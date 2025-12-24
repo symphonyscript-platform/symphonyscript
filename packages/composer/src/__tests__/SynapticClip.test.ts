@@ -3,7 +3,7 @@
 // =============================================================================
 
 import { SynapticClip, parsePitch } from '../SynapticClip'
-import { SiliconSynapse, SiliconBridge, NULL_PTR } from '@symphonyscript/core/linker'
+import { SiliconSynapse, SiliconBridge } from '@symphonyscript/kernel'
 
 // =============================================================================
 // Test Helpers
@@ -292,3 +292,40 @@ describe('SynapticClip - Integration', () => {
         expect(synapseExists(bridge, intro.getNode().getExitId(), verse.getNode().getEntryId())).toBe(true)
     })
 })
+
+describe('.shift() Micro-Timing', () => {
+    test('Shift offsets next note baseTick', () => {
+        const bridge = createTestBridge()
+        const clip = new SynapticClip(bridge)
+
+        clip.note('C4', 480)  // tick 0-480
+
+        const tickBefore = clip.getCurrentTick()  // 480
+        clip.shift(20)
+        clip.note('D4', 480)  // baseTick = 480 + 20 = 500, duration still advances by 480
+
+        // Cursor advances by duration, not shift
+        expect(clip.getCurrentTick()).toBe(960)
+    })
+
+    test('Shift resets after note', () => {
+        const bridge = createTestBridge()
+        const clip = new SynapticClip(bridge)
+
+        clip.shift(20).note('C4', 480).note('D4', 480)
+
+        // Second note should NOT be shifted (shift consumed)
+        expect(clip.getCurrentTick()).toBe(960)
+    })
+
+    test('Negative shift (pull timing forward)', () => {
+        const bridge = createTestBridge()
+        const clip = new SynapticClip(bridge)
+
+        clip.note('C4', 480).shift(-10).note('D4', 480)
+
+        // D4 starts at tick 480-10 = 470
+        expect(clip.getCurrentTick()).toBe(960)
+    })
+})
+

@@ -71,9 +71,12 @@ export function parsePitch(input: string | number): number {
  */
 export class SynapticClip {
     private builder: SynapticNode
+    private bridge: SiliconBridge
     private currentTick: number = 0
     private defaultDuration: number = 480  // Quarter note (assuming 480 PPQ)
     private defaultVelocity: number = 100
+    private pendingShift: number = 0  // RFC-047 Phase 2: Micro-timing offset
+    private currentExpressionId: number = 0  // RFC-047 Phase 2: MPE routing
 
     /**
      * Create a new SynapticClip.
@@ -81,6 +84,7 @@ export class SynapticClip {
      * @param bridge - SiliconBridge instance from @symphonyscript/core
      */
     constructor(bridge: SiliconBridge) {
+        this.bridge = bridge
         this.builder = new SynapticNode(bridge)
     }
 
@@ -100,14 +104,18 @@ export class SynapticClip {
         const noteDuration = duration ?? this.defaultDuration
         const noteVelocity = velocity ?? this.defaultVelocity
 
+        // RFC-047 Phase 2: Apply pending shift to baseTick
+        const actualTick = this.currentTick + this.pendingShift
+
         this.builder.addNote(
             midiPitch,
             noteVelocity,
             noteDuration,
-            this.currentTick
+            actualTick  // Use offset tick
         )
 
-        this.currentTick += noteDuration
+        this.currentTick += noteDuration  // Cursor advances by duration (not affected by shift)
+        this.pendingShift = 0  // Reset shift (one-shot behavior)
         return this
     }
 
@@ -156,5 +164,94 @@ export class SynapticClip {
      */
     getCurrentTick(): number {
         return this.currentTick
+    }
+
+    /**
+     * Stack (branch) independent voices for counterpoint.
+     * 
+     * Creates PARALLEL execution: voices start at the SAME tick.
+     * Per RFC-047 Section 3.2 "Model B: The Stack Graph".
+     * 
+     * @param voiceBuilder - Callback that receives a new SynapticClip for the voice
+     * @returns this for fluent chaining
+     * 
+     * @example
+     * const melody = Clip.clip('Counterpoint');
+     * 
+     * melody
+     *   .note('C4', 480)  // Main voice @ tick 0
+     *   .stack((voice) => {
+     *     voice.note('E4', 480);  // Voice 1 @ tick 480 (parallel)
+     *   })
+     *   .note('D4', 480);  // Main voice @ tick 480
+     * 
+     * // Result: At tick 480, BOTH 'E4' and 'D4' play simultaneously
+     */
+    stack(voiceBuilder: (voice: SynapticClip) => void): this {
+        const startTick = this.currentTick  // Capture current position
+
+        // Create new clip that runs IN PARALLEL
+        const voiceClip = new SynapticClip(this.bridge)
+
+        // CRITICAL: Set voice's cursor to SAME tick as main voice
+        voiceClip.currentTick = startTick
+
+        // Execute user callback
+        voiceBuilder(voiceClip)
+
+        // DO NOT link voiceClip.play(this) - that would create sequential execution
+        // Voice runs independently at the same time
+
+        return this
+    }
+
+    /**
+     * Tag voice with expression ID for MPE routing.
+     * 
+     * Executes builder callback and tags all notes with expressionId.
+     * Per RFC-047 brainstorming session requirements.
+     * 
+     * @param expressionId - MPE expression ID (channel assignment)
+     * @param builderFn - Callback to build notes for this voice
+     * @returns this for fluent chaining
+     * 
+     * @example
+     * clip.stack(s => s
+     *   .voice(1, v => v.note('C4'))  // MPE Channel 1
+     *   .voice(2, v => v.note('E4'))  // MPE Channel 2
+     * );
+     */
+    voice(expressionId: number, builderFn: (v: SynapticClip) => void): this {
+        // Store current expressionId (for tagging)
+        const previousExpressionId = this.currentExpressionId
+        this.currentExpressionId = expressionId
+
+        // Execute builder (all notes inside get tagged)
+        builderFn(this)
+
+        // Restore previous ID
+        this.currentExpressionId = previousExpressionId
+
+        return this
+    }
+
+    /**
+     * Shift the next note's start time (micro-timing).
+     * 
+     * Unlike rest(), shift() does NOT advance the cursor.
+     * It offsets the next event's baseTick for humanization/groove.
+     * 
+     * @param ticks - Offset in ticks (can be negative)
+     * @returns this for fluent chaining
+     * 
+     * @example
+     * clip
+     *   .note('C4', 480)
+     *   .shift(20)           // Next note starts 20 ticks late
+     *   .note('D4', 480);    // Slightly delayed for swing
+     */
+    shift(ticks: number): this {
+        this.pendingShift = ticks  // Store offset (one-shot)
+        return this
     }
 }

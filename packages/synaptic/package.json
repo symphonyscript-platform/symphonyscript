@@ -28,7 +28,7 @@
         "options": {
           "outputPath": "../../dist/packages/synaptic",
           "main": "packages/synaptic/src/index.ts",
-          "tsConfig": "packages/kernel/tsconfig.build.json",
+          "tsConfig": "packages/synaptic/tsconfig.build.json",
           "declaration": true,
           "format": [
             "esm"

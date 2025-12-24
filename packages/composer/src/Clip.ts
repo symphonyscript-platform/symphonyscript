@@ -6,6 +6,7 @@
 import { SiliconSynapse, SiliconBridge } from '@symphonyscript/kernel'
 import { SynapticClip } from './SynapticClip'
 import { SynapticMelody } from './SynapticMelody'
+import { GrooveBuilder } from './GrooveBuilder'
 
 
 // =============================================================================
@@ -77,5 +78,13 @@ export const Clip = {
     clip(name: string): SynapticClip {
         const bridge = getOrCreateBridge()
         return new SynapticClip(bridge)
+    },
+
+    /**
+     * Create a groove template builder.
+     * Returns GrooveBuilder for fluent DSL.
+     */
+    groove(): GrooveBuilder {
+        return new GrooveBuilder()
     }
 }
