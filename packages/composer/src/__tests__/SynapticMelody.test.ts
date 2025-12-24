@@ -3,7 +3,7 @@
 // =============================================================================
 
 import { SynapticMelody } from '../SynapticMelody'
-import { SiliconSynapse, SiliconBridge } from '@symphonyscript/core/linker'
+import { SiliconSynapse, SiliconBridge } from '@symphonyscript/kernel'
 
 // =============================================================================
 // Test Helpers

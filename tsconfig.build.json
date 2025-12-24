@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
+    "rootDir": ".",
     "composite": true,
     "declaration": true,
     "declarationMap": true,
@@ -9,8 +10,14 @@
     "noEmit": false,
     "emitDeclarationOnly": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "baseUrl": "."
   },
-  "exclude": ["node_modules", "dist", "**/test-output"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/test-output"
+  ]
 }

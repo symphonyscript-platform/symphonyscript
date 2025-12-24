@@ -33,7 +33,7 @@
           "format": [
             "esm"
           ],
-          "declarationRootDir": "packages/synaptic/src"
+          "declarationRootDir": "."
         }
       },
       "test": {
@@ -42,7 +42,7 @@
           "{projectRoot}/test-output/jest/coverage"
         ],
         "options": {
-          "jestConfig": "packages/synaptic/jest.config.cts"
+          "jestConfig": "packages/synaptic/jest.config.ts"
         }
       }
     }
