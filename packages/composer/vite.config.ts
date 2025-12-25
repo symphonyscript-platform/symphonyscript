@@ -1,10 +1,16 @@
-import {defineConfig} from 'vite'
-import customTsConfig from 'vite-plugin-custom-tsconfig'
+import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [
-    customTsConfig({
-      tsConfigPath: './tsconfig.build.json',
-    }),
-  ],
+  build: {
+    lib: {
+      entry: 'src/index.ts',
+      name: 'SymphonyComposer',
+      fileName: 'index'
+    },
+    rollupOptions: {
+      // Ensure we don't bundle external dependencies
+      external: ['@symphonyscript/kernel']
+    }
+  },
+  plugins: []
 })

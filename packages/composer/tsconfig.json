@@ -1,10 +1,20 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "./dist",
+    "lib": [
+      "esnext",
+      "dom",
+      "dom.iterable"
+    ],
     "composite": false,
     "incremental": false
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/__tests__/**"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/__tests__/**"
+  ]
 }

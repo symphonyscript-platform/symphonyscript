@@ -4,7 +4,8 @@
  * Utilities for calculating beat and bar boundaries for synchronized updates.
  */
 
-import type { QuantizeMode } from './types'
+// Local type definition since it's missing from types
+export type QuantizeMode = 'bar' | 'beat' | 'off'
 
 // =============================================================================
 // Time Signature Parsing
@@ -51,8 +52,8 @@ export function getNextBeat(currentBeat: number): number {
 export function getNextBarBeat(currentBeat: number, beatsPerMeasure: number): number {
   // If we're exactly on a bar boundary, return the next bar
   const currentBar = Math.floor(currentBeat / beatsPerMeasure)
-  const nextBar = currentBeat % beatsPerMeasure === 0 
-    ? currentBar + 1 
+  const nextBar = currentBeat % beatsPerMeasure === 0
+    ? currentBar + 1
     : currentBar + 1
   return nextBar * beatsPerMeasure
 }
@@ -259,7 +260,7 @@ export function isAtQuantizeBoundary(
     case 'bar':
       // Check if we're at a bar boundary
       return Math.abs(beat % beatsPerMeasure) < tolerance ||
-             Math.abs(beat % beatsPerMeasure - beatsPerMeasure) < tolerance
+        Math.abs(beat % beatsPerMeasure - beatsPerMeasure) < tolerance
     case 'beat':
       // Check if we're at a beat boundary
       return Math.abs(beat - Math.round(beat)) < tolerance
@@ -285,7 +286,7 @@ export function getTimeUntilNextQuantize(
   bpm: number
 ): number {
   if (mode === 'off') return 0
-  
+
   const targetBeat = getQuantizeTargetBeat(currentBeat, mode, beatsPerMeasure)
   const beatsUntil = targetBeat - currentBeat
   return beatsToSeconds(beatsUntil, bpm)
@@ -312,9 +313,9 @@ export function getQuantizeTargetWithLookahead(
     // Even with 'off' mode, respect lookahead
     return currentBeat + lookaheadBeats
   }
-  
+
   let targetBeat = getQuantizeTargetBeat(currentBeat, mode, beatsPerMeasure)
-  
+
   // If target is within lookahead, skip to next boundary
   while (targetBeat < currentBeat + lookaheadBeats) {
     if (mode === 'bar') {
@@ -323,7 +324,7 @@ export function getQuantizeTargetWithLookahead(
       targetBeat += 1
     }
   }
-  
+
   return targetBeat
 }
 
@@ -349,15 +350,15 @@ export function getBeatGridInfo(
   const beatInBar = getBeatInBar(currentBeat, beatsPerMeasure)
   const wholeBeat = Math.floor(currentBeat)
   const fractionalBeat = currentBeat - wholeBeat
-  
+
   const tolerance = 0.001
   const isOnBeat = Math.abs(fractionalBeat) < tolerance
-  const isOnBar = Math.abs(beatInBar) < tolerance || 
-                  Math.abs(beatInBar - beatsPerMeasure) < tolerance
-  
+  const isOnBar = Math.abs(beatInBar) < tolerance ||
+    Math.abs(beatInBar - beatsPerMeasure) < tolerance
+
   const nextBarBeat = getNextBarBeat(currentBeat, beatsPerMeasure)
   const beatsUntilNextBar = nextBarBeat - currentBeat
-  
+
   return {
     bar,
     beatInBar: Math.floor(beatInBar),

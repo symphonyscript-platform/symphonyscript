@@ -60,6 +60,7 @@ export {
   SYNAPSE_QUOTA,
 
   getSynapseTableOffset,
+  SOURCE_ID,
 } from './constants'
 
 // Types from constants

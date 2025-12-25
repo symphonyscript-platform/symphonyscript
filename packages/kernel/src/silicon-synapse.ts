@@ -966,6 +966,15 @@ export class SiliconSynapse implements ISiliconLinker {
   }
 
   /**
+   * Update the playhead position (for UI visualization).
+   *
+   * @param tick - Current playback tick
+   */
+  setPlayheadTick(tick: number): void {
+    Atomics.store(this.sab, HDR.PLAYHEAD_TICK, tick | 0)
+  }
+
+  /**
    * Get PPQ (Pulses Per Quarter note / ticks per beat).
    *
    * PPQ determines the resolution of timing in the system.
@@ -1389,7 +1398,7 @@ export class SiliconSynapse implements ISiliconLinker {
         // Store location in Symbol Table at this slot
         const symOffset = this.symTableSlotOffset(slot)
         const lineCol = ((line & SYM_TABLE.MAX_LINE) << SYM_TABLE.LINE_SHIFT) |
-                        (column & SYM_TABLE.COLUMN_MASK)
+          (column & SYM_TABLE.COLUMN_MASK)
         Atomics.store(this.sab, symOffset, fileHash | 0)
         Atomics.store(this.sab, symOffset + 1, lineCol)
         return true

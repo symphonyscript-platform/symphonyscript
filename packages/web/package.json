@@ -1,0 +1,34 @@
+{
+    "name": "@symphonyscript/web",
+    "version": "0.1.0",
+    "description": "SymphonyScript - Web Runtime",
+    "license": "MIT",
+    "author": "Tsomaia Technologies",
+    "type": "module",
+    "main": "./dist/index.mjs",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/index.mjs",
+            "types": "./dist/index.d.ts"
+        },
+        "./processor": {
+            "import": "./dist/processor.mjs",
+            "types": "./dist/processor.d.ts"
+        }
+    },
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build && tsc",
+        "test": "jest"
+    },
+    "dependencies": {
+        "@symphonyscript/kernel": "workspace:*",
+        "@symphonyscript/dsp": "workspace:*"
+    },
+    "devDependencies": {
+        "vite": "^5.0.0",
+        "typescript": "^5.3.3",
+        "vite-plugin-dts": "^3.6.0"
+    }
+}

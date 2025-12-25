@@ -292,6 +292,7 @@ export class SiliconBridge {
     this.ringBuffer = new RingBuffer(this.sab)
 
     // RFC-045: Initialize Synapse Graph infrastructure
+    // RFC-045: Initialize Synapse Graph infrastructure
     this.synapseAllocator = new SynapseAllocator(sab)
     this.learningRate = options.learningRate ?? 10
     this.synapseTableOffsetI32 = getSynapseTableOffset(nodeCapacity) / 4
@@ -340,6 +341,13 @@ export class SiliconBridge {
    * CRITICAL: SourceIds must fit in positive Int32 range (1 to 2^31-1).
    * RFC-045-04: Implements wraparound at MAX to prevent overflow.
    */
+  /**
+   * Get the underlying SharedArrayBuffer.
+   */
+  getSAB(): SharedArrayBuffer {
+    return this.linker.getSAB()
+  }
+
   generateSourceId(source?: SourceLocation): number {
     if (!source) {
       return this._advanceSourceId()
@@ -1638,6 +1646,27 @@ export class SiliconBridge {
    */
   getSynapseAllocator(): SynapseAllocator {
     return this.synapseAllocator
+  }
+
+  /**
+   * Set the system tempo (BPM).
+   */
+  setBpm(bpm: number): void {
+    this.linker.setBpm(bpm)
+  }
+
+  /**
+   * Get the system tempo (BPM).
+   */
+  getBpm(): number {
+    return this.linker.getBpm()
+  }
+
+  /**
+   * Get the current playhead position in ticks.
+   */
+  getPlayheadTick(): number {
+    return this.linker.getPlayheadTick()
   }
 }
 

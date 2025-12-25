@@ -1,10 +1,15 @@
-import {defineConfig} from 'vite'
-import customTsConfig from 'vite-plugin-custom-tsconfig'
+import { defineConfig } from 'vite';
+import { resolve } from 'path';
+import dts from 'vite-plugin-dts';
 
 export default defineConfig({
-  plugins: [
-    customTsConfig({
-      tsConfigPath: './tsconfig.build.json',
-    }),
-  ],
-})
+  plugins: [dts({ rollupTypes: true })],
+  build: {
+    lib: {
+      entry: resolve(__dirname, 'src/index.ts'),
+      name: 'SymphonyKernel',
+      fileName: 'index',
+      formats: ['es']
+    }
+  }
+});

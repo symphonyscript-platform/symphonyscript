@@ -1,0 +1,26 @@
+{
+    "name": "@symphonyscript/dsp",
+    "version": "0.1.0",
+    "description": "SymphonyScript - Pure Audio Math DSP",
+    "license": "MIT",
+    "author": "Tsomaia Technologies",
+    "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        }
+    },
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build && tsc",
+        "test": "jest"
+    },
+    "devDependencies": {
+        "vite": "^5.0.0",
+        "typescript": "^5.3.3",
+        "vite-plugin-dts": "^3.6.0"
+    }
+}

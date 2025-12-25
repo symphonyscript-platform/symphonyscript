@@ -5,6 +5,14 @@
   "license": "MIT",
   "author": "Tsomaia Technologies",
   "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

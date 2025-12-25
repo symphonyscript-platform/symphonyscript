@@ -4,8 +4,6 @@
 
 export { SynapticClip, parsePitch } from './SynapticClip'
 export { SynapticMelody } from './SynapticMelody'
-export { Clip, initSession } from './Clip'
+export * from './Clip';
+export * from './SymphonyEngine';
 export { GrooveBuilder } from './GrooveBuilder'
-
-
-
