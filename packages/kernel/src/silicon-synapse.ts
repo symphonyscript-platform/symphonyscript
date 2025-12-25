@@ -1189,24 +1189,26 @@ export class SiliconSynapse implements ISiliconLinker {
   }
 
   /**
-   * Insert a sourceId → NodePtr mapping into the Identity Table.
-   * Uses linear probing for collision resolution.
-   *
-   * **Atomic Strictness**: All slot reads/writes use Atomics for thread safety.
-   * **Load Factor Enforcement**: Sets ERROR_FLAG if load factor exceeds 75%.
-   *
-   * @param sourceId - Source ID (must be > 0)
-   * @param ptr - Node pointer
-   * @returns true if inserted, false if table full
-   */
+ * Insert a sourceId → NodePtr mapping into the Identity Table.
+ * Uses quadratic probing for collision resolution (RFC-047-50).
+ *
+ * **Atomic Strictness**: All slot reads/writes use Atomics for thread safety.
+ * **Load Factor Enforcement**: Sets ERROR_FLAG if load factor exceeds 75%.
+ *
+ * @param sourceId - Source ID (must be > 0)
+ * @param ptr - Node pointer
+ * @returns true if inserted, false if table full
+ */
   idTableInsert(sourceId: number, ptr: NodePtr): boolean {
     if (sourceId <= 0) return false
 
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
-    let slot = this.idTableHash(sourceId)
+    const baseSlot = this.idTableHash(sourceId)
 
-    let i = 0
-    while (i < capacity) {
+    // Quadratic probing: slot = (base + probe^2) % capacity
+    // This reduces primary clustering compared to linear probing
+    for (let probe = 0; probe < capacity; probe++) {
+      const slot = (baseSlot + probe * probe) & (capacity - 1)
       const offset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, offset)
 
@@ -1229,10 +1231,6 @@ export class SiliconSynapse implements ISiliconLinker {
         Atomics.store(this.sab, offset + 1, ptr)
         return true
       }
-
-      // Linear probe to next slot (bitwise for power-of-2 capacity)
-      slot = (slot + 1) & (capacity - 1)
-      i = i + 1
     }
 
     // Table full
@@ -1241,7 +1239,7 @@ export class SiliconSynapse implements ISiliconLinker {
 
   /**
    * Lookup a NodePtr by sourceId in the Identity Table.
-   * Uses linear probing for collision resolution.
+   * Uses quadratic probing for collision resolution (RFC-047-50).
    *
    * **Atomic Strictness**: All slot reads use Atomics for thread safety.
    *
@@ -1252,10 +1250,10 @@ export class SiliconSynapse implements ISiliconLinker {
     if (sourceId <= 0) return NULL_PTR
 
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
-    let slot = this.idTableHash(sourceId)
+    const baseSlot = this.idTableHash(sourceId)
 
-    let i = 0
-    while (i < capacity) {
+    for (let probe = 0; probe < capacity; probe++) {
+      const slot = (baseSlot + probe * probe) & (capacity - 1)
       const offset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, offset)
 
@@ -1268,10 +1266,6 @@ export class SiliconSynapse implements ISiliconLinker {
         // Found
         return Atomics.load(this.sab, offset + 1)
       }
-
-      // Linear probe (skip tombstones, bitwise for power-of-2 capacity)
-      slot = (slot + 1) & (capacity - 1)
-      i = i + 1
     }
 
     // Not found after full scan
@@ -1281,6 +1275,7 @@ export class SiliconSynapse implements ISiliconLinker {
   /**
    * Remove a sourceId from the Identity Table.
    * Marks the slot as a tombstone (TID = -1).
+   * Uses quadratic probing for collision resolution (RFC-047-50).
    *
    * **Atomic Strictness**: All slot reads/writes use Atomics for thread safety.
    *
@@ -1294,10 +1289,10 @@ export class SiliconSynapse implements ISiliconLinker {
     if (sourceId <= 0) return false
 
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
-    let slot = this.idTableHash(sourceId)
+    const baseSlot = this.idTableHash(sourceId)
 
-    let i = 0
-    while (i < capacity) {
+    for (let probe = 0; probe < capacity; probe++) {
+      const slot = (baseSlot + probe * probe) & (capacity - 1)
       const offset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, offset)
 
@@ -1312,10 +1307,6 @@ export class SiliconSynapse implements ISiliconLinker {
         Atomics.store(this.sab, offset + 1, NULL_PTR)
         return true
       }
-
-      // Linear probe (bitwise for power-of-2 capacity)
-      slot = (slot + 1) & (capacity - 1)
-      i = i + 1
     }
 
     // Not found
@@ -1676,15 +1667,6 @@ export class SiliconSynapse implements ISiliconLinker {
       this._linkNode(ptr, prevPtr)
     }
 
-    // Update Identity Table (sourceId → ptr mapping)
-    if (sourceId > 0) {
-      const inserted = this.idTableInsert(sourceId, ptr)
-      if (!inserted) {
-        // Table full - set error flag (node is linked but unmapped - degraded state)
-        Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.LOAD_FACTOR_WARNING)
-      }
-    }
-
     // Increment NODE_COUNT (node is now linked)
     const currentCount = Atomics.load(this.sab, HDR.NODE_COUNT)
     Atomics.store(this.sab, HDR.NODE_COUNT, currentCount + 1)
@@ -1693,6 +1675,18 @@ export class SiliconSynapse implements ISiliconLinker {
     this._incrementTelemetry()
 
     this._releaseChainMutex()
+
+    // RFC-047-50: Move Identity Table update OUTSIDE mutex
+    // This is safe because the node is already linked; ID table is purely for lookup.
+    // Moving this outside reduces critical section time and eliminates O(n²) contention.
+    if (sourceId > 0) {
+      const inserted = this.idTableInsert(sourceId, ptr)
+      if (!inserted) {
+        // Table full - set error flag (node is linked but unmapped - degraded state)
+        Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.LOAD_FACTOR_WARNING)
+      }
+    }
+
     return true
   }
 

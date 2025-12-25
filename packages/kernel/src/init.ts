@@ -166,15 +166,17 @@ function initializeIdentityTable(sab: Int32Array, nodeCapacity: number): void {
   const tableOffset = getIdentityTableOffset(nodeCapacity)
   const tableOffsetI32 = tableOffset / 4
 
+  // RFC-047-50: Use 2x capacity to keep load factor under 50% for better performance
+  const tableCapacity = nodeCapacity * 2
+
   // Set header fields
   sab[HDR.ID_TABLE_PTR] = tableOffset
-  sab[HDR.ID_TABLE_CAPACITY] = nodeCapacity
+  sab[HDR.ID_TABLE_CAPACITY] = tableCapacity
   sab[HDR.ID_TABLE_USED] = 0
 
   // Clear all slots to EMPTY_TID (0)
   // Each entry is 2 × i32: [TID, NodePtr]
-  // Total slots = nodeCapacity
-  const totalI32 = nodeCapacity * ID_TABLE.ENTRY_SIZE_I32
+  const totalI32 = tableCapacity * ID_TABLE.ENTRY_SIZE_I32
   let i = 0
   while (i < totalI32) {
     sab[tableOffsetI32 + i] = 0

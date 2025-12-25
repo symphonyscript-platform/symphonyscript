@@ -796,7 +796,7 @@ export function getZoneSplitIndex(nodeCapacity: number): number {
  * Layout:
  * - Header + Registers + Command Ring Header: 144 bytes (36 × i32)
  * - Node Heap: nodeCapacity × 32 bytes
- * - Identity Table: nodeCapacity × 8 bytes (TID + NodePtr per entry)
+ * - Identity Table: nodeCapacity × 2 × 8 bytes (RFC-047-50: 2x capacity for load factor)
  * - Symbol Table: nodeCapacity × 8 bytes (fileHash + lineCol per entry)
  * - Groove Templates: 1024 bytes (fixed)
  * - Command Ring Buffer: 64KB (RFC-044)
@@ -808,7 +808,7 @@ export function getZoneSplitIndex(nodeCapacity: number): number {
 export function calculateSABSize(nodeCapacity: number): number {
   const headerSize = HEAP_START_OFFSET // 144 bytes (includes header + registers + command ring header)
   const heapSize = nodeCapacity * NODE_SIZE_BYTES
-  const identityTableSize = nodeCapacity * ID_TABLE.ENTRY_SIZE_BYTES // 8 bytes per entry
+  const identityTableSize = nodeCapacity * 2 * ID_TABLE.ENTRY_SIZE_BYTES // RFC-047-50: 2x capacity
   const symbolTableSize = nodeCapacity * SYM_TABLE.ENTRY_SIZE_BYTES // 8 bytes per entry
   const grooveSize = 1024 // Fixed groove template region
   const ringBufferSize = COMMAND.DEFAULT_RING_SIZE_BYTES // 64KB command ring (RFC-044)
