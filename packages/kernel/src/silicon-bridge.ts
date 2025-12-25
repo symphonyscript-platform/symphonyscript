@@ -247,13 +247,13 @@ export class SiliconBridge {
   // Traverse callback state
   private traverseNotesCallback:
     | ((
-        sourceId: number,
-        pitch: number,
-        velocity: number,
-        duration: number,
-        baseTick: number,
-        muted: boolean
-      ) => void)
+      sourceId: number,
+      pitch: number,
+      velocity: number,
+      duration: number,
+      baseTick: number,
+      muted: boolean
+    ) => void)
     | null = null
 
   // ReadNote callback state
@@ -531,7 +531,8 @@ export class SiliconBridge {
     baseTick: number,
     muted: boolean,
     sourceId: number,
-    afterSourceId?: number
+    afterSourceId?: number,
+    expressionId?: number // RFC-047 Phase 3: MPE Expression ID
   ): number {
     // Validate afterSourceId BEFORE allocating (Zone B can't free individual nodes)
     let prevPtr = NULL_PTR
@@ -552,7 +553,8 @@ export class SiliconBridge {
     }
 
     const offset = (ptr / 4) | 0
-    const flags = (muted ? FLAG.MUTED : 0) | FLAG.ACTIVE
+    const expressionBits = ((expressionId ?? 0) << FLAG.EXPRESSION_SHIFT) & FLAG.EXPRESSION_MASK
+    const flags = (muted ? FLAG.MUTED : 0) | FLAG.ACTIVE | expressionBits
 
     const packedA =
       (opcode << PACKED.OPCODE_SHIFT) | (pitch << PACKED.PITCH_SHIFT) | (velocity << PACKED.VELOCITY_SHIFT) | flags
@@ -834,7 +836,8 @@ export class SiliconBridge {
           baseTick,
           muted,
           sourceId,
-          afterId >= 0 ? afterId : undefined
+          afterId >= 0 ? afterId : undefined,
+          undefined // expressionId
         )
 
         // Register mapping immediately (ptr is in Zone B, will be linked by worker)

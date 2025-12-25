@@ -368,7 +368,10 @@ export const FLAG = {
   /** Node is muted (skip during playback) */
   MUTED: 0x02,
   /** Write in progress (consumer should spin/skip) */
-  DIRTY: 0x04
+  DIRTY: 0x04,
+  /** [RFC-047] Packed Expression ID (4 bits: 0-15) */
+  EXPRESSION_SHIFT: 4,
+  EXPRESSION_MASK: 0xF0
 } as const
 
 // =============================================================================
