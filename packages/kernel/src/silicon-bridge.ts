@@ -375,12 +375,20 @@ export class SiliconBridge {
       return this._advanceSourceId()
     }
 
-    // Simple hash: combine file hash + line + column
+    // Unified Hash: Use Knuth Multiplicative Hash for better dispersion (K-004)
+    // Logic matches Kernel internal hashing.
     const fileHash = source.file ? this.hashString(source.file) : 0
-    const locationHash = (fileHash * 31 + source.line) * 31 + source.column
 
-    // Ensure positive Int32 range: 1 to SOURCE_ID.MAX
-    const maskedHash = (Math.abs(locationHash) >>> 0) & SOURCE_ID.MAX
+    let hash = fileHash
+    // Use Math.imul for 32-bit multiplication behavior similar to C++
+    // mixing: (current ^ input) * KNUTH_CONST
+    hash = Math.imul(hash ^ source.line, KNUTH_HASH_CONST)
+    hash = Math.imul(hash ^ source.column, KNUTH_HASH_CONST)
+
+    // Ensure positive 31-bit integer (SMI safe, fits in SOURCE_ID.MAX)
+    // >>> 1 ensures range 0...2^31-1. We want 1...MAX.
+    const maskedHash = (hash >>> 1) & SOURCE_ID.MAX
+
     if (maskedHash === 0) {
       return this._advanceSourceId()
     }
