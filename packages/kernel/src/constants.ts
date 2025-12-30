@@ -228,7 +228,19 @@ export const HDR = {
   /** [RFC-044] Ring Buffer capacity in commands (fixed at init) */
   RB_CAPACITY: 34,
   /** [RFC-044] Byte offset to Command Ring Buffer data region */
-  COMMAND_RING_PTR: 35
+  COMMAND_RING_PTR: 35,
+
+  // -------------------------------------------------------------------------
+  // Reclaim Ring Buffer Header (K-005)
+  // -------------------------------------------------------------------------
+  /** [K-005] [ATOMIC] Reclaim Ring Read Index (Main consumes) */
+  RECLAIM_RB_HEAD: 36,
+  /** [K-005] [ATOMIC] Reclaim Ring Write Index (Worker produces) */
+  RECLAIM_RB_TAIL: 37,
+  /** [K-005] Reclaim Ring capacity (fixed at init) */
+  RECLAIM_RB_CAPACITY: 38,
+  /** [K-005] Byte offset to Reclaim Ring data region */
+  RECLAIM_RING_PTR: 39
 } as const
 
 /**
@@ -561,6 +573,23 @@ export const COMMAND = {
 } as const
 
 // =============================================================================
+// Reclaim Ring Buffer (K-005)
+// =============================================================================
+
+/**
+ * Reclaim Ring Buffer constants (Main Thread -> Worker).
+ * Queue for recycling Zone B nodes.
+ */
+export const RECLAIM = {
+  /** Reclaim Ring stride in bytes (4 bytes for 1ptr) */
+  STRIDE_BYTES: 4,
+  /** Reclaim Ring stride in i32 units (1 word) */
+  STRIDE_I32: 1,
+  /** Default ring buffer size in bytes (16KB = 4096 ptrs) */
+  DEFAULT_RING_SIZE_BYTES: 16384
+} as const
+
+// =============================================================================
 // Synapse Table (RFC-045) - The Neural Connection Graph
 // =============================================================================
 
@@ -800,35 +829,37 @@ export function getZoneSplitIndex(nodeCapacity: number): number {
  * Calculate total SAB size needed for given node capacity.
  *
  * Layout:
- * - Header + Registers + Command Ring Header: 144 bytes (36 × i32)
+ * - Header + Registers + Command Ring + Reclaim Ring Header: 160 bytes (40 × i32)
  * - Node Heap: nodeCapacity × 32 bytes
  * - Identity Table: nodeCapacity × 2 × 8 bytes (RFC-047-50: 2x capacity for load factor)
  * - Symbol Table: nodeCapacity × 8 bytes (fileHash + lineCol per entry)
  * - Groove Templates: 1024 bytes (fixed)
  * - Command Ring Buffer: 64KB (RFC-044)
+ * - Reclaim Ring Buffer: 16KB (K-005)
  * - Synapse Table: 1MB (RFC-045) - Neural connection graph
  *
  * @param nodeCapacity - Maximum number of nodes
  * @returns Total bytes needed for SharedArrayBuffer
  */
 export function calculateSABSize(nodeCapacity: number): number {
-  const headerSize = HEAP_START_OFFSET // 144 bytes (includes header + registers + command ring header)
+  const headerSize = HEAP_START_OFFSET // 160 bytes
   const heapSize = nodeCapacity * NODE_SIZE_BYTES
   const identityTableSize = nodeCapacity * 2 * ID_TABLE.ENTRY_SIZE_BYTES // RFC-047-50: 2x capacity
   const symbolTableSize = nodeCapacity * SYM_TABLE.ENTRY_SIZE_BYTES // 8 bytes per entry
   const grooveSize = 1024 // Fixed groove template region
   const ringBufferSize = COMMAND.DEFAULT_RING_SIZE_BYTES // 64KB command ring (RFC-044)
+  const reclaimRingSize = RECLAIM.DEFAULT_RING_SIZE_BYTES // 16KB reclaim ring (K-005)
   const synapseTableSize = SYNAPSE_TABLE.SIZE_BYTES // ~1.25MB synapse table (RFC-045)
   const reverseIndexSize = REVERSE_INDEX.BUCKET_COUNT * 4 // 1KB reverse index (ISSUE-016)
-  return headerSize + heapSize + identityTableSize + symbolTableSize + grooveSize + ringBufferSize + synapseTableSize + reverseIndexSize
+  return headerSize + heapSize + identityTableSize + symbolTableSize + grooveSize + ringBufferSize + reclaimRingSize + synapseTableSize + reverseIndexSize
 }
 
 /**
  * Calculate byte offset where node heap begins.
- * Header (64) + Registers (64) + Command Ring Header (16) = 144 bytes.
- * Indices 0-35 = 36 × 4 bytes = 144 bytes.
+ * Header (64) + Registers (64) + Command Ring (16) + Reclaim Ring (16) = 160 bytes.
+ * Indices 0-39 = 40 × 4 bytes = 160 bytes.
  */
-export const HEAP_START_OFFSET = 144
+export const HEAP_START_OFFSET = 160
 
 /**
  * Calculate i32 index where node heap begins.
@@ -872,17 +903,27 @@ export function getRingBufferOffset(nodeCapacity: number): number {
 }
 
 /**
+ * Calculate byte offset where Reclaim Ring Buffer data begins (K-005).
+ * Immediately follows Command Ring.
+ * @param nodeCapacity - Maximum number of nodes
+ * @returns Byte offset to Reclaim Ring Buffer data region
+ */
+export function getReclaimRingOffset(nodeCapacity: number): number {
+  return getRingBufferOffset(nodeCapacity) + COMMAND.DEFAULT_RING_SIZE_BYTES
+}
+
+/**
  * Calculate byte offset where Synapse Table begins (RFC-045).
  *
  * The Synapse Table is a 1MB linear-probe hash table that stores neural
  * connections between Axons (clips). It resides immediately after the
- * Command Ring Buffer in the SharedArrayBuffer.
+ * Reclaim Ring Buffer in the SharedArrayBuffer.
  *
  * @param nodeCapacity - Maximum number of nodes
  * @returns Byte offset to Synapse Table
  */
 export function getSynapseTableOffset(nodeCapacity: number): number {
-  return getRingBufferOffset(nodeCapacity) + COMMAND.DEFAULT_RING_SIZE_BYTES
+  return getReclaimRingOffset(nodeCapacity) + RECLAIM.DEFAULT_RING_SIZE_BYTES
 }
 
 // =============================================================================

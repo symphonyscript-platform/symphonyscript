@@ -19,6 +19,9 @@ import {
   ID_TABLE,
   SYM_TABLE,
   getSymbolTableOffset,
+  getZoneSplitIndex, // K-005
+  getRingBufferOffset,
+  DEFAULT_RING_CAPACITY,
   CMD,
   SYNAPSE_TABLE,
   SYNAPSE,
@@ -63,6 +66,7 @@ export class SiliconSynapse implements ISiliconLinker {
   private ringBuffer: RingBuffer
   private heapStartI32: number
   private nodeCapacity: number
+  private zoneBStartPtr: number // K-005: For identifying Zone B nodes
 
   // RFC-044: Command processing state
   private commandBuffer: Int32Array // Pre-allocated buffer for reading commands
@@ -84,6 +88,13 @@ export class SiliconSynapse implements ISiliconLinker {
     this.sab64 = new BigInt64Array(buffer)
     this.heapStartI32 = HEAP_START_OFFSET / 4
     this.nodeCapacity = this.sab[HDR.NODE_CAPACITY]
+
+    // Calculate Zone B start pointer (byte offset) for reclamation check
+    // Formula: HEAP_START + (Index * 32)
+    // Note: heapStartI32 is in ints, we need bytes for consistency or use mixed math
+    const zoneSplitIndex = getZoneSplitIndex(this.nodeCapacity)
+    this.zoneBStartPtr = (this.heapStartI32 * 4) + (zoneSplitIndex * 32) // 32 = NODE_SIZE_BYTES
+
     this.freeList = new FreeList(this.sab, this.sab64)
     this.patcher = new AttributePatcher(this.sab, this.nodeCapacity)
 
@@ -94,6 +105,11 @@ export class SiliconSynapse implements ISiliconLinker {
     // [RFC-054] Initialize Synapse Allocator for async connect/disconnect
     this.synapseAllocator = new SynapseAllocator(buffer)
   }
+
+  /**
+   * Get the underlying SharedArrayBuffer.
+   */
+
 
   /**
    * Create a Silicon Linker with a new SAB.
@@ -696,8 +712,29 @@ export class SiliconSynapse implements ISiliconLinker {
     const currentCount = Atomics.load(this.sab, HDR.NODE_COUNT)
     Atomics.store(this.sab, HDR.NODE_COUNT, currentCount - 1)
 
-    // Free the node
-    this.freeNode(ptr)
+    // Free the node (K-005: Zone B Reclamation Logic)
+    if (ptr >= this.zoneBStartPtr) {
+      // Zone B (Main Thread Owned) -> Push to Reclaim Ring
+      const tail = Atomics.load(this.sab, HDR.RECLAIM_RB_TAIL)
+      const capacity = Atomics.load(this.sab, HDR.RECLAIM_RB_CAPACITY)
+
+      // Calculate write position (power-of-2 mask)
+      const mask = capacity - 1
+      const idx = tail & mask
+
+      // Calculate buffer offset
+      const ringDataOffset = Atomics.load(this.sab, HDR.RECLAIM_RING_PTR)
+      const ringDataI32 = ringDataOffset / 4
+
+      // Write pointer
+      this.sab[ringDataI32 + idx] = ptr
+
+      // Commit write
+      Atomics.store(this.sab, HDR.RECLAIM_RB_TAIL, tail + 1)
+    } else {
+      // Zone A (Worker Owned) -> Free List
+      this.freeList.free(ptr)
+    }
 
     // Signal structural change
     Atomics.store(this.sab, HDR.COMMIT_FLAG, COMMIT.PENDING)

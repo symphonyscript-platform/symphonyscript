@@ -953,6 +953,36 @@ export class SiliconBridge {
 
       this.structHead = this.structHead + 1
     }
+
+    // 4. Poll Reclaim Ring (K-005)
+    this.pollReclaim()
+  }
+
+  /**
+   * K-005: Poll Reclaim Ring for freed Zone B nodes.
+   * Drains the ring and returns pointers to LocalAllocator.
+   */
+  private pollReclaim(): void {
+    const head = Atomics.load(this.sab, HDR.RECLAIM_RB_HEAD)
+    const tail = Atomics.load(this.sab, HDR.RECLAIM_RB_TAIL)
+
+    if (head === tail) return // Empty
+
+    const capacity = Atomics.load(this.sab, HDR.RECLAIM_RB_CAPACITY)
+    const mask = capacity - 1
+    const ringDataOffset = Atomics.load(this.sab, HDR.RECLAIM_RING_PTR)
+    const ringDataI32 = ringDataOffset / 4
+
+    let currentHead = head
+
+    while (currentHead !== tail) {
+      const idx = currentHead & mask
+      const ptr = this.sab[ringDataI32 + idx]
+      this.localAllocator.free(ptr)
+      currentHead++
+    }
+
+    Atomics.store(this.sab, HDR.RECLAIM_RB_HEAD, currentHead)
   }
 
   // ===========================================================================

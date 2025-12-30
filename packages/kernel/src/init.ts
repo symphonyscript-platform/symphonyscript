@@ -21,6 +21,8 @@ import {
   getZoneSplitIndex,
   getRingBufferOffset,
   DEFAULT_RING_CAPACITY,
+  RECLAIM,
+  getReclaimRingOffset,
   ID_TABLE,
   SYM_TABLE,
   REVERSE_INDEX,
@@ -86,6 +88,9 @@ export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer {
 
   // Initialize Ring Buffer header (RFC-044)
   initializeRingBufferHeader(sab, cfg.nodeCapacity)
+
+  // Initialize Reclaim Ring header (K-005)
+  initializeReclaimRingHeader(sab, cfg.nodeCapacity)
 
   // Initialize Reverse Index table (ISSUE-016)
   initializeReverseIndex(sab, cfg.nodeCapacity)
@@ -238,6 +243,34 @@ function initializeRingBufferHeader(sab: Int32Array, nodeCapacity: number): void
 }
 
 /**
+ * Initialize the Reclaim Ring Buffer header (K-005).
+ *
+ * The Reclaim Ring (Worker -> Main) is used to recycle Zone B nodes.
+ *
+ * Header fields initialized:
+ * - RECLAIM.RB_CAPACITY: Maximum pointers that can be queued
+ * - RECLAIM.RECLAIM_RING_PTR: Byte offset to ring buffer data region
+ * - RECLAIM.RECLAIM_RB_HEAD: Read index (initially 0, empty)
+ * - RECLAIM.RECLAIM_RB_TAIL: Write index (initially 0, empty)
+ */
+function initializeReclaimRingHeader(sab: Int32Array, nodeCapacity: number): void {
+  // Set capacity (fixed at compile time)
+  // RECLAIM.DEFAULT_RING_SIZE_BYTES is 16384 (16KB)
+  // Each entry is 1 i32 (4 bytes)
+  const capacity = 4096
+  Atomics.store(sab, HDR.RECLAIM_RB_CAPACITY, capacity)
+
+  // Calculate and store data region pointer
+  // Reclaim Ring follows Command Ring immediately
+  const ringOffset = getReclaimRingOffset(nodeCapacity)
+  Atomics.store(sab, HDR.RECLAIM_RING_PTR, ringOffset)
+
+  // Initialize indices (empty ring: head === tail)
+  Atomics.store(sab, HDR.RECLAIM_RB_HEAD, 0)
+  Atomics.store(sab, HDR.RECLAIM_RB_TAIL, 0)
+}
+
+/**
  * Initialize the Reverse Index table (ISSUE-016).
  *
  * The Reverse Index maps TARGET_PTR → linked list of synapses for O(k) disconnect.
@@ -373,6 +406,9 @@ export function resetLinkerSAB(buffer: SharedArrayBuffer): void {
 
   // Re-initialize Ring Buffer header (RFC-044)
   initializeRingBufferHeader(sab, nodeCapacity)
+
+  // Re-initialize Reclaim Ring header (K-005)
+  initializeReclaimRingHeader(sab, nodeCapacity)
 
   // Re-initialize Reverse Index table (ISSUE-016)
   initializeReverseIndex(sab, nodeCapacity)

@@ -27,8 +27,12 @@ import { HEAP_START_OFFSET, NODE_SIZE_BYTES, getZoneSplitIndex, ALLOC_ERR } from
 export class LocalAllocator {
   private readonly sab: Int32Array
   private nextPtr: number // Byte offset to next free node
-  private readonly limitPtr: number // Byte offset to end of heap
-  private readonly startPtr: number // Byte offset where Zone B begins (for telemetry)
+  private limitPtr: number // Byte offset to end of heap
+  private startPtr: number // Byte offset where Zone B begins (for telemetry)
+
+  // K-005: Free List State
+  private freeHead: number
+  private freeCount: number
 
   /**
    * Create a Local Allocator for Zone B.
@@ -47,6 +51,10 @@ export class LocalAllocator {
     this.startPtr = zoneBStartOffset
     this.nextPtr = zoneBStartOffset
     this.limitPtr = heapEndOffset
+
+    // K-005: Local Free List (LIFO)
+    this.freeHead = -1 // NULL_PTR
+    this.freeCount = 0
   }
 
   /**
@@ -60,8 +68,27 @@ export class LocalAllocator {
    * This is an O(1) operation with zero contention. No atomic operations required.
    * The allocated node is "floating" (not in the linked list) until the Worker
    * processes the corresponding INSERT command from the Ring Buffer.
+   * K-005: Checks local free list first before bumping pointer.
    */
   alloc(): number {
+    // 1. Try to pop from free list (LIFO)
+    if (this.freeHead !== -1) { // NULL_PTR
+      const ptr = this.freeHead
+
+      // Read next pointer from the node's NEXT_PTR field
+      // We use NEXT_PTR (offset 12) for the free list chain
+      const nextIdx = (ptr / 4) + 3 // NEXT_PTR is at offset 3 ints (12 bytes)
+      const next = this.sab[nextIdx]
+
+      this.freeHead = next
+      this.freeCount = this.freeCount - 1
+
+      // K-003: Zero-on-Alloc
+      this.zeroNode(ptr)
+      return ptr
+    }
+
+    // 2. Fallback to Bump Pointer
     if (this.nextPtr >= this.limitPtr) {
       return ALLOC_ERR.EXHAUSTED
     }
@@ -74,6 +101,28 @@ export class LocalAllocator {
     this.zeroNode(ptr)
 
     return ptr
+  }
+
+  /**
+   * Return a node to the local free list (K-005).
+   * 
+   * @param ptr - Byte offset of the node to free
+   */
+  free(ptr: number): void {
+    if (ptr < this.startPtr || ptr >= this.limitPtr) {
+      return // Ignore invalid pointers (or Zone A pointers)
+    }
+
+    // LIFO Push
+    const idx = ptr / 4
+    const nextIdx = idx + 3 // NEXT_PTR field
+
+    // Link current head to this node's next
+    this.sab[nextIdx] = this.freeHead
+
+    // Update head to this node
+    this.freeHead = ptr
+    this.freeCount = this.freeCount + 1
   }
 
   /**
@@ -110,7 +159,7 @@ export class LocalAllocator {
    */
   getFreeCount(): number {
     const remainingBytes = this.limitPtr - this.nextPtr
-    return Math.floor(remainingBytes / NODE_SIZE_BYTES)
+    return Math.floor(remainingBytes / NODE_SIZE_BYTES) + this.freeCount
   }
 
   /**
@@ -126,7 +175,7 @@ export class LocalAllocator {
    * - > 0.9: Critical (consider hardReset or defragmentation)
    */
   getUtilization(): number {
-    const used = this.nextPtr - this.startPtr
+    const used = (this.nextPtr - this.startPtr) - (this.freeCount * NODE_SIZE_BYTES)
     const total = this.limitPtr - this.startPtr
     return total === 0 ? 0 : used / total
   }
@@ -141,6 +190,10 @@ export class LocalAllocator {
   reset(nodeCapacity: number): void {
     const zoneSplitIndex = getZoneSplitIndex(nodeCapacity)
     const zoneBStartOffset = HEAP_START_OFFSET + zoneSplitIndex * NODE_SIZE_BYTES
+    const heapEndOffset = HEAP_START_OFFSET + nodeCapacity * NODE_SIZE_BYTES
+    this.startPtr = zoneBStartOffset // Update startPtr in case HEAP_START_OFFSET changed
     this.nextPtr = zoneBStartOffset
+    this.freeHead = -1
+    this.freeCount = 0
   }
 }
