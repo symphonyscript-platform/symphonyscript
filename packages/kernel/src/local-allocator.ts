@@ -68,7 +68,39 @@ export class LocalAllocator {
 
     const ptr = this.nextPtr
     this.nextPtr = this.nextPtr + NODE_SIZE_BYTES
+
+    // K-003: Zero-on-Alloc (Clean as you go)
+    // Ensure the node is clean before handing it out.
+    this.zeroNode(ptr)
+
     return ptr
+  }
+
+  /**
+   * Zero out a node's memory region.
+   * Ensures no stale data from previous sessions or reuses persists.
+   * 
+   * **Thread Safety (Publication Safety):**
+   * These writes are non-atomic (raw assignment). This is SAFE because:
+   * 1. The node is currently "floating" in Zone B (exclusive to Main Thread).
+   * 2. The Worker Thread has no reference to this pointer yet.
+   * 3. The pointer is "published" to the Worker later via `ringBuffer.write(CMD.INSERT, ptr)`.
+   * 4. `ringBuffer.write` uses `Atomics.store`, which acts as a **Release Fence**.
+   * 5. The Worker reads via `Atomics.load` (**Acquire Fence**), guaranteeing it sees these writes.
+   * 
+   * @param ptrBytes - Byte offset to the node
+   */
+  private zeroNode(ptrBytes: number): void {
+    const idx = ptrBytes / 4
+    // Unrolled zeroing for NODE_SIZE_I32 (8 ints)
+    this.sab[idx + 0] = 0
+    this.sab[idx + 1] = 0
+    this.sab[idx + 2] = 0
+    this.sab[idx + 3] = 0
+    this.sab[idx + 4] = 0
+    this.sab[idx + 5] = 0
+    this.sab[idx + 6] = 0
+    this.sab[idx + 7] = 0
   }
 
   /**
