@@ -62,6 +62,9 @@ importers:
 
   packages/composer:
     dependencies:
+      '@symphonyscript/core':
+        specifier: workspace:*
+        version: link:../core
       '@symphonyscript/kernel':
         specifier: workspace:*
         version: link:../kernel
@@ -71,6 +74,15 @@ importers:
       '@symphonyscript/theory':
         specifier: workspace:*
         version: link:../theory
+    devDependencies:
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      vite:
+        specifier: ^7.3.0
+        version: 7.3.0(@types/node@24.10.4)
+
+  packages/core:
     devDependencies:
       typescript:
         specifier: ^5.3.3
