@@ -48,14 +48,25 @@ The `SynapticNode` (OS) exposes this via `setCycle(ticks)`.
 
 This "Reification" means the Loop is real effectively immediately.
 
-### 3.3 Application Layer: Zero-Burden UX
+### 3.3 Application Layer: Zero-Burden UX & Insertion Order
 
 The `SynapticClip` (App) removes `.finalize()`.
 
 *   User calls `clip.loop(16)`.
 *   System immediately appends the Barrier(16) and closes the loop.
 *   The topology is valid instantly.
-*   Subsequent note additions are inserted *into* the loop frame (before the barrier).
+
+**Insertion Logic (Critical)**:
+To support `loop(16).note().note()` (Reverse Polish Notation style definition), the Synaptic Layer must track two pointers:
+1.  `writeId` (The last musical note added).
+2.  `barrierId` (The immutable phase barrier at the end).
+
+When `addNote` is called:
+*   If `barrierId` exists: Insert NewNote **after** `writeId` and **before** `barrierId` (Mid-Chain Splicing).
+*   Correct chaining: `writeId` -> `NewNote` -> `barrierId`.
+*   Update `writeId` = `NewNote`.
+
+This ensures the user can define the container (`loop`) first, then fill it, without breaking the topological closure.
 
 ## 4. Implementation Plan
 
