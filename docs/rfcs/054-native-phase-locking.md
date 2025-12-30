@@ -66,14 +66,48 @@ When `addNote` is called:
 *   Correct chaining: `writeId` -> `NewNote` -> `barrierId`.
 *   Update `writeId` = `NewNote`.
 
-This ensures the user can define the container (`loop`) first, then fill it, without breaking the topological closure.
+**Idempotency & Updates**:
+Calling `setCycle` multiple times must not stack barriers.
+*   If `barrierId` exists: **Update** the `DURATION` of the existing barrier (Patch Command).
+*   If `barrierId` is null: **Insert** a new Barrier.
+
+### 3.4 Async Safety & Kernel Command Extension
+
+The connection race condition (ID not yet existing in Worker) is solved by extending the Kernel Protocol.
+
+*   **New Command**: `CMD.CONNECT` (Opcode 0x06)
+*   **Parameters**: `[CMD.CONNECT, SourcePtr, TargetPtr, RESERVED]`
+*   **Behavior**:
+    1.  Main Thread calls `bridge.connectAsync(srcPtr, tgtPtr)`.
+    2.  Pushes `0x06` + Pointers to the Ring Buffer.
+    3.  Worker dequeues command.
+    4.  Calls `synapseAllocator.connect(srcPtr, tgtPtr)`.
+    *   **Safety**: Guaranteed by FIFO order of Ring Buffer. `CMD.INSERT` (Creation) always precedes `CMD.CONNECT` (Linking) in the queue.
+    *   **Performance**: Zero-allocation, lock-free, O(1).
 
 ## 4. Implementation Plan
 
-1.  **Kernel**: Add `OPCODE.BARRIER = 0x05` to `constants.ts`.
-2.  **Kernel Reference**: Update `mock-consumer.ts` to implement the Wait Logic (proving the concept).
-3.  **OS**: Update `SynapticNode.ts` to use `addBarrier` instead of `enforcePhase`.
-4.  **App**: Update `SynapticClip.ts` to remove `finalize` and use implicit barrier strategy in `loop()`.
+### 4.1 Kernel Layer
+1.  **Constants**: Add `OPCODE.BARRIER` (0x05) and `CMD.CONNECT` (0x06).
+2.  **SiliconBridge**: Implement `connectAsync(srcPtr, tgtPtr)`.
+3.  **SiliconSynapse**: Implement `_handleConnectCommand` case.
+4.  **MockConsumer**: Implement `BARRIER` wait logic (Reference Implementation).
+
+### 4.2 Synaptic Layer (OS)
+1.  **SynapticNode**:
+    *   Add properties: `protected barrierId: number | undefined`.
+    *   Add properties: `protected writeId: number | undefined` (tracks last content node).
+    *   Implement `addBarrier` / `updateBarrier`.
+    *   Implement `setCycle` (Logic: Update if exists, Insert if null, Delete if 0).
+    *   Update `addNote`/`linkTo` to splice **between** `writeId` and `barrierId`.
+2.  **SynapticClip**:
+    *   Delete `finalize()`.
+    *   Update `loop()` to use `setCycle`.
+
+### 4.3 Validation
+*   Verify `MockConsumer` halts for correct duration.
+*   Verify `insertAsync` + `connectAsync` sequence creates valid loop in one tick.
+
 
 ## 5. Alternatives Considered
 
