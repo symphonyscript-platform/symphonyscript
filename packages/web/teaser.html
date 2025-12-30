@@ -21,7 +21,8 @@
             --text-primary: #ffffff;
             --text-secondary: #888888;
             --accent: #22d3ee;
-            /* Cyan pulse */
+            --accent-purple: #c084fc;
+            --accent-pink: #f472b6;
         }
 
         * {
@@ -34,14 +35,23 @@
             background-color: var(--bg);
             color: var(--text-primary);
             font-family: 'Inter', sans-serif;
-            overflow: hidden;
-            /* Canvas covers all */
-            height: 100vh;
+            overflow-x: hidden;
+            /* Allow scrolling, but we will control what is seen via fixed positioning */
+        }
+
+        /* The scroll container defines the length of the experience */
+        #scroll-track {
+            height: 400vh;
+            /* 4 screens worth of scroll */
+        }
+
+        #fixed-viewport {
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100vw;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
         }
 
         #synapse-canvas {
@@ -51,20 +61,46 @@
             width: 100%;
             height: 100%;
             z-index: 1;
-            opacity: 0.4;
         }
 
-        .container {
-            position: relative;
+        .content-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             z-index: 10;
-            text-align: center;
-            max-width: 800px;
-            padding: 2rem;
-            animation: fadeIn 2s ease-out;
+            pointer-events: none;
+            /* Let clicks pass through to canvas if needed, but we have buttons */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
+        .slide {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+
+        .slide.active {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        /* Typography */
         h1 {
-            font-size: 3.5rem;
+            font-size: 4rem;
             font-weight: 600;
             letter-spacing: -0.05em;
             margin-bottom: 1.5rem;
@@ -74,18 +110,23 @@
             -webkit-text-fill-color: transparent;
         }
 
-        p.hero-sub {
+        h2 {
+            font-size: 2.5rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            color: #fff;
+        }
+
+        p {
             font-size: 1.25rem;
             color: var(--text-secondary);
             font-weight: 300;
             line-height: 1.6;
-            margin-bottom: 2.5rem;
             max-width: 600px;
-            margin-left: auto;
-            margin-right: auto;
+            margin: 0 auto;
         }
 
-        p.hero-sub strong {
+        p strong {
             color: #ddd;
             font-weight: 400;
         }
@@ -113,6 +154,7 @@
             transition: all 0.3s ease;
             text-decoration: none;
             backdrop-filter: blur(5px);
+            margin-top: 2rem;
         }
 
         .cta-button:hover {
@@ -121,186 +163,326 @@
             box-shadow: 0 0 20px rgba(34, 211, 238, 0.2);
         }
 
-        .footer {
+        .scroll-indicator {
             position: absolute;
             bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'JetBrains Mono', monospace;
             font-size: 0.8rem;
             color: #444;
-            font-family: 'JetBrains Mono', monospace;
-            z-index: 10;
+            animation: bounce 2s infinite;
         }
 
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
+        .feature-label {
+            position: absolute;
+            padding: 0.5rem 1rem;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-left: 2px solid var(--accent);
+            color: #fff;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            pointer-events: none;
+            white-space: nowrap;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.3s, transform 0.3s;
+            backdrop-filter: blur(4px);
+        }
+
+        .feature-label.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @keyframes bounce {
+
+            0%,
+            20%,
+            50%,
+            80%,
+            100% {
+                transform: translateX(-50%) translateY(0);
             }
 
-            to {
-                opacity: 1;
-                transform: translateY(0);
+            40% {
+                transform: translateX(-50%) translateY(-10px);
             }
+
+            60% {
+                transform: translateX(-50%) translateY(-5px);
+            }
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 1rem;
+            font-size: 0.7rem;
+            color: #333;
+            font-family: 'JetBrains Mono', monospace;
+            width: 100%;
+            text-align: center;
         }
     </style>
 </head>
 
 <body>
 
-    <div class="container">
-        <span class="mono">Initializing Kernel...</span>
-        <h1>The Silicon Brain<br>for Music.</h1>
-        <p class="hero-sub">
-            Replacing static timelines with live <strong>Neural Topologies</strong>.<br>
-            Zero-allocation. Atomic memory. &lt;5µs latency.<br>
-            <br>
-            Don't just compose. <strong>Build something that breathes.</strong>
-        </p>
+    <div id="scroll-track"></div>
 
-        <a href="mailto:hello@symphonyscript.com?subject=Request%20Access%20to%20SymphonyScript" class="cta-button">
-            REQUEST_ACCESS()
-        </a>
+    <div id="fixed-viewport">
+        <canvas id="synapse-canvas"></canvas>
+
+        <div class="content-layer">
+            <!-- Slide 1: Hero -->
+            <div class="slide active" id="slide-1">
+                <span class="mono">Initializing Kernel...</span>
+                <h1>The Silicon Brain<br>for Music.</h1>
+                <p>
+                    Replacing static timelines with live <strong>Neural Topologies</strong>.<br>
+                    Zero-allocation. Atomic memory. &lt;5µs latency.
+                </p>
+                <div class="scroll-indicator">SCROLL TO EXPLORE</div>
+            </div>
+
+            <!-- Slide 2: The Topology -->
+            <div class="slide" id="slide-2">
+                <span class="mono">Architecture</span>
+                <h2>Living Synapses</h2>
+                <p>
+                    Music isn't linear. It's a graph.<br>
+                    <strong>Synaptic Nodes</strong> fire probabilistic triggers across a 1MB memory map.<br>
+                    The machine doesn't just play back. It thinks.
+                </p>
+            </div>
+
+            <!-- Slide 3: Performance -->
+            <div class="slide" id="slide-3">
+                <span class="mono">Performance</span>
+                <h2>Bare Metal Speed</h2>
+                <p>
+                    No Garbage Collection pauses. No buffer lag.<br>
+                    Direct memory access means your music evolves<br>at the speed of light.
+                </p>
+            </div>
+
+            <!-- Slide 4: CTA -->
+            <div class="slide" id="slide-4">
+                <span class="mono">Join the Revolution</span>
+                <h1>Build Something<br>That Breathes.</h1>
+                <a href="mailto:hello@symphonyscript.com?subject=Request%20Access%20to%20SymphonyScript"
+                    class="cta-button">
+                    REQUEST_ACCESS()
+                </a>
+                <div class="footer">© 2026 SymphonyScript | Tsomaia Technologies</div>
+            </div>
+        </div>
+
+        <!-- Tooltips container -->
+        <div id="labels-container"></div>
     </div>
-
-    <div class="footer">
-        © 2026 SymphonyScript | Tsomaia Technologies
-    </div>
-
-    <canvas id="synapse-canvas"></canvas>
 
     <script>
         const canvas = document.getElementById('synapse-canvas');
         const ctx = canvas.getContext('2d');
+        const labelsContainer = document.getElementById('labels-container');
 
         let width, height;
-        let nodes = [];
-        let synapses = [];
+        let scrollProgress = 0;
+
+        // Configuration
+        const NODE_COUNT = 80;
+        const CAM_Z_START = 1000;
+        const CAM_Z_END = 100;
+
+        // Labels definitions
+        const labels = [
+            { text: "SynapticNode<Note>", t: 0.4, x: 0.3, y: 0.4 },
+            { text: "Propagator::O(1)", t: 0.45, x: 0.7, y: 0.3 },
+            { text: "SharedArrayBuffer", t: 0.5, x: 0.5, y: 0.6 },
+            { text: "Jitter: 0.0ms", t: 0.7, x: 0.2, y: 0.5 },
+            { text: "GC: Zero", t: 0.75, x: 0.8, y: 0.4 }
+        ];
+
+        class Node3D {
+            constructor() {
+                this.x = (Math.random() - 0.5) * 2000;
+                this.y = (Math.random() - 0.5) * 1200;
+                this.z = Math.random() * 2000;
+                this.baseColor = Math.random() > 0.5 ? '#22d3ee' : (Math.random() > 0.5 ? '#c084fc' : '#f472b6');
+                this.size = Math.random() * 3 + 1;
+                this.pulseOffset = Math.random() * Math.PI * 2;
+
+                // Connections
+                this.connections = [];
+            }
+
+            project(camZ) {
+                const perspective = 600 / (perspective_flip(this.z - camZ));
+                // Clamp perspective to avoid division by zero artifacts behind camera
+                if (this.z - camZ < 10) return null;
+
+                return {
+                    x: width / 2 + this.x * perspective,
+                    y: height / 2 + this.y * perspective,
+                    scale: perspective
+                };
+            }
+        }
+
+        // Helper to keep math safe
+        function perspective_flip(d) {
+            return d < 1 ? 1 : d;
+        }
+
+        const nodes = [];
+        for (let i = 0; i < NODE_COUNT; i++) nodes.push(new Node3D());
+
+        // Create random connections locally
+        nodes.forEach((n, i) => {
+            nodes.forEach((n2, j) => {
+                if (i !== j) {
+                    const dx = n.x - n2.x;
+                    const dy = n.y - n2.y;
+                    const dz = n.z - n2.z;
+                    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    if (dist < 400 && n.connections.length < 3) {
+                        n.connections.push(n2);
+                    }
+                }
+            });
+        });
+
+        // Setup DOM Labels
+        const labelElements = labels.map(l => {
+            const el = document.createElement('div');
+            el.className = 'feature-label';
+            el.innerText = l.text;
+            labelsContainer.appendChild(el);
+            return { ...l, el };
+        });
 
         function resize() {
             width = window.innerWidth;
             height = window.innerHeight;
             canvas.width = width;
             canvas.height = height;
-            initNodes();
         }
 
-        class Node {
-            constructor() {
-                this.x = Math.random() * width;
-                this.y = Math.random() * height;
-                this.vx = (Math.random() - 0.5) * 0.5;
-                this.vy = (Math.random() - 0.5) * 0.5;
-                this.radius = Math.random() * 1.5 + 0.5;
-                this.pulseTimer = Math.random() * 200;
-            }
+        function updateScroll() {
+            const totalHeight = document.body.scrollHeight - window.innerHeight;
+            scrollProgress = Math.max(0, Math.min(1, window.scrollY / totalHeight));
 
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
+            // Update Slides
+            // 0.0 - 0.2: Slide 1
+            // 0.25 - 0.5: Slide 2
+            // 0.55 - 0.8: Slide 3
+            // 0.85 - 1.0: Slide 4
 
-                if (this.x < 0 || this.x > width) this.vx *= -1;
-                if (this.y < 0 || this.y > height) this.vy *= -1;
+            const p = scrollProgress;
 
-                this.pulseTimer--;
-                if (this.pulseTimer <= 0) {
-                    this.pulseTimer = 200 + Math.random() * 300;
-                    return true; // Fire pulse
-                }
-                return false;
-            }
+            document.getElementById('slide-1').classList.toggle('active', p < 0.2);
+            document.getElementById('slide-2').classList.toggle('active', p > 0.25 && p < 0.5);
+            document.getElementById('slide-3').classList.toggle('active', p > 0.55 && p < 0.8);
+            document.getElementById('slide-4').classList.toggle('active', p > 0.85);
 
-            draw() {
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(255, 255, 255, 0.3)`;
-                ctx.fill();
-            }
+            requestAnimationFrame(draw);
         }
 
-        class Pulse {
-            constructor(nodeA, nodeB) {
-                this.a = nodeA;
-                this.b = nodeB;
-                this.progress = 0;
-                this.speed = 0.05; // 5us simulation speed ;)
-            }
+        function draw() {
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, width, height);
 
-            update() {
-                this.progress += this.speed;
-                return this.progress >= 1;
-            }
+            const camZ = CAM_Z_START - (scrollProgress * (CAM_Z_START + 500)); // Travel past 0
 
-            draw() {
-                const x = this.a.x + (this.b.x - this.a.x) * this.progress;
-                const y = this.a.y + (this.b.y - this.a.y) * this.progress;
+            // Rotation effect based on scroll
+            const rotSpeed = 0.0005 * Date.now();
+            const scrollRot = scrollProgress * Math.PI;
 
-                ctx.beginPath();
-                ctx.arc(x, y, 2, 0, Math.PI * 2);
-                ctx.fillStyle = '#22d3ee';
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = '#22d3ee';
-                ctx.fill();
-                ctx.shadowBlur = 0;
-            }
-        }
+            nodes.forEach(node => {
+                // Apply slight rotation for liveliness
+                const cos = Math.cos(scrollRot * 0.2);
+                const sin = Math.sin(scrollRot * 0.2);
 
-        function initNodes() {
-            nodes = [];
-            const count = Math.min(100, (width * height) / 15000);
-            for (let i = 0; i < count; i++) {
-                nodes.push(new Node());
-            }
-        }
+                // Project
+                // Simple 3D projection logic adapted for scroll-through
+                // We actually move the camera Z 
 
-        let pulses = [];
+                const relativeZ = node.z - camZ;
 
-        function animate() {
-            ctx.clearRect(0, 0, width, height);
+                if (relativeZ > 0 && relativeZ < 2000) {
+                    const scale = 500 / relativeZ;
+                    const x2d = width / 2 + node.x * scale;
+                    const y2d = height / 2 + node.y * scale;
 
-            // Draw Synapses (Connections)
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-            ctx.lineWidth = 1;
+                    // Draw Connections
+                    ctx.beginPath();
+                    node.connections.forEach(target => {
+                        const tRelZ = target.z - camZ;
+                        if (tRelZ > 0) {
+                            const tScale = 500 / tRelZ;
+                            const tx = width / 2 + target.x * tScale;
+                            const ty = height / 2 + target.y * tScale;
 
-            for (let i = 0; i < nodes.length; i++) {
-                const nodeA = nodes[i];
-                const fired = nodeA.update();
-                nodeA.draw();
-
-                // Connect nearby nodes
-                for (let j = i + 1; j < nodes.length; j++) {
-                    const nodeB = nodes[j];
-                    const dx = nodeA.x - nodeB.x;
-                    const dy = nodeA.y - nodeB.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-
-                    if (dist < 150) {
-                        ctx.beginPath();
-                        ctx.moveTo(nodeA.x, nodeA.y);
-                        ctx.lineTo(nodeB.x, nodeB.y);
-                        ctx.stroke();
-
-                        // Occasional random pulse or fired pulse
-                        if (fired && Math.random() > 0.5) {
-                            pulses.push(new Pulse(nodeA, nodeB));
+                            const grad = ctx.createLinearGradient(x2d, y2d, tx, ty);
+                            grad.addColorStop(0, `rgba(255,255,255, ${0.1 * (1 - relativeZ / 2000)})`);
+                            grad.addColorStop(1, `rgba(255,255,255, ${0.1 * (1 - tRelZ / 2000)})`);
+                            ctx.strokeStyle = grad;
+                            ctx.lineWidth = 1 * scale;
+                            ctx.moveTo(x2d, y2d);
+                            ctx.lineTo(tx, ty);
                         }
-                    }
-                }
-            }
+                    });
+                    ctx.stroke();
 
-            // Update and draw pulses
-            for (let i = pulses.length - 1; i >= 0; i--) {
-                const p = pulses[i];
-                p.draw();
-                if (p.update()) {
-                    pulses.splice(i, 1);
-                }
-            }
+                    // Draw Node
+                    const pulse = Math.sin(Date.now() * 0.005 + node.pulseOffset) * 0.2 + 0.8;
+                    const alpha = Math.min(1, (1 - relativeZ / 2000) * 1.5) * pulse; // Fade at distance
 
-            requestAnimationFrame(animate);
+                    ctx.beginPath();
+                    ctx.arc(x2d, y2d, node.size * scale * pulse, 0, Math.PI * 2);
+                    ctx.fillStyle = node.baseColor;
+                    ctx.globalAlpha = alpha;
+                    ctx.fill();
+
+                    // Glow
+                    ctx.beginPath();
+                    ctx.arc(x2d, y2d, node.size * scale * 4, 0, Math.PI * 2);
+                    ctx.fillStyle = node.baseColor;
+                    ctx.globalAlpha = alpha * 0.3;
+                    ctx.fill();
+
+                    ctx.globalAlpha = 1.0;
+                }
+            });
+
+            // Update Labels
+            labelElements.forEach(l => {
+                // Show label if within scroll range
+                const visible = scrollProgress > l.t - 0.05 && scrollProgress < l.t + 0.1;
+                l.el.classList.toggle('visible', visible);
+
+                if (visible) {
+                    l.el.style.left = (l.x * width) + 'px';
+                    l.el.style.top = (l.y * height) + 'px';
+                }
+            });
         }
 
+        // Listeners
         window.addEventListener('resize', resize);
+        window.addEventListener('scroll', updateScroll);
+
+        // Loop for pulse animation even if not scrolling
+        function loop() {
+            draw();
+            requestAnimationFrame(loop);
+        }
+
         resize();
-        animate();
+        loop();
+        updateScroll(); // Init
     </script>
 </body>
 
