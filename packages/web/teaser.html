@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SymphonyScript | The Silicon Brain</title>
+    <meta name="description" content="Building the Silicon Brain for music. Replacing static timelines with live Neural Topologies.">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #050505;
+            --text-primary: #ffffff;
+            --text-secondary: #888888;
+            --accent: #22d3ee; /* Cyan pulse */
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Canvas covers all */
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #synapse-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            opacity: 0.4;
+        }
+
+        .container {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            max-width: 800px;
+            padding: 2rem;
+            animation: fadeIn 2s ease-out;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 600;
+            letter-spacing: -0.05em;
+            margin-bottom: 1.5rem;
+            line-height: 1.1;
+            background: linear-gradient(180deg, #fff 0%, #aaa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p.hero-sub {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            font-weight: 300;
+            line-height: 1.6;
+            margin-bottom: 2.5rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        p.hero-sub strong {
+            color: #ddd;
+            font-weight: 400;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--accent);
+            opacity: 0.8;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 1rem 2rem;
+            font-size: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            backdrop-filter: blur(5px);
+        }
+
+        .cta-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: var(--accent);
+            box-shadow: 0 0 20px rgba(34, 211, 238, 0.2);
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 2rem;
+            font-size: 0.8rem;
+            color: #444;
+            font-family: 'JetBrains Mono', monospace;
+            z-index: 10;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <span class="mono">Initializing Kernel...</span>
+        <h1>The Silicon Brain is Waking Up.</h1>
+        <p class="hero-sub">
+            Replacing static timelines with live <strong>Neural Topologies</strong>.<br>
+            Zero-allocation. Atomic memory. &lt;5µs latency.<br>
+            <br>
+            Don't just compose. <strong>Build something that breathes.</strong>
+        </p>
+
+        <a href="mailto:hello@tsomaia.tech?subject=Request%20Access%20to%20SymphonyScript" class="cta-button">
+            REQUEST_ACCESS()
+        </a>
+    </div>
+
+    <div class="footer">
+        © 2026 SymphonyScript | Tsomaia Technologies
+    </div>
+
+    <canvas id="synapse-canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('synapse-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let width, height;
+        let nodes = [];
+        let synapses = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            initNodes();
+        }
+
+        class Node {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.radius = Math.random() * 1.5 + 0.5;
+                this.pulseTimer = Math.random() * 200;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+
+                if (this.x < 0 || this.x > width) this.vx *= -1;
+                if (this.y < 0 || this.y > height) this.vy *= -1;
+
+                this.pulseTimer--;
+                if (this.pulseTimer <= 0) {
+                    this.pulseTimer = 200 + Math.random() * 300;
+                    return true; // Fire pulse
+                }
+                return false;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, 0.3)`;
+                ctx.fill();
+            }
+        }
+
+        class Pulse {
+            constructor(nodeA, nodeB) {
+                this.a = nodeA;
+                this.b = nodeB;
+                this.progress = 0;
+                this.speed = 0.05; // 5us simulation speed ;)
+            }
+
+            update() {
+                this.progress += this.speed;
+                return this.progress >= 1;
+            }
+
+            draw() {
+                const x = this.a.x + (this.b.x - this.a.x) * this.progress;
+                const y = this.a.y + (this.b.y - this.a.y) * this.progress;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 2, 0, Math.PI * 2);
+                ctx.fillStyle = '#22d3ee';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#22d3ee';
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        function initNodes() {
+            nodes = [];
+            const count = Math.min(100, (width * height) / 15000);
+            for (let i = 0; i < count; i++) {
+                nodes.push(new Node());
+            }
+        }
+
+        let pulses = [];
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw Synapses (Connections)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+            ctx.lineWidth = 1;
+            
+            for (let i = 0; i < nodes.length; i++) {
+                const nodeA = nodes[i];
+                const fired = nodeA.update();
+                nodeA.draw();
+
+                // Connect nearby nodes
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const nodeB = nodes[j];
+                    const dx = nodeA.x - nodeB.x;
+                    const dy = nodeA.y - nodeB.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < 150) {
+                        ctx.beginPath();
+                        ctx.moveTo(nodeA.x, nodeA.y);
+                        ctx.lineTo(nodeB.x, nodeB.y);
+                        ctx.stroke();
+
+                        // Occasional random pulse or fired pulse
+                        if (fired && Math.random() > 0.5) {
+                            pulses.push(new Pulse(nodeA, nodeB));
+                        }
+                    }
+                }
+            }
+
+            // Update and draw pulses
+            for (let i = pulses.length - 1; i >= 0; i--) {
+                const p = pulses[i];
+                p.draw();
+                if (p.update()) {
+                    pulses.splice(i, 1);
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+        animate();
+    </script>
+</body>
+</html>
