@@ -36,7 +36,7 @@ export class SynapticChordCursor extends SynapticMelodyBaseCursor {
      */
     chord(symbol: string): this {
         if (this.hasPending) {
-            this.flush();
+            this.commit();
             this.clip.advanceTick(this._duration);
         }
 
@@ -56,7 +56,7 @@ export class SynapticChordCursor extends SynapticMelodyBaseCursor {
      */
     harmony(mask: number, root?: number): this {
         if (this.hasPending) {
-            this.flush();
+            this.commit();
             this.clip.advanceTick(this._duration);
         }
         this.bind(this.clip.getCurrentTick());
@@ -100,7 +100,7 @@ export class SynapticChordCursor extends SynapticMelodyBaseCursor {
      * RFC-050: Delegates each voice to clip.flushNote() for transformation application.
      * STRICT ZERO-ALLOCATION. No closures.
      */
-    flush(): void {
+    commit(): void {
         if (!this.hasPending) return;
 
         let mask = this.chordMask;

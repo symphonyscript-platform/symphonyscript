@@ -1,4 +1,4 @@
-import { SynapticCursor } from './SynapticCursor';
+import { ComposerCursor } from './ComposerCursor';
 import { SynapticClip } from '../clips/SynapticClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 
@@ -7,7 +7,7 @@ import { SiliconBridge } from '@symphonyscript/kernel';
  * RFC-049 Section 4.6
  * Specialized for unpitched percussive events.
  */
-export class SynapticDrumHitCursor extends SynapticCursor {
+export class SynapticDrumHitCursor extends ComposerCursor {
     // State
     protected drumPitch: number = 36; // Default kick drum (C1)
     protected isFlam: boolean = false;
@@ -42,7 +42,7 @@ export class SynapticDrumHitCursor extends SynapticCursor {
 
     hit(pitch: number, duration?: number): this {
         if (this.hasPending) {
-            this.flush();
+            this.commit();
             this.clip.advanceTick(this._duration);
         }
 
@@ -75,7 +75,7 @@ export class SynapticDrumHitCursor extends SynapticCursor {
      * Flushes the drum hit to the clip mediator with articulations.
      * RFC-050: Delegates all insertions to clip.flushNote().
      */
-    flush(): void {
+    commit(): void {
         if (!this.hasPending) return;
 
         const sourceId = this.clip.generateSourceId();

@@ -11,7 +11,8 @@ import {
   NULL_PTR,
   PACKED,
   FLAG,
-  HEAP_START_OFFSET
+  HEAP_START_OFFSET,
+  OPCODE
 } from './constants'
 import type { SiliconSynapse } from './silicon-synapse'
 
@@ -47,6 +48,9 @@ export class MockConsumer {
   private tickRate: number // ticks per process() call
   private linker: SiliconSynapse | null = null // RFC-044: Worker-side linker for command processing
 
+  // [RFC-054] State Machine Hold for BARRIER nodes
+  private pendingBarrierTargetTick: number | null = null
+
   constructor(buffer: SharedArrayBuffer, tickRate = 24) {
     this.sab = new Int32Array(buffer)
     this.heapStartI32 = HEAP_START_OFFSET / 4
@@ -68,6 +72,7 @@ export class MockConsumer {
     this.currentPtr = NULL_PTR
     this.events = []
     this.isRunning = false
+    this.pendingBarrierTargetTick = null // [RFC-054]
     Atomics.store(this.sab, HDR.PLAYHEAD_TICK, 0)
   }
 
@@ -135,8 +140,42 @@ export class MockConsumer {
 
       // Extract fields from packed
       const flags = packed & PACKED.FLAGS_MASK
+      const opcode = (packed & PACKED.OPCODE_MASK) >>> PACKED.OPCODE_SHIFT
       const pitch = (packed & PACKED.PITCH_MASK) >>> PACKED.PITCH_SHIFT
       const velocity = (packed & PACKED.VELOCITY_MASK) >>> PACKED.VELOCITY_SHIFT
+
+      // [RFC-054] BARRIER State Machine Hold
+      if (opcode === OPCODE.BARRIER) {
+        const cycleLength = duration
+
+        // Check if we're already waiting on a barrier
+        if (this.pendingBarrierTargetTick !== null) {
+          // Check if playhead has reached target tick
+          if (playhead >= this.pendingBarrierTargetTick) {
+            // Barrier wait complete - advance to next node
+            this.pendingBarrierTargetTick = null
+            this.currentPtr = nextPtr
+            continue
+          } else {
+            // Still waiting - do not advance
+            break
+          }
+        } else {
+          // Calculate wait time
+          const remainder = playhead % cycleLength
+          const wait = remainder === 0 ? 0 : cycleLength - remainder
+
+          if (wait > 0) {
+            // Enter hold state
+            this.pendingBarrierTargetTick = playhead + wait
+            break // Do not advance currentPtr
+          } else {
+            // Already aligned - advance immediately
+            this.currentPtr = nextPtr
+            continue
+          }
+        }
+      }
 
       // Check if node is active and not muted
       if ((flags & FLAG.ACTIVE) && !(flags & FLAG.MUTED)) {

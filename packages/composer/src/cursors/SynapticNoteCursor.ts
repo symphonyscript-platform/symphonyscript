@@ -1,9 +1,9 @@
-import { SynapticCursor } from './SynapticCursor';
+import { ComposerCursor } from './ComposerCursor';
 import { SynapticClip } from '../clips/SynapticClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { parsePitch } from '../utils/pitch';
 
-export class SynapticNoteCursor extends SynapticCursor {
+export class SynapticNoteCursor extends ComposerCursor {
     protected pitch: number = 60; // Middle C default
 
     constructor(clip: SynapticClip, bridge: SiliconBridge) {
@@ -18,7 +18,7 @@ export class SynapticNoteCursor extends SynapticCursor {
     note(input: string | number, duration?: number): this {
         // 1. Commit previous if pending (Sequential flow)
         if (this.hasPending) {
-            this.flush();
+            this.commit();
             this.clip.advanceTick(this._duration);
         }
 
@@ -41,7 +41,7 @@ export class SynapticNoteCursor extends SynapticCursor {
      * Flushes the current single note to the clip mediator.
      * RFC-050: Delegates to clip.flushNote() for transformation application.
      */
-    flush(): void {
+    commit(): void {
         if (!this.hasPending) return;
 
         const sourceId = this.clip.generateSourceId();

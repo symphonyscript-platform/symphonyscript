@@ -389,7 +389,9 @@ export const OPCODE = {
   /** Control change */
   CC: 0x03,
   /** Pitch bend */
-  BEND: 0x04
+  BEND: 0x04,
+  /** Phase Barrier (wait until cycle boundary) */
+  BARRIER: 0x05
 } as const
 
 // =============================================================================
@@ -766,7 +768,11 @@ export const CMD = {
   /** Patch node attributes atomically (deferred/batched updates) */
   PATCH: 3,
   /** Clear all nodes from the chain (mass delete) */
-  CLEAR: 4
+  CLEAR: 4,
+  /** [RFC-054] Create synapse connection using raw pointers (async-safe) */
+  CONNECT: 5,
+  /** [RFC-054] Remove synapse connection using raw pointers (async-safe) */
+  DISCONNECT: 6
 } as const
 
 /**

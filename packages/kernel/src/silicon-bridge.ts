@@ -605,6 +605,47 @@ export class SiliconBridge {
   }
 
   /**
+   * [RFC-054] Create a synapse connection asynchronously using raw pointers.
+   *
+   * This is async-safe for newly allocated nodes that are not yet in the
+   * Identity Table. Uses FIFO guarantee of Ring Buffer to ensure nodes
+   * exist before connection is attempted.
+   *
+   * @param srcPtr - Byte offset to source node (trigger point)
+   * @param tgtPtr - Byte offset to target node (destination)
+   * @param weight - Connection weight (0-65535), default 500
+   * @param jitter - Micro-timing deviation in ticks (0-65535), default 0
+   */
+  connectAsync(srcPtr: NodePtr, tgtPtr: NodePtr, weight: number = 500, jitter: number = 0): void {
+    const packedWJ = (weight << 16) | (jitter & 0xFFFF)
+    this.ringBuffer.write(CMD.CONNECT, srcPtr, tgtPtr, packedWJ)
+    Atomics.notify(this.sab, HDR.YIELD_SLOT, 1)
+  }
+
+  /**
+   * [RFC-054] Remove a synapse connection asynchronously using raw pointers.
+   *
+   * @param srcPtr - Byte offset to source node (trigger point)
+   * @param tgtPtr - Byte offset to target node, or NULL_PTR for "disconnect all"
+   */
+  disconnectAsync(srcPtr: NodePtr, tgtPtr: NodePtr = NULL_PTR): void {
+    this.ringBuffer.write(CMD.DISCONNECT, srcPtr, tgtPtr, 0)
+    Atomics.notify(this.sab, HDR.YIELD_SLOT, 1)
+  }
+
+  /**
+   * [RFC-054] Delete a node asynchronously via Command Ring.
+   *
+   * Convenience wrapper that queues CMD.DELETE to the Ring Buffer.
+   *
+   * @param ptr - Byte offset to node to delete
+   */
+  deleteAsync(ptr: NodePtr): void {
+    this.ringBuffer.write(CMD.DELETE, ptr, 0, 0)
+    Atomics.notify(this.sab, HDR.YIELD_SLOT, 1)
+  }
+
+  /**
    * Insert a note immediately (bypasses debounce). TEST-ONLY.
    *
    * ISSUE-024: Renamed from insertNoteImmediate to _insertNoteImmediate
@@ -1302,10 +1343,11 @@ export class SiliconBridge {
    *
    * @param sourceId - SOURCE_ID of the trigger node (end of clip)
    * @param targetId - SOURCE_ID of the destination node (start of next clip)
-   * @param options - Optional weight (0-1000) and jitter (0-65535)
+   * @param weight - Probability/Intensity (0-1000, default 500)
+   * @param jitter - Micro-timing deviation in ticks (0-65535, default 0)
    * @returns The SynapsePtr on success, or negative error code
    */
-  connect(sourceId: number, targetId: number, options: SynapseOptions = {}): SynapsePtr {
+  connect(sourceId: number, targetId: number, weight: number = 500, jitter: number = 0): SynapsePtr {
     const sourcePtr = this.linker.idTableLookup(sourceId)
     if (sourcePtr === NULL_PTR) {
       return BRIDGE_ERR.NOT_FOUND
@@ -1315,9 +1357,6 @@ export class SiliconBridge {
     if (targetPtr === NULL_PTR) {
       return BRIDGE_ERR.NOT_FOUND
     }
-
-    const weight = options.weight ?? 500
-    const jitter = options.jitter ?? 0
 
     const result = this.synapseAllocator.connect(sourcePtr, targetPtr, weight, jitter)
     return result

@@ -1,6 +1,6 @@
-import { SynapticCursor } from './SynapticCursor';
+import { ComposerCursor } from './ComposerCursor';
 
-export abstract class SynapticMelodyBaseCursor extends SynapticCursor {
+export abstract class SynapticMelodyBaseCursor extends ComposerCursor {
     // State
     protected _detune: number = 0;
     protected _timbre: number = 0;

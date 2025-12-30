@@ -29,6 +29,7 @@ import {
 import { FreeList } from './free-list'
 import { AttributePatcher } from './patch'
 import { RingBuffer } from './ring-buffer'
+import { SynapseAllocator } from './synapse-allocator'
 import { createLinkerSAB, resetLinkerSAB } from './init'
 import type {
   NodePtr,
@@ -66,6 +67,9 @@ export class SiliconSynapse implements ISiliconLinker {
   // RFC-044: Command processing state
   private commandBuffer: Int32Array // Pre-allocated buffer for reading commands
 
+  // [RFC-054] Synapse Allocator for CMD.CONNECT/DISCONNECT
+  private synapseAllocator: SynapseAllocator
+
   // RFC-045-04: Context-aware mutex behavior
   private isAudioContext: boolean = false
 
@@ -86,6 +90,9 @@ export class SiliconSynapse implements ISiliconLinker {
     // RFC-044: Initialize Command Ring Buffer infrastructure
     this.ringBuffer = new RingBuffer(this.sab)
     this.commandBuffer = new Int32Array(4) // Pre-allocate for zero-alloc reads
+
+    // [RFC-054] Initialize Synapse Allocator for async connect/disconnect
+    this.synapseAllocator = new SynapseAllocator(buffer)
   }
 
   /**
@@ -397,6 +404,19 @@ export class SiliconSynapse implements ISiliconLinker {
    */
   private nodeOffset(ptr: NodePtr): number {
     return ptr / 4
+  }
+
+  /**
+   * [RFC-054] Validate that a pointer is within the valid heap range.
+   * Used by executeConnect/executeDisconnect for pointer safety.
+   *
+   * @param ptr - Byte offset pointer to validate
+   * @returns true if pointer is within valid heap bounds, false otherwise
+   */
+  private isValidHeapPtr(ptr: NodePtr): boolean {
+    if (ptr === NULL_PTR) return false
+    const ptrOffset = ptr / 4
+    return ptrOffset >= this.heapStartI32 && ptr < this.buffer.byteLength
   }
 
   /**
@@ -1585,7 +1605,7 @@ export class SiliconSynapse implements ISiliconLinker {
       const opcode = this.commandBuffer[0]
       const param1 = this.commandBuffer[1]
       const param2 = this.commandBuffer[2]
-      // param3 (commandBuffer[3]) is RESERVED
+      const param3 = this.commandBuffer[3] // [RFC-054] PackedWJ for CONNECT
 
       // Execute command based on opcode
       switch (opcode) {
@@ -1601,6 +1621,14 @@ export class SiliconSynapse implements ISiliconLinker {
         case CMD.PATCH:
           // PATCH not implemented in MVP (direct patches are immediate)
           // Could be used for batched/deferred patches in future
+          break
+        case CMD.CONNECT:
+          // [RFC-054] Create synapse using raw pointers
+          this.executeConnect(param1, param2, param3)
+          break
+        case CMD.DISCONNECT:
+          // [RFC-054] Remove synapse using raw pointers
+          this.executeDisconnect(param1, param2)
           break
         default:
           // Unknown opcode - set error flag (zero-allocation)
@@ -1704,6 +1732,67 @@ export class SiliconSynapse implements ISiliconLinker {
   private executeDelete(ptr: NodePtr): boolean {
     // RFC-045-04: _deleteNode now returns boolean instead of throwing
     return this._deleteNode(ptr)
+  }
+
+  /**
+   * [RFC-054] Execute CONNECT command: Create synaptic connection using raw pointers.
+   *
+   * This enables async-safe synapse creation for newly allocated nodes that
+   * are not yet in the Identity Table. Uses FIFO guarantee of Ring Buffer
+   * to ensure source/target nodes exist before connection.
+   *
+   * @param srcPtr - Byte offset to source node (trigger point)
+   * @param tgtPtr - Byte offset to target node (destination)
+   * @param packedWJ - Packed weight and jitter: (weight << 16) | (jitter & 0xFFFF)
+   * @returns true on success, false on error (ERROR_FLAG set)
+   */
+  private executeConnect(srcPtr: NodePtr, tgtPtr: NodePtr, packedWJ: number): boolean {
+    // 1. Validate pointers are in valid heap range
+    if (!this.isValidHeapPtr(srcPtr) || !this.isValidHeapPtr(tgtPtr)) {
+      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+      return false
+    }
+
+    // 2. Unpack weight and jitter
+    const weight = (packedWJ >>> 16) || 500 // Default 500 if 0
+    const jitter = packedWJ & 0xFFFF
+
+    // 3. Create synapse (returns SynapsePtr or error code)
+    const result = this.synapseAllocator.connect(srcPtr, tgtPtr, weight, jitter)
+    return result >= 0
+  }
+
+  /**
+   * [RFC-054] Execute DISCONNECT command: Remove synaptic connection using raw pointers.
+   *
+   * Supports both single-target and all-target disconnection:
+   * - If tgtPtr === NULL_PTR: Disconnect ALL synapses from source
+   * - If tgtPtr is valid: Disconnect only the specific synapse
+   *
+   * @param srcPtr - Byte offset to source node (trigger point)
+   * @param tgtPtr - Byte offset to target node, or NULL_PTR for "disconnect all"
+   * @returns true on success, false on error (ERROR_FLAG set)
+   */
+  private executeDisconnect(srcPtr: NodePtr, tgtPtr: NodePtr): boolean {
+    // Validate source pointer
+    if (!this.isValidHeapPtr(srcPtr)) {
+      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+      return false
+    }
+
+    if (tgtPtr === NULL_PTR) {
+      // Disconnect all synapses from source (targetPtr = undefined)
+      this.synapseAllocator.disconnect(srcPtr)
+      return true
+    } else {
+      // Disconnect specific synapse
+      if (!this.isValidHeapPtr(tgtPtr)) {
+        Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+        return false
+      }
+      this.synapseAllocator.disconnect(srcPtr, tgtPtr)
+      return true
+    }
   }
 
   /**

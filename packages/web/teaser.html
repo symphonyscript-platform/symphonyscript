@@ -311,8 +311,11 @@
                 this.y = (Math.random() - 0.5) * 1200;
                 this.z = Math.random() * 2000;
                 this.baseColor = Math.random() > 0.5 ? '#22d3ee' : (Math.random() > 0.5 ? '#c084fc' : '#f472b6');
-                this.size = Math.random() * 3 + 1;
-                this.pulseOffset = Math.random() * Math.PI * 2;
+                this.size = Math.random() * 2 + 1; // Smaller, more subtle size
+
+                // Breathing attributes
+                this.phase = Math.random() * Math.PI * 2;
+                this.speed = 0.002 + Math.random() * 0.002; // Very slow
 
                 // Connections
                 this.connections = [];
@@ -337,6 +340,7 @@
         }
 
         const nodes = [];
+
         for (let i = 0; i < NODE_COUNT; i++) nodes.push(new Node3D());
 
         // Create random connections locally
@@ -386,28 +390,19 @@
             document.getElementById('slide-2').classList.toggle('active', p > 0.25 && p < 0.5);
             document.getElementById('slide-3').classList.toggle('active', p > 0.55 && p < 0.8);
             document.getElementById('slide-4').classList.toggle('active', p > 0.85);
-
-            requestAnimationFrame(draw);
         }
 
         function draw() {
             ctx.fillStyle = '#050505';
             ctx.fillRect(0, 0, width, height);
 
-            const camZ = CAM_Z_START - (scrollProgress * (CAM_Z_START + 500)); // Travel past 0
-
-            // Rotation effect based on scroll
-            const rotSpeed = 0.0005 * Date.now();
-            const scrollRot = scrollProgress * Math.PI;
+            const camZ = CAM_Z_START - (scrollProgress * (CAM_Z_START + 500));
+            const time = Date.now();
 
             nodes.forEach(node => {
-                // Apply slight rotation for liveliness
-                const cos = Math.cos(scrollRot * 0.2);
-                const sin = Math.sin(scrollRot * 0.2);
-
-                // Project
-                // Simple 3D projection logic adapted for scroll-through
-                // We actually move the camera Z 
+                // Breathing logic
+                const breath = Math.sin(time * node.speed + node.phase); // -1 to 1
+                const normalizedBreath = (breath + 1) / 2; // 0 to 1
 
                 const relativeZ = node.z - camZ;
 
@@ -416,42 +411,44 @@
                     const x2d = width / 2 + node.x * scale;
                     const y2d = height / 2 + node.y * scale;
 
-                    // Draw Connections
+                    // Draw Connections (Steady, low opacity)
                     ctx.beginPath();
+                    // Very subtle breathing for wires too
+                    const wireAlpha = 0.03 + (normalizedBreath * 0.02);
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${wireAlpha * (1 - relativeZ / 2000)})`;
+                    ctx.lineWidth = 1 * scale;
+
                     node.connections.forEach(target => {
                         const tRelZ = target.z - camZ;
                         if (tRelZ > 0) {
                             const tScale = 500 / tRelZ;
                             const tx = width / 2 + target.x * tScale;
                             const ty = height / 2 + target.y * tScale;
-
-                            const grad = ctx.createLinearGradient(x2d, y2d, tx, ty);
-                            grad.addColorStop(0, `rgba(255,255,255, ${0.1 * (1 - relativeZ / 2000)})`);
-                            grad.addColorStop(1, `rgba(255,255,255, ${0.1 * (1 - tRelZ / 2000)})`);
-                            ctx.strokeStyle = grad;
-                            ctx.lineWidth = 1 * scale;
                             ctx.moveTo(x2d, y2d);
                             ctx.lineTo(tx, ty);
                         }
                     });
                     ctx.stroke();
 
-                    // Draw Node
-                    const pulse = Math.sin(Date.now() * 0.005 + node.pulseOffset) * 0.2 + 0.8;
-                    const alpha = Math.min(1, (1 - relativeZ / 2000) * 1.5) * pulse; // Fade at distance
+                    // Draw Node (Breathing)
+                    // Size modulates slightly
+                    const currentSize = node.size * scale * (0.8 + normalizedBreath * 0.4);
+                    const alpha = Math.min(1, (1 - relativeZ / 2000) * 1.5) * (0.3 + normalizedBreath * 0.7);
 
                     ctx.beginPath();
-                    ctx.arc(x2d, y2d, node.size * scale * pulse, 0, Math.PI * 2);
+                    ctx.arc(x2d, y2d, currentSize, 0, Math.PI * 2);
                     ctx.fillStyle = node.baseColor;
                     ctx.globalAlpha = alpha;
                     ctx.fill();
 
-                    // Glow
-                    ctx.beginPath();
-                    ctx.arc(x2d, y2d, node.size * scale * 4, 0, Math.PI * 2);
-                    ctx.fillStyle = node.baseColor;
-                    ctx.globalAlpha = alpha * 0.3;
-                    ctx.fill();
+                    // Subtle Glow for brighter moments
+                    if (normalizedBreath > 0.7) {
+                        ctx.beginPath();
+                        ctx.arc(x2d, y2d, currentSize * 2, 0, Math.PI * 2);
+                        ctx.fillStyle = node.baseColor;
+                        ctx.globalAlpha = alpha * 0.2;
+                        ctx.fill();
+                    }
 
                     ctx.globalAlpha = 1.0;
                 }
@@ -459,29 +456,22 @@
 
             // Update Labels
             labelElements.forEach(l => {
-                // Show label if within scroll range
                 const visible = scrollProgress > l.t - 0.05 && scrollProgress < l.t + 0.1;
                 l.el.classList.toggle('visible', visible);
-
                 if (visible) {
                     l.el.style.left = (l.x * width) + 'px';
                     l.el.style.top = (l.y * height) + 'px';
                 }
             });
+            requestAnimationFrame(draw);
         }
 
         // Listeners
         window.addEventListener('resize', resize);
         window.addEventListener('scroll', updateScroll);
 
-        // Loop for pulse animation even if not scrolling
-        function loop() {
-            draw();
-            requestAnimationFrame(loop);
-        }
-
         resize();
-        loop();
+        draw(); // Start loop
         updateScroll(); // Init
     </script>
 </body>

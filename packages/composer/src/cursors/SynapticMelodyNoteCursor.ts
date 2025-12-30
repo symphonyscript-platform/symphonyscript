@@ -34,7 +34,7 @@ export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
      */
     note(input: string | number, duration?: number): this {
         if (this.hasPending) {
-            this.flush();
+            this.commit();
             this.clip.advanceTick(this._duration);
         }
 
@@ -54,7 +54,7 @@ export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
     chord(symbol: string): SynapticChordCursor {
         // 1. Commit pending melody note
         if (this.hasPending) {
-            this.flush();
+            this.commit();
             this.clip.advanceTick(this._duration);
         }
 
@@ -73,7 +73,7 @@ export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
      */
     degree(deg: number, duration?: number): this {
         if (this.hasPending) {
-            this.flush();
+            this.commit();
             this.clip.advanceTick(this._duration);
         }
         this.bind(this.clip.getCurrentTick());
@@ -117,7 +117,7 @@ export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
      * Flushes the current note to the clip mediator.
      * RFC-050: Delegates to clip.flushNote() for transformation application.
      */
-    flush(): void {
+    commit(): void {
         if (!this.hasPending) return;
 
         const sourceId = this.clip.generateSourceId();

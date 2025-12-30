@@ -2,10 +2,10 @@ import { SiliconBridge } from '@symphonyscript/kernel';
 import { SynapticClip } from '../clips/SynapticClip';
 
 /**
- * Base SynapticCursor
+ * Base ComposerCursor
  * RFC-049 Phase 1
  */
-export abstract class SynapticCursor {
+export abstract class ComposerCursor {
     // State
     public hasPending: boolean = false;
     public baseTick: number = 0;
@@ -32,7 +32,7 @@ export abstract class SynapticCursor {
      * Flushes the pending state to the kernel.
      * MUST use zero-allocation logic (while loops, bitwise ops).
      */
-    abstract flush(): void;
+    abstract commit(): void;
 
     // ==========================================
     // Modifiers (Fluently return this)
@@ -92,50 +92,50 @@ export abstract class SynapticCursor {
     // Escapes (Commit & Return Clip)
     // ==========================================
 
-    commit(): SynapticClip {
+    _commit(): SynapticClip {
         if (this.hasPending) {
-            this.flush();
+            this.commit();
         }
         return this.clip;
     }
 
     rest(duration?: number): SynapticClip {
-        this.commit();
+        this._commit();
         return this.clip.rest(duration);
     }
 
     tempo(bpm: number): SynapticClip {
-        this.commit();
+        this._commit();
         return this.clip.tempo(bpm);
     }
 
     timeSignature(num: number, den: number): SynapticClip {
-        this.commit();
+        this._commit();
         return this.clip.timeSignature(num, den);
     }
 
     swing(val: number): SynapticClip {
-        this.commit();
+        this._commit();
         return this.clip.swing(val);
     }
 
     groove(name: string): SynapticClip {
-        this.commit();
+        this._commit();
         return this.clip.groove(name);
     }
 
     control(cc: number, val: number): SynapticClip {
-        this.commit();
+        this._commit();
         return this.clip.control(cc, val);
     }
 
     stack(): SynapticClip {
-        this.commit();
+        this._commit();
         return this.clip.stack();
     }
 
     loop(start: number, end: number): SynapticClip {
-        this.commit();
+        this._commit();
         return this.clip.loop(start, end);
     }
 }

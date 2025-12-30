@@ -1,7 +1,8 @@
 import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
+import { SynapticNode } from '@symphonyscript/synaptic';
 
-export abstract class SynapticClip {
+export abstract class SynapticClip extends SynapticNode {
     // Escape state (persisted user intent)
     protected transposeOffset: number = 0;
     protected currentScale: string | null = null;
@@ -22,7 +23,8 @@ export abstract class SynapticClip {
     // RFC-050: Seeded RNG for deterministic humanization
     protected humanizeRng: SeededRandom;
 
-    constructor(protected bridge: SiliconBridge, seed: number = 0) {
+    constructor(bridge: SiliconBridge, seed: number = 0) {
+        super(bridge);
         this.ccAutomation = new Map();
         this.humanizeRng = new SeededRandom(seed);
     }
@@ -77,8 +79,17 @@ export abstract class SynapticClip {
         this.loopStart = start;
         this.loopEnd = end;
         this.loopEnabled = true;
+
+        // [RFC-054] Sync OS-layer cycle property.
+        // setCycle() instantly creates BARRIER node and closes loop topology.
+        // No finalize() call is needed - topology is valid immediately.
+        this.setCycle(end - start);
         return this;
     }
+
+    // [RFC-054] finalize() REMOVED - Loop topology is now instantly closed by
+    // setCycle() via the BARRIER mechanism. The Kernel handles phase alignment
+    // at runtime, eliminating the need for manual finalization.
 
     // Melodic escape methods (fluent)
     transpose(semitones: number): this {
@@ -133,7 +144,7 @@ export abstract class SynapticClip {
 
         // 5. Final kernel insertion
         const finalVel = Math.floor(humanizedVel * 127);
-        this.bridge.insertAsync(
+        const ptr = this.bridge.insertAsync(
             OPCODE.NOTE,
             finalPitch,
             finalVel,
@@ -141,9 +152,17 @@ export abstract class SynapticClip {
             swingTick,
             muted,
             sourceId,
-            undefined,
+            this.exitId, // Chain to previous node (if any)
             expressionId
         );
+
+        // 6. Update Topology (Generic SynapticNode support)
+        if (ptr >= 0) {
+            if (this.entryId === undefined) {
+                this.entryId = sourceId;
+            }
+            this.exitId = sourceId;
+        }
     }
 
     /**

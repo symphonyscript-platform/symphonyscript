@@ -1,173 +1,145 @@
-// =============================================================================
-// SymphonyScript - SynapticNode (Phase 1: Builder Package)
-// =============================================================================
-// Unopinionated structure builder - low-level wrapper around SiliconBridge.
-//
-// CONSTRAINTS:
-// - Strict typing (no any)
-// - Zero-allocation in addNote (no temporary arrays/objects)
-// - Blind implementation following exact method signatures
-
-import type { SiliconBridge } from '@symphonyscript/kernel'
-import { SynapticNoteCursor } from './SynapticNoteCursor'
+import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
 
 /**
- * SynapticNode - Clean low-level wrapper around SiliconBridge.
+ * SynapticNode - The fundamental unit of the SymphonyScript topology.
  * 
- * Tracks entry and exit source IDs for building note chains and
- * creating synaptic connections between builders.
+ * Represents a generic "neuron" in the graph that can:
+ * 1. Hold a connection to the Kernel (SiliconBridge).
+ * 2. Track its topology identity (Entry/Exit Source IDs).
+ * 3. Form synaptic connections to other nodes.
+ * 4. Manage phase-locking / cycling behavior.
+ * 
+ * This class is content-agnostic. It knows nothing about music, notes, or data types.
  */
-export class SynapticNode {
-    private bridge: SiliconBridge
-    private entryId: number | undefined
-    private exitId: number | undefined
-    private expressionId: number = 0
-    private cycle: number = Infinity
+export abstract class SynapticNode {
+    protected entryId: number | undefined;
+    protected exitId: number | undefined;
+    protected cycle: number = Infinity; // Default: No phase locking (infinite cycle)
 
-    // RFC-047 Phase 9 Task 4: Reusable note parameter cursor
-    private cursor: SynapticNoteCursor
+    // [RFC-054] Phase Barrier tracking for implicit loops
+    protected barrierId: number | undefined;  // Source ID of BARRIER node
+    protected barrierPtr: number | undefined; // Raw pointer for async ops
+    protected writeId: number | undefined;    // Last content node (for splicing)
+
+    constructor(protected bridge: SiliconBridge) { }
 
     /**
-     * Create a new SynapticNode.
+     * Link this node's output to another node's input.
      * 
-     * @param bridge - Instance of SiliconBridge from @symphonyscript/core
+     * @param target - The target node to connect to.
+     * @param weight - Synaptic weight (0-1000).
+     * @param jitter - Timing jitter in milliseconds (or ticks, depending on kernel).
      */
-    constructor(bridge: SiliconBridge) {
-        this.bridge = bridge
-        this.entryId = undefined
-        this.exitId = undefined
-        this.cursor = new SynapticNoteCursor()  // RFC-047 Phase 9 Task 4
+    linkTo(target: SynapticNode, weight?: number, jitter?: number): this {
+        if (this.exitId === undefined) {
+            throw new Error('Cannot link: source node has no exit ID (topology not established)');
+        }
+
+        const targetEntry = target.getEntryId();
+
+        // RFC-054: Use flat arguments for zero-allocation
+        this.bridge.connect(this.exitId, targetEntry, weight, jitter);
+        return this;
     }
 
     /**
-     * Set the MPE Expression ID for subsequent notes.
-     * @param id - Expression ID (0-15)
+     * Alias for linkTo.
      */
-    setExpressionId(id: number): void {
-        this.expressionId = id & 0xF
+    connect(target: SynapticNode, weight?: number, jitter?: number): this {
+        return this.linkTo(target, weight, jitter);
     }
 
     /**
-     * Set the phase-locking cycle length.
-     * @param ticks - Cycle length in ticks (or Infinity)
+     * [RFC-054] Set the phase-locking cycle length.
+     * 
+     * This method manages the BARRIER node for implicit loop topology:
+     * - If ticks <= 0: Remove existing barrier (un-loop)
+     * - If barrier exists: Update its duration (idempotent)
+     * - If no barrier: Insert new BARRIER node and close loop
+     * 
+     * @param ticks - Cycle length in ticks. 0 or negative removes the cycle.
      */
     setCycle(ticks: number): void {
-        this.cycle = ticks
-    }
+        this.cycle = ticks;
 
-    /**
-     * Add a note to the builder's chain.
-     * 
-     * Zero-allocation implementation: no temporary arrays or objects.
-     * 
-     * @param pitch - MIDI pitch (0-127)
-     * @param velocity - MIDI velocity (0-127)
-     * @param duration - Duration in ticks
-     * @param baseTick - Start tick position
-     * @param muted - Optional mute state (default: false)
-     */
-    addNote(
-        pitch: number,
-        velocity: number,
-        duration: number,
-        baseTick: number,
-        muted?: boolean
-    ): void {
-        // RFC-047 Phase 9 Task 4: Populate cursor with provided parameters
-        this.cursor.set(pitch, velocity, duration, baseTick, muted ?? false)
+        if (ticks <= 0) {
+            // Remove cycle
+            if (this.barrierPtr !== undefined) {
+                this.bridge.deleteAsync(this.barrierPtr);
 
-        // Delegate to internal cursor-based implementation
-        this.addNoteFromCursor()
-    }
+                // Remove loop synapse: BARRIER → Entry (source → target)
+                if (this.entryId !== undefined) {
+                    const entryPtr = this.bridge.getNodePtr(this.entryId);
+                    if (entryPtr !== undefined) {
+                        this.bridge.disconnectAsync(this.barrierPtr, entryPtr);
+                    }
+                }
 
-    /**
-     * Internal method: Add note from cursor parameters.
-     * 
-     * This is the actual implementation. Public addNote() delegates to this.
-     * 
-     * @private
-     * @returns true if note was added, false on error
-     */
-    private addNoteFromCursor(): boolean {
-        // Call bridge.insertAsync with afterSourceId set to current exit
-        // This will chain notes together in the order they're added
-        const sourceId = this.bridge.generateSourceId()
+                this.barrierId = undefined;
+                this.barrierPtr = undefined;
+            }
+            return;
+        }
 
-        const ptr = this.bridge.insertAsync(
-            0x01, // OPCODE.NOTE
-            this.cursor.pitch,
-            this.cursor.velocity,
-            this.cursor.duration,
-            this.cursor.baseTick,
-            this.cursor.muted,
-            sourceId,
-            this.exitId,
-            this.expressionId // RFC-047 Phase 3: Pass MPE ID
-        )
+        if (this.barrierId !== undefined) {
+            // Update existing barrier duration (type is string 'duration')
+            this.bridge.patchDirect(this.barrierId, 'duration', ticks);
+        } else {
+            // Insert new barrier
+            const sourceId = this.bridge.generateSourceId();
 
-        // Only update IDs if insertion succeeded (ptr >= 0)
-        if (ptr >= 0) {
-            // Set entryId on first note
-            if (this.entryId === undefined) {
-                this.entryId = sourceId
+            // Insert BARRIER after writeId (or at end of chain)
+            // OPCODE.BARRIER = 0x05, pitch=0, velocity=0, duration=ticks, baseTick=0
+            const ptr = this.bridge.insertAsync(
+                OPCODE.BARRIER,
+                0,      // pitch (unused)
+                0,      // velocity (unused)
+                ticks,  // duration = cycle length
+                0,      // baseTick = 0 (evaluated dynamically)
+                false,  // muted
+                sourceId,
+                this.writeId ?? this.exitId // Insert after writeId, fallback to exitId
+            );
+
+            if (ptr < 0) {
+                throw new Error(`Failed to allocate BARRIER node: ${ptr}`);
             }
 
-            // Always update exitId to the newly added note
-            this.exitId = sourceId
+            this.barrierId = sourceId;
+            this.barrierPtr = ptr;
 
-            // Register mapping to make sourceId usable
-            // Note: We need to process commands to actually link the node
-            this.bridge.getLinker().processCommands()
-            return true
+            // Connect barrier to entry (loop closure)
+            // Synapse direction: BARRIER → Entry (source → target)
+            if (this.entryId !== undefined) {
+                const entryPtr = this.bridge.getNodePtr(this.entryId);
+                if (entryPtr !== undefined) {
+                    this.bridge.connectAsync(ptr, entryPtr, 500, 0);
+                }
+            }
         }
-
-        return false
     }
 
     /**
-     * Link this builder to a target builder via synaptic connection.
-     * 
-     * Creates a synapse from this builder's exit to the target's entry.
-     * 
-     * @param target - Target SynapticNode to link to
-     * @param weight - Optional synapse weight (0-1000, default: 500)
-     * @param jitter - Optional jitter in ticks (0-65535, default: 0)
-     */
-    linkTo(target: SynapticNode, weight?: number, jitter?: number): void {
-        // Validate that both builders have notes
-        if (this.exitId === undefined) {
-            throw new Error('Cannot link: source builder has no exit (no notes added)')
-        }
-
-        const targetEntryId = target.getEntryId() // Will throw if undefined
-
-        // Create synaptic connection
-        this.bridge.connect(this.exitId, targetEntryId, { weight, jitter })
-    }
-
-    /**
-     * Get the source ID of the first note added to this builder.
-     * 
-     * @returns The entry source ID
-     * @throws Error if no notes have been added
+     * Get the entry source ID (input/dendrite).
      */
     getEntryId(): number {
         if (this.entryId === undefined) {
-            throw new Error('No entry ID: no notes have been added to this builder')
+            throw new Error('Node has no entry ID assigned');
         }
-        return this.entryId
+        return this.entryId;
     }
 
     /**
-     * Get the source ID of the last note added to this builder.
-     * 
-     * @returns The exit source ID
-     * @throws Error if no notes have been added
+     * Get the exit source ID (output/axon).
      */
     getExitId(): number {
         if (this.exitId === undefined) {
-            throw new Error('No exit ID: no notes have been added to this builder')
+            throw new Error('Node has no exit ID assigned');
         }
-        return this.exitId
+        return this.exitId;
     }
+
+    // [RFC-054] enforcePhase() REMOVED - Phase enforcement is now handled by 
+    // the BARRIER mechanism in setCycle(). The Kernel evaluates phase alignment
+    // at runtime, eliminating the need for build-time spacer calculation.
 }

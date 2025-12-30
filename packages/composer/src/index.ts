@@ -2,7 +2,7 @@ export * from './Clip';
 export * from './SymphonyEngine';
 
 // Cursors
-export { SynapticCursor } from './cursors/SynapticCursor';
+export { ComposerCursor } from './cursors/ComposerCursor';
 export { SynapticNoteCursor } from './cursors/SynapticNoteCursor';
 export { SynapticMelodyBaseCursor } from './cursors/SynapticMelodyBaseCursor';
 export { SynapticMelodyNoteCursor } from './cursors/SynapticMelodyNoteCursor';
