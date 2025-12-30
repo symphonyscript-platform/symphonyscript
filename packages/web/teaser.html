@@ -1,22 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SymphonyScript | The Silicon Brain</title>
-    <meta name="description" content="Building the Silicon Brain for music. Replacing static timelines with live Neural Topologies.">
-    
+    <meta name="description"
+        content="Building the Silicon Brain for music. Replacing static timelines with live Neural Topologies.">
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400&display=swap"
+        rel="stylesheet">
 
     <style>
         :root {
             --bg: #050505;
             --text-primary: #ffffff;
             --text-secondary: #888888;
-            --accent: #22d3ee; /* Cyan pulse */
+            --accent: #22d3ee;
+            /* Cyan pulse */
         }
 
         * {
@@ -29,7 +34,8 @@
             background-color: var(--bg);
             color: var(--text-primary);
             font-family: 'Inter', sans-serif;
-            overflow: hidden; /* Canvas covers all */
+            overflow: hidden;
+            /* Canvas covers all */
             height: 100vh;
             width: 100vw;
             display: flex;
@@ -125,16 +131,24 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
     </style>
 </head>
+
 <body>
 
     <div class="container">
         <span class="mono">Initializing Kernel...</span>
-        <h1>The Silicon Brain is Waking Up.</h1>
+        <h1>The Silicon Brain<br>for Music.</h1>
         <p class="hero-sub">
             Replacing static timelines with live <strong>Neural Topologies</strong>.<br>
             Zero-allocation. Atomic memory. &lt;5µs latency.<br>
@@ -156,7 +170,7 @@
     <script>
         const canvas = document.getElementById('synapse-canvas');
         const ctx = canvas.getContext('2d');
-        
+
         let width, height;
         let nodes = [];
         let synapses = [];
@@ -218,7 +232,7 @@
             draw() {
                 const x = this.a.x + (this.b.x - this.a.x) * this.progress;
                 const y = this.a.y + (this.b.y - this.a.y) * this.progress;
-                
+
                 ctx.beginPath();
                 ctx.arc(x, y, 2, 0, Math.PI * 2);
                 ctx.fillStyle = '#22d3ee';
@@ -245,7 +259,7 @@
             // Draw Synapses (Connections)
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
             ctx.lineWidth = 1;
-            
+
             for (let i = 0; i < nodes.length; i++) {
                 const nodeA = nodes[i];
                 const fired = nodeA.update();
@@ -289,4 +303,5 @@
         animate();
     </script>
 </body>
+
 </html>
