@@ -35,14 +35,16 @@ import type { LinkerConfig } from './types'
 
 /**
  * Default configuration values.
+ * Note: synapseCapacity is NOT included here - it's calculated dynamically
+ * as nodeCapacity * 8 if not explicitly provided.
  */
-const DEFAULT_CONFIG: Required<LinkerConfig> = {
+const DEFAULT_CONFIG_BASE = {
   nodeCapacity: 4096,
   ppq: DEFAULT_PPQ,
   bpm: DEFAULT_BPM,
   safeZoneTicks: DEFAULT_SAFE_ZONE_TICKS,
   prngSeed: 12345
-}
+} as const
 
 /**
  * Create and initialize a new SharedArrayBuffer for the Silicon Linker.
@@ -58,10 +60,20 @@ const DEFAULT_CONFIG: Required<LinkerConfig> = {
  * @returns Initialized SharedArrayBuffer
  */
 export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer {
-  const cfg = { ...DEFAULT_CONFIG, ...config }
+  const baseCfg = { ...DEFAULT_CONFIG_BASE, ...config }
+
+  // K-002: Calculate effective synapse capacity
+  // Use explicit config value if provided, otherwise default to nodeCapacity * 8
+  const effectiveSynapseCapacity = config?.synapseCapacity ?? baseCfg.nodeCapacity * 8
+
+  // Create full config with synapseCapacity for typed function calls
+  const cfg: Required<LinkerConfig> = {
+    ...baseCfg,
+    synapseCapacity: effectiveSynapseCapacity
+  }
 
   // Calculate total size needed
-  const totalBytes = calculateSABSize(cfg.nodeCapacity)
+  const totalBytes = calculateSABSize(cfg.nodeCapacity, effectiveSynapseCapacity)
 
   // Create SharedArrayBuffer
   const buffer = new SharedArrayBuffer(totalBytes)
@@ -70,6 +82,10 @@ export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer {
 
   // Initialize header
   initializeHeader(sab, cfg)
+
+  // K-002: Store synapse capacity in header
+  sab[HDR.SYNAPSE_CAPACITY] = effectiveSynapseCapacity
+  sab[HDR.SYNAPSE_COUNT] = 0
 
   // Initialize register bank
   initializeRegisters(sab, cfg)
@@ -92,11 +108,11 @@ export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer {
   // Initialize Reclaim Ring header (K-005)
   initializeReclaimRingHeader(sab, cfg.nodeCapacity)
 
-  // Initialize Reverse Index table (ISSUE-016)
-  initializeReverseIndex(sab, cfg.nodeCapacity)
+  // Initialize Reverse Index table (ISSUE-016) - K-002: pass dynamic capacity
+  initializeReverseIndex(sab, cfg.nodeCapacity, effectiveSynapseCapacity)
 
-  // Initialize Synapse Table (ISSUE-023)
-  initializeSynapseTable(sab, cfg.nodeCapacity)
+  // Initialize Synapse Table (K-002: dynamic capacity)
+  initializeSynapseTable(sab, cfg.nodeCapacity, effectiveSynapseCapacity)
 
   return buffer
 }
@@ -278,9 +294,10 @@ function initializeReclaimRingHeader(sab: Int32Array, nodeCapacity: number): voi
  *
  * @param sab - Int32Array view of the SharedArrayBuffer
  * @param nodeCapacity - Number of nodes in the SAB (used to calculate offset)
+ * @param synapseCapacity - Maximum number of synapses (K-002 dynamic)
  */
-function initializeReverseIndex(sab: Int32Array, nodeCapacity: number): void {
-  const reverseIndexOffset = getReverseIndexOffset(nodeCapacity)
+function initializeReverseIndex(sab: Int32Array, nodeCapacity: number, synapseCapacity: number): void {
+  const reverseIndexOffset = getReverseIndexOffset(nodeCapacity, synapseCapacity)
   const reverseIndexI32 = reverseIndexOffset / 4
 
   // Initialize all buckets to EMPTY (-1)
@@ -292,7 +309,7 @@ function initializeReverseIndex(sab: Int32Array, nodeCapacity: number): void {
 }
 
 /**
- * Initialize the Synapse Table region (ISSUE-023).
+ * Initialize the Synapse Table region (K-002: dynamic capacity).
  *
  * While SharedArrayBuffer is zero-initialized by spec, we explicitly clear the
  * Synapse Table to:
@@ -300,16 +317,16 @@ function initializeReverseIndex(sab: Int32Array, nodeCapacity: number): void {
  * 2. Support future non-zero sentinel values if needed
  * 3. Ensure consistent behavior across all platforms
  *
- * Each synapse entry is 4 × i32: [SOURCE_PTR, TARGET_PTR, WEIGHT_DATA, META_NEXT]
- * Total size: SYNAPSE_TABLE.MAX_CAPACITY (65536) × SYNAPSE_TABLE.STRIDE_I32 (4) = 262144 i32s
+ * Each synapse entry is 5 × i32: [SOURCE_PTR, TARGET_PTR, WEIGHT_DATA, META_NEXT, NEXT_SAME_TARGET]
  *
  * @param sab - Int32Array view of the SharedArrayBuffer
  * @param nodeCapacity - Number of nodes in the SAB (used to calculate offset)
+ * @param synapseCapacity - Maximum number of synapses (K-002)
  */
-function initializeSynapseTable(sab: Int32Array, nodeCapacity: number): void {
+function initializeSynapseTable(sab: Int32Array, nodeCapacity: number, synapseCapacity: number): void {
   const tableOffset = getSynapseTableOffset(nodeCapacity)
   const tableOffsetI32 = tableOffset / 4
-  const totalI32 = SYNAPSE_TABLE.MAX_CAPACITY * SYNAPSE_TABLE.STRIDE_I32
+  const totalI32 = synapseCapacity * SYNAPSE_TABLE.STRIDE_I32
 
   // Zero all synapse entries
   let i = 0
@@ -368,6 +385,7 @@ export function getLinkerConfig(buffer: SharedArrayBuffer): Required<LinkerConfi
 
   return {
     nodeCapacity: sab[HDR.NODE_CAPACITY],
+    synapseCapacity: sab[HDR.SYNAPSE_CAPACITY],
     ppq: sab[HDR.PPQ],
     bpm: sab[HDR.BPM],
     safeZoneTicks: sab[HDR.SAFE_ZONE_TICKS],
@@ -410,11 +428,13 @@ export function resetLinkerSAB(buffer: SharedArrayBuffer): void {
   // Re-initialize Reclaim Ring header (K-005)
   initializeReclaimRingHeader(sab, nodeCapacity)
 
-  // Re-initialize Reverse Index table (ISSUE-016)
-  initializeReverseIndex(sab, nodeCapacity)
+  // Re-initialize Reverse Index table (ISSUE-016) - K-002: use dynamic capacity
+  const synapseCapacity = sab[HDR.SYNAPSE_CAPACITY]
+  initializeReverseIndex(sab, nodeCapacity, synapseCapacity)
 
-  // Re-initialize Synapse Table (ISSUE-023)
-  initializeSynapseTable(sab, nodeCapacity)
+  // Re-initialize Synapse Table (K-002: read capacity from header)
+  initializeSynapseTable(sab, nodeCapacity, synapseCapacity)
+  sab[HDR.SYNAPSE_COUNT] = 0
 }
 
 /**

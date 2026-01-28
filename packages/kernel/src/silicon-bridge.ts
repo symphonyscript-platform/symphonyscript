@@ -133,6 +133,7 @@ export class SiliconBridge {
   private synapseAllocator: SynapseAllocator
   private synapseTableOffsetI32: number
   private reverseIndexI32: number
+  private synapseCapacity: number // K-002: dynamic capacity
 
   /** Learning rate for plasticity (default: 10 = +1% per reward) */
   private learningRate: number
@@ -296,7 +297,8 @@ export class SiliconBridge {
     this.synapseAllocator = new SynapseAllocator(sab)
     this.learningRate = options.learningRate ?? 10
     this.synapseTableOffsetI32 = getSynapseTableOffset(nodeCapacity) / 4
-    this.reverseIndexI32 = getReverseIndexOffset(nodeCapacity) / 4
+    this.synapseCapacity = this.sab[HDR.SYNAPSE_CAPACITY] // K-002: dynamic
+    this.reverseIndexI32 = getReverseIndexOffset(nodeCapacity, this.synapseCapacity) / 4 // K-002
 
     // Pre-allocate ring buffers (init-time allocation is acceptable)
     this.firedRing = new Int32Array(SiliconBridge.FIRED_RING_CAPACITY)
@@ -1560,7 +1562,7 @@ export class SiliconBridge {
     return {
       loadFactor: this.synapseAllocator.getLoadFactor(),
       usedSlots: this.synapseAllocator.getUsedSlots(),
-      capacity: SYNAPSE_TABLE.MAX_CAPACITY
+      capacity: this.synapseCapacity // K-002: dynamic
     }
   }
 
@@ -1608,7 +1610,7 @@ export class SiliconBridge {
     let count = 0
     let slot = 0
 
-    while (slot < SYNAPSE_TABLE.MAX_CAPACITY) {
+    while (slot < this.synapseCapacity) { // K-002: dynamic
       const offset = this.synapseTableOffsetI32 + slot * SYNAPSE_TABLE.STRIDE_I32
 
       const sourcePtr = Atomics.load(this.sab, offset + SYNAPSE.SOURCE_PTR)
@@ -1646,7 +1648,7 @@ export class SiliconBridge {
     let slot = 0
     const maxEntries = out.sourceIds.length
 
-    while (slot < SYNAPSE_TABLE.MAX_CAPACITY && count < maxEntries) {
+    while (slot < this.synapseCapacity && count < maxEntries) { // K-002: dynamic
       const offset = this.synapseTableOffsetI32 + slot * SYNAPSE_TABLE.STRIDE_I32
 
       const sourcePtr = Atomics.load(this.sab, offset + SYNAPSE.SOURCE_PTR)

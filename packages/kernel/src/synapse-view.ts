@@ -29,6 +29,7 @@ export class SynapseView {
     protected readonly tableOffsetI32: number
     protected readonly reverseIndexI32: number
     protected readonly capacity: number
+    protected readonly hashMask: number // K-002: Dynamic hash mask
 
     // Tracking counters (Read-Only access via getters)
     // Note: Modifications should only happen in the Allocator subclass
@@ -43,12 +44,14 @@ export class SynapseView {
         const byteOffset = getSynapseTableOffset(nodeCapacity)
         this.tableOffsetI32 = byteOffset / 4
 
-        // Calculate reverse index offset (ISSUE-016)
-        const reverseByteOffset = getReverseIndexOffset(nodeCapacity)
-        this.reverseIndexI32 = reverseByteOffset / 4
+        // K-002: Read capacity from header (dynamic sizing)
+        this.capacity = this.sab[HDR.SYNAPSE_CAPACITY]
+        // Hash mask for power-of-2 modulo (capacity must be power of 2)
+        this.hashMask = this.capacity - 1
 
-        // Capacity is fixed by RFC-045 at 65536
-        this.capacity = SYNAPSE_TABLE.MAX_CAPACITY
+        // Calculate reverse index offset (ISSUE-016) - K-002: pass dynamic capacity
+        const reverseByteOffset = getReverseIndexOffset(nodeCapacity, this.capacity)
+        this.reverseIndexI32 = reverseByteOffset / 4
     }
 
     // ===========================================================================
@@ -123,9 +126,8 @@ export class SynapseView {
 
     protected hash(key: number): number {
         // Knuth Multiplicative Hash
-        // Use & (capacity - 1) since capacity is power of 2 (65536)
-        // 65536 - 1 = 0xFFFF
-        return (Math.imul(key, KNUTH_HASH_CONST) >>> 0) & 0xFFFF
+        // K-002: Use dynamic mask for variable capacity (power of 2)
+        return (Math.imul(key, KNUTH_HASH_CONST) >>> 0) & this.hashMask
     }
 
     protected offsetForSlot(slot: number): number {

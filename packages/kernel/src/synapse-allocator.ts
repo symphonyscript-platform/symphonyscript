@@ -166,11 +166,11 @@ export class SynapseAllocator extends SynapseView {
    * Compact the synapse table by rehashing all live entries.
    */
   compactTable(): number {
-    // K-001 Lazy Allocation Check
+    // K-001 Lazy Allocation Check - use dynamic capacity
     if (this.stagingSourcePtrs === null) {
-      this.stagingSourcePtrs = new Int32Array(SYNAPSE_TABLE.MAX_CAPACITY)
-      this.stagingTargetPtrs = new Int32Array(SYNAPSE_TABLE.MAX_CAPACITY)
-      this.stagingWeightData = new Int32Array(SYNAPSE_TABLE.MAX_CAPACITY)
+      this.stagingSourcePtrs = new Int32Array(this.capacity)
+      this.stagingTargetPtrs = new Int32Array(this.capacity)
+      this.stagingWeightData = new Int32Array(this.capacity)
     }
 
     // Capture non-null references for type safety
@@ -182,7 +182,7 @@ export class SynapseAllocator extends SynapseView {
     let liveCount = 0
     let scanSlot = 0
 
-    while (scanSlot < SYNAPSE_TABLE.MAX_CAPACITY) {
+    while (scanSlot < this.capacity) { // K-002: dynamic
       const offset = this.tableOffsetI32 + scanSlot * SYNAPSE_TABLE.STRIDE_I32
       const sourcePtr = Atomics.load(this.sab, offset + SYNAPSE.SOURCE_PTR)
       const targetPtr = Atomics.load(this.sab, offset + SYNAPSE.TARGET_PTR)
@@ -199,7 +199,7 @@ export class SynapseAllocator extends SynapseView {
 
     // Phase 2: Clear Table
     let clearSlot = 0
-    while (clearSlot < SYNAPSE_TABLE.MAX_CAPACITY) {
+    while (clearSlot < this.capacity) { // K-002: dynamic
       const offset = this.tableOffsetI32 + clearSlot * SYNAPSE_TABLE.STRIDE_I32
       Atomics.store(this.sab, offset + SYNAPSE.SOURCE_PTR, NULL_PTR)
       Atomics.store(this.sab, offset + SYNAPSE.TARGET_PTR, NULL_PTR)
@@ -242,7 +242,7 @@ export class SynapseAllocator extends SynapseView {
     let slot = idealSlot
     let probes = 0
 
-    while (probes < SYNAPSE_TABLE.MAX_CAPACITY) {
+    while (probes < this.capacity) { // K-002: dynamic
       const offset = this.tableOffsetI32 + slot * SYNAPSE_TABLE.STRIDE_I32
       const existing = Atomics.load(this.sab, offset + SYNAPSE.SOURCE_PTR)
 
@@ -261,7 +261,7 @@ export class SynapseAllocator extends SynapseView {
         this.usedSlots++
         return
       }
-      slot = (slot + 1) % SYNAPSE_TABLE.MAX_CAPACITY
+      slot = (slot + 1) % this.capacity // K-002: dynamic
       probes++
     }
     // Should never happen during compaction

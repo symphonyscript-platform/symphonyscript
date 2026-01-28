@@ -41,14 +41,16 @@ describe('RFC-054: Native Phase Guardrails', () => {
     function synapseExists(sourcePtr: number, targetPtr: number): boolean {
         const sab = new Int32Array(buffer)
         const nodeCapacity = sab[HDR.NODE_CAPACITY]
+        const synapseCapacity = sab[HDR.SYNAPSE_CAPACITY] // K-002: dynamic
+        const hashMask = synapseCapacity - 1
         const synapseTableI32 = getSynapseTableOffset(nodeCapacity) / 4
 
-        // Hash to find slot
-        const hash = (Math.imul(sourcePtr, KNUTH_HASH_CONST) >>> 0) % SYNAPSE_TABLE.MAX_CAPACITY
+        // Hash to find slot - K-002: use dynamic mask
+        const hash = (Math.imul(sourcePtr, KNUTH_HASH_CONST) >>> 0) & hashMask
         let slot = hash
         let probes = 0
 
-        while (probes < SYNAPSE_TABLE.MAX_CAPACITY) {
+        while (probes < synapseCapacity) {
             const offset = synapseTableI32 + slot * SYNAPSE_TABLE.STRIDE_I32
             const storedSource = Atomics.load(sab, offset + SYNAPSE.SOURCE_PTR)
             const storedTarget = Atomics.load(sab, offset + SYNAPSE.TARGET_PTR)
@@ -61,7 +63,7 @@ describe('RFC-054: Native Phase Guardrails', () => {
                 return true // Found matching synapse
             }
 
-            slot = (slot + 1) % SYNAPSE_TABLE.MAX_CAPACITY
+            slot = (slot + 1) % synapseCapacity
             probes++
         }
 

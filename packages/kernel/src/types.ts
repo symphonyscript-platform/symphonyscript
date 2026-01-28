@@ -48,6 +48,8 @@ export type SynapseResolutionCallback = (
 export interface LinkerConfig {
   /** Maximum number of nodes (default: 4096) */
   nodeCapacity?: number
+  /** Maximum number of synapses (default: nodeCapacity * 8) */
+  synapseCapacity?: number
   /** Pulses per quarter note (default: 480) */
   ppq?: number
   /** Initial BPM (default: 120) */

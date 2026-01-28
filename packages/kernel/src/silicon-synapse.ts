@@ -713,6 +713,10 @@ export class SiliconSynapse implements ISiliconLinker {
     Atomics.store(this.sab, HDR.NODE_COUNT, currentCount - 1)
 
     // Free the node (K-005: Zone B Reclamation Logic)
+    // FIRST: Clear ACTIVE flag so getSourceId returns undefined after delete
+    const packedA = Atomics.load(this.sab, offset + NODE.PACKED_A)
+    Atomics.store(this.sab, offset + NODE.PACKED_A, packedA & ~FLAG.ACTIVE)
+
     if (ptr >= this.zoneBStartPtr) {
       // Zone B (Main Thread Owned) -> Push to Reclaim Ring
       const tail = Atomics.load(this.sab, HDR.RECLAIM_RB_TAIL)
@@ -1585,19 +1589,20 @@ export class SiliconSynapse implements ISiliconLinker {
    * Clear the entire Synapse Table (memset-style).
    * Sets all SOURCE_PTR fields to NULL_PTR, effectively tombstoning all synapses.
    *
-   * **Performance:** O(n) where n = SYNAPSE_TABLE.MAX_CAPACITY (65536).
-   * Approximately 260KB of memory touched. ~1ms on modern hardware.
+   * **Performance:** O(n) where n = synapseCapacity (dynamic).
+   * ~1ms on modern hardware.
    *
    * **Thread Safety:** Must be called with Chain Mutex held.
    */
   private synapseTableClear(): void {
     const nodeCapacity = Atomics.load(this.sab, HDR.NODE_CAPACITY)
+    const synapseCapacity = Atomics.load(this.sab, HDR.SYNAPSE_CAPACITY) // K-002: dynamic
     const tableOffsetI32 = getSynapseTableOffset(nodeCapacity) / 4
 
     let slot = 0
-    while (slot < SYNAPSE_TABLE.MAX_CAPACITY) {
+    while (slot < synapseCapacity) {
       const offset = tableOffsetI32 + slot * SYNAPSE_TABLE.STRIDE_I32
-      // Zero all 4 words of each synapse entry
+      // Zero all 5 words of each synapse entry
       Atomics.store(this.sab, offset + SYNAPSE.SOURCE_PTR, NULL_PTR)
       Atomics.store(this.sab, offset + SYNAPSE.TARGET_PTR, NULL_PTR)
       Atomics.store(this.sab, offset + SYNAPSE.WEIGHT_DATA, 0)
