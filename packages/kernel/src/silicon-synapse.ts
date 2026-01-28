@@ -368,12 +368,16 @@ export class SiliconSynapse implements ISiliconLinker {
   /**
    * Allocate a node from the free list.
    *
-   * @returns Node pointer, or NULL_PTR if heap exhausted
+   * @returns Node pointer, or NULL_PTR if heap exhausted or free list corrupted
    */
   allocNode(): NodePtr {
     const ptr = this.freeList.alloc()
     if (ptr === NULL_PTR) {
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.HEAP_EXHAUSTED)
+      // Only set HEAP_EXHAUSTED if no error is already set (e.g., FREE_LIST_CORRUPT)
+      const currentError = Atomics.load(this.sab, HDR.ERROR_FLAG)
+      if (currentError === ERROR.OK) {
+        Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.HEAP_EXHAUSTED)
+      }
     }
     return ptr
   }
@@ -1436,12 +1440,12 @@ export class SiliconSynapse implements ISiliconLinker {
     if (sourceId <= 0) return false
 
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
-    let slot = this.idTableHash(sourceId)
+    const baseSlot = this.idTableHash(sourceId)
 
-    // Probe to find the slot where sourceId will be/is stored
-    // Uses same logic as idTableInsert for consistency
-    let i = 0
-    while (i < capacity) {
+    // Quadratic probing: slot = (base + probe^2) % capacity
+    // Must match Identity Table probing for consistent slot resolution
+    for (let probe = 0; probe < capacity; probe++) {
+      const slot = (baseSlot + probe * probe) & (capacity - 1)
       const idOffset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, idOffset)
 
@@ -1455,10 +1459,6 @@ export class SiliconSynapse implements ISiliconLinker {
         Atomics.store(this.sab, symOffset + 1, lineCol)
         return true
       }
-
-      // Collision - linear probe to next slot (bitwise for power-of-2 capacity)
-      slot = (slot + 1) & (capacity - 1)
-      i = i + 1
     }
 
     // Table full
@@ -1467,7 +1467,7 @@ export class SiliconSynapse implements ISiliconLinker {
 
   /**
    * Lookup a packed SourceLocation by sourceId with zero-allocation callback.
-   * Uses the same linear probing as Identity Table.
+   * Uses quadratic probing to match Identity Table (RFC-047-50).
    *
    * @param sourceId - Source ID to lookup
    * @param cb - Callback receiving (fileHash, line, column) if found
@@ -1480,11 +1480,12 @@ export class SiliconSynapse implements ISiliconLinker {
     if (sourceId <= 0) return false
 
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
-    let slot = this.idTableHash(sourceId)
+    const baseSlot = this.idTableHash(sourceId)
 
-    // Probe to find the slot where sourceId is stored in Identity Table
-    let i = 0
-    while (i < capacity) {
+    // Quadratic probing: slot = (base + probe^2) % capacity
+    // Must match Identity Table probing for consistent slot resolution
+    for (let probe = 0; probe < capacity; probe++) {
+      const slot = (baseSlot + probe * probe) & (capacity - 1)
       const idOffset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, idOffset)
 
@@ -1511,9 +1512,7 @@ export class SiliconSynapse implements ISiliconLinker {
         return true
       }
 
-      // Linear probe (continue past tombstones, bitwise for power-of-2 capacity)
-      slot = (slot + 1) & (capacity - 1)
-      i = i + 1
+      // Continue probing past tombstones (quadratic)
     }
 
     // Not found after full scan
@@ -1523,6 +1522,7 @@ export class SiliconSynapse implements ISiliconLinker {
   /**
    * Remove a SourceLocation from the Symbol Table.
    * Clears the entry at the slot corresponding to sourceId.
+   * Uses quadratic probing to match Identity Table (RFC-047-50).
    *
    * @param sourceId - Source ID whose location should be removed
    * @returns true if removed, false if not found
@@ -1531,11 +1531,12 @@ export class SiliconSynapse implements ISiliconLinker {
     if (sourceId <= 0) return false
 
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
-    let slot = this.idTableHash(sourceId)
+    const baseSlot = this.idTableHash(sourceId)
 
-    // Probe to find the slot where sourceId is stored in Identity Table
-    let i = 0
-    while (i < capacity) {
+    // Quadratic probing: slot = (base + probe^2) % capacity
+    // Must match Identity Table probing for consistent slot resolution
+    for (let probe = 0; probe < capacity; probe++) {
+      const slot = (baseSlot + probe * probe) & (capacity - 1)
       const idOffset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, idOffset)
 
@@ -1552,9 +1553,7 @@ export class SiliconSynapse implements ISiliconLinker {
         return true
       }
 
-      // Linear probe (bitwise for power-of-2 capacity)
-      slot = (slot + 1) & (capacity - 1)
-      i = i + 1
+      // Continue probing past tombstones (quadratic)
     }
 
     // Not found
@@ -1763,17 +1762,30 @@ export class SiliconSynapse implements ISiliconLinker {
   /**
    * Execute DELETE command: Remove a node from the chain (RFC-044).
    *
-   * **Note:** This uses the existing _deleteNode() method which already
-   * handles mutex acquisition and Identity Table cleanup.
+   * **CRITICAL:** Extracts sourceId BEFORE unlinking to ensure Identity Table
+   * and Symbol Table cleanup occurs after successful deletion.
    *
    * RFC-045-04: Returns boolean (no try/catch).
+   * RFC-002 Remediation: Added idTableRemove/symTableRemove calls.
    *
    * @param ptr - Pointer to node to delete
    * @returns true on success, false on error
    */
   private executeDelete(ptr: NodePtr): boolean {
-    // RFC-045-04: _deleteNode now returns boolean instead of throwing
-    return this._deleteNode(ptr)
+    // Extract sourceId BEFORE unlinking (node data may be overwritten after free)
+    const offset = ptr / 4
+    const sourceId = Atomics.load(this.sab, offset + NODE.SOURCE_ID)
+
+    // Delete from chain (handles mutex, unlinking, free list return)
+    const success = this._deleteNode(ptr)
+
+    // Clean up Identity Table and Symbol Table entries
+    if (success && sourceId > 0) {
+      this.idTableRemove(sourceId)
+      this.symTableRemove(sourceId)
+    }
+
+    return success
   }
 
   /**

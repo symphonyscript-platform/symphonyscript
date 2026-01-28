@@ -141,8 +141,8 @@ export interface ISiliconLinker {
   /** Lookup NodePtr by sourceId. Returns NULL_PTR if not found. */
   idTableLookup(sourceId: number): NodePtr
 
-  /** Insert sourceId → ptr mapping. */
-  idTableInsert(sourceId: number, ptr: NodePtr): void
+  /** Insert sourceId → ptr mapping. Returns true if inserted, false if table full. */
+  idTableInsert(sourceId: number, ptr: NodePtr): boolean
 
   /** Remove sourceId from table. */
   idTableRemove(sourceId: number): void
