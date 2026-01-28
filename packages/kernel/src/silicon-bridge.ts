@@ -1486,6 +1486,8 @@ export class SiliconBridge {
       if (target === targetPtr) {
         // Tombstone: set TARGET_PTR to NULL_PTR
         Atomics.store(this.sab, offset + SYNAPSE.TARGET_PTR, NULL_PTR)
+        // M-001: Update SYNAPSE_COUNT telemetry
+        Atomics.add(this.sab, HDR.SYNAPSE_COUNT, -1)
         count = count + 1
       }
 

@@ -175,7 +175,8 @@ function initializeRegisters(
 /**
  * Initialize the Identity Table region.
  *
- * The Identity Table is a linear-probe hash table mapping TID (sourceId) to NodePtr.
+ * The Identity Table is a quadratic-probe hash table mapping TID (sourceId) to NodePtr.
+ * Uses slot = (baseSlot + probe²) % capacity to reduce primary clustering.
  * All slots are initialized to EMPTY_TID (0) to indicate empty.
  *
  * Header fields set:

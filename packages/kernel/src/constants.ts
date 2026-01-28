@@ -108,7 +108,7 @@ export const KNUTH_HASH_CONST = 2654435761
  * ├─────────────────────────────────────────────────────────────────────┤
  * │ IDENTITY TABLE (dynamic offset)              capacity × 8 bytes    │
  * ├─────────────────────────────────────────────────────────────────────┤
- * │ Linear-probe hash table: [TID: i32, NodePtr: u32] × capacity       │
+ * │ Quadratic-probe hash table: [TID: i32, NodePtr: u32] × capacity    │
  * │   TID = 0  : Empty slot                                             │
  * │   TID = -1 : Tombstone (deleted, will be cleaned on rebuild)       │
  * │   TID > 0  : Active entry (Knuth multiplicative hash)              │
@@ -466,7 +466,8 @@ export const ERROR = {
  * The Identity Table is a fixed-size hash table stored in the SAB that maps
  * Temporal IDs (TID) to NodePtr values for zero-allocation lookups.
  *
- * Structure: Linear-probe hash table with [TID: i32, NodePtr: u32] entries.
+ * Structure: Quadratic-probe hash table with [TID: i32, NodePtr: u32] entries.
+ * Uses slot = (baseSlot + probe²) % capacity to reduce primary clustering.
  * - TID = 0: Empty slot
  * - TID = -1: Tombstone (deleted entry)
  * - TID > 0: Active entry
@@ -870,9 +871,17 @@ export function calculateSABSize(nodeCapacity: number, synapseCapacity?: number)
 }
 
 /**
- * Calculate byte offset where node heap begins.
- * Header (64) + Registers (64) + Command Ring (16) + Reclaim Ring (16) + Synapse Header (8) = 168 bytes.
- * Indices 0-41 = 42 × 4 bytes = 168 bytes.
+ * Byte offset where node heap begins.
+ *
+ * Memory layout (i32 indices):
+ * - Base Header (0-15): 16 × 4 = 64 bytes
+ * - Register Bank (16-22): 7 × 4 = 28 bytes
+ * - Extended Header (23-31): 9 × 4 = 36 bytes
+ * - Command Ring Header (32-35): 4 × 4 = 16 bytes
+ * - Reclaim Ring Header (36-39): 4 × 4 = 16 bytes
+ * - Synapse Header (40-41): 2 × 4 = 8 bytes
+ *
+ * Total: 64 + 28 + 36 + 16 + 16 + 8 = 168 bytes (indices 0-41)
  */
 export const HEAP_START_OFFSET = 168
 

@@ -459,6 +459,93 @@ describe('RFC-043: Silicon Linker', () => {
       // Should still be IDLE (attribute patches don't need commit)
       expect(sab[HDR.COMMIT_FLAG]).toBe(COMMIT.IDLE)
     })
+
+    // M-003: patchSourceId tests
+    it('should patch sourceId', () => {
+      const linker = createTestLinker()
+      const ptr = linker.insertHead(...noteData(60, 0))
+
+      const result = linker.patchSourceId(ptr, 9999)
+      expect(result).toBe(true)
+
+      const node = readNodeData(linker, ptr)
+      expect(node?.sourceId).toBe(9999)
+    })
+
+    it('should return false for patchSourceId with invalid pointer', () => {
+      const linker = createTestLinker()
+      const result = linker.patchSourceId(NULL_PTR, 1000)
+      expect(result).toBe(false)
+    })
+
+    // M-003: patchMultiple tests
+    it('should patch multiple attributes in one call', () => {
+      const linker = createTestLinker()
+      const ptr = linker.insertHead(...noteData(60, 0))
+
+      const result = linker.patchMultiple(ptr, {
+        pitch: 72,
+        velocity: 80,
+        duration: 240,
+        baseTick: 100
+      })
+      expect(result).toBe(true)
+
+      const node = readNodeData(linker, ptr)
+      expect(node?.pitch).toBe(72)
+      expect(node?.velocity).toBe(80)
+      expect(node?.duration).toBe(240)
+      expect(node?.baseTick).toBe(100)
+    })
+
+    it('should patch single attribute via patchMultiple', () => {
+      const linker = createTestLinker()
+      const ptr = linker.insertHead(...noteData(60, 0))
+
+      linker.patchMultiple(ptr, { pitch: 84 })
+
+      const node = readNodeData(linker, ptr)
+      expect(node?.pitch).toBe(84)
+      // Other values should remain unchanged
+      expect(node?.velocity).toBe(100) // Default from noteData
+    })
+
+    it('should patch muted flag via patchMultiple', () => {
+      const linker = createTestLinker()
+      const ptr = linker.insertHead(...noteData(60, 0))
+
+      linker.patchMultiple(ptr, { muted: true })
+
+      const node = readNodeData(linker, ptr)
+      expect((node?.flags ?? 0) & FLAG.MUTED).toBe(FLAG.MUTED)
+    })
+
+    it('should patch sourceId via patchMultiple', () => {
+      const linker = createTestLinker()
+      const ptr = linker.insertHead(...noteData(60, 0))
+
+      linker.patchMultiple(ptr, { sourceId: 7777 })
+
+      const node = readNodeData(linker, ptr)
+      expect(node?.sourceId).toBe(7777)
+    })
+
+    it('should return false for patchMultiple with invalid pointer', () => {
+      const linker = createTestLinker()
+      const result = linker.patchMultiple(NULL_PTR, { pitch: 72 })
+      expect(result).toBe(false)
+    })
+
+    it('should clamp values in patchMultiple', () => {
+      const linker = createTestLinker()
+      const ptr = linker.insertHead(...noteData(60, 0))
+
+      linker.patchMultiple(ptr, { pitch: 200, velocity: 300 })
+
+      const node = readNodeData(linker, ptr)
+      expect(node?.pitch).toBe(127)     // Clamped to max
+      expect(node?.velocity).toBe(127)  // Clamped to max
+    })
   })
 
   // ===========================================================================

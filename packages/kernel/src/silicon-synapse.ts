@@ -87,7 +87,8 @@ export class SiliconSynapse implements ISiliconLinker {
     this.sab = new Int32Array(buffer)
     this.sab64 = new BigInt64Array(buffer)
     this.heapStartI32 = HEAP_START_OFFSET / 4
-    this.nodeCapacity = this.sab[HDR.NODE_CAPACITY]
+    // M-002: Use Atomics.load for thread-safe header access
+    this.nodeCapacity = Atomics.load(this.sab, HDR.NODE_CAPACITY)
 
     // Calculate Zone B start pointer (byte offset) for reclamation check
     // Formula: HEAP_START + (Index * 32)
@@ -415,6 +416,39 @@ export class SiliconSynapse implements ISiliconLinker {
     this.patcher.patchMuted(ptr, muted)
   }
 
+  /**
+   * Patch the sourceId field of a node.
+   * M-003: Exposed for testing and advanced use cases.
+   *
+   * @param ptr - Node pointer
+   * @param sourceId - New source ID
+   * @returns true if patched, false if invalid pointer
+   */
+  patchSourceId(ptr: NodePtr, sourceId: number): boolean {
+    return this.patcher.patchSourceId(ptr, sourceId)
+  }
+
+  /**
+   * Patch multiple attributes of a node in a single operation.
+   * M-003: Exposed for testing and batch updates.
+   *
+   * Bumps SEQ counter once for all updates (efficient versioning).
+   *
+   * @param ptr - Node pointer
+   * @param updates - Object with optional fields to update
+   * @returns true if patched, false if invalid pointer
+   */
+  patchMultiple(ptr: NodePtr, updates: {
+    pitch?: number
+    velocity?: number
+    duration?: number
+    baseTick?: number
+    muted?: boolean
+    sourceId?: number
+  }): boolean {
+    return this.patcher.patchMultiple(ptr, updates)
+  }
+
   // ===========================================================================
   // Structural Operations
   // ===========================================================================
@@ -445,7 +479,8 @@ export class SiliconSynapse implements ISiliconLinker {
    */
   private checkSafeZone(targetTick: number): boolean {
     const playhead = Atomics.load(this.sab, HDR.PLAYHEAD_TICK)
-    const safeZone = this.sab[HDR.SAFE_ZONE_TICKS]
+    // M-002: Use Atomics.load for thread-safe header access
+    const safeZone = Atomics.load(this.sab, HDR.SAFE_ZONE_TICKS)
 
     if (targetTick - playhead < safeZone && targetTick >= playhead) {
       Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.SAFE_ZONE)
@@ -676,7 +711,8 @@ export class SiliconSynapse implements ISiliconLinker {
     }
 
     // Check safe zone INSIDE mutex (playhead may have moved during wait)
-    const targetTick = this.sab[offset + NODE.BASE_TICK]
+    // M-002: Use Atomics.load for thread-safe node field access
+    const targetTick = Atomics.load(this.sab, offset + NODE.BASE_TICK)
     if (!this.checkSafeZone(targetTick)) {
       // Safe zone violation - release mutex and return error
       this._releaseChainMutex()
@@ -1049,10 +1085,10 @@ export class SiliconSynapse implements ISiliconLinker {
    *
    * @remarks
    * PPQ is set at SAB creation and is immutable.
-   * Non-atomic read is safe since PPQ never changes.
+   * M-002: Use Atomics.load for memory ordering guarantees (especially ARM).
    */
   getPpq(): number {
-    return this.sab[HDR.PPQ]
+    return Atomics.load(this.sab, HDR.PPQ)
   }
 
   // ===========================================================================
@@ -1217,10 +1253,10 @@ export class SiliconSynapse implements ISiliconLinker {
    *
    * @remarks
    * Safe zone is set at SAB creation and is immutable.
-   * Non-atomic read is safe since value never changes.
+   * M-002: Use Atomics.load for memory ordering guarantees (especially ARM).
    */
   getSafeZoneTicks(): number {
-    return this.sab[HDR.SAFE_ZONE_TICKS]
+    return Atomics.load(this.sab, HDR.SAFE_ZONE_TICKS)
   }
 
   // ===========================================================================
@@ -1424,7 +1460,7 @@ export class SiliconSynapse implements ISiliconLinker {
 
   /**
    * Store a packed SourceLocation in the Symbol Table for a sourceId.
-   * Uses the same linear probing as Identity Table to find the slot.
+   * Uses quadratic probing: slot = (baseSlot + probe²) % capacity
    *
    * **Race-Free Write Order**: This method can be called BEFORE idTableInsert
    * to prevent transient states where Identity Table has an entry but Symbol
@@ -2028,7 +2064,8 @@ export class SiliconSynapse implements ISiliconLinker {
 
     // Check safe zone before deleting
     const offset = this.nodeOffset(ptr)
-    const targetTick = this.sab[offset + NODE.BASE_TICK]
+    // M-002: Use Atomics.load for thread-safe node field access
+    const targetTick = Atomics.load(this.sab, offset + NODE.BASE_TICK)
     if (!this.checkSafeZone(targetTick)) {
       return false
     }
