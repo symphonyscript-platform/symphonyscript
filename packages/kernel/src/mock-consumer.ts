@@ -3,6 +3,15 @@
 // =============================================================================
 // Simulates AudioWorklet behavior for integration testing.
 
+/**
+ * MockConsumer - TEST-ONLY Consumer Implementation
+ *
+ * ⚠️ WARNING: This class intentionally ALLOCATES memory (push(), arrays)
+ * and must NEVER be used as a template for production AudioWorklet code.
+ *
+ * For production patterns, see RFC-043 Section 7: "Consumer Implementation".
+ */
+
 import {
   HDR,
   REG,
@@ -15,15 +24,6 @@ import {
   OPCODE
 } from './constants'
 import type { SiliconSynapse } from './silicon-synapse'
-
-/**
- * MockConsumer - TEST-ONLY Consumer Implementation
- *
- * WARNING: This class intentionally ALLOCATES memory (push(), arrays)
- * and must NEVER be used as a template for production AudioWorklet code.
- *
- * For production patterns, see RFC-043 Section 7: "Consumer Implementation".
- */
 
 /**
  * Event emitted when consumer reads a node.

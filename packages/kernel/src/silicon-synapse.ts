@@ -1360,7 +1360,8 @@ export class SiliconSynapse implements ISiliconLinker {
 
     // Quadratic probing: slot = (base + probe^2) % capacity
     // This reduces primary clustering compared to linear probing
-    for (let probe = 0; probe < capacity; probe++) {
+    let probe = 0
+    while (probe < capacity) {
       const slot = (baseSlot + probe * probe) & (capacity - 1)
       const offset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, offset)
@@ -1384,6 +1385,8 @@ export class SiliconSynapse implements ISiliconLinker {
         Atomics.store(this.sab, offset + 1, ptr)
         return true
       }
+
+      probe = probe + 1
     }
 
     // Table full
@@ -1405,7 +1408,8 @@ export class SiliconSynapse implements ISiliconLinker {
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
     const baseSlot = this.idTableHash(sourceId)
 
-    for (let probe = 0; probe < capacity; probe++) {
+    let probe = 0
+    while (probe < capacity) {
       const slot = (baseSlot + probe * probe) & (capacity - 1)
       const offset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, offset)
@@ -1419,6 +1423,8 @@ export class SiliconSynapse implements ISiliconLinker {
         // Found
         return Atomics.load(this.sab, offset + 1)
       }
+
+      probe = probe + 1
     }
 
     // Not found after full scan
@@ -1444,7 +1450,8 @@ export class SiliconSynapse implements ISiliconLinker {
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
     const baseSlot = this.idTableHash(sourceId)
 
-    for (let probe = 0; probe < capacity; probe++) {
+    let probe = 0
+    while (probe < capacity) {
       const slot = (baseSlot + probe * probe) & (capacity - 1)
       const offset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, offset)
@@ -1460,6 +1467,8 @@ export class SiliconSynapse implements ISiliconLinker {
         Atomics.store(this.sab, offset + 1, NULL_PTR)
         return true
       }
+
+      probe = probe + 1
     }
 
     // Not found
@@ -1570,7 +1579,8 @@ export class SiliconSynapse implements ISiliconLinker {
 
     // Quadratic probing: slot = (base + probe^2) % capacity
     // Must match Identity Table probing for consistent slot resolution
-    for (let probe = 0; probe < capacity; probe++) {
+    let probe = 0
+    while (probe < capacity) {
       const slot = (baseSlot + probe * probe) & (capacity - 1)
       const idOffset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, idOffset)
@@ -1585,6 +1595,8 @@ export class SiliconSynapse implements ISiliconLinker {
         Atomics.store(this.sab, symOffset + 1, lineCol)
         return true
       }
+
+      probe = probe + 1
     }
 
     // Table full
@@ -1610,7 +1622,8 @@ export class SiliconSynapse implements ISiliconLinker {
 
     // Quadratic probing: slot = (base + probe^2) % capacity
     // Must match Identity Table probing for consistent slot resolution
-    for (let probe = 0; probe < capacity; probe++) {
+    let probe = 0
+    while (probe < capacity) {
       const slot = (baseSlot + probe * probe) & (capacity - 1)
       const idOffset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, idOffset)
@@ -1639,6 +1652,7 @@ export class SiliconSynapse implements ISiliconLinker {
       }
 
       // Continue probing past tombstones (quadratic)
+      probe = probe + 1
     }
 
     // Not found after full scan
@@ -1661,7 +1675,8 @@ export class SiliconSynapse implements ISiliconLinker {
 
     // Quadratic probing: slot = (base + probe^2) % capacity
     // Must match Identity Table probing for consistent slot resolution
-    for (let probe = 0; probe < capacity; probe++) {
+    let probe = 0
+    while (probe < capacity) {
       const slot = (baseSlot + probe * probe) & (capacity - 1)
       const idOffset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, idOffset)
@@ -1680,6 +1695,7 @@ export class SiliconSynapse implements ISiliconLinker {
       }
 
       // Continue probing past tombstones (quadratic)
+      probe = probe + 1
     }
 
     // Not found

@@ -133,7 +133,22 @@ export class FreeList {
       const version = head >> 32n
       const newVersion = version + 1n
 
-      // Construct new tagged head: (newVersion << 32) | next
+      /**
+       * NOTE: BigInt(next) allocation is an INTENTIONAL TRADE-OFF.
+       *
+       * Why it's unavoidable:
+       * - JavaScript has no native 64-bit integer type
+       * - 64-bit CAS requires BigInt for atomic version+pointer update
+       * - `next` depends on `head` which changes on CAS retry, so cannot be hoisted
+       *
+       * Why it's acceptable:
+       * - ONE allocation per alloc() call (not per CAS retry spin)
+       * - ~16-24 bytes, short-lived nursery allocation (fast GC)
+       * - CAS contention is rare in SPSC pattern with Zone A/B partitioning
+       * - Alternative (no version counter) would risk ABA data corruption
+       *
+       * This is the cost of ABA-safe 64-bit atomics in JavaScript.
+       */
       const newHead = (newVersion << 32n) | BigInt(next)
 
       // CAS: try to update FREE_LIST_HEAD from head to newHead
@@ -185,7 +200,14 @@ export class FreeList {
     // SEQ is in upper 24 bits of SEQ_FLAGS
     Atomics.add(this.sab, offset + NODE.SEQ_FLAGS, 1 << SEQ.SEQ_SHIFT)
 
-    // HOISTED: ptr is constant across CAS retries, so convert to BigInt once
+    /**
+     * HOISTED: ptr is constant across CAS retries.
+     *
+     * Unlike alloc() where `next` changes on retry, `ptr` (the pointer being freed)
+     * is fixed for the entire operation. This eliminates BigInt allocation on retry.
+     *
+     * See alloc() for full explanation of why BigInt is necessary for 64-bit CAS.
+     */
     const ptrBigInt = BigInt(ptr)
 
     // CAS loop to push onto free list head
