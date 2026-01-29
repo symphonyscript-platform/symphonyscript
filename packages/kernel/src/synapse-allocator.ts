@@ -161,11 +161,56 @@ export class SynapseAllocator extends SynapseView {
 
   /**
    * Check if compaction is needed and perform if so.
+   * 
+   * **WARNING:** This method is NOT thread-safe. Use `maybeCompactSafe()` instead
+   * when concurrent operations are possible.
    */
   maybeCompact(): number {
     if (this.usedSlots < SYNAPSE_TABLE.COMPACTION_MIN_SLOTS) return 0
     if (this.getTombstoneRatio() < SYNAPSE_TABLE.COMPACTION_THRESHOLD) return 0
     return this.compactTable()
+  }
+
+  /**
+   * Thread-safe compaction with mutex protection.
+   * 
+   * **THREAD SAFETY:** Acquires Chain Mutex for duration of compaction.
+   * This is a stop-the-world operation - use sparingly.
+   * 
+   * @param acquireMutex - Function to acquire mutex (injected from SiliconSynapse)
+   * @param releaseMutex - Function to release mutex
+   * @returns Number of live synapses after compaction, or -1 if mutex acquisition failed
+   */
+  compactTableSafe(
+    acquireMutex: () => boolean,
+    releaseMutex: () => void
+  ): number {
+    if (!acquireMutex()) {
+      return -1 // Mutex acquisition failed
+    }
+
+    const result = this.compactTable()
+    releaseMutex()
+    return result
+  }
+
+  /**
+   * Check if compaction is needed and perform with mutex protection.
+   * 
+   * **THREAD SAFETY:** Acquires Chain Mutex for duration of compaction.
+   * This is a stop-the-world operation - use sparingly.
+   * 
+   * @param acquireMutex - Function to acquire mutex (injected from SiliconSynapse)
+   * @param releaseMutex - Function to release mutex
+   * @returns Number of live synapses after compaction, 0 if not needed, or -1 if mutex failed
+   */
+  maybeCompactSafe(
+    acquireMutex: () => boolean,
+    releaseMutex: () => void
+  ): number {
+    if (this.usedSlots < SYNAPSE_TABLE.COMPACTION_MIN_SLOTS) return 0
+    if (this.getTombstoneRatio() < SYNAPSE_TABLE.COMPACTION_THRESHOLD) return 0
+    return this.compactTableSafe(acquireMutex, releaseMutex)
   }
 
   /**

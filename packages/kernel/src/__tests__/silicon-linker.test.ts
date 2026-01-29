@@ -170,14 +170,14 @@ describe('RFC-043: Silicon Linker', () => {
 
     it('should extract config from existing SAB', () => {
       const buffer = createLinkerSAB({
-        nodeCapacity: 100,
+        nodeCapacity: 128, // Power of 2 (synapseCapacity = 128 * 8 = 1024)
         ppq: 960,
         bpm: 140,
         safeZoneTicks: 500
       })
 
       const config = getLinkerConfig(buffer)
-      expect(config.nodeCapacity).toBe(100)
+      expect(config.nodeCapacity).toBe(128)
       expect(config.ppq).toBe(960)
       expect(config.bpm).toBe(140)
       expect(config.safeZoneTicks).toBe(500)
@@ -752,6 +752,31 @@ describe('RFC-043: Silicon Linker', () => {
       const ptr3 = linker.insertHead(...noteData(67, 192))
       expect(ptr3).toBe(NULL_PTR)
       expect(linker.getError()).toBe(ERROR.HEAP_EXHAUSTED)
+    })
+
+    // Task 4.1: Test UNKNOWN_OPCODE error handling
+    it('should set ERROR.UNKNOWN_OPCODE for invalid command', () => {
+      // nodeCapacity must be power of 2 (Task 3.2)
+      const linker = SiliconSynapse.create({ nodeCapacity: 256, safeZoneTicks: 0 })
+      const sab = new Int32Array(linker.getSAB())
+
+      // Manually inject invalid command into ring buffer
+      const ringOffset = Atomics.load(sab, HDR.COMMAND_RING_PTR) / 4
+      const tail = Atomics.load(sab, HDR.RB_TAIL)
+      const capacity = Atomics.load(sab, HDR.RB_CAPACITY)
+      const writeIdx = ringOffset + (tail % capacity) * 4
+
+      // Write invalid opcode 99 (not a valid CMD.*)
+      Atomics.store(sab, writeIdx + 0, 99) // Invalid opcode
+      Atomics.store(sab, writeIdx + 1, 0)
+      Atomics.store(sab, writeIdx + 2, 0)
+      Atomics.store(sab, writeIdx + 3, 0)
+      Atomics.store(sab, HDR.RB_TAIL, tail + 1)
+
+      // Process the invalid command
+      linker.processCommands()
+
+      expect(linker.getError()).toBe(ERROR.UNKNOWN_OPCODE)
     })
   })
 

@@ -61,6 +61,11 @@ export {
 
   getSynapseTableOffset,
   SOURCE_ID,
+  // Task 4.2: Memory layout testing
+  getIdentityTableOffset,
+  getSymbolTableOffset,
+  ID_TABLE,
+  SYM_TABLE,
 } from './constants'
 
 // Types from constants

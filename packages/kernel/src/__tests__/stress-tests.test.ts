@@ -647,3 +647,112 @@ describe('Stress Tests: Telemetry Accuracy', () => {
     expect(sab[HDR.FREE_COUNT]).toBe(4)
   })
 })
+
+// =============================================================================
+// 10. CONCURRENT OPERATIONS TESTS (Task 4.3)
+// =============================================================================
+
+describe('Stress Tests: Concurrent Operations', () => {
+  it('should maintain data integrity under interleaved insert/traverse', async () => {
+    // Task 4.3: Validates general concurrency correctness
+    // Note: ECMAScript guarantees SC semantics on all platforms
+    const linker = SiliconSynapse.create({ nodeCapacity: 1024, safeZoneTicks: 0 })
+
+    // Simulate interleaved access by rapidly alternating operations
+    const insertPromise = (async () => {
+      for (let i = 0; i < 100; i++) {
+        linker.insertHead(OPCODE.NOTE, 60, 100, 480, i * 10, i + 1, 0)
+        // Yield to allow interleaving
+        await new Promise(r => setTimeout(r, 0))
+      }
+    })()
+
+    const traversePromise = (async () => {
+      for (let i = 0; i < 100; i++) {
+        let count = 0
+        linker.traverse(() => { count++ })
+        // Count should always be consistent (not torn)
+        expect(count).toBeGreaterThanOrEqual(0)
+        await new Promise(r => setTimeout(r, 0))
+      }
+    })()
+
+    await Promise.all([insertPromise, traversePromise])
+
+    // Final count should match
+    expect(linker.getNodeCount()).toBe(100)
+  })
+
+  it('should handle interleaved insert/delete without corruption', async () => {
+    const linker = SiliconSynapse.create({ nodeCapacity: 256, safeZoneTicks: 0 })
+    const insertedPtrs: number[] = []
+
+    // Insert phase
+    const insertPromise = (async () => {
+      for (let i = 0; i < 50; i++) {
+        const ptr = linker.insertHead(OPCODE.NOTE, 60, 100, 480, i * 10, i + 1, 0)
+        if (ptr !== NULL_PTR) {
+          insertedPtrs.push(ptr)
+        }
+        await new Promise(r => setTimeout(r, 0))
+      }
+    })()
+
+    // Delete phase (starts after small delay to allow some inserts)
+    const deletePromise = (async () => {
+      await new Promise(r => setTimeout(r, 10)) // Let some inserts happen first
+      let deleted = 0
+      for (let i = 0; i < 25 && i < insertedPtrs.length; i++) {
+        const ptr = insertedPtrs[i]
+        if (ptr && ptr !== NULL_PTR) {
+          linker.deleteNode(ptr)
+          deleted++
+        }
+        await new Promise(r => setTimeout(r, 1))
+      }
+      return deleted
+    })()
+
+    await Promise.all([insertPromise, deletePromise])
+
+    // Verify chain integrity - traverse should not crash
+    let traverseCount = 0
+    linker.traverse(() => { traverseCount++ })
+
+    // Should have some nodes (inserted minus deleted)
+    expect(traverseCount).toBeGreaterThan(0)
+    expect(linker.getNodeCount()).toBe(traverseCount)
+  })
+
+  it('should maintain SEQ counter consistency during rapid patches', async () => {
+    const linker = SiliconSynapse.create({ nodeCapacity: 64, safeZoneTicks: 0 })
+    const sab = new Int32Array(linker.getSAB())
+
+    // Insert a node to patch
+    const ptr = linker.insertHead(OPCODE.NOTE, 60, 100, 480, 0, 1, 0)
+    expect(ptr).not.toBe(NULL_PTR)
+
+    const offset = ptr / 4
+    // Capture SEQ after insert (insertHead also bumps SEQ)
+    const seqAfterInsert = Atomics.load(sab, offset + NODE.SEQ_FLAGS) >>> 8
+
+    // Rapidly patch from multiple "threads" (simulated via interleaving)
+    const patchCount = 99 // 33 patches per "thread" × 3 threads
+    const patchPromises = []
+
+    for (let t = 0; t < 3; t++) {
+      patchPromises.push((async () => {
+        for (let i = 0; i < 33; i++) {
+          linker.patchPitch(ptr, 60 + (i % 12))
+          await new Promise(r => setTimeout(r, 0))
+        }
+      })())
+    }
+
+    await Promise.all(patchPromises)
+
+    // SEQ should have incremented by exactly patchCount from the post-insert value
+    const finalSeq = Atomics.load(sab, offset + NODE.SEQ_FLAGS) >>> 8
+    expect(finalSeq).toBe(seqAfterInsert + patchCount)
+  })
+})

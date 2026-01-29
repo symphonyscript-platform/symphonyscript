@@ -77,6 +77,10 @@ export class SiliconSynapse implements ISiliconLinker {
   // RFC-045-04: Context-aware mutex behavior
   private isAudioContext: boolean = false
 
+  // Task 3.3: Detect Atomics.wait support once at construction (not in hot path)
+  // Workers support it, main thread throws TypeError
+  private readonly canAtomicsWait: boolean
+
   /**
    * Create a new Silicon Linker.
    *
@@ -105,6 +109,29 @@ export class SiliconSynapse implements ISiliconLinker {
 
     // [RFC-054] Initialize Synapse Allocator for async connect/disconnect
     this.synapseAllocator = new SynapseAllocator(buffer)
+
+    // Task 3.3: Detect Atomics.wait support ONCE at construction (not in hot path)
+    this.canAtomicsWait = this._detectAtomicsWaitSupport()
+  }
+
+  /**
+   * Detect if Atomics.wait is supported in this context.
+   *
+   * Called once at construction time. Workers support Atomics.wait,
+   * main thread throws TypeError. This detection allows zero-allocation
+   * hot path by avoiding try/catch in _yieldToCPU().
+   *
+   * @returns true if Atomics.wait is available
+   */
+  private _detectAtomicsWaitSupport(): boolean {
+    try {
+      // Use a dummy test with immediate timeout
+      // Value -1 ensures "not-equal" return (no actual wait)
+      Atomics.wait(this.sab, HDR.YIELD_SLOT, -1, 0)
+      return true
+    } catch {
+      return false
+    }
   }
 
   /**
@@ -173,20 +200,21 @@ export class SiliconSynapse implements ISiliconLinker {
    * Zero-allocation CPU yield for worker context.
    *
    * Uses Atomics.wait() with 1ms timeout to sleep without allocating memory.
-   * RFC-045-04: No try/catch - we detect Worker context via typeof check.
+   * Task 3.3: Support detected once at construction — no try/catch in hot path.
    *
    * @remarks
    * This is a synchronous sleep that doesn't create Promise garbage.
    * The 1ms timeout allows other threads to acquire the mutex.
-   * On main thread (rare), Atomics.wait returns "not-equal" - no throw.
+   * On main thread: no-op (spin continues without yield) — acceptable for rare mutex use.
    */
   private _yieldToCPU(): void {
-    // **ZERO-ALLOC**: Sleep for 1ms using Atomics.wait
-    // This relinquishes the time slice without allocating memory.
-    // Atomics.wait returns "timed-out" on timeout, "not-equal" if value differs,
-    // or throws TypeError on main thread - but we catch that in isWorkerContext check.
-    // Using a simple timeout approach that works in all contexts.
-    Atomics.wait(this.sab, HDR.YIELD_SLOT, 0, 1)
+    // Task 3.3: Only call Atomics.wait if supported (detected at construction)
+    // Hot path is ZERO-ALLOC: simple boolean check, no try/catch
+    if (this.canAtomicsWait) {
+      Atomics.wait(this.sab, HDR.YIELD_SLOT, 0, 1)
+    }
+    // On main thread: no-op — spin continues without yield
+    // This is acceptable because main thread mutex acquisition is rare
   }
 
   /**
@@ -283,6 +311,33 @@ export class SiliconSynapse implements ISiliconLinker {
   private _releaseChainMutex(): void {
     // Release lock: 1 → 0
     Atomics.store(this.sab, HDR.CHAIN_MUTEX, CONCURRENCY.MUTEX_UNLOCKED)
+  }
+
+  // ===========================================================================
+  // Public Mutex Access (for thread-safe compaction)
+  // ===========================================================================
+
+  /**
+   * Acquire Chain Mutex (public wrapper for thread-safe operations).
+   * 
+   * **Use Case:** Enables thread-safe Synapse Table compaction via
+   * `synapseAllocator.compactTableSafe(linker.acquireMutex, linker.releaseMutex)`
+   * 
+   * **WARNING:** Always pair with `releaseMutex()` using try-finally pattern.
+   * 
+   * @returns true if acquired, false if contention (audio) or deadlock (main)
+   */
+  acquireMutex(): boolean {
+    return this._acquireChainMutex()
+  }
+
+  /**
+   * Release Chain Mutex (public wrapper for thread-safe operations).
+   * 
+   * **WARNING:** Must ALWAYS be called after `acquireMutex()` returns true.
+   */
+  releaseMutex(): void {
+    this._releaseChainMutex()
   }
 
   // ===========================================================================
@@ -595,8 +650,7 @@ export class SiliconSynapse implements ISiliconLinker {
     Atomics.store(this.sab, afterOffset + NODE.NEXT_PTR, newPtr)
 
     // 5. Increment NODE_COUNT (node is now linked)
-    const currentCount = Atomics.load(this.sab, HDR.NODE_COUNT)
-    Atomics.store(this.sab, HDR.NODE_COUNT, currentCount + 1)
+    Atomics.add(this.sab, HDR.NODE_COUNT, 1)
 
     // 6. Signal structural change
     Atomics.store(this.sab, HDR.COMMIT_FLAG, COMMIT.PENDING)
@@ -674,8 +728,7 @@ export class SiliconSynapse implements ISiliconLinker {
     Atomics.store(this.sab, HDR.HEAD_PTR, newPtr)
 
     // Increment NODE_COUNT (node is now linked)
-    const currentCount = Atomics.load(this.sab, HDR.NODE_COUNT)
-    Atomics.store(this.sab, HDR.NODE_COUNT, currentCount + 1)
+    Atomics.add(this.sab, HDR.NODE_COUNT, 1)
 
     // Signal structural change
     Atomics.store(this.sab, HDR.COMMIT_FLAG, COMMIT.PENDING)
@@ -749,8 +802,7 @@ export class SiliconSynapse implements ISiliconLinker {
     }
 
     // Decrement NODE_COUNT (RFC-045: now done at unlink time, not at free time)
-    const currentCount = Atomics.load(this.sab, HDR.NODE_COUNT)
-    Atomics.store(this.sab, HDR.NODE_COUNT, currentCount - 1)
+    Atomics.sub(this.sab, HDR.NODE_COUNT, 1)
 
     // Free the node (K-005: Zone B Reclamation Logic)
     // FIRST: Clear ACTIVE flag so getSourceId returns undefined after delete
@@ -770,10 +822,10 @@ export class SiliconSynapse implements ISiliconLinker {
       const ringDataOffset = Atomics.load(this.sab, HDR.RECLAIM_RING_PTR)
       const ringDataI32 = ringDataOffset / 4
 
-      // Write pointer
-      this.sab[ringDataI32 + idx] = ptr
+      // Write pointer atomically (release semantics on ARM)
+      Atomics.store(this.sab, ringDataI32 + idx, ptr)
 
-      // Commit write
+      // Commit write (consumer will see data due to acquire-release)
       Atomics.store(this.sab, HDR.RECLAIM_RB_TAIL, tail + 1)
     } else {
       // Zone A (Worker Owned) -> Free List
@@ -1443,6 +1495,44 @@ export class SiliconSynapse implements ISiliconLinker {
     }
   }
 
+  /**
+   * Rebuild the Identity Table from the live chain.
+   * Task 3.5: Addresses spec debt — no way to rebuild ID table after clearing.
+   *
+   * **Use Case:** After idTableClear() or when tombstones exceed threshold.
+   *
+   * **Thread Safety:** Acquires Chain Mutex for duration.
+   *
+   * @returns Number of entries rebuilt, or -1 if mutex acquisition failed
+   */
+  idTableRebuild(): number {
+    if (!this._acquireChainMutex()) {
+      return -1
+    }
+
+    // 1. Clear table (removes all tombstones)
+    this.idTableClear()
+
+    // 2. Traverse chain and re-insert all sourceIds
+    let count = 0
+    let ptr = Atomics.load(this.sab, HDR.HEAD_PTR)
+
+    while (ptr !== NULL_PTR) {
+      const offset = this.nodeOffset(ptr)
+      const sourceId = Atomics.load(this.sab, offset + NODE.SOURCE_ID)
+
+      if (sourceId > 0) {
+        this.idTableInsert(sourceId, ptr)
+        count = count + 1
+      }
+
+      ptr = Atomics.load(this.sab, offset + NODE.NEXT_PTR)
+    }
+
+    this._releaseChainMutex()
+    return count
+  }
+
   // ===========================================================================
   // Symbol Table Operations (v1.5) - SourceId → Packed SourceLocation
   // ===========================================================================
@@ -1646,6 +1736,43 @@ export class SiliconSynapse implements ISiliconLinker {
     }
   }
 
+  /**
+   * Compact the Synapse Table with mutex protection.
+   * 
+   * **Thread Safety:** Acquires Chain Mutex for duration of compaction.
+   * This is a stop-the-world operation that rehashes all live synapses
+   * and removes tombstones.
+   * 
+   * **Use Cases:**
+   * - Call after many disconnect() operations to reclaim tombstone slots
+   * - Call during maintenance windows to optimize lookup performance
+   * 
+   * @returns Number of live synapses after compaction, or -1 if mutex failed
+   */
+  compactSynapseTable(): number {
+    return this.synapseAllocator.compactTableSafe(
+      () => this._acquireChainMutex(),
+      () => this._releaseChainMutex()
+    )
+  }
+
+  /**
+   * Conditionally compact Synapse Table if tombstone ratio exceeds threshold.
+   * 
+   * **Thread Safety:** Acquires Chain Mutex only if compaction is needed.
+   * 
+   * **Threshold:** Compaction triggers when tombstones exceed 50% of used slots
+   * AND at least 100 slots have been used.
+   * 
+   * @returns Number of live synapses after compaction, 0 if not needed, or -1 if mutex failed
+   */
+  maybeCompactSynapseTable(): number {
+    return this.synapseAllocator.maybeCompactSafe(
+      () => this._acquireChainMutex(),
+      () => this._releaseChainMutex()
+    )
+  }
+
   // ===========================================================================
   // RFC-044: Command Ring Processing (Worker/Consumer Side)
   // ===========================================================================
@@ -1773,8 +1900,7 @@ export class SiliconSynapse implements ISiliconLinker {
     }
 
     // Increment NODE_COUNT (node is now linked)
-    const currentCount = Atomics.load(this.sab, HDR.NODE_COUNT)
-    Atomics.store(this.sab, HDR.NODE_COUNT, currentCount + 1)
+    Atomics.add(this.sab, HDR.NODE_COUNT, 1)
 
     // Track operation for telemetry
     this._incrementTelemetry()

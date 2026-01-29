@@ -861,7 +861,7 @@ export function calculateSABSize(nodeCapacity: number, synapseCapacity?: number)
   const headerSize = HEAP_START_OFFSET // 168 bytes
   const heapSize = nodeCapacity * NODE_SIZE_BYTES
   const identityTableSize = nodeCapacity * 2 * ID_TABLE.ENTRY_SIZE_BYTES // RFC-047-50: 2x capacity
-  const symbolTableSize = nodeCapacity * SYM_TABLE.ENTRY_SIZE_BYTES // 8 bytes per entry
+  const symbolTableSize = nodeCapacity * 2 * SYM_TABLE.ENTRY_SIZE_BYTES // Must match Identity Table capacity
   const grooveSize = 1024 // Fixed groove template region
   const ringBufferSize = COMMAND.DEFAULT_RING_SIZE_BYTES // 64KB command ring (RFC-044)
   const reclaimRingSize = RECLAIM.DEFAULT_RING_SIZE_BYTES // 16KB reclaim ring (K-005)
@@ -905,7 +905,9 @@ export function getIdentityTableOffset(nodeCapacity: number): number {
  * @returns Byte offset to Symbol Table
  */
 export function getSymbolTableOffset(nodeCapacity: number): number {
-  return getIdentityTableOffset(nodeCapacity) + nodeCapacity * ID_TABLE.ENTRY_SIZE_BYTES
+  // RFC-047-50: Identity Table uses 2x capacity for load factor
+  // Symbol Table must account for full Identity Table size
+  return getIdentityTableOffset(nodeCapacity) + nodeCapacity * 2 * ID_TABLE.ENTRY_SIZE_BYTES
 }
 
 /**
@@ -914,7 +916,8 @@ export function getSymbolTableOffset(nodeCapacity: number): number {
  * @returns Byte offset to Groove Templates
  */
 export function getGrooveTemplateOffset(nodeCapacity: number): number {
-  return getSymbolTableOffset(nodeCapacity) + nodeCapacity * SYM_TABLE.ENTRY_SIZE_BYTES
+  // Must match Symbol Table capacity (nodeCapacity * 2)
+  return getSymbolTableOffset(nodeCapacity) + nodeCapacity * 2 * SYM_TABLE.ENTRY_SIZE_BYTES
 }
 
 /**

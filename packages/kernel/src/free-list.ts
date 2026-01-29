@@ -185,6 +185,9 @@ export class FreeList {
     // SEQ is in upper 24 bits of SEQ_FLAGS
     Atomics.add(this.sab, offset + NODE.SEQ_FLAGS, 1 << SEQ.SEQ_SHIFT)
 
+    // HOISTED: ptr is constant across CAS retries, so convert to BigInt once
+    const ptrBigInt = BigInt(ptr)
+
     // CAS loop to push onto free list head
     while (true) {
       // Load current 64-bit tagged head
@@ -201,7 +204,8 @@ export class FreeList {
       const newVersion = version + 1n
 
       // Construct new tagged head: (newVersion << 32) | ptr
-      const newHead = (newVersion << 32n) | BigInt(ptr)
+      // ptrBigInt is hoisted - no allocation on retry
+      const newHead = (newVersion << 32n) | ptrBigInt
 
       // CAS: try to become the new head
       const result = Atomics.compareExchange(

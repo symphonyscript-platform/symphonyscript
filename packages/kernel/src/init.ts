@@ -66,6 +66,13 @@ export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer {
   // Use explicit config value if provided, otherwise default to nodeCapacity * 8
   const effectiveSynapseCapacity = config?.synapseCapacity ?? baseCfg.nodeCapacity * 8
 
+  // Validate synapse capacity is power of 2 (required for hash mask: & (capacity - 1))
+  if (effectiveSynapseCapacity <= 0 || (effectiveSynapseCapacity & (effectiveSynapseCapacity - 1)) !== 0) {
+    throw new Error(
+      `synapseCapacity must be a power of 2, got ${effectiveSynapseCapacity}`
+    )
+  }
+
   // Create full config with synapseCapacity for typed function calls
   const cfg: Required<LinkerConfig> = {
     ...baseCfg,
@@ -221,8 +228,8 @@ function initializeSymbolTable(sab: Int32Array, nodeCapacity: number): void {
 
   // Clear all entries to EMPTY_ENTRY (0)
   // Each entry is 2 × i32: [fileHash, lineCol]
-  // Total slots = nodeCapacity
-  const totalI32 = nodeCapacity * SYM_TABLE.ENTRY_SIZE_I32
+  // Must match Identity Table capacity (2x nodeCapacity)
+  const totalI32 = nodeCapacity * 2 * SYM_TABLE.ENTRY_SIZE_I32
   let i = 0
   while (i < totalI32) {
     sab[tableOffsetI32 + i] = 0

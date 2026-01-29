@@ -18,11 +18,12 @@ describe('K-002: Synapse Table Scalability', () => {
     })
 
     it('should respect explicit synapseCapacity config', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 1024, synapseCapacity: 20000 })
+        // synapseCapacity must be power of 2 for hash mask
+        const sab = createLinkerSAB({ nodeCapacity: 1024, synapseCapacity: 16384 })
         const sabView = new Int32Array(sab)
 
         const synapseCapacity = sabView[HDR.SYNAPSE_CAPACITY]
-        expect(synapseCapacity).toBe(20000)
+        expect(synapseCapacity).toBe(16384)
     })
 
     it('should return synapseCapacity from getLinkerConfig', () => {

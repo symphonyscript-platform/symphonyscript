@@ -83,8 +83,79 @@ export class AttributePatcher {
   }
 
   /**
+   * Atomically patch a field within PACKED_A using CAS loop.
+   * Task 3.4: Prevents lost updates if multiple threads patch concurrently.
+   *
+   * @param offset - Node i32 offset
+   * @param mask - Bit mask for the field
+   * @param shift - Bit shift for the field
+   * @param value - New value to set (will be shifted and masked)
+   */
+  private casUpdatePackedA(
+    offset: number,
+    mask: number,
+    shift: number,
+    value: number
+  ): void {
+    while (true) {
+      const current = Atomics.load(this.sab, offset + NODE.PACKED_A)
+      const newPacked = (current & ~mask) | ((value << shift) & mask)
+
+      if (newPacked === current) {
+        return // No change needed
+      }
+
+      const result = Atomics.compareExchange(
+        this.sab,
+        offset + NODE.PACKED_A,
+        current,
+        newPacked
+      )
+
+      if (result === current) {
+        return // CAS succeeded
+      }
+      // CAS failed, retry
+    }
+  }
+
+  /**
+   * Atomically update PACKED_A with a given update function using CAS loop.
+   * Task 3.4: For flag operations that need custom update logic.
+   *
+   * @param offset - Node i32 offset
+   * @param updateFn - Function that takes current value and returns new value
+   */
+  private casUpdatePackedAFn(
+    offset: number,
+    updateFn: (current: number) => number
+  ): void {
+    while (true) {
+      const current = Atomics.load(this.sab, offset + NODE.PACKED_A)
+      const newPacked = updateFn(current)
+
+      if (newPacked === current) {
+        return // No change needed
+      }
+
+      const result = Atomics.compareExchange(
+        this.sab,
+        offset + NODE.PACKED_A,
+        current,
+        newPacked
+      )
+
+      if (result === current) {
+        return // CAS succeeded
+      }
+      // CAS failed, retry
+    }
+  }
+
+  /**
    * Patch the pitch attribute (bits 16-23 of PACKED_A).
    * RFC-045-04: Returns boolean instead of throwing.
+   * Task 3.4: Uses CAS loop for atomic read-modify-write.
    *
    * @param ptr - Node byte pointer
    * @param pitch - New pitch value (0-127)
@@ -100,16 +171,15 @@ export class AttributePatcher {
     // Bump SEQ for ABA protection
     this.bumpSeq(offset)
 
-    // Read-modify-write PACKED_A
-    const packed = Atomics.load(this.sab, offset + NODE.PACKED_A)
-    const newPacked = (packed & ~PACKED.PITCH_MASK) | (pitch << PACKED.PITCH_SHIFT)
-    Atomics.store(this.sab, offset + NODE.PACKED_A, newPacked)
+    // Task 3.4: CAS loop for atomic PACKED_A update
+    this.casUpdatePackedA(offset, PACKED.PITCH_MASK, PACKED.PITCH_SHIFT, pitch)
     return true
   }
 
   /**
    * Patch the velocity attribute (bits 8-15 of PACKED_A).
    * RFC-045-04: Returns boolean instead of throwing.
+   * Task 3.4: Uses CAS loop for atomic read-modify-write.
    *
    * @param ptr - Node byte pointer
    * @param velocity - New velocity value (0-127)
@@ -125,11 +195,8 @@ export class AttributePatcher {
     // Bump SEQ for ABA protection
     this.bumpSeq(offset)
 
-    // Read-modify-write PACKED_A
-    const packed = Atomics.load(this.sab, offset + NODE.PACKED_A)
-    const newPacked =
-      (packed & ~PACKED.VELOCITY_MASK) | (velocity << PACKED.VELOCITY_SHIFT)
-    Atomics.store(this.sab, offset + NODE.PACKED_A, newPacked)
+    // Task 3.4: CAS loop for atomic PACKED_A update
+    this.casUpdatePackedA(offset, PACKED.VELOCITY_MASK, PACKED.VELOCITY_SHIFT, velocity)
     return true
   }
 
@@ -182,6 +249,7 @@ export class AttributePatcher {
   /**
    * Set or clear the MUTED flag.
    * RFC-045-04: Returns boolean instead of throwing.
+   * Task 3.4: Uses CAS loop for atomic read-modify-write.
    *
    * @param ptr - Node byte pointer
    * @param muted - Whether the node should be muted
@@ -194,12 +262,10 @@ export class AttributePatcher {
     // Bump SEQ for ABA protection
     this.bumpSeq(offset)
 
-    // Read-modify-write PACKED_A flags
-    const packed = Atomics.load(this.sab, offset + NODE.PACKED_A)
-    const newPacked = muted
-      ? packed | FLAG.MUTED
-      : packed & ~FLAG.MUTED
-    Atomics.store(this.sab, offset + NODE.PACKED_A, newPacked)
+    // Task 3.4: CAS loop for atomic PACKED_A flag update
+    this.casUpdatePackedAFn(offset, (current) =>
+      muted ? current | FLAG.MUTED : current & ~FLAG.MUTED
+    )
     return true
   }
 
@@ -227,6 +293,7 @@ export class AttributePatcher {
    * Patch multiple attributes at once (batch update).
    * More efficient than individual patches when changing multiple fields.
    * RFC-045-04: Returns boolean instead of throwing.
+   * Task 3.4: Uses CAS loop for atomic PACKED_A update.
    *
    * @param ptr - Node byte pointer
    * @param updates - Object with optional pitch, velocity, duration, baseTick, muted
@@ -249,33 +316,42 @@ export class AttributePatcher {
     // Single SEQ bump for all updates
     this.bumpSeq(offset)
 
-    // Update PACKED_A if any relevant fields changed
+    // Task 3.4: Update PACKED_A atomically using CAS loop
     if (
       updates.pitch !== undefined ||
       updates.velocity !== undefined ||
       updates.muted !== undefined
     ) {
-      let packed = Atomics.load(this.sab, offset + NODE.PACKED_A)
+      // Pre-compute clamped values outside CAS loop (zero-allocation optimization)
+      const pitch = updates.pitch !== undefined
+        ? Math.max(0, Math.min(127, updates.pitch | 0))
+        : undefined
+      const velocity = updates.velocity !== undefined
+        ? Math.max(0, Math.min(127, updates.velocity | 0))
+        : undefined
+      const muted = updates.muted
 
-      if (updates.pitch !== undefined) {
-        const pitch = Math.max(0, Math.min(127, updates.pitch | 0))
-        packed = (packed & ~PACKED.PITCH_MASK) | (pitch << PACKED.PITCH_SHIFT)
-      }
+      this.casUpdatePackedAFn(offset, (current) => {
+        let packed = current
 
-      if (updates.velocity !== undefined) {
-        const velocity = Math.max(0, Math.min(127, updates.velocity | 0))
-        packed =
-          (packed & ~PACKED.VELOCITY_MASK) | (velocity << PACKED.VELOCITY_SHIFT)
-      }
+        if (pitch !== undefined) {
+          packed = (packed & ~PACKED.PITCH_MASK) | (pitch << PACKED.PITCH_SHIFT)
+        }
 
-      if (updates.muted !== undefined) {
-        packed = updates.muted ? packed | FLAG.MUTED : packed & ~FLAG.MUTED
-      }
+        if (velocity !== undefined) {
+          packed =
+            (packed & ~PACKED.VELOCITY_MASK) | (velocity << PACKED.VELOCITY_SHIFT)
+        }
 
-      Atomics.store(this.sab, offset + NODE.PACKED_A, packed)
+        if (muted !== undefined) {
+          packed = muted ? packed | FLAG.MUTED : packed & ~FLAG.MUTED
+        }
+
+        return packed
+      })
     }
 
-    // Update individual fields
+    // Update individual fields (already atomic via Atomics.store)
     if (updates.duration !== undefined) {
       Atomics.store(
         this.sab,
