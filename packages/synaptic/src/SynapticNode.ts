@@ -1,4 +1,4 @@
-import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
+import { SiliconBridge, OPCODE, HDR } from '@symphonyscript/kernel';
 
 /**
  * SynapticNode - The fundamental unit of the SymphonyScript topology.
@@ -38,7 +38,14 @@ export abstract class SynapticNode {
         const targetEntry = target.getEntryId();
 
         // RFC-054: Use flat arguments for zero-allocation
-        this.bridge.connect(this.exitId, targetEntry, weight, jitter);
+        const result = this.bridge.connect(this.exitId, targetEntry, weight, jitter);
+        
+        // [KERNEL-001] Check for synapse creation failure
+        if (result < 0) {
+            // BRIDGE_ERR.NOT_FOUND = -1, BRIDGE_ERR.TABLE_FULL = -2
+            throw new Error(`Failed to create synapse from ${this.exitId} to ${targetEntry}: error ${result}`);
+        }
+        
         return this;
     }
 
@@ -65,15 +72,24 @@ export abstract class SynapticNode {
         if (ticks <= 0) {
             // Remove cycle
             if (this.barrierPtr !== undefined) {
-                this.bridge.deleteAsync(this.barrierPtr);
-
+                // [STATE-002] Idiomatic order: disconnect synapse BEFORE deleting node
                 // Remove loop synapse: BARRIER → Entry (source → target)
                 if (this.entryId !== undefined) {
                     const entryPtr = this.bridge.getNodePtr(this.entryId);
                     if (entryPtr !== undefined) {
                         this.bridge.disconnectAsync(this.barrierPtr, entryPtr);
+                        
+                        // [KERNEL-002] Telemetry check for async disconnect operation
+                        const sab = new Int32Array(this.bridge.getSAB());
+                        const errorFlag = Atomics.load(sab, HDR.ERROR_FLAG);
+                        if (errorFlag !== 0) {
+                            console.warn(`Disconnect may have failed: error flag ${errorFlag}`);
+                        }
                     }
                 }
+                
+                // Delete barrier node after synapse removal
+                this.bridge.deleteAsync(this.barrierPtr);
 
                 this.barrierId = undefined;
                 this.barrierPtr = undefined;
@@ -83,8 +99,17 @@ export abstract class SynapticNode {
 
         if (this.barrierId !== undefined) {
             // Update existing barrier duration (type is string 'duration')
-            this.bridge.patchDirect(this.barrierId, 'duration', ticks);
+            // [KERNEL-003] Check for patch failure
+            const result = this.bridge.patchDirect(this.barrierId, 'duration', ticks);
+            if (result < 0) {
+                throw new Error(`Failed to update barrier duration: error ${result}`);
+            }
         } else {
+            // [STATE-001] Guard: Cannot create cycle without content
+            if (this.entryId === undefined) {
+                throw new Error('Cannot set cycle: node has no content (entryId undefined)');
+            }
+            
             // Insert new barrier
             const sourceId = this.bridge.generateSourceId();
 
@@ -114,6 +139,17 @@ export abstract class SynapticNode {
                 const entryPtr = this.bridge.getNodePtr(this.entryId);
                 if (entryPtr !== undefined) {
                     this.bridge.connectAsync(ptr, entryPtr, 500, 0);
+                    
+                    // [KERNEL-004] Telemetry check for async connect operation
+                    // ALLOCATION OK: setCycle() runs on main thread, not audio worklet.
+                    // Closure allocation is acceptable here.
+                    queueMicrotask(() => {
+                        const sab = new Int32Array(this.bridge.getSAB());
+                        const errorFlag = Atomics.load(sab, HDR.ERROR_FLAG);
+                        if (errorFlag !== 0) {
+                            console.warn(`Loop closure may have failed: error flag ${errorFlag}`);
+                        }
+                    });
                 }
             }
         }

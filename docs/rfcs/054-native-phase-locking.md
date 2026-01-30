@@ -329,10 +329,12 @@ setCycle(ticks: number): void {
 | Scenario | Behavior |
 |----------|----------|
 | BARRIER allocation fails (`insertAsync` returns `NULL_PTR`) | `setCycle` throws or returns error; no partial state |
-| `connectAsync` fails (table full) | Worker sets `ERROR.TABLE_FULL`; caller should check |
-| `setCycle()` on empty clip (`entryId` undefined) | No-op; cannot create loop without content |
+| `connectAsync` fails (table full) | Worker sets `ERROR.TABLE_FULL`; caller should check `HDR.ERROR_FLAG` |
+| `setCycle()` on empty clip (`entryId` undefined) | **MUST throw** - Cannot create loop without content (RFC-002 remediation) |
 | `setCycle(0)` when no barrier exists | No-op |
 | Invalid pointer to `executeConnect` | Worker sets `ERROR.INVALID_PTR`; operation skipped |
+| `linkTo()` fails (synapse table full) | **MUST throw** - Caller is notified immediately (KERNEL-001 remediation) |
+| `patchDirect()` fails (node not found) | **MUST throw** - Barrier update failure is critical (KERNEL-003 remediation) |
 
 ## 6. Alternatives Considered
 

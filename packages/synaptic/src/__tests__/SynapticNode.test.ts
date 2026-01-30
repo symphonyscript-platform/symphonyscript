@@ -1,9 +1,58 @@
 // =============================================================================
 // SynapticNode Tests - Synaptic Package
 // =============================================================================
+// [2026-01-30] Updated for abstract SynapticNode with error handling tests
 
 import { SynapticNode } from '../SynapticNode'
-import { SiliconSynapse, SiliconBridge, NULL_PTR, NODE } from '@symphonyscript/kernel'
+import { SiliconSynapse, SiliconBridge, NULL_PTR } from '@symphonyscript/kernel'
+
+// Flush pending microtasks after each test to prevent hanging
+afterEach(async () => {
+    await new Promise(resolve => setTimeout(resolve, 0))
+})
+
+// =============================================================================
+// Test Implementation: Concrete SynapticNode
+// =============================================================================
+
+/**
+ * TestNode - Concrete implementation of SynapticNode for testing.
+ * Provides addNote() method to populate the node with content.
+ */
+class TestNode extends SynapticNode {
+    constructor(bridge: SiliconBridge) {
+        super(bridge)
+    }
+
+    /**
+     * Add a note to the node's chain using _insertNoteImmediate (test-only).
+     * This is synchronous and registers the ID mapping immediately.
+     */
+    addNote(pitch: number, velocity: number, duration: number, baseTick: number, muted: boolean = false): void {
+        // Use _insertNoteImmediate for synchronous test behavior
+        // Returns SOURCE_ID on success, negative on error
+        const sourceId = this.bridge._insertNoteImmediate(
+            { pitch, velocity, duration, baseTick, muted },
+            this.exitId // Chain after previous (or undefined for first)
+        )
+        
+        if (sourceId >= 0) {
+            if (this.entryId === undefined) {
+                this.entryId = sourceId
+            }
+            this.exitId = sourceId
+            this.writeId = sourceId
+        }
+    }
+
+    /**
+     * Helper to set IDs directly for unit testing.
+     */
+    setIds(entry: number, exit: number): void {
+        this.entryId = entry
+        this.exitId = exit
+    }
+}
 
 // =============================================================================
 // Test Helpers
@@ -69,36 +118,6 @@ function synapseExists(
     sourceId: number,
     targetId: number
 ): boolean {
-    const sourcePtr = bridge.getNodePtr(sourceId)
-    const targetPtr = bridge.getNodePtr(targetId)
-
-    if (sourcePtr === undefined || targetPtr === undefined) {
-        return false
-    }
-
-    // Use the bridge's synapse allocator to check if connection exists
-    // We'll read synapse data by checking the connection
-    const linker = bridge.getLinker()
-    const sab = linker.getSAB()
-    const i32 = new Int32Array(sab)
-
-    // The SynapseAllocator stores synapses in a table indexed by slot
-    // We need to scan the table to find a synapse with matching source/target
-    // This is done via the synapse table which is accessible through the allocator
-
-    // For testing purposes, we can verify by attempting to disconnect
-    // If disconnect succeeds, a synapse existed
-    // But that's destructive. Instead, let's check via snapshot.
-
-    // Actually, let's use a simpler approach: check if we can find the synapse
-    // by inspecting the synapse table directly
-
-    // Get synapse allocator (it's private, but we can access via the bridge's methods)
-    // The connect() method returns a SynapsePtr or error code
-    // If the synapse already exists, it might return an error or overwrite
-
-    // For this test, we'll use a different approach:
-    // We'll use the snapshot API to check if the synapse exists
     let found = false
 
     bridge.snapshotStream(
@@ -120,47 +139,47 @@ function synapseExists(
 describe('SynapticNode - Basic Construction', () => {
     test('constructs with SiliconBridge', () => {
         const bridge = createTestBridge()
-        const builder = new SynapticNode(bridge)
+        const node = new TestNode(bridge)
 
-        expect(builder).toBeInstanceOf(SynapticNode)
+        expect(node).toBeInstanceOf(SynapticNode)
     })
 
     test('getEntryId throws when no notes added', () => {
         const bridge = createTestBridge()
-        const builder = new SynapticNode(bridge)
+        const node = new TestNode(bridge)
 
-        expect(() => builder.getEntryId()).toThrow('No entry ID')
+        expect(() => node.getEntryId()).toThrow('Node has no entry ID assigned')
     })
 
     test('getExitId throws when no notes added', () => {
         const bridge = createTestBridge()
-        const builder = new SynapticNode(bridge)
+        const node = new TestNode(bridge)
 
-        expect(() => builder.getExitId()).toThrow('No exit ID')
+        expect(() => node.getExitId()).toThrow('Node has no exit ID assigned')
     })
 })
 
 describe('SynapticNode - Adding Notes', () => {
     test('addNote sets entryId and exitId', () => {
         const bridge = createTestBridge()
-        const builder = new SynapticNode(bridge)
+        const node = new TestNode(bridge)
 
-        builder.addNote(60, 100, 480, 0)
+        node.addNote(60, 100, 480, 0)
 
-        expect(() => builder.getEntryId()).not.toThrow()
-        expect(() => builder.getExitId()).not.toThrow()
-        expect(builder.getEntryId()).toBe(builder.getExitId())
+        expect(() => node.getEntryId()).not.toThrow()
+        expect(() => node.getExitId()).not.toThrow()
+        expect(node.getEntryId()).toBe(node.getExitId())
     })
 
     test('addNote creates linked list in SAB', () => {
         const bridge = createTestBridge()
-        const builder = new SynapticNode(bridge)
+        const node = new TestNode(bridge)
 
-        builder.addNote(60, 100, 480, 0)
-        builder.addNote(64, 110, 480, 480)
+        node.addNote(60, 100, 480, 0)
+        node.addNote(64, 110, 480, 480)
 
-        const entryId = builder.getEntryId()
-        const exitId = builder.getExitId()
+        const entryId = node.getEntryId()
+        const exitId = node.getExitId()
 
         // Entry and exit should be different for 2 notes
         expect(entryId).not.toBe(exitId)
@@ -189,14 +208,14 @@ describe('SynapticNode - Adding Notes', () => {
 
     test('addNote chains multiple notes in order', () => {
         const bridge = createTestBridge()
-        const builder = new SynapticNode(bridge)
+        const node = new TestNode(bridge)
 
-        builder.addNote(60, 100, 480, 0)     // Note 1
-        builder.addNote(64, 110, 480, 480)   // Note 2
-        builder.addNote(67, 120, 480, 960)   // Note 3
+        node.addNote(60, 100, 480, 0)     // Note 1
+        node.addNote(64, 110, 480, 480)   // Note 2
+        node.addNote(67, 120, 480, 960)   // Note 3
 
-        const entryId = builder.getEntryId()
-        const exitId = builder.getExitId()
+        const entryId = node.getEntryId()
+        const exitId = node.getExitId()
 
         // Walk the linked list
         const entryPtr = bridge.getNodePtr(entryId)!
@@ -216,11 +235,11 @@ describe('SynapticNode - Adding Notes', () => {
 
     test('addNote handles muted parameter', () => {
         const bridge = createTestBridge()
-        const builder = new SynapticNode(bridge)
+        const node = new TestNode(bridge)
 
-        builder.addNote(60, 100, 480, 0, true)
+        node.addNote(60, 100, 480, 0, true)
 
-        const entryId = builder.getEntryId()
+        const entryId = node.getEntryId()
 
         // Verify muted state via bridge.readNote
         let muted = false
@@ -232,24 +251,24 @@ describe('SynapticNode - Adding Notes', () => {
     })
 })
 
-describe('SynapticNode - Linking Builders', () => {
+describe('SynapticNode - Linking Nodes', () => {
     test('linkTo creates synapse connection', () => {
         const bridge = createTestBridge()
 
-        const builderA = new SynapticNode(bridge)
-        builderA.addNote(60, 100, 480, 0)
-        builderA.addNote(64, 110, 480, 480)
+        const nodeA = new TestNode(bridge)
+        nodeA.addNote(60, 100, 480, 0)
+        nodeA.addNote(64, 110, 480, 480)
 
-        const builderB = new SynapticNode(bridge)
-        builderB.addNote(67, 120, 480, 960)
-        builderB.addNote(72, 130, 480, 1440)
+        const nodeB = new TestNode(bridge)
+        nodeB.addNote(67, 120, 480, 960)
+        nodeB.addNote(72, 130, 480, 1440)
 
         // Link A to B
-        builderA.linkTo(builderB)
+        nodeA.linkTo(nodeB)
 
         // Verify synapse exists between A's exit and B's entry
-        const exitIdA = builderA.getExitId()
-        const entryIdB = builderB.getEntryId()
+        const exitIdA = nodeA.getExitId()
+        const entryIdB = nodeB.getEntryId()
 
         expect(synapseExists(bridge, exitIdA, entryIdB)).toBe(true)
     })
@@ -257,69 +276,60 @@ describe('SynapticNode - Linking Builders', () => {
     test('linkTo with weight and jitter parameters', () => {
         const bridge = createTestBridge()
 
-        const builderA = new SynapticNode(bridge)
-        builderA.addNote(60, 100, 480, 0)
+        const nodeA = new TestNode(bridge)
+        nodeA.addNote(60, 100, 480, 0)
 
-        const builderB = new SynapticNode(bridge)
-        builderB.addNote(64, 110, 480, 480)
+        const nodeB = new TestNode(bridge)
+        nodeB.addNote(64, 110, 480, 480)
 
         // Link with custom weight and jitter
-        builderA.linkTo(builderB, 750, 100)
+        nodeA.linkTo(nodeB, 750, 100)
 
-        // Verify synapse exists (weight/jitter verification would require
-        // deeper SAB inspection or snapshot API)
-        expect(synapseExists(bridge, builderA.getExitId(), builderB.getEntryId())).toBe(true)
+        expect(synapseExists(bridge, nodeA.getExitId(), nodeB.getEntryId())).toBe(true)
     })
 
-    test('linkTo throws when source has no notes', () => {
+    test('linkTo throws when source has no exit ID', () => {
         const bridge = createTestBridge()
 
-        const builderA = new SynapticNode(bridge)
-        const builderB = new SynapticNode(bridge)
-        builderB.addNote(60, 100, 480, 0)
+        const nodeA = new TestNode(bridge)
+        const nodeB = new TestNode(bridge)
+        nodeB.addNote(60, 100, 480, 0)
 
-        expect(() => builderA.linkTo(builderB)).toThrow('Cannot link: source builder has no exit')
+        expect(() => nodeA.linkTo(nodeB)).toThrow('source node has no exit ID')
     })
 
-    test('linkTo throws when target has no notes', () => {
+    test('linkTo throws when target has no entry ID', () => {
         const bridge = createTestBridge()
 
-        const builderA = new SynapticNode(bridge)
-        builderA.addNote(60, 100, 480, 0)
+        const nodeA = new TestNode(bridge)
+        nodeA.addNote(60, 100, 480, 0)
 
-        const builderB = new SynapticNode(bridge)
+        const nodeB = new TestNode(bridge)
 
-        expect(() => builderA.linkTo(builderB)).toThrow('No entry ID')
+        expect(() => nodeA.linkTo(nodeB)).toThrow('Node has no entry ID')
     })
 })
 
 describe('SynapticNode - Complete Scenario', () => {
-    test('builderA adds 2 notes, builderB adds 2 notes, link A to B', () => {
+    test('nodeA adds 2 notes, nodeB adds 2 notes, link A to B', () => {
         const bridge = createTestBridge()
 
-        // Create builderA and add 2 notes
-        const builderA = new SynapticNode(bridge)
-        builderA.addNote(60, 100, 480, 0, false)
-        builderA.addNote(64, 110, 480, 480, false)
+        const nodeA = new TestNode(bridge)
+        nodeA.addNote(60, 100, 480, 0, false)
+        nodeA.addNote(64, 110, 480, 480, false)
 
-        // Create builderB and add 2 notes
-        const builderB = new SynapticNode(bridge)
-        builderB.addNote(67, 120, 480, 960, false)
-        builderB.addNote(72, 130, 480, 1440, false)
+        const nodeB = new TestNode(bridge)
+        nodeB.addNote(67, 120, 480, 960, false)
+        nodeB.addNote(72, 130, 480, 1440, false)
 
-        // Link builderA to builderB
-        builderA.linkTo(builderB)
+        nodeA.linkTo(nodeB)
 
-        // ========================================================================
-        // VERIFICATION: Check SAB contains the linked list
-        // ========================================================================
+        const entryA = nodeA.getEntryId()
+        const exitA = nodeA.getExitId()
+        const entryB = nodeB.getEntryId()
+        const exitB = nodeB.getExitId()
 
-        const entryA = builderA.getEntryId()
-        const exitA = builderA.getExitId()
-        const entryB = builderB.getEntryId()
-        const exitB = builderB.getExitId()
-
-        // Verify builderA's chain
+        // Verify nodeA's chain
         const ptrA1 = bridge.getNodePtr(entryA)!
         const nodeA1 = readNodeFromSAB(bridge, ptrA1)!
         expect(nodeA1.pitch).toBe(60)
@@ -331,7 +341,7 @@ describe('SynapticNode - Complete Scenario', () => {
         expect(nodeA2.baseTick).toBe(480)
         expect(nodeA2.sourceId).toBe(exitA)
 
-        // Verify builderB's chain
+        // Verify nodeB's chain
         const ptrB1 = bridge.getNodePtr(entryB)!
         const nodeB1 = readNodeFromSAB(bridge, ptrB1)!
         expect(nodeB1.pitch).toBe(67)
@@ -343,13 +353,10 @@ describe('SynapticNode - Complete Scenario', () => {
         expect(nodeB2.baseTick).toBe(1440)
         expect(nodeB2.sourceId).toBe(exitB)
 
-        // ========================================================================
-        // VERIFICATION: Check synapse connection exists
-        // ========================================================================
-
+        // Verify synapse connection exists
         expect(synapseExists(bridge, exitA, entryB)).toBe(true)
 
-        // Additional verification: use streamSnapshot to get synapse details
+        // Additional verification via streamSnapshot
         let foundSynapse = false
         let synapseWeight = 0
         let synapseJitter = 0
@@ -362,40 +369,105 @@ describe('SynapticNode - Complete Scenario', () => {
                     synapseJitter = jitter
                 }
             },
-            (_count: number): void => { } // onComplete
+            (_count: number): void => { }
         )
 
         expect(foundSynapse).toBe(true)
-        // Default weight should be 500 (from SiliconBridge.connect)
-        expect(synapseWeight).toBe(500)
+        expect(synapseWeight).toBe(500) // Default weight
         expect(synapseJitter).toBe(0)
     })
 })
 
-describe('Cursor Integration (Phase 9)', () => {
-    test('addNote() uses cursor internally', () => {
-        const linker = SiliconSynapse.create({ nodeCapacity: 64, safeZoneTicks: 0 });
-        const bridge = new SiliconBridge(linker);
-        const node = new SynapticNode(bridge);
+// =============================================================================
+// Error Handling Tests (Audit Remediation)
+// =============================================================================
 
-        // Add note via public API
-        node.addNote(60, 100, 480, 0, false);
+describe('SynapticNode Error Handling', () => {
+    // [KERNEL-001] linkTo() error checking
+    test('linkTo() throws when bridge.connect() returns error', () => {
+        const bridge = createTestBridge()
+        
+        const nodeA = new TestNode(bridge)
+        nodeA.addNote(60, 100, 480, 0)
+        
+        const nodeB = new TestNode(bridge)
+        nodeB.addNote(64, 110, 480, 480)
+        
+        // Mock bridge.connect to return error code
+        jest.spyOn(bridge, 'connect').mockReturnValue(-2) // TABLE_FULL
+        
+        expect(() => nodeA.linkTo(nodeB)).toThrow(/Failed to create synapse.*error -2/)
+    })
 
-        // Cursor should be reusable (internal state)
-        expect(node).toBeDefined();
-    });
+    // [STATE-001] setCycle() guard on empty node
+    test('setCycle() throws on empty node', () => {
+        const bridge = createTestBridge()
+        const node = new TestNode(bridge)
+        // No notes added
+        
+        expect(() => node.setCycle(480)).toThrow(/no content.*entryId undefined/)
+    })
 
-    test('Cursor is reused across multiple notes', () => {
-        const linker = SiliconSynapse.create({ nodeCapacity: 64, safeZoneTicks: 0 });
-        const bridge = new SiliconBridge(linker);
-        const node = new SynapticNode(bridge);
+    // [KERNEL-003] patchDirect() error checking
+    test('setCycle() throws when patchDirect() fails', () => {
+        const bridge = createTestBridge()
+        const node = new TestNode(bridge)
+        node.addNote(60, 100, 480, 0)
+        
+        // Create initial barrier (without queueMicrotask blocking test)
+        node.setCycle(480)
+        
+        // Mock patchDirect to return error
+        jest.spyOn(bridge, 'patchDirect').mockReturnValue(-1) // NOT_FOUND
+        
+        // Try to update barrier duration
+        expect(() => node.setCycle(960)).toThrow(/Failed to update barrier duration.*error -1/)
+    })
 
-        // Multiple notes should reuse same cursor instance
-        node.addNote(60, 100, 480, 0);
-        node.addNote(64, 110, 240, 480);
-        node.addNote(67, 120, 480, 720);
+    // setCycle(0) removes barrier gracefully
+    test('setCycle(0) removes cycle without error', () => {
+        const bridge = createTestBridge()
+        const node = new TestNode(bridge)
+        node.addNote(60, 100, 480, 0)
+        
+        // Create and remove cycle
+        node.setCycle(480)
+        expect(() => node.setCycle(0)).not.toThrow()
+    })
 
-        expect(node.getEntryId()).toBeGreaterThan(0);
-        expect(node.getExitId()).toBeGreaterThan(0);
-    });
-});
+    // setCycle(0) on non-cycled node is a no-op
+    test('setCycle(0) on non-cycled node is no-op', () => {
+        const bridge = createTestBridge()
+        const node = new TestNode(bridge)
+        node.addNote(60, 100, 480, 0)
+        
+        expect(() => node.setCycle(0)).not.toThrow()
+    })
+})
+
+describe('Cursor Integration', () => {
+    test('addNote uses bridge internally', () => {
+        const linker = SiliconSynapse.create({ nodeCapacity: 64, safeZoneTicks: 0 })
+        const bridge = new SiliconBridge(linker)
+        const node = new TestNode(bridge)
+
+        node.addNote(60, 100, 480, 0, false)
+
+        expect(node).toBeDefined()
+        expect(node.getEntryId()).toBeGreaterThan(0)
+    })
+
+    test('Multiple notes maintain chain integrity', () => {
+        const linker = SiliconSynapse.create({ nodeCapacity: 64, safeZoneTicks: 0 })
+        const bridge = new SiliconBridge(linker)
+        const node = new TestNode(bridge)
+
+        node.addNote(60, 100, 480, 0)
+        node.addNote(64, 110, 240, 480)
+        node.addNote(67, 120, 480, 720)
+
+        expect(node.getEntryId()).toBeGreaterThan(0)
+        expect(node.getExitId()).toBeGreaterThan(0)
+        expect(node.getEntryId()).not.toBe(node.getExitId())
+    })
+})
