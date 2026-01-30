@@ -90,8 +90,9 @@ export class SynapticCursor {
     const byteOffset = getSynapseTableOffset(nodeCapacity)
     this.synapseTableOffsetI32 = byteOffset / 4
 
-    // Capacity is fixed by RFC-045 at 65536
-    this.capacity = SYNAPSE_TABLE.MAX_CAPACITY
+    // K-002: Read actual capacity from SAB header (dynamic sizing)
+    // RFC-045 defines MAX_CAPACITY as upper bound, not fixed value
+    this.capacity = this.sab[HDR.SYNAPSE_CAPACITY]
 
     // Initialize cursor position
     this.currentPtr = initialPtr
