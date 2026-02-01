@@ -123,19 +123,42 @@ class SiliconSynapse {
   private zoneConfig: ZoneConfig
   private freeList: FreeList
 
-  constructor(sab: SharedArrayBuffer, workerId: number) {
+  /**
+   * Factory method - use instead of constructor.
+   * @returns SiliconSynapse on success, null if no zones available
+   */
+  static create(sab: SharedArrayBuffer, workerId: number): SiliconSynapse | null {
+    const instance = new SiliconSynapse(sab)
+    
     // Find or allocate a zone for this worker
-    this.zoneIndex = this.claimZone(workerId)
-    this.zoneConfig = this.loadZoneConfig(this.zoneIndex)
+    const zoneIndex = instance.claimZone(workerId)
+    if (zoneIndex === -1) {
+      // Zero-allocation: return null instead of throwing
+      return null  // Caller must check for null
+    }
+    
+    instance.zoneIndex = zoneIndex
+    instance.zoneConfig = instance.loadZoneConfig(zoneIndex)
     
     // Create SPSC FreeList for our zone only
-    this.freeList = new FreeList(
-      this.sab,
-      this.zoneConfig.heapStart,
-      this.zoneConfig.heapEnd
+    instance.freeList = new FreeList(
+      instance.sab,
+      instance.zoneConfig.heapStart,
+      instance.zoneConfig.heapEnd
     )
+    
+    return instance
   }
 
+  private constructor(sab: SharedArrayBuffer) {
+    this.sab = new Int32Array(sab)
+    // Zone-specific fields initialized by factory
+  }
+
+  /**
+   * Claim a zone for this worker.
+   * @returns Zone index (0+) on success, -1 if no zones available
+   */
   private claimZone(workerId: number): number {
     const zoneCount = this.sab[HDR_MULTIZONE.ZONE_COUNT]
     
@@ -152,7 +175,8 @@ class SiliconSynapse {
       }
     }
     
-    throw new Error('No available zones for worker')
+    // Zero-allocation: return error code instead of throwing
+    return -1  // ZONE_ERR.NO_ZONES_AVAILABLE
   }
 }
 ```
@@ -242,15 +266,21 @@ class ZoneFreeList {
 
   /**
    * Determine which zone a pointer belongs to.
+   * O(1) using arithmetic (requires equal-sized zones).
    */
   private getZoneForPtr(ptr: NodePtr): number {
-    // Each zone has a contiguous address range
-    for (let z = 0; z < zoneCount; z++) {
-      if (ptr >= zones[z].heapStart && ptr < zones[z].heapEnd) {
-        return z
-      }
+    // All zones have equal capacity, so we can compute zone index directly
+    const offset = ptr - this.globalHeapStart
+    
+    // Division by zone size gives zone index
+    // Using bit shift if zoneSize is power of 2, otherwise integer division
+    const zoneIndex = (offset / this.zoneSizeBytes) | 0  // Fast integer division
+    
+    if (zoneIndex < 0 || zoneIndex >= this.zoneCount) {
+      return -1  // Invalid pointer (out of heap range)
     }
-    return -1  // Error: invalid pointer
+    
+    return zoneIndex
   }
 }
 ```
@@ -270,6 +300,9 @@ class ReturnQueue {
   /**
    * Enqueue a pointer (called by any worker).
    * Lock-free MPSC using CAS on head.
+   * 
+   * IMPORTANT: We write ptr BEFORE the CAS to avoid a race condition.
+   * If CAS fails, our write is harmless (will be overwritten by winner).
    */
   enqueue(ptr: NodePtr): boolean {
     while (true) {
@@ -280,11 +313,13 @@ class ReturnQueue {
         return false  // Queue full
       }
 
+      // Write ptr BEFORE claiming the slot (avoids read-before-write race)
+      Atomics.store(this.sab, this.bufferOffset + head, ptr)
+
       if (Atomics.compareExchange(this.sab, this.headOffset, head, next) === head) {
-        Atomics.store(this.sab, this.bufferOffset + head, ptr)
-        return true
+        return true  // Slot claimed, ptr already written
       }
-      // CAS failed, retry
+      // CAS failed, another producer may have overwritten our ptr, retry
     }
   }
 
@@ -370,17 +405,28 @@ allocNode(): NodePtr {
 
 **Zone Sizing Guidelines:**
 
+> **IMPORTANT:** All zones MUST have equal capacity for O(1) `getZoneForPtr()` lookup.
+> If different workloads need different capacities, use multiple zones per worker instead.
+
 ```typescript
-// Size zones based on expected workload
+// Equal-sized zones (required for O(1) pointer-to-zone lookup)
+const ZONE_CAPACITY = 2048  // All zones same size
+
 createLinkerSAB({
-  workerZones: [
-    { capacity: 4096, role: 'drums' },     // High note density
-    { capacity: 2048, role: 'bass' },      // Lower density
-    { capacity: 2048, role: 'melody' },    // Lower density
-    { capacity: 1024, role: 'fx' },        // Sparse events
-  ]
+  nodeCapacity: ZONE_CAPACITY * 4,  // 4 worker zones
+  workerZones: 4,                   // Each gets ZONE_CAPACITY nodes
 })
+
+// For unequal workloads, assign multiple zones to heavy workers:
+// Worker 1 (drums): claims zones 0, 1 → 4096 nodes
+// Worker 2 (bass):  claims zone 2    → 2048 nodes  
+// Worker 3 (fx):    claims zone 3    → 2048 nodes
 ```
+
+**Why equal-sized zones:**
+- Enables O(1) `getZoneForPtr()` via arithmetic: `zone = (ptr - heapStart) / zoneSize`
+- Avoids O(n) loop or binary search on every cross-zone free
+- Heavy workers can claim multiple sequential zones if needed
 
 ## 4. Use Cases
 
