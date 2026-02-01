@@ -13,6 +13,16 @@ import {
     MIDI_CC,
     GM_PROGRAM,
     GM_DRUM,
+    midiChannel,
+    midiValue,
+    midiControl,
+    instrumentId,
+    isInstrumentId,
+    unsafeInstrumentId,
+    type MidiChannel,
+    type MidiValue,
+    type MidiControlID,
+    type InstrumentId,
 } from '../pitch/midi';
 import { asInterval24EDO } from '../types';
 
@@ -318,6 +328,144 @@ describe('MIDI Constants', () => {
         test('cymbals', () => {
             expect(GM_DRUM.CRASH_CYMBAL_1).toBe(49);
             expect(GM_DRUM.RIDE_CYMBAL_1).toBe(51);
+        });
+    });
+});
+
+// ============================================================================
+// Branded MIDI Types Tests
+// ============================================================================
+
+describe('Branded MIDI Types', () => {
+    describe('midiChannel()', () => {
+        test('creates valid channels (0-15)', () => {
+            expect(midiChannel(0)).toBe(0);
+            expect(midiChannel(1)).toBe(1);
+            expect(midiChannel(9)).toBe(9); // drum channel
+            expect(midiChannel(15)).toBe(15);
+        });
+
+        test('returns null for invalid channels', () => {
+            expect(midiChannel(-1)).toBeNull();
+            expect(midiChannel(16)).toBeNull();
+            expect(midiChannel(100)).toBeNull();
+        });
+
+        test('returns null for non-integers', () => {
+            expect(midiChannel(0.5)).toBeNull();
+            expect(midiChannel(1.1)).toBeNull();
+            expect(midiChannel(NaN)).toBeNull();
+            expect(midiChannel(Infinity)).toBeNull();
+        });
+    });
+
+    describe('midiValue()', () => {
+        test('creates valid values (0-127)', () => {
+            expect(midiValue(0)).toBe(0);
+            expect(midiValue(64)).toBe(64);
+            expect(midiValue(127)).toBe(127);
+        });
+
+        test('returns null for invalid values', () => {
+            expect(midiValue(-1)).toBeNull();
+            expect(midiValue(128)).toBeNull();
+            expect(midiValue(200)).toBeNull();
+        });
+
+        test('returns null for non-integers', () => {
+            expect(midiValue(63.5)).toBeNull();
+            expect(midiValue(NaN)).toBeNull();
+            expect(midiValue(Infinity)).toBeNull();
+        });
+    });
+
+    describe('midiControl()', () => {
+        test('creates valid CC numbers (0-127)', () => {
+            expect(midiControl(0)).toBe(0);
+            expect(midiControl(1)).toBe(1); // modulation
+            expect(midiControl(7)).toBe(7); // volume
+            expect(midiControl(64)).toBe(64); // sustain
+            expect(midiControl(127)).toBe(127);
+        });
+
+        test('returns null for invalid CC numbers', () => {
+            expect(midiControl(-1)).toBeNull();
+            expect(midiControl(128)).toBeNull();
+        });
+
+        test('returns null for non-integers', () => {
+            expect(midiControl(64.5)).toBeNull();
+            expect(midiControl(NaN)).toBeNull();
+        });
+    });
+
+    describe('instrumentId()', () => {
+        test('creates valid instrument IDs', () => {
+            expect(instrumentId('piano')).toBe('piano');
+            expect(instrumentId('synth-lead-1')).toBe('synth-lead-1');
+            expect(instrumentId('drum-kit')).toBe('drum-kit');
+        });
+
+        test('returns null for empty string', () => {
+            expect(instrumentId('')).toBeNull();
+        });
+
+        test('returns null for non-strings', () => {
+            expect(instrumentId(null as unknown as string)).toBeNull();
+            expect(instrumentId(undefined as unknown as string)).toBeNull();
+            expect(instrumentId(123 as unknown as string)).toBeNull();
+        });
+    });
+
+    describe('isInstrumentId()', () => {
+        test('returns true for valid strings', () => {
+            expect(isInstrumentId('piano')).toBe(true);
+            expect(isInstrumentId('synth')).toBe(true);
+        });
+
+        test('returns false for empty string', () => {
+            expect(isInstrumentId('')).toBe(false);
+        });
+
+        test('returns false for non-strings', () => {
+            expect(isInstrumentId(null)).toBe(false);
+            expect(isInstrumentId(undefined)).toBe(false);
+            expect(isInstrumentId(123)).toBe(false);
+            expect(isInstrumentId({})).toBe(false);
+        });
+    });
+
+    describe('unsafeInstrumentId()', () => {
+        test('casts string to InstrumentId', () => {
+            const id: InstrumentId = unsafeInstrumentId('piano');
+            expect(id).toBe('piano');
+        });
+    });
+
+    describe('type safety', () => {
+        test('branded types are assignable to their base types', () => {
+            const channel: MidiChannel | null = midiChannel(5);
+            const value: MidiValue | null = midiValue(100);
+            const control: MidiControlID | null = midiControl(64);
+            const instrument: InstrumentId | null = instrumentId('piano');
+
+            // These should compile and work at runtime
+            if (channel !== null) {
+                const num: number = channel;
+                expect(num).toBe(5);
+            }
+            if (value !== null) {
+                const num: number = value;
+                expect(num).toBe(100);
+            }
+            if (control !== null) {
+                const num: number = control;
+                expect(num).toBe(64);
+            }
+            if (instrument !== null) {
+                const str: string = instrument;
+                expect(str).toBe('piano');
+            }
         });
     });
 });
