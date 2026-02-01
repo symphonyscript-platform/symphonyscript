@@ -66,6 +66,14 @@ export {
   getSymbolTableOffset,
   ID_TABLE,
   SYM_TABLE,
+  // RFC-056: Multi-Zone Heap Scaling
+  ZONE_CONFIG,
+  ZONE_CONFIG_STRIDE,
+  RETURN_QUEUE_CAPACITY,
+  ZONE_ERR,
+  getZoneConfigTableOffset,
+  getReturnQueueBufferOffset,
+  getReturnQueueForZone,
 } from './constants'
 
 // Types from constants
@@ -104,6 +112,9 @@ export { RingBuffer } from './ring-buffer'
 
 // RFC-045: Synapse Graph (Neural Audio Processor)
 export { SynapseAllocator } from './synapse-allocator'
+
+// RFC-056: Multi-Zone Heap Scaling
+export { ReturnQueue } from './return-queue'
 
 // Testing utilities
 export { MockConsumer } from './mock-consumer'

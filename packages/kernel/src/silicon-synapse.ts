@@ -26,7 +26,10 @@ import {
   SYNAPSE_TABLE,
   SYNAPSE,
   getSynapseTableOffset,
-  KNUTH_HASH_CONST
+  KNUTH_HASH_CONST,
+  ZONE_CONFIG,
+  ZONE_CONFIG_STRIDE,
+  getZoneConfigTableOffset
 } from './constants'
 // Note: PACKED and SEQ are used directly in readNode for zero-alloc versioned reads
 import { FreeList } from './free-list'
@@ -81,18 +84,23 @@ export class SiliconSynapse implements ISiliconLinker {
   // Workers support it, main thread throws TypeError
   private readonly canAtomicsWait: boolean
 
+  // RFC-056: Multi-zone support
+  private zoneIndex: number
+
   /**
    * Create a new Silicon Linker.
    *
    * @param buffer - Initialized SharedArrayBuffer (use createLinkerSAB)
+   * @param zoneIndex - Zone index for multi-zone mode (default: 0)
    */
-  constructor(buffer: SharedArrayBuffer) {
+  constructor(buffer: SharedArrayBuffer, zoneIndex: number = 0) {
     this.buffer = buffer
     this.sab = new Int32Array(buffer)
     this.sab64 = new BigInt64Array(buffer)
     this.heapStartI32 = HEAP_START_OFFSET / 4
     // M-002: Use Atomics.load for thread-safe header access
     this.nodeCapacity = Atomics.load(this.sab, HDR.NODE_CAPACITY)
+    this.zoneIndex = zoneIndex
 
     // Calculate Zone B start pointer (byte offset) for reclamation check
     // Formula: HEAP_START + (Index * 32)
@@ -100,8 +108,18 @@ export class SiliconSynapse implements ISiliconLinker {
     const zoneSplitIndex = getZoneSplitIndex(this.nodeCapacity)
     this.zoneBStartPtr = (this.heapStartI32 * 4) + (zoneSplitIndex * 32) // 32 = NODE_SIZE_BYTES
 
-    // RFC-055: SPSC FreeList — no BigInt64Array needed
-    this.freeList = new FreeList(this.sab)
+    // RFC-055/RFC-056: Initialize FreeList with zone parameters
+    const workerZones = Atomics.load(this.sab, HDR.ZONE_COUNT) || 1
+    const zoneConfigOffset = Atomics.load(this.sab, HDR.ZONE_CONFIG_OFFSET)
+
+    if (workerZones === 1 || zoneConfigOffset === 0) {
+      // Legacy mode: single-zone FreeList
+      this.freeList = new FreeList(this.sab)
+    } else {
+      // Multi-zone mode: zone-specific FreeList
+      this.freeList = new FreeList(this.sab, zoneIndex, zoneConfigOffset)
+    }
+
     this.patcher = new AttributePatcher(this.sab, this.nodeCapacity)
 
     // RFC-044: Initialize Command Ring Buffer infrastructure
@@ -149,6 +167,80 @@ export class SiliconSynapse implements ISiliconLinker {
   static create(config?: LinkerConfig): SiliconSynapse {
     const buffer = createLinkerSAB(config)
     return new SiliconSynapse(buffer)
+  }
+
+  /**
+   * Create a SiliconSynapse for a specific zone in an existing multi-zone SAB (RFC-056).
+   *
+   * Used when multiple workers share a SAB and each claims a zone.
+   * The worker ID is used to atomically claim an unclaimed zone via CAS.
+   *
+   * @param sab - Existing SharedArrayBuffer (already initialized with workerZones > 1)
+   * @param workerId - Unique worker ID (must be > 0, used for zone claiming)
+   * @returns SiliconSynapse on success, null if no zones available
+   */
+  static createForZone(sab: SharedArrayBuffer, workerId: number): SiliconSynapse | null {
+    const view = new Int32Array(sab)
+    const workerZones = Atomics.load(view, HDR.ZONE_COUNT)
+
+    if (workerZones <= 1) {
+      // Legacy mode - use standard constructor (zone 0, no claiming needed)
+      return new SiliconSynapse(sab)
+    }
+
+    // Multi-zone mode - claim a zone via atomic CAS
+    const zoneIndex = SiliconSynapse._claimZone(view, workerId)
+    if (zoneIndex === -1) {
+      return null // No zones available
+    }
+
+    return new SiliconSynapse(sab, zoneIndex)
+  }
+
+  /**
+   * Claim a zone for this worker using atomic CAS (RFC-056).
+   *
+   * Iterates through all zones and attempts to claim the first unclaimed one
+   * by atomically setting OWNER_ID from 0 to workerId.
+   *
+   * @param sab - Int32Array view of SharedArrayBuffer
+   * @param workerId - Unique worker ID (must be > 0)
+   * @returns Zone index (0+) on success, -1 if no zones available
+   */
+  private static _claimZone(sab: Int32Array, workerId: number): number {
+    const zoneCount = Atomics.load(sab, HDR.ZONE_COUNT)
+    const zoneConfigOffset = Atomics.load(sab, HDR.ZONE_CONFIG_OFFSET)
+
+    if (zoneConfigOffset === 0) {
+      return -1 // Legacy mode, no zone claiming
+    }
+
+    const configBaseI32 = zoneConfigOffset / 4
+
+    let i = 0
+    while (i < zoneCount) {
+      const ownerOffset = configBaseI32 + i * ZONE_CONFIG_STRIDE + ZONE_CONFIG.OWNER_ID
+
+      // Atomic claim: CAS from 0 (unclaimed) to workerId
+      const result = Atomics.compareExchange(sab, ownerOffset, 0, workerId)
+
+      if (result === 0) {
+        return i // Successfully claimed zone i
+      }
+
+      i = i + 1
+    }
+
+    return -1 // No zones available
+  }
+
+  /**
+   * Get the zone index this SiliconSynapse is operating on (RFC-056).
+   *
+   * @returns Zone index (0 in legacy mode)
+   */
+  getZoneIndex(): number {
+    return this.zoneIndex
   }
 
   // ===========================================================================
@@ -2129,6 +2221,10 @@ export class SiliconSynapse implements ISiliconLinker {
   poll(): number {
     // RFC-045-04 ISSUE-001: Set audio context for safe mutex behavior
     this.isAudioContext = true
+
+    // RFC-056: Drain cross-zone returns first (no-op in legacy mode)
+    this.freeList.drainReturnQueue()
+
     const result = this.processCommands()
     this.isAudioContext = false
     return result

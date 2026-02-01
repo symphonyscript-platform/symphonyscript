@@ -28,22 +28,30 @@ import {
   REVERSE_INDEX,
   getReverseIndexOffset,
   SYNAPSE_TABLE,
-  getSynapseTableOffset
+  getSynapseTableOffset,
+  ZONE_CONFIG,
+  ZONE_CONFIG_STRIDE,
+  getZoneConfigTableOffset,
+  NODE_SIZE_BYTES,
+  HEAP_START_OFFSET
 } from './constants'
 import { FreeList } from './free-list'
+import { ReturnQueue } from './return-queue'
 import type { LinkerConfig } from './types'
 
 /**
  * Default configuration values.
  * Note: synapseCapacity is NOT included here - it's calculated dynamically
  * as nodeCapacity * 8 if not explicitly provided.
+ * Note: workerZones defaults to 1 (legacy mode) for backward compatibility.
  */
 const DEFAULT_CONFIG_BASE = {
   nodeCapacity: 4096,
   ppq: DEFAULT_PPQ,
   bpm: DEFAULT_BPM,
   safeZoneTicks: DEFAULT_SAFE_ZONE_TICKS,
-  prngSeed: 12345
+  prngSeed: 12345,
+  workerZones: 1
 } as const
 
 /**
@@ -56,6 +64,10 @@ const DEFAULT_CONFIG_BASE = {
  * - Full free list (all nodes linked)
  * - Zeroed groove template region
  *
+ * RFC-056: Supports multi-zone heap partitioning via workerZones parameter.
+ * - workerZones: 1 (default) = legacy single-zone mode (no overhead)
+ * - workerZones: N > 1 = multi-zone mode with N worker zones
+ *
  * @param config - Optional configuration overrides
  * @returns Initialized SharedArrayBuffer
  */
@@ -66,6 +78,9 @@ export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer {
   // Use explicit config value if provided, otherwise default to nodeCapacity * 8
   const effectiveSynapseCapacity = config?.synapseCapacity ?? baseCfg.nodeCapacity * 8
 
+  // RFC-056: Get effective worker zones (default: 1 for legacy mode)
+  const effectiveWorkerZones = config?.workerZones ?? 1
+
   // Validate synapse capacity is power of 2 (required for hash mask: & (capacity - 1))
   if (effectiveSynapseCapacity <= 0 || (effectiveSynapseCapacity & (effectiveSynapseCapacity - 1)) !== 0) {
     throw new Error(
@@ -73,14 +88,22 @@ export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer {
     )
   }
 
+  // RFC-056: Validate worker zones
+  if (effectiveWorkerZones < 1 || effectiveWorkerZones > 8) {
+    throw new Error(
+      `workerZones must be between 1 and 8, got ${effectiveWorkerZones}`
+    )
+  }
+
   // Create full config with synapseCapacity for typed function calls
   const cfg: Required<LinkerConfig> = {
     ...baseCfg,
-    synapseCapacity: effectiveSynapseCapacity
+    synapseCapacity: effectiveSynapseCapacity,
+    workerZones: effectiveWorkerZones
   }
 
-  // Calculate total size needed
-  const totalBytes = calculateSABSize(cfg.nodeCapacity, effectiveSynapseCapacity)
+  // Calculate total size needed (RFC-056: includes zone config + return queues when workerZones > 1)
+  const totalBytes = calculateSABSize(cfg.nodeCapacity, effectiveSynapseCapacity, effectiveWorkerZones)
 
   // Create SharedArrayBuffer
   const buffer = new SharedArrayBuffer(totalBytes)
@@ -93,14 +116,27 @@ export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer {
   sab[HDR.SYNAPSE_CAPACITY] = effectiveSynapseCapacity
   sab[HDR.SYNAPSE_COUNT] = 0
 
+  // RFC-056: Store zone configuration in header
+  sab[HDR.ZONE_COUNT] = effectiveWorkerZones
+  const zoneConfigOffset = effectiveWorkerZones > 1 
+    ? getZoneConfigTableOffset(cfg.nodeCapacity, effectiveSynapseCapacity)
+    : 0
+  sab[HDR.ZONE_CONFIG_OFFSET] = zoneConfigOffset
+
   // Initialize register bank
   initializeRegisters(sab, cfg)
 
-  // Initialize free list (RFC-044: Only Zone A, not Zone B)
-  // Zone A is for Worker/Audio Thread SPSC allocation (RFC-055)
-  // Zone B is reserved for Main Thread bump-pointer allocation (LocalAllocator)
-  const zoneASize = getZoneSplitIndex(cfg.nodeCapacity)
-  FreeList.initialize(sab, zoneASize, cfg.nodeCapacity)
+  if (effectiveWorkerZones === 1) {
+    // LEGACY MODE: Identical to current behavior
+    // Initialize free list (RFC-044: Only Zone A, not Zone B)
+    // Zone A is for Worker/Audio Thread SPSC allocation (RFC-055)
+    // Zone B is reserved for Main Thread bump-pointer allocation (LocalAllocator)
+    const zoneASize = getZoneSplitIndex(cfg.nodeCapacity)
+    FreeList.initialize(sab, zoneASize, cfg.nodeCapacity)
+  } else {
+    // MULTI-ZONE MODE (RFC-056)
+    initializeMultiZone(sab, cfg.nodeCapacity, effectiveWorkerZones)
+  }
 
   // Initialize Identity Table
   initializeIdentityTable(sab, cfg.nodeCapacity)
@@ -121,6 +157,49 @@ export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer {
   initializeSynapseTable(sab, cfg.nodeCapacity, effectiveSynapseCapacity)
 
   return buffer
+}
+
+/**
+ * Initialize multi-zone heap partitioning (RFC-056).
+ *
+ * Divides the worker heap (Zone A) into N equal-sized zones, each with:
+ * - Its own FreeList
+ * - Its own Return Queue for cross-zone frees
+ * - Zone config entry in the Zone Config Table
+ *
+ * @param sab - Int32Array view of SharedArrayBuffer
+ * @param nodeCapacity - Total node capacity
+ * @param workerZones - Number of worker zones
+ */
+function initializeMultiZone(sab: Int32Array, nodeCapacity: number, workerZones: number): void {
+  // Read zone config offset from header (set by createLinkerSAB)
+  const zoneConfigOffset = sab[HDR.ZONE_CONFIG_OFFSET]
+
+  // Calculate total worker nodes (Zone B excluded)
+  const totalWorkerNodes = getZoneSplitIndex(nodeCapacity)
+  const nodesPerZone = Math.floor(totalWorkerNodes / workerZones)
+
+  // Initialize each zone's config, FreeList, and Return Queue
+  let z = 0
+  while (z < workerZones) {
+    const heapStartBytes = HEAP_START_OFFSET + z * nodesPerZone * NODE_SIZE_BYTES
+    const heapEndBytes = heapStartBytes + nodesPerZone * NODE_SIZE_BYTES
+
+    // Initialize zone's FreeList
+    FreeList.initializeZone(sab, z, heapStartBytes, heapEndBytes, nodesPerZone, zoneConfigOffset)
+
+    // Initialize zone's Return Queue
+    ReturnQueue.initialize(sab, z, workerZones)
+
+    z = z + 1
+  }
+
+  // Set global header fields for multi-zone
+  sab[HDR.HEAD_PTR] = NULL_PTR // Empty chain initially
+  sab[HDR.FREE_COUNT] = totalWorkerNodes // Total free nodes across all zones
+  sab[HDR.NODE_COUNT] = 0
+  sab[HDR.NODE_CAPACITY] = nodeCapacity // Total capacity (all zones + Zone B)
+  sab[HDR.HEAP_START] = HEAP_START_OFFSET
 }
 
 /**
@@ -396,7 +475,8 @@ export function getLinkerConfig(buffer: SharedArrayBuffer): Required<LinkerConfi
     ppq: sab[HDR.PPQ],
     bpm: sab[HDR.BPM],
     safeZoneTicks: sab[HDR.SAFE_ZONE_TICKS],
-    prngSeed: sab[REG.PRNG_SEED]
+    prngSeed: sab[REG.PRNG_SEED],
+    workerZones: sab[HDR.ZONE_COUNT] || 1
   }
 }
 
@@ -407,21 +487,29 @@ export function getLinkerConfig(buffer: SharedArrayBuffer): Required<LinkerConfi
  * WARNING: This is NOT thread-safe. Only call when no other threads
  * are accessing the buffer.
  *
+ * RFC-056: Handles both legacy and multi-zone modes.
+ *
  * @param buffer - SharedArrayBuffer to reset
  */
 export function resetLinkerSAB(buffer: SharedArrayBuffer): void {
   const sab = new Int32Array(buffer)
   const nodeCapacity = sab[HDR.NODE_CAPACITY]
+  const workerZones = sab[HDR.ZONE_COUNT] || 1
 
   // Reset synchronization state
   sab[HDR.COMMIT_FLAG] = COMMIT.IDLE
   sab[HDR.PLAYHEAD_TICK] = 0
   sab[HDR.ERROR_FLAG] = ERROR.OK
 
-  // Re-initialize free list (RFC-044: Only Zone A, not Zone B)
-  // RFC-055: SPSC implementation — no BigInt64Array needed
-  const zoneASize = getZoneSplitIndex(nodeCapacity)
-  FreeList.initialize(sab, zoneASize, nodeCapacity)
+  if (workerZones === 1) {
+    // LEGACY MODE: Re-initialize free list (RFC-044: Only Zone A, not Zone B)
+    // RFC-055: SPSC implementation — no BigInt64Array needed
+    const zoneASize = getZoneSplitIndex(nodeCapacity)
+    FreeList.initialize(sab, zoneASize, nodeCapacity)
+  } else {
+    // MULTI-ZONE MODE (RFC-056): Re-initialize all zones
+    initializeMultiZone(sab, nodeCapacity, workerZones)
+  }
 
   // Re-initialize Identity Table
   initializeIdentityTable(sab, nodeCapacity)

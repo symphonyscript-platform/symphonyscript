@@ -58,6 +58,12 @@ export interface LinkerConfig {
   safeZoneTicks?: number
   /** PRNG seed for humanization (default: 12345) */
   prngSeed?: number
+  /**
+   * Number of worker zones for parallel workers (RFC-056).
+   * Default: 1 (legacy single-zone mode, no overhead).
+   * When > 1, enables multi-zone heap partitioning with per-zone SPSC FreeLists.
+   */
+  workerZones?: number
 }
 
 /**

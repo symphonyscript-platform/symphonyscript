@@ -248,7 +248,15 @@ export const HDR = {
   /** [K-002] Maximum number of synapses (dynamic, defaults to nodeCapacity * 8) */
   SYNAPSE_CAPACITY: 40,
   /** [K-002] [ATOMIC] Current number of active synapses */
-  SYNAPSE_COUNT: 41
+  SYNAPSE_COUNT: 41,
+
+  // -------------------------------------------------------------------------
+  // Multi-Zone Header (RFC-056)
+  // -------------------------------------------------------------------------
+  /** [RFC-056] Number of worker zones (1 = legacy single-zone mode) */
+  ZONE_COUNT: 42,
+  /** [RFC-056] Byte offset to zone configuration table (0 = legacy mode) */
+  ZONE_CONFIG_OFFSET: 43
 } as const
 
 /**
@@ -754,6 +762,129 @@ export function getReverseIndexOffset(nodeCapacity: number, synapseCapacity?: nu
 }
 
 // =============================================================================
+// Multi-Zone Configuration (RFC-056)
+// =============================================================================
+
+/**
+ * Per-zone configuration structure (RFC-056).
+ *
+ * Each worker zone has its own configuration block in the Zone Config Table.
+ * The table starts at HDR.ZONE_CONFIG_OFFSET and contains ZONE_COUNT entries.
+ *
+ * Layout: 10 × i32 = 40 bytes per zone
+ * - HEAP_START: First node byte offset in this zone
+ * - HEAP_END: Last node byte offset + 1 (exclusive)
+ * - FREE_LIST_HEAD: Current free list head (32-bit, SPSC)
+ * - FREE_COUNT: Free nodes in this zone
+ * - NODE_COUNT: Allocated nodes in this zone
+ * - NODE_CAPACITY: Total capacity of this zone
+ * - OWNER_ID: Worker ID that owns this zone (0 = unclaimed)
+ * - RESERVED: Reserved for future use (alignment)
+ * - RETURN_QUEUE_HEAD: [ATOMIC] MPSC Return Queue head (producers CAS here)
+ * - RETURN_QUEUE_TAIL: Return Queue tail (only owner reads/advances)
+ */
+export const ZONE_CONFIG = {
+  /** First node byte offset in this zone */
+  HEAP_START: 0,
+  /** Last node byte offset + 1 (exclusive) */
+  HEAP_END: 1,
+  /** Current free list head (32-bit, SPSC) */
+  FREE_LIST_HEAD: 2,
+  /** Free nodes in this zone */
+  FREE_COUNT: 3,
+  /** Allocated nodes in this zone */
+  NODE_COUNT: 4,
+  /** Total capacity of this zone */
+  NODE_CAPACITY: 5,
+  /** Worker ID that owns this zone (0 = unclaimed) */
+  OWNER_ID: 6,
+  /** Reserved for future use (alignment) */
+  RESERVED: 7,
+  /** [ATOMIC] MPSC Return Queue head (producers CAS here) */
+  RETURN_QUEUE_HEAD: 8,
+  /** Return Queue tail (only owner reads/advances) */
+  RETURN_QUEUE_TAIL: 9
+} as const
+
+/**
+ * Number of i32 slots per zone configuration entry.
+ * 10 slots × 4 bytes = 40 bytes per zone.
+ */
+export const ZONE_CONFIG_STRIDE = 10
+
+/**
+ * Fixed capacity of each zone's Return Queue (number of pointer slots).
+ * 256 slots × 4 bytes = 1KB per queue.
+ */
+export const RETURN_QUEUE_CAPACITY = 256
+
+/**
+ * Calculate the byte offset to the Zone Configuration Table.
+ * The table is placed after all existing structures (at the end of the SAB).
+ *
+ * @param nodeCapacity - Maximum number of nodes
+ * @param synapseCapacity - Maximum number of synapses (default: nodeCapacity * 8)
+ * @returns Byte offset to Zone Config Table
+ */
+export function getZoneConfigTableOffset(nodeCapacity: number, synapseCapacity?: number): number {
+  const effectiveSynapseCapacity = synapseCapacity ?? nodeCapacity * 8
+  
+  // Calculate offset after all existing structures
+  const headerSize = HEAP_START_OFFSET
+  const heapSize = nodeCapacity * NODE_SIZE_BYTES
+  const identityTableSize = nodeCapacity * 2 * ID_TABLE.ENTRY_SIZE_BYTES
+  const symbolTableSize = nodeCapacity * 2 * SYM_TABLE.ENTRY_SIZE_BYTES
+  const grooveSize = 1024
+  const ringBufferSize = COMMAND.DEFAULT_RING_SIZE_BYTES
+  const reclaimRingSize = RECLAIM.DEFAULT_RING_SIZE_BYTES
+  const synapseTableSize = effectiveSynapseCapacity * SYNAPSE_TABLE.STRIDE_BYTES
+  const reverseIndexSize = REVERSE_INDEX.BUCKET_COUNT * 4
+  
+  return headerSize + heapSize + identityTableSize + symbolTableSize + grooveSize +
+         ringBufferSize + reclaimRingSize + synapseTableSize + reverseIndexSize
+}
+
+/**
+ * Calculate the byte offset to the Return Queue buffers region.
+ * Return Queue buffers start immediately after the Zone Config Table.
+ *
+ * @param zoneConfigOffset - Byte offset to Zone Config Table (from HDR.ZONE_CONFIG_OFFSET)
+ * @param workerZones - Number of worker zones
+ * @returns Byte offset to Return Queue buffers
+ */
+export function getReturnQueueBufferOffset(zoneConfigOffset: number, workerZones: number): number {
+  const zoneConfigTableSize = ZONE_CONFIG_STRIDE * workerZones * 4 // bytes
+  return zoneConfigOffset + zoneConfigTableSize
+}
+
+/**
+ * Calculate the byte offset to a specific zone's Return Queue buffer.
+ *
+ * @param zoneConfigOffset - Byte offset to Zone Config Table (from HDR.ZONE_CONFIG_OFFSET)
+ * @param workerZones - Number of worker zones
+ * @param zoneIndex - Index of the zone (0-based)
+ * @returns Byte offset to the zone's Return Queue buffer
+ */
+export function getReturnQueueForZone(zoneConfigOffset: number, workerZones: number, zoneIndex: number): number {
+  const baseOffset = getReturnQueueBufferOffset(zoneConfigOffset, workerZones)
+  return baseOffset + zoneIndex * RETURN_QUEUE_CAPACITY * 4 // 4 bytes per slot
+}
+
+/**
+ * Zone error codes (RFC-056 zero-allocation error handling).
+ */
+export const ZONE_ERR = {
+  /** Operation succeeded */
+  OK: 0,
+  /** No zones available for claiming */
+  NO_ZONES_AVAILABLE: -1,
+  /** Zone exhausted (no free nodes) */
+  ZONE_EXHAUSTED: -2,
+  /** Return Queue full */
+  RETURN_QUEUE_FULL: -3
+} as const
+
+// =============================================================================
 // Zero-Allocation Error Codes (RFC-045-04)
 // =============================================================================
 
@@ -853,7 +984,7 @@ export function getZoneSplitIndex(nodeCapacity: number): number {
  * Calculate total SAB size needed for given node capacity.
  *
  * Layout:
- * - Header + Registers + Command Ring + Reclaim Ring + Synapse Header: 168 bytes (42 × i32)
+ * - Header + Registers + Command Ring + Reclaim Ring + Synapse Header + Multi-Zone: 176 bytes (44 × i32)
  * - Node Heap: nodeCapacity × 32 bytes
  * - Identity Table: nodeCapacity × 2 × 8 bytes (RFC-047-50: 2x capacity for load factor)
  * - Symbol Table: nodeCapacity × 8 bytes (fileHash + lineCol per entry)
@@ -861,14 +992,21 @@ export function getZoneSplitIndex(nodeCapacity: number): number {
  * - Command Ring Buffer: 64KB (RFC-044)
  * - Reclaim Ring Buffer: 16KB (K-005)
  * - Synapse Table: synapseCapacity × 20 bytes (K-002: dynamic sizing)
+ * - Reverse Index: 1KB (ISSUE-016)
+ * - Zone Config Table: workerZones × 40 bytes (RFC-056, only when workerZones > 1)
+ * - Return Queue Buffers: workerZones × 1KB (RFC-056, only when workerZones > 1)
  *
  * @param nodeCapacity - Maximum number of nodes
  * @param synapseCapacity - Maximum number of synapses (default: nodeCapacity * 8)
+ * @param workerZones - Number of worker zones (default: 1, legacy mode)
  * @returns Total bytes needed for SharedArrayBuffer
  */
-export function calculateSABSize(nodeCapacity: number, synapseCapacity?: number): number {
+export function calculateSABSize(nodeCapacity: number, synapseCapacity?: number, workerZones?: number): number {
   const effectiveSynapseCapacity = synapseCapacity ?? nodeCapacity * 8
-  const headerSize = HEAP_START_OFFSET // 168 bytes
+  const effectiveWorkerZones = workerZones ?? 1
+  
+  // Existing regions
+  const headerSize = HEAP_START_OFFSET // 176 bytes (RFC-056)
   const heapSize = nodeCapacity * NODE_SIZE_BYTES
   const identityTableSize = nodeCapacity * 2 * ID_TABLE.ENTRY_SIZE_BYTES // RFC-047-50: 2x capacity
   const symbolTableSize = nodeCapacity * 2 * SYM_TABLE.ENTRY_SIZE_BYTES // Must match Identity Table capacity
@@ -877,7 +1015,18 @@ export function calculateSABSize(nodeCapacity: number, synapseCapacity?: number)
   const reclaimRingSize = RECLAIM.DEFAULT_RING_SIZE_BYTES // 16KB reclaim ring (K-005)
   const synapseTableSize = effectiveSynapseCapacity * SYNAPSE_TABLE.STRIDE_BYTES // K-002: dynamic
   const reverseIndexSize = REVERSE_INDEX.BUCKET_COUNT * 4 // 1KB reverse index (ISSUE-016)
-  return headerSize + heapSize + identityTableSize + symbolTableSize + grooveSize + ringBufferSize + reclaimRingSize + synapseTableSize + reverseIndexSize
+  
+  // RFC-056: Multi-zone regions (only when workerZones > 1)
+  const zoneConfigTableSize = effectiveWorkerZones > 1
+    ? ZONE_CONFIG_STRIDE * effectiveWorkerZones * 4 // 40 bytes per zone
+    : 0
+  const returnQueueBuffersSize = effectiveWorkerZones > 1
+    ? RETURN_QUEUE_CAPACITY * effectiveWorkerZones * 4 // 1KB per zone (256 slots × 4 bytes)
+    : 0
+  
+  return headerSize + heapSize + identityTableSize + symbolTableSize + grooveSize + 
+         ringBufferSize + reclaimRingSize + synapseTableSize + reverseIndexSize +
+         zoneConfigTableSize + returnQueueBuffersSize
 }
 
 /**
@@ -890,10 +1039,11 @@ export function calculateSABSize(nodeCapacity: number, synapseCapacity?: number)
  * - Command Ring Header (32-35): 4 × 4 = 16 bytes
  * - Reclaim Ring Header (36-39): 4 × 4 = 16 bytes
  * - Synapse Header (40-41): 2 × 4 = 8 bytes
+ * - Multi-Zone Header (42-43): 2 × 4 = 8 bytes (RFC-056)
  *
- * Total: 64 + 28 + 36 + 16 + 16 + 8 = 168 bytes (indices 0-41)
+ * Total: 64 + 28 + 36 + 16 + 16 + 8 + 8 = 176 bytes (indices 0-43)
  */
-export const HEAP_START_OFFSET = 168
+export const HEAP_START_OFFSET = 176
 
 /**
  * Calculate i32 index where node heap begins.
