@@ -214,41 +214,44 @@ export class FreeList {
    *
    * RFC-056: Uses zone-specific header offsets in multi-zone mode.
    *
-   * Returns NULL_PTR if heap is exhausted or free list corrupted.
+   * @returns Node pointer, or NULL_PTR if heap exhausted or corrupted
+   *
+   * @remarks
+   * - SPSC INVARIANT: Only AudioWorklet thread may call this
+   * - Zero-allocation: Uses error codes, not exceptions
+   * - O(1) time complexity
    */
   alloc(): NodePtr {
-    // Load current head (32-bit, memory barrier for visibility)
-    // RFC-056: Uses zone-specific offset in multi-zone mode
+    // MEMORY BARRIER: Atomics.load ensures visibility of head pointer
+    // SPSC: No CAS needed - single producer/consumer guarantees no races
     const head = Atomics.load(this.sab, this.freeListHeadOffset)
 
-    // Heap exhausted
+    // Heap exhausted - zero-allocation error path
     if (head === NULL_PTR) {
       return NULL_PTR
     }
 
-    // Validate pointer
+    // Validate pointer before dereferencing (defensive programming)
     if (!this.isValidPtr(head)) {
-      // Corrupted free list - set error flag (zero-allocation)
+      // ZERO-ALLOCATION: Set error flag instead of throwing
       Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.FREE_LIST_CORRUPT)
       return NULL_PTR
     }
 
     const headOffset = this.nodeOffset(head)
 
-    // Read the next pointer from the free node
-    // In free nodes, PACKED_A stores the next free pointer (32-bit)
+    // Read next pointer from free node's PACKED_A slot
+    // MEMORY BARRIER: Ensures we see the value written during free()
     const next = Atomics.load(this.sab, headOffset + NODE.PACKED_A)
 
-    // Update head (32-bit, memory barrier for visibility) — NO CAS NEEDED
-    // RFC-056: Uses zone-specific offset in multi-zone mode
+    // MEMORY BARRIER: Atomics.store ensures new head is visible
+    // SPSC: No CAS needed - we're the only writer
     Atomics.store(this.sab, this.freeListHeadOffset, next)
 
-    // Zero the node (except SEQ which we preserve)
+    // Zero the node fields (except SEQ which tracks version)
     this.zeroNode(headOffset)
 
-    // Update counters atomically
-    // RFC-045: NODE_COUNT is now incremented by executeInsert (when node is linked)
-    // RFC-056: Uses zone-specific offset in multi-zone mode
+    // MEMORY BARRIER: Atomic decrement for cross-thread visibility
     Atomics.sub(this.sab, this.freeCountOffset, 1)
 
     return head
@@ -296,34 +299,38 @@ export class FreeList {
   /**
    * Local free implementation (SPSC, same zone).
    * Called directly for same-zone frees and from drainReturnQueue().
+   *
+   * @remarks
+   * - SPSC INVARIANT: Only zone owner may call this
+   * - Implements LIFO stack push operation
+   * - SEQ counter increment invalidates stale references
    */
   private _localFree(ptr: NodePtr): void {
     if (!this.isValidPtr(ptr)) {
-      // Invalid pointer - set error flag (zero-allocation)
+      // ZERO-ALLOCATION: Set error flag instead of throwing
       Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.FREE_LIST_CORRUPT)
       return
     }
 
     const offset = this.nodeOffset(ptr)
 
-    // Increment SEQ counter to invalidate any stale references (for versioned reads)
-    // SEQ is in upper 24 bits of SEQ_FLAGS (SEQ.SEQ_SHIFT = 8)
+    // VERSIONING: Increment SEQ to invalidate stale references
+    // SEQ is upper 24 bits of SEQ_FLAGS (SEQ.SEQ_SHIFT = 8)
+    // MEMORY BARRIER: Atomic add ensures visibility to readers
     Atomics.add(this.sab, offset + NODE.SEQ_FLAGS, 1 << SEQ.SEQ_SHIFT)
 
-    // Load current head (32-bit, memory barrier)
-    // RFC-056: Uses zone-specific offset in multi-zone mode
+    // MEMORY BARRIER: Load current head with acquire semantics
     const head = Atomics.load(this.sab, this.freeListHeadOffset)
 
-    // Point new node to current head (using PACKED_A slot)
+    // LIFO PUSH: Point freed node to current head
+    // MEMORY BARRIER: Ensures next pointer is visible before head update
     Atomics.store(this.sab, offset + NODE.PACKED_A, head)
 
-    // Make new node the head (32-bit, memory barrier) — NO CAS NEEDED
-    // RFC-056: Uses zone-specific offset in multi-zone mode
+    // LINEARIZATION POINT: Make freed node the new head
+    // SPSC: No CAS needed - single writer guarantee
     Atomics.store(this.sab, this.freeListHeadOffset, ptr)
 
-    // Update counters atomically
-    // RFC-045: NODE_COUNT is now decremented by executeDelete (when node is unlinked)
-    // RFC-056: Uses zone-specific offset in multi-zone mode
+    // MEMORY BARRIER: Atomic increment for cross-thread visibility
     Atomics.add(this.sab, this.freeCountOffset, 1)
   }
 

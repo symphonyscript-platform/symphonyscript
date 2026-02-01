@@ -68,10 +68,25 @@ const DEFAULT_CONFIG_BASE = {
  * - workerZones: 1 (default) = legacy single-zone mode (no overhead)
  * - workerZones: N > 1 = multi-zone mode with N worker zones
  *
+ * RFC-058: Zero-allocation error handling - returns null on invalid config.
+ *
  * @param config - Optional configuration overrides
- * @returns Initialized SharedArrayBuffer
+ * @returns Initialized SharedArrayBuffer, or null if config is invalid
+ *
+ * @remarks
+ * - synapseCapacity must be a power of 2 (for hash mask optimization)
+ * - workerZones must be between 1 and 8
+ * - On error, returns null (caller should check)
+ *
+ * @example
+ * ```typescript
+ * const buffer = createLinkerSAB({ nodeCapacity: 4096 })
+ * if (buffer === null) {
+ *   // Handle invalid config
+ * }
+ * ```
  */
-export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer {
+export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer | null {
   const baseCfg = { ...DEFAULT_CONFIG_BASE, ...config }
 
   // K-002: Calculate effective synapse capacity
@@ -81,18 +96,15 @@ export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer {
   // RFC-056: Get effective worker zones (default: 1 for legacy mode)
   const effectiveWorkerZones = config?.workerZones ?? 1
 
+  // RFC-058: Zero-allocation validation - return null instead of throwing
   // Validate synapse capacity is power of 2 (required for hash mask: & (capacity - 1))
   if (effectiveSynapseCapacity <= 0 || (effectiveSynapseCapacity & (effectiveSynapseCapacity - 1)) !== 0) {
-    throw new Error(
-      `synapseCapacity must be a power of 2, got ${effectiveSynapseCapacity}`
-    )
+    return null // ERROR.INVALID_SYNAPSE_CAPACITY - caller must validate config
   }
 
-  // RFC-056: Validate worker zones
+  // RFC-056/058: Validate worker zones (1-8 range)
   if (effectiveWorkerZones < 1 || effectiveWorkerZones > 8) {
-    throw new Error(
-      `workerZones must be between 1 and 8, got ${effectiveWorkerZones}`
-    )
+    return null // ERROR.INVALID_WORKER_ZONES - caller must validate config
   }
 
   // Create full config with synapseCapacity for typed function calls

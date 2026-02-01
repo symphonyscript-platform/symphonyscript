@@ -121,9 +121,10 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
       expect(sab[zone1Base + ZONE_CONFIG.OWNER_ID]).toBe(0) // Unclaimed
     })
 
-    it('should reject invalid workerZones values', () => {
-      expect(() => createLinkerSAB({ nodeCapacity: 64, workerZones: 0 })).toThrow()
-      expect(() => createLinkerSAB({ nodeCapacity: 64, workerZones: 9 })).toThrow()
+    it('should return null for invalid workerZones values (RFC-058)', () => {
+      // RFC-058: Zero-allocation error handling - returns null instead of throwing
+      expect(createLinkerSAB({ nodeCapacity: 64, workerZones: 0 })).toBeNull()
+      expect(createLinkerSAB({ nodeCapacity: 64, workerZones: 9 })).toBeNull()
     })
   })
 

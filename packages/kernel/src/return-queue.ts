@@ -90,30 +90,34 @@ export class ReturnQueue {
     const maxRetries = 100 // Prevent infinite loop under extreme contention
 
     while (retries < maxRetries) {
+      // MEMORY BARRIER: Atomics.load ensures we see the latest head value
+      // published by other producers (acquire semantics)
       const head = Atomics.load(this.sab, this.headOffset)
       const next = (head + 1) & (RETURN_QUEUE_CAPACITY - 1) // Power-of-2 wrap
 
-      // Check if queue is full
+      // Check if queue is full (linearization point for full detection)
       const tail = Atomics.load(this.sab, this.tailOffset)
       if (next === tail) {
         return false // Queue full
       }
 
-      // Write ptr BEFORE claiming the slot (avoids read-before-write race)
+      // CRITICAL: Write ptr BEFORE claiming the slot (avoids read-before-write race)
       // If CAS fails, our write is harmless (will be overwritten by winner)
+      // MEMORY BARRIER: Atomics.store ensures visibility to consumer
       Atomics.store(this.sab, this.bufferOffset + head, ptr)
 
-      // Attempt to claim the slot
+      // LINEARIZATION POINT: CAS is the atomic commit operation
+      // If CAS succeeds, we own the slot and ptr is visible to consumer
       const result = Atomics.compareExchange(this.sab, this.headOffset, head, next)
       if (result === head) {
         return true // Successfully enqueued
       }
 
-      // CAS failed, another producer won - retry
+      // CAS failed, another producer won - retry with fresh head value
       retries = retries + 1
     }
 
-    // Extreme contention - treat as full
+    // Extreme contention - treat as full (zero-allocation: no error thrown)
     return false
   }
 
@@ -126,17 +130,22 @@ export class ReturnQueue {
    * @returns Node pointer if available, NULL_PTR if queue is empty
    */
   dequeue(): NodePtr {
+    // SPSC INVARIANT: Only zone owner calls dequeue(), so tail read is safe
     const tail = this.sab[this.tailOffset]
+    
+    // MEMORY BARRIER: Atomics.load ensures we see latest head from producers
     const head = Atomics.load(this.sab, this.headOffset)
 
     if (tail === head) {
       return NULL_PTR // Queue empty
     }
 
-    // Read pointer from buffer
+    // MEMORY BARRIER: Atomics.load ensures we see the ptr written by producer
+    // (producer used Atomics.store before CAS, so this is safe)
     const ptr = Atomics.load(this.sab, this.bufferOffset + tail)
 
-    // Advance tail (single consumer, no atomics needed for write)
+    // SPSC: Single consumer, no atomics needed for tail write
+    // Other producers only read tail to check fullness (benign race)
     this.sab[this.tailOffset] = (tail + 1) & (RETURN_QUEUE_CAPACITY - 1)
 
     return ptr

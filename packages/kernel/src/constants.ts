@@ -471,7 +471,11 @@ export const ERROR = {
   /** [RFC-045-04] Free list corruption detected */
   FREE_LIST_CORRUPT: 6,
   /** [RFC-045-04] Unknown command opcode received */
-  UNKNOWN_OPCODE: 7
+  UNKNOWN_OPCODE: 7,
+  /** [RFC-058] Invalid synapse capacity (must be power of 2) */
+  INVALID_SYNAPSE_CAPACITY: 8,
+  /** [RFC-058] Invalid worker zones (must be 1-8) */
+  INVALID_WORKER_ZONES: 9
 } as const
 
 // =============================================================================

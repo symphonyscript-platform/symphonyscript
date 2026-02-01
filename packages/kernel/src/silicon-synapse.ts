@@ -161,11 +161,30 @@ export class SiliconSynapse implements ISiliconLinker {
   /**
    * Create a Silicon Linker with a new SAB.
    *
-   * @param config - Optional configuration
-   * @returns New SiliconSynapse instance
+   * RFC-058: Returns null if configuration is invalid (zero-allocation error handling).
+   *
+   * @param config - Optional configuration overrides
+   * @returns New SiliconSynapse instance, or null if config is invalid
+   *
+   * @remarks
+   * - synapseCapacity must be a power of 2
+   * - workerZones must be between 1 and 8
+   * - Caller must check for null return
+   *
+   * @example
+   * ```typescript
+   * const linker = SiliconSynapse.create({ nodeCapacity: 4096 })
+   * if (linker === null) {
+   *   console.error('Invalid configuration')
+   *   return
+   * }
+   * ```
    */
-  static create(config?: LinkerConfig): SiliconSynapse {
+  static create(config?: LinkerConfig): SiliconSynapse | null {
     const buffer = createLinkerSAB(config)
+    if (buffer === null) {
+      return null // Invalid config - caller must handle
+    }
     return new SiliconSynapse(buffer)
   }
 
