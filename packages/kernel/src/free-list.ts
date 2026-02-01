@@ -1,12 +1,14 @@
 // =============================================================================
-// SymphonyScript - Silicon Linker Free List (RFC-043 Revision B)
+// SymphonyScript - Silicon Linker Free List (RFC-055 SPSC)
 // =============================================================================
-// Lock-free LIFO stack using 64-bit Tagged Pointers (Version + Pointer) to
-// eliminate ABA problem without sequence counters.
+// Zero-allocation SPSC (Single-Producer Single-Consumer) free list.
+// RFC-055: Replaces MPMC 64-bit CAS with simple 32-bit load/store.
+//
+// INVARIANT: Only the Worker thread (AudioWorklet) may call alloc() or free().
+// Violation will cause data corruption. See RFC-055.
 
 import {
   HDR,
-  HDR_I64,
   NODE,
   NODE_SIZE_I32,
   NULL_PTR,
@@ -17,28 +19,35 @@ import {
 import type { NodePtr } from './types'
 
 /**
- * Lock-free free list implementation using 64-bit tagged pointers.
+ * SPSC FreeList - Zero allocation memory management (RFC-055).
  *
  * The free list is a LIFO stack where:
- * - FREE_LIST_HEAD (64-bit) stores: (version << 32) | (ptr & 0xFFFFFFFF)
- * - Each free node's PACKED_A field (slot 0) stores the next free pointer (32-bit)
+ * - FREE_LIST_HEAD_LOW (32-bit) stores the head pointer
+ * - Each free node's PACKED_A field (slot 0) stores the next free pointer
  * - Allocation pops from head, deallocation pushes to head
  *
- * Thread safety:
- * - All operations use Atomics.compareExchange on BigInt64Array
- * - Version counter in upper 32 bits provides ABA protection
- * - No per-node sequence counters needed for free list operations
+ * SPSC Invariant:
+ * - Only the AudioWorklet thread may call alloc() or free()
+ * - No CAS needed - simple atomic load/store with memory barriers
+ * - Zero BigInt allocation (eliminates GC pressure in hot path)
+ *
+ * @see RFC-055 for architectural justification
  */
 export class FreeList {
   private sab: Int32Array
-  private sab64: BigInt64Array
   private heapStartI32: number
   private nodeCapacity: number
 
-  constructor(sab: Int32Array, sab64: BigInt64Array) {
+  /**
+   * Create a new FreeList instance.
+   *
+   * RFC-055: No BigInt64Array needed — SPSC uses 32-bit atomics only.
+   *
+   * @param sab - Int32Array view of SharedArrayBuffer
+   */
+  constructor(sab: Int32Array) {
     this.sab = sab
-    this.sab64 = sab64
-    // Heap starts at byte offset 128, which is i32 index 32
+    // Heap starts at byte offset 168 (HEAP_START_OFFSET), which is i32 index 42
     this.heapStartI32 = HEAP_START_OFFSET / 4
     this.nodeCapacity = sab[HDR.NODE_CAPACITY]
   }
@@ -97,91 +106,56 @@ export class FreeList {
   /**
    * Allocate a node from the free list.
    *
-   * Uses 64-bit tagged pointer CAS to eliminate ABA problem.
-   * Tagged pointer format: (version << 32) | (ptr & 0xFFFFFFFF)
+   * SPSC Implementation (RFC-055):
+   * - No CAS loop needed - single thread access guaranteed
+   * - Zero BigInt allocation
+   * - Simple load → read next → store pattern
    *
-   * Returns NULL_PTR if heap is exhausted.
+   * Returns NULL_PTR if heap is exhausted or free list corrupted.
    */
   alloc(): NodePtr {
-    // CAS loop - retry until we successfully pop a node
-    while (true) {
-      // Load current 64-bit tagged head
-      const head = Atomics.load(this.sab64, HDR_I64.FREE_LIST_HEAD)
+    // Load current head (32-bit, memory barrier for visibility)
+    const head = Atomics.load(this.sab, HDR.FREE_LIST_HEAD_LOW)
 
-      // Extract pointer from lower 32 bits
-      const ptr = Number(head & 0xFFFFFFFFn)
-
-      // Heap exhausted
-      if (ptr === NULL_PTR) {
-        return NULL_PTR
-      }
-
-      // Validate pointer
-      if (!this.isValidPtr(ptr)) {
-        // Corrupted free list - set error flag (zero-allocation)
-        Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.FREE_LIST_CORRUPT)
-        return NULL_PTR
-      }
-
-      const headOffset = this.nodeOffset(ptr)
-
-      // Read the next pointer from the free node
-      // In free nodes, PACKED_A stores the next free pointer (32-bit)
-      const next = Atomics.load(this.sab, headOffset + NODE.PACKED_A)
-
-      // Extract version from upper 32 bits and increment
-      const version = head >> 32n
-      const newVersion = version + 1n
-
-      /**
-       * NOTE: BigInt(next) allocation is an INTENTIONAL TRADE-OFF.
-       *
-       * Why it's unavoidable:
-       * - JavaScript has no native 64-bit integer type
-       * - 64-bit CAS requires BigInt for atomic version+pointer update
-       * - `next` depends on `head` which changes on CAS retry, so cannot be hoisted
-       *
-       * Why it's acceptable:
-       * - ONE allocation per alloc() call (not per CAS retry spin)
-       * - ~16-24 bytes, short-lived nursery allocation (fast GC)
-       * - CAS contention is rare in SPSC pattern with Zone A/B partitioning
-       * - Alternative (no version counter) would risk ABA data corruption
-       *
-       * This is the cost of ABA-safe 64-bit atomics in JavaScript.
-       */
-      const newHead = (newVersion << 32n) | BigInt(next)
-
-      // CAS: try to update FREE_LIST_HEAD from head to newHead
-      const result = Atomics.compareExchange(
-        this.sab64,
-        HDR_I64.FREE_LIST_HEAD,
-        head,
-        newHead
-      )
-
-      if (result === head) {
-        // CAS succeeded - we own this node now
-
-        // Zero the node (except SEQ which we preserve)
-        this.zeroNode(headOffset)
-
-        // Update counters atomically
-        // RFC-045: NODE_COUNT is now incremented by executeInsert (when node is linked)
-        Atomics.sub(this.sab, HDR.FREE_COUNT, 1)
-
-        return ptr
-      }
-
-      // CAS failed - another thread modified the head, retry
-      // This is expected in concurrent scenarios
+    // Heap exhausted
+    if (head === NULL_PTR) {
+      return NULL_PTR
     }
+
+    // Validate pointer
+    if (!this.isValidPtr(head)) {
+      // Corrupted free list - set error flag (zero-allocation)
+      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.FREE_LIST_CORRUPT)
+      return NULL_PTR
+    }
+
+    const headOffset = this.nodeOffset(head)
+
+    // Read the next pointer from the free node
+    // In free nodes, PACKED_A stores the next free pointer (32-bit)
+    const next = Atomics.load(this.sab, headOffset + NODE.PACKED_A)
+
+    // Update head (32-bit, memory barrier for visibility) — NO CAS NEEDED
+    Atomics.store(this.sab, HDR.FREE_LIST_HEAD_LOW, next)
+
+    // Zero the node (except SEQ which we preserve)
+    this.zeroNode(headOffset)
+
+    // Update counters atomically
+    // RFC-045: NODE_COUNT is now incremented by executeInsert (when node is linked)
+    Atomics.sub(this.sab, HDR.FREE_COUNT, 1)
+
+    return head
   }
 
   /**
    * Return a node to the free list.
    *
-   * Uses 64-bit tagged pointer CAS to eliminate ABA problem.
-   * Version counter is incremented on every free operation.
+   * SPSC Implementation (RFC-055):
+   * - No CAS loop needed - single thread access guaranteed
+   * - Zero BigInt allocation
+   * - Simple store → load → store pattern
+   * - SEQ counter still incremented for stale reference detection
    */
   free(ptr: NodePtr): void {
     if (ptr === NULL_PTR) {
@@ -197,58 +171,21 @@ export class FreeList {
     const offset = this.nodeOffset(ptr)
 
     // Increment SEQ counter to invalidate any stale references (for versioned reads)
-    // SEQ is in upper 24 bits of SEQ_FLAGS
+    // SEQ is in upper 24 bits of SEQ_FLAGS (SEQ.SEQ_SHIFT = 8)
     Atomics.add(this.sab, offset + NODE.SEQ_FLAGS, 1 << SEQ.SEQ_SHIFT)
 
-    /**
-     * HOISTED: ptr is constant across CAS retries.
-     *
-     * Unlike alloc() where `next` changes on retry, `ptr` (the pointer being freed)
-     * is fixed for the entire operation. This eliminates BigInt allocation on retry.
-     *
-     * See alloc() for full explanation of why BigInt is necessary for 64-bit CAS.
-     */
-    const ptrBigInt = BigInt(ptr)
+    // Load current head (32-bit, memory barrier)
+    const head = Atomics.load(this.sab, HDR.FREE_LIST_HEAD_LOW)
 
-    // CAS loop to push onto free list head
-    while (true) {
-      // Load current 64-bit tagged head
-      const head = Atomics.load(this.sab64, HDR_I64.FREE_LIST_HEAD)
+    // Point new node to current head (using PACKED_A slot)
+    Atomics.store(this.sab, offset + NODE.PACKED_A, head)
 
-      // Extract pointer from lower 32 bits
-      const headPtr = Number(head & 0xFFFFFFFFn)
+    // Make new node the head (32-bit, memory barrier) — NO CAS NEEDED
+    Atomics.store(this.sab, HDR.FREE_LIST_HEAD_LOW, ptr)
 
-      // Store current head ptr as our next pointer (using PACKED_A slot)
-      Atomics.store(this.sab, offset + NODE.PACKED_A, headPtr)
-
-      // Extract version and increment
-      const version = head >> 32n
-      const newVersion = version + 1n
-
-      // Construct new tagged head: (newVersion << 32) | ptr
-      // ptrBigInt is hoisted - no allocation on retry
-      const newHead = (newVersion << 32n) | ptrBigInt
-
-      // CAS: try to become the new head
-      const result = Atomics.compareExchange(
-        this.sab64,
-        HDR_I64.FREE_LIST_HEAD,
-        head,
-        newHead
-      )
-
-      if (result === head) {
-        // CAS succeeded - node is now on the free list
-
-        // Update counters atomically
-        // RFC-045: NODE_COUNT is now decremented by executeDelete (when node is unlinked)
-        Atomics.add(this.sab, HDR.FREE_COUNT, 1)
-
-        return
-      }
-
-      // CAS failed - another thread modified the head, retry
-    }
+    // Update counters atomically
+    // RFC-045: NODE_COUNT is now decremented by executeDelete (when node is unlinked)
+    Atomics.add(this.sab, HDR.FREE_COUNT, 1)
   }
 
   /**
@@ -267,35 +204,29 @@ export class FreeList {
 
   /**
    * Check if the free list is empty.
+   *
+   * SPSC Implementation (RFC-055): Simple 32-bit load.
    */
   isEmpty(): boolean {
-    const head = Atomics.load(this.sab64, HDR_I64.FREE_LIST_HEAD)
-    const ptr = Number(head & 0xFFFFFFFFn)
-    return ptr === NULL_PTR
+    return Atomics.load(this.sab, HDR.FREE_LIST_HEAD_LOW) === NULL_PTR
   }
 
   /**
-   * Initialize the free list with all nodes.
-   * Called once during SAB initialization.
-   *
-   * Links all nodes in the heap into a free list chain.
-   * Initializes FREE_LIST_HEAD as 64-bit tagged pointer with version 0.
-   */
-  /**
-   * Initialize the free list with Zone A nodes only (RFC-044).
+   * Initialize the free list with Zone A nodes only (RFC-044, RFC-055).
    *
    * @param sab - Int32Array view of SharedArrayBuffer
-   * @param sab64 - BigInt64Array view for atomic 64-bit operations
    * @param zoneASize - Number of nodes in Zone A (Worker-owned)
    * @param totalCapacity - Total node capacity of heap (Zone A + Zone B)
    *
    * @remarks
    * RFC-044 partitions the heap into Zone A (Worker) and Zone B (Main Thread).
    * The free list only contains Zone A nodes. Zone B nodes are managed by LocalAllocator.
+   *
+   * RFC-055: Uses 32-bit FREE_LIST_HEAD_LOW instead of 64-bit tagged pointer.
+   * No BigInt64Array needed.
    */
   static initialize(
     sab: Int32Array,
-    sab64: BigInt64Array,
     zoneASize: number,
     totalCapacity: number
   ): void {
@@ -307,7 +238,7 @@ export class FreeList {
     let i = 0
     while (i < zoneASize) {
       const offset = heapStartI32 + i * NODE_SIZE_I32
-      const ptr = offset * 4 // Convert i32 index to byte pointer
+      // const ptr = offset * 4 // Convert i32 index to byte pointer (unused in loop)
 
       // Initialize SEQ_FLAGS with initial sequence number 0
       sab[offset + NODE.SEQ_FLAGS] = 0
@@ -335,9 +266,9 @@ export class FreeList {
     // Set header pointers
     const firstNodePtr = heapStartI32 * 4
 
-    // Initialize 64-bit tagged FREE_LIST_HEAD: version 0, pointer to first node
-    // Format: (version << 32) | ptr = (0 << 32) | firstNodePtr
-    sab64[HDR_I64.FREE_LIST_HEAD] = BigInt(firstNodePtr)
+    // RFC-055: Initialize 32-bit FREE_LIST_HEAD_LOW (replaces 64-bit tagged pointer)
+    // No version counter needed in SPSC — ABA problem doesn't exist with single thread
+    Atomics.store(sab, HDR.FREE_LIST_HEAD_LOW, firstNodePtr)
 
     sab[HDR.HEAD_PTR] = NULL_PTR // Empty chain initially
     sab[HDR.FREE_COUNT] = zoneASize // Only Zone A nodes in free list

@@ -85,7 +85,6 @@ export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer {
   // Create SharedArrayBuffer
   const buffer = new SharedArrayBuffer(totalBytes)
   const sab = new Int32Array(buffer)
-  const sab64 = new BigInt64Array(buffer)
 
   // Initialize header
   initializeHeader(sab, cfg)
@@ -98,10 +97,10 @@ export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer {
   initializeRegisters(sab, cfg)
 
   // Initialize free list (RFC-044: Only Zone A, not Zone B)
-  // Zone A is for Worker/Audio Thread CAS-based allocation
+  // Zone A is for Worker/Audio Thread SPSC allocation (RFC-055)
   // Zone B is reserved for Main Thread bump-pointer allocation (LocalAllocator)
   const zoneASize = getZoneSplitIndex(cfg.nodeCapacity)
-  FreeList.initialize(sab, sab64, zoneASize, cfg.nodeCapacity)
+  FreeList.initialize(sab, zoneASize, cfg.nodeCapacity)
 
   // Initialize Identity Table
   initializeIdentityTable(sab, cfg.nodeCapacity)
@@ -412,7 +411,6 @@ export function getLinkerConfig(buffer: SharedArrayBuffer): Required<LinkerConfi
  */
 export function resetLinkerSAB(buffer: SharedArrayBuffer): void {
   const sab = new Int32Array(buffer)
-  const sab64 = new BigInt64Array(buffer)
   const nodeCapacity = sab[HDR.NODE_CAPACITY]
 
   // Reset synchronization state
@@ -421,8 +419,9 @@ export function resetLinkerSAB(buffer: SharedArrayBuffer): void {
   sab[HDR.ERROR_FLAG] = ERROR.OK
 
   // Re-initialize free list (RFC-044: Only Zone A, not Zone B)
+  // RFC-055: SPSC implementation — no BigInt64Array needed
   const zoneASize = getZoneSplitIndex(nodeCapacity)
-  FreeList.initialize(sab, sab64, zoneASize, nodeCapacity)
+  FreeList.initialize(sab, zoneASize, nodeCapacity)
 
   // Re-initialize Identity Table
   initializeIdentityTable(sab, nodeCapacity)

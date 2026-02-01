@@ -254,9 +254,19 @@ export const HDR = {
 /**
  * Header register offsets for BigInt64Array access.
  * Use this for 64-bit atomic operations on tagged pointers.
+ *
+ * @deprecated RFC-055: FREE_LIST_HEAD is no longer used after SPSC migration.
+ * The FreeList now uses HDR.FREE_LIST_HEAD_LOW (32-bit) instead.
+ * This constant is retained for backward compatibility and potential future use.
  */
 export const HDR_I64 = {
-  /** 64-bit tagged pointer: (version << 32n) | (ptr & 0xFFFFFFFFn) */
+  /**
+   * 64-bit tagged pointer: (version << 32n) | (ptr & 0xFFFFFFFFn)
+   *
+   * @deprecated RFC-055: Use HDR.FREE_LIST_HEAD_LOW instead.
+   * SPSC FreeList does not need version counter — ABA problem doesn't exist
+   * with single-threaded access.
+   */
   FREE_LIST_HEAD: 3 // Byte offset 24 / 8 = i64 index 3
 } as const
 

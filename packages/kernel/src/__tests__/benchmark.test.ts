@@ -154,6 +154,8 @@ describe('RFC-043 Latency Benchmarks', () => {
     it('insertHead latency should be under 1ms', () => {
       // Need fresh linker for each insertion
       const freshLinker = SiliconSynapse.create({ nodeCapacity: 2048, safeZoneTicks: 0 })
+      // RFC-055: Set audio context to simulate production environment
+      freshLinker.setAudioContext(true)
 
       const result = measureLatency(() => {
         freshLinker.insertHead(
@@ -166,6 +168,8 @@ describe('RFC-043 Latency Benchmarks', () => {
           FLAG.ACTIVE // flags
         )
       }, BENCHMARK_ITERATIONS)
+
+      freshLinker.setAudioContext(false)
 
       console.log('insertHead latency:', {
         mean: `${(result.mean * 1000).toFixed(3)}µs`,
@@ -180,6 +184,8 @@ describe('RFC-043 Latency Benchmarks', () => {
     it('deleteNode latency should be under 1ms (O(1))', () => {
       // Pre-allocate nodes to delete
       const freshLinker = SiliconSynapse.create({ nodeCapacity: 2048, safeZoneTicks: 0 })
+      // RFC-055: Set audio context to simulate production environment
+      freshLinker.setAudioContext(true)
       const ptrs: number[] = []
 
       for (let i = 0; i < BENCHMARK_ITERATIONS; i++) {
@@ -204,6 +210,8 @@ describe('RFC-043 Latency Benchmarks', () => {
         }
       }, BENCHMARK_ITERATIONS)
 
+      freshLinker.setAudioContext(false)
+
       console.log('deleteNode latency:', {
         mean: `${(result.mean * 1000).toFixed(3)}µs`,
         median: `${(result.median * 1000).toFixed(3)}µs`,
@@ -216,12 +224,16 @@ describe('RFC-043 Latency Benchmarks', () => {
   })
 
   describe('3. Memory Allocation Latency', () => {
-    it('allocNode should be fast (CAS operation)', () => {
+    it('allocNode should be fast (SPSC operation)', () => {
       const freshLinker = SiliconSynapse.create({ nodeCapacity: 2048, safeZoneTicks: 0 })
+      // RFC-055: Set audio context to simulate production environment
+      freshLinker.setAudioContext(true)
 
       const result = measureLatency(() => {
         freshLinker.allocNode()
       }, BENCHMARK_ITERATIONS)
+
+      freshLinker.setAudioContext(false)
 
       console.log('allocNode latency:', {
         mean: `${(result.mean * 1000).toFixed(3)}µs`,
@@ -232,8 +244,10 @@ describe('RFC-043 Latency Benchmarks', () => {
       expect(result.median).toBeLessThan(0.01) // 10µs target for raw alloc
     })
 
-    it('freeNode should be fast (CAS operation)', () => {
+    it('freeNode should be fast (SPSC operation)', () => {
       const freshLinker = SiliconSynapse.create({ nodeCapacity: 2048, safeZoneTicks: 0 })
+      // RFC-055: Set audio context to simulate production environment
+      freshLinker.setAudioContext(true)
       const ptrs: number[] = []
 
       // Pre-allocate
@@ -248,6 +262,8 @@ describe('RFC-043 Latency Benchmarks', () => {
           freeIndex++
         }
       }, BENCHMARK_ITERATIONS)
+
+      freshLinker.setAudioContext(false)
 
       console.log('freeNode latency:', {
         mean: `${(result.mean * 1000).toFixed(3)}µs`,

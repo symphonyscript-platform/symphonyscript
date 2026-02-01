@@ -100,7 +100,8 @@ export class SiliconSynapse implements ISiliconLinker {
     const zoneSplitIndex = getZoneSplitIndex(this.nodeCapacity)
     this.zoneBStartPtr = (this.heapStartI32 * 4) + (zoneSplitIndex * 32) // 32 = NODE_SIZE_BYTES
 
-    this.freeList = new FreeList(this.sab, this.sab64)
+    // RFC-055: SPSC FreeList — no BigInt64Array needed
+    this.freeList = new FreeList(this.sab)
     this.patcher = new AttributePatcher(this.sab, this.nodeCapacity)
 
     // RFC-044: Initialize Command Ring Buffer infrastructure
@@ -424,9 +425,20 @@ export class SiliconSynapse implements ISiliconLinker {
   /**
    * Allocate a node from the free list.
    *
+   * RFC-055 SPSC Invariant: Only the Worker thread (AudioWorklet) may call this.
+   * In debug mode, warns if called outside audio context.
+   *
    * @returns Node pointer, or NULL_PTR if heap exhausted or free list corrupted
    */
   allocNode(): NodePtr {
+    // RFC-055: Debug-mode SPSC invariant check
+    // isAudioContext is true when running inside poll() (AudioWorklet's process() callback)
+    if (process.env.NODE_ENV !== 'production' && !this.isAudioContext) {
+      console.warn(
+        'SPSC WARNING: allocNode() called outside Worker context. ' +
+        'Use Ring Buffer commands (insertAsync) instead. See RFC-055.'
+      )
+    }
     const ptr = this.freeList.alloc()
     if (ptr === NULL_PTR) {
       // Only set HEAP_EXHAUSTED if no error is already set (e.g., FREE_LIST_CORRUPT)
@@ -441,9 +453,19 @@ export class SiliconSynapse implements ISiliconLinker {
   /**
    * Return a node to the free list.
    *
+   * RFC-055 SPSC Invariant: Only the Worker thread (AudioWorklet) may call this.
+   * In debug mode, warns if called outside audio context.
+   *
    * @param ptr - Node to free
    */
   freeNode(ptr: NodePtr): void {
+    // RFC-055: Debug-mode SPSC invariant check
+    if (process.env.NODE_ENV !== 'production' && !this.isAudioContext) {
+      console.warn(
+        'SPSC WARNING: freeNode() called outside Worker context. ' +
+        'Use Ring Buffer commands (deleteAsync) instead. See RFC-055.'
+      )
+    }
     this.freeList.free(ptr)
   }
 

@@ -342,26 +342,32 @@ describe('Stress Tests: 64-bit Tagged Pointer', () => {
     expect(seenPtrs.size).toBeLessThanOrEqual(4)
   })
 
-  it('should increment version counter on each free', () => {
+  it('should increment SEQ counter on each free (stale reference detection)', () => {
+    // RFC-055: SPSC FreeList no longer uses 64-bit version counter.
+    // Instead, SEQ counter in NODE.SEQ_FLAGS is incremented for stale reference detection.
     const sab = createLinkerSAB({ nodeCapacity: 8 })
-    const sab64 = new BigInt64Array(sab)
+    const sabView = new Int32Array(sab)
     const linker = new SiliconSynapse(sab)
 
-    // Get initial version
-    const HDR_I64_FREE_LIST_HEAD = 3 // FREE_LIST_HEAD_LOW is at i32 index 6, so i64 index 3
-    const initialHead = sab64[HDR_I64_FREE_LIST_HEAD]
-    const initialVersion = initialHead >> 32n
-
-    // Allocate and free
+    // Allocate a node
     const ptr = linker.allocNode()
     expect(ptr).not.toBe(NULL_PTR)
+
+    // Read initial SEQ from node
+    const nodeOffset = ptr / 4
+    const SEQ_FLAGS_OFFSET = 6 // NODE.SEQ_FLAGS
+    const SEQ_SHIFT = 8 // SEQ.SEQ_SHIFT
+    const initialSeqFlags = sabView[nodeOffset + SEQ_FLAGS_OFFSET]
+    const initialSeq = (initialSeqFlags >>> SEQ_SHIFT) & 0xFFFFFF
+
+    // Free the node
     linker.freeNode(ptr)
 
-    // Version should have incremented
-    const newHead = sab64[HDR_I64_FREE_LIST_HEAD]
-    const newVersion = newHead >> 32n
+    // SEQ should have incremented
+    const newSeqFlags = sabView[nodeOffset + SEQ_FLAGS_OFFSET]
+    const newSeq = (newSeqFlags >>> SEQ_SHIFT) & 0xFFFFFF
 
-    expect(newVersion).toBeGreaterThan(initialVersion)
+    expect(newSeq).toBeGreaterThan(initialSeq)
   })
 })
 
