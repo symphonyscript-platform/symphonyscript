@@ -15,3 +15,4 @@ export * from './pitch';
 export * from './rhythm';
 export * from './harmony';
 export * from './util';
+export * from './effects';

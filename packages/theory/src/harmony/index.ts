@@ -54,3 +54,6 @@ export {
     applyKeySignature,
     type AccidentalOverride,
 } from './keys';
+
+// Helper types
+export * from './types';

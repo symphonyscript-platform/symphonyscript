@@ -77,3 +77,9 @@ export {
     durationToMs,
     isValidDuration,
 } from './duration';
+
+// Helper types
+export * from './types';
+
+// Tempo types
+export * from './tempo';
