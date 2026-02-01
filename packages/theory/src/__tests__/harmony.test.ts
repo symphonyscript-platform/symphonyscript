@@ -37,6 +37,7 @@ import {
     getParallelMajor,
     ALL_KEYS,
     MAJOR_KEYS_CIRCLE,
+    applyKeySignature,
 } from '../harmony';
 import { CHORD } from '../chords';
 import { unpackToArray, countBits } from '../packer';
@@ -481,6 +482,72 @@ describe('Key Signatures', () => {
 
         test('MAJOR_KEYS_CIRCLE starts with C', () => {
             expect(MAJOR_KEYS_CIRCLE[0]).toBe('C:major');
+        });
+    });
+
+    // =========================================================================
+    // applyKeySignature()
+    // =========================================================================
+    describe('applyKeySignature()', () => {
+        const gMajor: KeyContext = createKey(KEY_ROOT.G, 'major');
+        const fMajor: KeyContext = createKey(KEY_ROOT.F, 'major');
+        const cMajor: KeyContext = createKey(KEY_ROOT.C, 'major');
+        const dMajor: KeyContext = createKey(KEY_ROOT.D, 'major');
+
+        test('applies sharp in G major (F → F#)', () => {
+            expect(applyKeySignature('F4', gMajor)).toBe('F#4');
+        });
+
+        test('applies flat in F major (B → Bb)', () => {
+            expect(applyKeySignature('B4', fMajor)).toBe('Bb4');
+        });
+
+        test('preserves existing accidental', () => {
+            expect(applyKeySignature('F#4', cMajor)).toBe('F#4');
+            expect(applyKeySignature('Bb4', cMajor)).toBe('Bb4');
+        });
+
+        test('returns as-is with no key context', () => {
+            expect(applyKeySignature('F4', null)).toBe('F4');
+            expect(applyKeySignature('B4', null)).toBe('B4');
+        });
+
+        test('override to natural strips accidental', () => {
+            expect(applyKeySignature('F4', gMajor, 'natural')).toBe('F4');
+            expect(applyKeySignature('F#4', cMajor, 'natural')).toBe('F4');
+        });
+
+        test('override to sharp applies sharp', () => {
+            expect(applyKeySignature('C4', cMajor, 'sharp')).toBe('C#4');
+            expect(applyKeySignature('G4', fMajor, 'sharp')).toBe('G#4');
+        });
+
+        test('override to flat applies flat', () => {
+            expect(applyKeySignature('E4', cMajor, 'flat')).toBe('Eb4');
+            expect(applyKeySignature('A4', gMajor, 'flat')).toBe('Ab4');
+        });
+
+        test('applies multiple sharps in D major (F# and C#)', () => {
+            expect(applyKeySignature('F4', dMajor)).toBe('F#4');
+            expect(applyKeySignature('C4', dMajor)).toBe('C#4');
+            expect(applyKeySignature('G4', dMajor)).toBe('G4'); // not sharped
+        });
+
+        test('returns null for invalid input', () => {
+            expect(applyKeySignature('', gMajor)).toBeNull();
+            expect(applyKeySignature('invalid', gMajor)).toBeNull();
+            expect(applyKeySignature('X4', gMajor)).toBeNull();
+        });
+
+        test('handles different octaves', () => {
+            expect(applyKeySignature('F2', gMajor)).toBe('F#2');
+            expect(applyKeySignature('F6', gMajor)).toBe('F#6');
+            expect(applyKeySignature('B-1', fMajor)).toBe('Bb-1');
+        });
+
+        test('handles lowercase note names', () => {
+            expect(applyKeySignature('f4', gMajor)).toBe('F#4');
+            expect(applyKeySignature('b4', fMajor)).toBe('Bb4');
         });
     });
 });

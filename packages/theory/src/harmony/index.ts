@@ -51,4 +51,6 @@ export {
     ALL_KEYS,
     MAJOR_KEYS_CIRCLE,
     MINOR_KEYS_CIRCLE,
+    applyKeySignature,
+    type AccidentalOverride,
 } from './keys';

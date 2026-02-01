@@ -334,3 +334,106 @@ export const MINOR_KEYS_CIRCLE: readonly string[] = Object.freeze([
     'A:minor', 'E:minor', 'B:minor', 'F#:minor', 'C#:minor', 'G#:minor',
     'D#:minor', 'Bb:minor', 'F:minor', 'C:minor', 'G:minor', 'D:minor'
 ]);
+
+// ============================================================================
+// SECTION 6: Apply Key Signature to Note Names
+// ============================================================================
+
+/**
+ * Accidental override type.
+ */
+export type AccidentalOverride = 'sharp' | 'flat' | 'natural';
+
+/**
+ * Parse a note name into letter, accidental, and octave.
+ * Internal helper for applyKeySignature.
+ */
+function parseNoteNameInternal(noteName: string): { letter: string; accidental: string; octave: number } | null {
+    if (!noteName || typeof noteName !== 'string') return null;
+
+    const match = noteName.match(/^([A-Ga-g])([#b]?)(-?\d+)$/);
+    if (!match) return null;
+
+    const letter = match[1].toUpperCase();
+    const accidental = match[2];
+    const octave = parseInt(match[3], 10);
+
+    if (!Number.isFinite(octave)) return null;
+
+    return { letter, accidental, octave };
+}
+
+/**
+ * Map of note letters to their 24-EDO pitch class (natural notes).
+ */
+const LETTER_TO_PITCH_CLASS: Readonly<Record<string, number>> = {
+    'C': 0, 'D': 4, 'E': 8, 'F': 10, 'G': 14, 'A': 18, 'B': 22
+};
+
+/**
+ * Apply key signature accidentals to a note name.
+ * COMPOSER-ONLY: String manipulation.
+ *
+ * @param noteName - Note name (e.g., "F4")
+ * @param key - Key context (or null for no key)
+ * @param overrideAccidental - Explicit accidental ('sharp', 'flat', 'natural')
+ * @returns Modified note name (e.g., "F#4" in G major), or null if invalid
+ */
+export function applyKeySignature(
+    noteName: string,
+    key: KeyContext | null,
+    overrideAccidental?: AccidentalOverride
+): string | null {
+    const parsed = parseNoteNameInternal(noteName);
+    if (!parsed) return null;
+
+    // If override is 'natural', return without accidental
+    if (overrideAccidental === 'natural') {
+        return `${parsed.letter}${parsed.octave}`;
+    }
+
+    // If override is 'sharp', apply sharp directly
+    if (overrideAccidental === 'sharp') {
+        return `${parsed.letter}#${parsed.octave}`;
+    }
+
+    // If override is 'flat', apply flat directly
+    if (overrideAccidental === 'flat') {
+        return `${parsed.letter}b${parsed.octave}`;
+    }
+
+    // No key context → return as-is
+    if (!key) {
+        return noteName;
+    }
+
+    // If note already has an accidental, preserve it
+    if (parsed.accidental) {
+        return noteName;
+    }
+
+    // Look up the pitch class for this letter
+    const naturalPitchClass = LETTER_TO_PITCH_CLASS[parsed.letter];
+    if (naturalPitchClass === undefined) return null;
+
+    // Get key signature masks
+    const sharps = Number(getKeySharps(key));
+    const flats = Number(getKeyFlats(key));
+
+    // Check if this note letter should be sharped
+    // The sharps mask has bits set at (natural + 2) positions
+    const sharpedPitchClass = (naturalPitchClass + 2) % OCTAVE_SIZE;
+    if (sharps & (1 << sharpedPitchClass)) {
+        return `${parsed.letter}#${parsed.octave}`;
+    }
+
+    // Check if this note letter should be flatted
+    // The flats mask has bits set at (natural - 2) positions
+    const flattedPitchClass = (naturalPitchClass - 2 + OCTAVE_SIZE) % OCTAVE_SIZE;
+    if (flats & (1 << flattedPitchClass)) {
+        return `${parsed.letter}b${parsed.octave}`;
+    }
+
+    // No accidental needed
+    return noteName;
+}
