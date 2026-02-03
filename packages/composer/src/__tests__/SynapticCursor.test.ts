@@ -17,7 +17,7 @@ class MockClip extends SynapticClip {
     groove = jest.fn().mockImplementation(() => this);
     control = jest.fn().mockImplementation(() => this);
     stack = jest.fn().mockImplementation(() => this);
-    loop = jest.fn().mockImplementation(() => this);
+    setLoopRegion = jest.fn().mockImplementation(() => this);
 }
 
 class TestCursor extends ComposerCursor {

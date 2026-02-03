@@ -43,9 +43,8 @@ describe('SynapticDrumHitCursor & SynapticDrums (Phase 3)', () => {
     });
 
     it('supports fluent chaining', () => {
-        const result = drums.kick().velocity(0.9).hat().velocity(0.5).commit();
+        drums.kick().velocity(0.9).hat().velocity(0.5).commit();
 
-        expect(result).toBeDefined();
         expect(mockBridge.insertAsync).toHaveBeenCalledTimes(2);
     });
 
@@ -56,5 +55,83 @@ describe('SynapticDrumHitCursor & SynapticDrums (Phase 3)', () => {
         expect(mockBridge.insertAsync.mock.calls[0][4]).toBe(0);
         // Snare at tick 0.25
         expect(mockBridge.insertAsync.mock.calls[1][4]).toBe(0.25);
+    });
+
+    describe('Additional drum hits (Task 018)', () => {
+        it('openHat() emits pitch 46', () => {
+            drums.openHat().commit();
+
+            expect(mockBridge.insertAsync).toHaveBeenCalledWith(
+                1, 46, expect.any(Number), expect.any(Number),
+                expect.any(Number), expect.any(Boolean), expect.any(Number),
+                undefined, undefined
+            );
+        });
+
+        it('crash() emits pitch 49', () => {
+            drums.crash().commit();
+
+            expect(mockBridge.insertAsync).toHaveBeenCalledWith(
+                1, 49, expect.any(Number), expect.any(Number),
+                expect.any(Number), expect.any(Boolean), expect.any(Number),
+                undefined, undefined
+            );
+        });
+
+        it('ride() emits pitch 51', () => {
+            drums.ride().commit();
+
+            expect(mockBridge.insertAsync).toHaveBeenCalledWith(
+                1, 51, expect.any(Number), expect.any(Number),
+                expect.any(Number), expect.any(Boolean), expect.any(Number),
+                undefined, undefined
+            );
+        });
+
+        it('tom(1) emits pitch 48', () => {
+            drums.tom(1).commit();
+
+            expect(mockBridge.insertAsync).toHaveBeenCalledWith(
+                1, 48, expect.any(Number), expect.any(Number),
+                expect.any(Number), expect.any(Boolean), expect.any(Number),
+                undefined, undefined
+            );
+        });
+
+        it('tom(2) emits pitch 45', () => {
+            drums.tom(2).commit();
+
+            expect(mockBridge.insertAsync).toHaveBeenCalledWith(
+                1, 45, expect.any(Number), expect.any(Number),
+                expect.any(Number), expect.any(Boolean), expect.any(Number),
+                undefined, undefined
+            );
+        });
+
+        it('tom(3) emits pitch 43', () => {
+            drums.tom(3).commit();
+
+            expect(mockBridge.insertAsync).toHaveBeenCalledWith(
+                1, 43, expect.any(Number), expect.any(Number),
+                expect.any(Number), expect.any(Boolean), expect.any(Number),
+                undefined, undefined
+            );
+        });
+
+        it('tom() defaults to tom(1)', () => {
+            drums.tom().commit();
+
+            expect(mockBridge.insertAsync).toHaveBeenCalledWith(
+                1, 48, expect.any(Number), expect.any(Number),
+                expect.any(Number), expect.any(Boolean), expect.any(Number),
+                undefined, undefined
+            );
+        });
+
+        it('cursor chaining works with new methods', () => {
+            drums.kick().openHat().crash().ride().tom(1).commit();
+
+            expect(mockBridge.insertAsync).toHaveBeenCalledTimes(5);
+        });
     });
 });

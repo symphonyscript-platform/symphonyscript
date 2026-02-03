@@ -25,7 +25,7 @@ class MockClip extends SynapticClip {
     groove = jest.fn().mockImplementation(() => this);
     control = jest.fn().mockImplementation(() => this);
     stack = jest.fn().mockImplementation(() => this);
-    loop = jest.fn().mockImplementation(() => this);
+    setLoopRegion = jest.fn().mockImplementation(() => this);
 }
 
 describe('SynapticNoteCursor (Phase 2)', () => {
@@ -73,7 +73,7 @@ describe('SynapticNoteCursor (Phase 2)', () => {
     it('flush sends correct pitch and velocity', () => {
         cursor.velocity(1.0);
         cursor.note('A4'); // 69, pending
-        cursor.flush();
+        cursor.commit();
 
         expect(mockInsertAsync).toHaveBeenCalledWith(
             1, 69, 127, 0.25, 0, false, 123, undefined, undefined

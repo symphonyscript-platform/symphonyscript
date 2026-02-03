@@ -1,8 +1,16 @@
 import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
 import { SynapticNode } from '@symphonyscript/synaptic';
+import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode } from '../types';
 
 export abstract class SynapticClip extends SynapticNode {
+    // Build output tracking
+    protected clipName: string = '';
+    protected operations: NoteOperation[] = [];
+
+    // Scale context for degree() resolution
+    protected scaleContext: ScaleContext | null = null;
+
     // Escape state (persisted user intent)
     protected transposeOffset: number = 0;
     protected currentScale: string | null = null;
@@ -74,7 +82,7 @@ export abstract class SynapticClip extends SynapticNode {
         return this;
     }
 
-    loop(start: number, end: number): this {
+    setLoopRegion(start: number, end: number): this {
         // Store loop region boundaries
         this.loopStart = start;
         this.loopEnd = end;
@@ -97,9 +105,54 @@ export abstract class SynapticClip extends SynapticNode {
         return this;
     }
 
+    /**
+     * Set absolute octave context.
+     * @param n - Octave number (4 = middle C, 5 = one octave up)
+     */
+    octave(n: number): this {
+        this.transposeOffset = (n - 4) * 12;
+        return this;
+    }
+
+    /**
+     * Shift up by n octaves.
+     * @param n - Number of octaves (default 1)
+     */
+    octaveUp(n: number = 1): this {
+        this.transposeOffset += n * 12;
+        return this;
+    }
+
+    /**
+     * Shift down by n octaves.
+     * @param n - Number of octaves (default 1)
+     */
+    octaveDown(n: number = 1): this {
+        this.transposeOffset -= n * 12;
+        return this;
+    }
+
     scale(scaleName: string): this {
         this.currentScale = scaleName;
         return this;
+    }
+
+    /**
+     * Set scale context for degree() resolution.
+     * @param root - Root note (e.g., 'C', 'G', 'F#')
+     * @param mode - Scale mode (major, minor, dorian, etc.)
+     * @param octave - Base octave (default 4 = middle C octave)
+     */
+    setScale(root: string, mode: ScaleMode, octave: number = 4): this {
+        this.scaleContext = { root, mode, octave };
+        return this;
+    }
+
+    /**
+     * Get current scale context.
+     */
+    getScaleContext(): ScaleContext | null {
+        return this.scaleContext;
     }
 
     arpeggio(pattern: string): this {
@@ -111,6 +164,31 @@ export abstract class SynapticClip extends SynapticNode {
         this.vibratoRate = rate;
         this.vibratoDepth = depth;
         return this;
+    }
+
+    /**
+     * Set the clip name for identification.
+     */
+    name(n: string): this {
+        this.clipName = n;
+        return this;
+    }
+
+    /**
+     * Build and return the ClipNode AST structure.
+     * Contains all operations recorded during clip construction.
+     */
+    build(): ClipNode {
+        return {
+            _version: SCHEMA_VERSION,
+            kind: 'clip',
+            name: this.clipName,
+            operations: this.operations,
+            tempo: this.currentTempo,
+            timeSignature: [this.timeSignatureNumerator, this.timeSignatureDenominator],
+            swing: this.swingAmount,
+            groove: this.currentGroove
+        };
     }
 
     // =========================================================================
@@ -156,7 +234,18 @@ export abstract class SynapticClip extends SynapticNode {
             expressionId
         );
 
-        // 6. Update Topology (Generic SynapticNode support)
+        // 6. Track operation for build() output
+        this.operations.push({
+            kind: 'note',
+            pitch: finalPitch,
+            velocity: finalVel,
+            duration,
+            tick: swingTick,
+            muted,
+            sourceId
+        });
+
+        // 7. Update Topology (Generic SynapticNode support)
         if (ptr >= 0) {
             if (this.entryId === undefined) {
                 this.entryId = sourceId;

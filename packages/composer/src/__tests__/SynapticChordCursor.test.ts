@@ -24,7 +24,7 @@ class MockClip extends SynapticClip {
     groove = jest.fn();
     control = jest.fn();
     stack = jest.fn();
-    loop = jest.fn();
+    setLoopRegion = jest.fn();
 }
 
 describe('SynapticChordCursor (Phase 5)', () => {
@@ -39,7 +39,7 @@ describe('SynapticChordCursor (Phase 5)', () => {
 
     it('chord("Cmaj") flushes correct notes', () => {
         cursor.chord('Cmaj'); // C E G (0, 4, 7)
-        cursor.flush();
+        cursor.commit();
 
         // C4 = 60. E4 = 64. G4 = 67. (velocities humanized with seed=42: 102, 101, 103)
         expect(mockInsertAsync).toHaveBeenCalledTimes(3);
@@ -50,7 +50,7 @@ describe('SynapticChordCursor (Phase 5)', () => {
 
     it('inversion(1) rotates notes', () => {
         cursor.chord('Cmaj').inversion(1); // E G C(next)
-        cursor.flush();
+        cursor.commit();
 
         // E4=64, G4=67, C5=72 (velocities humanized: 102, 101, 103 with seed=42)
         expect(mockInsertAsync).toHaveBeenNthCalledWith(1, 1, 64, 102, 0.25, 0, false, 100, undefined, 0);
@@ -63,7 +63,7 @@ describe('SynapticChordCursor (Phase 5)', () => {
         // 0, 1, 2, 3, 4 (5 notes)
         const mask = 1 | 2 | 4 | 8 | 16;
         cursor.harmony(mask);
-        cursor.flush();
+        cursor.commit();
 
         expect(mockInsertAsync).toHaveBeenCalledTimes(4); // Max 4
     });
@@ -98,7 +98,7 @@ describe('SynapticChordCursor (Phase 5)', () => {
             pureCursor.chord('Cmaj7');
             for (let i = 0; i < 10000; i++) {
                 pureCursor.harmony(1);
-                pureCursor.flush();
+                pureCursor.commit();
             }
 
             global.gc && global.gc();
@@ -107,7 +107,7 @@ describe('SynapticChordCursor (Phase 5)', () => {
 
             for (let i = 0; i < 10000; i++) {
                 pureCursor.harmony(1 | 16 | 128);
-                pureCursor.flush();
+                pureCursor.commit();
             }
 
             const endHeap = process.memoryUsage().heapUsed;

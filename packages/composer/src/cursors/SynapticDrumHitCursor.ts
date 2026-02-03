@@ -71,6 +71,23 @@ export class SynapticDrumHitCursor extends ComposerCursor {
         return this.hit(39, duration); // D#1
     }
 
+    openHat(duration?: number): this {
+        return this.hit(46, duration); // A#1
+    }
+
+    crash(duration?: number): this {
+        return this.hit(49, duration); // C#2
+    }
+
+    ride(duration?: number): this {
+        return this.hit(51, duration); // D#2
+    }
+
+    tom(which: 1 | 2 | 3 = 1, duration?: number): this {
+        const pitches: Record<1 | 2 | 3, number> = { 1: 48, 2: 45, 3: 43 }; // C2, A1, G1
+        return this.hit(pitches[which], duration);
+    }
+
     /**
      * Flushes the drum hit to the clip mediator with articulations.
      * RFC-050: Delegates all insertions to clip.flushNote().

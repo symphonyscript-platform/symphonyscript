@@ -134,8 +134,23 @@ export abstract class ComposerCursor {
         return this.clip.stack();
     }
 
-    loop(start: number, end: number): SynapticClip {
+    setLoopRegion(start: number, end: number): SynapticClip {
         this._commit();
-        return this.clip.loop(start, end);
+        return this.clip.setLoopRegion(start, end);
+    }
+
+    octave(n: number): SynapticClip {
+        this._commit();
+        return this.clip.octave(n);
+    }
+
+    octaveUp(n: number = 1): SynapticClip {
+        this._commit();
+        return this.clip.octaveUp(n);
+    }
+
+    octaveDown(n: number = 1): SynapticClip {
+        this._commit();
+        return this.clip.octaveDown(n);
     }
 }

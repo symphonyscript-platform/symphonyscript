@@ -25,7 +25,7 @@ class MockClip extends SynapticClip {
     groove = jest.fn();
     control = jest.fn();
     stack = jest.fn();
-    loop = jest.fn();
+    setLoopRegion = jest.fn();
 }
 
 class MockChordCursor extends SynapticChordCursor {
@@ -89,13 +89,14 @@ describe('SynapticMelodyNoteCursor (Phase 3 & 4)', () => {
         });
 
         it('degree() behaves like note()', () => {
+            clip.setScale('C', 'major'); // Required for degree()
             cursor.degree(3, 0.5);
             cursor.hasPending = true;
 
-            cursor.flush();
-            // Degree 3 in C major = F (60 + 5 semitones), velocity humanized to 102 with seed=42
+            cursor.commit();
+            // Degree 3 in C major = E (60 + 4 semitones = 64), velocity humanized to 102 with seed=42
             expect(mockInsertAsync).toHaveBeenCalledWith(
-                1, 65, 102, 0.5, 0, false, 999, undefined, 0
+                1, 64, 102, 0.5, 0, false, 999, undefined, 0
             );
         });
     });

@@ -57,6 +57,22 @@ export class SynapticDrums extends SynapticClip {
         return this.cursor.hit(pitch, duration);
     }
 
+    openHat(duration?: number): SynapticDrumHitCursor {
+        return this.cursor.openHat(duration);
+    }
+
+    crash(duration?: number): SynapticDrumHitCursor {
+        return this.cursor.crash(duration);
+    }
+
+    ride(duration?: number): SynapticDrumHitCursor {
+        return this.cursor.ride(duration);
+    }
+
+    tom(which: 1 | 2 | 3 = 1, duration?: number): SynapticDrumHitCursor {
+        return this.cursor.tom(which, duration);
+    }
+
     // Note: All escape methods (tempo, swing, etc.) are inherited from SynapticClip.
     // No empty overrides. SynapticClip base implementation handles state storage.
 }
