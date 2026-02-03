@@ -64,6 +64,9 @@ export class SymphonyEngine {
 
         // 3. Create Shared Memory (Kernel)
         this.sab = createLinkerSAB({ nodeCapacity: options.nodeCapacity ?? 4096 });
+        if (!this.sab) {
+            throw new Error('Failed to create SharedArrayBuffer for kernel');
+        }
 
         // 4. Initialize Bridge (Main Thread side)
         const linker = new SiliconSynapse(this.sab);

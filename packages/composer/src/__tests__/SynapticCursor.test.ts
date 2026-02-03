@@ -1,4 +1,4 @@
-import { SynapticCursor } from '../cursors/SynapticCursor';
+import { ComposerCursor } from '../cursors/ComposerCursor';
 import { SynapticClip } from '../clips/SynapticClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 
@@ -7,6 +7,8 @@ const mockBridge = {} as SiliconBridge;
 
 class MockClip extends SynapticClip {
     getCurrentTick() { return 0; }
+    advanceTick(ticks: number) { }
+    generateSourceId() { return 1; }
     commit() { }
     rest = jest.fn().mockImplementation(() => this);
     tempo = jest.fn().mockImplementation(() => this);
@@ -18,7 +20,7 @@ class MockClip extends SynapticClip {
     loop = jest.fn().mockImplementation(() => this);
 }
 
-class TestCursor extends SynapticCursor {
+class TestCursor extends ComposerCursor {
     flushCalls = 0;
     flush() {
         this.flushCalls++;

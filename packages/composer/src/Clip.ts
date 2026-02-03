@@ -4,9 +4,9 @@
 // High-level DSL factory for composing music.
 
 import { SiliconSynapse, SiliconBridge } from '@symphonyscript/kernel'
-import { SynapticClip } from '../../../../legacy/symphonyscript/packages/composer/src/legacy-synaptic/SynapticClip'
-import { SynapticMelody } from '../../../../legacy/symphonyscript/packages/composer/src/legacy-synaptic/SynapticMelody'
-import { GrooveBuilder } from '../../../../legacy/symphonyscript/packages/composer/src/legacy-synaptic/GrooveBuilder'
+import { SynapticMelody } from './clips/SynapticMelody'
+import { SynapticDrums } from './clips/SynapticDrums'
+import { SynapticGrooveBuilder } from './groove/SynapticGrooveBuilder'
 
 
 // =============================================================================
@@ -33,6 +33,9 @@ function getOrCreateBridge(): SiliconBridge {
             nodeCapacity: 1024,
             safeZoneTicks: 0
         })
+        if (!linker) {
+            throw new Error('Failed to create SiliconSynapse: invalid configuration')
+        }
         activeBridge = new SiliconBridge(linker)
     }
     return activeBridge
@@ -53,10 +56,10 @@ function getOrCreateBridge(): SiliconBridge {
  *   .key('C')
  *   .degree(1).degree(3).degree(5)
  * 
- * const verse = Clip.melody('Verse')
- *   .chord([1, 4, 6])
+ * const drums = Clip.drums('Beat')
+ *   .kick().snare().hat()
  * 
- * intro.play(verse)
+ * intro.play(drums)
  * ```
  */
 export const Clip = {
@@ -71,20 +74,20 @@ export const Clip = {
     },
 
     /**
-     * Create a generic clip builder.
-     * Returns SynapticClip with fluent DSL (note, rest, play).
+     * Create a drums clip builder.
+     * Returns SynapticDrums with fluent DSL (kick, snare, hat, etc.).
      * @param name - Clip name (for identification)
      */
-    clip(name: string): SynapticClip {
+    drums(name: string): SynapticDrums {
         const bridge = getOrCreateBridge()
-        return new SynapticClip(bridge)
+        return new SynapticDrums(bridge)
     },
 
     /**
      * Create a groove template builder.
-     * Returns GrooveBuilder for fluent DSL.
+     * Returns SynapticGrooveBuilder for fluent DSL.
      */
-    groove(): GrooveBuilder {
-        return new GrooveBuilder()
+    groove(): SynapticGrooveBuilder {
+        return new SynapticGrooveBuilder()
     }
 }
