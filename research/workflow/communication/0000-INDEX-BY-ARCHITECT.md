@@ -6,3 +6,4 @@
 #003-by-architect-directive-0001.md
 #003-by-architect-approval-0002.md
 #004-by-architect-directive-0001.md
+#004-by-architect-approval-0002.md

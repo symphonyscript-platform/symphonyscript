@@ -70,6 +70,9 @@ SEQ     = 4 digits, starts 0001, increments per task
 ```
 Script outputs filename when architect posts, then exits.
 
+**IMPORTANT:** If script terminates without output OR with error → RE-RUN IT.
+Only valid termination = script outputs a filename. Keep re-running until you get output.
+
 **2. Read Architect's Message**
 - Read file from `research/workflow/communication/`
 - Determine: DIRECTIVE | REJECTION | APPROVAL
@@ -161,6 +164,7 @@ READ FROM:   0000-INDEX-BY-ARCHITECT.md
 
 LISTEN:
 ./research/workflow/scripts/watch-index.sh research/workflow/communication/0000-INDEX-BY-ARCHITECT.md
+(If no output or error → re-run. Only stop when filename is output.)
 
 WORKFLOW:
 1. Run watch-index.sh on 0000-INDEX-BY-ARCHITECT.md

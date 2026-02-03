@@ -82,6 +82,9 @@ echo "<filename>" >> research/workflow/communication/0000-INDEX-BY-ARCHITECT.md
 ```
 Script outputs filename when engineer responds, then exits.
 
+**IMPORTANT:** If script terminates without output OR with error → RE-RUN IT.
+Only valid termination = script outputs a filename. Keep re-running until you get output.
+
 **5. Review Response**
 - Read engineer's file from `research/workflow/communication/`
 - Read ALL code changes mentioned
@@ -159,6 +162,7 @@ READ FROM:   0000-INDEX-BY-ENGINEER.md
 
 LISTEN:
 ./research/workflow/scripts/watch-index.sh research/workflow/communication/0000-INDEX-BY-ENGINEER.md
+(If no output or error → re-run. Only stop when filename is output.)
 
 WORKFLOW:
 1. Pick task → read code

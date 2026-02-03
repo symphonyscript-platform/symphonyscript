@@ -21,14 +21,14 @@ class MockClip extends SynapticClip {
 }
 
 class TestCursor extends ComposerCursor {
-    flushCalls = 0;
-    flush() {
-        this.flushCalls++;
+    commitCalls = 0;
+    commit() {
+        this.commitCalls++;
         this.hasPending = false;
     }
 }
 
-describe('SynapticCursor (Phase 1)', () => {
+describe('ComposerCursor (Phase 1)', () => {
     let clip: MockClip;
     let cursor: TestCursor;
 
@@ -54,17 +54,17 @@ describe('SynapticCursor (Phase 1)', () => {
     });
 
     describe('Commit Logic', () => {
-        it('commit() flushes if pending', () => {
+        it('_commit() calls commit() if pending', () => {
             cursor.hasPending = true;
-            cursor.commit();
-            expect(cursor.flushCalls).toBe(1);
+            cursor._commit();
+            expect(cursor.commitCalls).toBe(1);
             expect(cursor.hasPending).toBe(false);
         });
 
-        it('commit() does NOT flush if not pending', () => {
+        it('_commit() does NOT call commit() if not pending', () => {
             cursor.hasPending = false;
-            cursor.commit();
-            expect(cursor.flushCalls).toBe(0);
+            cursor._commit();
+            expect(cursor.commitCalls).toBe(0);
         });
     });
 
@@ -73,7 +73,7 @@ describe('SynapticCursor (Phase 1)', () => {
             cursor.hasPending = true;
             const res = cursor.rest(0.5);
 
-            expect(cursor.flushCalls).toBe(1);
+            expect(cursor.commitCalls).toBe(1);
             expect(clip.rest).toHaveBeenCalledWith(0.5);
             expect(res).toBe(clip);
         });
@@ -81,7 +81,7 @@ describe('SynapticCursor (Phase 1)', () => {
         it('tempo() commits and calls clip.tempo', () => {
             cursor.hasPending = true;
             cursor.tempo(120);
-            expect(cursor.flushCalls).toBe(1);
+            expect(cursor.commitCalls).toBe(1);
             expect(clip.tempo).toHaveBeenCalledWith(120);
         });
     });
