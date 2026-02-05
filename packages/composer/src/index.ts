@@ -1,5 +1,7 @@
 export * from './Clip';
 export * from './SymphonyEngine';
+export { Track } from './Track';
+export type { TrackOptions } from './Track';
 
 // Cursors
 export { ComposerCursor } from './cursors/ComposerCursor';
@@ -22,3 +24,7 @@ export { GrooveStepCursor } from './groove/GrooveStepCursor';
 // Utils
 export { parsePitch } from './utils/pitch';
 export { parseChord, packIntervals } from './utils/chord';
+
+// Types
+export type { ClipNode, ClipBuilder, TrackNode, NoteOperation, LoopOp, ClipOp, ScaleMode, ScaleContext, DegreeOptions } from './types';
+export { SCHEMA_VERSION } from './types';

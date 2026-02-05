@@ -39,3 +39,5 @@
 #019-by-architect-approval-0002.md
 #019-by-architect-rejection-0003.md
 #019-by-architect-approval-0004.md
+#020-by-architect-directive-0001.md
+#020-by-architect-approval-0002.md

@@ -153,7 +153,7 @@ Task complete. Awaiting next directive.
 - **While writing:** No console.log, no TODOs, handle errors, null checks
 - **Before submit:** `pnpm build` passes, `pnpm test` passes, self-reviewed
 - **On rejection:** Fix ALL issues. Disagree? Write objection with evidence.
-
+- **Active Listening:** Never put the script in the background. Always wait for it to finish on its own, as soon as it outputs - read the relevant file and proceed accordingly. If the script finishes without output - that means it failed and in such case - run it again.
 ---
 
 ## QUICK REFERENCE

@@ -44,3 +44,31 @@ export interface DegreeOptions {
     octaveOffset?: number;   // Shift octaves (+1 = up, -1 = down)
     alteration?: number;     // Semitone alteration (+1 = sharp, -1 = flat)
 }
+
+// ============================================================================
+// Track Types (RFC-020)
+// ============================================================================
+
+import type { InsertEffect, SendConfig } from '@symphonyscript/theory';
+
+/**
+ * Track node representing a clip associated with an instrument and effects.
+ */
+export interface TrackNode {
+    readonly _version: number;
+    kind: 'track';
+    name: string;
+    instrumentId: string;
+    clip: ClipNode;
+    tempo?: number;
+    timeSignature?: [number, number];
+    inserts: InsertEffect[];
+    sends: SendConfig[];
+}
+
+/**
+ * Interface for objects that can build a ClipNode.
+ */
+export interface ClipBuilder {
+    build(): ClipNode;
+}
