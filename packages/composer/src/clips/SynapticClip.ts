@@ -1,7 +1,7 @@
 import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
 import { SynapticNode } from '@symphonyscript/synaptic';
-import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode } from '../types';
+import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsOp, VelocityPoint } from '../types';
 
 export abstract class SynapticClip extends SynapticNode {
     // Build output tracking
@@ -10,6 +10,10 @@ export abstract class SynapticClip extends SynapticNode {
 
     // Scale context for degree() resolution
     protected scaleContext: ScaleContext | null = null;
+
+    // Key context for automatic accidentals (RFC-022)
+    protected keyContext: KeyContext | null = null;
+    protected nextAccidental: Accidental | null = null;
 
     // Escape state (persisted user intent)
     protected transposeOffset: number = 0;
@@ -30,6 +34,11 @@ export abstract class SynapticClip extends SynapticNode {
 
     // RFC-050: Seeded RNG for deterministic humanization
     protected humanizeRng: SeededRandom;
+
+    // Dynamics state (Task 024)
+    protected activeDynamics: DynamicsOp | null = null;
+    protected dynamicsStartTick: number = 0;
+    protected velocityCurvePoints: VelocityPoint[] | null = null;
 
     constructor(bridge: SiliconBridge, seed: number = 0) {
         super(bridge);
@@ -155,6 +164,42 @@ export abstract class SynapticClip extends SynapticNode {
         return this.scaleContext;
     }
 
+    /**
+     * Set key signature context for automatic accidentals.
+     * @param root - Key root (e.g., 'G', 'Bb')
+     * @param mode - Key mode ('major' or 'minor')
+     */
+    key(root: string, mode: 'major' | 'minor'): this {
+        this.keyContext = { root, mode };
+        return this;
+    }
+
+    /**
+     * Get current key context.
+     */
+    getKeyContext(): KeyContext | null {
+        return this.keyContext;
+    }
+
+    /**
+     * Set accidental override for the next note.
+     * @param acc - Accidental to apply ('sharp', 'flat', or 'natural')
+     */
+    accidental(acc: Accidental): this {
+        this.nextAccidental = acc;
+        return this;
+    }
+
+    /**
+     * Get and consume the next accidental override.
+     * Returns null if no accidental is pending.
+     */
+    consumeAccidental(): Accidental | null {
+        const acc = this.nextAccidental;
+        this.nextAccidental = null;
+        return acc;
+    }
+
     arpeggio(pattern: string): this {
         this.arpeggioPattern = pattern;
         return this;
@@ -164,6 +209,182 @@ export abstract class SynapticClip extends SynapticNode {
         this.vibratoRate = rate;
         this.vibratoDepth = depth;
         return this;
+    }
+
+    // =========================================================================
+    // Dynamics Methods (Task 024)
+    // =========================================================================
+
+    /**
+     * Start a crescendo (gradual increase in velocity).
+     * @param duration - Duration in ticks
+     * @param options - Optional from/to velocities and curve type
+     */
+    crescendo(duration: number, options?: { from?: number; to?: number; curve?: 'linear' | 'exponential' | 'ease-in' | 'ease-out' }): this {
+        const from = options?.from ?? 0.4;
+        const to = options?.to ?? 1.0;
+        const curve = options?.curve ?? 'linear';
+
+        this.activeDynamics = {
+            kind: 'dynamics',
+            type: 'crescendo',
+            from,
+            to,
+            duration,
+            curve
+        };
+        this.dynamicsStartTick = this.getCurrentTick();
+        this.velocityCurvePoints = null;
+        return this;
+    }
+
+    /**
+     * Start a decrescendo (gradual decrease in velocity).
+     * @param duration - Duration in ticks
+     * @param options - Optional from/to velocities and curve type
+     */
+    decrescendo(duration: number, options?: { from?: number; to?: number; curve?: 'linear' | 'exponential' | 'ease-in' | 'ease-out' }): this {
+        const from = options?.from ?? 1.0;
+        const to = options?.to ?? 0.4;
+        const curve = options?.curve ?? 'linear';
+
+        this.activeDynamics = {
+            kind: 'dynamics',
+            type: 'decrescendo',
+            from,
+            to,
+            duration,
+            curve
+        };
+        this.dynamicsStartTick = this.getCurrentTick();
+        this.velocityCurvePoints = null;
+        return this;
+    }
+
+    /**
+     * Ramp velocity to a target value over a duration.
+     * @param to - Target velocity (0-1)
+     * @param duration - Duration in ticks
+     * @param options - Optional starting velocity
+     */
+    velocityRamp(to: number, duration: number, options?: { from?: number }): this {
+        const from = options?.from ?? 0.8;
+
+        this.activeDynamics = {
+            kind: 'dynamics',
+            type: 'ramp',
+            from,
+            to,
+            duration,
+            curve: 'linear'
+        };
+        this.dynamicsStartTick = this.getCurrentTick();
+        this.velocityCurvePoints = null;
+        return this;
+    }
+
+    /**
+     * Apply a custom velocity curve defined by points.
+     * @param points - Array of velocity points with tick offsets
+     * @param duration - Total duration of the curve
+     */
+    velocityCurve(points: VelocityPoint[], duration: number): this {
+        if (points.length < 2) {
+            throw new Error('velocityCurve requires at least 2 points');
+        }
+
+        // Sort points by tick offset
+        const sortedPoints = [...points].sort((a, b) => a.tick - b.tick);
+
+        this.activeDynamics = {
+            kind: 'dynamics',
+            type: 'curve',
+            from: sortedPoints[0].velocity,
+            to: sortedPoints[sortedPoints.length - 1].velocity,
+            duration
+        };
+        this.dynamicsStartTick = this.getCurrentTick();
+        this.velocityCurvePoints = sortedPoints;
+        return this;
+    }
+
+    /**
+     * Calculate velocity based on active dynamics at a given tick.
+     * @param tick - Current tick position
+     * @param baseVelocity - Base velocity to use if no dynamics active
+     * @returns Calculated velocity (0-1)
+     */
+    protected calculateDynamicsVelocity(tick: number, baseVelocity: number): number {
+        if (!this.activeDynamics) {
+            return baseVelocity;
+        }
+
+        const elapsed = tick - this.dynamicsStartTick;
+        const { from, to, duration, curve } = this.activeDynamics;
+
+        // Check if dynamics have expired
+        if (elapsed >= duration) {
+            this.activeDynamics = null;
+            this.velocityCurvePoints = null;
+            return baseVelocity;
+        }
+
+        // Handle custom curve
+        if (this.activeDynamics.type === 'curve' && this.velocityCurvePoints) {
+            return this.interpolateCurveVelocity(elapsed, this.velocityCurvePoints);
+        }
+
+        // Calculate progress (0-1)
+        const progress = elapsed / duration;
+
+        // Apply curve transformation
+        const easedProgress = this.applyCurve(progress, curve ?? 'linear');
+
+        // Linear interpolation between from and to
+        return from + (to - from) * easedProgress;
+    }
+
+    /**
+     * Apply curve transformation to progress value.
+     */
+    protected applyCurve(progress: number, curve: 'linear' | 'exponential' | 'ease-in' | 'ease-out'): number {
+        switch (curve) {
+            case 'linear':
+                return progress;
+            case 'exponential':
+                return progress * progress;
+            case 'ease-in':
+                return progress * progress * progress;
+            case 'ease-out':
+                return 1 - Math.pow(1 - progress, 3);
+            default:
+                return progress;
+        }
+    }
+
+    /**
+     * Interpolate velocity from custom curve points.
+     */
+    protected interpolateCurveVelocity(elapsed: number, points: VelocityPoint[]): number {
+        // Find surrounding points
+        let lower = points[0];
+        let upper = points[points.length - 1];
+
+        for (let i = 0; i < points.length - 1; i++) {
+            if (elapsed >= points[i].tick && elapsed < points[i + 1].tick) {
+                lower = points[i];
+                upper = points[i + 1];
+                break;
+            }
+        }
+
+        // Handle edge cases
+        if (elapsed <= lower.tick) return lower.velocity;
+        if (elapsed >= upper.tick) return upper.velocity;
+
+        // Linear interpolation between surrounding points
+        const segmentProgress = (elapsed - lower.tick) / (upper.tick - lower.tick);
+        return lower.velocity + (upper.velocity - lower.velocity) * segmentProgress;
     }
 
     /**
@@ -211,16 +432,19 @@ export abstract class SynapticClip extends SynapticNode {
         // 1. Apply transpose
         const finalPitch = pitch + this.transposeOffset;
 
-        // 2. Apply humanization (velocity micro-variations)
-        const humanizedVel = this.applyHumanization(velocity);
+        // 2. Apply dynamics (before humanization for clean curve)
+        const dynamicsVel = this.calculateDynamicsVelocity(tick, velocity);
 
-        // 3. Apply swing/groove timing
+        // 3. Apply humanization (velocity micro-variations)
+        const humanizedVel = this.applyHumanization(dynamicsVel);
+
+        // 4. Apply swing/groove timing
         const swingTick = this.applySwing(tick);
 
-        // 4. Insert CC automation if pending (stubbed)
+        // 5. Insert CC automation if pending (stubbed)
         // this.flushCCAutomation(swingTick);
 
-        // 5. Final kernel insertion
+        // 6. Final kernel insertion
         const finalVel = Math.floor(humanizedVel * 127);
         const ptr = this.bridge.insertAsync(
             OPCODE.NOTE,

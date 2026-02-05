@@ -1,5 +1,6 @@
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { SynapticClip } from '../clips/SynapticClip';
+import { ClipNode } from '../types';
 
 /**
  * Base ComposerCursor
@@ -152,5 +153,14 @@ export abstract class ComposerCursor {
     octaveDown(n: number = 1): SynapticClip {
         this._commit();
         return this.clip.octaveDown(n);
+    }
+
+    /**
+     * Escape: Commit pending note and build the clip.
+     * Enables fluent chaining: melody.note('C4', 1).build()
+     */
+    build(): ClipNode {
+        this._commit();
+        return this.clip.build();
     }
 }

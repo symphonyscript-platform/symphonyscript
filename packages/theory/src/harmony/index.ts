@@ -16,6 +16,9 @@ export {
     PROGRESSION,
     createKey,
     KEY_ROOT,
+    romanToChord,
+    degreeToRoot,
+    progressionToChords,
 } from './progressions';
 
 // Voice leading

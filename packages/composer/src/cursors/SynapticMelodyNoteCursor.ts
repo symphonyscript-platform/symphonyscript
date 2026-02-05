@@ -3,6 +3,7 @@ import { SynapticChordCursor } from './SynapticChordCursor';
 import { SynapticClip } from '../clips/SynapticClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { parsePitch } from '../utils/pitch';
+import { applyKeySignature } from '../utils/key';
 import { DegreeOptions, ScaleMode } from '../types';
 
 const SCALE_INTERVALS: Record<ScaleMode, number[]> = {
@@ -42,6 +43,7 @@ export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
 
     /**
      * Relay: Note
+     * Applies key signature context for automatic accidentals.
      */
     note(input: string | number, duration?: number): this {
         if (this.hasPending) {
@@ -51,7 +53,18 @@ export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
 
         this.bind(this.clip.getCurrentTick());
 
-        this.pitch = parsePitch(input);
+        // Apply key signature transformation for string input
+        if (typeof input === 'string') {
+            const keyContext = this.clip.getKeyContext();
+            const accidentalOverride = this.clip.consumeAccidental();
+            const transformedNote = applyKeySignature(input, keyContext, accidentalOverride);
+            this.pitch = parsePitch(transformedNote);
+        } else {
+            // Numeric input - consume accidental without applying
+            this.clip.consumeAccidental();
+            this.pitch = input;
+        }
+
         if (duration !== undefined) {
             this._duration = duration;
         }

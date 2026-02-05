@@ -41,3 +41,13 @@
 #019-by-architect-approval-0004.md
 #020-by-architect-directive-0001.md
 #020-by-architect-approval-0002.md
+#021-by-architect-directive-0001.md
+#021-by-architect-approval-0002.md
+#022-by-architect-directive-0001.md
+#022-by-architect-approval-0002.md
+#023-by-architect-directive-0001.md
+#023-by-architect-approval-0002.md
+#024-by-architect-directive-0001.md
+#024-by-architect-approval-0002.md
+#025-by-architect-directive-0001.md
+#025-by-architect-approval-0002.md

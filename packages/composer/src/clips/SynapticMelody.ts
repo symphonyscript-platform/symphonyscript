@@ -3,6 +3,7 @@ import { SynapticMelodyNoteCursor } from '../cursors/SynapticMelodyNoteCursor';
 import { SynapticChordCursor } from '../cursors/SynapticChordCursor';
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { ClipNode } from '../types';
+import { romanToChord } from '../utils/romanAdapter';
 
 /**
  * SynapticMelody
@@ -51,6 +52,61 @@ export class SynapticMelody extends SynapticClip {
 
     chord(symbol: string): SynapticChordCursor {
         return this.noteCursor.chord(symbol);
+    }
+
+    /**
+     * Create a chord from a roman numeral in the current key context.
+     * Requires key() to be set first.
+     * @param numeral - Roman numeral (e.g., 'I', 'ii', 'V7', 'bVII')
+     * @param duration - Optional chord duration
+     * @returns SynapticChordCursor for further configuration
+     * @throws Error if key context is not set
+     */
+    roman(numeral: string, duration?: number): SynapticChordCursor {
+        const keyCtx = this.getKeyContext();
+        if (!keyCtx) {
+            throw new Error('roman() requires key() to be called first');
+        }
+
+        const chordSymbol = romanToChord(numeral, keyCtx);
+        if (!chordSymbol) {
+            throw new Error(`Invalid roman numeral: ${numeral}`);
+        }
+
+        const cursor = this.chord(chordSymbol);
+        if (duration !== undefined) {
+            cursor.duration(duration);
+        }
+        return cursor;
+    }
+
+    /**
+     * Emit a sequence of chords from roman numerals.
+     * Requires key() to be set first.
+     * @param numerals - Array of roman numerals (e.g., ['I', 'IV', 'V', 'I'])
+     * @param options - Optional configuration (duration per chord)
+     * @returns this for chaining
+     * @throws Error if key context is not set
+     */
+    progression(numerals: string[], options?: { duration?: number }): this {
+        const keyCtx = this.getKeyContext();
+        if (!keyCtx) {
+            throw new Error('progression() requires key() to be called first');
+        }
+
+        const duration = options?.duration ?? 1;
+
+        for (const numeral of numerals) {
+            const chordSymbol = romanToChord(numeral, keyCtx);
+            if (!chordSymbol) {
+                throw new Error(`Invalid roman numeral in progression: ${numeral}`);
+            }
+
+            this.chord(chordSymbol).duration(duration).commit();
+            this.advanceTick(duration);
+        }
+
+        return this;
     }
 
     /**
