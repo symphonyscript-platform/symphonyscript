@@ -216,3 +216,4 @@ The music adapts **instantly** and **deterministically**. You play the logic, no
 All of this happens in the **Silicon Kernel**, with zero garbage collection and zero latency. It is the first audio engine that thinks as fast as the game logic.
 
 
+Music that reacts instantly. Code you can version control. Professional quality, open source.
