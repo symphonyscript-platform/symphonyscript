@@ -35,6 +35,8 @@ export type SynapseResolutionCallback = (targetPtr: number, jitter: number, weig
 export interface LinkerConfig {
     /** Maximum number of nodes (default: 4096) */
     nodeCapacity?: number;
+    /** Maximum number of synapses (default: nodeCapacity * 8) */
+    synapseCapacity?: number;
     /** Pulses per quarter note (default: 480) */
     ppq?: number;
     /** Initial BPM (default: 120) */
@@ -43,6 +45,12 @@ export interface LinkerConfig {
     safeZoneTicks?: number;
     /** PRNG seed for humanization (default: 12345) */
     prngSeed?: number;
+    /**
+     * Number of worker zones for parallel workers (RFC-056).
+     * Default: 1 (legacy single-zone mode, no overhead).
+     * When > 1, enables multi-zone heap partitioning with per-zone SPSC FreeLists.
+     */
+    workerZones?: number;
 }
 /**
  * Result of a structural edit operation.
@@ -100,8 +108,8 @@ export interface ISiliconLinker {
     processCommands(): number;
     /** Lookup NodePtr by sourceId. Returns NULL_PTR if not found. */
     idTableLookup(sourceId: number): NodePtr;
-    /** Insert sourceId → ptr mapping. */
-    idTableInsert(sourceId: number, ptr: NodePtr): void;
+    /** Insert sourceId → ptr mapping. Returns true if inserted, false if table full. */
+    idTableInsert(sourceId: number, ptr: NodePtr): boolean;
     /** Remove sourceId from table. */
     idTableRemove(sourceId: number): void;
     /** Clear all identity mappings. */

@@ -54,7 +54,7 @@ export class KeyboardBuilder extends SynapticMelody {
      * Build and return the ClipNode AST structure.
      * Includes both note operations and CC operations.
      */
-    build() {
+    override build() {
         const baseClip = super.build();
         return {
             ...baseClip,

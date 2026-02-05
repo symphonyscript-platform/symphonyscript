@@ -1783,5 +1783,8 @@ export function createSiliconBridge(
     nodeCapacity: options?.nodeCapacity ?? 4096,
     safeZoneTicks: options?.safeZoneTicks
   })
+  if (!linker) {
+    throw new Error('Failed to create SiliconSynapse: invalid configuration')
+  }
   return new SiliconBridge(linker, options)
 }

@@ -78,6 +78,7 @@ export declare class SiliconBridge {
     private synapseAllocator;
     private synapseTableOffsetI32;
     private reverseIndexI32;
+    private synapseCapacity;
     /** Learning rate for plasticity (default: 10 = +1% per reward) */
     private learningRate;
     private static readonly FIRED_RING_CAPACITY;
@@ -225,6 +226,34 @@ export declare class SiliconBridge {
      */
     insertAsync(opcode: number, pitch: number, velocity: number, duration: number, baseTick: number, muted: boolean, sourceId: number, afterSourceId?: number, expressionId?: number): number;
     /**
+     * [RFC-054] Create a synapse connection asynchronously using raw pointers.
+     *
+     * This is async-safe for newly allocated nodes that are not yet in the
+     * Identity Table. Uses FIFO guarantee of Ring Buffer to ensure nodes
+     * exist before connection is attempted.
+     *
+     * @param srcPtr - Byte offset to source node (trigger point)
+     * @param tgtPtr - Byte offset to target node (destination)
+     * @param weight - Connection weight (0-65535), default 500
+     * @param jitter - Micro-timing deviation in ticks (0-65535), default 0
+     */
+    connectAsync(srcPtr: NodePtr, tgtPtr: NodePtr, weight?: number, jitter?: number): void;
+    /**
+     * [RFC-054] Remove a synapse connection asynchronously using raw pointers.
+     *
+     * @param srcPtr - Byte offset to source node (trigger point)
+     * @param tgtPtr - Byte offset to target node, or NULL_PTR for "disconnect all"
+     */
+    disconnectAsync(srcPtr: NodePtr, tgtPtr?: NodePtr): void;
+    /**
+     * [RFC-054] Delete a node asynchronously via Command Ring.
+     *
+     * Convenience wrapper that queues CMD.DELETE to the Ring Buffer.
+     *
+     * @param ptr - Byte offset to node to delete
+     */
+    deleteAsync(ptr: NodePtr): void;
+    /**
      * Insert a note immediately (bypasses debounce). TEST-ONLY.
      *
      * ISSUE-024: Renamed from insertNoteImmediate to _insertNoteImmediate
@@ -284,6 +313,11 @@ export declare class SiliconBridge {
      * Flush all pending structural edits.
      */
     flushStructural(): void;
+    /**
+     * K-005: Poll Reclaim Ring for freed Zone B nodes.
+     * Drains the ring and returns pointers to LocalAllocator.
+     */
+    private pollReclaim;
     /**
      * Load notes from parallel TypedArrays. COLD PATH.
      *
@@ -404,10 +438,11 @@ export declare class SiliconBridge {
      *
      * @param sourceId - SOURCE_ID of the trigger node (end of clip)
      * @param targetId - SOURCE_ID of the destination node (start of next clip)
-     * @param options - Optional weight (0-1000) and jitter (0-65535)
+     * @param weight - Probability/Intensity (0-1000, default 500)
+     * @param jitter - Micro-timing deviation in ticks (0-65535, default 0)
      * @returns The SynapsePtr on success, or negative error code
      */
-    connect(sourceId: number, targetId: number, options?: SynapseOptions): SynapsePtr;
+    connect(sourceId: number, targetId: number, weight?: number, jitter?: number): SynapsePtr;
     /**
      * Remove a synaptic connection (RFC-045 §6.1).
      *

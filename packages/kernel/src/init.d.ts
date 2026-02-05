@@ -9,10 +9,29 @@ import type { LinkerConfig } from './types';
  * - Full free list (all nodes linked)
  * - Zeroed groove template region
  *
+ * RFC-056: Supports multi-zone heap partitioning via workerZones parameter.
+ * - workerZones: 1 (default) = legacy single-zone mode (no overhead)
+ * - workerZones: N > 1 = multi-zone mode with N worker zones
+ *
+ * RFC-058: Zero-allocation error handling - returns null on invalid config.
+ *
  * @param config - Optional configuration overrides
- * @returns Initialized SharedArrayBuffer
+ * @returns Initialized SharedArrayBuffer, or null if config is invalid
+ *
+ * @remarks
+ * - synapseCapacity must be a power of 2 (for hash mask optimization)
+ * - workerZones must be between 1 and 8
+ * - On error, returns null (caller should check)
+ *
+ * @example
+ * ```typescript
+ * const buffer = createLinkerSAB({ nodeCapacity: 4096 })
+ * if (buffer === null) {
+ *   // Handle invalid config
+ * }
+ * ```
  */
-export declare function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer;
+export declare function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer | null;
 /**
  * Validate that a SharedArrayBuffer has the correct Silicon Linker format.
  *
@@ -33,6 +52,8 @@ export declare function getLinkerConfig(buffer: SharedArrayBuffer): Required<Lin
  *
  * WARNING: This is NOT thread-safe. Only call when no other threads
  * are accessing the buffer.
+ *
+ * RFC-056: Handles both legacy and multi-zone modes.
  *
  * @param buffer - SharedArrayBuffer to reset
  */

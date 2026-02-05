@@ -20,8 +20,10 @@
 export declare class LocalAllocator {
     private readonly sab;
     private nextPtr;
-    private readonly limitPtr;
-    private readonly startPtr;
+    private limitPtr;
+    private startPtr;
+    private freeHead;
+    private freeCount;
     /**
      * Create a Local Allocator for Zone B.
      *
@@ -40,8 +42,30 @@ export declare class LocalAllocator {
      * This is an O(1) operation with zero contention. No atomic operations required.
      * The allocated node is "floating" (not in the linked list) until the Worker
      * processes the corresponding INSERT command from the Ring Buffer.
+     * K-005: Checks local free list first before bumping pointer.
      */
     alloc(): number;
+    /**
+     * Return a node to the local free list (K-005).
+     *
+     * @param ptr - Byte offset of the node to free
+     */
+    free(ptr: number): void;
+    /**
+     * Zero out a node's memory region.
+     * Ensures no stale data from previous sessions or reuses persists.
+     *
+     * **Thread Safety (Publication Safety):**
+     * These writes are non-atomic (raw assignment). This is SAFE because:
+     * 1. The node is currently "floating" in Zone B (exclusive to Main Thread).
+     * 2. The Worker Thread has no reference to this pointer yet.
+     * 3. The pointer is "published" to the Worker later via `ringBuffer.write(CMD.INSERT, ptr)`.
+     * 4. `ringBuffer.write` uses `Atomics.store`, which acts as a **Release Fence**.
+     * 5. The Worker reads via `Atomics.load` (**Acquire Fence**), guaranteeing it sees these writes.
+     *
+     * @param ptrBytes - Byte offset to the node
+     */
+    private zeroNode;
     /**
      * Get the number of remaining free nodes in Zone B.
      *

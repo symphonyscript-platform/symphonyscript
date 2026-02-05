@@ -1,0 +1,27 @@
+export * from './Clip';
+export * from './SymphonyEngine';
+export { Track } from './Track';
+export type { TrackOptions } from './Track';
+export { Session } from './Session';
+export type { SessionOptions } from './Session';
+export { ComposerCursor } from './cursors/ComposerCursor';
+export { SynapticNoteCursor } from './cursors/SynapticNoteCursor';
+export { SynapticMelodyBaseCursor } from './cursors/SynapticMelodyBaseCursor';
+export { SynapticMelodyNoteCursor } from './cursors/SynapticMelodyNoteCursor';
+export { SynapticChordCursor } from './cursors/SynapticChordCursor';
+export { SynapticDrumHitCursor } from './cursors/SynapticDrumHitCursor';
+export { SynapticClip } from './clips/SynapticClip';
+export { SynapticMelody } from './clips/SynapticMelody';
+export { SynapticDrums } from './clips/SynapticDrums';
+export { KeyboardBuilder } from './clips/KeyboardBuilder';
+export { WindBuilder } from './clips/WindBuilder';
+export { SynapticGrooveBuilder } from './groove/SynapticGrooveBuilder';
+export type { GrooveTemplate } from './groove/SynapticGrooveBuilder';
+export { GrooveStepCursor } from './groove/GrooveStepCursor';
+export { parsePitch } from './utils/pitch';
+export { parseChord, packIntervals } from './utils/chord';
+export { applyKeySignature, hasExplicitAccidental } from './utils/key';
+export { romanToChord, toTheoryKeyContext } from './utils/romanAdapter';
+export type { ClipNode, ClipBuilder, TrackNode, SessionNode, NoteOperation, LoopOp, ClipOp, CCOperation, ScaleMode, ScaleContext, DegreeOptions, KeyContext, Accidental } from './types';
+export { SCHEMA_VERSION } from './types';
+//# sourceMappingURL=index.d.ts.map

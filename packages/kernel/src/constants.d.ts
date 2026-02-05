@@ -93,7 +93,7 @@ export declare const KNUTH_HASH_CONST = 2654435761;
  * ├─────────────────────────────────────────────────────────────────────┤
  * │ IDENTITY TABLE (dynamic offset)              capacity × 8 bytes    │
  * ├─────────────────────────────────────────────────────────────────────┤
- * │ Linear-probe hash table: [TID: i32, NodePtr: u32] × capacity       │
+ * │ Quadratic-probe hash table: [TID: i32, NodePtr: u32] × capacity    │
  * │   TID = 0  : Empty slot                                             │
  * │   TID = -1 : Tombstone (deleted, will be cleaned on rebuild)       │
  * │   TID > 0  : Active entry (Knuth multiplicative hash)              │
@@ -198,13 +198,39 @@ export declare const HDR: {
     readonly RB_CAPACITY: 34;
     /** [RFC-044] Byte offset to Command Ring Buffer data region */
     readonly COMMAND_RING_PTR: 35;
+    /** [K-005] [ATOMIC] Reclaim Ring Read Index (Main consumes) */
+    readonly RECLAIM_RB_HEAD: 36;
+    /** [K-005] [ATOMIC] Reclaim Ring Write Index (Worker produces) */
+    readonly RECLAIM_RB_TAIL: 37;
+    /** [K-005] Reclaim Ring capacity (fixed at init) */
+    readonly RECLAIM_RB_CAPACITY: 38;
+    /** [K-005] Byte offset to Reclaim Ring data region */
+    readonly RECLAIM_RING_PTR: 39;
+    /** [K-002] Maximum number of synapses (dynamic, defaults to nodeCapacity * 8) */
+    readonly SYNAPSE_CAPACITY: 40;
+    /** [K-002] [ATOMIC] Current number of active synapses */
+    readonly SYNAPSE_COUNT: 41;
+    /** [RFC-056] Number of worker zones (1 = legacy single-zone mode) */
+    readonly ZONE_COUNT: 42;
+    /** [RFC-056] Byte offset to zone configuration table (0 = legacy mode) */
+    readonly ZONE_CONFIG_OFFSET: 43;
 };
 /**
  * Header register offsets for BigInt64Array access.
  * Use this for 64-bit atomic operations on tagged pointers.
+ *
+ * @deprecated RFC-055: FREE_LIST_HEAD is no longer used after SPSC migration.
+ * The FreeList now uses HDR.FREE_LIST_HEAD_LOW (32-bit) instead.
+ * This constant is retained for backward compatibility and potential future use.
  */
 export declare const HDR_I64: {
-    /** 64-bit tagged pointer: (version << 32n) | (ptr & 0xFFFFFFFFn) */
+    /**
+     * 64-bit tagged pointer: (version << 32n) | (ptr & 0xFFFFFFFFn)
+     *
+     * @deprecated RFC-055: Use HDR.FREE_LIST_HEAD_LOW instead.
+     * SPSC FreeList does not need version counter — ABA problem doesn't exist
+     * with single-threaded access.
+     */
     readonly FREE_LIST_HEAD: 3;
 };
 /**
@@ -329,6 +355,8 @@ export declare const OPCODE: {
     readonly CC: 3;
     /** Pitch bend */
     readonly BEND: 4;
+    /** Phase Barrier (wait until cycle boundary) */
+    readonly BARRIER: 5;
 };
 /**
  * COMMIT_FLAG states for structural edit synchronization.
@@ -361,6 +389,10 @@ export declare const ERROR: {
     readonly FREE_LIST_CORRUPT: 6;
     /** [RFC-045-04] Unknown command opcode received */
     readonly UNKNOWN_OPCODE: 7;
+    /** [RFC-058] Invalid synapse capacity (must be power of 2) */
+    readonly INVALID_SYNAPSE_CAPACITY: 8;
+    /** [RFC-058] Invalid worker zones (must be 1-8) */
+    readonly INVALID_WORKER_ZONES: 9;
 };
 /**
  * Identity Table constants for O(1) Temporal ID lookups.
@@ -368,7 +400,8 @@ export declare const ERROR: {
  * The Identity Table is a fixed-size hash table stored in the SAB that maps
  * Temporal IDs (TID) to NodePtr values for zero-allocation lookups.
  *
- * Structure: Linear-probe hash table with [TID: i32, NodePtr: u32] entries.
+ * Structure: Quadratic-probe hash table with [TID: i32, NodePtr: u32] entries.
+ * Uses slot = (baseSlot + probe²) % capacity to reduce primary clustering.
  * - TID = 0: Empty slot
  * - TID = -1: Tombstone (deleted entry)
  * - TID > 0: Active entry
@@ -460,6 +493,18 @@ export declare const COMMAND: {
     readonly STRIDE_I32: 4;
     /** Default ring buffer size in bytes (64KB = 4096 commands) */
     readonly DEFAULT_RING_SIZE_BYTES: 65536;
+};
+/**
+ * Reclaim Ring Buffer constants (Main Thread -> Worker).
+ * Queue for recycling Zone B nodes.
+ */
+export declare const RECLAIM: {
+    /** Reclaim Ring stride in bytes (4 bytes for 1ptr) */
+    readonly STRIDE_BYTES: 4;
+    /** Reclaim Ring stride in i32 units (1 word) */
+    readonly STRIDE_I32: 1;
+    /** Default ring buffer size in bytes (16KB = 4096 ptrs) */
+    readonly DEFAULT_RING_SIZE_BYTES: 16384;
 };
 /**
  * Synapse Table constants for the "Silicon Brain" Neural Audio Processor.
@@ -581,10 +626,103 @@ export declare const REVERSE_INDEX: {
  *
  * Layout: [Header][Nodes][IdTable][SymTable][RingBuffer][SynapseTable][ReverseIndex]
  *
+ * K-002: Now accepts optional synapseCapacity for dynamic synapse table sizing.
+ *
  * @param nodeCapacity - Number of nodes in the SAB
+ * @param synapseCapacity - Maximum number of synapses (K-002 dynamic, defaults to nodeCapacity * 8)
  * @returns Byte offset to the start of the Reverse Index table
  */
-export declare function getReverseIndexOffset(nodeCapacity: number): number;
+export declare function getReverseIndexOffset(nodeCapacity: number, synapseCapacity?: number): number;
+/**
+ * Per-zone configuration structure (RFC-056).
+ *
+ * Each worker zone has its own configuration block in the Zone Config Table.
+ * The table starts at HDR.ZONE_CONFIG_OFFSET and contains ZONE_COUNT entries.
+ *
+ * Layout: 10 × i32 = 40 bytes per zone
+ * - HEAP_START: First node byte offset in this zone
+ * - HEAP_END: Last node byte offset + 1 (exclusive)
+ * - FREE_LIST_HEAD: Current free list head (32-bit, SPSC)
+ * - FREE_COUNT: Free nodes in this zone
+ * - NODE_COUNT: Allocated nodes in this zone
+ * - NODE_CAPACITY: Total capacity of this zone
+ * - OWNER_ID: Worker ID that owns this zone (0 = unclaimed)
+ * - RESERVED: Reserved for future use (alignment)
+ * - RETURN_QUEUE_HEAD: [ATOMIC] MPSC Return Queue head (producers CAS here)
+ * - RETURN_QUEUE_TAIL: Return Queue tail (only owner reads/advances)
+ */
+export declare const ZONE_CONFIG: {
+    /** First node byte offset in this zone */
+    readonly HEAP_START: 0;
+    /** Last node byte offset + 1 (exclusive) */
+    readonly HEAP_END: 1;
+    /** Current free list head (32-bit, SPSC) */
+    readonly FREE_LIST_HEAD: 2;
+    /** Free nodes in this zone */
+    readonly FREE_COUNT: 3;
+    /** Allocated nodes in this zone */
+    readonly NODE_COUNT: 4;
+    /** Total capacity of this zone */
+    readonly NODE_CAPACITY: 5;
+    /** Worker ID that owns this zone (0 = unclaimed) */
+    readonly OWNER_ID: 6;
+    /** Reserved for future use (alignment) */
+    readonly RESERVED: 7;
+    /** [ATOMIC] MPSC Return Queue head (producers CAS here) */
+    readonly RETURN_QUEUE_HEAD: 8;
+    /** Return Queue tail (only owner reads/advances) */
+    readonly RETURN_QUEUE_TAIL: 9;
+};
+/**
+ * Number of i32 slots per zone configuration entry.
+ * 10 slots × 4 bytes = 40 bytes per zone.
+ */
+export declare const ZONE_CONFIG_STRIDE = 10;
+/**
+ * Fixed capacity of each zone's Return Queue (number of pointer slots).
+ * 256 slots × 4 bytes = 1KB per queue.
+ */
+export declare const RETURN_QUEUE_CAPACITY = 256;
+/**
+ * Calculate the byte offset to the Zone Configuration Table.
+ * The table is placed after all existing structures (at the end of the SAB).
+ *
+ * @param nodeCapacity - Maximum number of nodes
+ * @param synapseCapacity - Maximum number of synapses (default: nodeCapacity * 8)
+ * @returns Byte offset to Zone Config Table
+ */
+export declare function getZoneConfigTableOffset(nodeCapacity: number, synapseCapacity?: number): number;
+/**
+ * Calculate the byte offset to the Return Queue buffers region.
+ * Return Queue buffers start immediately after the Zone Config Table.
+ *
+ * @param zoneConfigOffset - Byte offset to Zone Config Table (from HDR.ZONE_CONFIG_OFFSET)
+ * @param workerZones - Number of worker zones
+ * @returns Byte offset to Return Queue buffers
+ */
+export declare function getReturnQueueBufferOffset(zoneConfigOffset: number, workerZones: number): number;
+/**
+ * Calculate the byte offset to a specific zone's Return Queue buffer.
+ *
+ * @param zoneConfigOffset - Byte offset to Zone Config Table (from HDR.ZONE_CONFIG_OFFSET)
+ * @param workerZones - Number of worker zones
+ * @param zoneIndex - Index of the zone (0-based)
+ * @returns Byte offset to the zone's Return Queue buffer
+ */
+export declare function getReturnQueueForZone(zoneConfigOffset: number, workerZones: number, zoneIndex: number): number;
+/**
+ * Zone error codes (RFC-056 zero-allocation error handling).
+ */
+export declare const ZONE_ERR: {
+    /** Operation succeeded */
+    readonly OK: 0;
+    /** No zones available for claiming */
+    readonly NO_ZONES_AVAILABLE: -1;
+    /** Zone exhausted (no free nodes) */
+    readonly ZONE_EXHAUSTED: -2;
+    /** Return Queue full */
+    readonly RETURN_QUEUE_FULL: -3;
+};
 /**
  * SiliconBridge error codes (zero-allocation error handling).
  * Methods return these instead of throwing exceptions.
@@ -646,6 +784,10 @@ export declare const CMD: {
     readonly PATCH: 3;
     /** Clear all nodes from the chain (mass delete) */
     readonly CLEAR: 4;
+    /** [RFC-054] Create synapse connection using raw pointers (async-safe) */
+    readonly CONNECT: 5;
+    /** [RFC-054] Remove synapse connection using raw pointers (async-safe) */
+    readonly DISCONNECT: 6;
 };
 /**
  * Calculate the Zone Split Index for partitioned heap allocation (RFC-044).
@@ -665,24 +807,39 @@ export declare function getZoneSplitIndex(nodeCapacity: number): number;
  * Calculate total SAB size needed for given node capacity.
  *
  * Layout:
- * - Header + Registers + Command Ring Header: 144 bytes (36 × i32)
+ * - Header + Registers + Command Ring + Reclaim Ring + Synapse Header + Multi-Zone: 176 bytes (44 × i32)
  * - Node Heap: nodeCapacity × 32 bytes
  * - Identity Table: nodeCapacity × 2 × 8 bytes (RFC-047-50: 2x capacity for load factor)
  * - Symbol Table: nodeCapacity × 8 bytes (fileHash + lineCol per entry)
  * - Groove Templates: 1024 bytes (fixed)
  * - Command Ring Buffer: 64KB (RFC-044)
- * - Synapse Table: 1MB (RFC-045) - Neural connection graph
+ * - Reclaim Ring Buffer: 16KB (K-005)
+ * - Synapse Table: synapseCapacity × 20 bytes (K-002: dynamic sizing)
+ * - Reverse Index: 1KB (ISSUE-016)
+ * - Zone Config Table: workerZones × 40 bytes (RFC-056, only when workerZones > 1)
+ * - Return Queue Buffers: workerZones × 1KB (RFC-056, only when workerZones > 1)
  *
  * @param nodeCapacity - Maximum number of nodes
+ * @param synapseCapacity - Maximum number of synapses (default: nodeCapacity * 8)
+ * @param workerZones - Number of worker zones (default: 1, legacy mode)
  * @returns Total bytes needed for SharedArrayBuffer
  */
-export declare function calculateSABSize(nodeCapacity: number): number;
+export declare function calculateSABSize(nodeCapacity: number, synapseCapacity?: number, workerZones?: number): number;
 /**
- * Calculate byte offset where node heap begins.
- * Header (64) + Registers (64) + Command Ring Header (16) = 144 bytes.
- * Indices 0-35 = 36 × 4 bytes = 144 bytes.
+ * Byte offset where node heap begins.
+ *
+ * Memory layout (i32 indices):
+ * - Base Header (0-15): 16 × 4 = 64 bytes
+ * - Register Bank (16-22): 7 × 4 = 28 bytes
+ * - Extended Header (23-31): 9 × 4 = 36 bytes
+ * - Command Ring Header (32-35): 4 × 4 = 16 bytes
+ * - Reclaim Ring Header (36-39): 4 × 4 = 16 bytes
+ * - Synapse Header (40-41): 2 × 4 = 8 bytes
+ * - Multi-Zone Header (42-43): 2 × 4 = 8 bytes (RFC-056)
+ *
+ * Total: 64 + 28 + 36 + 16 + 16 + 8 + 8 = 176 bytes (indices 0-43)
  */
-export declare const HEAP_START_OFFSET = 144;
+export declare const HEAP_START_OFFSET = 176;
 /**
  * Calculate i32 index where node heap begins.
  */
@@ -712,11 +869,18 @@ export declare function getGrooveTemplateOffset(nodeCapacity: number): number;
  */
 export declare function getRingBufferOffset(nodeCapacity: number): number;
 /**
+ * Calculate byte offset where Reclaim Ring Buffer data begins (K-005).
+ * Immediately follows Command Ring.
+ * @param nodeCapacity - Maximum number of nodes
+ * @returns Byte offset to Reclaim Ring Buffer data region
+ */
+export declare function getReclaimRingOffset(nodeCapacity: number): number;
+/**
  * Calculate byte offset where Synapse Table begins (RFC-045).
  *
  * The Synapse Table is a 1MB linear-probe hash table that stores neural
  * connections between Axons (clips). It resides immediately after the
- * Command Ring Buffer in the SharedArrayBuffer.
+ * Reclaim Ring Buffer in the SharedArrayBuffer.
  *
  * @param nodeCapacity - Maximum number of nodes
  * @returns Byte offset to Synapse Table

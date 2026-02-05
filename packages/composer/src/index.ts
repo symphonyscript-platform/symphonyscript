@@ -18,6 +18,7 @@ export { SynapticClip } from './clips/SynapticClip';
 export { SynapticMelody } from './clips/SynapticMelody';
 export { SynapticDrums } from './clips/SynapticDrums';
 export { KeyboardBuilder } from './clips/KeyboardBuilder';
+export { WindBuilder } from './clips/WindBuilder';
 
 // Groove
 export { SynapticGrooveBuilder } from './groove/SynapticGrooveBuilder';

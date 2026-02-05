@@ -24,21 +24,83 @@ export declare class SiliconSynapse implements ISiliconLinker {
     private ringBuffer;
     private heapStartI32;
     private nodeCapacity;
+    private zoneBStartPtr;
     private commandBuffer;
+    private synapseAllocator;
     private isAudioContext;
+    private readonly canAtomicsWait;
+    private zoneIndex;
     /**
      * Create a new Silicon Linker.
      *
      * @param buffer - Initialized SharedArrayBuffer (use createLinkerSAB)
+     * @param zoneIndex - Zone index for multi-zone mode (default: 0)
      */
-    constructor(buffer: SharedArrayBuffer);
+    constructor(buffer: SharedArrayBuffer, zoneIndex?: number);
+    /**
+     * Detect if Atomics.wait is supported in this context.
+     *
+     * Called once at construction time. Workers support Atomics.wait,
+     * main thread throws TypeError. This detection allows zero-allocation
+     * hot path by avoiding try/catch in _yieldToCPU().
+     *
+     * @returns true if Atomics.wait is available
+     */
+    private _detectAtomicsWaitSupport;
+    /**
+     * Get the underlying SharedArrayBuffer.
+     */
     /**
      * Create a Silicon Linker with a new SAB.
      *
-     * @param config - Optional configuration
-     * @returns New SiliconSynapse instance
+     * RFC-058: Returns null if configuration is invalid (zero-allocation error handling).
+     *
+     * @param config - Optional configuration overrides
+     * @returns New SiliconSynapse instance, or null if config is invalid
+     *
+     * @remarks
+     * - synapseCapacity must be a power of 2
+     * - workerZones must be between 1 and 8
+     * - Caller must check for null return
+     *
+     * @example
+     * ```typescript
+     * const linker = SiliconSynapse.create({ nodeCapacity: 4096 })
+     * if (linker === null) {
+     *   console.error('Invalid configuration')
+     *   return
+     * }
+     * ```
      */
-    static create(config?: LinkerConfig): SiliconSynapse;
+    static create(config?: LinkerConfig): SiliconSynapse | null;
+    /**
+     * Create a SiliconSynapse for a specific zone in an existing multi-zone SAB (RFC-056).
+     *
+     * Used when multiple workers share a SAB and each claims a zone.
+     * The worker ID is used to atomically claim an unclaimed zone via CAS.
+     *
+     * @param sab - Existing SharedArrayBuffer (already initialized with workerZones > 1)
+     * @param workerId - Unique worker ID (must be > 0, used for zone claiming)
+     * @returns SiliconSynapse on success, null if no zones available
+     */
+    static createForZone(sab: SharedArrayBuffer, workerId: number): SiliconSynapse | null;
+    /**
+     * Claim a zone for this worker using atomic CAS (RFC-056).
+     *
+     * Iterates through all zones and attempts to claim the first unclaimed one
+     * by atomically setting OWNER_ID from 0 to workerId.
+     *
+     * @param sab - Int32Array view of SharedArrayBuffer
+     * @param workerId - Unique worker ID (must be > 0)
+     * @returns Zone index (0+) on success, -1 if no zones available
+     */
+    private static _claimZone;
+    /**
+     * Get the zone index this SiliconSynapse is operating on (RFC-056).
+     *
+     * @returns Zone index (0 in legacy mode)
+     */
+    getZoneIndex(): number;
     /**
      * Set execution context for mutex behavior (RFC-045-04).
      *
@@ -75,12 +137,12 @@ export declare class SiliconSynapse implements ISiliconLinker {
      * Zero-allocation CPU yield for worker context.
      *
      * Uses Atomics.wait() with 1ms timeout to sleep without allocating memory.
-     * RFC-045-04: No try/catch - we detect Worker context via typeof check.
+     * Task 3.3: Support detected once at construction — no try/catch in hot path.
      *
      * @remarks
      * This is a synchronous sleep that doesn't create Promise garbage.
      * The 1ms timeout allows other threads to acquire the mutex.
-     * On main thread (rare), Atomics.wait returns "not-equal" - no throw.
+     * On main thread: no-op (spin continues without yield) — acceptable for rare mutex use.
      */
     private _yieldToCPU;
     /**
@@ -120,6 +182,23 @@ export declare class SiliconSynapse implements ISiliconLinker {
      */
     private _releaseChainMutex;
     /**
+     * Acquire Chain Mutex (public wrapper for thread-safe operations).
+     *
+     * **Use Case:** Enables thread-safe Synapse Table compaction via
+     * `synapseAllocator.compactTableSafe(linker.acquireMutex, linker.releaseMutex)`
+     *
+     * **WARNING:** Always pair with `releaseMutex()` using try-finally pattern.
+     *
+     * @returns true if acquired, false if contention (audio) or deadlock (main)
+     */
+    acquireMutex(): boolean;
+    /**
+     * Release Chain Mutex (public wrapper for thread-safe operations).
+     *
+     * **WARNING:** Must ALWAYS be called after `acquireMutex()` returns true.
+     */
+    releaseMutex(): void;
+    /**
      * Link an existing node into the chain after a given node (RFC-044).
      *
      * **CRITICAL:** This method assumes:
@@ -152,11 +231,17 @@ export declare class SiliconSynapse implements ISiliconLinker {
     /**
      * Allocate a node from the free list.
      *
-     * @returns Node pointer, or NULL_PTR if heap exhausted
+     * RFC-055 SPSC Invariant: Only the Worker thread (AudioWorklet) may call this.
+     * In debug mode, warns if called outside audio context.
+     *
+     * @returns Node pointer, or NULL_PTR if heap exhausted or free list corrupted
      */
     allocNode(): NodePtr;
     /**
      * Return a node to the free list.
+     *
+     * RFC-055 SPSC Invariant: Only the Worker thread (AudioWorklet) may call this.
+     * In debug mode, warns if called outside audio context.
      *
      * @param ptr - Node to free
      */
@@ -167,9 +252,44 @@ export declare class SiliconSynapse implements ISiliconLinker {
     patchBaseTick(ptr: NodePtr, baseTick: number): void;
     patchMuted(ptr: NodePtr, muted: boolean): void;
     /**
+     * Patch the sourceId field of a node.
+     * M-003: Exposed for testing and advanced use cases.
+     *
+     * @param ptr - Node pointer
+     * @param sourceId - New source ID
+     * @returns true if patched, false if invalid pointer
+     */
+    patchSourceId(ptr: NodePtr, sourceId: number): boolean;
+    /**
+     * Patch multiple attributes of a node in a single operation.
+     * M-003: Exposed for testing and batch updates.
+     *
+     * Bumps SEQ counter once for all updates (efficient versioning).
+     *
+     * @param ptr - Node pointer
+     * @param updates - Object with optional fields to update
+     * @returns true if patched, false if invalid pointer
+     */
+    patchMultiple(ptr: NodePtr, updates: {
+        pitch?: number;
+        velocity?: number;
+        duration?: number;
+        baseTick?: number;
+        muted?: boolean;
+        sourceId?: number;
+    }): boolean;
+    /**
      * Convert byte pointer to i32 index.
      */
     private nodeOffset;
+    /**
+     * [RFC-054] Validate that a pointer is within the valid heap range.
+     * Used by executeConnect/executeDisconnect for pointer safety.
+     *
+     * @param ptr - Byte offset pointer to validate
+     * @returns true if pointer is within valid heap bounds, false otherwise
+     */
+    private isValidHeapPtr;
     /**
      * Check if a pointer is within safe zone of playhead.
      * RFC-045-04: Returns false if violation, true if safe (no throw).
@@ -334,7 +454,7 @@ export declare class SiliconSynapse implements ISiliconLinker {
      *
      * @remarks
      * PPQ is set at SAB creation and is immutable.
-     * Non-atomic read is safe since PPQ never changes.
+     * M-002: Use Atomics.load for memory ordering guarantees (especially ARM).
      */
     getPpq(): number;
     /**
@@ -467,7 +587,7 @@ export declare class SiliconSynapse implements ISiliconLinker {
      *
      * @remarks
      * Safe zone is set at SAB creation and is immutable.
-     * Non-atomic read is safe since value never changes.
+     * M-002: Use Atomics.load for memory ordering guarantees (especially ARM).
      */
     getSafeZoneTicks(): number;
     /**
@@ -531,13 +651,24 @@ export declare class SiliconSynapse implements ISiliconLinker {
      */
     idTableClear(): void;
     /**
+     * Rebuild the Identity Table from the live chain.
+     * Task 3.5: Addresses spec debt — no way to rebuild ID table after clearing.
+     *
+     * **Use Case:** After idTableClear() or when tombstones exceed threshold.
+     *
+     * **Thread Safety:** Acquires Chain Mutex for duration.
+     *
+     * @returns Number of entries rebuilt, or -1 if mutex acquisition failed
+     */
+    idTableRebuild(): number;
+    /**
      * Get the i32 offset for a slot in the Symbol Table.
      * Each slot is 2 × i32: [fileHash, lineCol]
      */
     private symTableSlotOffset;
     /**
      * Store a packed SourceLocation in the Symbol Table for a sourceId.
-     * Uses the same linear probing as Identity Table to find the slot.
+     * Uses quadratic probing: slot = (baseSlot + probe²) % capacity
      *
      * **Race-Free Write Order**: This method can be called BEFORE idTableInsert
      * to prevent transient states where Identity Table has an entry but Symbol
@@ -552,7 +683,7 @@ export declare class SiliconSynapse implements ISiliconLinker {
     symTableStore(sourceId: number, fileHash: number, line: number, column: number): boolean;
     /**
      * Lookup a packed SourceLocation by sourceId with zero-allocation callback.
-     * Uses the same linear probing as Identity Table.
+     * Uses quadratic probing to match Identity Table (RFC-047-50).
      *
      * @param sourceId - Source ID to lookup
      * @param cb - Callback receiving (fileHash, line, column) if found
@@ -562,6 +693,7 @@ export declare class SiliconSynapse implements ISiliconLinker {
     /**
      * Remove a SourceLocation from the Symbol Table.
      * Clears the entry at the slot corresponding to sourceId.
+     * Uses quadratic probing to match Identity Table (RFC-047-50).
      *
      * @param sourceId - Source ID whose location should be removed
      * @returns true if removed, false if not found
@@ -576,12 +708,37 @@ export declare class SiliconSynapse implements ISiliconLinker {
      * Clear the entire Synapse Table (memset-style).
      * Sets all SOURCE_PTR fields to NULL_PTR, effectively tombstoning all synapses.
      *
-     * **Performance:** O(n) where n = SYNAPSE_TABLE.MAX_CAPACITY (65536).
-     * Approximately 260KB of memory touched. ~1ms on modern hardware.
+     * **Performance:** O(n) where n = synapseCapacity (dynamic).
+     * ~1ms on modern hardware.
      *
      * **Thread Safety:** Must be called with Chain Mutex held.
      */
     private synapseTableClear;
+    /**
+     * Compact the Synapse Table with mutex protection.
+     *
+     * **Thread Safety:** Acquires Chain Mutex for duration of compaction.
+     * This is a stop-the-world operation that rehashes all live synapses
+     * and removes tombstones.
+     *
+     * **Use Cases:**
+     * - Call after many disconnect() operations to reclaim tombstone slots
+     * - Call during maintenance windows to optimize lookup performance
+     *
+     * @returns Number of live synapses after compaction, or -1 if mutex failed
+     */
+    compactSynapseTable(): number;
+    /**
+     * Conditionally compact Synapse Table if tombstone ratio exceeds threshold.
+     *
+     * **Thread Safety:** Acquires Chain Mutex only if compaction is needed.
+     *
+     * **Threshold:** Compaction triggers when tombstones exceed 50% of used slots
+     * AND at least 100 slots have been used.
+     *
+     * @returns Number of live synapses after compaction, 0 if not needed, or -1 if mutex failed
+     */
+    maybeCompactSynapseTable(): number;
     /**
      * Process pending commands from the Ring Buffer (RFC-044).
      *
@@ -623,15 +780,41 @@ export declare class SiliconSynapse implements ISiliconLinker {
     /**
      * Execute DELETE command: Remove a node from the chain (RFC-044).
      *
-     * **Note:** This uses the existing _deleteNode() method which already
-     * handles mutex acquisition and Identity Table cleanup.
+     * **CRITICAL:** Extracts sourceId BEFORE unlinking to ensure Identity Table
+     * and Symbol Table cleanup occurs after successful deletion.
      *
      * RFC-045-04: Returns boolean (no try/catch).
+     * RFC-002 Remediation: Added idTableRemove/symTableRemove calls.
      *
      * @param ptr - Pointer to node to delete
      * @returns true on success, false on error
      */
     private executeDelete;
+    /**
+     * [RFC-054] Execute CONNECT command: Create synaptic connection using raw pointers.
+     *
+     * This enables async-safe synapse creation for newly allocated nodes that
+     * are not yet in the Identity Table. Uses FIFO guarantee of Ring Buffer
+     * to ensure source/target nodes exist before connection.
+     *
+     * @param srcPtr - Byte offset to source node (trigger point)
+     * @param tgtPtr - Byte offset to target node (destination)
+     * @param packedWJ - Packed weight and jitter: (weight << 16) | (jitter & 0xFFFF)
+     * @returns true on success, false on error (ERROR_FLAG set)
+     */
+    private executeConnect;
+    /**
+     * [RFC-054] Execute DISCONNECT command: Remove synaptic connection using raw pointers.
+     *
+     * Supports both single-target and all-target disconnection:
+     * - If tgtPtr === NULL_PTR: Disconnect ALL synapses from source
+     * - If tgtPtr is valid: Disconnect only the specific synapse
+     *
+     * @param srcPtr - Byte offset to source node (trigger point)
+     * @param tgtPtr - Byte offset to target node, or NULL_PTR for "disconnect all"
+     * @returns true on success, false on error (ERROR_FLAG set)
+     */
+    private executeDisconnect;
     /**
      * Execute CLEAR command: Remove all nodes from the chain (RFC-044).
      *

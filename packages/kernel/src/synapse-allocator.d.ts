@@ -1,119 +1,74 @@
 import type { SynapsePtr } from './types';
+import { SynapseView } from './synapse-view';
 /**
  * Synapse Allocator - The "Dendrite" Manager for the Silicon Brain.
  *
- * Manages the 1MB Synapse Table in the SharedArrayBuffer. This class implements
- * a high-performance Linear Probe Hash Table to map Axons (Source Nodes) to
- * Synapses (Connections).
+ * Extends SynapseView with Write capabilities.
+ * Manages the 1MB Synapse Table in the SharedArrayBuffer.
  *
- * Topology:
- * - Table Size: 65,536 entries (1MB)
- * - Hash: Knuth's Multiplicative Hash on SOURCE_PTR
- * - Collision Strategy: Linear Probing for "Head" slots
- * - Fan-Out: Linked List (NEXT_SYNAPSE_PTR) for multiple targets from one source
- *
- * Thread Safety:
- * - Designed for single-writer (Worker/Kernel) access via Command Ring.
- * - Uses Atomics for all writes to ensure the Audio Thread never sees torn data.
+ * **K-001 Class Separation & Optimization:**
+ * - Extends implementation-free `SynapseView` (Base)
+ * - Owns write buffers (staging arrays)
+ * - **Lazy Allocation:** Staging arrays are only allocated when compaction occurs.
+ *   This saves ~0.75MB of memory for read-only consumers (like SiliconBridge in default mode).
  */
-export declare class SynapseAllocator {
-    private readonly sab;
-    private readonly tableOffsetI32;
-    private readonly reverseIndexI32;
-    private readonly capacity;
-    /** Tracks number of used slots for load factor monitoring (RFC-045-02 directive) */
-    private usedSlots;
-    /** Tracks number of tombstoned entries (ISSUE-021) */
-    private tombstoneCount;
-    /** Pre-allocated staging array for compaction - source pointers (ISSUE-021) */
-    private readonly stagingSourcePtrs;
-    /** Pre-allocated staging array for compaction - target pointers (ISSUE-021) */
-    private readonly stagingTargetPtrs;
-    /** Pre-allocated staging array for compaction - weight data (ISSUE-021) */
-    private readonly stagingWeightData;
+export declare class SynapseAllocator extends SynapseView {
+    /** Pre-allocated staging array for compaction - source pointers (Lazy) */
+    private stagingSourcePtrs;
+    /** Pre-allocated staging array for compaction - target pointers (Lazy) */
+    private stagingTargetPtrs;
+    /** Pre-allocated staging array for compaction - weight data (Lazy) */
+    private stagingWeightData;
     constructor(buffer: SharedArrayBuffer);
     /**
-     * Get the current load factor of the Synapse Table.
-     * Accounts for tombstoned entries to reflect actual usage.
-     * @returns Load factor as a ratio (0.0 to 1.0)
-     */
-    getLoadFactor(): number;
-    /**
-     * Get the number of used slots in the Synapse Table (including tombstones).
-     * @returns Number of slots currently in use
-     */
-    getUsedSlots(): number;
-    /**
-     * Get the number of active (non-tombstoned) slots.
-     * @returns Number of live synapse entries
-     */
-    getActiveSlots(): number;
-    /**
-     * Get the ratio of tombstoned entries to total used slots.
-     * High ratio (>0.5) indicates table should be compacted.
-     * @returns Tombstone ratio (0.0 to 1.0)
-     */
-    getTombstoneRatio(): number;
-    /**
      * Reset allocator state after table clear.
-     *
-     * **Note:** Actual memory clearing is done by SiliconSynapse.synapseTableClear().
-     * This method resets the allocator's internal tracking counters.
      */
     clear(): void;
     /**
-     * Create a synaptic connection between two Axons.
-     *
-     * This is an O(1) operation (amortized) that writes a "Dendrite" into the
-     * shared memory. If the source already has connections, this appends to
-     * the fan-out chain.
-     *
-     * Thread Safety (RFC-045-02 CORRECTION-01):
-     * For append operations, data writes MUST complete before linking to prevent
-     * the Audio Thread from following a valid link to uninitialized memory.
-     *
-     * RFC-045-04: Zero-allocation error handling via return codes.
-     *
-     * @param sourcePtr - The Trigger Node (End of Clip)
-     * @param targetPtr - The Destination Node (Start of Next Clip)
-     * @param weight - Probability/Intensity (0-1000)
-     * @param jitter - Micro-timing deviation in ticks (0-65535)
-     * @returns The SynapsePtr to the new entry on success, or negative error code
-     */
+      * Create a synaptic connection between two Axons.
+      *
+      * @param sourcePtr - The Trigger Node (End of Clip)
+      * @param targetPtr - The Destination Node (Start of Next Clip)
+      * @param weight - Probability/Intensity (0-1000)
+      * @param jitter - Micro-timing deviation in ticks (0-65535)
+      * @returns The SynapsePtr to the new entry on success, or negative error code
+      */
     connect(sourcePtr: number, targetPtr: number, weight: number, jitter: number): SynapsePtr;
     /**
      * Sever a synaptic connection.
-     *
-     * Implements "Tombstoning" by setting TARGET_PTR to NULL. The connection
-     * remains in the chain but is skipped by the Kernel during resolution.
-     * This preserves the linked list integrity for other targets.
-     *
-     * @param sourcePtr - The Trigger Node
-     * @param targetPtr - (Optional) Specific target to disconnect. If omitted, disconnects ALL.
      */
     disconnect(sourcePtr: number, targetPtr?: number): void;
     /**
      * Check if compaction is needed and perform if so.
-     * COLD PATH - Called after disconnect operations.
      *
-     * @returns Number of entries compacted (0 if no compaction needed)
+     * **WARNING:** This method is NOT thread-safe. Use `maybeCompactSafe()` instead
+     * when concurrent operations are possible.
      */
     maybeCompact(): number;
     /**
+     * Thread-safe compaction with mutex protection.
+     *
+     * **THREAD SAFETY:** Acquires Chain Mutex for duration of compaction.
+     * This is a stop-the-world operation - use sparingly.
+     *
+     * @param acquireMutex - Function to acquire mutex (injected from SiliconSynapse)
+     * @param releaseMutex - Function to release mutex
+     * @returns Number of live synapses after compaction, or -1 if mutex acquisition failed
+     */
+    compactTableSafe(acquireMutex: () => boolean, releaseMutex: () => void): number;
+    /**
+     * Check if compaction is needed and perform with mutex protection.
+     *
+     * **THREAD SAFETY:** Acquires Chain Mutex for duration of compaction.
+     * This is a stop-the-world operation - use sparingly.
+     *
+     * @param acquireMutex - Function to acquire mutex (injected from SiliconSynapse)
+     * @param releaseMutex - Function to release mutex
+     * @returns Number of live synapses after compaction, 0 if not needed, or -1 if mutex failed
+     */
+    maybeCompactSafe(acquireMutex: () => boolean, releaseMutex: () => void): number;
+    /**
      * Compact the synapse table by rehashing all live entries.
-     * COLD PATH - O(n) where n = table capacity.
-     *
-     * **Thread Safety:** Must NOT be called while audio thread is active.
-     * Caller must ensure exclusive access (e.g., during pause or clear).
-     *
-     * **Algorithm:**
-     * 1. Scan table for live entries (SOURCE_PTR != NULL && TARGET_PTR != NULL)
-     * 2. Collect live entries into staging arrays
-     * 3. Clear entire table
-     * 4. Clear reverse index buckets
-     * 5. Reinsert live entries with fresh hash positions
-     *
-     * @returns Number of entries compacted
      */
     compactTable(): number;
     /**
@@ -121,26 +76,9 @@ export declare class SynapseAllocator {
      * @internal
      */
     private _insertDirect;
-    /** Knuth's Multiplicative Hash (using KNUTH_HASH_CONST per RFC-045) */
-    private hash;
-    /**
-     * Find the slot containing the "Head" of the chain for a source.
-     * Uses Linear Probing.
-     * * @returns Slot index, or -1 if not found.
-     */
-    private findHeadSlot;
     /**
      * Find the next empty slot starting from a seed index.
-     * Used for allocating new entries (heads or overflow links).
      */
     private findEmptySlot;
-    /** Convert slot index to i32 index in SAB */
-    private offsetForSlot;
-    /** Convert slot index to Byte Pointer (relative to start of SAB) */
-    private ptrFromSlot;
-    /** Convert Byte Pointer to slot index */
-    private slotFromPtr;
-    /** Extract Next Pointer from a slot's META_NEXT field */
-    private getNextPtr;
 }
 //# sourceMappingURL=synapse-allocator.d.ts.map

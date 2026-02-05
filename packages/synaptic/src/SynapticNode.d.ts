@@ -1,66 +1,53 @@
-import type { SiliconBridge } from '@symphonyscript/kernel';
+import { SiliconBridge } from '@symphonyscript/kernel';
 /**
- * SynapticNode - Clean low-level wrapper around SiliconBridge.
+ * SynapticNode - The fundamental unit of the SymphonyScript topology.
  *
- * Tracks entry and exit source IDs for building note chains and
- * creating synaptic connections between builders.
+ * Represents a generic "neuron" in the graph that can:
+ * 1. Hold a connection to the Kernel (SiliconBridge).
+ * 2. Track its topology identity (Entry/Exit Source IDs).
+ * 3. Form synaptic connections to other nodes.
+ * 4. Manage phase-locking / cycling behavior.
+ *
+ * This class is content-agnostic. It knows nothing about music, notes, or data types.
  */
-export declare class SynapticNode {
-    private bridge;
-    private entryId;
-    private exitId;
-    private expressionId;
-    private cycle;
-    /**
-     * Create a new SynapticNode.
-     *
-     * @param bridge - Instance of SiliconBridge from @symphonyscript/core
-     */
+export declare abstract class SynapticNode {
+    protected bridge: SiliconBridge;
+    protected entryId: number | undefined;
+    protected exitId: number | undefined;
+    protected cycle: number;
+    protected barrierId: number | undefined;
+    protected barrierPtr: number | undefined;
+    protected writeId: number | undefined;
     constructor(bridge: SiliconBridge);
     /**
-     * Set the MPE Expression ID for subsequent notes.
-     * @param id - Expression ID (0-15)
+     * Link this node's output to another node's input.
+     *
+     * @param target - The target node to connect to.
+     * @param weight - Synaptic weight (0-1000).
+     * @param jitter - Timing jitter in milliseconds (or ticks, depending on kernel).
      */
-    setExpressionId(id: number): void;
+    linkTo(target: SynapticNode, weight?: number, jitter?: number): this;
     /**
-     * Set the phase-locking cycle length.
-     * @param ticks - Cycle length in ticks (or Infinity)
+     * Alias for linkTo.
+     */
+    connect(target: SynapticNode, weight?: number, jitter?: number): this;
+    /**
+     * [RFC-054] Set the phase-locking cycle length.
+     *
+     * This method manages the BARRIER node for implicit loop topology:
+     * - If ticks <= 0: Remove existing barrier (un-loop)
+     * - If barrier exists: Update its duration (idempotent)
+     * - If no barrier: Insert new BARRIER node and close loop
+     *
+     * @param ticks - Cycle length in ticks. 0 or negative removes the cycle.
      */
     setCycle(ticks: number): void;
     /**
-     * Add a note to the builder's chain.
-     *
-     * Zero-allocation implementation: no temporary arrays or objects.
-     *
-     * @param pitch - MIDI pitch (0-127)
-     * @param velocity - MIDI velocity (0-127)
-     * @param duration - Duration in ticks
-     * @param baseTick - Start tick position
-     * @param muted - Optional mute state (default: false)
-     */
-    addNote(pitch: number, velocity: number, duration: number, baseTick: number, muted?: boolean): void;
-    /**
-     * Link this builder to a target builder via synaptic connection.
-     *
-     * Creates a synapse from this builder's exit to the target's entry.
-     *
-     * @param target - Target SynapticNode to link to
-     * @param weight - Optional synapse weight (0-1000, default: 500)
-     * @param jitter - Optional jitter in ticks (0-65535, default: 0)
-     */
-    linkTo(target: SynapticNode, weight?: number, jitter?: number): void;
-    /**
-     * Get the source ID of the first note added to this builder.
-     *
-     * @returns The entry source ID
-     * @throws Error if no notes have been added
+     * Get the entry source ID (input/dendrite).
      */
     getEntryId(): number;
     /**
-     * Get the source ID of the last note added to this builder.
-     *
-     * @returns The exit source ID
-     * @throws Error if no notes have been added
+     * Get the exit source ID (output/axon).
      */
     getExitId(): number;
 }

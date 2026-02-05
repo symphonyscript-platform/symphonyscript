@@ -29,6 +29,7 @@ export declare class MockConsumer {
     private isRunning;
     private tickRate;
     private linker;
+    private pendingBarrierTargetTick;
     constructor(buffer: SharedArrayBuffer, tickRate?: number);
     /**
      * Set the linker instance for RFC-044 command processing.

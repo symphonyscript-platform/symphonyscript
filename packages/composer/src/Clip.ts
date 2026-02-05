@@ -7,6 +7,7 @@ import { SiliconSynapse, SiliconBridge } from '@symphonyscript/kernel'
 import { SynapticMelody } from './clips/SynapticMelody'
 import { SynapticDrums } from './clips/SynapticDrums'
 import { KeyboardBuilder } from './clips/KeyboardBuilder'
+import { WindBuilder } from './clips/WindBuilder'
 import { SynapticGrooveBuilder } from './groove/SynapticGrooveBuilder'
 
 
@@ -92,6 +93,16 @@ export const Clip = {
     keyboard(name: string): KeyboardBuilder {
         const bridge = getOrCreateBridge()
         return new KeyboardBuilder(bridge)
+    },
+
+    /**
+     * Create a wind instrument clip builder.
+     * Returns WindBuilder with fluent DSL (breath, expressionCC, plus all melody methods).
+     * @param name - Clip name (for identification)
+     */
+    wind(name: string): WindBuilder {
+        const bridge = getOrCreateBridge()
+        return new WindBuilder(bridge)
     },
 
     /**

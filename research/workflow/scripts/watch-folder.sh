@@ -11,6 +11,7 @@
 #   - Blocks until a NEW file matching the pattern appears
 #   - Outputs the filename and exits
 #   - Uses fswatch for native filesystem events (no polling)
+#   - Loops until a matching file is found (won't exit empty)
 
 set -e
 
@@ -38,18 +39,23 @@ fi
 # Get current files before watching
 BEFORE=$(ls -1 "$DIR"/$PATTERN 2>/dev/null | sort || true)
 
-# Watch for new files
-# fswatch -1 exits after first event, --event Created filters to file creation
-fswatch -1 --event Created --event Renamed "$DIR" | while read -r _; do
+# Loop until we find a new matching file
+while true; do
+    # Wait for any file system event (fswatch -1 exits after first event)
+    fswatch -1 --event Created --event Renamed --event Updated "$DIR" > /dev/null 2>&1 || true
+    
     # Get files after event
     AFTER=$(ls -1 "$DIR"/$PATTERN 2>/dev/null | sort || true)
     
     # Find new files (in AFTER but not in BEFORE)
-    NEW=$(comm -13 <(echo "$BEFORE") <(echo "$AFTER"))
+    NEW=$(comm -13 <(echo "$BEFORE") <(echo "$AFTER") | head -1)
     
     if [ -n "$NEW" ]; then
         # Output just the filename (basename), not full path
         basename "$NEW"
         exit 0
     fi
+    
+    # No match yet - keep watching
+    # (loop continues, fswatch will block again)
 done

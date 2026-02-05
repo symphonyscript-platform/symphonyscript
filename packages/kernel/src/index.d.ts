@@ -1,6 +1,6 @@
 export { SiliconSynapse } from './silicon-synapse';
 export { getModulatedTime } from './scheduler';
-export { SL_MAGIC, SL_VERSION, DEFAULT_PPQ, DEFAULT_BPM, DEFAULT_SAFE_ZONE_TICKS, NULL_PTR, KNUTH_HASH_CONST, HDR, REG, NODE, NODE_SIZE_I32, NODE_SIZE_BYTES, PACKED, SEQ, FLAG, OPCODE, COMMIT, ERROR, calculateSABSize, HEAP_START_OFFSET, HEAP_START_I32, COMMAND, CMD, DEFAULT_RING_CAPACITY, getZoneSplitIndex, getRingBufferOffset, SYNAPSE_TABLE, SYNAPSE, REVERSE_INDEX, getReverseIndexOffset, SYN_PACK, SYNAPSE_QUOTA, getSynapseTableOffset, SOURCE_ID, } from './constants';
+export { SL_MAGIC, SL_VERSION, DEFAULT_PPQ, DEFAULT_BPM, DEFAULT_SAFE_ZONE_TICKS, NULL_PTR, KNUTH_HASH_CONST, HDR, REG, NODE, NODE_SIZE_I32, NODE_SIZE_BYTES, PACKED, SEQ, FLAG, OPCODE, COMMIT, ERROR, calculateSABSize, HEAP_START_OFFSET, HEAP_START_I32, COMMAND, CMD, DEFAULT_RING_CAPACITY, getZoneSplitIndex, getRingBufferOffset, SYNAPSE_TABLE, SYNAPSE, REVERSE_INDEX, getReverseIndexOffset, SYN_PACK, SYNAPSE_QUOTA, getSynapseTableOffset, SOURCE_ID, getIdentityTableOffset, getSymbolTableOffset, ID_TABLE, SYM_TABLE, ZONE_CONFIG, ZONE_CONFIG_STRIDE, RETURN_QUEUE_CAPACITY, ZONE_ERR, getZoneConfigTableOffset, getReturnQueueBufferOffset, getReturnQueueForZone, } from './constants';
 export type { Opcode, CommitState, ErrorCode, NodeFlag } from './constants';
 export type { NodePtr, SynapsePtr, PlasticityCallback, SynapseResolutionCallback, LinkerConfig, EditResult, ISiliconLinker } from './types';
 export { createLinkerSAB, validateLinkerSAB, getLinkerConfig, resetLinkerSAB, writeGrooveTemplate, readGrooveTemplate } from './init';
@@ -9,6 +9,7 @@ export { AttributePatcher } from './patch';
 export { LocalAllocator } from './local-allocator';
 export { RingBuffer } from './ring-buffer';
 export { SynapseAllocator } from './synapse-allocator';
+export { ReturnQueue } from './return-queue';
 export { MockConsumer } from './mock-consumer';
 export type { ConsumerNoteEvent } from './mock-consumer';
 export { SiliconBridge, createSiliconBridge } from './silicon-bridge';

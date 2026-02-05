@@ -35,8 +35,27 @@ export declare class AttributePatcher {
      */
     private bumpSeq;
     /**
+     * Atomically patch a field within PACKED_A using CAS loop.
+     * Task 3.4: Prevents lost updates if multiple threads patch concurrently.
+     *
+     * @param offset - Node i32 offset
+     * @param mask - Bit mask for the field
+     * @param shift - Bit shift for the field
+     * @param value - New value to set (will be shifted and masked)
+     */
+    private casUpdatePackedA;
+    /**
+     * Atomically update PACKED_A with a given update function using CAS loop.
+     * Task 3.4: For flag operations that need custom update logic.
+     *
+     * @param offset - Node i32 offset
+     * @param updateFn - Function that takes current value and returns new value
+     */
+    private casUpdatePackedAFn;
+    /**
      * Patch the pitch attribute (bits 16-23 of PACKED_A).
      * RFC-045-04: Returns boolean instead of throwing.
+     * Task 3.4: Uses CAS loop for atomic read-modify-write.
      *
      * @param ptr - Node byte pointer
      * @param pitch - New pitch value (0-127)
@@ -46,6 +65,7 @@ export declare class AttributePatcher {
     /**
      * Patch the velocity attribute (bits 8-15 of PACKED_A).
      * RFC-045-04: Returns boolean instead of throwing.
+     * Task 3.4: Uses CAS loop for atomic read-modify-write.
      *
      * @param ptr - Node byte pointer
      * @param velocity - New velocity value (0-127)
@@ -73,6 +93,7 @@ export declare class AttributePatcher {
     /**
      * Set or clear the MUTED flag.
      * RFC-045-04: Returns boolean instead of throwing.
+     * Task 3.4: Uses CAS loop for atomic read-modify-write.
      *
      * @param ptr - Node byte pointer
      * @param muted - Whether the node should be muted
@@ -92,6 +113,7 @@ export declare class AttributePatcher {
      * Patch multiple attributes at once (batch update).
      * More efficient than individual patches when changing multiple fields.
      * RFC-045-04: Returns boolean instead of throwing.
+     * Task 3.4: Uses CAS loop for atomic PACKED_A update.
      *
      * @param ptr - Node byte pointer
      * @param updates - Object with optional pitch, velocity, duration, baseTick, muted

@@ -55,16 +55,17 @@ export declare class RingBuffer {
      *
      * RFC-045-04: Returns error code instead of throwing.
      *
-     * @param opcode - Command opcode (INSERT, DELETE, PATCH, CLEAR)
+     * @param opcode - Command opcode (INSERT, DELETE, PATCH, CLEAR, CONNECT, DISCONNECT)
      * @param param1 - First parameter (e.g., node pointer)
      * @param param2 - Second parameter (e.g., prev pointer)
+     * @param param3 - Third parameter (e.g., PackedWJ for CONNECT) [RFC-054]
      * @returns RING_ERR.OK on success, RING_ERR.FULL if buffer is full
      *
      * @remarks
      * This method uses atomic operations to ensure thread-safe communication.
      * The Worker must process commands fast enough to prevent overflow.
      */
-    write(opcode: number, param1: number, param2: number): number;
+    write(opcode: number, param1: number, param2: number, param3?: number): number;
     /**
      * Read a command from the ring buffer (Worker Thread / Consumer).
      *
