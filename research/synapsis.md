@@ -217,3 +217,7 @@ All of this happens in the **Silicon Kernel**, with zero garbage collection and 
 
 
 Music that reacts instantly. Code you can version control. Professional quality, open source.
+
+It's a music engine where the music reacts to your intent instantly — no loading, no lag — and you write it in code you can version control."
+Whether you are on stage or whether you are a game developer - SymphonyScript is there for you.
+Imagine instead of tweaking hundreds of notes, you just tweak Intensity or CrowdEnergy of your pre-designed but complex Clip and it just reacts instantly.
