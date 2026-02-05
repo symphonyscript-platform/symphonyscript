@@ -128,4 +128,68 @@ export interface VelocityPoint {
     tick: number;
     velocity: number;
 }
+/**
+ * Options for generating Euclidean rhythms on melody clips.
+ */
+export interface EuclideanMelodyOptions {
+    /** Number of hits (notes) to place */
+    hits: number;
+    /** Total number of steps in the pattern */
+    steps: number;
+    /** Notes to cycle through for each hit */
+    notes: (string | number)[];
+    /** Duration of each step */
+    stepDuration: number;
+    /** Velocity for notes (0-1, default: 0.8) */
+    velocity?: number;
+    /** Rotation offset (positive = rotate right, default: 0) */
+    rotation?: number;
+    /** Number of times to repeat the pattern (default: 1) */
+    repeat?: number;
+}
+/**
+ * Options for generating Euclidean rhythms on drum clips.
+ */
+export interface EuclideanDrumOptions {
+    /** Number of hits to place */
+    hits: number;
+    /** Total number of steps in the pattern */
+    steps: number;
+    /** Drum sound to use */
+    drum: 'kick' | 'snare' | 'hat' | 'clap' | 'tom';
+    /** Duration of each step */
+    stepDuration: number;
+    /** Velocity for hits (0-1, default: 0.8) */
+    velocity?: number;
+    /** Rotation offset (positive = rotate right, default: 0) */
+    rotation?: number;
+    /** Number of times to repeat the pattern (default: 1) */
+    repeat?: number;
+}
+/**
+ * Arpeggio pattern types.
+ * - 'up': ascending order
+ * - 'down': descending order
+ * - 'upDown': ascending then descending
+ * - 'downUp': descending then ascending
+ * - 'random': random order (use seed for reproducibility)
+ * - 'converge': outer → inner (first, last, second, second-last, ...)
+ * - 'diverge': inner → outer (middle outward)
+ */
+export type ArpPattern = 'up' | 'down' | 'upDown' | 'downUp' | 'random' | 'converge' | 'diverge';
+/**
+ * Options for arpeggio generation.
+ */
+export interface ArpeggioOptions {
+    /** Arpeggio pattern (default: 'up') */
+    pattern?: ArpPattern;
+    /** Velocity for notes (0-1, default: 0.8) */
+    velocity?: number;
+    /** Gate: note duration multiplier (0-1, default: 0.8) */
+    gate?: number;
+    /** Number of octaves to expand (default: 1) */
+    octaves?: number;
+    /** Seed for reproducible random pattern */
+    seed?: number;
+}
 //# sourceMappingURL=types.d.ts.map

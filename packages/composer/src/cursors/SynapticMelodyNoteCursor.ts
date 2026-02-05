@@ -65,8 +65,11 @@ export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
             this.pitch = input;
         }
 
+        // Use explicit duration if provided, otherwise use clip's default duration
         if (duration !== undefined) {
             this._duration = duration;
+        } else {
+            this._duration = this.clip.getDefaultDuration();
         }
         this.hasPending = true;
         return this;
@@ -122,7 +125,12 @@ export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
             + (octaveShift + octaveOffset) * 12
             + alteration;
 
-        if (duration !== undefined) this._duration = duration;
+        // Use explicit duration if provided, otherwise use clip's default duration
+        if (duration !== undefined) {
+            this._duration = duration;
+        } else {
+            this._duration = this.clip.getDefaultDuration();
+        }
         this.hasPending = true;
         return this;
     }
@@ -167,9 +175,11 @@ export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
             this.baseTick,
             this.muted,
             sourceId,
-            this.expressionId
+            this.expressionId,
+            this._precise  // Task 031: Pass precise flag
         );
 
         this.hasPending = false;
+        this._precise = false;  // Task 031: Reset after commit
     }
 }

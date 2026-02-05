@@ -161,3 +161,113 @@ export interface VelocityPoint {
     tick: number;       // Relative tick offset
     velocity: number;   // Velocity (0-1)
 }
+
+// ============================================================================
+// Euclidean Rhythm Types (Task 028)
+// ============================================================================
+
+/**
+ * Options for generating Euclidean rhythms on melody clips.
+ */
+export interface EuclideanMelodyOptions {
+    /** Number of hits (notes) to place */
+    hits: number;
+    /** Total number of steps in the pattern */
+    steps: number;
+    /** Notes to cycle through for each hit */
+    notes: (string | number)[];
+    /** Duration of each step */
+    stepDuration: number;
+    /** Velocity for notes (0-1, default: 0.8) */
+    velocity?: number;
+    /** Rotation offset (positive = rotate right, default: 0) */
+    rotation?: number;
+    /** Number of times to repeat the pattern (default: 1) */
+    repeat?: number;
+}
+
+/**
+ * Options for generating Euclidean rhythms on drum clips.
+ */
+export interface EuclideanDrumOptions {
+    /** Number of hits to place */
+    hits: number;
+    /** Total number of steps in the pattern */
+    steps: number;
+    /** Drum sound to use */
+    drum: 'kick' | 'snare' | 'hat' | 'clap' | 'tom';
+    /** Duration of each step */
+    stepDuration: number;
+    /** Velocity for hits (0-1, default: 0.8) */
+    velocity?: number;
+    /** Rotation offset (positive = rotate right, default: 0) */
+    rotation?: number;
+    /** Number of times to repeat the pattern (default: 1) */
+    repeat?: number;
+}
+
+// ============================================================================
+// Arpeggio Types (Task 029)
+// ============================================================================
+
+/**
+ * Arpeggio pattern types.
+ * - 'up': ascending order
+ * - 'down': descending order
+ * - 'upDown': ascending then descending
+ * - 'downUp': descending then ascending
+ * - 'random': random order (use seed for reproducibility)
+ * - 'converge': outer → inner (first, last, second, second-last, ...)
+ * - 'diverge': inner → outer (middle outward)
+ */
+export type ArpPattern = 'up' | 'down' | 'upDown' | 'downUp' | 'random' | 'converge' | 'diverge';
+
+/**
+ * Options for arpeggio generation.
+ */
+export interface ArpeggioOptions {
+    /** Arpeggio pattern (default: 'up') */
+    pattern?: ArpPattern;
+    /** Velocity for notes (0-1, default: 0.8) */
+    velocity?: number;
+    /** Gate: note duration multiplier (0-1, default: 0.8) */
+    gate?: number;
+    /** Number of octaves to expand (default: 1) */
+    octaves?: number;
+    /** Seed for reproducible random pattern */
+    seed?: number;
+}
+
+// ============================================================================
+// Humanization Types (Task 031)
+// ============================================================================
+
+/**
+ * Settings for clip-level humanization.
+ * Applied to all notes unless overridden with precise().
+ */
+export interface HumanizeSettings {
+    /** Max timing offset in ms (default: 0) */
+    timing?: number;
+    /** Max velocity variation (0-1, default: 0) */
+    velocity?: number;
+    /** Seed for reproducible humanization */
+    seed?: number;
+}
+
+// ============================================================================
+// Quantize Types (Task 032)
+// ============================================================================
+
+/**
+ * Settings for snap-to-grid timing correction.
+ * Applied in flushNote() pipeline: Quantize → Groove → Humanize
+ */
+export interface QuantizeSettings {
+    /** Grid size in beats (e.g., 0.25 = 16th notes, 0.5 = 8th notes) */
+    grid: number;
+    /** How much to snap (0-1, default: 1 = full snap) */
+    strength?: number;
+    /** Also quantize note duration (default: false) */
+    duration?: boolean;
+}

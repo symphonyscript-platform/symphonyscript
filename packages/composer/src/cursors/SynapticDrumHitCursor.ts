@@ -48,8 +48,11 @@ export class SynapticDrumHitCursor extends ComposerCursor {
 
         this.bind(this.clip.getCurrentTick());
         this.drumPitch = pitch;
+        // Use explicit duration if provided, otherwise use clip's default duration
         if (duration !== undefined) {
             this._duration = duration;
+        } else {
+            this._duration = this.clip.getDefaultDuration();
         }
         this.hasPending = true;
         return this;
@@ -110,7 +113,8 @@ export class SynapticDrumHitCursor extends ComposerCursor {
                 this.baseTick + graceOffset,
                 this.muted,
                 this.clip.generateSourceId(),
-                undefined
+                undefined,
+                this._precise  // Task 031: Pass precise flag
             );
 
             // Main hit
@@ -121,7 +125,8 @@ export class SynapticDrumHitCursor extends ComposerCursor {
                 this.baseTick,
                 this.muted,
                 sourceId,
-                undefined
+                undefined,
+                this._precise  // Task 031: Pass precise flag
             );
         }
         // Drag: Multiple rapid grace notes before main hit (buzz roll effect)
@@ -139,7 +144,8 @@ export class SynapticDrumHitCursor extends ComposerCursor {
                     this.baseTick + offset,
                     this.muted,
                     this.clip.generateSourceId(),
-                    undefined
+                    undefined,
+                    this._precise  // Task 031: Pass precise flag
                 );
             }
 
@@ -151,7 +157,8 @@ export class SynapticDrumHitCursor extends ComposerCursor {
                 this.baseTick,
                 this.muted,
                 sourceId,
-                undefined
+                undefined,
+                this._precise  // Task 031: Pass precise flag
             );
         }
         // Standard hit (no articulation)
@@ -163,12 +170,14 @@ export class SynapticDrumHitCursor extends ComposerCursor {
                 this.baseTick,
                 this.muted,
                 sourceId,
-                undefined
+                undefined,
+                this._precise  // Task 031: Pass precise flag
             );
         }
 
         this.hasPending = false;
         this.isFlam = false;
         this.isDrag = false;
+        this._precise = false;  // Task 031: Reset after commit
     }
 }

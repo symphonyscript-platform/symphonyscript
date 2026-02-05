@@ -35,7 +35,7 @@ export declare class StringBuilder extends SynapticMelody {
     bend(semitones: number): this;
     /**
      * Slide to a target pitch with legato articulation.
-     * Creates a note with legato flag set for smooth transition.
+     * Creates a note with glide flag set for smooth transition.
      * @param targetPitch - Target pitch (e.g., 'E4', 60)
      * @param duration - Duration of the slide
      */

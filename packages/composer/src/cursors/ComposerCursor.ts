@@ -14,6 +14,7 @@ export abstract class ComposerCursor {
     protected _duration: number = 0.25; // Default 1/4 note
     public muted: boolean = false;
     protected humanizeAmount: number = 0; // 0 = precise, 1 = fully humanized
+    protected _precise: boolean = false; // Task 031: Skip humanization for this note
 
     constructor(
         protected clip: SynapticClip,
@@ -80,12 +81,14 @@ export abstract class ComposerCursor {
         // Apply subtle randomization to timing and velocity
         // amount controls the degree of humanization (0.0-1.0)
         this.humanizeAmount = Math.max(0, Math.min(1, amount));
+        this._precise = false; // Disable precise mode when humanizing
         return this;
     }
 
     precise(): this {
         // Disable humanization for mechanical precision
-        this.humanizeAmount = 0;
+        // Task 031: This flag is consumed by commit() and passed to flushNote()
+        this._precise = true;
         return this;
     }
 

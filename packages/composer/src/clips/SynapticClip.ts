@@ -1,7 +1,7 @@
 import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
 import { SynapticNode } from '@symphonyscript/synaptic';
-import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsOp, VelocityPoint } from '../types';
+import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsOp, VelocityPoint, HumanizeSettings, QuantizeSettings } from '../types';
 
 export abstract class SynapticClip extends SynapticNode {
     // Build output tracking
@@ -39,6 +39,15 @@ export abstract class SynapticClip extends SynapticNode {
     protected activeDynamics: DynamicsOp | null = null;
     protected dynamicsStartTick: number = 0;
     protected velocityCurvePoints: VelocityPoint[] | null = null;
+
+    // Default duration state (Task 030)
+    protected _defaultDuration: number | null = null;
+
+    // Humanization settings (Task 031)
+    protected _humanizeSettings: HumanizeSettings | null = null;
+
+    // Quantize settings (Task 032)
+    protected _quantizeSettings: QuantizeSettings | null = null;
 
     constructor(bridge: SiliconBridge, seed: number = 0) {
         super(bridge);
@@ -209,6 +218,112 @@ export abstract class SynapticClip extends SynapticNode {
         this.vibratoRate = rate;
         this.vibratoDepth = depth;
         return this;
+    }
+
+    // =========================================================================
+    // Default Duration Methods (Task 030)
+    // =========================================================================
+
+    /**
+     * Set the default duration for notes that don't specify one.
+     * @param duration - Duration in beats (e.g., 0.25 for quarter note, 0.5 for half)
+     */
+    defaultDuration(duration: number): this {
+        this._defaultDuration = duration;
+        return this;
+    }
+
+    /**
+     * Get the default duration for notes.
+     * @returns The default duration, or 1 (one beat) if not set
+     */
+    getDefaultDuration(): number {
+        return this._defaultDuration ?? 1;
+    }
+
+    // =========================================================================
+    // Humanization Methods (Task 031)
+    // =========================================================================
+
+    /**
+     * Set default humanization settings for all notes in the clip.
+     * Notes can override this with precise() to skip humanization.
+     * @param settings - Humanization settings
+     */
+    defaultHumanize(settings: HumanizeSettings): this {
+        this._humanizeSettings = settings;
+        // Reinitialize RNG with new seed if provided
+        if (settings.seed !== undefined) {
+            this.humanizeRng = new SeededRandom(settings.seed);
+        }
+        return this;
+    }
+
+    /**
+     * Get current humanization settings.
+     */
+    getHumanizeSettings(): HumanizeSettings | null {
+        return this._humanizeSettings;
+    }
+
+    // =========================================================================
+    // Quantize Methods (Task 032)
+    // =========================================================================
+
+    /**
+     * Set quantize settings for snap-to-grid timing correction.
+     * Applied in flushNote() pipeline: Quantize → Groove → Humanize
+     * @param grid - Grid size in beats (e.g., 0.25 = 16th notes)
+     * @param options - Optional strength and duration settings
+     */
+    quantize(grid: number, options?: { strength?: number; duration?: boolean }): this {
+        this._quantizeSettings = {
+            grid,
+            strength: options?.strength,
+            duration: options?.duration
+        };
+        return this;
+    }
+
+    /**
+     * Get current quantize settings.
+     */
+    getQuantizeSettings(): QuantizeSettings | null {
+        return this._quantizeSettings;
+    }
+
+    /**
+     * Apply quantization to a tick value.
+     * @param tick - Original tick value
+     * @returns Quantized tick value
+     */
+    protected applyQuantize(tick: number): number {
+        if (!this._quantizeSettings) return tick;
+
+        const { grid, strength = 1 } = this._quantizeSettings;
+
+        // Snap to nearest grid point
+        const snappedTick = Math.round(tick / grid) * grid;
+
+        // Interpolate based on strength
+        return tick + (snappedTick - tick) * strength;
+    }
+
+    /**
+     * Apply quantization to a duration value.
+     * @param duration - Original duration value
+     * @returns Quantized duration value
+     */
+    protected applyQuantizeDuration(duration: number): number {
+        if (!this._quantizeSettings || !this._quantizeSettings.duration) return duration;
+
+        const { grid, strength = 1 } = this._quantizeSettings;
+
+        // Snap to nearest grid point (minimum 1 grid unit)
+        const snappedDuration = Math.max(grid, Math.round(duration / grid) * grid);
+
+        // Interpolate based on strength
+        return duration + (snappedDuration - duration) * strength;
     }
 
     // =========================================================================
@@ -419,6 +534,14 @@ export abstract class SynapticClip extends SynapticNode {
     /**
      * Flush a single note to kernel with all escape transformations applied.
      * @remarks This is the ONLY method that may call bridge.insertAsync()
+     * @param pitch - MIDI pitch number
+     * @param velocity - Normalized velocity (0-1)
+     * @param duration - Note duration in beats
+     * @param tick - Start tick
+     * @param muted - Whether note is muted
+     * @param sourceId - Source ID for topology tracking
+     * @param expressionId - Optional expression ID
+     * @param precise - If true, skip humanization for this note
      */
     flushNote(
         pitch: number,
@@ -427,7 +550,8 @@ export abstract class SynapticClip extends SynapticNode {
         tick: number,
         muted: boolean,
         sourceId: number,
-        expressionId?: number
+        expressionId?: number,
+        precise: boolean = false
     ): void {
         // 1. Apply transpose
         const finalPitch = pitch + this.transposeOffset;
@@ -435,36 +559,51 @@ export abstract class SynapticClip extends SynapticNode {
         // 2. Apply dynamics (before humanization for clean curve)
         const dynamicsVel = this.calculateDynamicsVelocity(tick, velocity);
 
-        // 3. Apply humanization (velocity micro-variations)
-        const humanizedVel = this.applyHumanization(dynamicsVel);
+        // Pipeline order: Quantize → Groove → Humanize
+
+        // 3. Apply quantization (snap to grid) - Task 032
+        let quantizedTick = this.applyQuantize(tick);
+        let quantizedDuration = this.applyQuantizeDuration(duration);
 
         // 4. Apply swing/groove timing
-        const swingTick = this.applySwing(tick);
+        const swungTick = this.applySwing(quantizedTick);
 
-        // 5. Insert CC automation if pending (stubbed)
-        // this.flushCCAutomation(swingTick);
+        // 5. Apply humanization (velocity + timing) unless precise flag is set
+        let humanizedVel = dynamicsVel;
+        let humanizedTick = swungTick;
+        if (!precise && this._humanizeSettings) {
+            const result = this.applyHumanizeSettings(dynamicsVel, swungTick);
+            humanizedVel = result.velocity;
+            humanizedTick = result.tick;
+        } else if (!precise) {
+            // Legacy micro-variation for backward compatibility
+            humanizedVel = this.applyHumanization(dynamicsVel);
+        }
 
-        // 6. Final kernel insertion
+        // 6. Insert CC automation if pending (stubbed)
+        // this.flushCCAutomation(humanizedTick);
+
+        // 7. Final kernel insertion
         const finalVel = Math.floor(humanizedVel * 127);
         const ptr = this.bridge.insertAsync(
             OPCODE.NOTE,
             finalPitch,
             finalVel,
-            duration,
-            swingTick,
+            quantizedDuration,
+            humanizedTick,
             muted,
             sourceId,
             this.exitId, // Chain to previous node (if any)
             expressionId
         );
 
-        // 6. Track operation for build() output
+        // 8. Track operation for build() output
         this.operations.push({
             kind: 'note',
             pitch: finalPitch,
             velocity: finalVel,
-            duration,
-            tick: swingTick,
+            duration: quantizedDuration,
+            tick: humanizedTick,
             muted,
             sourceId
         });
@@ -496,10 +635,41 @@ export abstract class SynapticClip extends SynapticNode {
 
     /**
      * Apply velocity humanization using seeded PRNG.
+     * Legacy micro-variation for backward compatibility.
      */
     protected applyHumanization(velocity: number): number {
         const variation = (this.humanizeRng.next() - 0.5) * 0.05; // ±2.5%
         return Math.max(0, Math.min(1, velocity + variation));
+    }
+
+    /**
+     * Apply humanization settings to velocity and timing.
+     * @param velocity - Input velocity (0-1)
+     * @param tick - Input tick
+     * @returns Object with humanized velocity and tick
+     */
+    protected applyHumanizeSettings(velocity: number, tick: number): { velocity: number; tick: number } {
+        const settings = this._humanizeSettings!;
+
+        // Apply velocity variation
+        let humanizedVel = velocity;
+        if (settings.velocity && settings.velocity > 0) {
+            const velVariation = (this.humanizeRng.next() - 0.5) * 2 * settings.velocity;
+            humanizedVel = Math.max(0, Math.min(1, velocity + velVariation));
+        }
+
+        // Apply timing variation (ms → beats conversion)
+        // Assumes 120 BPM as reference: 1 beat = 500ms, so 1ms = 0.002 beats
+        let humanizedTick = tick;
+        if (settings.timing && settings.timing > 0) {
+            // Convert ms to beats using current tempo
+            const msPerBeat = 60000 / this.currentTempo;
+            const maxOffsetBeats = settings.timing / msPerBeat;
+            const timingVariation = (this.humanizeRng.next() - 0.5) * 2 * maxOffsetBeats;
+            humanizedTick = tick + timingVariation;
+        }
+
+        return { velocity: humanizedVel, tick: humanizedTick };
     }
 
     /**

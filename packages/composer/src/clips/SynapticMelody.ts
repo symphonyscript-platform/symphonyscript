@@ -2,8 +2,11 @@ import { SynapticClip } from './SynapticClip';
 import { SynapticMelodyNoteCursor } from '../cursors/SynapticMelodyNoteCursor';
 import { SynapticChordCursor } from '../cursors/SynapticChordCursor';
 import { SiliconBridge } from '@symphonyscript/kernel';
-import { ClipNode } from '../types';
+import { SeededRandom } from '@symphonyscript/core';
+import { ClipNode, EuclideanMelodyOptions, ArpeggioOptions } from '../types';
 import { romanToChord } from '../utils/romanAdapter';
+import { euclidean, rotatePattern } from '@symphonyscript/theory';
+import { parsePitch } from '../utils/pitch';
 
 /**
  * SynapticMelody
@@ -149,6 +152,185 @@ export class SynapticMelody extends SynapticClip {
         this.advanceTick(maxTick);
 
         return this;
+    }
+
+    /**
+     * Generate a Euclidean rhythm pattern with melodic notes.
+     * @param options - Euclidean rhythm options
+     * @returns this for chaining
+     */
+    euclidean(options: EuclideanMelodyOptions): this {
+        const {
+            hits,
+            steps,
+            notes,
+            stepDuration,
+            velocity = 0.8,
+            rotation = 0,
+            repeat = 1
+        } = options;
+
+        // Generate the Euclidean pattern
+        let pattern = euclidean(hits, steps);
+        if (!pattern) {
+            throw new Error(`Invalid Euclidean parameters: hits=${hits}, steps=${steps}`);
+        }
+
+        // Apply rotation if specified
+        if (rotation !== 0) {
+            pattern = rotatePattern(pattern, rotation);
+        }
+
+        // Cycle through notes for each hit
+        let noteIndex = 0;
+
+        for (let r = 0; r < repeat; r++) {
+            for (const isHit of pattern) {
+                if (isHit) {
+                    const currentNote = notes[noteIndex % notes.length];
+                    this.note(currentNote, stepDuration).velocity(velocity).commit();
+                    noteIndex++;
+                }
+                this.advanceTick(stepDuration);
+            }
+        }
+
+        return this;
+    }
+
+    /**
+     * Play an arpeggio pattern over the given pitches.
+     * @param pitches - Array of pitches (note names or MIDI numbers)
+     * @param rate - Duration for each arpeggiated note
+     * @param options - Arpeggio options (pattern, velocity, gate, octaves, seed)
+     * @returns this for chaining
+     */
+    arpeggiate(pitches: (string | number)[], rate: number, options?: ArpeggioOptions): this {
+        const {
+            pattern = 'up',
+            velocity = 0.8,
+            gate = 0.8,
+            octaves = 1,
+            seed
+        } = options ?? {};
+
+        // Convert pitches to MIDI numbers
+        let midiPitches = pitches.map(p =>
+            typeof p === 'string' ? parsePitch(p) : p
+        );
+
+        // Expand pitches across octaves
+        if (octaves > 1) {
+            const expanded: number[] = [];
+            for (let oct = 0; oct < octaves; oct++) {
+                for (const pitch of midiPitches) {
+                    expanded.push(pitch + oct * 12);
+                }
+            }
+            midiPitches = expanded;
+        }
+
+        // Apply pattern ordering
+        const orderedPitches = this.applyArpPattern(midiPitches, pattern, seed);
+
+        // Calculate actual note duration
+        const noteDuration = rate * gate;
+
+        // Play the arpeggio
+        for (const pitch of orderedPitches) {
+            this.note(pitch, noteDuration).velocity(velocity).commit();
+            this.advanceTick(rate);
+        }
+
+        return this;
+    }
+
+    /**
+     * Apply arpeggio pattern ordering to pitches.
+     * @internal
+     */
+    private applyArpPattern(pitches: number[], pattern: string, seed?: number): number[] {
+        const sorted = [...pitches].sort((a, b) => a - b);
+
+        switch (pattern) {
+            case 'up':
+                return sorted;
+
+            case 'down':
+                return [...sorted].reverse();
+
+            case 'upDown': {
+                // Up then down (excluding duplicate at peak)
+                const down = [...sorted].reverse().slice(1);
+                return [...sorted, ...down];
+            }
+
+            case 'downUp': {
+                // Down then up (excluding duplicate at bottom)
+                const up = [...sorted].slice(1);
+                return [...[...sorted].reverse(), ...up];
+            }
+
+            case 'random': {
+                const rng = new SeededRandom(seed ?? Date.now());
+                const shuffled = [...sorted];
+                // Fisher-Yates shuffle
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(rng.next() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
+                return shuffled;
+            }
+
+            case 'converge': {
+                // Outer → inner: first, last, second, second-last, ...
+                const result: number[] = [];
+                let left = 0;
+                let right = sorted.length - 1;
+                while (left <= right) {
+                    result.push(sorted[left]);
+                    if (left !== right) {
+                        result.push(sorted[right]);
+                    }
+                    left++;
+                    right--;
+                }
+                return result;
+            }
+
+            case 'diverge': {
+                // Inner → outer: middle outward
+                const result: number[] = [];
+                const mid = Math.floor(sorted.length / 2);
+                let left = mid;
+                let right = mid + 1;
+
+                // Add middle element(s)
+                if (sorted.length % 2 === 1) {
+                    result.push(sorted[mid]);
+                    left = mid - 1;
+                } else {
+                    left = mid - 1;
+                    right = mid;
+                }
+
+                // Expand outward
+                while (left >= 0 || right < sorted.length) {
+                    if (right < sorted.length) {
+                        result.push(sorted[right]);
+                        right++;
+                    }
+                    if (left >= 0) {
+                        result.push(sorted[left]);
+                        left--;
+                    }
+                }
+                return result;
+            }
+
+            default:
+                return sorted;
+        }
     }
 
     // Note: All escape methods (tempo, swing, transpose, etc.) are inherited from SynapticClip.
