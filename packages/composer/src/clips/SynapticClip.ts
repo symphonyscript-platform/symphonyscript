@@ -1,12 +1,12 @@
 import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
 import { SynapticNode } from '@symphonyscript/synaptic';
-import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsOp, VelocityPoint, HumanizeSettings, QuantizeSettings } from '../types';
+import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsOp, VelocityPoint, HumanizeSettings, QuantizeSettings, CCOperation } from '../types';
 
 export abstract class SynapticClip extends SynapticNode {
     // Build output tracking
     protected clipName: string = '';
-    protected operations: NoteOperation[] = [];
+    protected operations: (NoteOperation | CCOperation)[] = [];
 
     // Scale context for degree() resolution
     protected scaleContext: ScaleContext | null = null;
@@ -89,8 +89,32 @@ export abstract class SynapticClip extends SynapticNode {
         return this;
     }
 
-    control(cc: number, val: number): this {
-        this.ccAutomation.set(cc, val);
+    /**
+     * Send a MIDI Control Change message at the current tick.
+     * @param controller - MIDI CC number (0-127)
+     * @param value - CC value (0-127)
+     * @throws Error if controller or value is out of range
+     */
+    control(controller: number, value: number): this {
+        // Validate MIDI range
+        if (controller < 0 || controller > 127) {
+            throw new Error(`Controller number must be 0-127, got ${controller}`);
+        }
+        if (value < 0 || value > 127) {
+            throw new Error(`CC value must be 0-127, got ${value}`);
+        }
+
+        // Queue CC operation at current tick
+        const ccOp: CCOperation = {
+            kind: 'cc',
+            controller,
+            value,
+            tick: this.getCurrentTick()
+        };
+        this.operations.push(ccOp);
+
+        // Also maintain current state in map (for potential real-time use)
+        this.ccAutomation.set(controller, value);
         return this;
     }
 

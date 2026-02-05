@@ -128,9 +128,14 @@ export abstract class ComposerCursor {
         return this.clip.groove(name);
     }
 
-    control(cc: number, val: number): SynapticClip {
+    /**
+     * Escape: Send MIDI CC and return to clip.
+     * @param controller - MIDI CC number (0-127)
+     * @param value - CC value (0-127)
+     */
+    control(controller: number, value: number): SynapticClip {
         this._commit();
-        return this.clip.control(cc, val);
+        return this.clip.control(controller, value);
     }
 
     stack(): SynapticClip {
