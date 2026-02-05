@@ -3,6 +3,7 @@ import { SynapticMelody } from './clips/SynapticMelody';
 import { SynapticDrums } from './clips/SynapticDrums';
 import { KeyboardBuilder } from './clips/KeyboardBuilder';
 import { WindBuilder } from './clips/WindBuilder';
+import { StringBuilder } from './clips/StringBuilder';
 import { SynapticGrooveBuilder } from './groove/SynapticGrooveBuilder';
 /**
  * Initialize the Music OS session with a bridge.
@@ -51,6 +52,12 @@ export declare const Clip: {
      * @param name - Clip name (for identification)
      */
     wind(name: string): WindBuilder;
+    /**
+     * Create a string instrument clip builder.
+     * Returns StringBuilder with fluent DSL (bend, slide, bendReset, plus all melody methods).
+     * @param name - Clip name (for identification)
+     */
+    string(name: string): StringBuilder;
     /**
      * Create a groove template builder.
      * Returns SynapticGrooveBuilder for fluent DSL.

@@ -4,7 +4,7 @@ export interface ClipNode {
     readonly _version: number;
     kind: 'clip';
     name: string;
-    operations: (NoteOperation | LoopOp | ClipOp | CCOperation)[];
+    operations: (NoteOperation | LoopOp | ClipOp | CCOperation | PitchBendOperation)[];
     tempo?: number;
     timeSignature?: [number, number];
     swing?: number;
@@ -19,6 +19,7 @@ export interface NoteOperation {
     tick: number;
     muted: boolean;
     sourceId: number;
+    legato?: boolean;
 }
 
 export interface LoopOp {
@@ -40,6 +41,17 @@ export interface CCOperation {
     kind: 'cc';
     controller: number;  // CC number (64 = sustain)
     value: number;       // 0-127
+    tick: number;
+}
+
+/**
+ * Pitch Bend operation for MIDI pitch bend messages.
+ * Used for string bends, vibrato, and other pitch modulation.
+ * Standard MIDI pitch bend is 14-bit (-8192 to +8191, center = 0).
+ */
+export interface PitchBendOperation {
+    kind: 'pitchBend';
+    value: number;  // -8192 to +8191 (center = 0)
     tick: number;
 }
 

@@ -15,6 +15,7 @@ export { SynapticMelody } from './clips/SynapticMelody';
 export { SynapticDrums } from './clips/SynapticDrums';
 export { KeyboardBuilder } from './clips/KeyboardBuilder';
 export { WindBuilder } from './clips/WindBuilder';
+export { StringBuilder } from './clips/StringBuilder';
 export { SynapticGrooveBuilder } from './groove/SynapticGrooveBuilder';
 export type { GrooveTemplate } from './groove/SynapticGrooveBuilder';
 export { GrooveStepCursor } from './groove/GrooveStepCursor';
@@ -22,6 +23,6 @@ export { parsePitch } from './utils/pitch';
 export { parseChord, packIntervals } from './utils/chord';
 export { applyKeySignature, hasExplicitAccidental } from './utils/key';
 export { romanToChord, toTheoryKeyContext } from './utils/romanAdapter';
-export type { ClipNode, ClipBuilder, TrackNode, SessionNode, NoteOperation, LoopOp, ClipOp, CCOperation, ScaleMode, ScaleContext, DegreeOptions, KeyContext, Accidental } from './types';
+export type { ClipNode, ClipBuilder, TrackNode, SessionNode, NoteOperation, LoopOp, ClipOp, CCOperation, PitchBendOperation, ScaleMode, ScaleContext, DegreeOptions, KeyContext, Accidental } from './types';
 export { SCHEMA_VERSION } from './types';
 //# sourceMappingURL=index.d.ts.map

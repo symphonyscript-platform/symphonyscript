@@ -19,6 +19,7 @@ export { SynapticMelody } from './clips/SynapticMelody';
 export { SynapticDrums } from './clips/SynapticDrums';
 export { KeyboardBuilder } from './clips/KeyboardBuilder';
 export { WindBuilder } from './clips/WindBuilder';
+export { StringBuilder } from './clips/StringBuilder';
 
 // Groove
 export { SynapticGrooveBuilder } from './groove/SynapticGrooveBuilder';
@@ -32,5 +33,5 @@ export { applyKeySignature, hasExplicitAccidental } from './utils/key';
 export { romanToChord, toTheoryKeyContext } from './utils/romanAdapter';
 
 // Types
-export type { ClipNode, ClipBuilder, TrackNode, SessionNode, NoteOperation, LoopOp, ClipOp, CCOperation, ScaleMode, ScaleContext, DegreeOptions, KeyContext, Accidental } from './types';
+export type { ClipNode, ClipBuilder, TrackNode, SessionNode, NoteOperation, LoopOp, ClipOp, CCOperation, PitchBendOperation, ScaleMode, ScaleContext, DegreeOptions, KeyContext, Accidental } from './types';
 export { SCHEMA_VERSION } from './types';

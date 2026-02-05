@@ -37,7 +37,7 @@ export declare class WindBuilder extends SynapticMelody {
      * Includes both note operations and CC operations.
      */
     build(): {
-        operations: (import("..").NoteOperation | import("..").LoopOp | import("..").ClipOp | CCOperation)[];
+        operations: (import("..").NoteOperation | import("..").LoopOp | import("..").ClipOp | CCOperation | import("..").PitchBendOperation)[];
         _version: number;
         kind: "clip";
         name: string;

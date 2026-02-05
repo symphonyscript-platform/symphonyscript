@@ -8,6 +8,7 @@ import { SynapticMelody } from './clips/SynapticMelody'
 import { SynapticDrums } from './clips/SynapticDrums'
 import { KeyboardBuilder } from './clips/KeyboardBuilder'
 import { WindBuilder } from './clips/WindBuilder'
+import { StringBuilder } from './clips/StringBuilder'
 import { SynapticGrooveBuilder } from './groove/SynapticGrooveBuilder'
 
 
@@ -103,6 +104,16 @@ export const Clip = {
     wind(name: string): WindBuilder {
         const bridge = getOrCreateBridge()
         return new WindBuilder(bridge)
+    },
+
+    /**
+     * Create a string instrument clip builder.
+     * Returns StringBuilder with fluent DSL (bend, slide, bendReset, plus all melody methods).
+     * @param name - Clip name (for identification)
+     */
+    string(name: string): StringBuilder {
+        const bridge = getOrCreateBridge()
+        return new StringBuilder(bridge)
     },
 
     /**
