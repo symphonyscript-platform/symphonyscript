@@ -49,7 +49,7 @@ export declare class StringBuilder extends SynapticMelody {
      * Includes both note operations and pitch bend operations.
      */
     build(): {
-        operations: (import("..").NoteOperation | import("..").LoopOp | import("..").ClipOp | import("..").CCOperation | PitchBendOperation)[];
+        operations: (import("..").NoteOperation | import("..").LoopOp | import("..").ClipOp | import("..").CCOperation | PitchBendOperation | import("..").AftertouchOperation | import("..").AutomationOperation | import("..").ScopeOp | import("..").TempoEnvelopeOp)[];
         _version: number;
         kind: "clip";
         name: string;
@@ -57,6 +57,11 @@ export declare class StringBuilder extends SynapticMelody {
         timeSignature?: [number, number];
         swing?: number;
         groove?: string | null;
+        loopRegion?: {
+            start: number;
+            end: number;
+            enabled: boolean;
+        };
     };
 }
 //# sourceMappingURL=StringBuilder.d.ts.map

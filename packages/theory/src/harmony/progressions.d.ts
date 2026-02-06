@@ -167,4 +167,26 @@ export declare function romanToChord(numeral: string, key: KeyContext): string |
  * @returns Array of chord code strings (null entries for invalid numerals)
  */
 export declare function progressionToChords(numerals: readonly string[], key: KeyContext): (string | null)[];
+/**
+ * Get the tritone substitute for a root note.
+ * KERNEL-SAFE: Pure lookup, no allocation.
+ *
+ * The tritone substitute is the root 6 semitones (tritone) away.
+ * Jazz convention uses flat notation for substitutes.
+ *
+ * @param root - Root note name (e.g., 'G', 'C#', 'Bb')
+ * @returns Tritone substitute root (e.g., 'Db', 'G', 'E')
+ */
+export declare function tritoneSubstitute(root: string): string;
+/**
+ * Apply tritone substitutions to a chord progression.
+ * COMPOSER-ONLY: Allocates new array.
+ *
+ * Only dominant 7th chords (e.g., G7, D7) are substituted.
+ * Other chord types (maj7, m7, dim7, etc.) are left unchanged.
+ *
+ * @param chords - Array of chord symbols
+ * @returns New array with dominant 7th chords substituted
+ */
+export declare function applyTritoneSubstitutions(chords: string[]): string[];
 //# sourceMappingURL=progressions.d.ts.map

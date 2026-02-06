@@ -29,7 +29,7 @@ export interface VoiceMovement {
 }
 /**
  * Calculate total voice movement distance between two chords.
- * KERNEL-SAFE: Pure arithmetic, no allocation.
+ * KERNEL-SAFE: Zero allocation, pure bitwise arithmetic.
  *
  * Lower values indicate smoother voice leading.
  * Uses greedy matching to pair voices.

@@ -9,20 +9,9 @@ import { romanToChord } from '../utils/romanAdapter';
 import { euclidean, rotatePattern } from '@symphonyscript/theory';
 import { parsePitch } from '../utils/pitch';
 import { parseChord } from '../utils/chord';
+import { SCALE_INTERVALS } from '../utils/scales';
 
-/**
- * Scale intervals for degree-to-pitch conversion.
- * Duplicated from SynapticMelodyNoteCursor to avoid circular dependency.
- */
-const SCALE_INTERVALS: Record<ScaleMode, number[]> = {
-    major:      [0, 2, 4, 5, 7, 9, 11],
-    minor:      [0, 2, 3, 5, 7, 8, 10],
-    dorian:     [0, 2, 3, 5, 7, 9, 10],
-    phrygian:   [0, 1, 3, 5, 7, 8, 10],
-    lydian:     [0, 2, 4, 6, 7, 9, 11],
-    mixolydian: [0, 2, 4, 5, 7, 9, 10],
-    locrian:    [0, 1, 3, 5, 6, 8, 10]
-};
+
 
 /**
  * SynapticMelody
@@ -306,6 +295,12 @@ export class SynapticMelody extends SynapticClip {
     /**
      * Calculate the total voice movement cost between two voicings.
      * Uses sum of absolute pitch differences.
+     * 
+     * INTENTIONAL DIVERGENCE FROM THEORY PACKAGE:
+     * - Theory version uses `HarmonyMask` (pitch-class only) for scale degree analysis.
+     * - Composer version uses `number[]` (absolute pitch) for octave-aware voice leading.
+     * - This distinction is intentional and critical for minimizing physical interval distance.
+     * 
      * @internal
      */
     private voiceMovementCost(from: number[], to: number[]): number {
@@ -652,7 +647,7 @@ export class SynapticMelody extends SynapticClip {
      * @param builderFn - Builder function to execute in parallel
      * @returns this for chaining
      */
-    stack(builderFn?: (b: SynapticMelody) => SynapticMelody | SynapticMelodyNoteCursor | void): this {
+    override stack(builderFn?: (b: SynapticMelody) => SynapticMelody | SynapticMelodyNoteCursor | void): this {
         if (builderFn === undefined) {
             // No-arg version: enable polyphonic stacking mode
             return super.stack() as this;

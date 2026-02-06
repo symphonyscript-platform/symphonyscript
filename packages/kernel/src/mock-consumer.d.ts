@@ -30,12 +30,17 @@ export declare class MockConsumer {
     private tickRate;
     private linker;
     private pendingBarrierTargetTick;
+    private loopStart;
+    private loopEnd;
+    private loopEnabled;
     constructor(buffer: SharedArrayBuffer, tickRate?: number);
     /**
      * Set the linker instance for RFC-044 command processing.
      * In real system, Worker would create its own SiliconSynapse instance.
      */
     setLinker(linker: SiliconSynapse): void;
+    setLoop(start: number, end: number): void;
+    enableLoop(enabled: boolean): void;
     /**
      * Reset consumer state.
      */

@@ -32,7 +32,7 @@ export declare class KeyboardBuilder extends SynapticMelody {
      * Includes both note operations and CC operations.
      */
     build(): {
-        operations: (import("..").NoteOperation | import("..").LoopOp | import("..").ClipOp | CCOperation | import("..").PitchBendOperation)[];
+        operations: (import("..").NoteOperation | import("..").LoopOp | import("..").ClipOp | CCOperation | import("..").PitchBendOperation | import("..").AftertouchOperation | import("..").AutomationOperation | import("..").ScopeOp | import("..").TempoEnvelopeOp)[];
         _version: number;
         kind: "clip";
         name: string;
@@ -40,6 +40,11 @@ export declare class KeyboardBuilder extends SynapticMelody {
         timeSignature?: [number, number];
         swing?: number;
         groove?: string | null;
+        loopRegion?: {
+            start: number;
+            end: number;
+            enabled: boolean;
+        };
     };
 }
 //# sourceMappingURL=KeyboardBuilder.d.ts.map

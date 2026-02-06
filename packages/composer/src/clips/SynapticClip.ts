@@ -1,14 +1,29 @@
 import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
 import { SynapticNode } from '@symphonyscript/synaptic';
-import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsOp, VelocityPoint, HumanizeSettings, QuantizeSettings, CCOperation, AftertouchOperation, AutomationOperation, AutomationTarget, FreezeOptions, ScopeIsolation, ScopeOp, TempoKeyframe, TempoEnvelopeOp, ClipOperation, OperationsSource } from '../types';
+import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsOp, VelocityPoint, HumanizeSettings, QuantizeSettings, CCOperation, AftertouchOperation, AutomationOperation, AutomationTarget, FreezeOptions, ScopeIsolation, ScopeOp, TempoKeyframe, TempoEnvelopeOp, ClipOperation, OperationsSource, ArpPattern, PitchBendOperation } from '../types';
 import { parsePitch } from '../utils/pitch';
 import { FrozenClip } from './FrozenClip';
 
+/**
+ * SynapticClip - Orchestration Logic for Neural Audio Clippings.
+ * 
+ * ALLOCATION POLICY:
+ * - This class runs on the MAIN THREAD (Composer Layer).
+ * - Maps, Arrays, and Object allocations are PERMITTED.
+ * - This layer compiles user intent into a zero-allocation format.
+ * 
+ * "KERNEL-SAFE" DEFINITION:
+ * - Methods marked KERNEL-SAFE refer to OUTPUT FORMAT compatibility.
+ * - They do NOT imply thread safety or real-time constraints.
+ * 
+ * CLARIFICATION:
+ * - Actual audio-thread-safe zero-allocation operations reside in `@symphonyscript/kernel`.
+ */
 export abstract class SynapticClip extends SynapticNode {
     // Build output tracking
     protected clipName: string = '';
-    protected operations: (NoteOperation | CCOperation | AftertouchOperation | AutomationOperation | ScopeOp | TempoEnvelopeOp)[] = [];
+    protected operations: (NoteOperation | CCOperation | AftertouchOperation | AutomationOperation | ScopeOp | TempoEnvelopeOp | PitchBendOperation)[] = [];
 
     // Scale context for degree() resolution
     protected scaleContext: ScaleContext | null = null;
@@ -20,7 +35,9 @@ export abstract class SynapticClip extends SynapticNode {
     // Escape state (persisted user intent)
     protected transposeOffset: number = 0;
     protected currentScale: string | null = null;
-    protected arpeggioPattern: string | null = null;
+    protected _arpeggioPattern: ArpPattern | null = null;
+    protected _arpeggioRate: number = 0.125;
+    protected _arpeggioGate: number = 0.8;
     protected vibratoRate: number = 0;
     protected vibratoDepth: number = 0;
     protected currentTempo: number = 120; // Default BPM
@@ -358,15 +375,111 @@ export abstract class SynapticClip extends SynapticNode {
         return acc;
     }
 
-    arpeggio(pattern: string): this {
-        this.arpeggioPattern = pattern;
+    arpeggio(pattern: ArpPattern | null): this {
+        this._arpeggioPattern = pattern;
         return this;
+    }
+
+    /**
+     * Set clip-level arpeggio rate (duration per arpeggiated note).
+     * @param rate - Duration in beats (default: 0.125)
+     */
+    arpeggioRate(rate: number): this {
+        this._arpeggioRate = rate;
+        return this;
+    }
+
+    /**
+     * Set clip-level arpeggio gate (note duration multiplier).
+     * @param gate - Gate value 0-1 (default: 0.8)
+     */
+    arpeggioGate(gate: number): this {
+        this._arpeggioGate = gate;
+        return this;
+    }
+
+    /**
+     * Get clip-level arpeggio pattern.
+     */
+    getArpeggioPattern(): ArpPattern | null {
+        return this._arpeggioPattern;
+    }
+
+    /**
+     * Get clip-level arpeggio rate.
+     */
+    getArpeggioRate(): number {
+        return this._arpeggioRate;
+    }
+
+    /**
+     * Get clip-level arpeggio gate.
+     */
+    getArpeggioGate(): number {
+        return this._arpeggioGate;
     }
 
     vibrato(rate: number, depth: number): this {
         this.vibratoRate = rate;
         this.vibratoDepth = depth;
         return this;
+    }
+
+    /**
+     * Disable vibrato for subsequent notes.
+     */
+    vibratoOff(): this {
+        this.vibratoRate = 0;
+        this.vibratoDepth = 0;
+        return this;
+    }
+
+    /**
+     * Emit pitch bend LFO events for vibrato.
+     * @param tick - Start tick
+     * @param duration - Duration in ticks
+     */
+    protected emitVibratoLFO(tick: number, duration: number): void {
+        // Return if vibrato is disabled
+        if (this.vibratoRate <= 0 || this.vibratoDepth <= 0) return;
+
+        // Sample interval: ~48 ticks (approx 1/40th of a beat at 1920 PPQ)
+        // Correcting unit: duration is in beats. 48 ticks at 1920 PPQ is 0.025 beats.
+        const interval = 0.025;
+
+        // Calculate number of steps
+        const steps = Math.floor(duration / interval);
+
+        // Amplitude: 1 semitone = 4096 units (assuming +/- 2 semitone range = +/- 8192 units)
+        const semitoneUnits = 4096;
+        const amplitude = this.vibratoDepth * semitoneUnits;
+
+        for (let i = 0; i <= steps; i++) {
+            const currentTick = tick + i * interval;
+            if (currentTick >= tick + duration) break;
+
+            // Calculate LFO value (sine wave)
+            // LFO Phase: currentTick * rate
+            const val = Math.sin(currentTick * this.vibratoRate * Math.PI * 2);
+            const bendValue = Math.floor(val * amplitude);
+
+            // Clamp to legal range
+            const clamped = Math.max(-8192, Math.min(8191, bendValue));
+
+            const op: PitchBendOperation = {
+                kind: 'pitchBend',
+                value: clamped,
+                tick: currentTick
+            };
+            this.operations.push(op);
+        }
+
+        // Reset at end
+        this.operations.push({
+            kind: 'pitchBend',
+            value: 0,
+            tick: tick + duration
+        });
     }
 
     // =========================================================================
@@ -413,6 +526,14 @@ export abstract class SynapticClip extends SynapticNode {
      */
     getHumanizeSettings(): HumanizeSettings | null {
         return this._humanizeSettings;
+    }
+
+    /**
+     * Get the seeded RNG for deterministic randomization.
+     * Used by cursors for random arpeggio patterns.
+     */
+    getSeededRng(): SeededRandom {
+        return this.humanizeRng;
     }
 
     // =========================================================================
@@ -672,7 +793,12 @@ export abstract class SynapticClip extends SynapticNode {
             tempo: this.currentTempo,
             timeSignature: [this.timeSignatureNumerator, this.timeSignatureDenominator],
             swing: this.swingAmount,
-            groove: this.currentGroove
+            groove: this.currentGroove,
+            loopRegion: this.loopEnabled ? {
+                start: this.loopStart,
+                end: this.loopEnd,
+                enabled: true
+            } : undefined
         };
     }
 
@@ -723,7 +849,9 @@ export abstract class SynapticClip extends SynapticNode {
     isolate(options: ScopeIsolation, builderFn: (b: this) => this | void): this {
         // Save current state
         const savedTempo = this.currentTempo;
-        const savedDynamics = this.dynamicsPoints ? [...this.dynamicsPoints] : null;
+        const savedDynamicsOp = this.activeDynamics;
+        const savedDynamicsTick = this.dynamicsStartTick;
+        const savedCurvePoints = this.velocityCurvePoints ? [...this.velocityCurvePoints] : null;
         const savedTimeSignatureNum = this.timeSignatureNumerator;
         const savedTimeSignatureDen = this.timeSignatureDenominator;
 
@@ -760,8 +888,10 @@ export abstract class SynapticClip extends SynapticNode {
         if (options.tempo) {
             this.currentTempo = savedTempo;
         }
-        if (options.dynamics && savedDynamics) {
-            this.dynamicsPoints = savedDynamics;
+        if (options.dynamics) {
+            this.activeDynamics = savedDynamicsOp;
+            this.dynamicsStartTick = savedDynamicsTick;
+            this.velocityCurvePoints = savedCurvePoints;
         }
         if (options.timeSignature) {
             this.timeSignatureNumerator = savedTimeSignatureNum;
@@ -826,6 +956,17 @@ export abstract class SynapticClip extends SynapticNode {
 
         // 6. Insert CC automation if pending (stubbed)
         // this.flushCCAutomation(humanizedTick);
+
+        // Apply Vibrato LFO (Task 052)
+        if (this.vibratoRate > 0 && this.vibratoDepth > 0) {
+            this.emitVibratoLFO(humanizedTick, quantizedDuration); // Use humanized tick/duration? 
+            // Directive says: emitVibratoLFO(tick, duration). 
+            // Usually pitch bend should align with the note.
+            // Using tick/duration passed to flushNote or the calculated ones?
+            // "Integrate in flushNote": 
+            //    if (this.vibratoRate > 0 ...) this.emitVibratoLFO(tick, duration);
+            // I'll use the final timestamps (humanizedTick, quantizedDuration) to match the note's actual position in the stream.
+        }
 
         // 7. Final kernel insertion
         const finalVel = Math.floor(humanizedVel * 127);

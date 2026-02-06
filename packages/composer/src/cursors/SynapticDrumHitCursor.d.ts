@@ -1,4 +1,4 @@
-import { ComposerCursor } from './ComposerCursor';
+import { SynapticCursor } from './SynapticCursor';
 import { SynapticClip } from '../clips/SynapticClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 /**
@@ -6,7 +6,7 @@ import { SiliconBridge } from '@symphonyscript/kernel';
  * RFC-049 Section 4.6
  * Specialized for unpitched percussive events.
  */
-export declare class SynapticDrumHitCursor extends ComposerCursor {
+export declare class SynapticDrumHitCursor extends SynapticCursor {
     protected drumPitch: number;
     protected isFlam: boolean;
     protected isDrag: boolean;

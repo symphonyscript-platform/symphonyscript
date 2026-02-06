@@ -4,7 +4,7 @@ export { Track } from './Track';
 export type { TrackOptions } from './Track';
 export { Session } from './Session';
 export type { SessionOptions } from './Session';
-export { ComposerCursor } from './cursors/ComposerCursor';
+export { SynapticCursor } from './cursors/SynapticCursor';
 export { SynapticNoteCursor } from './cursors/SynapticNoteCursor';
 export { SynapticMelodyBaseCursor } from './cursors/SynapticMelodyBaseCursor';
 export { SynapticMelodyNoteCursor } from './cursors/SynapticMelodyNoteCursor';
@@ -23,6 +23,7 @@ export { parsePitch } from './utils/pitch';
 export { parseChord, packIntervals } from './utils/chord';
 export { applyKeySignature, hasExplicitAccidental } from './utils/key';
 export { romanToChord, toTheoryKeyContext } from './utils/romanAdapter';
-export type { ClipNode, ClipBuilder, TrackNode, SessionNode, NoteOperation, LoopOp, ClipOp, CCOperation, PitchBendOperation, ScaleMode, ScaleContext, DegreeOptions, KeyContext, Accidental, EuclideanMelodyOptions, EuclideanDrumOptions, ArpPattern, ArpeggioOptions } from './types';
+export type { ClipNode, ClipBuilder, TrackNode, SessionNode, NoteOperation, LoopOp, ClipOp, CCOperation, PitchBendOperation, AftertouchOperation, AutomationTarget, AutomationOperation, ScaleMode, ScaleContext, DegreeOptions, KeyContext, Accidental, EuclideanMelodyOptions, EuclideanDrumOptions, ArpPattern, ArpeggioOptions, HumanizeSettings, QuantizeSettings, FreezeOptions, ScopeIsolation, ScopeOp, DrumMap, TempoCurve, TempoKeyframe, TempoEnvelopeOp, ClipOperation, OperationsSource } from './types';
 export { SCHEMA_VERSION } from './types';
+export { FrozenClip } from './clips/FrozenClip';
 //# sourceMappingURL=index.d.ts.map

@@ -2,7 +2,7 @@ import { SynapticMelodyBaseCursor } from './SynapticMelodyBaseCursor';
 import { SynapticChordCursor } from './SynapticChordCursor';
 import { SynapticClip } from '../clips/SynapticClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
-import { DegreeOptions } from '../types';
+import { DegreeOptions, ArpPattern } from '../types';
 export declare class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
     protected pitch: number;
     private chordCursor;
@@ -32,7 +32,7 @@ export declare class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
     degree(deg: number, duration?: number, options?: DegreeOptions): this;
     transpose(semitones: number): SynapticClip;
     scale(scaleName: string): SynapticClip;
-    arpeggio(pattern: string): SynapticClip;
+    arpeggio(pattern: ArpPattern | null): SynapticClip;
     vibrato(rate: number, depth: number): SynapticClip;
     /**
      * Flushes the current note to the clip mediator.

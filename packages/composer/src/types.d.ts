@@ -3,11 +3,16 @@ export interface ClipNode {
     readonly _version: number;
     kind: 'clip';
     name: string;
-    operations: (NoteOperation | LoopOp | ClipOp | CCOperation | PitchBendOperation)[];
+    operations: (NoteOperation | LoopOp | ClipOp | CCOperation | PitchBendOperation | AftertouchOperation | AutomationOperation | ScopeOp | TempoEnvelopeOp)[];
     tempo?: number;
     timeSignature?: [number, number];
     swing?: number;
     groove?: string | null;
+    loopRegion?: {
+        start: number;
+        end: number;
+        enabled: boolean;
+    };
 }
 export interface NoteOperation {
     kind: 'note';
@@ -18,6 +23,7 @@ export interface NoteOperation {
     muted: boolean;
     sourceId: number;
     legato?: boolean;
+    expressionId?: number;
 }
 export interface LoopOp {
     kind: 'loop';
@@ -46,6 +52,32 @@ export interface CCOperation {
 export interface PitchBendOperation {
     kind: 'pitchBend';
     value: number;
+    tick: number;
+}
+/**
+ * Aftertouch operation for MIDI pressure messages.
+ * Channel aftertouch affects all notes, poly aftertouch affects specific notes.
+ */
+export interface AftertouchOperation {
+    kind: 'aftertouch';
+    type: 'channel' | 'poly';
+    value: number;
+    note?: number;
+    tick: number;
+}
+/**
+ * Automation target parameters.
+ */
+export type AutomationTarget = 'volume' | 'pan' | 'filter' | 'resonance' | 'attack' | 'release';
+/**
+ * Automation operation for parameter changes over time.
+ */
+export interface AutomationOperation {
+    kind: 'automation';
+    target: AutomationTarget;
+    value: number;
+    rampBeats?: number;
+    curve?: 'linear' | 'exponential' | 'smooth';
     tick: number;
 }
 export type ScaleMode = 'major' | 'minor' | 'dorian' | 'phrygian' | 'lydian' | 'mixolydian' | 'locrian';
@@ -191,5 +223,101 @@ export interface ArpeggioOptions {
     octaves?: number;
     /** Seed for reproducible random pattern */
     seed?: number;
+}
+/**
+ * Settings for clip-level humanization.
+ * Applied to all notes unless overridden with precise().
+ */
+export interface HumanizeSettings {
+    /** Max timing offset in ms (default: 0) */
+    timing?: number;
+    /** Max velocity variation (0-1, default: 0) */
+    velocity?: number;
+    /** Seed for reproducible humanization */
+    seed?: number;
+}
+/**
+ * Settings for snap-to-grid timing correction.
+ * Applied in flushNote() pipeline: Quantize → Groove → Humanize
+ */
+export interface QuantizeSettings {
+    /** Grid size in beats (e.g., 0.25 = 16th notes, 0.5 = 8th notes) */
+    grid: number;
+    /** How much to snap (0-1, default: 1 = full snap) */
+    strength?: number;
+    /** Also quantize note duration (default: false) */
+    duration?: boolean;
+}
+/**
+ * Options for freezing a clip for reuse.
+ */
+export interface FreezeOptions {
+    /** Tempo for the frozen clip */
+    bpm?: number;
+    /** Time signature for the frozen clip */
+    timeSignature?: [number, number];
+}
+/**
+ * Custom drum mapping type.
+ * Maps drum names to pitch values (note names or MIDI numbers).
+ */
+export type DrumMap = Record<string, string | number>;
+/**
+ * Options for scope isolation.
+ * Specifies which state changes should be isolated to the scope.
+ */
+export interface ScopeIsolation {
+    /** Isolate tempo changes */
+    tempo?: boolean;
+    /** Isolate dynamics changes */
+    dynamics?: boolean;
+    /** Isolate time signature changes */
+    timeSignature?: boolean;
+}
+/**
+ * Scope operation that wraps isolated operations.
+ */
+export interface ScopeOp {
+    kind: 'scope';
+    isolate: ScopeIsolation;
+    operations: (NoteOperation | CCOperation | AftertouchOperation | AutomationOperation)[];
+}
+/**
+ * Curve type for tempo transitions.
+ */
+export type TempoCurve = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+/**
+ * A single keyframe in a tempo envelope.
+ */
+export interface TempoKeyframe {
+    /** Beat position for this keyframe */
+    beat: number;
+    /** Target BPM at this keyframe */
+    bpm: number;
+    /** Curve type for transition to this keyframe (default: 'linear') */
+    curve?: TempoCurve;
+}
+/**
+ * Tempo envelope operation for multi-keyframe tempo transitions.
+ */
+export interface TempoEnvelopeOp {
+    kind: 'tempoEnvelope';
+    keyframes: TempoKeyframe[];
+    tick: number;
+}
+/**
+ * Union type for all operation types that can be in a clip.
+ */
+export type ClipOperation = NoteOperation | LoopOp | ClipOp | CCOperation | PitchBendOperation | AftertouchOperation | AutomationOperation | ScopeOp | TempoEnvelopeOp;
+/**
+ * Interface for objects that can provide their operations as an array.
+ * Used by loop() and play() to accept both clips and frozen clips as content sources.
+ */
+export interface OperationsSource {
+    /**
+     * Returns a snapshot of the current operations.
+     * @returns Array of operations
+     */
+    toOperations(): ClipOperation[];
 }
 //# sourceMappingURL=types.d.ts.map

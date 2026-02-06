@@ -1,7 +1,7 @@
-import { ComposerCursor } from './ComposerCursor';
+import { SynapticCursor } from './SynapticCursor';
 import { SynapticClip } from '../clips/SynapticClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
-export declare class SynapticNoteCursor extends ComposerCursor {
+export declare class SynapticNoteCursor extends SynapticCursor {
     protected pitch: number;
     constructor(clip: SynapticClip, bridge: SiliconBridge);
     /**

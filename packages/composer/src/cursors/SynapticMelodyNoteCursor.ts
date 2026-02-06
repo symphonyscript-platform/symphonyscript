@@ -4,17 +4,8 @@ import { SynapticClip } from '../clips/SynapticClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { parsePitch } from '../utils/pitch';
 import { applyKeySignature } from '../utils/key';
-import { DegreeOptions, ScaleMode } from '../types';
-
-const SCALE_INTERVALS: Record<ScaleMode, number[]> = {
-    major:      [0, 2, 4, 5, 7, 9, 11],
-    minor:      [0, 2, 3, 5, 7, 8, 10],
-    dorian:     [0, 2, 3, 5, 7, 9, 10],
-    phrygian:   [0, 1, 3, 5, 7, 8, 10],
-    lydian:     [0, 2, 4, 6, 7, 9, 11],
-    mixolydian: [0, 2, 4, 5, 7, 9, 10],
-    locrian:    [0, 1, 3, 5, 6, 8, 10]
-};
+import { DegreeOptions, ArpPattern } from '../types';
+import { SCALE_INTERVALS } from '../utils/scales';
 
 export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
     protected pitch: number = 60;
@@ -149,7 +140,7 @@ export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
         return this.clip.scale(scaleName);
     }
 
-    arpeggio(pattern: string): SynapticClip {
+    arpeggio(pattern: ArpPattern | null): SynapticClip {
         this.commit();
         return this.clip.arpeggio(pattern);
     }
