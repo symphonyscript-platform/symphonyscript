@@ -60,6 +60,11 @@ export class MockConsumer {
   // [RFC-054] State Machine Hold for BARRIER nodes
   private pendingBarrierTargetTick: number | null = null
 
+  // Loop Support
+  private loopStart: number = 0
+  private loopEnd: number = 0
+  private loopEnabled: boolean = false
+
   constructor(buffer: SharedArrayBuffer, tickRate = 24) {
     this.sab = new Int32Array(buffer)
     this.heapStartI32 = HEAP_START_OFFSET / 4
@@ -72,6 +77,15 @@ export class MockConsumer {
    */
   setLinker(linker: SiliconSynapse): void {
     this.linker = linker
+  }
+
+  setLoop(start: number, end: number): void {
+    this.loopStart = start
+    this.loopEnd = end
+  }
+
+  enableLoop(enabled: boolean): void {
+    this.loopEnabled = enabled
   }
 
   /**
@@ -130,7 +144,17 @@ export class MockConsumer {
 
     // 2. Get current playhead position
     const playhead = Atomics.load(this.sab, HDR.PLAYHEAD_TICK)
-    const nextPlayhead = playhead + this.tickRate
+    let nextPlayhead = playhead + this.tickRate
+
+    // Loop Logic
+    if (this.loopEnabled && this.loopEnd > this.loopStart) {
+      if (playhead < this.loopEnd && nextPlayhead >= this.loopEnd) {
+        const overflow = nextPlayhead - this.loopEnd
+        nextPlayhead = this.loopStart + overflow
+        // Reset pointer to traverse from start next time
+        this.currentPtr = NULL_PTR
+      }
+    }
 
     // 3. Initialize pointer if needed
     if (this.currentPtr === NULL_PTR) {

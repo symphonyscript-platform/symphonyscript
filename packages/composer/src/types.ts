@@ -9,6 +9,11 @@ export interface ClipNode {
     timeSignature?: [number, number];
     swing?: number;
     groove?: string | null;
+    loopRegion?: {
+        start: number;
+        end: number;
+        enabled: boolean;
+    };
 }
 
 export interface NoteOperation {
