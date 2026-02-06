@@ -1,7 +1,7 @@
 import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
 import { SynapticNode } from '@symphonyscript/synaptic';
-import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsOp, VelocityPoint, HumanizeSettings, QuantizeSettings, CCOperation, AftertouchOperation, AutomationOperation, AutomationTarget, FreezeOptions, ScopeIsolation, ScopeOp, TempoKeyframe, TempoEnvelopeOp } from '../types';
+import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsOp, VelocityPoint, HumanizeSettings, QuantizeSettings, CCOperation, AftertouchOperation, AutomationOperation, AutomationTarget, FreezeOptions, ScopeIsolation, ScopeOp, TempoKeyframe, TempoEnvelopeOp, ClipOperation, OperationsSource } from '../types';
 import { parsePitch } from '../utils/pitch';
 import { FrozenClip } from './FrozenClip';
 
@@ -674,6 +674,15 @@ export abstract class SynapticClip extends SynapticNode {
             swing: this.swingAmount,
             groove: this.currentGroove
         };
+    }
+
+    /**
+     * Returns a snapshot of the current operations array.
+     * Implements OperationsSource interface for use with loop() and play().
+     * @returns Array of operations (shallow copy)
+     */
+    toOperations(): ClipOperation[] {
+        return [...this.operations];
     }
 
     /**

@@ -19,6 +19,8 @@ export {
     romanToChord,
     degreeToRoot,
     progressionToChords,
+    tritoneSubstitute,
+    applyTritoneSubstitutions,
 } from './progressions';
 
 // Voice leading

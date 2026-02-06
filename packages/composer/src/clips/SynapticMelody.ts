@@ -4,10 +4,11 @@ import { SynapticChordCursor } from '../cursors/SynapticChordCursor';
 import { FrozenClip } from './FrozenClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
-import { ClipNode, EuclideanMelodyOptions, ArpeggioOptions, ScaleMode } from '../types';
+import { ClipNode, EuclideanMelodyOptions, ArpeggioOptions, ScaleMode, OperationsSource } from '../types';
 import { romanToChord } from '../utils/romanAdapter';
 import { euclidean, rotatePattern } from '@symphonyscript/theory';
 import { parsePitch } from '../utils/pitch';
+import { parseChord } from '../utils/chord';
 
 /**
  * Scale intervals for degree-to-pitch conversion.
@@ -178,34 +179,216 @@ export class SynapticMelody extends SynapticClip {
     }
 
     /**
-     * Execute a builder function multiple times.
+     * Emit a voice-led chord progression from roman numerals.
+     * Minimizes voice movement between successive chords.
+     * Requires key() to be set first.
+     * @param numerals - Array of roman numerals (e.g., ['I', 'IV', 'V', 'I'])
+     * @param options - Optional configuration (duration per chord)
+     * @returns this for chaining
+     * @throws Error if key context is not set
+     */
+    voiceLead(numerals: string[], options?: { duration?: number }): this {
+        const keyCtx = this.getKeyContext();
+        if (!keyCtx) {
+            throw new Error('voiceLead() requires key() to be called first');
+        }
+
+        if (numerals.length === 0) {
+            return this;
+        }
+
+        const duration = options?.duration ?? 1;
+
+        // Convert roman numerals to chord symbols and then to pitch arrays
+        const chordPitches: number[][] = [];
+        for (const numeral of numerals) {
+            const chordSymbol = romanToChord(numeral, keyCtx);
+            if (!chordSymbol) {
+                throw new Error(`Invalid roman numeral in voiceLead: ${numeral}`);
+            }
+            const pitches = this.chordSymbolToPitches(chordSymbol);
+            chordPitches.push(pitches);
+        }
+
+        // Voice lead the progression
+        let previousVoicing: number[] | null = null;
+
+        for (const basePitches of chordPitches) {
+            let voicing: number[];
+
+            if (previousVoicing === null) {
+                // First chord: use root position
+                voicing = [...basePitches].sort((a, b) => a - b);
+            } else {
+                // Find best voicing (minimize voice movement)
+                voicing = this.findBestVoicing(basePitches, previousVoicing);
+            }
+
+            // Emit the chord
+            this.emitChordPitches(voicing, duration);
+            this.advanceTick(duration);
+
+            previousVoicing = voicing;
+        }
+
+        return this;
+    }
+
+    /**
+     * Convert a chord symbol to an array of MIDI pitches.
+     * @internal
+     */
+    private chordSymbolToPitches(symbol: string): number[] {
+        const { root, mask } = parseChord(symbol);
+        const pitches: number[] = [];
+
+        let interval = 0;
+        let m = mask;
+        while (m !== 0) {
+            if ((m & 1) === 1) {
+                pitches.push(root + interval);
+            }
+            m >>>= 1;
+            interval++;
+        }
+
+        return pitches;
+    }
+
+    /**
+     * Find the voicing of a chord that minimizes total voice movement from previous chord.
+     * Tries all inversions and picks the one with smallest sum of absolute pitch differences.
+     * @internal
+     */
+    private findBestVoicing(basePitches: number[], previousVoicing: number[]): number[] {
+        const numVoices = basePitches.length;
+        const sorted = [...basePitches].sort((a, b) => a - b);
+
+        // Generate all inversions
+        const inversions: number[][] = [];
+        for (let inv = 0; inv < numVoices; inv++) {
+            const voicing: number[] = [];
+            for (let i = 0; i < numVoices; i++) {
+                const idx = (i + inv) % numVoices;
+                let pitch = sorted[idx];
+                // If this note is below the first note of the inversion, move it up an octave
+                if (i > 0 && pitch <= voicing[i - 1]) {
+                    pitch += 12;
+                }
+                voicing.push(pitch);
+            }
+            inversions.push(voicing);
+        }
+
+        // Also try inversions shifted up/down an octave
+        const allVoicings: number[][] = [];
+        for (const inv of inversions) {
+            allVoicings.push(inv);
+            allVoicings.push(inv.map(p => p - 12));
+            allVoicings.push(inv.map(p => p + 12));
+        }
+
+        // Find voicing with minimum voice movement
+        let bestVoicing = allVoicings[0];
+        let bestCost = this.voiceMovementCost(previousVoicing, bestVoicing);
+
+        for (let i = 1; i < allVoicings.length; i++) {
+            const cost = this.voiceMovementCost(previousVoicing, allVoicings[i]);
+            if (cost < bestCost) {
+                bestCost = cost;
+                bestVoicing = allVoicings[i];
+            }
+        }
+
+        return bestVoicing;
+    }
+
+    /**
+     * Calculate the total voice movement cost between two voicings.
+     * Uses sum of absolute pitch differences.
+     * @internal
+     */
+    private voiceMovementCost(from: number[], to: number[]): number {
+        // If different number of voices, use a simple metric
+        const minLen = Math.min(from.length, to.length);
+        let cost = 0;
+
+        // Sort both to compare by register
+        const fromSorted = [...from].sort((a, b) => a - b);
+        const toSorted = [...to].sort((a, b) => a - b);
+
+        for (let i = 0; i < minLen; i++) {
+            cost += Math.abs(fromSorted[i] - toSorted[i]);
+        }
+
+        // Penalize voice count mismatch
+        cost += Math.abs(from.length - to.length) * 12;
+
+        return cost;
+    }
+
+    /**
+     * Emit a chord from an array of pitches.
+     * @internal
+     */
+    private emitChordPitches(pitches: number[], duration: number): void {
+        // Build a mask from the pitches
+        const root = Math.min(...pitches);
+        let mask = 0;
+        for (const pitch of pitches) {
+            const interval = pitch - root;
+            mask |= (1 << interval);
+        }
+
+        // Use the chord cursor to emit
+        this.chordCursor.harmony(mask, root).duration(duration).commit();
+    }
+
+    /**
+     * Execute a builder function multiple times, or loop an OperationsSource.
      * Each iteration adds operations at the current tick position.
      * @param count - Number of repetitions
-     * @param builderFn - Function that builds content for each iteration
+     * @param source - Builder function or OperationsSource to loop
      */
-    loop(count: number, builderFn: (clip: SynapticMelody) => void): this {
-        for (let i = 0; i < count; i++) {
-            builderFn(this);
+    loop(count: number, source: ((clip: SynapticMelody) => void) | OperationsSource): this {
+        if (typeof source === 'function') {
+            // Builder function
+            for (let i = 0; i < count; i++) {
+                source(this);
+            }
+        } else {
+            // OperationsSource - play it count times
+            for (let i = 0; i < count; i++) {
+                this.play(source);
+            }
         }
         return this;
     }
 
     /**
      * Insert operations from another clip at current tick position.
-     * @param clip - Source clip (SynapticMelody, ClipNode, or FrozenClip)
+     * @param clip - Source clip (SynapticMelody, ClipNode, FrozenClip, or OperationsSource)
      */
-    play(clip: SynapticMelody | ClipNode | FrozenClip): this {
-        // Handle FrozenClip
-        let source: ClipNode;
+    play(clip: SynapticMelody | ClipNode | FrozenClip | OperationsSource): this {
+        // Get operations from source
+        let operations: ClipNode['operations'];
+
         if (clip instanceof FrozenClip) {
-            source = clip.clipNode;
+            operations = clip.clipNode.operations;
+        } else if ('toOperations' in clip && typeof clip.toOperations === 'function') {
+            // OperationsSource interface
+            operations = clip.toOperations();
+        } else if ('build' in clip && typeof clip.build === 'function') {
+            // ClipBuilder (SynapticMelody, etc.)
+            operations = clip.build().operations;
         } else {
-            source = 'build' in clip ? clip.build() : clip;
+            // ClipNode
+            operations = (clip as ClipNode).operations;
         }
 
         // Replay each operation at current tick offset
         const tickOffset = this.getCurrentTick();
-        for (const op of source.operations) {
+        for (const op of operations) {
             if (op.kind === 'note') {
                 this.operations.push({
                     ...op,
@@ -216,7 +399,7 @@ export class SynapticMelody extends SynapticClip {
         }
 
         // Advance tick by source clip duration
-        const maxTick = source.operations.reduce(
+        const maxTick = operations.reduce(
             (max, op) => op.kind === 'note' ? Math.max(max, op.tick + op.duration) : max,
             0
         );
@@ -454,6 +637,41 @@ export class SynapticMelody extends SynapticClip {
             throw new Error(`Expression ID must be 1-15, got ${id}`);
         }
         this._expressionId = id;
+        return this;
+    }
+
+    /**
+     * Execute a builder function in parallel (stacked) mode.
+     * All operations inside the builder are placed at the SAME starting tick,
+     * and the parent tick does NOT advance past the stacked content.
+     * 
+     * Overloads:
+     * - `stack()` - Enable polyphonic stacking mode (inherited from SynapticClip)
+     * - `stack(builderFn)` - Execute builder in parallel
+     * 
+     * @param builderFn - Builder function to execute in parallel
+     * @returns this for chaining
+     */
+    stack(builderFn?: (b: SynapticMelody) => SynapticMelody | SynapticMelodyNoteCursor | void): this {
+        if (builderFn === undefined) {
+            // No-arg version: enable polyphonic stacking mode
+            return super.stack() as this;
+        }
+
+        // Save current tick position
+        const savedTick = this.getCurrentTick();
+
+        // Execute the builder function
+        const result = builderFn(this);
+
+        // If result is a cursor, commit it
+        if (result && result !== this && 'commit' in result) {
+            result.commit();
+        }
+
+        // Restore tick to saved position (parallel, not sequential)
+        this.currentTick = savedTick;
+
         return this;
     }
 

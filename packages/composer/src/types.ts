@@ -381,3 +381,24 @@ export interface TempoEnvelopeOp {
     keyframes: TempoKeyframe[];
     tick: number;
 }
+
+// ============================================================================
+// Operations Source Interface (Task 046)
+// ============================================================================
+
+/**
+ * Union type for all operation types that can be in a clip.
+ */
+export type ClipOperation = NoteOperation | LoopOp | ClipOp | CCOperation | PitchBendOperation | AftertouchOperation | AutomationOperation | ScopeOp | TempoEnvelopeOp;
+
+/**
+ * Interface for objects that can provide their operations as an array.
+ * Used by loop() and play() to accept both clips and frozen clips as content sources.
+ */
+export interface OperationsSource {
+    /**
+     * Returns a snapshot of the current operations.
+     * @returns Array of operations
+     */
+    toOperations(): ClipOperation[];
+}

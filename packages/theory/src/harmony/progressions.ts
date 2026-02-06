@@ -536,3 +536,84 @@ export function progressionToChords(
 ): (string | null)[] {
     return numerals.map(num => romanToChord(num, key));
 }
+
+// ============================================================================
+// SECTION 8: Tritone Substitution
+// ============================================================================
+
+/**
+ * Tritone substitution lookup table.
+ * Maps each root note to its tritone substitute (6 semitones away).
+ * Uses flat notation for substitutes to follow jazz convention.
+ * KERNEL-SAFE: Frozen lookup table.
+ */
+const TRITONE_SUBSTITUTE_MAP: Readonly<Record<string, string>> = Object.freeze({
+    'C': 'Gb',
+    'C#': 'G',
+    'Db': 'G',
+    'D': 'Ab',
+    'D#': 'A',
+    'Eb': 'A',
+    'E': 'Bb',
+    'F': 'B',
+    'F#': 'C',
+    'Gb': 'C',
+    'G': 'Db',
+    'G#': 'D',
+    'Ab': 'D',
+    'A': 'Eb',
+    'A#': 'E',
+    'Bb': 'E',
+    'B': 'F',
+});
+
+/**
+ * Get the tritone substitute for a root note.
+ * KERNEL-SAFE: Pure lookup, no allocation.
+ *
+ * The tritone substitute is the root 6 semitones (tritone) away.
+ * Jazz convention uses flat notation for substitutes.
+ *
+ * @param root - Root note name (e.g., 'G', 'C#', 'Bb')
+ * @returns Tritone substitute root (e.g., 'Db', 'G', 'E')
+ */
+export function tritoneSubstitute(root: string): string {
+    // Normalize root (handle case variations)
+    const normalized = root.charAt(0).toUpperCase() + root.slice(1).toLowerCase();
+    return TRITONE_SUBSTITUTE_MAP[normalized] ?? root;
+}
+
+/**
+ * Regex pattern to detect dominant 7th chords.
+ * Matches: G7, C#7, Bb7, D7, etc.
+ * Does NOT match: Gmaj7, Gm7, Gdim7, G7sus4, etc.
+ */
+const DOMINANT_7TH_PATTERN = /^([A-G][#b]?)7$/;
+
+/**
+ * Apply tritone substitutions to a chord progression.
+ * COMPOSER-ONLY: Allocates new array.
+ *
+ * Only dominant 7th chords (e.g., G7, D7) are substituted.
+ * Other chord types (maj7, m7, dim7, etc.) are left unchanged.
+ *
+ * @param chords - Array of chord symbols
+ * @returns New array with dominant 7th chords substituted
+ */
+export function applyTritoneSubstitutions(chords: string[]): string[] {
+    const result: string[] = [];
+    for (let i = 0; i < chords.length; i++) {
+        const chord = chords[i];
+        const match = chord.match(DOMINANT_7TH_PATTERN);
+        if (match) {
+            // Dominant 7th chord - apply tritone substitution
+            const originalRoot = match[1];
+            const newRoot = tritoneSubstitute(originalRoot);
+            result.push(`${newRoot}7`);
+        } else {
+            // Not a dominant 7th - keep unchanged
+            result.push(chord);
+        }
+    }
+    return result;
+}

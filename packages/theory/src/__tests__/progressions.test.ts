@@ -9,6 +9,8 @@ import {
     createKey,
     KEY_ROOT,
     PROGRESSION,
+    tritoneSubstitute,
+    applyTritoneSubstitutions,
     type KeyContext,
 } from '../harmony/progressions';
 
@@ -176,6 +178,124 @@ describe('harmony/progressions string helpers', () => {
             const chords = progressionToChords(PROGRESSION.JAZZ_II_V_I, cMajor);
             expect(chords[0]).toContain('m7'); // ii7 = Dm7
             expect(chords[1]).toContain('7');  // V7 = G7
+        });
+    });
+
+    // =========================================================================
+    // tritoneSubstitute()
+    // =========================================================================
+    describe('tritoneSubstitute()', () => {
+        it('returns Db for G (acceptance criteria)', () => {
+            expect(tritoneSubstitute('G')).toBe('Db');
+        });
+
+        it('returns tritone substitute for all natural notes', () => {
+            expect(tritoneSubstitute('C')).toBe('Gb');
+            expect(tritoneSubstitute('D')).toBe('Ab');
+            expect(tritoneSubstitute('E')).toBe('Bb');
+            expect(tritoneSubstitute('F')).toBe('B');
+            expect(tritoneSubstitute('G')).toBe('Db');
+            expect(tritoneSubstitute('A')).toBe('Eb');
+            expect(tritoneSubstitute('B')).toBe('F');
+        });
+
+        it('returns tritone substitute for sharp notes', () => {
+            expect(tritoneSubstitute('C#')).toBe('G');
+            expect(tritoneSubstitute('D#')).toBe('A');
+            expect(tritoneSubstitute('F#')).toBe('C');
+            expect(tritoneSubstitute('G#')).toBe('D');
+            expect(tritoneSubstitute('A#')).toBe('E');
+        });
+
+        it('returns tritone substitute for flat notes', () => {
+            expect(tritoneSubstitute('Db')).toBe('G');
+            expect(tritoneSubstitute('Eb')).toBe('A');
+            expect(tritoneSubstitute('Gb')).toBe('C');
+            expect(tritoneSubstitute('Ab')).toBe('D');
+            expect(tritoneSubstitute('Bb')).toBe('E');
+        });
+
+        it('handles case variations', () => {
+            expect(tritoneSubstitute('g')).toBe('Db');
+            expect(tritoneSubstitute('bb')).toBe('E');
+            expect(tritoneSubstitute('C#')).toBe('G');
+        });
+
+        it('returns original for unknown roots', () => {
+            expect(tritoneSubstitute('X')).toBe('X');
+            expect(tritoneSubstitute('')).toBe('');
+        });
+
+        it('is symmetric (applying twice returns original enharmonic)', () => {
+            // G -> Db -> G (enharmonic to original)
+            expect(tritoneSubstitute(tritoneSubstitute('G'))).toBe('G');
+            // C -> Gb -> C
+            expect(tritoneSubstitute(tritoneSubstitute('C'))).toBe('C');
+        });
+    });
+
+    // =========================================================================
+    // applyTritoneSubstitutions()
+    // =========================================================================
+    describe('applyTritoneSubstitutions()', () => {
+        it('substitutes dominant 7th chords (acceptance criteria)', () => {
+            const result = applyTritoneSubstitutions(['Dm7', 'G7', 'Cmaj7']);
+            expect(result).toEqual(['Dm7', 'Db7', 'Cmaj7']);
+        });
+
+        it('only substitutes dominant 7th chords', () => {
+            const result = applyTritoneSubstitutions([
+                'C7',      // dominant 7th - substitute
+                'Cmaj7',   // major 7th - keep
+                'Cm7',     // minor 7th - keep
+                'Cdim7',   // diminished 7th - keep
+                'C',       // triad - keep
+            ]);
+            expect(result).toEqual(['Gb7', 'Cmaj7', 'Cm7', 'Cdim7', 'C']);
+        });
+
+        it('substitutes all dominant 7th chords in progression', () => {
+            const result = applyTritoneSubstitutions(['D7', 'G7', 'C7', 'F7']);
+            expect(result).toEqual(['Ab7', 'Db7', 'Gb7', 'B7']);
+        });
+
+        it('handles sharp root dominant 7th chords', () => {
+            const result = applyTritoneSubstitutions(['C#7', 'F#7']);
+            expect(result).toEqual(['G7', 'C7']);
+        });
+
+        it('handles flat root dominant 7th chords', () => {
+            const result = applyTritoneSubstitutions(['Bb7', 'Eb7']);
+            expect(result).toEqual(['E7', 'A7']);
+        });
+
+        it('preserves non-dominant chords unchanged', () => {
+            const input = ['Am7', 'Dm7', 'Gmaj7', 'Cmaj7', 'Bdim7'];
+            const result = applyTritoneSubstitutions(input);
+            expect(result).toEqual(input);
+        });
+
+        it('handles empty array', () => {
+            expect(applyTritoneSubstitutions([])).toEqual([]);
+        });
+
+        it('handles single chord', () => {
+            expect(applyTritoneSubstitutions(['G7'])).toEqual(['Db7']);
+            expect(applyTritoneSubstitutions(['Gmaj7'])).toEqual(['Gmaj7']);
+        });
+
+        it('does not modify original array', () => {
+            const original = ['Dm7', 'G7', 'Cmaj7'];
+            const copy = [...original];
+            applyTritoneSubstitutions(original);
+            expect(original).toEqual(copy);
+        });
+
+        it('handles jazz ii-V-I with tritone sub', () => {
+            // Classic jazz substitution: ii-V-I becomes ii-bII7-I
+            const iiVI = ['Dm7', 'G7', 'Cmaj7'];
+            const result = applyTritoneSubstitutions(iiVI);
+            expect(result).toEqual(['Dm7', 'Db7', 'Cmaj7']);
         });
     });
 });

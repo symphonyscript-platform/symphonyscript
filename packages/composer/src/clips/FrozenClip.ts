@@ -1,10 +1,11 @@
-import { ClipNode, FreezeOptions } from '../types';
+import { ClipNode, FreezeOptions, ClipOperation, OperationsSource } from '../types';
 
 /**
  * A frozen (pre-compiled) clip for efficient reuse.
  * Frozen clips can be played multiple times without re-expansion.
+ * Implements OperationsSource for use with loop() and play().
  */
-export class FrozenClip {
+export class FrozenClip implements OperationsSource {
     constructor(
         public readonly clipNode: ClipNode,
         public readonly options: FreezeOptions
@@ -29,5 +30,14 @@ export class FrozenClip {
      */
     get noteCount(): number {
         return this.clipNode.operations.filter(op => op.kind === 'note').length;
+    }
+
+    /**
+     * Returns the frozen operations array.
+     * Implements OperationsSource interface for use with loop() and play().
+     * @returns Array of operations (shallow copy for safety)
+     */
+    toOperations(): ClipOperation[] {
+        return [...this.clipNode.operations];
     }
 }

@@ -1,6 +1,6 @@
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { SynapticClip } from '../clips/SynapticClip';
-import { ClipNode, AutomationTarget, ScopeIsolation, TempoKeyframe } from '../types';
+import { ClipNode, AutomationTarget, ScopeIsolation, TempoKeyframe, ClipOperation } from '../types';
 
 /**
  * Base SynapticCursor
@@ -199,6 +199,10 @@ export abstract class SynapticCursor {
         return this.clip.isolate(options, builderFn);
     }
 
+    /**
+     * Escape: Enable polyphonic stacking mode.
+     * Note: For stack(builderFn) parallel execution, use the clip method directly.
+     */
     stack(): SynapticClip {
         this._commit();
         return this.clip.stack();
@@ -231,5 +235,14 @@ export abstract class SynapticCursor {
     build(): ClipNode {
         this._commit();
         return this.clip.build();
+    }
+
+    /**
+     * Escape: Commit pending note and return operations array.
+     * Enables fluent chaining: melody.note('C4', 1).toOperations()
+     */
+    toOperations(): ClipOperation[] {
+        this._commit();
+        return this.clip.toOperations();
     }
 }
