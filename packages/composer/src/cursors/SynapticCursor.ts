@@ -1,12 +1,12 @@
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { SynapticClip } from '../clips/SynapticClip';
-import { ClipNode } from '../types';
+import { ClipNode, AutomationTarget, ScopeIsolation, TempoKeyframe } from '../types';
 
 /**
- * Base ComposerCursor
+ * Base SynapticCursor
  * RFC-049 Phase 1
  */
-export abstract class ComposerCursor {
+export abstract class SynapticCursor {
     // State
     public hasPending: boolean = false;
     public baseTick: number = 0;
@@ -113,6 +113,15 @@ export abstract class ComposerCursor {
         return this.clip.tempo(bpm);
     }
 
+    /**
+     * Escape: Define a multi-keyframe tempo envelope and return to clip.
+     * @param keyframes - Array of tempo keyframes (minimum 2 required)
+     */
+    tempoEnvelope(keyframes: TempoKeyframe[]): SynapticClip {
+        this._commit();
+        return this.clip.tempoEnvelope(keyframes);
+    }
+
     timeSignature(num: number, den: number): SynapticClip {
         this._commit();
         return this.clip.timeSignature(num, den);
@@ -136,6 +145,58 @@ export abstract class ComposerCursor {
     control(controller: number, value: number): SynapticClip {
         this._commit();
         return this.clip.control(controller, value);
+    }
+
+    /**
+     * Escape: Send MIDI Aftertouch and return to clip.
+     * @param value - Pressure value (0-1, normalized)
+     * @param options - Optional type ('channel' or 'poly') and note for poly aftertouch
+     */
+    aftertouch(value: number, options?: { type?: 'channel' | 'poly'; note?: string | number }): SynapticClip {
+        this._commit();
+        return this.clip.aftertouch(value, options);
+    }
+
+    /**
+     * Escape: Send parameter automation and return to clip.
+     * @param target - Automation target parameter
+     * @param value - Target value
+     * @param rampBeats - Duration to ramp (instant if undefined)
+     * @param curve - Ramp curve type
+     */
+    automate(target: AutomationTarget, value: number, rampBeats?: number, curve?: 'linear' | 'exponential' | 'smooth'): SynapticClip {
+        this._commit();
+        return this.clip.automate(target, value, rampBeats, curve);
+    }
+
+    /**
+     * Escape: Set volume and return to clip.
+     * @param value - Volume level (0-1)
+     * @param rampBeats - Duration to ramp (instant if undefined)
+     */
+    volume(value: number, rampBeats?: number): SynapticClip {
+        this._commit();
+        return this.clip.volume(value, rampBeats);
+    }
+
+    /**
+     * Escape: Set pan and return to clip.
+     * @param value - Pan position (-1 = left, 0 = center, 1 = right)
+     * @param rampBeats - Duration to ramp (instant if undefined)
+     */
+    pan(value: number, rampBeats?: number): SynapticClip {
+        this._commit();
+        return this.clip.pan(value, rampBeats);
+    }
+
+    /**
+     * Escape: Execute isolated scope and return to clip.
+     * @param options - Which state to isolate
+     * @param builderFn - Builder function to execute in isolated scope
+     */
+    isolate(options: ScopeIsolation, builderFn: (b: SynapticClip) => SynapticClip | void): SynapticClip {
+        this._commit();
+        return this.clip.isolate(options, builderFn);
     }
 
     stack(): SynapticClip {

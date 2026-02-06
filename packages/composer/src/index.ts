@@ -6,7 +6,7 @@ export { Session } from './Session';
 export type { SessionOptions } from './Session';
 
 // Cursors
-export { ComposerCursor } from './cursors/ComposerCursor';
+export { SynapticCursor } from './cursors/SynapticCursor';
 export { SynapticNoteCursor } from './cursors/SynapticNoteCursor';
 export { SynapticMelodyBaseCursor } from './cursors/SynapticMelodyBaseCursor';
 export { SynapticMelodyNoteCursor } from './cursors/SynapticMelodyNoteCursor';
@@ -33,5 +33,8 @@ export { applyKeySignature, hasExplicitAccidental } from './utils/key';
 export { romanToChord, toTheoryKeyContext } from './utils/romanAdapter';
 
 // Types
-export type { ClipNode, ClipBuilder, TrackNode, SessionNode, NoteOperation, LoopOp, ClipOp, CCOperation, PitchBendOperation, ScaleMode, ScaleContext, DegreeOptions, KeyContext, Accidental, EuclideanMelodyOptions, EuclideanDrumOptions, ArpPattern, ArpeggioOptions, HumanizeSettings, QuantizeSettings } from './types';
+export type { ClipNode, ClipBuilder, TrackNode, SessionNode, NoteOperation, LoopOp, ClipOp, CCOperation, PitchBendOperation, AftertouchOperation, AutomationTarget, AutomationOperation, ScaleMode, ScaleContext, DegreeOptions, KeyContext, Accidental, EuclideanMelodyOptions, EuclideanDrumOptions, ArpPattern, ArpeggioOptions, HumanizeSettings, QuantizeSettings, FreezeOptions, ScopeIsolation, ScopeOp, DrumMap, TempoCurve, TempoKeyframe, TempoEnvelopeOp } from './types';
 export { SCHEMA_VERSION } from './types';
+
+// FrozenClip
+export { FrozenClip } from './clips/FrozenClip';

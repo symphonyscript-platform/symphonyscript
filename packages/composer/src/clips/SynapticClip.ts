@@ -1,12 +1,14 @@
 import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
 import { SynapticNode } from '@symphonyscript/synaptic';
-import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsOp, VelocityPoint, HumanizeSettings, QuantizeSettings, CCOperation } from '../types';
+import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsOp, VelocityPoint, HumanizeSettings, QuantizeSettings, CCOperation, AftertouchOperation, AutomationOperation, AutomationTarget, FreezeOptions, ScopeIsolation, ScopeOp, TempoKeyframe, TempoEnvelopeOp } from '../types';
+import { parsePitch } from '../utils/pitch';
+import { FrozenClip } from './FrozenClip';
 
 export abstract class SynapticClip extends SynapticNode {
     // Build output tracking
     protected clipName: string = '';
-    protected operations: (NoteOperation | CCOperation)[] = [];
+    protected operations: (NoteOperation | CCOperation | AftertouchOperation | AutomationOperation | ScopeOp | TempoEnvelopeOp)[] = [];
 
     // Scale context for degree() resolution
     protected scaleContext: ScaleContext | null = null;
@@ -49,6 +51,9 @@ export abstract class SynapticClip extends SynapticNode {
     // Quantize settings (Task 032)
     protected _quantizeSettings: QuantizeSettings | null = null;
 
+    // MPE voice expression ID (Task 036)
+    protected _expressionId: number | null = null;
+
     constructor(bridge: SiliconBridge, seed: number = 0) {
         super(bridge);
         this.ccAutomation = new Map();
@@ -68,6 +73,32 @@ export abstract class SynapticClip extends SynapticNode {
 
     tempo(bpm: number): this {
         this.currentTempo = bpm;
+        return this;
+    }
+
+    /**
+     * Define a multi-keyframe tempo envelope.
+     * Allows gradual tempo transitions over time with different curve types.
+     * @param keyframes - Array of tempo keyframes (minimum 2 required)
+     * @returns this for chaining
+     * @throws Error if fewer than 2 keyframes provided
+     */
+    tempoEnvelope(keyframes: TempoKeyframe[]): this {
+        if (keyframes.length < 2) {
+            throw new Error('tempoEnvelope() requires at least 2 keyframes');
+        }
+
+        const op: TempoEnvelopeOp = {
+            kind: 'tempoEnvelope',
+            keyframes: keyframes.map(kf => ({ ...kf })), // Shallow copy
+            tick: this.getCurrentTick()
+        };
+
+        this.operations.push(op);
+
+        // Update current tempo to the final keyframe's BPM
+        this.currentTempo = keyframes[keyframes.length - 1].bpm;
+
         return this;
     }
 
@@ -116,6 +147,100 @@ export abstract class SynapticClip extends SynapticNode {
         // Also maintain current state in map (for potential real-time use)
         this.ccAutomation.set(controller, value);
         return this;
+    }
+
+    /**
+     * Send a MIDI Aftertouch (pressure) message at the current tick.
+     * @param value - Pressure value (0-1, normalized)
+     * @param options - Optional type ('channel' or 'poly') and note for poly aftertouch
+     * @throws Error if value is out of range or poly aftertouch missing note
+     */
+    aftertouch(value: number, options?: { type?: 'channel' | 'poly'; note?: string | number }): this {
+        // Validate value range
+        if (value < 0 || value > 1) {
+            throw new Error(`Aftertouch value must be 0-1, got ${value}`);
+        }
+
+        const type = options?.type ?? 'channel';
+
+        // Poly aftertouch requires a note
+        if (type === 'poly' && options?.note === undefined) {
+            throw new Error('Poly aftertouch requires a note parameter');
+        }
+
+        // Parse note if string
+        let midiNote: number | undefined;
+        if (options?.note !== undefined) {
+            midiNote = typeof options.note === 'string' ? parsePitch(options.note) : options.note;
+        }
+
+        // Scale value to 0-127
+        const scaledValue = Math.round(value * 127);
+
+        // Queue aftertouch operation
+        const atOp: AftertouchOperation = {
+            kind: 'aftertouch',
+            type,
+            value: scaledValue,
+            note: midiNote,
+            tick: this.getCurrentTick()
+        };
+        this.operations.push(atOp);
+
+        return this;
+    }
+
+    /**
+     * Send a parameter automation message at the current tick.
+     * @param target - Automation target parameter
+     * @param value - Target value (volume: 0-1, pan: -1 to 1, others: 0-1)
+     * @param rampBeats - Duration to ramp to value (instant if undefined)
+     * @param curve - Ramp curve type (default: 'linear')
+     * @throws Error if value is out of range for the target
+     */
+    automate(target: AutomationTarget, value: number, rampBeats?: number, curve?: 'linear' | 'exponential' | 'smooth'): this {
+        // Validate value range based on target
+        if (target === 'pan') {
+            if (value < -1 || value > 1) {
+                throw new Error(`Pan value must be -1 to 1, got ${value}`);
+            }
+        } else {
+            // All other targets use 0-1 range
+            if (value < 0 || value > 1) {
+                throw new Error(`${target} value must be 0-1, got ${value}`);
+            }
+        }
+
+        // Queue automation operation
+        const autoOp: AutomationOperation = {
+            kind: 'automation',
+            target,
+            value,
+            rampBeats,
+            curve,
+            tick: this.getCurrentTick()
+        };
+        this.operations.push(autoOp);
+
+        return this;
+    }
+
+    /**
+     * Shorthand for volume automation.
+     * @param value - Volume level (0-1)
+     * @param rampBeats - Duration to ramp (instant if undefined)
+     */
+    volume(value: number, rampBeats?: number): this {
+        return this.automate('volume', value, rampBeats);
+    }
+
+    /**
+     * Shorthand for pan automation.
+     * @param value - Pan position (-1 = left, 0 = center, 1 = right)
+     * @param rampBeats - Duration to ramp (instant if undefined)
+     */
+    pan(value: number, rampBeats?: number): this {
+        return this.automate('pan', value, rampBeats);
     }
 
     stack(): this {
@@ -551,6 +676,92 @@ export abstract class SynapticClip extends SynapticNode {
         };
     }
 
+    /**
+     * Freeze the clip for efficient reuse.
+     * Frozen clips can be played multiple times without re-expansion.
+     * Creates a snapshot of current operations (not affected by future changes).
+     * @param options - Freeze options (bpm, timeSignature)
+     * @returns FrozenClip instance
+     */
+    freeze(options?: FreezeOptions): FrozenClip {
+        // Create a deep copy of operations to snapshot current state
+        const snapshotOps = this.operations.map(op => ({ ...op }));
+        const clipNode: ClipNode = {
+            _version: SCHEMA_VERSION,
+            kind: 'clip',
+            name: this.clipName,
+            operations: snapshotOps,
+            tempo: this.currentTempo,
+            timeSignature: [this.timeSignatureNumerator, this.timeSignatureDenominator],
+            swing: this.swingAmount,
+            groove: this.currentGroove
+        };
+        const freezeOpts: FreezeOptions = {
+            bpm: options?.bpm ?? this.currentTempo,
+            timeSignature: options?.timeSignature ?? [this.timeSignatureNumerator, this.timeSignatureDenominator]
+        };
+        return new FrozenClip(clipNode, freezeOpts);
+    }
+
+    /**
+     * Execute a builder function with isolated state.
+     * Changes to tempo, dynamics, or time signature inside the scope
+     * do not affect the parent clip state.
+     * @param options - Which state to isolate
+     * @param builderFn - Builder function to execute in isolated scope
+     * @returns this for chaining
+     */
+    isolate(options: ScopeIsolation, builderFn: (b: this) => this | void): this {
+        // Save current state
+        const savedTempo = this.currentTempo;
+        const savedDynamics = this.dynamicsPoints ? [...this.dynamicsPoints] : null;
+        const savedTimeSignatureNum = this.timeSignatureNumerator;
+        const savedTimeSignatureDen = this.timeSignatureDenominator;
+
+        // Track operations added during scope
+        const startOpCount = this.operations.length;
+
+        // Execute builder function
+        const result = builderFn(this as this);
+
+        // If result is a cursor-like object with commit, commit it
+        if (result && result !== this && 'commit' in result) {
+            (result as any).commit();
+        }
+
+        // Collect operations added during scope
+        const scopeOps = this.operations.slice(startOpCount);
+
+        // Remove scope operations from main array
+        this.operations.length = startOpCount;
+
+        // Create scope operation if there are any operations
+        if (scopeOps.length > 0) {
+            const scopeOp: ScopeOp = {
+                kind: 'scope',
+                isolate: options,
+                operations: scopeOps.filter(op =>
+                    op.kind === 'note' || op.kind === 'cc' || op.kind === 'aftertouch' || op.kind === 'automation'
+                ) as (NoteOperation | CCOperation | AftertouchOperation | AutomationOperation)[]
+            };
+            this.operations.push(scopeOp);
+        }
+
+        // Restore isolated state
+        if (options.tempo) {
+            this.currentTempo = savedTempo;
+        }
+        if (options.dynamics && savedDynamics) {
+            this.dynamicsPoints = savedDynamics;
+        }
+        if (options.timeSignature) {
+            this.timeSignatureNumerator = savedTimeSignatureNum;
+            this.timeSignatureDenominator = savedTimeSignatureDen;
+        }
+
+        return this;
+    }
+
     // =========================================================================
     // RFC-050: Clip-Mediated Flush Architecture
     // =========================================================================
@@ -622,6 +833,9 @@ export abstract class SynapticClip extends SynapticNode {
         );
 
         // 8. Track operation for build() output
+        // Include expressionId from parameter (if non-zero) or clip-level setting
+        // expressionId=0 from cursor means "use clip default"
+        const finalExpressionId = (expressionId && expressionId !== 0) ? expressionId : (this._expressionId ?? undefined);
         this.operations.push({
             kind: 'note',
             pitch: finalPitch,
@@ -629,7 +843,8 @@ export abstract class SynapticClip extends SynapticNode {
             duration: quantizedDuration,
             tick: humanizedTick,
             muted,
-            sourceId
+            sourceId,
+            expressionId: finalExpressionId
         });
 
         // 7. Update Topology (Generic SynapticNode support)
@@ -718,5 +933,99 @@ export abstract class SynapticClip extends SynapticNode {
         //     );
         // }
         // this.ccAutomation.clear();
+    }
+
+    /**
+     * Print ASCII visualization of the clip to console.
+     * @param bpm - Tempo for display (default: 120)
+     * @returns this for chaining
+     */
+    preview(bpm: number = 120): this {
+        const clip = this.build();
+        const noteOps = clip.operations.filter(op => op.kind === 'note') as NoteOperation[];
+
+        if (noteOps.length === 0) {
+            console.log(`Clip: ${clip.name} (${bpm} BPM)`);
+            console.log('(empty)');
+            return this;
+        }
+
+        // Find time range
+        const maxTick = noteOps.reduce((max, op) => Math.max(max, op.tick + op.duration), 0);
+        const totalBars = Math.ceil(maxTick / 4); // 4 beats per bar
+        const barsToShow = Math.max(totalBars, 1);
+
+        // Grid resolution: 16th notes (4 per beat, 16 per bar)
+        const stepsPerBar = 16;
+        const totalSteps = barsToShow * stepsPerBar;
+        const stepDuration = 0.25; // 1/16th note in beats
+
+        // Collect unique pitches, sorted high to low
+        const pitches = [...new Set(noteOps.map(op => op.pitch))].sort((a, b) => b - a);
+
+        // Build grid for each pitch
+        const grid: Map<number, string[]> = new Map();
+        for (const pitch of pitches) {
+            grid.set(pitch, new Array(totalSteps).fill('.'));
+        }
+
+        // Fill in notes
+        for (const op of noteOps) {
+            const pitchGrid = grid.get(op.pitch);
+            if (!pitchGrid) continue;
+
+            const startStep = Math.floor(op.tick / stepDuration);
+            const durationSteps = Math.ceil(op.duration / stepDuration);
+
+            // Mark onset
+            if (startStep >= 0 && startStep < totalSteps) {
+                pitchGrid[startStep] = 'X';
+            }
+
+            // Mark sustain (optional, use '-' for sustained notes)
+            for (let i = 1; i < durationSteps && startStep + i < totalSteps; i++) {
+                if (pitchGrid[startStep + i] === '.') {
+                    pitchGrid[startStep + i] = '-';
+                }
+            }
+        }
+
+        // Render output
+        console.log(`Clip: ${clip.name} (${bpm} BPM)`);
+
+        // Beat header
+        let beatHeader = 'Beat: ';
+        for (let bar = 0; bar < barsToShow; bar++) {
+            beatHeader += '|1---2---3---4---|';
+        }
+        console.log(beatHeader);
+
+        // Pitch rows
+        for (const pitch of pitches) {
+            const pitchGrid = grid.get(pitch)!;
+            const pitchName = this.midiToPitchName(pitch);
+            const paddedName = pitchName.padEnd(5);
+
+            let row = `${paddedName} `;
+            for (let bar = 0; bar < barsToShow; bar++) {
+                const barStart = bar * stepsPerBar;
+                const barSlice = pitchGrid.slice(barStart, barStart + stepsPerBar).join('');
+                row += `|${barSlice}|`;
+            }
+            console.log(row);
+        }
+
+        return this;
+    }
+
+    /**
+     * Convert MIDI note number to pitch name.
+     * @internal
+     */
+    private midiToPitchName(midi: number): string {
+        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const octave = Math.floor(midi / 12) - 1;
+        const note = noteNames[midi % 12];
+        return `${note}${octave}`;
     }
 }

@@ -1,4 +1,4 @@
-import { ComposerCursor } from '../cursors/ComposerCursor';
+import { SynapticCursor } from '../cursors/SynapticCursor';
 import { SynapticClip } from '../clips/SynapticClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 
@@ -20,7 +20,7 @@ class MockClip extends SynapticClip {
     setLoopRegion = jest.fn().mockImplementation(() => this);
 }
 
-class TestCursor extends ComposerCursor {
+class TestCursor extends SynapticCursor {
     commitCalls = 0;
     commit() {
         this.commitCalls++;
@@ -28,7 +28,7 @@ class TestCursor extends ComposerCursor {
     }
 }
 
-describe('ComposerCursor (Phase 1)', () => {
+describe('SynapticCursor (Phase 1)', () => {
     let clip: MockClip;
     let cursor: TestCursor;
 

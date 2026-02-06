@@ -1,22 +1,70 @@
 import { SynapticClip } from './SynapticClip';
 import { SynapticDrumHitCursor } from '../cursors/SynapticDrumHitCursor';
 import { SiliconBridge } from '@symphonyscript/kernel';
-import { EuclideanDrumOptions } from '../types';
+import { EuclideanDrumOptions, DrumMap } from '../types';
 import { euclidean, rotatePattern } from '@symphonyscript/theory';
+import { parsePitch } from '../utils/pitch';
+
+/**
+ * Default drum mapping (GM Standard).
+ * Maps drum names to MIDI note numbers.
+ */
+const DEFAULT_DRUM_MAP: DrumMap = {
+    'kick': 36,      // C1
+    'snare': 38,     // D1
+    'hat': 42,       // F#1 (closed hi-hat)
+    'openhat': 46,   // A#1
+    'crash': 49,     // C#2
+    'ride': 51,      // D#2
+    'tom1': 48,      // C2
+    'tom2': 45,      // A1
+    'tom3': 43,      // G1
+    'clap': 39,      // D#1
+    'rim': 37,       // C#1
+};
 
 /**
  * SynapticDrums
  * RFC-049 Section 5.1
- * Builder for drum sequences.
+ * Builder for drum sequences with custom mapping support.
  */
 export class SynapticDrums extends SynapticClip {
     private cursor: SynapticDrumHitCursor;
     private currentTick: number = 0;
     private sourceIdCounter: number = 0;
+    protected _drumMap: DrumMap = { ...DEFAULT_DRUM_MAP };
 
     constructor(bridge: SiliconBridge) {
         super(bridge);
         this.cursor = new SynapticDrumHitCursor(this, bridge);
+    }
+
+    /**
+     * Create a new drum builder with custom mapping.
+     * Merges provided mapping with existing map (overrides existing, adds new).
+     * @param mapping - Custom drum name to pitch mapping
+     * @returns this for chaining
+     */
+    withMapping(mapping: DrumMap): this {
+        this._drumMap = { ...this._drumMap, ...mapping };
+        return this;
+    }
+
+    /**
+     * Resolve a drum name to MIDI pitch.
+     * @param name - Drum name or pitch value
+     * @returns MIDI note number
+     */
+    resolveDrumPitch(name: string | number): number {
+        if (typeof name === 'number') {
+            return name;
+        }
+        const mapped = this._drumMap[name.toLowerCase()];
+        if (mapped !== undefined) {
+            return typeof mapped === 'number' ? mapped : parsePitch(mapped);
+        }
+        // Fallback: try to parse as pitch (e.g., 'C2')
+        return parsePitch(name);
     }
 
     //========================
@@ -39,40 +87,46 @@ export class SynapticDrums extends SynapticClip {
     // Drum API Entry Points
     // ========================
 
+    /**
+     * Generic drum hit by name or pitch.
+     * @param pitch - Drum name (from map) or MIDI pitch number
+     * @param duration - Optional duration override
+     */
+    hit(pitch: string | number, duration?: number): SynapticDrumHitCursor {
+        const resolvedPitch = this.resolveDrumPitch(pitch);
+        return this.cursor.hit(resolvedPitch, duration);
+    }
+
     kick(duration?: number): SynapticDrumHitCursor {
-        return this.cursor.kick(duration);
+        return this.hit('kick', duration);
     }
 
     snare(duration?: number): SynapticDrumHitCursor {
-        return this.cursor.snare(duration);
+        return this.hit('snare', duration);
     }
 
     hat(duration?: number): SynapticDrumHitCursor {
-        return this.cursor.hat(duration);
+        return this.hit('hat', duration);
     }
 
     clap(duration?: number): SynapticDrumHitCursor {
-        return this.cursor.clap(duration);
-    }
-
-    hit(pitch: number, duration?: number): SynapticDrumHitCursor {
-        return this.cursor.hit(pitch, duration);
+        return this.hit('clap', duration);
     }
 
     openHat(duration?: number): SynapticDrumHitCursor {
-        return this.cursor.openHat(duration);
+        return this.hit('openhat', duration);
     }
 
     crash(duration?: number): SynapticDrumHitCursor {
-        return this.cursor.crash(duration);
+        return this.hit('crash', duration);
     }
 
     ride(duration?: number): SynapticDrumHitCursor {
-        return this.cursor.ride(duration);
+        return this.hit('ride', duration);
     }
 
     tom(which: 1 | 2 | 3 = 1, duration?: number): SynapticDrumHitCursor {
-        return this.cursor.tom(which, duration);
+        return this.hit(`tom${which}`, duration);
     }
 
     /**
@@ -122,13 +176,8 @@ export class SynapticDrums extends SynapticClip {
      * @internal
      */
     private getDrumMethod(drum: 'kick' | 'snare' | 'hat' | 'clap' | 'tom'): (duration?: number) => SynapticDrumHitCursor {
-        switch (drum) {
-            case 'kick': return this.kick;
-            case 'snare': return this.snare;
-            case 'hat': return this.hat;
-            case 'clap': return this.clap;
-            case 'tom': return (d?: number) => this.tom(1, d);
-        }
+        // Use hit() with drum name to leverage custom mapping
+        return (d?: number) => this.hit(drum === 'tom' ? 'tom1' : drum, d);
     }
 
     // Note: All escape methods (tempo, swing, etc.) are inherited from SynapticClip.

@@ -73,7 +73,9 @@ export const Clip = {
      */
     melody(name: string): SynapticMelody {
         const bridge = getOrCreateBridge()
-        return new SynapticMelody(bridge)
+        const clip = new SynapticMelody(bridge)
+        clip.name(name)
+        return clip
     },
 
     /**
@@ -83,7 +85,9 @@ export const Clip = {
      */
     drums(name: string): SynapticDrums {
         const bridge = getOrCreateBridge()
-        return new SynapticDrums(bridge)
+        const clip = new SynapticDrums(bridge)
+        clip.name(name)
+        return clip
     },
 
     /**
@@ -93,7 +97,9 @@ export const Clip = {
      */
     keyboard(name: string): KeyboardBuilder {
         const bridge = getOrCreateBridge()
-        return new KeyboardBuilder(bridge)
+        const clip = new KeyboardBuilder(bridge)
+        clip.name(name)
+        return clip
     },
 
     /**
@@ -103,7 +109,9 @@ export const Clip = {
      */
     wind(name: string): WindBuilder {
         const bridge = getOrCreateBridge()
-        return new WindBuilder(bridge)
+        const clip = new WindBuilder(bridge)
+        clip.name(name)
+        return clip
     },
 
     /**
@@ -113,7 +121,9 @@ export const Clip = {
      */
     string(name: string): StringBuilder {
         const bridge = getOrCreateBridge()
-        return new StringBuilder(bridge)
+        const clip = new StringBuilder(bridge)
+        clip.name(name)
+        return clip
     },
 
     /**

@@ -1,12 +1,27 @@
 import { SynapticClip } from './SynapticClip';
 import { SynapticMelodyNoteCursor } from '../cursors/SynapticMelodyNoteCursor';
 import { SynapticChordCursor } from '../cursors/SynapticChordCursor';
+import { FrozenClip } from './FrozenClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
-import { ClipNode, EuclideanMelodyOptions, ArpeggioOptions } from '../types';
+import { ClipNode, EuclideanMelodyOptions, ArpeggioOptions, ScaleMode } from '../types';
 import { romanToChord } from '../utils/romanAdapter';
 import { euclidean, rotatePattern } from '@symphonyscript/theory';
 import { parsePitch } from '../utils/pitch';
+
+/**
+ * Scale intervals for degree-to-pitch conversion.
+ * Duplicated from SynapticMelodyNoteCursor to avoid circular dependency.
+ */
+const SCALE_INTERVALS: Record<ScaleMode, number[]> = {
+    major:      [0, 2, 4, 5, 7, 9, 11],
+    minor:      [0, 2, 3, 5, 7, 8, 10],
+    dorian:     [0, 2, 3, 5, 7, 9, 10],
+    phrygian:   [0, 1, 3, 5, 7, 8, 10],
+    lydian:     [0, 2, 4, 6, 7, 9, 11],
+    mixolydian: [0, 2, 4, 5, 7, 9, 10],
+    locrian:    [0, 1, 3, 5, 6, 8, 10]
+};
 
 /**
  * SynapticMelody
@@ -55,6 +70,56 @@ export class SynapticMelody extends SynapticClip {
 
     chord(symbol: string): SynapticChordCursor {
         return this.noteCursor.chord(symbol);
+    }
+
+    /**
+     * Create a chord from scale degrees.
+     * Requires scale() to be called first.
+     * @param degrees - Array of scale degrees (1-7 for first octave, 8+ wraps to higher octaves)
+     * @param duration - Optional chord duration
+     * @returns SynapticChordCursor for further configuration
+     * @throws Error if scale context is not set
+     */
+    degreeChord(degrees: number[], duration?: number): SynapticChordCursor {
+        const ctx = this.getScaleContext();
+        if (!ctx) {
+            throw new Error('degreeChord() requires scale() to be called first');
+        }
+
+        if (degrees.length === 0) {
+            throw new Error('degreeChord() requires at least one degree');
+        }
+
+        const intervals = SCALE_INTERVALS[ctx.mode];
+        const rootPitch = parsePitch(ctx.root + ctx.octave);
+
+        // Convert degrees to pitches
+        const pitches: number[] = [];
+        for (const deg of degrees) {
+            const octaveShift = Math.floor((deg - 1) / 7);
+            const scaleDegree = ((deg - 1) % 7 + 7) % 7; // Handle negative degrees
+            const pitch = rootPitch + intervals[scaleDegree] + octaveShift * 12;
+            pitches.push(pitch);
+        }
+
+        // Find the lowest pitch as the chord root
+        const chordRoot = Math.min(...pitches);
+
+        // Calculate intervals relative to the root
+        let mask = 0;
+        for (const pitch of pitches) {
+            const interval = pitch - chordRoot;
+            mask |= (1 << interval);
+        }
+
+        // Configure the chord cursor (harmony() calls bind() internally)
+        const cursor = this.chordCursor.harmony(mask, chordRoot);
+
+        if (duration !== undefined) {
+            cursor.duration(duration);
+        }
+
+        return cursor;
     }
 
     /**
@@ -127,10 +192,16 @@ export class SynapticMelody extends SynapticClip {
 
     /**
      * Insert operations from another clip at current tick position.
-     * @param clip - Source clip (SynapticMelody or ClipNode)
+     * @param clip - Source clip (SynapticMelody, ClipNode, or FrozenClip)
      */
-    play(clip: SynapticMelody | ClipNode): this {
-        const source = 'build' in clip ? clip.build() : clip;
+    play(clip: SynapticMelody | ClipNode | FrozenClip): this {
+        // Handle FrozenClip
+        let source: ClipNode;
+        if (clip instanceof FrozenClip) {
+            source = clip.clipNode;
+        } else {
+            source = 'build' in clip ? clip.build() : clip;
+        }
 
         // Replay each operation at current tick offset
         const tickOffset = this.getCurrentTick();
@@ -331,6 +402,59 @@ export class SynapticMelody extends SynapticClip {
             default:
                 return sorted;
         }
+    }
+
+    /**
+     * Execute a builder function within an MPE voice scope.
+     * All notes created inside the builder will be tagged with the expressionId.
+     * @param id - Voice ID (1-15, MPE channel range)
+     * @param builderFn - Builder function that creates notes for this voice
+     * @returns this for chaining
+     * @throws Error if id is out of range (1-15)
+     */
+    voice(id: number, builderFn: (v: SynapticMelody) => SynapticMelody | SynapticMelodyNoteCursor | void): this {
+        // Validate MPE channel range
+        if (id < 1 || id > 15) {
+            throw new Error(`Voice ID must be 1-15 (MPE range), got ${id}`);
+        }
+
+        // Store current expression ID
+        const previousExpressionId = this._expressionId;
+
+        // Set expression ID for this voice scope
+        this._expressionId = id;
+
+        // Execute the builder function
+        const result = builderFn(this);
+
+        // If result is a cursor, commit it
+        if (result && result !== this && 'commit' in result) {
+            result.commit();
+        }
+
+        // Restore previous expression ID
+        this._expressionId = previousExpressionId;
+
+        return this;
+    }
+
+    /**
+     * Get the current expression ID (for voice scoping).
+     */
+    getExpressionId(): number | null {
+        return this._expressionId;
+    }
+
+    /**
+     * Set the expression ID directly (for advanced use cases).
+     * @param id - Expression ID (1-15) or null to clear
+     */
+    setExpressionId(id: number | null): this {
+        if (id !== null && (id < 1 || id > 15)) {
+            throw new Error(`Expression ID must be 1-15, got ${id}`);
+        }
+        this._expressionId = id;
+        return this;
     }
 
     // Note: All escape methods (tempo, swing, transpose, etc.) are inherited from SynapticClip.

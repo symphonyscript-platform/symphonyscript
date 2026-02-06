@@ -4,7 +4,7 @@ export interface ClipNode {
     readonly _version: number;
     kind: 'clip';
     name: string;
-    operations: (NoteOperation | LoopOp | ClipOp | CCOperation | PitchBendOperation)[];
+    operations: (NoteOperation | LoopOp | ClipOp | CCOperation | PitchBendOperation | AftertouchOperation | AutomationOperation | ScopeOp | TempoEnvelopeOp)[];
     tempo?: number;
     timeSignature?: [number, number];
     swing?: number;
@@ -20,6 +20,7 @@ export interface NoteOperation {
     muted: boolean;
     sourceId: number;
     legato?: boolean;
+    expressionId?: number;  // MPE voice channel (1-15)
 }
 
 export interface LoopOp {
@@ -52,6 +53,35 @@ export interface CCOperation {
 export interface PitchBendOperation {
     kind: 'pitchBend';
     value: number;  // -8192 to +8191 (center = 0)
+    tick: number;
+}
+
+/**
+ * Aftertouch operation for MIDI pressure messages.
+ * Channel aftertouch affects all notes, poly aftertouch affects specific notes.
+ */
+export interface AftertouchOperation {
+    kind: 'aftertouch';
+    type: 'channel' | 'poly';
+    value: number;       // 0-127 (scaled from 0-1 input)
+    note?: number;       // MIDI note for poly aftertouch
+    tick: number;
+}
+
+/**
+ * Automation target parameters.
+ */
+export type AutomationTarget = 'volume' | 'pan' | 'filter' | 'resonance' | 'attack' | 'release';
+
+/**
+ * Automation operation for parameter changes over time.
+ */
+export interface AutomationOperation {
+    kind: 'automation';
+    target: AutomationTarget;
+    value: number;           // Normalized (volume: 0-1, pan: -1 to 1)
+    rampBeats?: number;      // Duration to ramp (instant if undefined)
+    curve?: 'linear' | 'exponential' | 'smooth';
     tick: number;
 }
 
@@ -270,4 +300,84 @@ export interface QuantizeSettings {
     strength?: number;
     /** Also quantize note duration (default: false) */
     duration?: boolean;
+}
+
+// ============================================================================
+// Freeze Types (Task 038)
+// ============================================================================
+
+/**
+ * Options for freezing a clip for reuse.
+ */
+export interface FreezeOptions {
+    /** Tempo for the frozen clip */
+    bpm?: number;
+    /** Time signature for the frozen clip */
+    timeSignature?: [number, number];
+}
+
+// ============================================================================
+// Drum Mapping Types (Task 040)
+// ============================================================================
+
+/**
+ * Custom drum mapping type.
+ * Maps drum names to pitch values (note names or MIDI numbers).
+ */
+export type DrumMap = Record<string, string | number>;
+
+// ============================================================================
+// Scope Isolation Types (Task 039)
+// ============================================================================
+
+/**
+ * Options for scope isolation.
+ * Specifies which state changes should be isolated to the scope.
+ */
+export interface ScopeIsolation {
+    /** Isolate tempo changes */
+    tempo?: boolean;
+    /** Isolate dynamics changes */
+    dynamics?: boolean;
+    /** Isolate time signature changes */
+    timeSignature?: boolean;
+}
+
+/**
+ * Scope operation that wraps isolated operations.
+ */
+export interface ScopeOp {
+    kind: 'scope';
+    isolate: ScopeIsolation;
+    operations: (NoteOperation | CCOperation | AftertouchOperation | AutomationOperation)[];
+}
+
+// ============================================================================
+// Tempo Envelope Types (Task 042)
+// ============================================================================
+
+/**
+ * Curve type for tempo transitions.
+ */
+export type TempoCurve = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+
+/**
+ * A single keyframe in a tempo envelope.
+ */
+export interface TempoKeyframe {
+    /** Beat position for this keyframe */
+    beat: number;
+    /** Target BPM at this keyframe */
+    bpm: number;
+    /** Curve type for transition to this keyframe (default: 'linear') */
+    curve?: TempoCurve;
+}
+
+/**
+ * Tempo envelope operation for multi-keyframe tempo transitions.
+ */
+export interface TempoEnvelopeOp {
+    kind: 'tempoEnvelope';
+    keyframes: TempoKeyframe[];
+    tick: number;
 }
