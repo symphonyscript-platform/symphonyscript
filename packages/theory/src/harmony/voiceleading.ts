@@ -44,7 +44,7 @@ export interface VoiceMovement {
 
 /**
  * Calculate total voice movement distance between two chords.
- * KERNEL-SAFE: Pure arithmetic, no allocation.
+ * KERNEL-SAFE: Zero allocation, pure bitwise arithmetic.
  *
  * Lower values indicate smoother voice leading.
  * Uses greedy matching to pair voices.
@@ -54,40 +54,41 @@ export interface VoiceMovement {
  * @returns Total movement in 24-EDO steps
  */
 export function voiceMovementCost(fromMask: HarmonyMask, toMask: HarmonyMask): number {
-    // Count bits to get voice counts
-    const fromCount = countBits(fromMask);
-    const toCount = countBits(toMask);
+    if (fromMask === 0 || toMask === 0) return 0;
 
-    if (fromCount === 0 || toCount === 0) return 0;
-
-    // Extract intervals
-    const fromIntervals = unpackToArray(fromMask).map(Number);
-    const toIntervals = unpackToArray(toMask).map(Number);
-
-    // Calculate minimum movement for each from-voice
     let totalCost = 0;
-    const usedTo = new Set<number>();
+    let usedMask = 0;  // Track which toMask bits have been paired
+    let remaining = fromMask & 0xFFFFFF;
 
-    for (const fromInt of fromIntervals) {
-        let minDist = Infinity;
-        let bestTo = -1;
+    // Iterate over each set bit in fromMask
+    while (remaining !== 0) {
+        // Extract lowest set bit position
+        const lowestBit = remaining & -remaining;
+        const fromInt = Math.clz32(lowestBit) ^ 31;  // bit position (0-23)
+        remaining &= remaining - 1;  // Clear lowest bit
 
-        for (const toInt of toIntervals) {
-            if (usedTo.has(toInt)) continue;
+        // Find closest unmatched interval in toMask
+        let minDist = 25;  // Max possible is 12 (half octave)
+        let bestBit = 0;
+        let toRemaining = (toMask & ~usedMask) & 0xFFFFFF;
+
+        while (toRemaining !== 0) {
+            const toBit = toRemaining & -toRemaining;
+            const toInt = Math.clz32(toBit) ^ 31;
+            toRemaining &= toRemaining - 1;
 
             // Calculate distance considering octave equivalence
-            const directDist = Math.abs(toInt - fromInt);
-            const wrapDist = OCTAVE_SIZE - directDist;
-            const dist = Math.min(directDist, wrapDist);
+            const directDist = fromInt > toInt ? fromInt - toInt : toInt - fromInt;
+            const dist = directDist <= 12 ? directDist : OCTAVE_SIZE - directDist;
 
             if (dist < minDist) {
                 minDist = dist;
-                bestTo = toInt;
+                bestBit = toBit;
             }
         }
 
-        if (bestTo !== -1) {
-            usedTo.add(bestTo);
+        if (bestBit !== 0) {
+            usedMask |= bestBit;
             totalCost += minDist;
         }
     }
