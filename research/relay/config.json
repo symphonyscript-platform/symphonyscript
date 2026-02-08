@@ -1,0 +1,9 @@
+{
+    "activeTask": "051",
+    "context": "Focus on high performance and zero-allocation. NO new object creation in hot loops.",
+    "requirements": [
+        "Use existing SynapticClip helpers",
+        "Maintain strict typing",
+        "Follow the established patterns in similar files"
+    ]
+}
