@@ -5,7 +5,7 @@
 **Every agent runs this. No exceptions.**
 
 ```bash
-./research/workflow/scripts/watch-folder.sh research/<FEATURE>/communication "<PATTERN>"
+./research/workflows/watch-folder.sh research/<FEATURE>/communication "<PATTERN>"
 ```
 
 | Role     | Pattern                |
@@ -45,11 +45,11 @@ SEQ     = 4 digits (0001, 0002)
 
 ## ROLES
 
-| Role     | Prompt                                      | Purpose                    |
-|----------|---------------------------------------------|----------------------------|
-| Architect| `research/workflow/prompts/ARCHITECT.md`    | Design, Planning, Tasks    |
-| Reviewer | `research/workflow/prompts/REVIEWER.md`     | Hostile code review        |
-| Engineer | `research/workflow/prompts/ENGINEER.md`     | Execution-only implementer |
+| Role     | Prompt                                 | Purpose                    |
+|----------|----------------------------------------|----------------------------|
+| Architect| `research/workflows/ARCHITECT.md` | Design, Planning, Tasks    |
+| Reviewer | `research/workflows/REVIEWER.md` | Hostile code review        |
+| Engineer | `research/workflows/ENGINEER.md` | Execution-only implementer |
 
 ---
 
