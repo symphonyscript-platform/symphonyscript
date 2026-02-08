@@ -22,7 +22,8 @@
     "build:web": "mkdir -p dist && cp packages/web/teaser.html dist/index.html",
     "compile:kernel:web": "cd packages/kernel && wasm-pack build --target web",
     "build": "pnpm build:core && pnpm build:kernel && pnpm build:theory && pnpm build:synaptic && pnpm build:composer",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "clean:files": "find . -type d -name \"src\" -prune -o -name \"*.d.ts\" -delete && find . -type d -name \"src\" -prune -o -name \"*.d.ts.map\" -delete"
   },
   "private": true,
   "devDependencies": {
