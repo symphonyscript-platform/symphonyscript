@@ -4,7 +4,7 @@
     "module": "es2015",
     "moduleResolution": "bundler",
     "lib": [
-      "ES2022"
+      "esnext"
     ],
     "declaration": true,
     "declarationMap": true,
@@ -31,6 +31,7 @@
     "noImplicitReturns": true,
     "noUnusedLocals": false,
     "baseUrl": ".",
+    "outDir": "dist",
     "paths": {
       "@symphonyscript/composer": [
         "packages/composer/src/index.ts"

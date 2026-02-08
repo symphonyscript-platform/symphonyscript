@@ -23,13 +23,15 @@
     "compile:kernel:web": "cd packages/kernel && wasm-pack build --target web",
     "build": "pnpm build:core && pnpm build:kernel && pnpm build:theory && pnpm build:synaptic && pnpm build:composer",
     "test": "pnpm -r test",
-    "clean:files": "find . -type d -name \"src\" -prune -o -name \"*.d.ts\" -delete && find . -type d -name \"src\" -prune -o -name \"*.d.ts.map\" -delete"
+    "clean:files": "find . -type d -name \"src\" -prune -o -name \"*.d.ts\" -delete && find . -type d -name \"src\" -prune -o -name \"*.d.ts.map\" -delete",
+    "clean:dist": "find . -name \"dist\" -type d -prune -exec rm -rf '{}' +",
+    "clean:node_modules": "find . -name \"node_modules\" -type d -prune -exec rm -rf '{}' +"
   },
   "private": true,
   "devDependencies": {
     "@swc/jest": "^0.2.39",
     "@types/jest": "^30.0.0",
-    "@types/node": "^24.10.1",
+    "@types/node": "^24.10.4",
     "@vitejs/plugin-react": "^5.1.2",
     "jest": "^30.0.2",
     "jest-environment-node": "^30.2.0",
