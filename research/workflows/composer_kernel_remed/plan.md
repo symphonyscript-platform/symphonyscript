@@ -42,12 +42,37 @@ To safely support the Direct-to-Silicon architecture without data loss, the Kern
     -   `_humanizeSettings` -> `_humVel`, `_humTiming`.
 -   **Refactor `flushNote`**: Rewrite to calculate final values from primitive state and call `bridge.insertAsync` directly.
 
-### 3.2 Cursor Optimization
+### 3.2 Method Categories
+
+**One-Shot Methods (Direct Flush)**:
+Methods that immediately write to Kernel and return `this` (the Clip):
+
+| Method | Kernel Action |
+|--------|---------------|
+| `transpose(n)` | `Atomics.store(sab, REG.TRANSPOSE, n)` |
+| `tempo(bpm)` | `Atomics.store(sab, HDR.BPM, bpm)` |
+| `cc(num, val)` | `bridge.insertAsync(OPCODE.CC, ...)` |
+| `pitchBend(val)` | `bridge.insertAsync(OPCODE.BEND, ...)` |
+| `rest(dur)` | Advance internal tick (or emit REST node) |
+
+No cursor. No buffering. Fire immediately.
+
+**Cursor-Based Methods (Deferred Commit)**:
+Methods that branch to a singleton cursor, accumulate modifiers, then commit implicitly:
+
+```
+clip.note(60)       // → cursor (sets pitch=60)
+    .velocity(0.8)  // → cursor (sets _velocity=0.8)
+    .staccato()     // → cursor (sets _duration *= 0.5)
+    .note(62)       // → IMPLICIT COMMIT: flush to Kernel, reset, delegate
+```
+
+### 3.3 Cursor Optimization
 -   **Lifecycle**: `SynapticClip` initializes `_noteCursor` and `_chordCursor` in its constructor.
 -   **Re-entry**: `clip.note(pitch)` resets `_noteCursor` state (pitch, velocity, duration) and returns it.
 -   **Commit**: `cursor.commit()` calls `clip.flushNote(...)` and resets pending state.
 
-### 3.3 Cursor Architecture: Parallel Hierarchy
+### 3.4 Cursor Architecture: Parallel Hierarchy
 
 **Decision**: Use a **parallel class hierarchy** for cursors that mirrors the Clip hierarchy.
 
@@ -84,15 +109,41 @@ class MelodyNoteCursor extends BaseNoteCursor<MelodyClip> {
 
 ## 4. Implementation Tasks
 
-1.  **Task 060: Kernel Backpressure**
-    -   Increase Ring Buffer to 64k.
-    -   Implement Spin-Wait in `SiliconBridge`.
-2.  **Task 059: Enums**
-    -   Define numeric Enums for Dynamics, Curves, Modes in `types.ts`.
-3.  **Task 057: Flatten Clip State**
-    -   Replace object fields with primitives in `SynapticClip`.
-4.  **Task 058: Remove Operations**
-    -   Delete `operations` array and recording logic.
+> **Full task specifications:** [tasks/INDEX.md](./tasks/INDEX.md)
+
+### Phase 1: Foundation
+
+| Task | Priority | Description |
+|------|----------|-------------|
+| 060 | 🔴 CRITICAL | Kernel Backpressure (64k buffer + Spin-Wait) |
+| 059 | 🟠 HIGH | Define numeric Enums for Dynamics, Curves, Modes |
+| 069 | 🟠 HIGH | Mark Session/Track as design-time builders |
+
+### Phase 2: Core Remediation
+
+| Task | Priority | Description |
+|------|----------|-------------|
+| 057 | 🔴 CRITICAL | Flatten SynapticClip state to primitives |
+| 066 | 🟠 HIGH | Refactor SynapticDrums drum map to Uint8Array |
+| 070 | 🟠 HIGH | Refactor key.ts utilities (out-parameter pattern) |
+| 068 | 🟠 HIGH | Refactor SynapticGrooveBuilder allocations |
+
+### Phase 3: Operations Removal
+
+| Task | Priority | Description |
+|------|----------|-------------|
+| 058 | 🔴 CRITICAL | Remove operations[] array entirely |
+| 063 | 🟠 HIGH | Remove isolate() closures (pushState/popState) |
+| 067 | 🟠 HIGH | Decide FrozenClip fate (delete/refactor/mark) |
+
+### Phase 4: API Refactoring
+
+| Task | Priority | Description |
+|------|----------|-------------|
+| 061 | 🟠 HIGH | Refactor Cursors to Parallel Hierarchy |
+| 062 | 🟠 HIGH | Refactor One-Shot Methods to Direct-to-Kernel |
+| 064 | 🔴 CRITICAL | Refactor SynapticMelody chord/voicing methods |
+| 065 | 🟠 HIGH | Refactor loop/play/progression methods |
 
 ## 5. Verification
 -   **Correctness**: Verify strict 1:1 mapping between API calls and Kernel commands.
