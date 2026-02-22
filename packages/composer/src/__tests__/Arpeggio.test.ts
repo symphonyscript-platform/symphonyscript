@@ -1,16 +1,14 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
 import { Clip } from '../Clip';
-import { SiliconBridge } from '@symphonyscript/kernel';
+import { createTestBridge } from '../test-bridge';
 import { NoteOperation } from '../types';
 
 describe('Arpeggio Generator', () => {
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
     let melody: SynapticMelody;
 
     beforeEach(() => {
-        mockBridge = {
-            insertAsync: jest.fn().mockReturnValue(0)
-        } as any;
+        mockBridge = createTestBridge();
         melody = new SynapticMelody(mockBridge);
     });
 
@@ -162,17 +160,18 @@ describe('Arpeggio Generator', () => {
         });
 
         it('produces different order with different seed', () => {
-            const melody1 = new SynapticMelody(mockBridge);
+            const bridge1 = createTestBridge();
+            const melody1 = new SynapticMelody(bridge1);
             melody1.arpeggiate(['C4', 'E4', 'G4', 'B4'], 0.25, { pattern: 'random', seed: 42 });
 
-            const melody2 = new SynapticMelody(mockBridge);
+            const bridge2 = createTestBridge();
+            const melody2 = new SynapticMelody(bridge2);
             melody2.arpeggiate(['C4', 'E4', 'G4', 'B4'], 0.25, { pattern: 'random', seed: 123 });
 
             const notes1 = melody1.build().operations.filter(op => op.kind === 'note').map(op => (op as NoteOperation).pitch);
             const notes2 = melody2.build().operations.filter(op => op.kind === 'note').map(op => (op as NoteOperation).pitch);
 
             // Different seeds should produce different order (with high probability)
-            // Note: There's a small chance they could be the same by coincidence
             expect(notes1).not.toEqual(notes2);
         });
     });

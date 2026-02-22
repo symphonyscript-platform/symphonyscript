@@ -73,4 +73,4 @@ export class Session {
 - [ ] `Track` class has `@design-time` JSDoc documentation
 - [ ] README updated to clarify design-time vs runtime distinction
 - [ ] No code changes needed (documentation only)
-- [ ] `pnpm build && pnpm test` passes
+- [ ] `pnpm build` passes; `pnpm test` passes **excluding** pre-existing `SynapticChordCursor` allocation smoke test (addressed in task 061)

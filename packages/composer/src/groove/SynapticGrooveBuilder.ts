@@ -85,15 +85,18 @@ export class SynapticGrooveBuilder {
 
     /**
      * Internal: Called by cursor.freeze()
+     * Uses subarray (views) instead of slice to avoid Float32Array allocations.
+     * @remarks Views are invalidated on builder reuse (e.g. calling step() again).
+     * Callers must not mutate the returned arrays or the builder's internal buffers will be modified.
      */
     build(): GrooveTemplate {
         return {
             stepsPerBeat: this._stepsPerBeat,
             swing: this._swing,
-            velocities: this.velocities.slice(0, this.count),
-            durations: this.durations.slice(0, this.count),
-            offsets: this.offsets.slice(0, this.count),
-            probabilities: this.probabilities.slice(0, this.count),
+            velocities: this.velocities.subarray(0, this.count),
+            durations: this.durations.subarray(0, this.count),
+            offsets: this.offsets.subarray(0, this.count),
+            probabilities: this.probabilities.subarray(0, this.count),
             length: this.count
         };
     }

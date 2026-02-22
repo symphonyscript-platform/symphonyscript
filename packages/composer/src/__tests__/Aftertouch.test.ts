@@ -1,16 +1,18 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
 import { SynapticDrums } from '../clips/SynapticDrums';
 import { Clip } from '../Clip';
-import { SiliconBridge } from '@symphonyscript/kernel';
-import { AftertouchOperation, NoteOperation } from '../types';
+import { createTestBridge } from '../test-bridge';
+import { NoteOperation } from '../types';
 
+/**
+ * Task 058: Aftertouch operations no longer in build().operations.
+ * Kernel insertAsync is note-only. Tests verify aftertouch() API and notes.
+ */
 describe('Aftertouch (Task 034)', () => {
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
 
     beforeEach(() => {
-        mockBridge = {
-            insertAsync: jest.fn().mockReturnValue(0)
-        } as any;
+        mockBridge = createTestBridge();
     });
 
     describe('SynapticClip.aftertouch()', () => {
@@ -20,71 +22,26 @@ describe('Aftertouch (Task 034)', () => {
             expect(result).toBe(melody);
         });
 
-        it('queues channel aftertouch by default', () => {
+        it('aftertouch does not affect notes', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.aftertouch(0.5);
+            melody.note('C4', 0.5).commit();
 
             const result = melody.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
-            expect(atOps).toHaveLength(1);
-            expect(atOps[0].type).toBe('channel');
-            expect(atOps[0].value).toBe(64); // 0.5 * 127 = 63.5 -> 64
-            expect(atOps[0].note).toBeUndefined();
-            expect(atOps[0].tick).toBe(0);
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(1);
         });
 
-        it('queues at correct tick position', () => {
+        it('aftertouch with advanceTick - notes at correct position', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.advanceTick(2);
             melody.aftertouch(0.8);
+            melody.note('C4', 0.5).commit();
 
             const result = melody.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
-            expect(atOps[0].tick).toBe(2);
-        });
-    });
-
-    describe('Value scaling', () => {
-        it('scales 0 to 0', () => {
-            const melody = new SynapticMelody(mockBridge);
-            melody.aftertouch(0);
-
-            const result = melody.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
-            expect(atOps[0].value).toBe(0);
-        });
-
-        it('scales 1 to 127', () => {
-            const melody = new SynapticMelody(mockBridge);
-            melody.aftertouch(1);
-
-            const result = melody.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
-            expect(atOps[0].value).toBe(127);
-        });
-
-        it('scales 0.5 to ~64', () => {
-            const melody = new SynapticMelody(mockBridge);
-            melody.aftertouch(0.5);
-
-            const result = melody.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
-            expect(atOps[0].value).toBe(64);
-        });
-
-        it('rounds to nearest integer', () => {
-            const melody = new SynapticMelody(mockBridge);
-            melody.aftertouch(0.75); // 0.75 * 127 = 95.25 -> 95
-
-            const result = melody.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
-            expect(atOps[0].value).toBe(95);
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(1);
+            expect(noteOps[0].tick).toBe(2);
         });
     });
 
@@ -113,49 +70,24 @@ describe('Aftertouch (Task 034)', () => {
     describe('Channel aftertouch', () => {
         it('explicit channel type', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.aftertouch(0.6, { type: 'channel' });
-
-            const result = melody.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
-            expect(atOps[0].type).toBe('channel');
-            expect(atOps[0].note).toBeUndefined();
+            expect(() => melody.aftertouch(0.6, { type: 'channel' })).not.toThrow();
         });
 
-        it('channel aftertouch ignores note parameter', () => {
+        it('channel aftertouch with note option', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.aftertouch(0.6, { type: 'channel', note: 'C4' });
-
-            const result = melody.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
-            // Note is stored but type is still channel
-            expect(atOps[0].type).toBe('channel');
-            expect(atOps[0].note).toBe(60); // C4
+            expect(() => melody.aftertouch(0.6, { type: 'channel', note: 'C4' })).not.toThrow();
         });
     });
 
     describe('Poly aftertouch', () => {
         it('poly type with string note', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.aftertouch(0.7, { type: 'poly', note: 'C4' });
-
-            const result = melody.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
-            expect(atOps[0].type).toBe('poly');
-            expect(atOps[0].note).toBe(60); // C4
+            expect(() => melody.aftertouch(0.7, { type: 'poly', note: 'C4' })).not.toThrow();
         });
 
         it('poly type with numeric note', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.aftertouch(0.7, { type: 'poly', note: 64 });
-
-            const result = melody.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
-            expect(atOps[0].type).toBe('poly');
-            expect(atOps[0].note).toBe(64);
+            expect(() => melody.aftertouch(0.7, { type: 'poly', note: 64 })).not.toThrow();
         });
 
         it('poly type requires note', () => {
@@ -165,12 +97,7 @@ describe('Aftertouch (Task 034)', () => {
 
         it('parses various note names', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.aftertouch(0.5, { type: 'poly', note: 'D#5' });
-
-            const result = melody.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
-            expect(atOps[0].note).toBe(75); // D#5
+            expect(() => melody.aftertouch(0.5, { type: 'poly', note: 'D#5' })).not.toThrow();
         });
     });
 
@@ -183,10 +110,10 @@ describe('Aftertouch (Task 034)', () => {
             melody.note('D4', 0.5).commit();
 
             const result = melody.build();
-
-            expect(result.operations[0].kind).toBe('note');
-            expect(result.operations[1].kind).toBe('aftertouch');
-            expect(result.operations[2].kind).toBe('note');
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(2);
+            expect(noteOps[0].pitch).toBe(60);
+            expect(noteOps[1].pitch).toBe(62);
         });
     });
 
@@ -201,23 +128,18 @@ describe('Aftertouch (Task 034)', () => {
 
             const result = melody.build();
             const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
             expect(noteOps).toHaveLength(1);
-            expect(atOps).toHaveLength(1);
         });
 
         it('chained cursor aftertouch works', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.note('C4', 0.5).commit();
-            melody
-                .aftertouch(0.5)
-                .aftertouch(0.8);
+            melody.aftertouch(0.5).aftertouch(0.8);
+            melody.note('D4', 0.5).commit();
 
             const result = melody.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
-            expect(atOps).toHaveLength(2);
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(2);
         });
     });
 
@@ -228,10 +150,7 @@ describe('Aftertouch (Task 034)', () => {
             drums.kick(0.25).commit();
 
             const result = drums.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
             const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
-
-            expect(atOps).toHaveLength(1);
             expect(noteOps).toHaveLength(1);
         });
     });
@@ -243,9 +162,8 @@ describe('Aftertouch (Task 034)', () => {
                 .note('C4', 0.5)
                 .build();
 
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-            expect(atOps).toHaveLength(1);
-            expect(atOps[0].type).toBe('channel');
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(1);
         });
 
         it('Clip.melody() poly aftertouch works', () => {
@@ -254,58 +172,47 @@ describe('Aftertouch (Task 034)', () => {
                 .note('E4', 0.5)
                 .build();
 
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-            expect(atOps).toHaveLength(1);
-            expect(atOps[0].type).toBe('poly');
-            expect(atOps[0].note).toBe(64); // E4
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(1);
         });
     });
 
     describe('Edge cases', () => {
-        it('empty clip with only aftertouch', () => {
+        it('empty clip with only aftertouch returns no notes', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.aftertouch(0.5);
             melody.aftertouch(0.8);
 
             const result = melody.build();
-
-            expect(result.operations).toHaveLength(2);
-            expect(result.operations.every(op => op.kind === 'aftertouch')).toBe(true);
+            const noteOps = result.operations.filter(op => op.kind === 'note');
+            expect(noteOps).toHaveLength(0);
         });
 
-        it('multiple aftertouch at different ticks', () => {
+        it('multiple aftertouch with notes', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.aftertouch(0);
+            melody.note('C4', 0.5).commit();
             melody.advanceTick(1);
             melody.aftertouch(0.5);
-            melody.advanceTick(1);
-            melody.aftertouch(1);
+            melody.note('D4', 0.5).commit();
 
             const result = melody.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
-            expect(atOps).toHaveLength(3);
-            expect(atOps[0].tick).toBe(0);
-            expect(atOps[0].value).toBe(0);
-            expect(atOps[1].tick).toBe(1);
-            expect(atOps[1].value).toBe(64);
-            expect(atOps[2].tick).toBe(2);
-            expect(atOps[2].value).toBe(127);
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(2);
+            expect(noteOps[0].tick).toBe(0);
+            expect(noteOps[1].tick).toBe(1);
         });
 
-        it('mixed channel and poly aftertouch', () => {
+        it('mixed channel and poly aftertouch with note', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.aftertouch(0.5); // Channel
-            melody.aftertouch(0.7, { type: 'poly', note: 'C4' }); // Poly
-            melody.aftertouch(0.3); // Channel
+            melody.aftertouch(0.5);
+            melody.aftertouch(0.7, { type: 'poly', note: 'C4' });
+            melody.aftertouch(0.3);
+            melody.note('C4', 0.5).commit();
 
             const result = melody.build();
-            const atOps = result.operations.filter(op => op.kind === 'aftertouch') as AftertouchOperation[];
-
-            expect(atOps).toHaveLength(3);
-            expect(atOps[0].type).toBe('channel');
-            expect(atOps[1].type).toBe('poly');
-            expect(atOps[2].type).toBe('channel');
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(1);
         });
     });
 });

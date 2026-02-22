@@ -4,7 +4,7 @@ import { SynapticChordCursor } from '../cursors/SynapticChordCursor';
 import { FrozenClip } from './FrozenClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
-import { ClipNode, EuclideanMelodyOptions, ArpeggioOptions, ScaleMode, OperationsSource } from '../types';
+import { ClipNode, EuclideanMelodyOptions, ArpeggioOptions, ScaleMode, OperationsSource, NoteOperation } from '../types';
 import { romanToChord } from '../utils/romanAdapter';
 import { euclidean, rotatePattern } from '@symphonyscript/theory';
 import { parsePitch } from '../utils/pitch';
@@ -381,15 +381,19 @@ export class SynapticMelody extends SynapticClip {
             operations = (clip as ClipNode).operations;
         }
 
-        // Replay each operation at current tick offset
+        // Task 058: Flush each note directly to Kernel (no operations push)
         const tickOffset = this.getCurrentTick();
         for (const op of operations) {
             if (op.kind === 'note') {
-                this.operations.push({
-                    ...op,
-                    tick: op.tick + tickOffset,
-                    sourceId: this.generateSourceId()
-                });
+                const n = op as NoteOperation;
+                this.flushNote(
+                    n.pitch,
+                    n.velocity / 127,
+                    n.duration,
+                    n.tick + tickOffset,
+                    n.muted,
+                    this.generateSourceId()
+                );
             }
         }
 

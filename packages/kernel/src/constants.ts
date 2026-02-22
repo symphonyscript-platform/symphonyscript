@@ -123,9 +123,9 @@ export const KNUTH_HASH_CONST = 2654435761
  * ├─────────────────────────────────────────────────────────────────────┤
  * │ Fixed-size region for groove template patterns (humanization)      │
  * ├─────────────────────────────────────────────────────────────────────┤
- * │ COMMAND RING BUFFER (dynamic offset) [RFC-044]        64KB        │
+ * │ COMMAND RING BUFFER (dynamic offset) [RFC-044]         1MB        │
  * ├─────────────────────────────────────────────────────────────────────┤
- * │ Circular buffer for zero-blocking structural edits (4096 commands) │
+ * │ Circular buffer for zero-blocking structural edits (65536 commands, Task 060) │
  * │ Each command: 4 × i32 = 16 bytes [OPCODE, PARAM_1, PARAM_2, RSV]  │
  * ├─────────────────────────────────────────────────────────────────────┤
  * │ SYNAPSE TABLE (dynamic offset) [RFC-045]               1MB        │
@@ -593,14 +593,16 @@ export const SOURCE_ID = {
  *
  * Each command occupies exactly 4 × i32 (16 bytes) for alignment:
  * [OPCODE, PARAM_1, PARAM_2, RESERVED]
+ *
+ * Task 060: Increased from 64KB to 1MB (65536 entries) for burst composition safety.
  */
 export const COMMAND = {
   /** Command stride in bytes (16 bytes for 4 × i32) */
   STRIDE_BYTES: 16,
   /** Command stride in i32 units (4 words) */
   STRIDE_I32: 4,
-  /** Default ring buffer size in bytes (64KB = 4096 commands) */
-  DEFAULT_RING_SIZE_BYTES: 65536
+  /** Default ring buffer size in bytes (1MB = 65536 commands, Task 060) */
+  DEFAULT_RING_SIZE_BYTES: 1048576
 } as const
 
 // =============================================================================
@@ -932,7 +934,7 @@ export const ALLOC_ERR = {
 } as const
 
 /**
- * Default number of commands that can be queued (64KB / 16 bytes).
+ * Default number of commands that can be queued (1MB / 16 bytes, Task 060).
  */
 export const DEFAULT_RING_CAPACITY = COMMAND.DEFAULT_RING_SIZE_BYTES / COMMAND.STRIDE_BYTES
 
@@ -993,7 +995,7 @@ export function getZoneSplitIndex(nodeCapacity: number): number {
  * - Identity Table: nodeCapacity × 2 × 8 bytes (RFC-047-50: 2x capacity for load factor)
  * - Symbol Table: nodeCapacity × 8 bytes (fileHash + lineCol per entry)
  * - Groove Templates: 1024 bytes (fixed)
- * - Command Ring Buffer: 64KB (RFC-044)
+ * - Command Ring Buffer: 1MB (Task 060)
  * - Reclaim Ring Buffer: 16KB (K-005)
  * - Synapse Table: synapseCapacity × 20 bytes (K-002: dynamic sizing)
  * - Reverse Index: 1KB (ISSUE-016)
@@ -1015,7 +1017,7 @@ export function calculateSABSize(nodeCapacity: number, synapseCapacity?: number,
   const identityTableSize = nodeCapacity * 2 * ID_TABLE.ENTRY_SIZE_BYTES // RFC-047-50: 2x capacity
   const symbolTableSize = nodeCapacity * 2 * SYM_TABLE.ENTRY_SIZE_BYTES // Must match Identity Table capacity
   const grooveSize = 1024 // Fixed groove template region
-  const ringBufferSize = COMMAND.DEFAULT_RING_SIZE_BYTES // 64KB command ring (RFC-044)
+  const ringBufferSize = COMMAND.DEFAULT_RING_SIZE_BYTES // 1MB command ring (Task 060)
   const reclaimRingSize = RECLAIM.DEFAULT_RING_SIZE_BYTES // 16KB reclaim ring (K-005)
   const synapseTableSize = effectiveSynapseCapacity * SYNAPSE_TABLE.STRIDE_BYTES // K-002: dynamic
   const reverseIndexSize = REVERSE_INDEX.BUCKET_COUNT * 4 // 1KB reverse index (ISSUE-016)

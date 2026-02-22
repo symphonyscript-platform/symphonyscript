@@ -32,7 +32,7 @@ import {
 } from './constants'
 import type { NodePtr, SynapsePtr, BrainSnapshotArrays } from './types'
 import { LocalAllocator } from './local-allocator'
-import { RingBuffer } from './ring-buffer'
+import { RingBuffer, RING_ERR } from './ring-buffer'
 import { SynapseAllocator } from './synapse-allocator'
 
 // =============================================================================
@@ -559,6 +559,31 @@ export class SiliconBridge {
   }
 
   /**
+   * Write command to ring buffer with spin-wait backpressure (Task 060).
+   * Blocks until space available or 500ms timeout. Prevents silent command drops.
+   *
+   * @throws Error with "KERNEL_PANIC: Ring buffer timeout" if Audio Thread unresponsive
+   */
+  private writeOrSpin(cmd: number, param1: number, param2: number, param3: number = 0): void {
+    const MAX_SPIN_MS = 500
+    const startTime = performance.now()
+
+    while (true) {
+      const result = this.ringBuffer.write(cmd, param1, param2, param3)
+      if (result === RING_ERR.OK) {
+        Atomics.notify(this.sab, HDR.YIELD_SLOT, 1)
+        return
+      }
+
+      Atomics.notify(this.sab, HDR.YIELD_SLOT, 1)
+
+      if (performance.now() - startTime > MAX_SPIN_MS) {
+        throw new Error('KERNEL_PANIC: Ring buffer timeout - Audio Thread unresponsive')
+      }
+    }
+  }
+
+  /**
    * Insert a node asynchronously using RFC-044 Command Ring (zero-blocking).
    *
    * @returns The NODE pointer (byte offset) in Zone B, or negative error code
@@ -608,9 +633,7 @@ export class SiliconBridge {
     Atomics.store(this.sab, offset + NODE.SEQ_FLAGS, 0)
     Atomics.store(this.sab, offset + NODE.LAST_PASS_ID, 0)
 
-    this.ringBuffer.write(CMD.INSERT, ptr, prevPtr)
-    Atomics.notify(this.sab, HDR.YIELD_SLOT, 1)
-
+    this.writeOrSpin(CMD.INSERT, ptr, prevPtr)
     return ptr
   }
 
@@ -628,8 +651,7 @@ export class SiliconBridge {
    */
   connectAsync(srcPtr: NodePtr, tgtPtr: NodePtr, weight: number = 500, jitter: number = 0): void {
     const packedWJ = (weight << 16) | (jitter & 0xFFFF)
-    this.ringBuffer.write(CMD.CONNECT, srcPtr, tgtPtr, packedWJ)
-    Atomics.notify(this.sab, HDR.YIELD_SLOT, 1)
+    this.writeOrSpin(CMD.CONNECT, srcPtr, tgtPtr, packedWJ)
   }
 
   /**
@@ -639,8 +661,7 @@ export class SiliconBridge {
    * @param tgtPtr - Byte offset to target node, or NULL_PTR for "disconnect all"
    */
   disconnectAsync(srcPtr: NodePtr, tgtPtr: NodePtr = NULL_PTR): void {
-    this.ringBuffer.write(CMD.DISCONNECT, srcPtr, tgtPtr, 0)
-    Atomics.notify(this.sab, HDR.YIELD_SLOT, 1)
+    this.writeOrSpin(CMD.DISCONNECT, srcPtr, tgtPtr, 0)
   }
 
   /**
@@ -651,8 +672,7 @@ export class SiliconBridge {
    * @param ptr - Byte offset to node to delete
    */
   deleteAsync(ptr: NodePtr): void {
-    this.ringBuffer.write(CMD.DELETE, ptr, 0, 0)
-    Atomics.notify(this.sab, HDR.YIELD_SLOT, 1)
+    this.writeOrSpin(CMD.DELETE, ptr, 0, 0)
   }
 
   /**
@@ -696,8 +716,8 @@ export class SiliconBridge {
     this.disconnectAllFromSource(ptr)
     this.disconnectAllToTarget(ptr)
 
-    // Queue delete command
-    this.ringBuffer.write(CMD.DELETE, ptr, 0)
+    // Queue delete command (Task 060: use writeOrSpin for backpressure)
+    this.writeOrSpin(CMD.DELETE, ptr, 0, 0)
 
     // Process commands immediately to make it synchronous
     this.linker.processCommands()
@@ -938,9 +958,8 @@ export class SiliconBridge {
           this.disconnectAllFromSource(ptr)
           this.disconnectAllToTarget(ptr)
 
-          // Queue delete command
-          this.ringBuffer.write(CMD.DELETE, ptr, 0)
-          Atomics.notify(this.sab, HDR.YIELD_SLOT, 1)
+          // Queue delete command (Task 060: use writeOrSpin)
+          this.writeOrSpin(CMD.DELETE, ptr, 0, 0)
 
           // Unregister immediately (worker will process delete)
           this.unregisterMapping(sourceId)
@@ -1124,8 +1143,8 @@ export class SiliconBridge {
    * RFC-045-FINAL: Routes through command ring + processCommands for synchronous clear.
    */
   clear(): void {
-    // Queue CLEAR command
-    this.ringBuffer.write(CMD.CLEAR, 0, 0)
+    // Queue CLEAR command (Task 060: use writeOrSpin)
+    this.writeOrSpin(CMD.CLEAR, 0, 0, 0)
 
     // Process command immediately
     this.linker.processCommands()

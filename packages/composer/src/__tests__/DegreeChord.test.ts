@@ -4,13 +4,13 @@
  */
 
 import { Clip } from '../Clip';
-import { NoteOperation } from '../types';
+import { NoteOperation, ScaleMode } from '../types';
 
 describe('DegreeChord (Task 041)', () => {
     describe('Basic Functionality', () => {
         it('creates a triad from degrees [1, 3, 5] in C major', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             melody.degreeChord([1, 3, 5]).commit();
             
@@ -25,7 +25,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('creates a minor triad from degrees [1, 3, 5] in A minor', () => {
             const melody = Clip.melody('test')
-                .setScale('A', 'minor');
+                .setScale('A', ScaleMode.MINOR);
             
             melody.degreeChord([1, 3, 5]).commit();
             
@@ -40,7 +40,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('creates a 7th chord from degrees [1, 3, 5, 7]', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             melody.degreeChord([1, 3, 5, 7]).commit();
             
@@ -55,7 +55,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('creates a sus4 chord from degrees [1, 4, 5]', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             melody.degreeChord([1, 4, 5]).commit();
             
@@ -72,7 +72,7 @@ describe('DegreeChord (Task 041)', () => {
     describe('Scale Modes', () => {
         it('works with dorian mode', () => {
             const melody = Clip.melody('test')
-                .setScale('D', 'dorian');
+                .setScale('D', ScaleMode.DORIAN);
             
             melody.degreeChord([1, 3, 5]).commit();
             
@@ -87,7 +87,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('works with phrygian mode', () => {
             const melody = Clip.melody('test')
-                .setScale('E', 'phrygian');
+                .setScale('E', ScaleMode.PHRYGIAN);
             
             melody.degreeChord([1, 3, 5]).commit();
             
@@ -102,7 +102,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('works with lydian mode', () => {
             const melody = Clip.melody('test')
-                .setScale('F', 'lydian');
+                .setScale('F', ScaleMode.LYDIAN);
             
             melody.degreeChord([1, 3, 5]).commit();
             
@@ -117,7 +117,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('works with mixolydian mode', () => {
             const melody = Clip.melody('test')
-                .setScale('G', 'mixolydian');
+                .setScale('G', ScaleMode.MIXOLYDIAN);
             
             melody.degreeChord([1, 3, 5]).commit();
             
@@ -132,7 +132,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('works with locrian mode', () => {
             const melody = Clip.melody('test')
-                .setScale('B', 'locrian');
+                .setScale('B', ScaleMode.LOCRIAN);
             
             melody.degreeChord([1, 3, 5]).commit();
             
@@ -149,7 +149,7 @@ describe('DegreeChord (Task 041)', () => {
     describe('Octave Handling', () => {
         it('handles degrees above 7 (octave wrap)', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             // Degrees 8, 10, 12 = 1, 3, 5 one octave up
             melody.degreeChord([8, 10, 12]).commit();
@@ -165,7 +165,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('handles mixed octave degrees', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             // Root in base octave, 3rd and 5th one octave up
             melody.degreeChord([1, 10, 12]).commit();
@@ -183,7 +183,7 @@ describe('DegreeChord (Task 041)', () => {
     describe('Duration', () => {
         it('applies duration to all chord notes', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             melody.degreeChord([1, 3, 5], 2).commit();
             
@@ -198,7 +198,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('uses cursor default duration when not specified', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             melody.degreeChord([1, 3, 5]).commit();
             
@@ -222,7 +222,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('throws for empty degrees array', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             expect(() => melody.degreeChord([])).toThrow(
                 'degreeChord() requires at least one degree'
@@ -233,7 +233,7 @@ describe('DegreeChord (Task 041)', () => {
     describe('Chaining', () => {
         it('returns SynapticChordCursor for chaining', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             const cursor = melody.degreeChord([1, 3, 5]);
             
@@ -245,7 +245,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('chains with velocity modifier', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             melody.degreeChord([1, 3, 5]).velocity(0.5).commit();
             
@@ -260,7 +260,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('chains multiple degree chords', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             // I - IV - V - I progression
             melody.degreeChord([1, 3, 5], 1).commit();
@@ -284,7 +284,7 @@ describe('DegreeChord (Task 041)', () => {
             const melody = Clip.melody('test')
                 .tempo(140)
                 .timeSignature(3, 4)
-                .setScale('G', 'major');
+                .setScale('G', ScaleMode.MAJOR);
             
             melody.degreeChord([1, 3, 5]).commit();
             
@@ -298,7 +298,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('works alongside regular notes', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             melody.note('C4', 0.5).commit();
             melody.advanceTick(0.5);
@@ -313,7 +313,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('works with degree() single notes', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             melody.degree(1, 0.5).commit();
             melody.advanceTick(0.5);
@@ -333,7 +333,7 @@ describe('DegreeChord (Task 041)', () => {
     describe('Secondary Chords', () => {
         it('creates ii chord (degrees 2, 4, 6) in C major', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             melody.degreeChord([2, 4, 6]).commit();
             
@@ -348,7 +348,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('creates iii chord (degrees 3, 5, 7) in C major', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             melody.degreeChord([3, 5, 7]).commit();
             
@@ -363,7 +363,7 @@ describe('DegreeChord (Task 041)', () => {
 
         it('creates vi chord (degrees 6, 8, 10) in C major', () => {
             const melody = Clip.melody('test')
-                .setScale('C', 'major');
+                .setScale('C', ScaleMode.MAJOR);
             
             melody.degreeChord([6, 8, 10]).commit();
             

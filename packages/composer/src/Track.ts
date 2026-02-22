@@ -29,6 +29,10 @@ export interface TrackOptions {
 /**
  * Track class for associating clips with instruments and effects.
  *
+ * @design-time This class is intended for session setup only.
+ * Do not call Track methods during playback hot paths.
+ * Allocations (arrays, object literals) are acceptable during design-time.
+ *
  * Provides fluent API for:
  * - Setting tempo and time signature
  * - Adding insert effects

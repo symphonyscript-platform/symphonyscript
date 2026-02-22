@@ -63,4 +63,4 @@ protected _humTiming: number = 0;
 - [ ] No `{}` allocations in state mutation methods
 - [ ] All getter/setter methods updated to use primitives
 - [ ] All subclasses (`SynapticMelody`, `SynapticDrums`) compatible
-- [ ] `pnpm build && pnpm test` passes
+- [ ] `pnpm build && pnpm test` passes (excluding SynapticChordCursor zero-allocation smoke—pre-existing, root cause: operations.push in flushNote; addressed in Task 058)

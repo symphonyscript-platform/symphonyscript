@@ -43,9 +43,9 @@ describe('SynapticChordCursor (Phase 5)', () => {
 
         // C4 = 60. E4 = 64. G4 = 67. (velocities humanized with seed=42: 102, 101, 103)
         expect(mockInsertAsync).toHaveBeenCalledTimes(3);
-        expect(mockInsertAsync).toHaveBeenNthCalledWith(1, 1, 60, 102, 0.25, 0, false, 100, undefined, 0); // C
-        expect(mockInsertAsync).toHaveBeenNthCalledWith(2, 1, 64, 101, 0.25, 0, false, 100, undefined, 0); // E
-        expect(mockInsertAsync).toHaveBeenNthCalledWith(3, 1, 67, 103, 0.25, 0, false, 100, undefined, 0); // G
+        expect(mockInsertAsync).toHaveBeenNthCalledWith(1, 1, 60, 102, 0.25, 0, false, 100, undefined, undefined); // C
+        expect(mockInsertAsync).toHaveBeenNthCalledWith(2, 1, 64, 101, 0.25, 0, false, 100, undefined, undefined); // E
+        expect(mockInsertAsync).toHaveBeenNthCalledWith(3, 1, 67, 103, 0.25, 0, false, 100, undefined, undefined); // G
     });
 
     it('inversion(1) rotates notes', () => {
@@ -53,9 +53,9 @@ describe('SynapticChordCursor (Phase 5)', () => {
         cursor.commit();
 
         // E4=64, G4=67, C5=72 (velocities humanized: 102, 101, 103 with seed=42)
-        expect(mockInsertAsync).toHaveBeenNthCalledWith(1, 1, 64, 102, 0.25, 0, false, 100, undefined, 0);
-        expect(mockInsertAsync).toHaveBeenNthCalledWith(2, 1, 67, 101, 0.25, 0, false, 100, undefined, 0);
-        expect(mockInsertAsync).toHaveBeenNthCalledWith(3, 1, 72, 103, 0.25, 0, false, 100, undefined, 0);
+        expect(mockInsertAsync).toHaveBeenNthCalledWith(1, 1, 64, 102, 0.25, 0, false, 100, undefined, undefined);
+        expect(mockInsertAsync).toHaveBeenNthCalledWith(2, 1, 67, 101, 0.25, 0, false, 100, undefined, undefined);
+        expect(mockInsertAsync).toHaveBeenNthCalledWith(3, 1, 72, 103, 0.25, 0, false, 100, undefined, undefined);
     });
 
     it('voice limit works (maxVoices=4)', () => {

@@ -3,21 +3,16 @@
  * Task 047: Voice-led chord progressions with minimal voice movement.
  */
 
-import { SiliconBridge } from '@symphonyscript/kernel';
 import { SynapticMelody } from '../clips/SynapticMelody';
-import { NoteOperation } from '../types';
-
-// Mock bridge with insertAsync
-const createMockBridge = (): jest.Mocked<SiliconBridge> => ({
-    insertAsync: jest.fn().mockReturnValue(0)
-} as any);
+import { NoteOperation, ScaleMode } from '../types';
+import { createTestBridge } from '../test-bridge';
 
 describe('SynapticMelody.voiceLead()', () => {
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
     let melody: SynapticMelody;
 
     beforeEach(() => {
-        mockBridge = createMockBridge();
+        mockBridge = createTestBridge();
         melody = new SynapticMelody(mockBridge);
     });
 
@@ -29,7 +24,7 @@ describe('SynapticMelody.voiceLead()', () => {
         });
 
         it('generates chords for I-IV-V-I progression', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
             melody.voiceLead(['I', 'IV', 'V', 'I']);
 
             const ops = melody.toOperations();
@@ -40,7 +35,7 @@ describe('SynapticMelody.voiceLead()', () => {
         });
 
         it('handles empty array', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
             melody.voiceLead([]);
 
             const ops = melody.toOperations();
@@ -48,7 +43,7 @@ describe('SynapticMelody.voiceLead()', () => {
         });
 
         it('handles single chord', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
             melody.voiceLead(['I']);
 
             const ops = melody.toOperations();
@@ -61,7 +56,7 @@ describe('SynapticMelody.voiceLead()', () => {
 
     describe('Voice leading algorithm', () => {
         it('first chord uses root position', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
             melody.voiceLead(['I']);
 
             const ops = melody.toOperations();
@@ -75,7 +70,7 @@ describe('SynapticMelody.voiceLead()', () => {
         });
 
         it('minimizes voice movement between chords', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
             melody.voiceLead(['I', 'IV']);
 
             const ops = melody.toOperations();
@@ -96,7 +91,7 @@ describe('SynapticMelody.voiceLead()', () => {
         });
 
         it('produces smooth ii-V-I progression', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
             melody.voiceLead(['ii', 'V', 'I']);
 
             const ops = melody.toOperations();
@@ -119,7 +114,7 @@ describe('SynapticMelody.voiceLead()', () => {
 
     describe('Duration option', () => {
         it('uses default duration of 1', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
             melody.voiceLead(['I', 'IV']);
 
             const ops = melody.toOperations();
@@ -132,7 +127,7 @@ describe('SynapticMelody.voiceLead()', () => {
         });
 
         it('respects custom duration', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
             melody.voiceLead(['I', 'IV'], { duration: 2 });
 
             const ops = melody.toOperations();
@@ -145,7 +140,7 @@ describe('SynapticMelody.voiceLead()', () => {
         });
 
         it('advances tick by duration for each chord', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
             melody.voiceLead(['I', 'IV', 'V'], { duration: 2 });
 
             // Should advance by 2 × 3 = 6 ticks
@@ -155,7 +150,7 @@ describe('SynapticMelody.voiceLead()', () => {
 
     describe('Different keys', () => {
         it('works in G major', () => {
-            melody.key('G', 'major');
+            melody.key('G', ScaleMode.MAJOR);
             melody.voiceLead(['I', 'IV', 'V', 'I']);
 
             const ops = melody.toOperations();
@@ -165,7 +160,7 @@ describe('SynapticMelody.voiceLead()', () => {
         });
 
         it('works in minor keys', () => {
-            melody.key('A', 'minor');
+            melody.key('A', ScaleMode.MINOR);
             melody.voiceLead(['i', 'iv', 'V', 'i']);
 
             const ops = melody.toOperations();
@@ -175,7 +170,7 @@ describe('SynapticMelody.voiceLead()', () => {
         });
 
         it('works with flat keys', () => {
-            melody.key('Bb', 'major');
+            melody.key('Bb', ScaleMode.MAJOR);
             melody.voiceLead(['I', 'IV', 'V']);
 
             const ops = melody.toOperations();
@@ -187,7 +182,7 @@ describe('SynapticMelody.voiceLead()', () => {
 
     describe('Seventh chords', () => {
         it('handles seventh chords', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
             melody.voiceLead(['ii7', 'V7', 'Imaj7']);
 
             const ops = melody.toOperations();
@@ -200,7 +195,7 @@ describe('SynapticMelody.voiceLead()', () => {
 
     describe('Error handling', () => {
         it('throws for invalid roman numerals', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
 
             expect(() => {
                 melody.voiceLead(['I', 'invalid', 'V']);
@@ -210,14 +205,14 @@ describe('SynapticMelody.voiceLead()', () => {
 
     describe('Chaining', () => {
         it('returns this for chaining', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
             const result = melody.voiceLead(['I', 'IV']);
 
             expect(result).toBe(melody);
         });
 
         it('chains with other methods', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
             melody
                 .voiceLead(['I', 'IV'])
                 .rest(1)
@@ -233,7 +228,7 @@ describe('SynapticMelody.voiceLead()', () => {
 
     describe('Integration', () => {
         it('works with progression() in same clip', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
             melody.progression(['I', 'IV'], { duration: 1 });
             melody.voiceLead(['V', 'I'], { duration: 1 });
 

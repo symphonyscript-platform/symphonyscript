@@ -4,13 +4,31 @@
  * Functions for applying key signature accidentals to notes.
  */
 
-import type { KeyContext, Accidental } from '../types';
+import { ScaleMode, type KeyContext, Accidental } from '../types';
+
+/** Convert ScaleMode to key signature lookup string (major/minor only). */
+export function scaleModeToKeyString(mode: ScaleMode): 'major' | 'minor' {
+    return mode === ScaleMode.MINOR ? 'minor' : 'major';
+}
 
 /**
  * Natural note letters (no accidentals).
  */
 const NOTE_LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
 type NoteLetter = typeof NOTE_LETTERS[number];
+
+/**
+ * Parsed note result (out-parameter pattern).
+ * letter: 0–6 (C–B), accidental: -1 flat / 0 natural / 1 sharp, octave: number.
+ */
+interface ParsedNote {
+    letter: number;
+    accidental: number;
+    octave: number;
+}
+
+/** Module-level reusable result (zero-allocation). */
+const PARSED_NOTE: ParsedNote = { letter: 0, accidental: 0, octave: 4 };
 
 /**
  * Key signature accidentals.
@@ -61,23 +79,33 @@ const KEY_SIGNATURES: Record<string, Partial<Record<NoteLetter, 'sharp' | 'flat'
 };
 
 /**
- * Parse a note name into letter, accidental, and octave.
- * @example parseNoteName('F#4') → { letter: 'F', accidental: '#', octave: '4' }
+ * Parse a note name into out-parameter. Zero-allocation for hot paths.
+ * @param note - Note string (e.g., 'F#4')
+ * @param out - Reusable result object (default: module-level PARSED_NOTE)
+ * @returns out on success, null if parse fails
  */
-function parseNoteName(note: string): { letter: NoteLetter; accidental: string; octave: string } | null {
+function parseNoteName(note: string, out: ParsedNote = PARSED_NOTE): ParsedNote | null {
     const match = note.match(/^([A-Ga-g])([#b]?)(\d+)$/);
     if (!match) return null;
 
-    return {
-        letter: match[1].toUpperCase() as NoteLetter,
-        accidental: match[2],
-        octave: match[3]
-    };
+    const letterChar = match[1].charCodeAt(0);
+    const base = letterChar >= 97 ? letterChar - 97 : letterChar - 65; // 0-6 for A-G or a-g
+    out.letter = [5, 6, 0, 1, 2, 3, 4][base]; // map to C=0,D=1,E=2,F=3,G=4,A=5,B=6
+    const a = match[2];
+    out.accidental = a === '#' ? 1 : a === 'b' ? -1 : 0;
+    out.octave = parseInt(match[3], 10);
+    return out;
+}
+
+/** Letter index 0-6 to NoteLetter for KEY_SIGNATURES lookup. */
+function letterToNoteLetter(idx: number): NoteLetter {
+    return NOTE_LETTERS[idx];
 }
 
 /**
  * Apply key signature to a note name.
- * 
+ * Uses out-parameter parseNoteName and parses once per call.
+ *
  * @param noteName - Original note (e.g., 'F4')
  * @param keyContext - Key signature context
  * @param overrideAccidental - Explicit accidental override
@@ -88,63 +116,44 @@ export function applyKeySignature(
     keyContext: KeyContext | null,
     overrideAccidental?: Accidental | null
 ): string {
-    // If override is 'natural', return as-is (strip any existing accidental)
-    if (overrideAccidental === 'natural') {
-        const parsed = parseNoteName(noteName);
-        if (parsed) {
-            return `${parsed.letter}${parsed.octave}`;
-        }
-        return noteName;
-    }
-
-    // If override is 'sharp' or 'flat', apply it directly
-    if (overrideAccidental === 'sharp') {
-        const parsed = parseNoteName(noteName);
-        if (parsed) {
-            return `${parsed.letter}#${parsed.octave}`;
-        }
-        return noteName;
-    }
-
-    if (overrideAccidental === 'flat') {
-        const parsed = parseNoteName(noteName);
-        if (parsed) {
-            return `${parsed.letter}b${parsed.octave}`;
-        }
-        return noteName;
-    }
-
-    // No key context → return as-is
-    if (!keyContext) {
+    // No override and no key → return as-is (avoid parse)
+    if (!overrideAccidental && !keyContext) {
         return noteName;
     }
 
     const parsed = parseNoteName(noteName);
-    if (!parsed) {
-        return noteName;
+    if (!parsed) return noteName;
+
+    const letter = letterToNoteLetter(parsed.letter);
+
+    // Override NATURAL: strip accidental
+    if (overrideAccidental === Accidental.NATURAL) {
+        return letter + String(parsed.octave);
     }
 
-    // If note already has an accidental, respect it (don't override)
-    if (parsed.accidental) {
-        return noteName;
+    // Override SHARP or FLAT
+    if (overrideAccidental === Accidental.SHARP) {
+        return letter + '#' + String(parsed.octave);
+    }
+    if (overrideAccidental === Accidental.FLAT) {
+        return letter + 'b' + String(parsed.octave);
     }
 
-    // Look up key signature accidentals
-    const keyStr = `${keyContext.root}:${keyContext.mode}`;
+    // Note already has accidental → respect it
+    if (parsed.accidental !== 0) return noteName;
+
+    // No key context → return as-is
+    if (!keyContext) return noteName;
+
+    const modeStr = scaleModeToKeyString(keyContext.mode);
+    const keyStr = keyContext.root + ':' + modeStr;
     const keyAccidentals = KEY_SIGNATURES[keyStr];
+    if (!keyAccidentals) return noteName;
 
-    if (!keyAccidentals) {
-        // Unknown key, return as-is
-        return noteName;
-    }
-
-    // Check if this note letter has an accidental in the key
-    const keyAccidental = keyAccidentals[parsed.letter];
+    const keyAccidental = keyAccidentals[letter];
     if (keyAccidental) {
-        const accidentalSymbol = keyAccidental === 'sharp' ? '#' : 'b';
-        return `${parsed.letter}${accidentalSymbol}${parsed.octave}`;
+        return letter + (keyAccidental === 'sharp' ? '#' : 'b') + String(parsed.octave);
     }
-
     return noteName;
 }
 

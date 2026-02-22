@@ -13,6 +13,8 @@ module.exports = {
   displayName: '@symphonyscript/composer',
   preset: '../../jest.preset.js',
   testEnvironment: 'node',
+  setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
+  testPathIgnorePatterns: ['/node_modules/', 'test-bridge.ts', 'setup.ts'],
   transform: {
     '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig],
   },

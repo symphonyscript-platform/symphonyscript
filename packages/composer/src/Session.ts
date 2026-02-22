@@ -29,6 +29,10 @@ export interface SessionOptions {
 /**
  * Session class for managing multiple tracks and effect buses.
  *
+ * @design-time This class is intended for session setup only.
+ * Do not call Session methods during playback hot paths.
+ * Allocations (arrays, object literals) are acceptable during design-time.
+ *
  * Provides fluent API for:
  * - Setting session-wide tempo and time signature
  * - Adding tracks (Track instances or TrackNodes)

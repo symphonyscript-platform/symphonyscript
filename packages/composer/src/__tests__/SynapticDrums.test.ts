@@ -1,14 +1,15 @@
 import { SynapticDrums } from '../clips/SynapticDrums';
-import { SiliconBridge } from '@symphonyscript/kernel';
+import { createTestBridge } from '../test-bridge';
+
+// Matcher for optional params (afterSourceId, expressionId) which can be undefined or number
+const optional = { asymmetricMatch: () => true };
 
 describe('SynapticDrumHitCursor & SynapticDrums (Phase 3)', () => {
     let drums: SynapticDrums;
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
 
     beforeEach(() => {
-        mockBridge = {
-            insertAsync: jest.fn()
-        } as any;
+        mockBridge = createTestBridge();
         drums = new SynapticDrums(mockBridge);
     });
 
@@ -21,14 +22,14 @@ describe('SynapticDrumHitCursor & SynapticDrums (Phase 3)', () => {
         expect(mockBridge.insertAsync).toHaveBeenNthCalledWith(
             1, 1, 36, expect.any(Number), expect.any(Number),
             expect.any(Number), expect.any(Boolean), expect.any(Number),
-            undefined, undefined
+            optional, optional
         );
 
         // Snare (D1 = 38)
         expect(mockBridge.insertAsync).toHaveBeenNthCalledWith(
             2, 1, 38, expect.any(Number), expect.any(Number),
             expect.any(Number), expect.any(Boolean), expect.any(Number),
-            undefined, undefined
+            optional, optional
         );
     });
 
@@ -64,7 +65,7 @@ describe('SynapticDrumHitCursor & SynapticDrums (Phase 3)', () => {
             expect(mockBridge.insertAsync).toHaveBeenCalledWith(
                 1, 46, expect.any(Number), expect.any(Number),
                 expect.any(Number), expect.any(Boolean), expect.any(Number),
-                undefined, undefined
+                optional, optional
             );
         });
 
@@ -74,7 +75,7 @@ describe('SynapticDrumHitCursor & SynapticDrums (Phase 3)', () => {
             expect(mockBridge.insertAsync).toHaveBeenCalledWith(
                 1, 49, expect.any(Number), expect.any(Number),
                 expect.any(Number), expect.any(Boolean), expect.any(Number),
-                undefined, undefined
+                optional, optional
             );
         });
 
@@ -84,7 +85,7 @@ describe('SynapticDrumHitCursor & SynapticDrums (Phase 3)', () => {
             expect(mockBridge.insertAsync).toHaveBeenCalledWith(
                 1, 51, expect.any(Number), expect.any(Number),
                 expect.any(Number), expect.any(Boolean), expect.any(Number),
-                undefined, undefined
+                optional, optional
             );
         });
 
@@ -94,7 +95,7 @@ describe('SynapticDrumHitCursor & SynapticDrums (Phase 3)', () => {
             expect(mockBridge.insertAsync).toHaveBeenCalledWith(
                 1, 48, expect.any(Number), expect.any(Number),
                 expect.any(Number), expect.any(Boolean), expect.any(Number),
-                undefined, undefined
+                optional, optional
             );
         });
 
@@ -104,7 +105,7 @@ describe('SynapticDrumHitCursor & SynapticDrums (Phase 3)', () => {
             expect(mockBridge.insertAsync).toHaveBeenCalledWith(
                 1, 45, expect.any(Number), expect.any(Number),
                 expect.any(Number), expect.any(Boolean), expect.any(Number),
-                undefined, undefined
+                optional, optional
             );
         });
 
@@ -114,7 +115,7 @@ describe('SynapticDrumHitCursor & SynapticDrums (Phase 3)', () => {
             expect(mockBridge.insertAsync).toHaveBeenCalledWith(
                 1, 43, expect.any(Number), expect.any(Number),
                 expect.any(Number), expect.any(Boolean), expect.any(Number),
-                undefined, undefined
+                optional, optional
             );
         });
 
@@ -124,7 +125,7 @@ describe('SynapticDrumHitCursor & SynapticDrums (Phase 3)', () => {
             expect(mockBridge.insertAsync).toHaveBeenCalledWith(
                 1, 48, expect.any(Number), expect.any(Number),
                 expect.any(Number), expect.any(Boolean), expect.any(Number),
-                undefined, undefined
+                optional, optional
             );
         });
 

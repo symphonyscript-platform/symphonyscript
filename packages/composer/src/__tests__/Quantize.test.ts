@@ -1,16 +1,14 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
 import { SynapticDrums } from '../clips/SynapticDrums';
 import { Clip } from '../Clip';
-import { SiliconBridge } from '@symphonyscript/kernel';
+import { createTestBridge } from '../test-bridge';
 import { NoteOperation, QuantizeSettings } from '../types';
 
 describe('Quantize (Task 032)', () => {
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
 
     beforeEach(() => {
-        mockBridge = {
-            insertAsync: jest.fn().mockReturnValue(0)
-        } as any;
+        mockBridge = createTestBridge();
     });
 
     describe('SynapticClip.quantize()', () => {

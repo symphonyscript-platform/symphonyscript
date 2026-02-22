@@ -1,7 +1,7 @@
 import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
 import { SynapticNode } from '@symphonyscript/synaptic';
-import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsOp, VelocityPoint, HumanizeSettings, QuantizeSettings, CCOperation, AftertouchOperation, AutomationOperation, AutomationTarget, FreezeOptions, ScopeIsolation, ScopeOp, TempoKeyframe, TempoEnvelopeOp, ClipOperation, OperationsSource, ArpPattern, PitchBendOperation } from '../types';
+import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsType, CurveType, VelocityPoint, HumanizeSettings, QuantizeSettings, CCOperation, AftertouchOperation, AutomationOperation, AutomationTarget, FreezeOptions, ScopeIsolation, TempoKeyframe, TempoEnvelopeOp, ClipOperation, OperationsSource, ArpPattern, PitchBendOperation, PITCH_CLASS_TO_ROOT } from '../types';
 import { parsePitch } from '../utils/pitch';
 import { FrozenClip } from './FrozenClip';
 
@@ -19,14 +19,17 @@ import { FrozenClip } from './FrozenClip';
  * 
  * CLARIFICATION:
  * - Actual audio-thread-safe zero-allocation operations reside in `@symphonyscript/kernel`.
+ * 
+ * Task 058: Kernel is the single source of truth. No operations[] array.
+ * build() and toOperations() read from Kernel via bridge.traverseNotes().
  */
 export abstract class SynapticClip extends SynapticNode {
-    // Build output tracking
     protected clipName: string = '';
-    protected operations: (NoteOperation | CCOperation | AftertouchOperation | AutomationOperation | ScopeOp | TempoEnvelopeOp | PitchBendOperation)[] = [];
 
-    // Scale context for degree() resolution
-    protected scaleContext: ScaleContext | null = null;
+    // Scale context for degree() resolution (flattened primitives)
+    protected _scaleRoot: number = -1;   // -1 = no scale, 0-11 = pitch class
+    protected _scaleMode: ScaleMode = ScaleMode.NONE;
+    protected _scaleOctave: number = 4;
 
     // Key context for automatic accidentals (RFC-022)
     protected keyContext: KeyContext | null = null;
@@ -54,16 +57,25 @@ export abstract class SynapticClip extends SynapticNode {
     // RFC-050: Seeded RNG for deterministic humanization
     protected humanizeRng: SeededRandom;
 
-    // Dynamics state (Task 024)
-    protected activeDynamics: DynamicsOp | null = null;
-    protected dynamicsStartTick: number = 0;
+    // Dynamics state (Task 024, flattened)
+    protected _dynType: DynamicsType = DynamicsType.NONE;
+    protected _dynStart: number = 0;
+    protected _dynDuration: number = 0;
+    protected _dynFrom: number = 0;
+    protected _dynTo: number = 0;
+    protected _dynCurve: CurveType = CurveType.LINEAR;
     protected velocityCurvePoints: VelocityPoint[] | null = null;
 
     // Default duration state (Task 030)
     protected _defaultDuration: number | null = null;
 
-    // Humanization settings (Task 031)
-    protected _humanizeSettings: HumanizeSettings | null = null;
+    // Humanization settings (Task 031, flattened)
+    protected _humVel: number = 0;
+    protected _humTiming: number = 0;
+    protected _humEnabled: boolean = false;
+    protected _humSeed: number = -1;    // -1 = not set
+    protected _humanizeVelOut: number = 0;
+    protected _humanizeTickOut: number = 0;
 
     // Quantize settings (Task 032)
     protected _quantizeSettings: QuantizeSettings | null = null;
@@ -71,10 +83,19 @@ export abstract class SynapticClip extends SynapticNode {
     // MPE voice expression ID (Task 036)
     protected _expressionId: number | null = null;
 
+    // Task 063: Pre-allocated state stack for pushState/popState (zero-allocation)
+    private static readonly MAX_STACK_DEPTH = 16;
+    private readonly _stateStackNum: Float64Array;
+    private readonly _stateStackRef: (VelocityPoint[] | null)[];
+    private _stackPtr: number = 0;
+
     constructor(bridge: SiliconBridge, seed: number = 0) {
         super(bridge);
         this.ccAutomation = new Map();
         this.humanizeRng = new SeededRandom(seed);
+        // Task 063: Pre-allocate state stack slots (9 numbers per frame: tempo, dyn×6, ts×2)
+        this._stateStackNum = new Float64Array(SynapticClip.MAX_STACK_DEPTH * 9);
+        this._stateStackRef = new Array(SynapticClip.MAX_STACK_DEPTH);
     }
 
     // Abstract methods that the real implementation will provide
@@ -105,15 +126,7 @@ export abstract class SynapticClip extends SynapticNode {
             throw new Error('tempoEnvelope() requires at least 2 keyframes');
         }
 
-        const op: TempoEnvelopeOp = {
-            kind: 'tempoEnvelope',
-            keyframes: keyframes.map(kf => ({ ...kf })), // Shallow copy
-            tick: this.getCurrentTick()
-        };
-
-        this.operations.push(op);
-
-        // Update current tempo to the final keyframe's BPM
+        // Update current tempo to the final keyframe's BPM (Task 058: no operations push)
         this.currentTempo = keyframes[keyframes.length - 1].bpm;
 
         return this;
@@ -152,17 +165,16 @@ export abstract class SynapticClip extends SynapticNode {
             throw new Error(`CC value must be 0-127, got ${value}`);
         }
 
-        // Queue CC operation at current tick
-        const ccOp: CCOperation = {
-            kind: 'cc',
+        // Task 062: Direct-to-Kernel flush (pitch=controller, velocity=value for OPCODE.CC)
+        this.bridge.insertAsync(
+            OPCODE.CC,
             controller,
             value,
-            tick: this.getCurrentTick()
-        };
-        this.operations.push(ccOp);
-
-        // Also maintain current state in map (for potential real-time use)
-        this.ccAutomation.set(controller, value);
+            0,
+            this.getCurrentTick(),
+            false,
+            this.generateSourceId()
+        );
         return this;
     }
 
@@ -185,24 +197,10 @@ export abstract class SynapticClip extends SynapticNode {
             throw new Error('Poly aftertouch requires a note parameter');
         }
 
-        // Parse note if string
-        let midiNote: number | undefined;
-        if (options?.note !== undefined) {
-            midiNote = typeof options.note === 'string' ? parsePitch(options.note) : options.note;
+        // Parse note if string (validation only; Task 058: no operations push)
+        if (options?.note !== undefined && type === 'poly') {
+            typeof options.note === 'string' ? parsePitch(options.note) : options.note;
         }
-
-        // Scale value to 0-127
-        const scaledValue = Math.round(value * 127);
-
-        // Queue aftertouch operation
-        const atOp: AftertouchOperation = {
-            kind: 'aftertouch',
-            type,
-            value: scaledValue,
-            note: midiNote,
-            tick: this.getCurrentTick()
-        };
-        this.operations.push(atOp);
 
         return this;
     }
@@ -212,10 +210,10 @@ export abstract class SynapticClip extends SynapticNode {
      * @param target - Automation target parameter
      * @param value - Target value (volume: 0-1, pan: -1 to 1, others: 0-1)
      * @param rampBeats - Duration to ramp to value (instant if undefined)
-     * @param curve - Ramp curve type (default: 'linear')
+     * @param curve - Ramp curve type (default: CurveType.LINEAR)
      * @throws Error if value is out of range for the target
      */
-    automate(target: AutomationTarget, value: number, rampBeats?: number, curve?: 'linear' | 'exponential' | 'smooth'): this {
+    automate(target: AutomationTarget, value: number, rampBeats?: number, curve?: CurveType): this {
         // Validate value range based on target
         if (target === 'pan') {
             if (value < -1 || value > 1) {
@@ -228,17 +226,7 @@ export abstract class SynapticClip extends SynapticNode {
             }
         }
 
-        // Queue automation operation
-        const autoOp: AutomationOperation = {
-            kind: 'automation',
-            target,
-            value,
-            rampBeats,
-            curve,
-            tick: this.getCurrentTick()
-        };
-        this.operations.push(autoOp);
-
+        // Task 058: No operations push
         return this;
     }
 
@@ -328,7 +316,9 @@ export abstract class SynapticClip extends SynapticNode {
      * @param octave - Base octave (default 4 = middle C octave)
      */
     setScale(root: string, mode: ScaleMode, octave: number = 4): this {
-        this.scaleContext = { root, mode, octave };
+        this._scaleRoot = parsePitch(root + '4') % 12;
+        this._scaleMode = mode;
+        this._scaleOctave = octave;
         return this;
     }
 
@@ -336,15 +326,20 @@ export abstract class SynapticClip extends SynapticNode {
      * Get current scale context.
      */
     getScaleContext(): ScaleContext | null {
-        return this.scaleContext;
+        if (this._scaleRoot < 0) return null;
+        return {
+            root: PITCH_CLASS_TO_ROOT[this._scaleRoot],
+            mode: this._scaleMode,
+            octave: this._scaleOctave
+        };
     }
 
     /**
      * Set key signature context for automatic accidentals.
      * @param root - Key root (e.g., 'G', 'Bb')
-     * @param mode - Key mode ('major' or 'minor')
+     * @param mode - Key mode (ScaleMode.MAJOR or ScaleMode.MINOR)
      */
-    key(root: string, mode: 'major' | 'minor'): this {
+    key(root: string, mode: ScaleMode): this {
         this.keyContext = { root, mode };
         return this;
     }
@@ -358,7 +353,7 @@ export abstract class SynapticClip extends SynapticNode {
 
     /**
      * Set accidental override for the next note.
-     * @param acc - Accidental to apply ('sharp', 'flat', or 'natural')
+     * @param acc - Accidental to apply (Accidental.SHARP, Accidental.FLAT, or Accidental.NATURAL)
      */
     accidental(acc: Accidental): this {
         this.nextAccidental = acc;
@@ -439,47 +434,8 @@ export abstract class SynapticClip extends SynapticNode {
      * @param tick - Start tick
      * @param duration - Duration in ticks
      */
-    protected emitVibratoLFO(tick: number, duration: number): void {
-        // Return if vibrato is disabled
-        if (this.vibratoRate <= 0 || this.vibratoDepth <= 0) return;
-
-        // Sample interval: ~48 ticks (approx 1/40th of a beat at 1920 PPQ)
-        // Correcting unit: duration is in beats. 48 ticks at 1920 PPQ is 0.025 beats.
-        const interval = 0.025;
-
-        // Calculate number of steps
-        const steps = Math.floor(duration / interval);
-
-        // Amplitude: 1 semitone = 4096 units (assuming +/- 2 semitone range = +/- 8192 units)
-        const semitoneUnits = 4096;
-        const amplitude = this.vibratoDepth * semitoneUnits;
-
-        for (let i = 0; i <= steps; i++) {
-            const currentTick = tick + i * interval;
-            if (currentTick >= tick + duration) break;
-
-            // Calculate LFO value (sine wave)
-            // LFO Phase: currentTick * rate
-            const val = Math.sin(currentTick * this.vibratoRate * Math.PI * 2);
-            const bendValue = Math.floor(val * amplitude);
-
-            // Clamp to legal range
-            const clamped = Math.max(-8192, Math.min(8191, bendValue));
-
-            const op: PitchBendOperation = {
-                kind: 'pitchBend',
-                value: clamped,
-                tick: currentTick
-            };
-            this.operations.push(op);
-        }
-
-        // Reset at end
-        this.operations.push({
-            kind: 'pitchBend',
-            value: 0,
-            tick: tick + duration
-        });
+    protected emitVibratoLFO(_tick: number, _duration: number): void {
+        // Task 058: Pitch bend not yet supported by Kernel insertAsync; no-op.
     }
 
     // =========================================================================
@@ -513,8 +469,10 @@ export abstract class SynapticClip extends SynapticNode {
      * @param settings - Humanization settings
      */
     defaultHumanize(settings: HumanizeSettings): this {
-        this._humanizeSettings = settings;
-        // Reinitialize RNG with new seed if provided
+        this._humVel = settings.velocity ?? 0;
+        this._humTiming = settings.timing ?? 0;
+        this._humEnabled = true;
+        this._humSeed = settings.seed ?? -1;
         if (settings.seed !== undefined) {
             this.humanizeRng = new SeededRandom(settings.seed);
         }
@@ -525,7 +483,10 @@ export abstract class SynapticClip extends SynapticNode {
      * Get current humanization settings.
      */
     getHumanizeSettings(): HumanizeSettings | null {
-        return this._humanizeSettings;
+        if (!this._humEnabled) return null;
+        const out: HumanizeSettings = { velocity: this._humVel, timing: this._humTiming };
+        if (this._humSeed >= 0) out.seed = this._humSeed;
+        return out;
     }
 
     /**
@@ -605,20 +566,13 @@ export abstract class SynapticClip extends SynapticNode {
      * @param duration - Duration in ticks
      * @param options - Optional from/to velocities and curve type
      */
-    crescendo(duration: number, options?: { from?: number; to?: number; curve?: 'linear' | 'exponential' | 'ease-in' | 'ease-out' }): this {
-        const from = options?.from ?? 0.4;
-        const to = options?.to ?? 1.0;
-        const curve = options?.curve ?? 'linear';
-
-        this.activeDynamics = {
-            kind: 'dynamics',
-            type: 'crescendo',
-            from,
-            to,
-            duration,
-            curve
-        };
-        this.dynamicsStartTick = this.getCurrentTick();
+    crescendo(duration: number, options?: { from?: number; to?: number; curve?: CurveType }): this {
+        this._dynType = DynamicsType.CRESCENDO;
+        this._dynStart = this.getCurrentTick();
+        this._dynDuration = duration;
+        this._dynFrom = options?.from ?? 0.4;
+        this._dynTo = options?.to ?? 1.0;
+        this._dynCurve = options?.curve ?? CurveType.LINEAR;
         this.velocityCurvePoints = null;
         return this;
     }
@@ -628,20 +582,13 @@ export abstract class SynapticClip extends SynapticNode {
      * @param duration - Duration in ticks
      * @param options - Optional from/to velocities and curve type
      */
-    decrescendo(duration: number, options?: { from?: number; to?: number; curve?: 'linear' | 'exponential' | 'ease-in' | 'ease-out' }): this {
-        const from = options?.from ?? 1.0;
-        const to = options?.to ?? 0.4;
-        const curve = options?.curve ?? 'linear';
-
-        this.activeDynamics = {
-            kind: 'dynamics',
-            type: 'decrescendo',
-            from,
-            to,
-            duration,
-            curve
-        };
-        this.dynamicsStartTick = this.getCurrentTick();
+    decrescendo(duration: number, options?: { from?: number; to?: number; curve?: CurveType }): this {
+        this._dynType = DynamicsType.DECRESCENDO;
+        this._dynStart = this.getCurrentTick();
+        this._dynDuration = duration;
+        this._dynFrom = options?.from ?? 1.0;
+        this._dynTo = options?.to ?? 0.4;
+        this._dynCurve = options?.curve ?? CurveType.LINEAR;
         this.velocityCurvePoints = null;
         return this;
     }
@@ -653,17 +600,12 @@ export abstract class SynapticClip extends SynapticNode {
      * @param options - Optional starting velocity
      */
     velocityRamp(to: number, duration: number, options?: { from?: number }): this {
-        const from = options?.from ?? 0.8;
-
-        this.activeDynamics = {
-            kind: 'dynamics',
-            type: 'ramp',
-            from,
-            to,
-            duration,
-            curve: 'linear'
-        };
-        this.dynamicsStartTick = this.getCurrentTick();
+        this._dynType = DynamicsType.RAMP;
+        this._dynStart = this.getCurrentTick();
+        this._dynDuration = duration;
+        this._dynFrom = options?.from ?? 0.8;
+        this._dynTo = to;
+        this._dynCurve = CurveType.LINEAR;
         this.velocityCurvePoints = null;
         return this;
     }
@@ -681,14 +623,11 @@ export abstract class SynapticClip extends SynapticNode {
         // Sort points by tick offset
         const sortedPoints = [...points].sort((a, b) => a.tick - b.tick);
 
-        this.activeDynamics = {
-            kind: 'dynamics',
-            type: 'curve',
-            from: sortedPoints[0].velocity,
-            to: sortedPoints[sortedPoints.length - 1].velocity,
-            duration
-        };
-        this.dynamicsStartTick = this.getCurrentTick();
+        this._dynType = DynamicsType.CURVE;
+        this._dynStart = this.getCurrentTick();
+        this._dynDuration = duration;
+        this._dynFrom = sortedPoints[0].velocity;
+        this._dynTo = sortedPoints[sortedPoints.length - 1].velocity;
         this.velocityCurvePoints = sortedPoints;
         return this;
     }
@@ -700,47 +639,46 @@ export abstract class SynapticClip extends SynapticNode {
      * @returns Calculated velocity (0-1)
      */
     protected calculateDynamicsVelocity(tick: number, baseVelocity: number): number {
-        if (!this.activeDynamics) {
+        if (this._dynType === DynamicsType.NONE) {
             return baseVelocity;
         }
 
-        const elapsed = tick - this.dynamicsStartTick;
-        const { from, to, duration, curve } = this.activeDynamics;
+        const elapsed = tick - this._dynStart;
 
         // Check if dynamics have expired
-        if (elapsed >= duration) {
-            this.activeDynamics = null;
+        if (elapsed >= this._dynDuration) {
+            this._dynType = DynamicsType.NONE;
             this.velocityCurvePoints = null;
             return baseVelocity;
         }
 
         // Handle custom curve
-        if (this.activeDynamics.type === 'curve' && this.velocityCurvePoints) {
+        if (this._dynType === DynamicsType.CURVE && this.velocityCurvePoints) {
             return this.interpolateCurveVelocity(elapsed, this.velocityCurvePoints);
         }
 
         // Calculate progress (0-1)
-        const progress = elapsed / duration;
+        const progress = elapsed / this._dynDuration;
 
         // Apply curve transformation
-        const easedProgress = this.applyCurve(progress, curve ?? 'linear');
+        const easedProgress = this.applyCurve(progress, this._dynCurve);
 
         // Linear interpolation between from and to
-        return from + (to - from) * easedProgress;
+        return this._dynFrom + (this._dynTo - this._dynFrom) * easedProgress;
     }
 
     /**
      * Apply curve transformation to progress value.
      */
-    protected applyCurve(progress: number, curve: 'linear' | 'exponential' | 'ease-in' | 'ease-out'): number {
+    protected applyCurve(progress: number, curve: CurveType): number {
         switch (curve) {
-            case 'linear':
+            case CurveType.LINEAR:
                 return progress;
-            case 'exponential':
+            case CurveType.EXPONENTIAL:
                 return progress * progress;
-            case 'ease-in':
+            case CurveType.EASE_IN:
                 return progress * progress * progress;
-            case 'ease-out':
+            case CurveType.EASE_OUT:
                 return 1 - Math.pow(1 - progress, 3);
             default:
                 return progress;
@@ -782,14 +720,15 @@ export abstract class SynapticClip extends SynapticNode {
 
     /**
      * Build and return the ClipNode AST structure.
-     * Contains all operations recorded during clip construction.
+     * Task 058: Reads from Kernel via bridge.traverseNotes() (single source of truth).
      */
     build(): ClipNode {
+        const operations = this.toOperations();
         return {
             _version: SCHEMA_VERSION,
             kind: 'clip',
             name: this.clipName,
-            operations: this.operations,
+            operations,
             tempo: this.currentTempo,
             timeSignature: [this.timeSignatureNumerator, this.timeSignatureDenominator],
             swing: this.swingAmount,
@@ -803,29 +742,36 @@ export abstract class SynapticClip extends SynapticNode {
     }
 
     /**
-     * Returns a snapshot of the current operations array.
-     * Implements OperationsSource interface for use with loop() and play().
-     * @returns Array of operations (shallow copy)
+     * Returns operations from Kernel. Implements OperationsSource for loop() and play().
+     * Task 058: Reads via bridge.traverseNotes() (cold path).
      */
     toOperations(): ClipOperation[] {
-        return [...this.operations];
+        const ops: NoteOperation[] = [];
+        const cb = (sourceId: number, pitch: number, velocity: number, duration: number, tick: number, muted: boolean, expressionId?: number) => {
+            ops.push({
+                kind: 'note',
+                pitch,
+                velocity,
+                duration,
+                tick,
+                muted,
+                sourceId,
+                ...(expressionId !== undefined && expressionId !== 0 ? { expressionId } : {})
+            });
+        };
+        this.bridge.traverseNotes(cb as any);
+        return ops;
     }
 
     /**
-     * Freeze the clip for efficient reuse.
-     * Frozen clips can be played multiple times without re-expansion.
-     * Creates a snapshot of current operations (not affected by future changes).
-     * @param options - Freeze options (bpm, timeSignature)
-     * @returns FrozenClip instance
+     * Freeze the clip for efficient reuse. Task 058: Reads from Kernel via toOperations().
      */
     freeze(options?: FreezeOptions): FrozenClip {
-        // Create a deep copy of operations to snapshot current state
-        const snapshotOps = this.operations.map(op => ({ ...op }));
         const clipNode: ClipNode = {
             _version: SCHEMA_VERSION,
             kind: 'clip',
             name: this.clipName,
-            operations: snapshotOps,
+            operations: this.toOperations().map(op => ({ ...op })),
             tempo: this.currentTempo,
             timeSignature: [this.timeSignatureNumerator, this.timeSignatureDenominator],
             swing: this.swingAmount,
@@ -839,65 +785,60 @@ export abstract class SynapticClip extends SynapticNode {
     }
 
     /**
-     * Execute a builder function with isolated state.
-     * Changes to tempo, dynamics, or time signature inside the scope
-     * do not affect the parent clip state.
-     * @param options - Which state to isolate
-     * @param builderFn - Builder function to execute in isolated scope
-     * @returns this for chaining
+     * Task 063: Push current state onto pre-allocated stack (zero-allocation).
+     * Call popState(options) to restore. Max depth: 16.
      */
-    isolate(options: ScopeIsolation, builderFn: (b: this) => this | void): this {
-        // Save current state
-        const savedTempo = this.currentTempo;
-        const savedDynamicsOp = this.activeDynamics;
-        const savedDynamicsTick = this.dynamicsStartTick;
-        const savedCurvePoints = this.velocityCurvePoints ? [...this.velocityCurvePoints] : null;
-        const savedTimeSignatureNum = this.timeSignatureNumerator;
-        const savedTimeSignatureDen = this.timeSignatureDenominator;
-
-        // Track operations added during scope
-        const startOpCount = this.operations.length;
-
-        // Execute builder function
-        const result = builderFn(this as this);
-
-        // If result is a cursor-like object with commit, commit it
-        if (result && result !== this && 'commit' in result) {
-            (result as any).commit();
+    pushState(options: ScopeIsolation): this {
+        if (this._stackPtr >= SynapticClip.MAX_STACK_DEPTH) {
+            throw new Error('SynapticClip: state stack overflow (max 16)');
         }
-
-        // Collect operations added during scope
-        const scopeOps = this.operations.slice(startOpCount);
-
-        // Remove scope operations from main array
-        this.operations.length = startOpCount;
-
-        // Create scope operation if there are any operations
-        if (scopeOps.length > 0) {
-            const scopeOp: ScopeOp = {
-                kind: 'scope',
-                isolate: options,
-                operations: scopeOps.filter(op =>
-                    op.kind === 'note' || op.kind === 'cc' || op.kind === 'aftertouch' || op.kind === 'automation'
-                ) as (NoteOperation | CCOperation | AftertouchOperation | AutomationOperation)[]
-            };
-            this.operations.push(scopeOp);
-        }
-
-        // Restore isolated state
+        const base = this._stackPtr * 9;
         if (options.tempo) {
-            this.currentTempo = savedTempo;
+            this._stateStackNum[base + 0] = this.currentTempo;
         }
         if (options.dynamics) {
-            this.activeDynamics = savedDynamicsOp;
-            this.dynamicsStartTick = savedDynamicsTick;
-            this.velocityCurvePoints = savedCurvePoints;
+            this._stateStackNum[base + 1] = this._dynType;
+            this._stateStackNum[base + 2] = this._dynStart;
+            this._stateStackNum[base + 3] = this._dynDuration;
+            this._stateStackNum[base + 4] = this._dynFrom;
+            this._stateStackNum[base + 5] = this._dynTo;
+            this._stateStackNum[base + 6] = this._dynCurve;
+            this._stateStackRef[this._stackPtr] = this.velocityCurvePoints;
         }
         if (options.timeSignature) {
-            this.timeSignatureNumerator = savedTimeSignatureNum;
-            this.timeSignatureDenominator = savedTimeSignatureDen;
+            this._stateStackNum[base + 7] = this.timeSignatureNumerator;
+            this._stateStackNum[base + 8] = this.timeSignatureDenominator;
         }
+        this._stackPtr++;
+        return this;
+    }
 
+    /**
+     * Task 063: Pop state from stack and restore (zero-allocation).
+     * options must match the corresponding pushState(options).
+     */
+    popState(options: ScopeIsolation): this {
+        if (this._stackPtr <= 0) {
+            throw new Error('SynapticClip: state stack underflow');
+        }
+        this._stackPtr--;
+        const base = this._stackPtr * 9;
+        if (options.tempo) {
+            this.currentTempo = this._stateStackNum[base + 0];
+        }
+        if (options.dynamics) {
+            this._dynType = this._stateStackNum[base + 1] as DynamicsType;
+            this._dynStart = this._stateStackNum[base + 2];
+            this._dynDuration = this._stateStackNum[base + 3];
+            this._dynFrom = this._stateStackNum[base + 4];
+            this._dynTo = this._stateStackNum[base + 5];
+            this._dynCurve = this._stateStackNum[base + 6] as CurveType;
+            this.velocityCurvePoints = this._stateStackRef[this._stackPtr];
+        }
+        if (options.timeSignature) {
+            this.timeSignatureNumerator = this._stateStackNum[base + 7];
+            this.timeSignatureDenominator = this._stateStackNum[base + 8];
+        }
         return this;
     }
 
@@ -945,10 +886,10 @@ export abstract class SynapticClip extends SynapticNode {
         // 5. Apply humanization (velocity + timing) unless precise flag is set
         let humanizedVel = dynamicsVel;
         let humanizedTick = swungTick;
-        if (!precise && this._humanizeSettings) {
-            const result = this.applyHumanizeSettings(dynamicsVel, swungTick);
-            humanizedVel = result.velocity;
-            humanizedTick = result.tick;
+        if (!precise && this._humEnabled) {
+            this.applyHumanizeSettings(dynamicsVel, swungTick);
+            humanizedVel = this._humanizeVelOut;
+            humanizedTick = this._humanizeTickOut;
         } else if (!precise) {
             // Legacy micro-variation for backward compatibility
             humanizedVel = this.applyHumanization(dynamicsVel);
@@ -968,8 +909,9 @@ export abstract class SynapticClip extends SynapticNode {
             // I'll use the final timestamps (humanizedTick, quantizedDuration) to match the note's actual position in the stream.
         }
 
-        // 7. Final kernel insertion
+        // 7. Final kernel insertion (Task 058: direct write, no operations push)
         const finalVel = Math.floor(humanizedVel * 127);
+        const finalExpressionId = (expressionId && expressionId !== 0) ? expressionId : (this._expressionId ?? undefined);
         const ptr = this.bridge.insertAsync(
             OPCODE.NOTE,
             finalPitch,
@@ -978,26 +920,11 @@ export abstract class SynapticClip extends SynapticNode {
             humanizedTick,
             muted,
             sourceId,
-            this.exitId, // Chain to previous node (if any)
-            expressionId
+            this.exitId,
+            finalExpressionId
         );
 
-        // 8. Track operation for build() output
-        // Include expressionId from parameter (if non-zero) or clip-level setting
-        // expressionId=0 from cursor means "use clip default"
-        const finalExpressionId = (expressionId && expressionId !== 0) ? expressionId : (this._expressionId ?? undefined);
-        this.operations.push({
-            kind: 'note',
-            pitch: finalPitch,
-            velocity: finalVel,
-            duration: quantizedDuration,
-            tick: humanizedTick,
-            muted,
-            sourceId,
-            expressionId: finalExpressionId
-        });
-
-        // 7. Update Topology (Generic SynapticNode support)
+        // 8. Update Topology (Generic SynapticNode support)
         if (ptr >= 0) {
             if (this.entryId === undefined) {
                 this.entryId = sourceId;
@@ -1033,32 +960,25 @@ export abstract class SynapticClip extends SynapticNode {
 
     /**
      * Apply humanization settings to velocity and timing.
+     * Writes result to _humanizeVelOut and _humanizeTickOut (no allocation).
      * @param velocity - Input velocity (0-1)
      * @param tick - Input tick
-     * @returns Object with humanized velocity and tick
      */
-    protected applyHumanizeSettings(velocity: number, tick: number): { velocity: number; tick: number } {
-        const settings = this._humanizeSettings!;
+    protected applyHumanizeSettings(velocity: number, tick: number): void {
+        this._humanizeVelOut = velocity;
+        this._humanizeTickOut = tick;
 
-        // Apply velocity variation
-        let humanizedVel = velocity;
-        if (settings.velocity && settings.velocity > 0) {
-            const velVariation = (this.humanizeRng.next() - 0.5) * 2 * settings.velocity;
-            humanizedVel = Math.max(0, Math.min(1, velocity + velVariation));
+        if (this._humVel > 0) {
+            const velVariation = (this.humanizeRng.next() - 0.5) * 2 * this._humVel;
+            this._humanizeVelOut = Math.max(0, Math.min(1, velocity + velVariation));
         }
 
-        // Apply timing variation (ms → beats conversion)
-        // Assumes 120 BPM as reference: 1 beat = 500ms, so 1ms = 0.002 beats
-        let humanizedTick = tick;
-        if (settings.timing && settings.timing > 0) {
-            // Convert ms to beats using current tempo
+        if (this._humTiming > 0) {
             const msPerBeat = 60000 / this.currentTempo;
-            const maxOffsetBeats = settings.timing / msPerBeat;
+            const maxOffsetBeats = this._humTiming / msPerBeat;
             const timingVariation = (this.humanizeRng.next() - 0.5) * 2 * maxOffsetBeats;
-            humanizedTick = tick + timingVariation;
+            this._humanizeTickOut = tick + timingVariation;
         }
-
-        return { velocity: humanizedVel, tick: humanizedTick };
     }
 
     /**

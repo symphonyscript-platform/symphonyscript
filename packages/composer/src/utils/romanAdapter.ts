@@ -5,6 +5,7 @@
  */
 
 import { romanToChord as theoryRomanToChord, KEY_ROOT, createKey } from '@symphonyscript/theory';
+import { scaleModeToKeyString } from './key';
 import type { KeyContext } from '../types';
 
 /**
@@ -42,7 +43,7 @@ export function toTheoryKeyContext(keyContext: KeyContext): ReturnType<typeof cr
     if (!keyRootKey) return null;
 
     const root = KEY_ROOT[keyRootKey];
-    return createKey(root, keyContext.mode);
+    return createKey(root, scaleModeToKeyString(keyContext.mode));
 }
 
 /**

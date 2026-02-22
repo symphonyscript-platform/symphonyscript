@@ -1,60 +1,58 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
-import { SiliconBridge } from '@symphonyscript/kernel';
 import { applyKeySignature, hasExplicitAccidental } from '../utils/key';
-import type { KeyContext } from '../types';
+import { ScaleMode, Accidental, type KeyContext } from '../types';
+import { createTestBridge } from '../test-bridge';
 
 describe('Key signature context', () => {
     let melody: SynapticMelody;
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
 
     beforeEach(() => {
-        mockBridge = {
-            insertAsync: jest.fn().mockReturnValue(0)
-        } as any;
+        mockBridge = createTestBridge();
         melody = new SynapticMelody(mockBridge);
     });
 
     describe('key()', () => {
         it('sets key context', () => {
-            melody.key('G', 'major');
+            melody.key('G', ScaleMode.MAJOR);
 
             const ctx = melody.getKeyContext();
-            expect(ctx).toEqual({ root: 'G', mode: 'major' });
+            expect(ctx).toEqual({ root: 'G', mode: ScaleMode.MAJOR });
         });
 
         it('returns this for chaining', () => {
-            const result = melody.key('D', 'minor');
+            const result = melody.key('D', ScaleMode.MINOR);
             expect(result).toBe(melody);
         });
 
         it('can be changed', () => {
-            melody.key('G', 'major');
-            melody.key('F', 'major');
+            melody.key('G', ScaleMode.MAJOR);
+            melody.key('F', ScaleMode.MAJOR);
 
             const ctx = melody.getKeyContext();
-            expect(ctx).toEqual({ root: 'F', mode: 'major' });
+            expect(ctx).toEqual({ root: 'F', mode: ScaleMode.MAJOR });
         });
     });
 
     describe('accidental()', () => {
         it('returns this for chaining', () => {
-            const result = melody.accidental('sharp');
+            const result = melody.accidental(Accidental.SHARP);
             expect(result).toBe(melody);
         });
 
         it('is consumed after use', () => {
-            melody.accidental('sharp');
+            melody.accidental(Accidental.SHARP);
             const first = melody.consumeAccidental();
             const second = melody.consumeAccidental();
 
-            expect(first).toBe('sharp');
+            expect(first).toBe(Accidental.SHARP);
             expect(second).toBeNull();
         });
     });
 
     describe('note() with key context', () => {
         it('note("F4") becomes F#4 in G major', () => {
-            melody.key('G', 'major')
+            melody.key('G', ScaleMode.MAJOR)
                 .note('F4').commit();
 
             // F#4 = MIDI 66
@@ -63,7 +61,7 @@ describe('Key signature context', () => {
         });
 
         it('note("B4") becomes Bb4 in F major', () => {
-            melody.key('F', 'major')
+            melody.key('F', ScaleMode.MAJOR)
                 .note('B4').commit();
 
             // Bb4 = MIDI 70
@@ -72,7 +70,7 @@ describe('Key signature context', () => {
         });
 
         it('note("C4") stays C4 in G major (no accidental for C)', () => {
-            melody.key('G', 'major')
+            melody.key('G', ScaleMode.MAJOR)
                 .note('C4').commit();
 
             // C4 = MIDI 60
@@ -81,7 +79,7 @@ describe('Key signature context', () => {
         });
 
         it('multiple sharps in D major (F# and C#)', () => {
-            melody.key('D', 'major');
+            melody.key('D', ScaleMode.MAJOR);
             melody.note('F4').commit();
             melody.note('C4').commit();
 
@@ -92,7 +90,7 @@ describe('Key signature context', () => {
         });
 
         it('minor key accidentals (E minor has F#)', () => {
-            melody.key('E', 'minor')
+            melody.key('E', ScaleMode.MINOR)
                 .note('F4').commit();
 
             // F#4 = 66
@@ -103,8 +101,8 @@ describe('Key signature context', () => {
 
     describe('accidental override', () => {
         it('accidental("natural").note("F4") stays F4 in G major', () => {
-            melody.key('G', 'major')
-                .accidental('natural')
+            melody.key('G', ScaleMode.MAJOR)
+                .accidental(Accidental.NATURAL)
                 .note('F4').commit();
 
             // F4 = MIDI 65 (natural overrides key signature)
@@ -113,7 +111,7 @@ describe('Key signature context', () => {
         });
 
         it('accidental("sharp").note("C4") becomes C#4', () => {
-            melody.accidental('sharp')
+            melody.accidental(Accidental.SHARP)
                 .note('C4').commit();
 
             // C#4 = MIDI 61
@@ -122,7 +120,7 @@ describe('Key signature context', () => {
         });
 
         it('accidental("flat").note("B4") becomes Bb4', () => {
-            melody.accidental('flat')
+            melody.accidental(Accidental.FLAT)
                 .note('B4').commit();
 
             // Bb4 = MIDI 70
@@ -131,8 +129,8 @@ describe('Key signature context', () => {
         });
 
         it('accidental is consumed after one note', () => {
-            melody.key('G', 'major')
-                .accidental('natural')
+            melody.key('G', ScaleMode.MAJOR)
+                .accidental(Accidental.NATURAL)
                 .note('F4').commit();  // Should be F4 (natural override)
             melody.note('F4').commit(); // Should be F#4 (key signature applies)
 
@@ -144,7 +142,7 @@ describe('Key signature context', () => {
 
     describe('explicit accidentals in note name', () => {
         it('note("F#4") is not modified by key context', () => {
-            melody.key('C', 'major') // C major has no sharps
+            melody.key('C', ScaleMode.MAJOR) // C major has no sharps
                 .note('F#4').commit();
 
             // F#4 = MIDI 66 (explicit accidental preserved)
@@ -153,7 +151,7 @@ describe('Key signature context', () => {
         });
 
         it('note("Bb4") is not modified by key context', () => {
-            melody.key('G', 'major') // G major has no Bb
+            melody.key('G', ScaleMode.MAJOR) // G major has no Bb
                 .note('Bb4').commit();
 
             // Bb4 = MIDI 70 (explicit accidental preserved)
@@ -162,7 +160,7 @@ describe('Key signature context', () => {
         });
 
         it('explicit accidental overrides key signature', () => {
-            melody.key('G', 'major'); // G major has F#
+            melody.key('G', ScaleMode.MAJOR); // G major has F#
             melody.note('F4').commit();   // Should become F#4
             melody.note('Fb4').commit(); // Explicit Fb4 stays Fb4
 
@@ -174,7 +172,7 @@ describe('Key signature context', () => {
 
     describe('numeric input', () => {
         it('numeric input ignores key context', () => {
-            melody.key('G', 'major')
+            melody.key('G', ScaleMode.MAJOR)
                 .note(65).commit(); // MIDI 65 = F4
 
             const result = melody.build();
@@ -182,8 +180,8 @@ describe('Key signature context', () => {
         });
 
         it('accidental is consumed even for numeric input', () => {
-            melody.key('G', 'major')
-                .accidental('sharp')
+            melody.key('G', ScaleMode.MAJOR)
+                .accidental(Accidental.SHARP)
                 .note(60).commit();  // C4, accidental consumed but not applied
             melody.note('F4').commit(); // Should be F#4 (key applies, accidental consumed)
 
@@ -194,29 +192,30 @@ describe('Key signature context', () => {
     });
 
     describe('various key signatures', () => {
-        const testCases: [string, 'major' | 'minor', string, number][] = [
+        const testCases: [string, ScaleMode, string, number][] = [
             // Major keys - sharps
-            ['G', 'major', 'F4', 66],  // F#4
-            ['D', 'major', 'C4', 61],  // C#4
-            ['A', 'major', 'G4', 68],  // G#4
-            ['E', 'major', 'D4', 63],  // D#4
-            ['B', 'major', 'A4', 70],  // A#4
+            ['G', ScaleMode.MAJOR, 'F4', 66],  // F#4
+            ['D', ScaleMode.MAJOR, 'C4', 61],  // C#4
+            ['A', ScaleMode.MAJOR, 'G4', 68],  // G#4
+            ['E', ScaleMode.MAJOR, 'D4', 63],  // D#4
+            ['B', ScaleMode.MAJOR, 'A4', 70],  // A#4
             
             // Major keys - flats
-            ['F', 'major', 'B4', 70],  // Bb4
-            ['Bb', 'major', 'E4', 63], // Eb4
-            ['Eb', 'major', 'A4', 68], // Ab4
-            ['Ab', 'major', 'D4', 61], // Db4
+            ['F', ScaleMode.MAJOR, 'B4', 70],  // Bb4
+            ['Bb', ScaleMode.MAJOR, 'E4', 63], // Eb4
+            ['Eb', ScaleMode.MAJOR, 'A4', 68], // Ab4
+            ['Ab', ScaleMode.MAJOR, 'D4', 61], // Db4
             
             // Minor keys
-            ['E', 'minor', 'F4', 66],  // F#4
-            ['D', 'minor', 'B4', 70],  // Bb4
-            ['G', 'minor', 'E4', 63],  // Eb4
+            ['E', ScaleMode.MINOR, 'F4', 66],  // F#4
+            ['D', ScaleMode.MINOR, 'B4', 70],  // Bb4
+            ['G', ScaleMode.MINOR, 'E4', 63],  // Eb4
         ];
 
         testCases.forEach(([root, mode, note, expectedPitch]) => {
             it(`${root} ${mode}: ${note} → MIDI ${expectedPitch}`, () => {
-                melody = new SynapticMelody(mockBridge);
+                const bridge = createTestBridge();
+                melody = new SynapticMelody(bridge);
                 
                 melody.key(root, mode).note(note).commit();
                 
@@ -233,30 +232,30 @@ describe('applyKeySignature utility', () => {
     });
 
     it('applies sharp in G major', () => {
-        const ctx: KeyContext = { root: 'G', mode: 'major' };
+        const ctx: KeyContext = { root: 'G', mode: ScaleMode.MAJOR };
         expect(applyKeySignature('F4', ctx)).toBe('F#4');
     });
 
     it('applies flat in F major', () => {
-        const ctx: KeyContext = { root: 'F', mode: 'major' };
+        const ctx: KeyContext = { root: 'F', mode: ScaleMode.MAJOR };
         expect(applyKeySignature('B4', ctx)).toBe('Bb4');
     });
 
     it('natural override strips accidental', () => {
-        const ctx: KeyContext = { root: 'G', mode: 'major' };
-        expect(applyKeySignature('F4', ctx, 'natural')).toBe('F4');
+        const ctx: KeyContext = { root: 'G', mode: ScaleMode.MAJOR };
+        expect(applyKeySignature('F4', ctx, Accidental.NATURAL)).toBe('F4');
     });
 
     it('sharp override adds sharp', () => {
-        expect(applyKeySignature('C4', null, 'sharp')).toBe('C#4');
+        expect(applyKeySignature('C4', null, Accidental.SHARP)).toBe('C#4');
     });
 
     it('flat override adds flat', () => {
-        expect(applyKeySignature('B4', null, 'flat')).toBe('Bb4');
+        expect(applyKeySignature('B4', null, Accidental.FLAT)).toBe('Bb4');
     });
 
     it('does not modify explicit accidentals', () => {
-        const ctx: KeyContext = { root: 'C', mode: 'major' };
+        const ctx: KeyContext = { root: 'C', mode: ScaleMode.MAJOR };
         expect(applyKeySignature('F#4', ctx)).toBe('F#4');
         expect(applyKeySignature('Bb4', ctx)).toBe('Bb4');
     });

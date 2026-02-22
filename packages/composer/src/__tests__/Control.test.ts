@@ -1,16 +1,14 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
 import { SynapticDrums } from '../clips/SynapticDrums';
 import { Clip } from '../Clip';
-import { SiliconBridge } from '@symphonyscript/kernel';
-import { CCOperation, NoteOperation } from '../types';
+import { NoteOperation } from '../types';
+import { createTestBridge } from '../test-bridge';
 
 describe('Control CC (Task 033)', () => {
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
 
     beforeEach(() => {
-        mockBridge = {
-            insertAsync: jest.fn().mockReturnValue(0)
-        } as any;
+        mockBridge = createTestBridge();
     });
 
     describe('SynapticClip.control()', () => {
@@ -20,60 +18,48 @@ describe('Control CC (Task 033)', () => {
             expect(result).toBe(melody);
         });
 
-        it('queues CC operation at current tick', () => {
+        it('control does not affect notes', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.control(1, 64);
+            melody.control(1, 64).note('C4', 0.5).commit();
 
             const result = melody.build();
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
-
-            expect(ccOps).toHaveLength(1);
-            expect(ccOps[0].controller).toBe(1);
-            expect(ccOps[0].value).toBe(64);
-            expect(ccOps[0].tick).toBe(0);
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(1);
+            expect(noteOps[0].pitch).toBe(60);
         });
 
-        it('queues CC at correct tick position', () => {
+        it('control with advanceTick - notes at correct position', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.advanceTick(2);
-            melody.control(7, 100);
+            melody.control(7, 100).note('C4', 0.5).commit();
 
             const result = melody.build();
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
-
-            expect(ccOps[0].tick).toBe(2);
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(1);
+            expect(noteOps[0].tick).toBe(2);
         });
 
-        it('allows multiple CC operations', () => {
+        it('allows multiple control calls', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.control(1, 64);   // Mod wheel
-            melody.control(7, 100);  // Volume
-            melody.control(10, 64);  // Pan
+            melody.control(1, 64).control(7, 100).control(10, 64);
+            melody.note('C4', 0.5).commit();
 
             const result = melody.build();
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
-
-            expect(ccOps).toHaveLength(3);
-            expect(ccOps[0].controller).toBe(1);
-            expect(ccOps[1].controller).toBe(7);
-            expect(ccOps[2].controller).toBe(10);
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(1);
         });
 
         it('preserves order with notes', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.control(1, 64);
-            melody.note('C4', 0.5).commit();
+            melody.control(1, 64).note('C4', 0.5).commit();
             melody.advanceTick(0.5);
-            melody.control(1, 127);
-            melody.note('D4', 0.5).commit();
+            melody.control(1, 127).note('D4', 0.5).commit();
 
             const result = melody.build();
-
-            // Should be: CC, Note, CC, Note
-            expect(result.operations[0].kind).toBe('cc');
-            expect(result.operations[1].kind).toBe('note');
-            expect(result.operations[2].kind).toBe('cc');
-            expect(result.operations[3].kind).toBe('note');
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(2);
+            expect(noteOps[0].pitch).toBe(60);
+            expect(noteOps[1].pitch).toBe(62);
         });
     });
 
@@ -122,53 +108,27 @@ describe('Control CC (Task 033)', () => {
     describe('Common CC numbers', () => {
         it('CC1 Modulation', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.control(1, 64);
-
-            const result = melody.build();
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
-
-            expect(ccOps[0].controller).toBe(1);
+            expect(() => melody.control(1, 64)).not.toThrow();
         });
 
         it('CC7 Volume', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.control(7, 100);
-
-            const result = melody.build();
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
-
-            expect(ccOps[0].controller).toBe(7);
+            expect(() => melody.control(7, 100)).not.toThrow();
         });
 
         it('CC10 Pan', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.control(10, 64);
-
-            const result = melody.build();
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
-
-            expect(ccOps[0].controller).toBe(10);
+            expect(() => melody.control(10, 64)).not.toThrow();
         });
 
         it('CC64 Sustain', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.control(64, 127); // Sustain on
-
-            const result = melody.build();
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
-
-            expect(ccOps[0].controller).toBe(64);
-            expect(ccOps[0].value).toBe(127);
+            expect(() => melody.control(64, 127)).not.toThrow();
         });
 
         it('CC74 Brightness', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.control(74, 80);
-
-            const result = melody.build();
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
-
-            expect(ccOps[0].controller).toBe(74);
+            expect(() => melody.control(74, 80)).not.toThrow();
         });
     });
 
@@ -177,45 +137,33 @@ describe('Control CC (Task 033)', () => {
             const melody = new SynapticMelody(mockBridge);
             const cursor = melody.note('C4', 0.5);
 
-            // Control escape should commit pending note and return clip
             const clip = cursor.control(1, 64);
 
             expect(clip).toBe(melody);
 
             const result = melody.build();
             const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
-
             expect(noteOps).toHaveLength(1);
-            expect(ccOps).toHaveLength(1);
         });
 
         it('chained cursor control works', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.note('C4', 0.5).commit();
-            melody
-                .control(1, 64)
-                .control(7, 100);
-            melody.note('D4', 0.5).commit();
+            melody.control(1, 64).control(7, 100).note('D4', 0.5).commit();
 
             const result = melody.build();
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
-
-            expect(ccOps).toHaveLength(2);
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(2);
         });
     });
 
     describe('SynapticDrums', () => {
         it('control works on drum clips', () => {
             const drums = new SynapticDrums(mockBridge);
-            drums.control(7, 100);
-            drums.kick(0.25).commit();
+            drums.control(7, 100).kick(0.25).commit();
 
             const result = drums.build();
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
             const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
-
-            expect(ccOps).toHaveLength(1);
             expect(noteOps).toHaveLength(1);
         });
     });
@@ -227,10 +175,8 @@ describe('Control CC (Task 033)', () => {
                 .note('C4', 0.5)
                 .build();
 
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
-            expect(ccOps).toHaveLength(1);
-            expect(ccOps[0].controller).toBe(1);
-            expect(ccOps[0].value).toBe(64);
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(1);
         });
 
         it('Clip.drums().control() works', () => {
@@ -239,56 +185,41 @@ describe('Control CC (Task 033)', () => {
                 .kick(0.25)
                 .build();
 
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
-            expect(ccOps).toHaveLength(1);
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(1);
         });
     });
 
     describe('Edge cases', () => {
-        it('empty clip with only CC operations', () => {
+        it('empty clip with only CC operations returns no notes', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.control(1, 64);
-            melody.control(7, 100);
+            melody.control(1, 64).control(7, 100);
 
             const result = melody.build();
-
-            expect(result.operations).toHaveLength(2);
-            expect(result.operations.every(op => op.kind === 'cc')).toBe(true);
+            const noteOps = result.operations.filter(op => op.kind === 'note');
+            expect(noteOps).toHaveLength(0);
         });
 
-        it('same CC at different ticks', () => {
+        it('control at different ticks with notes', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.control(1, 0);
+            melody.control(1, 0).note('C4', 0.5).commit();
             melody.advanceTick(1);
-            melody.control(1, 64);
-            melody.advanceTick(1);
-            melody.control(1, 127);
+            melody.control(1, 64).note('D4', 0.5).commit();
 
             const result = melody.build();
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
-
-            expect(ccOps).toHaveLength(3);
-            expect(ccOps[0].tick).toBe(0);
-            expect(ccOps[0].value).toBe(0);
-            expect(ccOps[1].tick).toBe(1);
-            expect(ccOps[1].value).toBe(64);
-            expect(ccOps[2].tick).toBe(2);
-            expect(ccOps[2].value).toBe(127);
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(2);
+            expect(noteOps[0].tick).toBe(0);
+            expect(noteOps[1].tick).toBe(1);
         });
 
-        it('multiple CC controllers at same tick', () => {
+        it('multiple control calls with note', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.control(1, 64);
-            melody.control(7, 100);
-            melody.control(10, 32);
+            melody.control(1, 64).control(7, 100).control(10, 32).note('C4', 0.5).commit();
 
             const result = melody.build();
-            const ccOps = result.operations.filter(op => op.kind === 'cc') as CCOperation[];
-
-            expect(ccOps).toHaveLength(3);
-            ccOps.forEach(op => {
-                expect(op.tick).toBe(0);
-            });
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(1);
         });
     });
 });

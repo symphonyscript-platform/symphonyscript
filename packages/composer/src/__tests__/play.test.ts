@@ -1,21 +1,19 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
-import { SiliconBridge } from '@symphonyscript/kernel';
 import { ClipNode, SCHEMA_VERSION } from '../types';
+import { createTestBridge } from '../test-bridge';
 
 describe('SynapticMelody.play()', () => {
     let melody: SynapticMelody;
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
 
     beforeEach(() => {
-        mockBridge = {
-            insertAsync: jest.fn().mockReturnValue(0)
-        } as any;
+        mockBridge = createTestBridge();
         melody = new SynapticMelody(mockBridge);
     });
 
     it('inserts operations from another SynapticMelody', () => {
-        // Create source clip
-        const source = new SynapticMelody(mockBridge);
+        const sourceBridge = createTestBridge();
+        const source = new SynapticMelody(sourceBridge);
         source.note('C4', 0.5).commit();
         source.note('E4', 0.25).commit();
 
@@ -48,10 +46,9 @@ describe('SynapticMelody.play()', () => {
     });
 
     it('offsets operations by current tick position', () => {
-        // Advance melody tick to 1.0 using rest()
         melody.rest(1.0);
-
-        const source = new SynapticMelody(mockBridge);
+        const sourceBridge = createTestBridge();
+        const source = new SynapticMelody(sourceBridge);
         source.note('C4', 0.5).commit();
 
         melody.play(source);
@@ -63,7 +60,8 @@ describe('SynapticMelody.play()', () => {
     });
 
     it('advances tick by source clip duration', () => {
-        const source = new SynapticMelody(mockBridge);
+        const sourceBridge = createTestBridge();
+        const source = new SynapticMelody(sourceBridge);
         source.note('C4', 0.5);  // Pending
         source.note('E4', 0.25).commit();  // Commits C4, makes E4 pending, then commits E4
 
@@ -75,14 +73,16 @@ describe('SynapticMelody.play()', () => {
     });
 
     it('returns this for chaining', () => {
-        const source = new SynapticMelody(mockBridge);
+        const sourceBridge = createTestBridge();
+        const source = new SynapticMelody(sourceBridge);
         const result = melody.play(source);
 
         expect(result).toBe(melody);
     });
 
     it('handles empty source clip', () => {
-        const source = new SynapticMelody(mockBridge);
+        const sourceBridge = createTestBridge();
+        const source = new SynapticMelody(sourceBridge);
 
         melody.play(source);
 

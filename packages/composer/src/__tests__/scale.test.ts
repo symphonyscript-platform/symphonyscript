@@ -1,34 +1,33 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
-import { SiliconBridge } from '@symphonyscript/kernel';
+import { ScaleMode } from '../types';
+import { createTestBridge } from '../test-bridge';
 
 describe('Scale context and degree()', () => {
     let melody: SynapticMelody;
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
 
     beforeEach(() => {
-        mockBridge = {
-            insertAsync: jest.fn().mockReturnValue(0)
-        } as any;
+        mockBridge = createTestBridge();
         melody = new SynapticMelody(mockBridge);
     });
 
     describe('setScale()', () => {
         it('sets scale context', () => {
-            melody.setScale('G', 'major');
+            melody.setScale('G', ScaleMode.MAJOR);
 
             const ctx = melody.getScaleContext();
-            expect(ctx).toEqual({ root: 'G', mode: 'major', octave: 4 });
+            expect(ctx).toEqual({ root: 'G', mode: ScaleMode.MAJOR, octave: 4 });
         });
 
         it('sets scale context with custom octave', () => {
-            melody.setScale('C', 'minor', 5);
+            melody.setScale('C', ScaleMode.MINOR, 5);
 
             const ctx = melody.getScaleContext();
-            expect(ctx).toEqual({ root: 'C', mode: 'minor', octave: 5 });
+            expect(ctx).toEqual({ root: 'C', mode: ScaleMode.MINOR, octave: 5 });
         });
 
         it('returns this for chaining', () => {
-            const result = melody.setScale('C', 'major');
+            const result = melody.setScale('C', ScaleMode.MAJOR);
             expect(result).toBe(melody);
         });
     });
@@ -39,7 +38,7 @@ describe('Scale context and degree()', () => {
         });
 
         it('degree(1) returns root note in C major', () => {
-            melody.setScale('C', 'major');
+            melody.setScale('C', ScaleMode.MAJOR);
             melody.degree(1, 0.25).commit();
 
             const result = melody.build();
@@ -47,7 +46,7 @@ describe('Scale context and degree()', () => {
         });
 
         it('degree(3) returns major third in C major', () => {
-            melody.setScale('C', 'major');
+            melody.setScale('C', ScaleMode.MAJOR);
             melody.degree(3, 0.25).commit();
 
             const result = melody.build();
@@ -55,7 +54,7 @@ describe('Scale context and degree()', () => {
         });
 
         it('degree(3) returns minor third in C minor', () => {
-            melody.setScale('C', 'minor');
+            melody.setScale('C', ScaleMode.MINOR);
             melody.degree(3, 0.25).commit();
 
             const result = melody.build();
@@ -63,7 +62,7 @@ describe('Scale context and degree()', () => {
         });
 
         it('degree(1) in G major returns G4', () => {
-            melody.setScale('G', 'major');
+            melody.setScale('G', ScaleMode.MAJOR);
             melody.degree(1, 0.25).commit();
 
             const result = melody.build();
@@ -71,7 +70,7 @@ describe('Scale context and degree()', () => {
         });
 
         it('degree(8) wraps to next octave', () => {
-            melody.setScale('C', 'major');
+            melody.setScale('C', ScaleMode.MAJOR);
             melody.degree(8, 0.25).commit();
 
             const result = melody.build();
@@ -79,7 +78,7 @@ describe('Scale context and degree()', () => {
         });
 
         it('octaveOffset shifts octaves', () => {
-            melody.setScale('C', 'major');
+            melody.setScale('C', ScaleMode.MAJOR);
             melody.degree(1, 0.25, { octaveOffset: 1 }).commit();
 
             const result = melody.build();
@@ -87,7 +86,7 @@ describe('Scale context and degree()', () => {
         });
 
         it('alteration adds/subtracts semitones', () => {
-            melody.setScale('C', 'major');
+            melody.setScale('C', ScaleMode.MAJOR);
             melody.degree(2, 0.25, { alteration: 1 }).commit(); // D# instead of D
 
             const result = melody.build();
@@ -95,7 +94,7 @@ describe('Scale context and degree()', () => {
         });
 
         it('negative alteration flattens', () => {
-            melody.setScale('C', 'major');
+            melody.setScale('C', ScaleMode.MAJOR);
             melody.degree(5, 0.25, { alteration: -1 }).commit(); // Gb instead of G
 
             const result = melody.build();
@@ -103,10 +102,11 @@ describe('Scale context and degree()', () => {
         });
 
         it('supports all scale modes', () => {
-            const modes = ['major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian'] as const;
+            const modes = [ScaleMode.MAJOR, ScaleMode.MINOR, ScaleMode.DORIAN, ScaleMode.PHRYGIAN, ScaleMode.LYDIAN, ScaleMode.MIXOLYDIAN, ScaleMode.LOCRIAN];
 
             for (const mode of modes) {
-                const m = new SynapticMelody(mockBridge);
+                const bridge = createTestBridge();
+                const m = new SynapticMelody(bridge);
                 m.setScale('C', mode);
                 m.degree(1, 0.25).commit();
 
@@ -115,12 +115,14 @@ describe('Scale context and degree()', () => {
         });
 
         it('dorian has raised 6th compared to minor', () => {
-            const minor = new SynapticMelody(mockBridge);
-            minor.setScale('C', 'minor');
+            const minorBridge = createTestBridge();
+            const minor = new SynapticMelody(minorBridge);
+            minor.setScale('C', ScaleMode.MINOR);
             minor.degree(6, 0.25).commit();
 
-            const dorian = new SynapticMelody(mockBridge);
-            dorian.setScale('C', 'dorian');
+            const dorianBridge = createTestBridge();
+            const dorian = new SynapticMelody(dorianBridge);
+            dorian.setScale('C', ScaleMode.DORIAN);
             dorian.degree(6, 0.25).commit();
 
             // Minor 6th = 8 semitones (Ab), Dorian 6th = 9 semitones (A)

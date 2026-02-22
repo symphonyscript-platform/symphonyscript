@@ -1,16 +1,14 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
 import { SynapticDrums } from '../clips/SynapticDrums';
 import { Clip } from '../Clip';
-import { SiliconBridge } from '@symphonyscript/kernel';
+import { createTestBridge } from '../test-bridge';
 
 describe('Preview (Task 037)', () => {
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
     let consoleSpy: jest.SpyInstance;
 
     beforeEach(() => {
-        mockBridge = {
-            insertAsync: jest.fn().mockReturnValue(0)
-        } as any;
+        mockBridge = createTestBridge();
         consoleSpy = jest.spyOn(console, 'log').mockImplementation();
     });
 

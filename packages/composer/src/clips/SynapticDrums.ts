@@ -5,23 +5,40 @@ import { EuclideanDrumOptions, DrumMap } from '../types';
 import { euclidean, rotatePattern } from '@symphonyscript/theory';
 import { parsePitch } from '../utils/pitch';
 
-/**
- * Default drum mapping (GM Standard).
- * Maps drum names to MIDI note numbers.
- */
-const DEFAULT_DRUM_MAP: DrumMap = {
-    'kick': 36,      // C1
-    'snare': 38,     // D1
-    'hat': 42,       // F#1 (closed hi-hat)
-    'openhat': 46,   // A#1
-    'crash': 49,     // C#2
-    'ride': 51,      // D#2
-    'tom1': 48,      // C2
-    'tom2': 45,      // A1
-    'tom3': 43,      // G1
-    'clap': 39,      // D#1
-    'rim': 37,       // C#1
-};
+/** Standard drum slot indices (O(1) lookup). */
+const enum DrumSlot {
+    KICK = 0,
+    SNARE = 1,
+    HAT = 2,
+    OPENHAT = 3,
+    CRASH = 4,
+    RIDE = 5,
+    TOM1 = 6,
+    TOM2 = 7,
+    TOM3 = 8,
+    CLAP = 9,
+    RIM = 10,
+}
+
+/** Name to standard drum slot. Shared, no per-instance allocation. */
+const STANDARD_DRUM_SLOT: Record<string, DrumSlot> = {
+    kick: DrumSlot.KICK,
+    snare: DrumSlot.SNARE,
+    hat: DrumSlot.HAT,
+    openhat: DrumSlot.OPENHAT,
+    crash: DrumSlot.CRASH,
+    ride: DrumSlot.RIDE,
+    tom1: DrumSlot.TOM1,
+    tom2: DrumSlot.TOM2,
+    tom3: DrumSlot.TOM3,
+    clap: DrumSlot.CLAP,
+    rim: DrumSlot.RIM,
+} as const;
+
+/** Default GM pitches per slot. */
+const DEFAULT_PITCHES = new Uint8Array([
+    36, 38, 42, 46, 49, 51, 48, 45, 43, 39, 37,
+]);
 
 /**
  * SynapticDrums
@@ -32,21 +49,36 @@ export class SynapticDrums extends SynapticClip {
     private cursor: SynapticDrumHitCursor;
     private currentTick: number = 0;
     private sourceIdCounter: number = 0;
-    protected _drumMap: DrumMap = { ...DEFAULT_DRUM_MAP };
+    /** Standard drums: O(1) array lookup. */
+    private readonly _drumPitches: Uint8Array;
+    /** Custom drum names. Lazily allocated only when needed. */
+    private _customMap: Map<string, number> | null = null;
 
     constructor(bridge: SiliconBridge) {
         super(bridge);
         this.cursor = new SynapticDrumHitCursor(this, bridge);
+        this._drumPitches = new Uint8Array(DEFAULT_PITCHES);
     }
 
     /**
      * Create a new drum builder with custom mapping.
-     * Merges provided mapping with existing map (overrides existing, adds new).
+     * Mutates in place (no object spread).
      * @param mapping - Custom drum name to pitch mapping
      * @returns this for chaining
      */
     withMapping(mapping: DrumMap): this {
-        this._drumMap = { ...this._drumMap, ...mapping };
+        for (const k in mapping) {
+            if (!Object.prototype.hasOwnProperty.call(mapping, k)) continue;
+            const raw = mapping[k];
+            const pitch = typeof raw === 'number' ? raw : parsePitch(raw);
+            const key = k.toLowerCase();
+            const slot = STANDARD_DRUM_SLOT[key];
+            if (slot !== undefined) {
+                this._drumPitches[slot] = pitch;
+            } else {
+                (this._customMap ??= new Map()).set(key, pitch);
+            }
+        }
         return this;
     }
 
@@ -59,11 +91,15 @@ export class SynapticDrums extends SynapticClip {
         if (typeof name === 'number') {
             return name;
         }
-        const mapped = this._drumMap[name.toLowerCase()];
-        if (mapped !== undefined) {
-            return typeof mapped === 'number' ? mapped : parsePitch(mapped);
+        const key = name.toLowerCase();
+        const slot = STANDARD_DRUM_SLOT[key];
+        if (slot !== undefined) {
+            return this._drumPitches[slot];
         }
-        // Fallback: try to parse as pitch (e.g., 'C2')
+        const custom = this._customMap?.get(key);
+        if (custom !== undefined) {
+            return custom;
+        }
         return parsePitch(name);
     }
 
@@ -131,43 +167,68 @@ export class SynapticDrums extends SynapticClip {
 
     /**
      * Generate a Euclidean rhythm pattern with drum hits.
-     * @param options - Euclidean rhythm options
-     * @returns this for chaining
+     * Supports both options object (for compatibility) and positional args (zero-allocation).
+     * @param hitsOrOptions - Hit count or options object
+     * @param steps - Steps (when using positional)
+     * @param drum - Drum type (when using positional)
+     * @param stepDuration - Step duration (when using positional)
+     * @param velocity - Velocity 0-1 (when using positional)
+     * @param rotation - Rotation offset (when using positional)
+     * @param repeat - Repeat count (when using positional)
      */
-    euclidean(options: EuclideanDrumOptions): this {
-        const {
-            hits,
-            steps,
-            drum,
-            stepDuration,
-            velocity = 0.8,
-            rotation = 0,
-            repeat = 1
-        } = options;
+    euclidean(
+        hitsOrOptions: number | EuclideanDrumOptions,
+        steps?: number,
+        drum?: 'kick' | 'snare' | 'hat' | 'clap' | 'tom',
+        stepDuration?: number,
+        velocity?: number,
+        rotation?: number,
+        repeat?: number
+    ): this {
+        let hits: number;
+        let stepsVal: number;
+        let drumVal: 'kick' | 'snare' | 'hat' | 'clap' | 'tom';
+        let stepDurationVal: number;
+        let velocityVal: number;
+        let rotationVal: number;
+        let repeatVal: number;
 
-        // Generate the Euclidean pattern
-        let pattern = euclidean(hits, steps);
+        if (typeof hitsOrOptions === 'object') {
+            const o = hitsOrOptions;
+            hits = o.hits;
+            stepsVal = o.steps;
+            drumVal = o.drum;
+            stepDurationVal = o.stepDuration;
+            velocityVal = o.velocity ?? 0.8;
+            rotationVal = o.rotation ?? 0;
+            repeatVal = o.repeat ?? 1;
+        } else {
+            hits = hitsOrOptions;
+            stepsVal = steps!;
+            drumVal = drum!;
+            stepDurationVal = stepDuration!;
+            velocityVal = velocity ?? 0.8;
+            rotationVal = rotation ?? 0;
+            repeatVal = repeat ?? 1;
+        }
+
+        let pattern = euclidean(hits, stepsVal);
         if (!pattern) {
-            throw new Error(`Invalid Euclidean parameters: hits=${hits}, steps=${steps}`);
+            throw new Error(`Invalid Euclidean parameters: hits=${hits}, steps=${stepsVal}`);
+        }
+        if (rotationVal !== 0) {
+            pattern = rotatePattern(pattern, rotationVal);
         }
 
-        // Apply rotation if specified
-        if (rotation !== 0) {
-            pattern = rotatePattern(pattern, rotation);
-        }
-
-        // Get the drum method
-        const drumMethod = this.getDrumMethod(drum);
-
-        for (let r = 0; r < repeat; r++) {
+        const drumMethod = this.getDrumMethod(drumVal);
+        for (let r = 0; r < repeatVal; r++) {
             for (const isHit of pattern) {
                 if (isHit) {
-                    drumMethod.call(this, stepDuration).velocity(velocity).commit();
+                    drumMethod.call(this, stepDurationVal).velocity(velocityVal).commit();
                 }
-                this.advanceTick(stepDuration);
+                this.advanceTick(stepDurationVal);
             }
         }
-
         return this;
     }
 
@@ -176,10 +237,8 @@ export class SynapticDrums extends SynapticClip {
      * @internal
      */
     private getDrumMethod(drum: 'kick' | 'snare' | 'hat' | 'clap' | 'tom'): (duration?: number) => SynapticDrumHitCursor {
-        // Use hit() with drum name to leverage custom mapping
         return (d?: number) => this.hit(drum === 'tom' ? 'tom1' : drum, d);
     }
 
     // Note: All escape methods (tempo, swing, etc.) are inherited from SynapticClip.
-    // No empty overrides. SynapticClip base implementation handles state storage.
 }

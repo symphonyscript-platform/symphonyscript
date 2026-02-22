@@ -1,15 +1,13 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
 import { Clip } from '../Clip';
-import { SiliconBridge } from '@symphonyscript/kernel';
 import { NoteOperation } from '../types';
+import { createTestBridge } from '../test-bridge';
 
 describe('Voice (Task 036)', () => {
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
 
     beforeEach(() => {
-        mockBridge = {
-            insertAsync: jest.fn().mockReturnValue(0)
-        } as any;
+        mockBridge = createTestBridge();
     });
 
     describe('SynapticMelody.voice()', () => {

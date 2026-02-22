@@ -1,16 +1,14 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
 import { SynapticDrums } from '../clips/SynapticDrums';
 import { Clip } from '../Clip';
-import { SiliconBridge } from '@symphonyscript/kernel';
+import { createTestBridge } from '../test-bridge';
 import { NoteOperation, HumanizeSettings } from '../types';
 
 describe('Default Humanize (Task 031)', () => {
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
 
     beforeEach(() => {
-        mockBridge = {
-            insertAsync: jest.fn().mockReturnValue(0)
-        } as any;
+        mockBridge = createTestBridge();
     });
 
     describe('SynapticClip.defaultHumanize()', () => {
@@ -160,11 +158,13 @@ describe('Default Humanize (Task 031)', () => {
         });
 
         it('different seeds produce different humanization', () => {
-            const melody1 = new SynapticMelody(mockBridge);
+            const bridge1 = createTestBridge();
+            const melody1 = new SynapticMelody(bridge1);
             melody1.defaultHumanize({ timing: 10, velocity: 0.1, seed: 111 });
             melody1.note('C4', 0.5).velocity(0.7).commit();
 
-            const melody2 = new SynapticMelody(mockBridge);
+            const bridge2 = createTestBridge();
+            const melody2 = new SynapticMelody(bridge2);
             melody2.defaultHumanize({ timing: 10, velocity: 0.1, seed: 222 });
             melody2.note('C4', 0.5).velocity(0.7).commit();
 
@@ -174,8 +174,6 @@ describe('Default Humanize (Task 031)', () => {
             const note1 = result1.operations[0] as NoteOperation;
             const note2 = result2.operations[0] as NoteOperation;
 
-            // Different seeds should (most likely) produce different results
-            // Note: There's a tiny chance they could be equal by coincidence
             const isDifferent = note1.velocity !== note2.velocity || note1.tick !== note2.tick;
             expect(isDifferent).toBe(true);
         });

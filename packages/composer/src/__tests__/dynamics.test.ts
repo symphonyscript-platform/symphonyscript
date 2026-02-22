@@ -1,14 +1,12 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
-import { SiliconBridge } from '@symphonyscript/kernel';
+import { createTestBridge } from '../test-bridge';
 
 describe('Dynamics methods', () => {
     let melody: SynapticMelody;
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
 
     beforeEach(() => {
-        mockBridge = {
-            insertAsync: jest.fn().mockReturnValue(0)
-        } as any;
+        mockBridge = createTestBridge();
         melody = new SynapticMelody(mockBridge);
     });
 

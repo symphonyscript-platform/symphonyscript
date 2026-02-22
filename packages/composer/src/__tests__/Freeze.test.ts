@@ -1,16 +1,14 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
 import { FrozenClip } from '../clips/FrozenClip';
 import { Clip } from '../Clip';
-import { SiliconBridge } from '@symphonyscript/kernel';
 import { NoteOperation } from '../types';
+import { createTestBridge } from '../test-bridge';
 
 describe('Freeze (Task 038)', () => {
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
 
     beforeEach(() => {
-        mockBridge = {
-            insertAsync: jest.fn().mockReturnValue(0)
-        } as any;
+        mockBridge = createTestBridge();
     });
 
     describe('FrozenClip class', () => {
@@ -124,13 +122,15 @@ describe('Freeze (Task 038)', () => {
 
     describe('play(FrozenClip)', () => {
         it('inserts frozen clip operations at current tick', () => {
-            const riff = new SynapticMelody(mockBridge);
+            const riffBridge = createTestBridge();
+            const riff = new SynapticMelody(riffBridge);
             riff.note('C4', 0.5).commit();
             riff.advanceTick(0.5);
             riff.note('E4', 0.5).commit();
             const frozen = riff.freeze();
 
-            const main = new SynapticMelody(mockBridge);
+            const mainBridge = createTestBridge();
+            const main = new SynapticMelody(mainBridge);
             main.advanceTick(2); // Start at tick 2
             main.play(frozen);
 
@@ -143,11 +143,13 @@ describe('Freeze (Task 038)', () => {
         });
 
         it('advances tick by frozen clip duration', () => {
-            const riff = new SynapticMelody(mockBridge);
+            const riffBridge = createTestBridge();
+            const riff = new SynapticMelody(riffBridge);
             riff.note('C4', 1).commit();
             const frozen = riff.freeze();
 
-            const main = new SynapticMelody(mockBridge);
+            const mainBridge = createTestBridge();
+            const main = new SynapticMelody(mainBridge);
             main.play(frozen);
             main.note('D4', 0.5).commit();
 
@@ -160,11 +162,13 @@ describe('Freeze (Task 038)', () => {
         });
 
         it('can play same frozen clip multiple times', () => {
-            const riff = new SynapticMelody(mockBridge);
+            const riffBridge = createTestBridge();
+            const riff = new SynapticMelody(riffBridge);
             riff.note('C4', 0.5).commit();
             const frozen = riff.freeze();
 
-            const main = new SynapticMelody(mockBridge);
+            const mainBridge = createTestBridge();
+            const main = new SynapticMelody(mainBridge);
             main.play(frozen);
             main.play(frozen);
             main.play(frozen);
@@ -179,11 +183,13 @@ describe('Freeze (Task 038)', () => {
         });
 
         it('preserves note properties from frozen clip', () => {
-            const riff = new SynapticMelody(mockBridge);
+            const riffBridge = createTestBridge();
+            const riff = new SynapticMelody(riffBridge);
             riff.note('C4', 0.5).velocity(0.9).commit();
             const frozen = riff.freeze();
 
-            const main = new SynapticMelody(mockBridge);
+            const mainBridge = createTestBridge();
+            const main = new SynapticMelody(mainBridge);
             main.play(frozen);
 
             const result = main.build();
@@ -195,11 +201,13 @@ describe('Freeze (Task 038)', () => {
         });
 
         it('assigns new sourceIds to played notes', () => {
-            const riff = new SynapticMelody(mockBridge);
+            const riffBridge = createTestBridge();
+            const riff = new SynapticMelody(riffBridge);
             riff.note('C4', 0.5).commit();
             const frozen = riff.freeze();
 
-            const main = new SynapticMelody(mockBridge);
+            const mainBridge = createTestBridge();
+            const main = new SynapticMelody(mainBridge);
             main.play(frozen);
             main.play(frozen);
 
@@ -222,11 +230,13 @@ describe('Freeze (Task 038)', () => {
         });
 
         it('Clip.melody().play(frozen) works', () => {
-            const riff = Clip.melody('riff');
+            const riffBridge = createTestBridge();
+            const riff = new SynapticMelody(riffBridge);
             riff.note('C4', 0.5).commit();
             const frozen = riff.freeze();
 
-            const main = Clip.melody('main');
+            const mainBridge = createTestBridge();
+            const main = new SynapticMelody(mainBridge);
             main.play(frozen);
             main.play(frozen);
 
@@ -251,12 +261,12 @@ describe('Freeze (Task 038)', () => {
 
         it('frozen clip with non-note operations', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.control(1, 64); // CC
+            melody.control(1, 64); // CC - no longer stored
             melody.note('C4', 0.5).commit();
             const frozen = melody.freeze();
 
-            // Only notes are transferred in play()
-            const main = new SynapticMelody(mockBridge);
+            const mainBridge = createTestBridge();
+            const main = new SynapticMelody(mainBridge);
             main.play(frozen);
 
             const result = main.build();

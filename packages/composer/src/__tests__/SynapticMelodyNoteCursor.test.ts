@@ -2,6 +2,10 @@ import { SynapticMelodyNoteCursor } from '../cursors/SynapticMelodyNoteCursor';
 import { SynapticChordCursor } from '../cursors/SynapticChordCursor';
 import { SynapticClip } from '../clips/SynapticClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
+import { ScaleMode } from '../types';
+
+// Matcher for optional expressionId (can be undefined or number)
+const optional = { asymmetricMatch: () => true };
 
 // Mocks
 const mockInsertAsync = jest.fn();
@@ -76,7 +80,7 @@ describe('SynapticMelodyNoteCursor (Phase 3 & 4)', () => {
 
             // Verify C4 flush (velocity 101 → 102 with seed=42 humanization)
             expect(mockInsertAsync).toHaveBeenCalledWith(
-                1, 60, 102, 1.0, 0, false, 999, undefined, 0
+                1, 60, 102, 1.0, 0, false, 999, undefined, optional
             );
 
             // Verify tick advance
@@ -89,14 +93,14 @@ describe('SynapticMelodyNoteCursor (Phase 3 & 4)', () => {
         });
 
         it('degree() behaves like note()', () => {
-            clip.setScale('C', 'major'); // Required for degree()
+            clip.setScale('C', ScaleMode.MAJOR); // Required for degree()
             cursor.degree(3, 0.5);
             cursor.hasPending = true;
 
             cursor.commit();
             // Degree 3 in C major = E (60 + 4 semitones = 64), velocity humanized to 102 with seed=42
             expect(mockInsertAsync).toHaveBeenCalledWith(
-                1, 64, 102, 0.5, 0, false, 999, undefined, 0
+                1, 64, 102, 0.5, 0, false, 999, undefined, optional
             );
         });
     });

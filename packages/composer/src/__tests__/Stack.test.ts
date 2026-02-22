@@ -3,21 +3,16 @@
  * Task 048: Execute builder function in parallel mode.
  */
 
-import { SiliconBridge } from '@symphonyscript/kernel';
 import { SynapticMelody } from '../clips/SynapticMelody';
-import { NoteOperation } from '../types';
-
-// Mock bridge with insertAsync
-const createMockBridge = (): jest.Mocked<SiliconBridge> => ({
-    insertAsync: jest.fn().mockReturnValue(0)
-} as any);
+import { NoteOperation, ScaleMode } from '../types';
+import { createTestBridge } from '../test-bridge';
 
 describe('SynapticMelody.stack(builderFn)', () => {
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
     let melody: SynapticMelody;
 
     beforeEach(() => {
-        mockBridge = createMockBridge();
+        mockBridge = createTestBridge();
         melody = new SynapticMelody(mockBridge);
     });
 
@@ -192,7 +187,7 @@ describe('SynapticMelody.stack(builderFn)', () => {
 
     describe('Integration', () => {
         it('works with chords in stacked layers', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
 
             melody.stack(b => {
                 b.chord('C').duration(2).commit();
@@ -210,7 +205,7 @@ describe('SynapticMelody.stack(builderFn)', () => {
         });
 
         it('works with progression after stack', () => {
-            melody.key('C', 'major');
+            melody.key('C', ScaleMode.MAJOR);
 
             melody.stack(b => {
                 b.note('C4', 4).commit();

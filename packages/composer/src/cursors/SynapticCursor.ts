@@ -1,6 +1,6 @@
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { SynapticClip } from '../clips/SynapticClip';
-import { ClipNode, AutomationTarget, ScopeIsolation, TempoKeyframe, ClipOperation } from '../types';
+import { ClipNode, AutomationTarget, CurveType, ScopeIsolation, TempoKeyframe, ClipOperation } from '../types';
 
 /**
  * Base SynapticCursor
@@ -164,7 +164,7 @@ export abstract class SynapticCursor {
      * @param rampBeats - Duration to ramp (instant if undefined)
      * @param curve - Ramp curve type
      */
-    automate(target: AutomationTarget, value: number, rampBeats?: number, curve?: 'linear' | 'exponential' | 'smooth'): SynapticClip {
+    automate(target: AutomationTarget, value: number, rampBeats?: number, curve?: CurveType): SynapticClip {
         this._commit();
         return this.clip.automate(target, value, rampBeats, curve);
     }
@@ -190,13 +190,18 @@ export abstract class SynapticCursor {
     }
 
     /**
-     * Escape: Execute isolated scope and return to clip.
-     * @param options - Which state to isolate
-     * @param builderFn - Builder function to execute in isolated scope
+     * Task 063: Delegate to clip.pushState (zero-allocation state stack).
      */
-    isolate(options: ScopeIsolation, builderFn: (b: SynapticClip) => SynapticClip | void): SynapticClip {
+    pushState(options: ScopeIsolation): SynapticClip {
         this._commit();
-        return this.clip.isolate(options, builderFn);
+        return this.clip.pushState(options);
+    }
+
+    /**
+     * Task 063: Delegate to clip.popState.
+     */
+    popState(options: ScopeIsolation): SynapticClip {
+        return this.clip.popState(options);
     }
 
     /**

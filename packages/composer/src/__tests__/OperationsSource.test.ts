@@ -1,23 +1,19 @@
 /**
  * Tests for OperationsSource interface and toOperations() method.
  * Task 046: Enable clips and frozen clips to provide operations.
+ * Task 058: Uses createTestBridge (traverseNotes) for build/toOperations.
  */
 
-import { SiliconBridge } from '@symphonyscript/kernel';
 import { SynapticMelody } from '../clips/SynapticMelody';
 import { FrozenClip } from '../clips/FrozenClip';
 import { OperationsSource, ClipOperation } from '../types';
-
-// Mock bridge with insertAsync
-const createMockBridge = (): jest.Mocked<SiliconBridge> => ({
-    insertAsync: jest.fn().mockReturnValue(0)
-} as any);
+import { createTestBridge } from '../test-bridge';
 
 describe('OperationsSource Interface', () => {
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
 
     beforeEach(() => {
-        mockBridge = createMockBridge();
+        mockBridge = createTestBridge();
     });
 
     describe('SynapticClip.toOperations()', () => {
@@ -57,16 +53,12 @@ describe('OperationsSource Interface', () => {
             expect(newOps.length).toBe(3);
         });
 
-        it('includes all operation types', () => {
+        it('includes note operations from Kernel', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.note('C4', 1).commit();
-            melody.control(64, 127); // CC
-            melody.aftertouch(0.5);  // Aftertouch
 
             const ops = melody.toOperations();
             expect(ops.some(op => op.kind === 'note')).toBe(true);
-            expect(ops.some(op => op.kind === 'cc')).toBe(true);
-            expect(ops.some(op => op.kind === 'aftertouch')).toBe(true);
         });
     });
 
@@ -136,11 +128,13 @@ describe('OperationsSource Interface', () => {
 
     describe('play() with OperationsSource', () => {
         it('accepts OperationsSource as argument', () => {
-            const source = new SynapticMelody(mockBridge);
+            const sourceBridge = createTestBridge();
+            const source = new SynapticMelody(sourceBridge);
             source.note('C4', 1).commit();
             source.note('E4', 1).commit();
 
-            const target = new SynapticMelody(mockBridge);
+            const targetBridge = createTestBridge();
+            const target = new SynapticMelody(targetBridge);
             target.play(source);
 
             const ops = target.toOperations();
@@ -148,11 +142,13 @@ describe('OperationsSource Interface', () => {
         });
 
         it('accepts FrozenClip (implements OperationsSource)', () => {
-            const source = new SynapticMelody(mockBridge);
+            const sourceBridge = createTestBridge();
+            const source = new SynapticMelody(sourceBridge);
             source.note('C4', 1).commit();
             const frozen = source.freeze();
 
-            const target = new SynapticMelody(mockBridge);
+            const targetBridge = createTestBridge();
+            const target = new SynapticMelody(targetBridge);
             target.play(frozen);
 
             const ops = target.toOperations();
@@ -160,10 +156,12 @@ describe('OperationsSource Interface', () => {
         });
 
         it('offsets operations by current tick', () => {
-            const source = new SynapticMelody(mockBridge);
+            const sourceBridge = createTestBridge();
+            const source = new SynapticMelody(sourceBridge);
             source.note('C4', 1).commit();
 
-            const target = new SynapticMelody(mockBridge);
+            const targetBridge = createTestBridge();
+            const target = new SynapticMelody(targetBridge);
             target.rest(4); // Advance to tick 4
             target.play(source);
 
@@ -177,10 +175,12 @@ describe('OperationsSource Interface', () => {
 
     describe('loop() with OperationsSource', () => {
         it('accepts OperationsSource as second argument', () => {
-            const source = new SynapticMelody(mockBridge);
+            const sourceBridge = createTestBridge();
+            const source = new SynapticMelody(sourceBridge);
             source.note('C4', 1).commit();
 
-            const target = new SynapticMelody(mockBridge);
+            const targetBridge = createTestBridge();
+            const target = new SynapticMelody(targetBridge);
             target.loop(3, source);
 
             const ops = target.toOperations();
@@ -188,11 +188,13 @@ describe('OperationsSource Interface', () => {
         });
 
         it('accepts FrozenClip in loop', () => {
-            const source = new SynapticMelody(mockBridge);
+            const sourceBridge = createTestBridge();
+            const source = new SynapticMelody(sourceBridge);
             source.note('C4', 1).commit();
             const frozen = source.freeze();
 
-            const target = new SynapticMelody(mockBridge);
+            const targetBridge = createTestBridge();
+            const target = new SynapticMelody(targetBridge);
             target.loop(2, frozen);
 
             const ops = target.toOperations();
@@ -215,11 +217,13 @@ describe('OperationsSource Interface', () => {
         });
 
         it('offsets each loop iteration correctly', () => {
-            const source = new SynapticMelody(mockBridge);
+            const sourceBridge = createTestBridge();
+            const source = new SynapticMelody(sourceBridge);
             source.note('C4', 1).commit();
             source.advanceTick(1);
 
-            const target = new SynapticMelody(mockBridge);
+            const targetBridge = createTestBridge();
+            const target = new SynapticMelody(targetBridge);
             target.loop(3, source);
 
             const ops = target.toOperations();
@@ -233,13 +237,15 @@ describe('OperationsSource Interface', () => {
 
     describe('Integration', () => {
         it('chains play and loop with OperationsSource', () => {
-            const riff = new SynapticMelody(mockBridge);
+            const riffBridge = createTestBridge();
+            const riff = new SynapticMelody(riffBridge);
             riff.note('C4', 0.5).commit();
             riff.advanceTick(0.5);
             riff.note('E4', 0.5).commit();
             riff.advanceTick(0.5);
 
-            const song = new SynapticMelody(mockBridge);
+            const songBridge = createTestBridge();
+            const song = new SynapticMelody(songBridge);
             song.loop(2, riff);
             song.play(riff.freeze());
 
@@ -249,17 +255,20 @@ describe('OperationsSource Interface', () => {
         });
 
         it('works with frozen clips in complex arrangements', () => {
-            const verse = new SynapticMelody(mockBridge);
+            const verseBridge = createTestBridge();
+            const verse = new SynapticMelody(verseBridge);
             verse.note('C4', 1).commit();
             verse.advanceTick(1);
             const frozenVerse = verse.freeze();
 
-            const chorus = new SynapticMelody(mockBridge);
+            const chorusBridge = createTestBridge();
+            const chorus = new SynapticMelody(chorusBridge);
             chorus.note('G4', 1).commit();
             chorus.advanceTick(1);
             const frozenChorus = chorus.freeze();
 
-            const song = new SynapticMelody(mockBridge);
+            const songBridge = createTestBridge();
+            const song = new SynapticMelody(songBridge);
             song.loop(2, frozenVerse);  // verse × 2
             song.play(frozenChorus);     // chorus × 1
             song.loop(2, frozenVerse);  // verse × 2

@@ -4,6 +4,10 @@ import { ClipNode, FreezeOptions, ClipOperation, OperationsSource } from '../typ
  * A frozen (pre-compiled) clip for efficient reuse.
  * Frozen clips can be played multiple times without re-expansion.
  * Implements OperationsSource for use with loop() and play().
+ *
+ * @design-time This class is intended for clip composition and export only.
+ * Do not use FrozenClip in playback hot paths. Allocations (toOperations spread,
+ * filter() in getters) are acceptable during design-time clip setup.
  */
 export class FrozenClip implements OperationsSource {
     constructor(

@@ -79,6 +79,18 @@ export interface AftertouchOperation {
 export type AutomationTarget = 'volume' | 'pan' | 'filter' | 'resonance' | 'attack' | 'release';
 
 /**
+ * Curve type for automation, dynamics, and tempo transitions.
+ */
+export const enum CurveType {
+    LINEAR = 0,
+    EXPONENTIAL = 1,
+    SMOOTH = 2,
+    EASE_IN = 3,
+    EASE_OUT = 4,
+    EASE_IN_OUT = 5,
+}
+
+/**
  * Automation operation for parameter changes over time.
  */
 export interface AutomationOperation {
@@ -86,17 +98,29 @@ export interface AutomationOperation {
     target: AutomationTarget;
     value: number;           // Normalized (volume: 0-1, pan: -1 to 1)
     rampBeats?: number;      // Duration to ramp (instant if undefined)
-    curve?: 'linear' | 'exponential' | 'smooth';
+    curve?: CurveType;
     tick: number;
 }
 
-export type ScaleMode = 'major' | 'minor' | 'dorian' | 'phrygian' | 'lydian' | 'mixolydian' | 'locrian';
+export const enum ScaleMode {
+    NONE = 0,
+    MAJOR = 1,
+    MINOR = 2,
+    DORIAN = 3,
+    PHRYGIAN = 4,
+    LYDIAN = 5,
+    MIXOLYDIAN = 6,
+    LOCRIAN = 7,
+}
 
 export interface ScaleContext {
     root: string;      // 'C', 'G', 'F#', etc.
     mode: ScaleMode;
     octave: number;    // Base octave (4 = middle C octave)
 }
+
+/** Pitch class 0-11 to root string. Used for scale context conversion. */
+export const PITCH_CLASS_TO_ROOT: readonly string[] = Object.freeze(['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']);
 
 export interface DegreeOptions {
     octaveOffset?: number;   // Shift octaves (+1 = up, -1 = down)
@@ -117,16 +141,21 @@ export interface KeyContext {
     /** Key root (e.g., 'G', 'Bb') */
     root: string;
     /** Key mode (major or minor) */
-    mode: 'major' | 'minor';
+    mode: ScaleMode;
 }
 
 /**
  * Accidental override for the next note.
- * - 'sharp': Raise by semitone
- * - 'flat': Lower by semitone
- * - 'natural': Use natural (override key signature)
+ * - SHARP: Raise by semitone
+ * - FLAT: Lower by semitone
+ * - NATURAL: Use natural (override key signature)
  */
-export type Accidental = 'sharp' | 'flat' | 'natural';
+export const enum Accidental {
+    NONE = 0,
+    SHARP = 1,
+    FLAT = 2,
+    NATURAL = 3,
+}
 
 // ============================================================================
 // Track Types (RFC-020)
@@ -177,16 +206,25 @@ export interface SessionNode {
 // Dynamics Types (Task 024)
 // ============================================================================
 
+export const enum DynamicsType {
+    NONE = 0,
+    STATIC = 1,
+    CRESCENDO = 2,
+    DECRESCENDO = 3,
+    RAMP = 4,
+    CURVE = 5,
+}
+
 /**
  * Dynamics operation for gradual volume changes.
  */
 export interface DynamicsOp {
     kind: 'dynamics';
-    type: 'crescendo' | 'decrescendo' | 'ramp' | 'curve';
+    type: DynamicsType;
     from: number;       // Starting velocity (0-1)
     to: number;         // Ending velocity (0-1)
     duration: number;   // Duration in ticks
-    curve?: 'linear' | 'exponential' | 'ease-in' | 'ease-out';
+    curve?: CurveType;
 }
 
 /**
@@ -361,10 +399,8 @@ export interface ScopeOp {
 // Tempo Envelope Types (Task 042)
 // ============================================================================
 
-/**
- * Curve type for tempo transitions.
- */
-export type TempoCurve = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+/** @deprecated Use CurveType for tempo transitions */
+export type TempoCurve = CurveType;
 
 /**
  * A single keyframe in a tempo envelope.
@@ -374,8 +410,8 @@ export interface TempoKeyframe {
     beat: number;
     /** Target BPM at this keyframe */
     bpm: number;
-    /** Curve type for transition to this keyframe (default: 'linear') */
-    curve?: TempoCurve;
+    /** Curve type for transition to this keyframe (default: CurveType.LINEAR) */
+    curve?: CurveType;
 }
 
 /**

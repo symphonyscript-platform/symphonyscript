@@ -1,21 +1,6 @@
-
-import { ClipNode, SCHEMA_VERSION } from '../types';
 import { SynapticClip } from '../clips/SynapticClip';
-import { SiliconBridge } from '@symphonyscript/kernel';
 import { MockConsumer } from '@symphonyscript/kernel';
-
-// Mock SiliconBridge
-class MockBridge extends SiliconBridge {
-    constructor() {
-        // Mock Linker for SiliconBridge constructor
-        const sab = new SharedArrayBuffer(1024);
-        const mockLinker = {
-            getSAB: () => sab
-        } as any;
-        super(mockLinker);
-    }
-    insertAsync = jest.fn().mockReturnValue(1);
-}
+import { createTestBridge } from '../test-bridge';
 
 // Concrete Clip Implementation
 class TestClip extends SynapticClip {
@@ -28,7 +13,7 @@ class TestClip extends SynapticClip {
 
 describe('Loop Region', () => {
     test('build() includes loopRegion when enabled', () => {
-        const bridge = new MockBridge();
+        const bridge = createTestBridge();
         const clip = new TestClip(bridge);
 
         // Set loop region (start=0, end=480)

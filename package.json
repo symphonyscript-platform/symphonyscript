@@ -49,5 +49,8 @@
   },
   "workspaces": [
     "packages/*"
-  ]
+  ],
+  "dependencies": {
+    "orchestrator-relay": "^2.0.7"
+  }
 }

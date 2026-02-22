@@ -29,11 +29,12 @@ export { GrooveStepCursor } from './groove/GrooveStepCursor';
 // Utils
 export { parsePitch } from './utils/pitch';
 export { parseChord, packIntervals } from './utils/chord';
-export { applyKeySignature, hasExplicitAccidental } from './utils/key';
+export { applyKeySignature, hasExplicitAccidental, scaleModeToKeyString } from './utils/key';
 export { romanToChord, toTheoryKeyContext } from './utils/romanAdapter';
 
 // Types
-export type { ClipNode, ClipBuilder, TrackNode, SessionNode, NoteOperation, LoopOp, ClipOp, CCOperation, PitchBendOperation, AftertouchOperation, AutomationTarget, AutomationOperation, ScaleMode, ScaleContext, DegreeOptions, KeyContext, Accidental, EuclideanMelodyOptions, EuclideanDrumOptions, ArpPattern, ArpeggioOptions, HumanizeSettings, QuantizeSettings, FreezeOptions, ScopeIsolation, ScopeOp, DrumMap, TempoCurve, TempoKeyframe, TempoEnvelopeOp, ClipOperation, OperationsSource } from './types';
+export { ScaleMode, Accidental, CurveType, DynamicsType } from './types';
+export type { ClipNode, ClipBuilder, TrackNode, SessionNode, NoteOperation, LoopOp, ClipOp, CCOperation, PitchBendOperation, AftertouchOperation, AutomationTarget, AutomationOperation, ScaleContext, DegreeOptions, KeyContext, EuclideanMelodyOptions, EuclideanDrumOptions, ArpPattern, ArpeggioOptions, HumanizeSettings, QuantizeSettings, FreezeOptions, ScopeIsolation, ScopeOp, DrumMap, TempoCurve, TempoKeyframe, TempoEnvelopeOp, ClipOperation, OperationsSource } from './types';
 export { SCHEMA_VERSION } from './types';
 
 // FrozenClip

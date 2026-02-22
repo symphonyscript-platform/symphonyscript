@@ -1,16 +1,14 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
 import { SynapticDrums } from '../clips/SynapticDrums';
 import { Clip } from '../Clip';
-import { SiliconBridge } from '@symphonyscript/kernel';
 import { NoteOperation } from '../types';
+import { createTestBridge } from '../test-bridge';
 
 describe('Euclidean Rhythm Generator', () => {
-    let mockBridge: jest.Mocked<SiliconBridge>;
+    let mockBridge: ReturnType<typeof createTestBridge>;
 
     beforeEach(() => {
-        mockBridge = {
-            insertAsync: jest.fn().mockReturnValue(0)
-        } as any;
+        mockBridge = createTestBridge();
     });
 
     describe('SynapticMelody.euclidean()', () => {
@@ -109,7 +107,8 @@ describe('Euclidean Rhythm Generator', () => {
         it('applies rotation', () => {
             // Without rotation: euclidean(3,8) = [1,0,0,1,0,0,1,0]
             // With rotation 1:  [0,1,0,0,1,0,0,1]
-            const melodyNoRotation = new SynapticMelody(mockBridge);
+            const bridgeNoRot = createTestBridge();
+            const melodyNoRotation = new SynapticMelody(bridgeNoRot);
             melodyNoRotation.euclidean({
                 hits: 3,
                 steps: 8,
@@ -118,7 +117,8 @@ describe('Euclidean Rhythm Generator', () => {
                 rotation: 0
             });
 
-            const melodyWithRotation = new SynapticMelody(mockBridge);
+            const bridgeWithRot = createTestBridge();
+            const melodyWithRotation = new SynapticMelody(bridgeWithRot);
             melodyWithRotation.euclidean({
                 hits: 3,
                 steps: 8,
@@ -265,7 +265,8 @@ describe('Euclidean Rhythm Generator', () => {
         });
 
         it('applies rotation', () => {
-            const drumsNoRotation = new SynapticDrums(mockBridge);
+            const bridgeNoRot = createTestBridge();
+            const drumsNoRotation = new SynapticDrums(bridgeNoRot);
             drumsNoRotation.euclidean({
                 hits: 3,
                 steps: 8,
@@ -274,7 +275,8 @@ describe('Euclidean Rhythm Generator', () => {
                 rotation: 0
             });
 
-            const drumsWithRotation = new SynapticDrums(mockBridge);
+            const bridgeWithRot = createTestBridge();
+            const drumsWithRotation = new SynapticDrums(bridgeWithRot);
             drumsWithRotation.euclidean({
                 hits: 3,
                 steps: 8,
