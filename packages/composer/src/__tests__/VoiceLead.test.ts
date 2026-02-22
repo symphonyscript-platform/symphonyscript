@@ -128,7 +128,7 @@ describe('SynapticMelody.voiceLead()', () => {
 
         it('respects custom duration', () => {
             melody.key('C', ScaleMode.MAJOR);
-            melody.voiceLead(['I', 'IV'], { duration: 2 });
+            melody.voiceLead(['I', 'IV'], 2);
 
             const ops = melody.toOperations();
             const noteOps = ops.filter(op => op.kind === 'note') as NoteOperation[];
@@ -141,7 +141,7 @@ describe('SynapticMelody.voiceLead()', () => {
 
         it('advances tick by duration for each chord', () => {
             melody.key('C', ScaleMode.MAJOR);
-            melody.voiceLead(['I', 'IV', 'V'], { duration: 2 });
+            melody.voiceLead(['I', 'IV', 'V'], 2);
 
             // Should advance by 2 × 3 = 6 ticks
             expect(melody.getCurrentTick()).toBe(6);
@@ -229,8 +229,8 @@ describe('SynapticMelody.voiceLead()', () => {
     describe('Integration', () => {
         it('works with progression() in same clip', () => {
             melody.key('C', ScaleMode.MAJOR);
-            melody.progression(['I', 'IV'], { duration: 1 });
-            melody.voiceLead(['V', 'I'], { duration: 1 });
+            melody.progression(['I', 'IV'], 1);
+            melody.voiceLead(['V', 'I'], 1);
 
             const ops = melody.toOperations();
             const noteOps = ops.filter(op => op.kind === 'note') as NoteOperation[];

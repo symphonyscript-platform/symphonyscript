@@ -24,6 +24,16 @@ export class SynapticMelody extends SynapticClip {
     private currentTick: number = 0;
     private sourceIdCounter: number = 0;
 
+    // Task 064: Pre-allocated buffers for chord/voicing (zero-allocation)
+    private readonly _chordBuffer = new Int8Array(12);
+    private _chordLen = 0;
+    private readonly _voicingBuffer = new Int8Array(12);
+    private _voicingLen = 0;
+    private readonly _prevVoicingBuffer = new Int8Array(12);
+    private _prevVoicingLen = 0;
+    private readonly _candidateBuffer = new Int8Array(12);
+    private readonly _sortScratch = new Int8Array(12);
+
     constructor(bridge: SiliconBridge) {
         super(bridge);
         this.chordCursor = new SynapticChordCursor(this, bridge);
@@ -141,18 +151,17 @@ export class SynapticMelody extends SynapticClip {
     /**
      * Emit a sequence of chords from roman numerals.
      * Requires key() to be set first.
+     * No options objects - use duration param directly.
      * @param numerals - Array of roman numerals (e.g., ['I', 'IV', 'V', 'I'])
-     * @param options - Optional configuration (duration per chord)
+     * @param duration - Duration per chord in beats (default 1)
      * @returns this for chaining
      * @throws Error if key context is not set
      */
-    progression(numerals: string[], options?: { duration?: number }): this {
+    progression(numerals: string[], duration: number = 1): this {
         const keyCtx = this.getKeyContext();
         if (!keyCtx) {
             throw new Error('progression() requires key() to be called first');
         }
-
-        const duration = options?.duration ?? 1;
 
         for (const numeral of numerals) {
             const chordSymbol = romanToChord(numeral, keyCtx);
@@ -176,7 +185,7 @@ export class SynapticMelody extends SynapticClip {
      * @returns this for chaining
      * @throws Error if key context is not set
      */
-    voiceLead(numerals: string[], options?: { duration?: number }): this {
+    voiceLead(numerals: string[], duration: number = 1): this {
         const keyCtx = this.getKeyContext();
         if (!keyCtx) {
             throw new Error('voiceLead() requires key() to be called first');
@@ -185,163 +194,133 @@ export class SynapticMelody extends SynapticClip {
         if (numerals.length === 0) {
             return this;
         }
+        this._prevVoicingLen = 0;
 
-        const duration = options?.duration ?? 1;
-
-        // Convert roman numerals to chord symbols and then to pitch arrays
-        const chordPitches: number[][] = [];
         for (const numeral of numerals) {
             const chordSymbol = romanToChord(numeral, keyCtx);
             if (!chordSymbol) {
                 throw new Error(`Invalid roman numeral in voiceLead: ${numeral}`);
             }
-            const pitches = this.chordSymbolToPitches(chordSymbol);
-            chordPitches.push(pitches);
-        }
 
-        // Voice lead the progression
-        let previousVoicing: number[] | null = null;
+            this._chordLen = this.chordSymbolToBuffer(chordSymbol);
 
-        for (const basePitches of chordPitches) {
-            let voicing: number[];
-
-            if (previousVoicing === null) {
-                // First chord: use root position
-                voicing = [...basePitches].sort((a, b) => a - b);
+            if (this._prevVoicingLen === 0) {
+                this.copySortToVoicing(this._chordBuffer, this._chordLen);
             } else {
-                // Find best voicing (minimize voice movement)
-                voicing = this.findBestVoicing(basePitches, previousVoicing);
+                this.findBestVoicingToBuffer();
             }
 
-            // Emit the chord
-            this.emitChordPitches(voicing, duration);
+            this.emitChordFromBuffer(this._voicingBuffer, this._voicingLen, duration);
+            this.copyBuffer(this._voicingBuffer, this._voicingLen, this._prevVoicingBuffer);
+            this._prevVoicingLen = this._voicingLen;
             this.advanceTick(duration);
-
-            previousVoicing = voicing;
         }
 
         return this;
     }
 
-    /**
-     * Convert a chord symbol to an array of MIDI pitches.
-     * @internal
-     */
-    private chordSymbolToPitches(symbol: string): number[] {
+    /** Task 064: Write chord pitches to _chordBuffer, return length. */
+    private chordSymbolToBuffer(symbol: string): number {
         const { root, mask } = parseChord(symbol);
-        const pitches: number[] = [];
-
+        let len = 0;
         let interval = 0;
         let m = mask;
-        while (m !== 0) {
+        while (m !== 0 && len < 12) {
             if ((m & 1) === 1) {
-                pitches.push(root + interval);
+                this._chordBuffer[len++] = root + interval;
             }
             m >>>= 1;
             interval++;
         }
-
-        return pitches;
+        return len;
     }
 
-    /**
-     * Find the voicing of a chord that minimizes total voice movement from previous chord.
-     * Tries all inversions and picks the one with smallest sum of absolute pitch differences.
-     * @internal
-     */
-    private findBestVoicing(basePitches: number[], previousVoicing: number[]): number[] {
-        const numVoices = basePitches.length;
-        const sorted = [...basePitches].sort((a, b) => a - b);
+    /** Task 064: Copy src to _voicingBuffer, sort in place, set _voicingLen. */
+    private copySortToVoicing(src: Int8Array, len: number): void {
+        for (let i = 0; i < len; i++) this._voicingBuffer[i] = src[i];
+        // Insertion sort (zero allocation)
+        for (let i = 1; i < len; i++) {
+            const v = this._voicingBuffer[i];
+            let j = i;
+            while (j > 0 && this._voicingBuffer[j - 1] > v) {
+                this._voicingBuffer[j] = this._voicingBuffer[j - 1];
+                j--;
+            }
+            this._voicingBuffer[j] = v;
+        }
+        this._voicingLen = len;
+    }
 
-        // Generate all inversions
-        const inversions: number[][] = [];
-        for (let inv = 0; inv < numVoices; inv++) {
-            const voicing: number[] = [];
-            for (let i = 0; i < numVoices; i++) {
-                const idx = (i + inv) % numVoices;
-                let pitch = sorted[idx];
-                // If this note is below the first note of the inversion, move it up an octave
-                if (i > 0 && pitch <= voicing[i - 1]) {
-                    pitch += 12;
+    /** Task 064: Copy src to dst. */
+    private copyBuffer(src: Int8Array, len: number, dst: Int8Array): void {
+        for (let i = 0; i < len; i++) dst[i] = src[i];
+    }
+
+    /** Task 064: Find best voicing using _chordBuffer, _prevVoicingBuffer; write to _voicingBuffer. */
+    private findBestVoicingToBuffer(): void {
+        const baseLen = this._chordLen;
+        const prevLen = this._prevVoicingLen;
+
+        // Sort chord into _sortScratch
+        for (let i = 0; i < baseLen; i++) this._sortScratch[i] = this._chordBuffer[i];
+        for (let i = 1; i < baseLen; i++) {
+            const v = this._sortScratch[i];
+            let j = i;
+            while (j > 0 && this._sortScratch[j - 1] > v) {
+                this._sortScratch[j] = this._sortScratch[j - 1];
+                j--;
+            }
+            this._sortScratch[j] = v;
+        }
+
+        let bestCost = Infinity;
+
+        for (let inv = 0; inv < baseLen; inv++) {
+            for (let octOffset of [0, -12, 12]) {
+                for (let i = 0; i < baseLen; i++) {
+                    const idx = (i + inv) % baseLen;
+                    let pitch = this._sortScratch[idx] + octOffset;
+                    if (i > 0 && pitch <= this._candidateBuffer[i - 1]) pitch += 12;
+                    this._candidateBuffer[i] = pitch;
                 }
-                voicing.push(pitch);
-            }
-            inversions.push(voicing);
-        }
-
-        // Also try inversions shifted up/down an octave
-        const allVoicings: number[][] = [];
-        for (const inv of inversions) {
-            allVoicings.push(inv);
-            allVoicings.push(inv.map(p => p - 12));
-            allVoicings.push(inv.map(p => p + 12));
-        }
-
-        // Find voicing with minimum voice movement
-        let bestVoicing = allVoicings[0];
-        let bestCost = this.voiceMovementCost(previousVoicing, bestVoicing);
-
-        for (let i = 1; i < allVoicings.length; i++) {
-            const cost = this.voiceMovementCost(previousVoicing, allVoicings[i]);
-            if (cost < bestCost) {
-                bestCost = cost;
-                bestVoicing = allVoicings[i];
+                const cost = this.voiceMovementCostBuffers(prevLen, baseLen);
+                if (cost < bestCost) {
+                    bestCost = cost;
+                    this.copyBuffer(this._candidateBuffer, baseLen, this._voicingBuffer);
+                    this._voicingLen = baseLen;
+                }
             }
         }
-
-        return bestVoicing;
     }
 
-    /**
-     * Calculate the total voice movement cost between two voicings.
-     * Uses sum of absolute pitch differences.
-     * 
-     * INTENTIONAL DIVERGENCE FROM THEORY PACKAGE:
-     * - Theory version uses `HarmonyMask` (pitch-class only) for scale degree analysis.
-     * - Composer version uses `number[]` (absolute pitch) for octave-aware voice leading.
-     * - This distinction is intentional and critical for minimizing physical interval distance.
-     * 
-     * @internal
-     */
-    private voiceMovementCost(from: number[], to: number[]): number {
-        // If different number of voices, use a simple metric
-        const minLen = Math.min(from.length, to.length);
+    /** Task 064: Voice movement cost between _prevVoicingBuffer and _candidateBuffer. */
+    private voiceMovementCostBuffers(prevLen: number, candLen: number): number {
+        const minLen = Math.min(prevLen, candLen);
         let cost = 0;
-
-        // Sort both to compare by register
-        const fromSorted = [...from].sort((a, b) => a - b);
-        const toSorted = [...to].sort((a, b) => a - b);
-
         for (let i = 0; i < minLen; i++) {
-            cost += Math.abs(fromSorted[i] - toSorted[i]);
+            cost += Math.abs(this._prevVoicingBuffer[i] - this._candidateBuffer[i]);
         }
-
-        // Penalize voice count mismatch
-        cost += Math.abs(from.length - to.length) * 12;
-
+        cost += Math.abs(prevLen - candLen) * 12;
         return cost;
     }
 
-    /**
-     * Emit a chord from an array of pitches.
-     * @internal
-     */
-    private emitChordPitches(pitches: number[], duration: number): void {
-        // Build a mask from the pitches
-        const root = Math.min(...pitches);
+    /** Task 064: Emit chord from buffer. */
+    private emitChordFromBuffer(buf: Int8Array, len: number, duration: number): void {
+        if (len === 0) return;
+        let root = 127;
+        for (let i = 0; i < len; i++) if (buf[i] < root) root = buf[i];
         let mask = 0;
-        for (const pitch of pitches) {
-            const interval = pitch - root;
-            mask |= (1 << interval);
-        }
-
-        // Use the chord cursor to emit
+        for (let i = 0; i < len; i++) mask |= (1 << (buf[i] - root));
         this.chordCursor.harmony(mask, root).duration(duration).commit();
     }
 
     /**
      * Execute a builder function multiple times, or loop an OperationsSource.
      * Each iteration adds operations at the current tick position.
+     *
+     * @design-time Called during clip composition only. Closure allocations
+     * are acceptable. Do not call during playback hot paths.
+     *
      * @param count - Number of repetitions
      * @param source - Builder function or OperationsSource to loop
      */
@@ -362,6 +341,10 @@ export class SynapticMelody extends SynapticClip {
 
     /**
      * Insert operations from another clip at current tick position.
+     *
+     * @design-time Called during clip composition only. Do not call during
+     * playback hot paths.
+     *
      * @param clip - Source clip (SynapticMelody, ClipNode, FrozenClip, or OperationsSource)
      */
     play(clip: SynapticMelody | ClipNode | FrozenClip | OperationsSource): this {

@@ -85,7 +85,7 @@ describe('Roman numeral methods', () => {
 
         it('uses specified duration for each chord', () => {
             melody.key('C', ScaleMode.MAJOR);
-            melody.progression(['I', 'V'], { duration: 2 });
+            melody.progression(['I', 'V'], 2);
 
             const result = melody.build();
             expect(result.operations[0].duration).toBe(2);
@@ -94,7 +94,7 @@ describe('Roman numeral methods', () => {
 
         it('advances tick position between chords', () => {
             melody.key('C', ScaleMode.MAJOR);
-            melody.progression(['I', 'V'], { duration: 1 });
+            melody.progression(['I', 'V'], 1);
 
             const result = melody.build();
             // First chord at tick 0, second chord at tick 1

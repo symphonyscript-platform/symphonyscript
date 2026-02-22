@@ -212,7 +212,7 @@ describe('SynapticMelody.stack(builderFn)', () => {
             });
 
             melody.advanceTick(4);
-            melody.progression(['I', 'IV'], { duration: 2 });
+            melody.progression(['I', 'IV'], 2);
 
             const ops = melody.toOperations();
             const noteOps = ops.filter(op => op.kind === 'note') as NoteOperation[];
