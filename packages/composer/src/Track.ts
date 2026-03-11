@@ -31,7 +31,7 @@ export interface TrackOptions {
  *
  * @design-time This class is intended for session setup only.
  * Do not call Track methods during playback hot paths.
- * Allocations (arrays, object literals) are acceptable during design-time.
+ * Allocations (arrays, objects) are acceptable during design-time setup.
  *
  * Provides fluent API for:
  * - Setting tempo and time signature
