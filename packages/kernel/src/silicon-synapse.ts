@@ -45,6 +45,21 @@ import type {
 // RFC-045-04: Error classes no longer thrown - using error codes instead
 
 /**
+ * Modular distance check for 24-bit SEQ counter wraparound (Task 071).
+ *
+ * Uses TCP-style sequence number arithmetic: if the counter wrapped a full
+ * half-cycle (2^23 increments) during a single read, the distance check
+ * catches it even when before === after by coincidence.
+ *
+ * @param before - SEQ value read before the data fields
+ * @param after - SEQ value read after the data fields
+ * @returns true if the sequence changed (read is inconsistent), false if consistent
+ */
+export function seqChanged(before: number, after: number): boolean {
+  return before !== after || ((after - before) & 0xFFFFFF) >= SEQ.SEQ_HALF
+}
+
+/**
  * Silicon Linker - Memory Management Unit for Direct-to-Silicon Mirroring.
  *
  * This class acts as the sole authority for memory allocation and pointer
@@ -1053,11 +1068,11 @@ export class SiliconSynapse implements ISiliconLinker {
       // Read SEQ after reading fields
       seq2 = (Atomics.load(this.sab, offset + NODE.SEQ_FLAGS) & SEQ.SEQ_MASK) >>> SEQ.SEQ_SHIFT
 
-      // If SEQ changed, writer was mutating during our read - retry
-      if (seq1 !== seq2) {
+      // If SEQ changed (including wraparound), writer was mutating during our read - retry
+      if (seqChanged(seq1, seq2)) {
         retries = retries + 1
       }
-    } while (seq1 !== seq2)
+    } while (seqChanged(seq1, seq2))
 
     // SEQ is stable - extract fields from packed and invoke callback
     const opcode = (packed & PACKED.OPCODE_MASK) >>> PACKED.OPCODE_SHIFT
@@ -1141,8 +1156,8 @@ export class SiliconSynapse implements ISiliconLinker {
         seq2 =
           (Atomics.load(this.sab, offset + NODE.SEQ_FLAGS) & SEQ.SEQ_MASK) >>> SEQ.SEQ_SHIFT
 
-        // If SEQ changed, writer was mutating during our read - retry
-        if (seq1 !== seq2) {
+        // If SEQ changed (including wraparound), writer was mutating during our read - retry
+        if (seqChanged(seq1, seq2)) {
           // Safety bailout: prevent infinite loop on severe contention
           if (retries >= 1000) {
             // RFC-045-04: Set error flag and skip node instead of throwing
@@ -1155,7 +1170,7 @@ export class SiliconSynapse implements ISiliconLinker {
           }
           retries = retries + 1
         }
-      } while (seq1 !== seq2)
+      } while (seqChanged(seq1, seq2))
 
       // If we bailed out due to contention, continue to next iteration
       if (bailedOut) {

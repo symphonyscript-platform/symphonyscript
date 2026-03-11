@@ -387,7 +387,9 @@ export const SEQ = {
   SEQ_SHIFT: 8,
   SEQ_MASK: 0xffffff00,
   /** Extended flags: bits 0-7 */
-  FLAGS_EXT_MASK: 0x000000ff
+  FLAGS_EXT_MASK: 0x000000ff,
+  /** Half the 24-bit counter range (2^23) for modular distance wraparound detection */
+  SEQ_HALF: 0x800000
 } as const
 
 // =============================================================================

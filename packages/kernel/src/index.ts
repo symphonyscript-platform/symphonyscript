@@ -4,7 +4,7 @@
 // Direct-to-Silicon Mirroring for zero-latency live coding.
 
 // Main class
-export { SiliconSynapse } from './silicon-synapse'
+export { SiliconSynapse, seqChanged } from './silicon-synapse'
 
 // RFC-047 Phase 3: Scheduler
 export { getModulatedTime } from './scheduler'
