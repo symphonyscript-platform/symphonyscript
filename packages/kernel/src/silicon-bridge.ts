@@ -121,6 +121,21 @@ export interface SynapseOptions {
  * - Error handling via return codes (no throw/try/catch)
  * - Debouncing via tick counter (no setTimeout)
  * - All loops use index-based iteration (no for...of)
+ *
+ * @todo DECOMPOSE — This class is a god-class (~1700+ lines) with too many
+ * responsibilities. Phase 1 should extract:
+ *
+ * 1. **SynapseManager** — synapse connect/disconnect/compact (lines ~1283-1405)
+ * 2. **NoteManager** — note CRUD, insertAsync/_insertNoteImmediate/deleteNoteImmediate (lines ~456-700)
+ * 3. **SnapshotManager** — snapshotStream/snapshotToArrays/restoreFromArrays (lines ~1511-1630)
+ * 4. **SourceIdManager** — generateSourceId/getSourceId (lines ~307-390)
+ * 5. **ErrorReporter** — onError callback, error flag management (scattered)
+ *
+ * Each extracted module should receive the SAB and relevant allocators
+ * via constructor injection. SiliconBridge becomes a thin facade that
+ * delegates to these modules.
+ *
+ * See: research/composer-kernel-remed.md §2.11
  */
 export class SiliconBridge {
   private linker: SiliconSynapse
