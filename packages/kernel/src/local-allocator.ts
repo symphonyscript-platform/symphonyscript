@@ -163,21 +163,18 @@ export class LocalAllocator {
   }
 
   /**
-   * Get Zone B utilization (RFC-044 Telemetry).
-   *
-   * @returns Utilization ratio from 0.0 (empty) to 1.0 (full)
-   *
-   * @remarks
-   * **Fuel Gauge:** Monitor this to detect approaching Zone B exhaustion.
-   * - < 0.5: Healthy
-   * - 0.5 - 0.75: Monitor
-   * - 0.75 - 0.9: Warning
-   * - > 0.9: Critical (consider hardReset or defragmentation)
+   * Total Zone B capacity in node slots.
    */
-  getUtilization(): number {
-    const used = (this.nextPtr - this.startPtr) - (this.freeCount * NODE_SIZE_BYTES)
-    const total = this.limitPtr - this.startPtr
-    return total === 0 ? 0 : used / total
+  getTotalSlots(): number {
+    return ((this.limitPtr - this.startPtr) / NODE_SIZE_BYTES) | 0
+  }
+
+  /**
+   * Number of Zone B slots currently in use (allocated minus freed).
+   */
+  getUsedSlots(): number {
+    const usedBytes = (this.nextPtr - this.startPtr) - (this.freeCount * NODE_SIZE_BYTES)
+    return (usedBytes / NODE_SIZE_BYTES) | 0
   }
 
   /**
@@ -196,4 +193,36 @@ export class LocalAllocator {
     this.freeHead = -1
     this.freeCount = 0
   }
+}
+
+// =============================================================================
+// Zone B Stats Bit-Packing (Task 076)
+// =============================================================================
+//
+// Layout (53-bit safe integer budget):
+//   bits  0-15: totalSlots  (16 bits, max 65535)
+//   bits 16-31: usedSlots   (16 bits, max 65535)
+//   bits 32-38: utilization (7 bits, 0-100 percentage)
+//
+// freeSlots is derived: totalSlots - usedSlots (not packed).
+// Bits 32+ use multiplication/division because JS bitwise ops are 32-bit.
+
+export function packZoneBStats(totalSlots: number, usedSlots: number, utilization: number): number {
+  return (((totalSlots & 0xFFFF) | ((usedSlots & 0xFFFF) << 16)) >>> 0) + utilization * 0x100000000
+}
+
+export function unpackZoneBTotal(packed: number): number {
+  return packed & 0xFFFF
+}
+
+export function unpackZoneBUsed(packed: number): number {
+  return (packed >>> 16) & 0xFFFF
+}
+
+export function unpackZoneBFree(packed: number): number {
+  return (packed & 0xFFFF) - ((packed >>> 16) & 0xFFFF)
+}
+
+export function unpackZoneBUtilization(packed: number): number {
+  return (packed / 0x100000000) | 0
 }

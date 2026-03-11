@@ -6,6 +6,7 @@ import { SiliconBridge, createSiliconBridge } from '../silicon-bridge'
 import type { EditorNoteData, PatchType, SourceLocation } from '../silicon-bridge'
 import { SiliconSynapse } from '../silicon-synapse'
 import { HDR, NULL_PTR, OPCODE, getZoneSplitIndex, HEAP_START_OFFSET, NODE_SIZE_BYTES, BRIDGE_ERR } from '../constants'
+import { unpackZoneBUtilization, unpackZoneBFree } from '../local-allocator'
 
 // =============================================================================
 // Test Helpers
@@ -914,15 +915,15 @@ describe('RFC-044: Async Path & Resilience', () => {
 
       // Utilization should be > 0
       const statsBeforeReset = bridge.getZoneBStats()
-      expect(statsBeforeReset.usage).toBeGreaterThan(0)
+      expect(unpackZoneBUtilization(statsBeforeReset)).toBeGreaterThan(0)
 
       // Hard reset
       bridge.hardReset()
 
-      // Utilization should be 0.0
+      // Utilization should be 0
       const statsAfterReset = bridge.getZoneBStats()
-      expect(statsAfterReset.usage).toBe(0)
-      expect(statsAfterReset.freeNodes).toBeGreaterThan(0)
+      expect(unpackZoneBUtilization(statsAfterReset)).toBe(0)
+      expect(unpackZoneBFree(statsAfterReset)).toBeGreaterThan(0)
     })
 
     it('should clear all pending structural edits', () => {
@@ -993,7 +994,7 @@ describe('RFC-044: Async Path & Resilience', () => {
       // Both zones should have allocations
       expect(sab[HDR.NODE_COUNT]).toBe(2)
       const zoneBStats = bridge.getZoneBStats()
-      expect(zoneBStats.usage).toBeGreaterThan(0)
+      expect(unpackZoneBUtilization(zoneBStats)).toBeGreaterThan(0)
 
       // Hard reset
       bridge.hardReset()
@@ -1004,7 +1005,7 @@ describe('RFC-044: Async Path & Resilience', () => {
 
       // Zone B should be reset
       const zoneBStatsAfter = bridge.getZoneBStats()
-      expect(zoneBStatsAfter.usage).toBe(0)
+      expect(unpackZoneBUtilization(zoneBStatsAfter)).toBe(0)
     })
   })
 })

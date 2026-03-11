@@ -32,7 +32,7 @@ import {
   getReverseIndexOffset
 } from './constants'
 import type { NodePtr, SynapsePtr, BrainSnapshotArrays } from './types'
-import { LocalAllocator } from './local-allocator'
+import { LocalAllocator, packZoneBStats } from './local-allocator'
 import { RingBuffer, RING_ERR } from './ring-buffer'
 import { SynapseAllocator } from './synapse-allocator'
 
@@ -1249,13 +1249,16 @@ export class SiliconBridge {
   }
 
   /**
-   * Get Zone B statistics (RFC-044 Telemetry).
+   * Get Zone B statistics as a bit-packed number (RFC-044 Telemetry, Task 076).
+   *
+   * Use unpackZoneBTotal / unpackZoneBUsed / unpackZoneBFree /
+   * unpackZoneBUtilization to read individual fields.
    */
-  getZoneBStats(): { usage: number; freeNodes: number } {
-    return {
-      usage: this.localAllocator.getUtilization(),
-      freeNodes: this.localAllocator.getFreeCount()
-    }
+  getZoneBStats(): number {
+    const total = this.localAllocator.getTotalSlots()
+    const used = this.localAllocator.getUsedSlots()
+    const util = total === 0 ? 0 : ((used * 100) / total) | 0
+    return packZoneBStats(total, used, util)
   }
 
   /**

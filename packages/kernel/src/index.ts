@@ -115,7 +115,14 @@ export { FreeList } from './free-list'
 export { AttributePatcher } from './patch'
 
 // RFC-044: Command Ring Architecture
-export { LocalAllocator } from './local-allocator'
+export {
+  LocalAllocator,
+  packZoneBStats,
+  unpackZoneBTotal,
+  unpackZoneBUsed,
+  unpackZoneBFree,
+  unpackZoneBUtilization
+} from './local-allocator'
 export { RingBuffer } from './ring-buffer'
 
 // RFC-045: Synapse Graph (Neural Audio Processor)
