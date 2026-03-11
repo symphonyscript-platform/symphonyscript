@@ -108,6 +108,15 @@ export abstract class SynapticCursor {
         return this.clip.rest(duration);
     }
 
+    /**
+     * Escape: Advance timeline and return to clip for fluent chaining.
+     * @param ticks - Ticks to advance
+     */
+    advanceTick(ticks: number): SynapticClip {
+        this._commit();
+        return this.clip.advanceTick(ticks);
+    }
+
     tempo(bpm: number): SynapticClip {
         this._commit();
         return this.clip.tempo(bpm);
@@ -138,6 +147,52 @@ export abstract class SynapticCursor {
     }
 
     /**
+     * Escape: Set quantize and return to clip.
+     * @param grid - Grid size in beats (e.g., 0.25 = 16th notes)
+     * @param strength - Snap strength 0-1
+     * @param duration - Quantize duration too
+     */
+    quantize(grid: number, strength?: number, duration?: boolean): SynapticClip {
+        this._commit();
+        return this.clip.quantize(grid, strength, duration);
+    }
+
+    /**
+     * Escape: Start crescendo and return to clip.
+     * @param duration - Duration in ticks
+     * @param from - Start velocity (default 0.4)
+     * @param to - End velocity (default 1.0)
+     * @param curve - Curve type (default LINEAR)
+     */
+    crescendo(duration: number, from?: number, to?: number, curve?: CurveType): SynapticClip {
+        this._commit();
+        return this.clip.crescendo(duration, from ?? 0.4, to ?? 1.0, curve ?? CurveType.LINEAR);
+    }
+
+    /**
+     * Escape: Start decrescendo and return to clip.
+     * @param duration - Duration in ticks
+     * @param from - Start velocity (default 1.0)
+     * @param to - End velocity (default 0.4)
+     * @param curve - Curve type (default LINEAR)
+     */
+    decrescendo(duration: number, from?: number, to?: number, curve?: CurveType): SynapticClip {
+        this._commit();
+        return this.clip.decrescendo(duration, from ?? 1.0, to ?? 0.4, curve ?? CurveType.LINEAR);
+    }
+
+    /**
+     * Escape: Ramp velocity and return to clip.
+     * @param to - Target velocity (0-1)
+     * @param duration - Duration in ticks
+     * @param from - Start velocity (default 0.8)
+     */
+    velocityRamp(to: number, duration: number, from?: number): SynapticClip {
+        this._commit();
+        return this.clip.velocityRamp(to, duration, from ?? 0.8);
+    }
+
+    /**
      * Escape: Send MIDI CC and return to clip.
      * @param controller - MIDI CC number (0-127)
      * @param value - CC value (0-127)
@@ -150,11 +205,11 @@ export abstract class SynapticCursor {
     /**
      * Escape: Send MIDI Aftertouch and return to clip.
      * @param value - Pressure value (0-1, normalized)
-     * @param options - Optional type ('channel' or 'poly') and note for poly aftertouch
+     * @param note - Note for poly aftertouch (omit for channel)
      */
-    aftertouch(value: number, options?: { type?: 'channel' | 'poly'; note?: string | number }): SynapticClip {
+    aftertouch(value: number, note?: string | number): SynapticClip {
         this._commit();
-        return this.clip.aftertouch(value, options);
+        return this.clip.aftertouch(value, note);
     }
 
     /**

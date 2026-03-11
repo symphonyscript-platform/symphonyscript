@@ -231,7 +231,7 @@ describe('DegreeChord (Task 041)', () => {
     });
 
     describe('Chaining', () => {
-        it('returns SynapticChordCursor for chaining', () => {
+        it('returns MelodyChordCursor for chaining', () => {
             const melody = Clip.melody('test')
                 .setScale('C', ScaleMode.MAJOR);
             

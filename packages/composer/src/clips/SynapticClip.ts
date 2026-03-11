@@ -5,6 +5,8 @@ import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyCo
 import { parsePitch } from '../utils/pitch';
 import { FrozenClip } from './FrozenClip';
 
+const sortVelocityPoints = (a: VelocityPoint, b: VelocityPoint) => a.tick - b.tick;
+
 /**
  * SynapticClip - Orchestration Logic for Neural Audio Clippings.
  * 
@@ -48,7 +50,6 @@ export abstract class SynapticClip extends SynapticNode {
     protected timeSignatureDenominator: number = 4;
     protected swingAmount: number = 0.5;
     protected currentGroove: string | null = null;
-    protected ccAutomation: Map<number, number>;
     protected stackingEnabled: boolean = false;
     protected loopEnabled: boolean = false;
     protected loopStart: number = 0;
@@ -91,7 +92,6 @@ export abstract class SynapticClip extends SynapticNode {
 
     constructor(bridge: SiliconBridge, seed: number = 0) {
         super(bridge);
-        this.ccAutomation = new Map();
         this.humanizeRng = new SeededRandom(seed);
         // Task 063: Pre-allocate state stack slots (9 numbers per frame: tempo, dyn×6, ts×2)
         this._stateStackNum = new Float64Array(SynapticClip.MAX_STACK_DEPTH * 9);
@@ -100,7 +100,7 @@ export abstract class SynapticClip extends SynapticNode {
 
     // Abstract methods that the real implementation will provide
     abstract getCurrentTick(): number;
-    abstract advanceTick(ticks: number): void;
+    abstract advanceTick(ticks: number): this;
     abstract generateSourceId(): number;
 
     // Escape implementations (store state)
@@ -180,28 +180,17 @@ export abstract class SynapticClip extends SynapticNode {
 
     /**
      * Send a MIDI Aftertouch (pressure) message at the current tick.
+     * No options objects - use note param for poly aftertouch.
      * @param value - Pressure value (0-1, normalized)
-     * @param options - Optional type ('channel' or 'poly') and note for poly aftertouch
-     * @throws Error if value is out of range or poly aftertouch missing note
+     * @param note - Note for poly aftertouch (omit for channel aftertouch)
      */
-    aftertouch(value: number, options?: { type?: 'channel' | 'poly'; note?: string | number }): this {
-        // Validate value range
+    aftertouch(value: number, note?: string | number): this {
         if (value < 0 || value > 1) {
             throw new Error(`Aftertouch value must be 0-1, got ${value}`);
         }
-
-        const type = options?.type ?? 'channel';
-
-        // Poly aftertouch requires a note
-        if (type === 'poly' && options?.note === undefined) {
-            throw new Error('Poly aftertouch requires a note parameter');
+        if (note !== undefined) {
+            typeof note === 'string' ? parsePitch(note) : note;
         }
-
-        // Parse note if string (validation only; Task 058: no operations push)
-        if (options?.note !== undefined && type === 'poly') {
-            typeof options.note === 'string' ? parsePitch(options.note) : options.note;
-        }
-
         return this;
     }
 
@@ -503,15 +492,16 @@ export abstract class SynapticClip extends SynapticNode {
 
     /**
      * Set quantize settings for snap-to-grid timing correction.
-     * Applied in flushNote() pipeline: Quantize → Groove → Humanize
+     * No options objects - use strength and duration params directly.
      * @param grid - Grid size in beats (e.g., 0.25 = 16th notes)
-     * @param options - Optional strength and duration settings
+     * @param strength - Snap strength 0-1 (default 1)
+     * @param duration - Quantize duration too (default false)
      */
-    quantize(grid: number, options?: { strength?: number; duration?: boolean }): this {
+    quantize(grid: number, strength?: number, duration?: boolean): this {
         this._quantizeSettings = {
             grid,
-            strength: options?.strength,
-            duration: options?.duration
+            strength,
+            duration
         };
         return this;
     }
@@ -563,47 +553,54 @@ export abstract class SynapticClip extends SynapticNode {
 
     /**
      * Start a crescendo (gradual increase in velocity).
+     * No options objects - use from, to, curve params directly.
      * @param duration - Duration in ticks
-     * @param options - Optional from/to velocities and curve type
+     * @param from - Start velocity (default 0.4)
+     * @param to - End velocity (default 1.0)
+     * @param curve - Curve type (default LINEAR)
      */
-    crescendo(duration: number, options?: { from?: number; to?: number; curve?: CurveType }): this {
+    crescendo(duration: number, from: number = 0.4, to: number = 1.0, curve: CurveType = CurveType.LINEAR): this {
         this._dynType = DynamicsType.CRESCENDO;
         this._dynStart = this.getCurrentTick();
         this._dynDuration = duration;
-        this._dynFrom = options?.from ?? 0.4;
-        this._dynTo = options?.to ?? 1.0;
-        this._dynCurve = options?.curve ?? CurveType.LINEAR;
+        this._dynFrom = from;
+        this._dynTo = to;
+        this._dynCurve = curve;
         this.velocityCurvePoints = null;
         return this;
     }
 
     /**
      * Start a decrescendo (gradual decrease in velocity).
+     * No options objects - use from, to, curve params directly.
      * @param duration - Duration in ticks
-     * @param options - Optional from/to velocities and curve type
+     * @param from - Start velocity (default 1.0)
+     * @param to - End velocity (default 0.4)
+     * @param curve - Curve type (default LINEAR)
      */
-    decrescendo(duration: number, options?: { from?: number; to?: number; curve?: CurveType }): this {
+    decrescendo(duration: number, from: number = 1.0, to: number = 0.4, curve: CurveType = CurveType.LINEAR): this {
         this._dynType = DynamicsType.DECRESCENDO;
         this._dynStart = this.getCurrentTick();
         this._dynDuration = duration;
-        this._dynFrom = options?.from ?? 1.0;
-        this._dynTo = options?.to ?? 0.4;
-        this._dynCurve = options?.curve ?? CurveType.LINEAR;
+        this._dynFrom = from;
+        this._dynTo = to;
+        this._dynCurve = curve;
         this.velocityCurvePoints = null;
         return this;
     }
 
     /**
      * Ramp velocity to a target value over a duration.
+     * No options objects - use from param directly.
      * @param to - Target velocity (0-1)
      * @param duration - Duration in ticks
-     * @param options - Optional starting velocity
+     * @param from - Start velocity (default 0.8)
      */
-    velocityRamp(to: number, duration: number, options?: { from?: number }): this {
+    velocityRamp(to: number, duration: number, from: number = 0.8): this {
         this._dynType = DynamicsType.RAMP;
         this._dynStart = this.getCurrentTick();
         this._dynDuration = duration;
-        this._dynFrom = options?.from ?? 0.8;
+        this._dynFrom = from;
         this._dynTo = to;
         this._dynCurve = CurveType.LINEAR;
         this.velocityCurvePoints = null;
@@ -620,15 +617,15 @@ export abstract class SynapticClip extends SynapticNode {
             throw new Error('velocityCurve requires at least 2 points');
         }
 
-        // Sort points by tick offset
-        const sortedPoints = [...points].sort((a, b) => a.tick - b.tick);
+        // Sort points by tick offset (in place, zero-allocation)
+        points.sort(sortVelocityPoints);
 
         this._dynType = DynamicsType.CURVE;
         this._dynStart = this.getCurrentTick();
         this._dynDuration = duration;
-        this._dynFrom = sortedPoints[0].velocity;
-        this._dynTo = sortedPoints[sortedPoints.length - 1].velocity;
-        this.velocityCurvePoints = sortedPoints;
+        this._dynFrom = points[0].velocity;
+        this._dynTo = points[points.length - 1].velocity;
+        this.velocityCurvePoints = points;
         return this;
     }
 
@@ -895,9 +892,6 @@ export abstract class SynapticClip extends SynapticNode {
             humanizedVel = this.applyHumanization(dynamicsVel);
         }
 
-        // 6. Insert CC automation if pending (stubbed)
-        // this.flushCCAutomation(humanizedTick);
-
         // Apply Vibrato LFO (Task 052)
         if (this.vibratoRate > 0 && this.vibratoDepth > 0) {
             this.emitVibratoLFO(humanizedTick, quantizedDuration); // Use humanized tick/duration? 
@@ -979,30 +973,6 @@ export abstract class SynapticClip extends SynapticNode {
             const timingVariation = (this.humanizeRng.next() - 0.5) * 2 * maxOffsetBeats;
             this._humanizeTickOut = tick + timingVariation;
         }
-    }
-
-    /**
-     * Flush CC automation points to kernel.
-     * @remarks Currently stubbed pending AudioWorklet CC handler verification.
-     */
-    protected flushCCAutomation(tick: number): void {
-        if (this.ccAutomation.size === 0) return;
-
-        // TEMPORARY STUB: Verify AudioWorklet CC handler before enabling
-        // for (const [cc, value] of this.ccAutomation) {
-        //     this.bridge.insertAsync(
-        //         OPCODE.CC,
-        //         cc,
-        //         value,
-        //         0,
-        //         tick,
-        //         false,
-        //         this.generateSourceId(),
-        //         undefined,
-        //         undefined
-        //     );
-        // }
-        // this.ccAutomation.clear();
     }
 
     /**

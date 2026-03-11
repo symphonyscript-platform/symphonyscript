@@ -7,11 +7,16 @@ export type { SessionOptions } from './Session';
 
 // Cursors
 export { SynapticCursor } from './cursors/SynapticCursor';
+export { BaseNoteCursor } from './cursors/BaseNoteCursor';
 export { SynapticNoteCursor } from './cursors/SynapticNoteCursor';
 export { SynapticMelodyBaseCursor } from './cursors/SynapticMelodyBaseCursor';
-export { SynapticMelodyNoteCursor } from './cursors/SynapticMelodyNoteCursor';
-export { SynapticChordCursor } from './cursors/SynapticChordCursor';
-export { SynapticDrumHitCursor } from './cursors/SynapticDrumHitCursor';
+export { MelodyNoteCursor } from './cursors/MelodyNoteCursor';
+export { MelodyChordCursor } from './cursors/MelodyChordCursor';
+export { DrumsHitCursor } from './cursors/DrumsHitCursor';
+// Backward-compat aliases (deprecated)
+export { MelodyNoteCursor as SynapticMelodyNoteCursor } from './cursors/MelodyNoteCursor';
+export { MelodyChordCursor as SynapticChordCursor } from './cursors/MelodyChordCursor';
+export { DrumsHitCursor as SynapticDrumHitCursor } from './cursors/DrumsHitCursor';
 
 // Clips
 export { SynapticClip } from './clips/SynapticClip';

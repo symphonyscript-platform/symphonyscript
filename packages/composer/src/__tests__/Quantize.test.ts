@@ -20,7 +20,7 @@ describe('Quantize (Task 032)', () => {
 
         it('stores quantize settings', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.quantize(0.25, { strength: 0.8, duration: true });
+            melody.quantize(0.25, 0.8, true);
             expect(melody.getQuantizeSettings()).toEqual({
                 grid: 0.25,
                 strength: 0.8,
@@ -94,7 +94,7 @@ describe('Quantize (Task 032)', () => {
     describe('Strength parameter', () => {
         it('strength 0 = no quantization', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.quantize(0.25, { strength: 0 });
+            melody.quantize(0.25, 0);
 
             melody.advanceTick(0.3);
             melody.note('C4', 0.25).commit();
@@ -108,7 +108,7 @@ describe('Quantize (Task 032)', () => {
 
         it('strength 0.5 = halfway to grid', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.quantize(0.25, { strength: 0.5 });
+            melody.quantize(0.25, 0.5);
 
             // Note at 0.3, grid at 0.25
             // Distance = 0.3 - 0.25 = 0.05
@@ -139,7 +139,7 @@ describe('Quantize (Task 032)', () => {
     describe('Duration quantization', () => {
         it('quantizes duration when enabled', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.quantize(0.25, { duration: true });
+            melody.quantize(0.25, undefined, true);
 
             // Duration 0.3 should snap to 0.25
             melody.note('C4', 0.3).commit();
@@ -165,7 +165,7 @@ describe('Quantize (Task 032)', () => {
 
         it('applies strength to duration quantization', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.quantize(0.25, { strength: 0.5, duration: true });
+            melody.quantize(0.25, 0.5, true);
 
             // Duration 0.3, grid 0.25
             // snapped = 0.25, distance = 0.3 - 0.25 = 0.05
@@ -180,7 +180,7 @@ describe('Quantize (Task 032)', () => {
 
         it('enforces minimum duration of one grid unit', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.quantize(0.25, { duration: true });
+            melody.quantize(0.25, undefined, true);
 
             // Very short duration should snap to at least 0.25
             melody.note('C4', 0.1).commit();
@@ -297,7 +297,7 @@ describe('Quantize (Task 032)', () => {
 
     describe('Clip factory integration', () => {
         it('Clip.melody().quantize() works', () => {
-            const melody = Clip.melody('test').quantize(0.25, { strength: 0.8 });
+            const melody = Clip.melody('test').quantize(0.25, 0.8);
             melody.advanceTick(0.3);
             const result = melody.note('C4', 0.25).build();
 
@@ -305,6 +305,15 @@ describe('Quantize (Task 032)', () => {
             expect(noteOps).toHaveLength(1);
             // Should be between 0.25 and 0.3 at 80% strength
             expect(noteOps[0].tick).toBeCloseTo(0.26, 2);
+        });
+
+        it('cursor.quantize() escape works (fluent alternative to clip.quantize)', () => {
+            const melody = Clip.melody('test');
+            melody.note('C4', 0.25).quantize(0.25, 0.8); // escape: commit note, set quantize, return clip
+            melody.advanceTick(0.3);
+            const result = melody.note('D4', 0.25).build();
+            const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
+            expect(noteOps).toHaveLength(2);
         });
 
         it('Clip.drums().quantize() works', () => {

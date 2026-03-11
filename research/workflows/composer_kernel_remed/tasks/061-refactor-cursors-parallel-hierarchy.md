@@ -2,7 +2,7 @@
 
 **Priority:** HIGH  
 **Category:** Zero-Allocation Architecture  
-**Status:** Open  
+**Status:** Done  
 **Created:** 2026-02-08  
 **Source:** Composer & Kernel Remediation Plan
 
@@ -107,10 +107,10 @@ note(pitch: number): MelodyNoteCursor {
 
 ## Acceptance Criteria
 
-- [ ] `BaseNoteCursor<TClip>` exists with common modifiers
-- [ ] Each Clip type has a corresponding Cursor type
-- [ ] All escape methods implement `commit() + delegate` pattern
-- [ ] Cursors write directly to Kernel via `bridge.insertAsync()`
-- [ ] No `operations.push()` calls anywhere in cursor code
-- [ ] Singleton cursor instance per Clip
-- [ ] `pnpm build && pnpm test` passes
+- [x] `BaseNoteCursor<TClip>` exists with common modifiers
+- [x] Each Clip type has a corresponding Cursor type
+- [x] All escape methods implement `commit() + delegate` pattern
+- [x] Cursors write directly to Kernel via `bridge.insertAsync()`
+- [x] No `operations.push()` calls anywhere in cursor code
+- [x] Singleton cursor instance per Clip
+- [x] `pnpm build && pnpm test` passes

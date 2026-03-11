@@ -1,4 +1,4 @@
-import { SynapticChordCursor } from '../cursors/SynapticChordCursor';
+import { MelodyChordCursor } from '../cursors/MelodyChordCursor';
 import { SynapticClip } from '../clips/SynapticClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 
@@ -14,7 +14,7 @@ class MockClip extends SynapticClip {
         super(bridge, seed); // Pass seed for deterministic humanization
     }
     getCurrentTick() { return this.tick; }
-    advanceTick(t: number) { this.tick += t; }
+    advanceTick(t: number): this { this.tick += t; return this; }
     generateSourceId() { return 100; }
     commit() { }
     rest = jest.fn();
@@ -27,14 +27,14 @@ class MockClip extends SynapticClip {
     setLoopRegion = jest.fn();
 }
 
-describe('SynapticChordCursor (Phase 5)', () => {
+describe('MelodyChordCursor (Phase 5)', () => {
     let clip: MockClip;
-    let cursor: SynapticChordCursor;
+    let cursor: MelodyChordCursor;
 
     beforeEach(() => {
         mockInsertAsync.mockClear();
         clip = new MockClip(mockBridge);
-        cursor = new SynapticChordCursor(clip, mockBridge, 4); // Low maxVoices for testing
+        cursor = new MelodyChordCursor(clip, mockBridge, 4); // Low maxVoices for testing
     });
 
     it('chord("Cmaj") flushes correct notes', () => {
@@ -92,7 +92,7 @@ describe('SynapticChordCursor (Phase 5)', () => {
                 commit() { }
             }
 
-            const pureCursor = new SynapticChordCursor(new PureClip(cleanBridge), cleanBridge, 4);
+            const pureCursor = new MelodyChordCursor(new PureClip(cleanBridge), cleanBridge, 4);
 
             // WARM UP
             pureCursor.chord('Cmaj7');

@@ -1,5 +1,5 @@
 import { SynapticClip } from './SynapticClip';
-import { SynapticDrumHitCursor } from '../cursors/SynapticDrumHitCursor';
+import { DrumsHitCursor } from '../cursors/DrumsHitCursor';
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { EuclideanDrumOptions, DrumMap } from '../types';
 import { euclidean, rotatePattern } from '@symphonyscript/theory';
@@ -46,7 +46,7 @@ const DEFAULT_PITCHES = new Uint8Array([
  * Builder for drum sequences with custom mapping support.
  */
 export class SynapticDrums extends SynapticClip {
-    private cursor: SynapticDrumHitCursor;
+    private cursor: DrumsHitCursor;
     private currentTick: number = 0;
     private sourceIdCounter: number = 0;
     /** Standard drums: O(1) array lookup. */
@@ -56,7 +56,7 @@ export class SynapticDrums extends SynapticClip {
 
     constructor(bridge: SiliconBridge) {
         super(bridge);
-        this.cursor = new SynapticDrumHitCursor(this, bridge);
+        this.cursor = new DrumsHitCursor(this, bridge);
         this._drumPitches = new Uint8Array(DEFAULT_PITCHES);
     }
 
@@ -111,8 +111,9 @@ export class SynapticDrums extends SynapticClip {
         return this.currentTick;
     }
 
-    advanceTick(duration: number): void {
+    advanceTick(duration: number): this {
         this.currentTick += duration;
+        return this;
     }
 
     generateSourceId(): number {
@@ -128,40 +129,40 @@ export class SynapticDrums extends SynapticClip {
      * @param pitch - Drum name (from map) or MIDI pitch number
      * @param duration - Optional duration override
      */
-    hit(pitch: string | number, duration?: number): SynapticDrumHitCursor {
+    hit(pitch: string | number, duration?: number): DrumsHitCursor {
         const resolvedPitch = this.resolveDrumPitch(pitch);
         return this.cursor.hit(resolvedPitch, duration);
     }
 
-    kick(duration?: number): SynapticDrumHitCursor {
+    kick(duration?: number): DrumsHitCursor {
         return this.hit('kick', duration);
     }
 
-    snare(duration?: number): SynapticDrumHitCursor {
+    snare(duration?: number): DrumsHitCursor {
         return this.hit('snare', duration);
     }
 
-    hat(duration?: number): SynapticDrumHitCursor {
+    hat(duration?: number): DrumsHitCursor {
         return this.hit('hat', duration);
     }
 
-    clap(duration?: number): SynapticDrumHitCursor {
+    clap(duration?: number): DrumsHitCursor {
         return this.hit('clap', duration);
     }
 
-    openHat(duration?: number): SynapticDrumHitCursor {
+    openHat(duration?: number): DrumsHitCursor {
         return this.hit('openhat', duration);
     }
 
-    crash(duration?: number): SynapticDrumHitCursor {
+    crash(duration?: number): DrumsHitCursor {
         return this.hit('crash', duration);
     }
 
-    ride(duration?: number): SynapticDrumHitCursor {
+    ride(duration?: number): DrumsHitCursor {
         return this.hit('ride', duration);
     }
 
-    tom(which: 1 | 2 | 3 = 1, duration?: number): SynapticDrumHitCursor {
+    tom(which: 1 | 2 | 3 = 1, duration?: number): DrumsHitCursor {
         return this.hit(`tom${which}`, duration);
     }
 
@@ -220,24 +221,16 @@ export class SynapticDrums extends SynapticClip {
             pattern = rotatePattern(pattern, rotationVal);
         }
 
-        const drumMethod = this.getDrumMethod(drumVal);
+        const hitTarget = drumVal === 'tom' ? 'tom1' : drumVal;
         for (let r = 0; r < repeatVal; r++) {
             for (const isHit of pattern) {
                 if (isHit) {
-                    drumMethod.call(this, stepDurationVal).velocity(velocityVal).commit();
+                    this.hit(hitTarget, stepDurationVal).velocity(velocityVal).commit();
                 }
                 this.advanceTick(stepDurationVal);
             }
         }
         return this;
-    }
-
-    /**
-     * Get the drum method by name.
-     * @internal
-     */
-    private getDrumMethod(drum: 'kick' | 'snare' | 'hat' | 'clap' | 'tom'): (duration?: number) => SynapticDrumHitCursor {
-        return (d?: number) => this.hit(drum === 'tom' ? 'tom1' : drum, d);
     }
 
     // Note: All escape methods (tempo, swing, etc.) are inherited from SynapticClip.

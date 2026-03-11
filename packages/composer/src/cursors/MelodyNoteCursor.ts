@@ -1,20 +1,24 @@
 import { SynapticMelodyBaseCursor } from './SynapticMelodyBaseCursor';
-import { SynapticChordCursor } from './SynapticChordCursor';
+import { MelodyChordCursor } from './MelodyChordCursor';
 import { SynapticClip } from '../clips/SynapticClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { parsePitch } from '../utils/pitch';
 import { applyKeySignature } from '../utils/key';
-import { DegreeOptions, ArpPattern } from '../types';
+import { ArpPattern } from '../types';
 import { SCALE_INTERVALS } from '../utils/scales';
 
-export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
+/**
+ * MelodyNoteCursor - Task 061 parallel hierarchy
+ * Melody note cursor with key signature, degree, and chord relay support.
+ */
+export class MelodyNoteCursor extends SynapticMelodyBaseCursor {
     protected pitch: number = 60;
-    private chordCursor: SynapticChordCursor;
+    private chordCursor: MelodyChordCursor;
 
     constructor(
         clip: SynapticClip,
         bridge: SiliconBridge,
-        chordCursor: SynapticChordCursor
+        chordCursor: MelodyChordCursor
     ) {
         super(clip, bridge);
         this.chordCursor = chordCursor;
@@ -69,7 +73,7 @@ export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
     /**
      * Relay: Chord (Switches to ChordCursor)
      */
-    chord(symbol: string): SynapticChordCursor {
+    chord(symbol: string): MelodyChordCursor {
         // 1. Commit pending melody note
         if (this.hasPending) {
             this.commit();
@@ -89,9 +93,10 @@ export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
      * Uses scale context from this.clip.getScaleContext().
      * @param deg - Scale degree (1-7 for first octave, 8+ wraps to higher octaves)
      * @param duration - Note duration
-     * @param options - Optional octaveOffset and alteration
+     * @param octaveOffset - Octave shift (+1 = up, -1 = down)
+     * @param alteration - Semitone alteration (+1 = sharp, -1 = flat)
      */
-    degree(deg: number, duration?: number, options?: DegreeOptions): this {
+    degree(deg: number, duration?: number, octaveOffset?: number, alteration?: number): this {
         if (this.hasPending) {
             this.commit();
             this.clip.advanceTick(this._duration);
@@ -108,13 +113,13 @@ export class SynapticMelodyNoteCursor extends SynapticMelodyBaseCursor {
         const scaleDegree = ((deg - 1) % 7 + 7) % 7; // Handle negative degrees
 
         const rootPitch = parsePitch(ctx.root + ctx.octave);
-        const octaveOffset = options?.octaveOffset ?? 0;
-        const alteration = options?.alteration ?? 0;
+        const oo = octaveOffset ?? 0;
+        const alt = alteration ?? 0;
 
         this.pitch = rootPitch
             + intervals[scaleDegree]
-            + (octaveShift + octaveOffset) * 12
-            + alteration;
+            + (octaveShift + oo) * 12
+            + alt;
 
         // Use explicit duration if provided, otherwise use clip's default duration
         if (duration !== undefined) {

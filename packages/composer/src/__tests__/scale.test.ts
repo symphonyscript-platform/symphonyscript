@@ -79,7 +79,7 @@ describe('Scale context and degree()', () => {
 
         it('octaveOffset shifts octaves', () => {
             melody.setScale('C', ScaleMode.MAJOR);
-            melody.degree(1, 0.25, { octaveOffset: 1 }).commit();
+            melody.degree(1, 0.25, 1).commit();
 
             const result = melody.build();
             expect(result.operations[0].pitch).toBe(72); // C5 (C4 + 12)
@@ -87,7 +87,7 @@ describe('Scale context and degree()', () => {
 
         it('alteration adds/subtracts semitones', () => {
             melody.setScale('C', ScaleMode.MAJOR);
-            melody.degree(2, 0.25, { alteration: 1 }).commit(); // D# instead of D
+            melody.degree(2, 0.25, undefined, 1).commit(); // D# instead of D
 
             const result = melody.build();
             expect(result.operations[0].pitch).toBe(63); // D4 + 1 = D#4
@@ -95,7 +95,7 @@ describe('Scale context and degree()', () => {
 
         it('negative alteration flattens', () => {
             melody.setScale('C', ScaleMode.MAJOR);
-            melody.degree(5, 0.25, { alteration: -1 }).commit(); // Gb instead of G
+            melody.degree(5, 0.25, undefined, -1).commit(); // Gb instead of G
 
             const result = melody.build();
             expect(result.operations[0].pitch).toBe(66); // G4 - 1 = Gb4

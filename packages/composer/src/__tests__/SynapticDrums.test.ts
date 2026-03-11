@@ -4,7 +4,7 @@ import { createTestBridge } from '../test-bridge';
 // Matcher for optional params (afterSourceId, expressionId) which can be undefined or number
 const optional = { asymmetricMatch: () => true };
 
-describe('SynapticDrumHitCursor & SynapticDrums (Phase 3)', () => {
+describe('DrumsHitCursor & SynapticDrums (Phase 3)', () => {
     let drums: SynapticDrums;
     let mockBridge: ReturnType<typeof createTestBridge>;
 

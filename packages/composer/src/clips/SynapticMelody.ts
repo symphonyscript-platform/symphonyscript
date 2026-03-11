@@ -1,6 +1,6 @@
 import { SynapticClip } from './SynapticClip';
-import { SynapticMelodyNoteCursor } from '../cursors/SynapticMelodyNoteCursor';
-import { SynapticChordCursor } from '../cursors/SynapticChordCursor';
+import { MelodyNoteCursor } from '../cursors/MelodyNoteCursor';
+import { MelodyChordCursor } from '../cursors/MelodyChordCursor';
 import { FrozenClip } from './FrozenClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
@@ -12,6 +12,8 @@ import { parseChord } from '../utils/chord';
 import { SCALE_INTERVALS } from '../utils/scales';
 
 
+const OCTAVE_OFFSETS = [0, -12, 12];
+const sortPitchesAsc = (a: number, b: number) => a - b;
 
 /**
  * SynapticMelody
@@ -19,8 +21,8 @@ import { SCALE_INTERVALS } from '../utils/scales';
  * Refreshed melody builder with cursor architecture.
  */
 export class SynapticMelody extends SynapticClip {
-    private noteCursor: SynapticMelodyNoteCursor;
-    private chordCursor: SynapticChordCursor;
+    private noteCursor: MelodyNoteCursor;
+    private chordCursor: MelodyChordCursor;
     private currentTick: number = 0;
     private sourceIdCounter: number = 0;
 
@@ -36,8 +38,8 @@ export class SynapticMelody extends SynapticClip {
 
     constructor(bridge: SiliconBridge) {
         super(bridge);
-        this.chordCursor = new SynapticChordCursor(this, bridge);
-        this.noteCursor = new SynapticMelodyNoteCursor(this, bridge, this.chordCursor);
+        this.chordCursor = new MelodyChordCursor(this, bridge);
+        this.noteCursor = new MelodyNoteCursor(this, bridge, this.chordCursor);
     }
 
     // ========================
@@ -48,8 +50,9 @@ export class SynapticMelody extends SynapticClip {
         return this.currentTick;
     }
 
-    advanceTick(duration: number): void {
+    advanceTick(duration: number): this {
         this.currentTick += duration;
+        return this;
     }
 
     generateSourceId(): number {
@@ -60,15 +63,15 @@ export class SynapticMelody extends SynapticClip {
     // Melody API Entry Points
     // ========================
 
-    note(input: string | number, duration?: number): SynapticMelodyNoteCursor {
+    note(input: string | number, duration?: number): MelodyNoteCursor {
         return this.noteCursor.note(input, duration);
     }
 
-    degree(deg: number, duration?: number, options?: import('../types').DegreeOptions): SynapticMelodyNoteCursor {
-        return this.noteCursor.degree(deg, duration, options);
+    degree(deg: number, duration?: number, octaveOffset?: number, alteration?: number): MelodyNoteCursor {
+        return this.noteCursor.degree(deg, duration, octaveOffset, alteration);
     }
 
-    chord(symbol: string): SynapticChordCursor {
+    chord(symbol: string): MelodyChordCursor {
         return this.noteCursor.chord(symbol);
     }
 
@@ -77,10 +80,10 @@ export class SynapticMelody extends SynapticClip {
      * Requires scale() to be called first.
      * @param degrees - Array of scale degrees (1-7 for first octave, 8+ wraps to higher octaves)
      * @param duration - Optional chord duration
-     * @returns SynapticChordCursor for further configuration
+     * @returns MelodyChordCursor for further configuration
      * @throws Error if scale context is not set
      */
-    degreeChord(degrees: number[], duration?: number): SynapticChordCursor {
+    degreeChord(degrees: number[], duration?: number): MelodyChordCursor {
         const ctx = this.getScaleContext();
         if (!ctx) {
             throw new Error('degreeChord() requires scale() to be called first');
@@ -93,21 +96,23 @@ export class SynapticMelody extends SynapticClip {
         const intervals = SCALE_INTERVALS[ctx.mode];
         const rootPitch = parsePitch(ctx.root + ctx.octave);
 
-        // Convert degrees to pitches
-        const pitches: number[] = [];
-        for (const deg of degrees) {
+        // Find the lowest pitch as the chord root (zero-allocation)
+        let chordRoot = 127;
+        for (let i = 0; i < degrees.length; i++) {
+            const deg = degrees[i];
             const octaveShift = Math.floor((deg - 1) / 7);
             const scaleDegree = ((deg - 1) % 7 + 7) % 7; // Handle negative degrees
             const pitch = rootPitch + intervals[scaleDegree] + octaveShift * 12;
-            pitches.push(pitch);
+            if (pitch < chordRoot) chordRoot = pitch;
         }
-
-        // Find the lowest pitch as the chord root
-        const chordRoot = Math.min(...pitches);
 
         // Calculate intervals relative to the root
         let mask = 0;
-        for (const pitch of pitches) {
+        for (let i = 0; i < degrees.length; i++) {
+            const deg = degrees[i];
+            const octaveShift = Math.floor((deg - 1) / 7);
+            const scaleDegree = ((deg - 1) % 7 + 7) % 7;
+            const pitch = rootPitch + intervals[scaleDegree] + octaveShift * 12;
             const interval = pitch - chordRoot;
             mask |= (1 << interval);
         }
@@ -127,10 +132,10 @@ export class SynapticMelody extends SynapticClip {
      * Requires key() to be set first.
      * @param numeral - Roman numeral (e.g., 'I', 'ii', 'V7', 'bVII')
      * @param duration - Optional chord duration
-     * @returns SynapticChordCursor for further configuration
+     * @returns MelodyChordCursor for further configuration
      * @throws Error if key context is not set
      */
-    roman(numeral: string, duration?: number): SynapticChordCursor {
+    roman(numeral: string, duration?: number): MelodyChordCursor {
         const keyCtx = this.getKeyContext();
         if (!keyCtx) {
             throw new Error('roman() requires key() to be called first');
@@ -276,7 +281,8 @@ export class SynapticMelody extends SynapticClip {
         let bestCost = Infinity;
 
         for (let inv = 0; inv < baseLen; inv++) {
-            for (let octOffset of [0, -12, 12]) {
+            for (let oIdx = 0; oIdx < 3; oIdx++) {
+                const octOffset = OCTAVE_OFFSETS[oIdx];
                 for (let i = 0; i < baseLen; i++) {
                     const idx = (i + inv) % baseLen;
                     let pitch = this._sortScratch[idx] + octOffset;
@@ -451,9 +457,11 @@ export class SynapticMelody extends SynapticClip {
         } = options ?? {};
 
         // Convert pitches to MIDI numbers
-        let midiPitches = pitches.map(p =>
-            typeof p === 'string' ? parsePitch(p) : p
-        );
+        let midiPitches: number[] = new Array(pitches.length);
+        for (let i = 0; i < pitches.length; i++) {
+            const p = pitches[i];
+            midiPitches[i] = typeof p === 'string' ? parsePitch(p) : p;
+        }
 
         // Expand pitches across octaves
         if (octaves > 1) {
@@ -486,7 +494,9 @@ export class SynapticMelody extends SynapticClip {
      * @internal
      */
     private applyArpPattern(pitches: number[], pattern: string, seed?: number): number[] {
-        const sorted = [...pitches].sort((a, b) => a - b);
+        const sorted = new Array<number>(pitches.length);
+        for (let i = 0; i < pitches.length; i++) sorted[i] = pitches[i];
+        sorted.sort(sortPitchesAsc);
 
         switch (pattern) {
             case 'up':
@@ -577,7 +587,7 @@ export class SynapticMelody extends SynapticClip {
      * @returns this for chaining
      * @throws Error if id is out of range (1-15)
      */
-    voice(id: number, builderFn: (v: SynapticMelody) => SynapticMelody | SynapticMelodyNoteCursor | void): this {
+    voice(id: number, builderFn: (v: SynapticMelody) => SynapticMelody | MelodyNoteCursor | void): this {
         // Validate MPE channel range
         if (id < 1 || id > 15) {
             throw new Error(`Voice ID must be 1-15 (MPE range), got ${id}`);
@@ -634,7 +644,7 @@ export class SynapticMelody extends SynapticClip {
      * @param builderFn - Builder function to execute in parallel
      * @returns this for chaining
      */
-    override stack(builderFn?: (b: SynapticMelody) => SynapticMelody | SynapticMelodyNoteCursor | void): this {
+    override stack(builderFn?: (b: SynapticMelody) => SynapticMelody | MelodyNoteCursor | void): this {
         if (builderFn === undefined) {
             // No-arg version: enable polyphonic stacking mode
             return super.stack() as this;

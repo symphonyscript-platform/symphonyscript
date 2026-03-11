@@ -30,6 +30,9 @@ interface ParsedNote {
 /** Module-level reusable result (zero-allocation). */
 const PARSED_NOTE: ParsedNote = { letter: 0, accidental: 0, octave: 4 };
 
+/** O(1) mapping from local letter index to true note index. */
+const BASE_LETTER_MAP = [5, 6, 0, 1, 2, 3, 4] as const;
+
 /**
  * Key signature accidentals.
  * Maps 'root:mode' → { noteLetter: accidental }
@@ -48,7 +51,7 @@ const KEY_SIGNATURES: Record<string, Partial<Record<NoteLetter, 'sharp' | 'flat'
     'B:major': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp' },
     'F#:major': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp', E: 'sharp' },
     'C#:major': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp', E: 'sharp', B: 'sharp' },
-    
+
     // Major keys - flats
     'F:major': { B: 'flat' },
     'Bb:major': { B: 'flat', E: 'flat' },
@@ -57,7 +60,7 @@ const KEY_SIGNATURES: Record<string, Partial<Record<NoteLetter, 'sharp' | 'flat'
     'Db:major': { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat' },
     'Gb:major': { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat', C: 'flat' },
     'Cb:major': { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat', C: 'flat', F: 'flat' },
-    
+
     // Minor keys - sharps (relative to major: A=C, E=G, B=D, etc.)
     'A:minor': {},
     'E:minor': { F: 'sharp' },
@@ -67,7 +70,7 @@ const KEY_SIGNATURES: Record<string, Partial<Record<NoteLetter, 'sharp' | 'flat'
     'G#:minor': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp' },
     'D#:minor': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp', E: 'sharp' },
     'A#:minor': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp', E: 'sharp', B: 'sharp' },
-    
+
     // Minor keys - flats
     'D:minor': { B: 'flat' },
     'G:minor': { B: 'flat', E: 'flat' },
@@ -85,15 +88,54 @@ const KEY_SIGNATURES: Record<string, Partial<Record<NoteLetter, 'sharp' | 'flat'
  * @returns out on success, null if parse fails
  */
 function parseNoteName(note: string, out: ParsedNote = PARSED_NOTE): ParsedNote | null {
-    const match = note.match(/^([A-Ga-g])([#b]?)(\d+)$/);
-    if (!match) return null;
+    const len = note.length;
+    if (len < 2) return null;
 
-    const letterChar = match[1].charCodeAt(0);
-    const base = letterChar >= 97 ? letterChar - 97 : letterChar - 65; // 0-6 for A-G or a-g
-    out.letter = [5, 6, 0, 1, 2, 3, 4][base]; // map to C=0,D=1,E=2,F=3,G=4,A=5,B=6
-    const a = match[2];
-    out.accidental = a === '#' ? 1 : a === 'b' ? -1 : 0;
-    out.octave = parseInt(match[3], 10);
+    const c0 = note.charCodeAt(0);
+    let base: number;
+    if (c0 >= 65 && c0 <= 71) {
+        base = c0 - 65; // A-G (0-6)
+    } else if (c0 >= 97 && c0 <= 103) {
+        base = c0 - 97; // a-g (0-6)
+    } else {
+        return null;
+    }
+
+    out.letter = BASE_LETTER_MAP[base]; // map to C=0,D=1,E=2,F=3,G=4,A=5,B=6
+
+    let octaveStart = 1;
+    out.accidental = 0;
+
+    const c1 = note.charCodeAt(1);
+    if (c1 === 35) { // '#'
+        out.accidental = 1;
+        octaveStart = 2;
+    } else if (c1 === 98) { // 'b'
+        out.accidental = -1;
+        octaveStart = 2;
+    }
+
+    if (octaveStart >= len) return null;
+
+    let octave = 0;
+    let isNegative = false;
+    let i = octaveStart;
+
+    if (note.charCodeAt(i) === 45) { // '-'
+        isNegative = true;
+        i++;
+    }
+
+    if (i >= len) return null;
+
+    for (; i < len; i++) {
+        const d = note.charCodeAt(i);
+        if (d < 48 || d > 57) return null;
+        octave = octave * 10 + (d - 48);
+    }
+
+    out.octave = isNegative ? -octave : octave;
+
     return out;
 }
 

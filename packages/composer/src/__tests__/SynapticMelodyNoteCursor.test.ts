@@ -1,5 +1,5 @@
-import { SynapticMelodyNoteCursor } from '../cursors/SynapticMelodyNoteCursor';
-import { SynapticChordCursor } from '../cursors/SynapticChordCursor';
+import { MelodyNoteCursor } from '../cursors/MelodyNoteCursor';
+import { MelodyChordCursor } from '../cursors/MelodyChordCursor';
 import { SynapticClip } from '../clips/SynapticClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { ScaleMode } from '../types';
@@ -19,7 +19,7 @@ class MockClip extends SynapticClip {
         super(bridge, seed); // Pass seed for deterministic humanization
     }
     getCurrentTick() { return this.tick; }
-    advanceTick(t: number) { this.tick += t; }
+    advanceTick(t: number): this { this.tick += t; return this; }
     generateSourceId() { return 999; }
     commit() { }
     rest = jest.fn();
@@ -32,7 +32,7 @@ class MockClip extends SynapticClip {
     setLoopRegion = jest.fn();
 }
 
-class MockChordCursor extends SynapticChordCursor {
+class MockChordCursor extends MelodyChordCursor {
     bindCalledWith = -1;
     chordCalledWith = '';
 
@@ -47,16 +47,16 @@ class MockChordCursor extends SynapticChordCursor {
     }
 }
 
-describe('SynapticMelodyNoteCursor (Phase 3 & 4)', () => {
+describe('MelodyNoteCursor (Phase 3 & 4)', () => {
     let clip: MockClip;
     let chordCursor: MockChordCursor;
-    let cursor: SynapticMelodyNoteCursor;
+    let cursor: MelodyNoteCursor;
 
     beforeEach(() => {
         mockInsertAsync.mockClear();
         clip = new MockClip(mockBridge);
         chordCursor = new MockChordCursor(clip, mockBridge, 8);
-        cursor = new SynapticMelodyNoteCursor(clip, mockBridge, chordCursor);
+        cursor = new MelodyNoteCursor(clip, mockBridge, chordCursor);
     });
 
     describe('Expression Modifiers (Phase 3)', () => {

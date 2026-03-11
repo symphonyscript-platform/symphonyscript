@@ -8,10 +8,10 @@ import { ArpPattern } from '../types';
 const OPCODE_NOTE = 1;
 
 /**
- * SynapticChordCursor - Phase 5
- * Zero-allocation, bit-mask based chord handling.
+ * MelodyChordCursor - Task 061 parallel hierarchy
+ * Phase 5: Zero-allocation, bit-mask based chord handling.
  */
-export class SynapticChordCursor extends SynapticMelodyBaseCursor {
+export class MelodyChordCursor extends SynapticMelodyBaseCursor {
     // Config
     private readonly maxVoices: number;
 

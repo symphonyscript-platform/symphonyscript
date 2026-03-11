@@ -1,13 +1,13 @@
-import { SynapticCursor } from './SynapticCursor';
+import { BaseNoteCursor } from './BaseNoteCursor';
 import { SynapticClip } from '../clips/SynapticClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 
 /**
- * SynapticDrumHitCursor
+ * DrumsHitCursor - Task 061 parallel hierarchy
  * RFC-049 Section 4.6
  * Specialized for unpitched percussive events.
  */
-export class SynapticDrumHitCursor extends SynapticCursor {
+export class DrumsHitCursor extends BaseNoteCursor<SynapticClip> {
     // State
     protected drumPitch: number = 36; // Default kick drum (C1)
     protected isFlam: boolean = false;

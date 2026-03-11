@@ -1,4 +1,5 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
+import { CurveType } from '../types';
 import { createTestBridge } from '../test-bridge';
 
 describe('Dynamics methods', () => {
@@ -37,7 +38,7 @@ describe('Dynamics methods', () => {
         });
 
         it('respects custom from/to values', () => {
-            melody.crescendo(2, { from: 0.2, to: 0.6 });
+            melody.crescendo(2, 0.2, 0.6);
 
             melody.note('C4', 1).commit();
             melody.advanceTick(1);
@@ -56,7 +57,7 @@ describe('Dynamics methods', () => {
 
     describe('decrescendo()', () => {
         it('decreases velocity over specified ticks', () => {
-            melody.decrescendo(4, { from: 1, to: 0.2 });
+            melody.decrescendo(4, 1, 0.2);
 
             melody.note('C4', 1).commit();
             melody.advanceTick(1);
@@ -77,7 +78,7 @@ describe('Dynamics methods', () => {
 
         it('respects custom curve option', () => {
             // Ease-out curve: fast start, slow end
-            melody.decrescendo(4, { from: 1, to: 0.2, curve: 'ease-out' });
+            melody.decrescendo(4, 1, 0.2, CurveType.EASE_OUT);
 
             melody.note('C4', 1).commit();
             melody.advanceTick(1);
@@ -110,7 +111,7 @@ describe('Dynamics methods', () => {
         });
 
         it('respects custom from option', () => {
-            melody.velocityRamp(0.8, 2, { from: 0.4 });
+            melody.velocityRamp(0.8, 2, 0.4);
 
             melody.note('C4', 1).commit();
             melody.advanceTick(1);
@@ -181,7 +182,7 @@ describe('Dynamics methods', () => {
 
     describe('dynamics auto-clear', () => {
         it('dynamics expire after duration', () => {
-            melody.crescendo(2, { from: 0.3, to: 0.9 });
+            melody.crescendo(2, 0.3, 0.9);
 
             melody.note('C4', 1).commit();
             melody.advanceTick(1);
@@ -209,7 +210,7 @@ describe('Dynamics methods', () => {
     describe('dynamics integration', () => {
         it('dynamics work with transpose', () => {
             melody.transpose(12); // Up one octave
-            melody.crescendo(2, { from: 0.4, to: 0.8 });
+            melody.crescendo(2, 0.4, 0.8);
 
             melody.note('C4', 1).commit();
             melody.advanceTick(1);
@@ -232,6 +233,15 @@ describe('Dynamics methods', () => {
 
             expect(result.operations.length).toBe(2);
             expect(result.operations[0].velocity).toBeLessThan(result.operations[1].velocity);
+        });
+
+        it('cursor.crescendo() escape works (fluent alternative to clip.crescendo)', () => {
+            const result = melody
+                .crescendo(4, 0.2, 0.6).note('C4', 1).advanceTick(1).note('D4', 1).note('E4', 1).build();
+
+            expect(result.operations.length).toBe(3);
+            expect(result.operations[0].velocity).toBeLessThan(result.operations[1].velocity);
+            expect(result.operations[1].velocity).toBeLessThan(result.operations[2].velocity);
         });
     });
 });

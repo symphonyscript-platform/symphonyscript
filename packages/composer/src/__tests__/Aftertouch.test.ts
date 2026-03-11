@@ -70,34 +70,29 @@ describe('Aftertouch (Task 034)', () => {
     describe('Channel aftertouch', () => {
         it('explicit channel type', () => {
             const melody = new SynapticMelody(mockBridge);
-            expect(() => melody.aftertouch(0.6, { type: 'channel' })).not.toThrow();
+            expect(() => melody.aftertouch(0.6)).not.toThrow();
         });
 
         it('channel aftertouch with note option', () => {
             const melody = new SynapticMelody(mockBridge);
-            expect(() => melody.aftertouch(0.6, { type: 'channel', note: 'C4' })).not.toThrow();
+            expect(() => melody.aftertouch(0.6, 'C4')).not.toThrow();
         });
     });
 
     describe('Poly aftertouch', () => {
         it('poly type with string note', () => {
             const melody = new SynapticMelody(mockBridge);
-            expect(() => melody.aftertouch(0.7, { type: 'poly', note: 'C4' })).not.toThrow();
+            expect(() => melody.aftertouch(0.7, 'C4')).not.toThrow();
         });
 
         it('poly type with numeric note', () => {
             const melody = new SynapticMelody(mockBridge);
-            expect(() => melody.aftertouch(0.7, { type: 'poly', note: 64 })).not.toThrow();
+            expect(() => melody.aftertouch(0.7, 64)).not.toThrow();
         });
 
-        it('poly type requires note', () => {
+        it('poly with note parses correctly', () => {
             const melody = new SynapticMelody(mockBridge);
-            expect(() => melody.aftertouch(0.7, { type: 'poly' })).toThrow('Poly aftertouch requires a note parameter');
-        });
-
-        it('parses various note names', () => {
-            const melody = new SynapticMelody(mockBridge);
-            expect(() => melody.aftertouch(0.5, { type: 'poly', note: 'D#5' })).not.toThrow();
+            expect(() => melody.aftertouch(0.5, 'D#5')).not.toThrow();
         });
     });
 
@@ -168,7 +163,7 @@ describe('Aftertouch (Task 034)', () => {
 
         it('Clip.melody() poly aftertouch works', () => {
             const result = Clip.melody('test')
-                .aftertouch(0.7, { type: 'poly', note: 'E4' })
+                .aftertouch(0.7, 'E4')
                 .note('E4', 0.5)
                 .build();
 

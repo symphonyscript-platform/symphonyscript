@@ -2,7 +2,7 @@ import { ScaleMode } from '../types';
 
 /**
  * Scale intervals for degree-to-pitch conversion.
- * Shared across SynapticMelody and SynapticMelodyNoteCursor.
+ * Shared across SynapticMelody and MelodyNoteCursor.
  * Deeply frozen for immutability.
  * NONE uses major intervals as fallback (never used for degree resolution).
  */
