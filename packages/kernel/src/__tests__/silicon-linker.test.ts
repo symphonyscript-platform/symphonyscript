@@ -509,53 +509,53 @@ describe('RFC-043: Silicon Linker', () => {
       expect(result).toBe(false)
     })
 
-    // M-003: patchMultiple tests
-    it('should patch multiple attributes in one call', () => {
+    // Task 074: patchMultiple positional params tests
+    it('should patch multiple i32 fields in one call', () => {
       const linker = createTestLinker()
       const ptr = linker.insertHead(...noteData(60, 0))
 
-      const result = linker.patchMultiple(ptr, {
-        pitch: 72,
-        velocity: 80,
-        duration: 240,
-        baseTick: 100
-      })
+      const result = linker.patchMultiple(ptr,
+        NODE.DURATION, 240,
+        NODE.BASE_TICK, 100,
+        0, 0,
+        0, 0,
+        2
+      )
       expect(result).toBe(true)
 
       const node = readNodeData(linker, ptr)
-      expect(node?.pitch).toBe(72)
-      expect(node?.velocity).toBe(80)
       expect(node?.duration).toBe(240)
       expect(node?.baseTick).toBe(100)
     })
 
-    it('should patch single attribute via patchMultiple', () => {
+    it('should patch single field via patchMultiple', () => {
       const linker = createTestLinker()
       const ptr = linker.insertHead(...noteData(60, 0))
 
-      linker.patchMultiple(ptr, { pitch: 84 })
+      linker.patchMultiple(ptr,
+        NODE.DURATION, 999,
+        0, 0,
+        0, 0,
+        0, 0,
+        1
+      )
 
       const node = readNodeData(linker, ptr)
-      expect(node?.pitch).toBe(84)
-      // Other values should remain unchanged
-      expect(node?.velocity).toBe(100) // Default from noteData
-    })
-
-    it('should patch muted flag via patchMultiple', () => {
-      const linker = createTestLinker()
-      const ptr = linker.insertHead(...noteData(60, 0))
-
-      linker.patchMultiple(ptr, { muted: true })
-
-      const node = readNodeData(linker, ptr)
-      expect((node?.flags ?? 0) & FLAG.MUTED).toBe(FLAG.MUTED)
+      expect(node?.duration).toBe(999)
+      expect(node?.baseTick).toBe(0) // Unchanged
     })
 
     it('should patch sourceId via patchMultiple', () => {
       const linker = createTestLinker()
       const ptr = linker.insertHead(...noteData(60, 0))
 
-      linker.patchMultiple(ptr, { sourceId: 7777 })
+      linker.patchMultiple(ptr,
+        NODE.SOURCE_ID, 7777,
+        0, 0,
+        0, 0,
+        0, 0,
+        1
+      )
 
       const node = readNodeData(linker, ptr)
       expect(node?.sourceId).toBe(7777)
@@ -563,19 +563,32 @@ describe('RFC-043: Silicon Linker', () => {
 
     it('should return false for patchMultiple with invalid pointer', () => {
       const linker = createTestLinker()
-      const result = linker.patchMultiple(NULL_PTR, { pitch: 72 })
+      const result = linker.patchMultiple(NULL_PTR,
+        NODE.DURATION, 480,
+        0, 0,
+        0, 0,
+        0, 0,
+        1
+      )
       expect(result).toBe(false)
     })
 
-    it('should clamp values in patchMultiple', () => {
+    it('should patch three fields in one call', () => {
       const linker = createTestLinker()
       const ptr = linker.insertHead(...noteData(60, 0))
 
-      linker.patchMultiple(ptr, { pitch: 200, velocity: 300 })
+      linker.patchMultiple(ptr,
+        NODE.DURATION, 240,
+        NODE.BASE_TICK, 100,
+        NODE.SOURCE_ID, 5555,
+        0, 0,
+        3
+      )
 
       const node = readNodeData(linker, ptr)
-      expect(node?.pitch).toBe(127)     // Clamped to max
-      expect(node?.velocity).toBe(127)  // Clamped to max
+      expect(node?.duration).toBe(240)
+      expect(node?.baseTick).toBe(100)
+      expect(node?.sourceId).toBe(5555)
     })
   })
 

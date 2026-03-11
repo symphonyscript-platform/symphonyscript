@@ -290,87 +290,42 @@ export class AttributePatcher {
   }
 
   /**
-   * Patch multiple attributes at once (batch update).
-   * More efficient than individual patches when changing multiple fields.
-   * RFC-045-04: Returns boolean instead of throwing.
-   * Task 3.4: Uses CAS loop for atomic PACKED_A update.
+   * Patch multiple whole i32 fields in a single SEQ bump (Task 074).
+   *
+   * Each offset/value pair writes directly via Atomics.store.
+   * For PACKED_A sub-fields (pitch, velocity, muted), use the
+   * individual patchPitch/patchVelocity/patchMuted methods instead.
    *
    * @param ptr - Node byte pointer
-   * @param updates - Object with optional pitch, velocity, duration, baseTick, muted
+   * @param o1 - First field offset (NODE.* constant)
+   * @param v1 - First field value
+   * @param o2 - Second field offset
+   * @param v2 - Second field value
+   * @param o3 - Third field offset
+   * @param v3 - Third field value
+   * @param o4 - Fourth field offset
+   * @param v4 - Fourth field value
+   * @param count - Number of active offset/value pairs (1-4)
    * @returns true on success, false on invalid pointer
    */
   patchMultiple(
     ptr: NodePtr,
-    updates: {
-      pitch?: number
-      velocity?: number
-      duration?: number
-      baseTick?: number
-      muted?: boolean
-      sourceId?: number
-    }
+    o1: number, v1: number,
+    o2: number, v2: number,
+    o3: number, v3: number,
+    o4: number, v4: number,
+    count: number
   ): boolean {
     if (!this.validatePtr(ptr)) return false
     const offset = this.nodeOffset(ptr)
 
-    // Single SEQ bump for all updates
     this.bumpSeq(offset)
 
-    // Task 3.4: Update PACKED_A atomically using CAS loop
-    if (
-      updates.pitch !== undefined ||
-      updates.velocity !== undefined ||
-      updates.muted !== undefined
-    ) {
-      // Pre-compute clamped values outside CAS loop (zero-allocation optimization)
-      const pitch = updates.pitch !== undefined
-        ? Math.max(0, Math.min(127, updates.pitch | 0))
-        : undefined
-      const velocity = updates.velocity !== undefined
-        ? Math.max(0, Math.min(127, updates.velocity | 0))
-        : undefined
-      const muted = updates.muted
+    if (count >= 1) Atomics.store(this.sab, offset + o1, v1)
+    if (count >= 2) Atomics.store(this.sab, offset + o2, v2)
+    if (count >= 3) Atomics.store(this.sab, offset + o3, v3)
+    if (count >= 4) Atomics.store(this.sab, offset + o4, v4)
 
-      this.casUpdatePackedAFn(offset, (current) => {
-        let packed = current
-
-        if (pitch !== undefined) {
-          packed = (packed & ~PACKED.PITCH_MASK) | (pitch << PACKED.PITCH_SHIFT)
-        }
-
-        if (velocity !== undefined) {
-          packed =
-            (packed & ~PACKED.VELOCITY_MASK) | (velocity << PACKED.VELOCITY_SHIFT)
-        }
-
-        if (muted !== undefined) {
-          packed = muted ? packed | FLAG.MUTED : packed & ~FLAG.MUTED
-        }
-
-        return packed
-      })
-    }
-
-    // Update individual fields (already atomic via Atomics.store)
-    if (updates.duration !== undefined) {
-      Atomics.store(
-        this.sab,
-        offset + NODE.DURATION,
-        Math.max(0, updates.duration | 0)
-      )
-    }
-
-    if (updates.baseTick !== undefined) {
-      Atomics.store(
-        this.sab,
-        offset + NODE.BASE_TICK,
-        Math.max(0, updates.baseTick | 0)
-      )
-    }
-
-    if (updates.sourceId !== undefined) {
-      Atomics.store(this.sab, offset + NODE.SOURCE_ID, updates.sourceId | 0)
-    }
     return true
   }
 

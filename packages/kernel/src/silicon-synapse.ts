@@ -659,24 +659,29 @@ export class SiliconSynapse implements ISiliconLinker {
   }
 
   /**
-   * Patch multiple attributes of a node in a single operation.
-   * M-003: Exposed for testing and batch updates.
-   *
-   * Bumps SEQ counter once for all updates (efficient versioning).
+   * Patch multiple whole i32 fields in a single SEQ bump (Task 074).
    *
    * @param ptr - Node pointer
-   * @param updates - Object with optional fields to update
+   * @param o1 - First field offset (NODE.* constant)
+   * @param v1 - First field value
+   * @param o2 - Second field offset
+   * @param v2 - Second field value
+   * @param o3 - Third field offset
+   * @param v3 - Third field value
+   * @param o4 - Fourth field offset
+   * @param v4 - Fourth field value
+   * @param count - Number of active offset/value pairs (1-4)
    * @returns true if patched, false if invalid pointer
    */
-  patchMultiple(ptr: NodePtr, updates: {
-    pitch?: number
-    velocity?: number
-    duration?: number
-    baseTick?: number
-    muted?: boolean
-    sourceId?: number
-  }): boolean {
-    return this.patcher.patchMultiple(ptr, updates)
+  patchMultiple(
+    ptr: NodePtr,
+    o1: number, v1: number,
+    o2: number, v2: number,
+    o3: number, v3: number,
+    o4: number, v4: number,
+    count: number
+  ): boolean {
+    return this.patcher.patchMultiple(ptr, o1, v1, o2, v2, o3, v3, o4, v4, count)
   }
 
   // ===========================================================================
