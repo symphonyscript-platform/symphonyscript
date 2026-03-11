@@ -959,6 +959,31 @@ export const ALLOC_ERR = {
 } as const
 
 /**
+ * validateLinkerSAB error codes (Task 079).
+ * Returns 0 on success, negative on failure.
+ */
+export const VALIDATE_ERR = {
+  /** SAB is valid */
+  OK: 0,
+  /** Buffer too small to contain header */
+  TOO_SMALL: -1,
+  /** Magic number mismatch */
+  BAD_MAGIC: -2,
+  /** Version mismatch */
+  BAD_VERSION: -3,
+  /** NODE_CAPACITY is non-positive or unreasonably large */
+  BAD_NODE_CAPACITY: -4,
+  /** SYNAPSE_CAPACITY is non-positive or not a power of 2 */
+  BAD_SYNAPSE_CAPACITY: -5,
+  /** ZONE_COUNT out of valid range (1-8) */
+  BAD_ZONE_COUNT: -6,
+  /** Buffer byteLength doesn't match calculated size from header values */
+  SIZE_MISMATCH: -7,
+  /** HEAP_START doesn't match expected offset */
+  BAD_HEAP_START: -8
+} as const
+
+/**
  * Default number of commands that can be queued (1MB / 16 bytes, Task 060).
  */
 export const DEFAULT_RING_CAPACITY = COMMAND.DEFAULT_RING_SIZE_BYTES / COMMAND.STRIDE_BYTES

@@ -34,7 +34,8 @@ import {
   ZONE_CONFIG_STRIDE,
   getZoneConfigTableOffset,
   NODE_SIZE_BYTES,
-  HEAP_START_OFFSET
+  HEAP_START_OFFSET,
+  VALIDATE_ERR
 } from './constants'
 import { FreeList } from './free-list'
 import { ReturnQueue } from './return-queue'
@@ -443,39 +444,53 @@ function initializeSynapseTable(sab: Int32Array, nodeCapacity: number, synapseCa
 /**
  * Validate that a SharedArrayBuffer has the correct Silicon Linker format.
  *
+ * Self-describing: reads capacity, synapse capacity, and zone count from
+ * the SAB header and validates internal consistency. No external config
+ * parameters are needed.
+ *
  * @param buffer - Buffer to validate
- * @returns true if valid, false otherwise
+ * @returns 0 (VALIDATE_ERR.OK) on success, negative error code on failure
  */
-export function validateLinkerSAB(buffer: SharedArrayBuffer): boolean {
-  if (buffer.byteLength < 128) {
-    return false // Too small for header + registers
+export function validateLinkerSAB(buffer: SharedArrayBuffer): number {
+  if (buffer.byteLength < HEAP_START_OFFSET) {
+    return VALIDATE_ERR.TOO_SMALL
   }
 
   const sab = new Int32Array(buffer)
 
-  // Check magic number
   if (sab[HDR.MAGIC] !== SL_MAGIC) {
-    return false
+    return VALIDATE_ERR.BAD_MAGIC
   }
 
-  // Check version
   if (sab[HDR.VERSION] !== SL_VERSION) {
-    return false
+    return VALIDATE_ERR.BAD_VERSION
   }
 
-  // Check that node capacity is reasonable
   const nodeCapacity = sab[HDR.NODE_CAPACITY]
   if (nodeCapacity <= 0 || nodeCapacity > 1000000) {
-    return false
+    return VALIDATE_ERR.BAD_NODE_CAPACITY
   }
 
-  // Check buffer size matches expected
-  const expectedSize = calculateSABSize(nodeCapacity)
+  const synapseCapacity = sab[HDR.SYNAPSE_CAPACITY]
+  if (synapseCapacity <= 0 || (synapseCapacity & (synapseCapacity - 1)) !== 0) {
+    return VALIDATE_ERR.BAD_SYNAPSE_CAPACITY
+  }
+
+  const zoneCount = sab[HDR.ZONE_COUNT] || 1
+  if (zoneCount < 1 || zoneCount > 8) {
+    return VALIDATE_ERR.BAD_ZONE_COUNT
+  }
+
+  if (sab[HDR.HEAP_START] !== HEAP_START_OFFSET) {
+    return VALIDATE_ERR.BAD_HEAP_START
+  }
+
+  const expectedSize = calculateSABSize(nodeCapacity, synapseCapacity, zoneCount)
   if (buffer.byteLength < expectedSize) {
-    return false
+    return VALIDATE_ERR.SIZE_MISMATCH
   }
 
-  return true
+  return VALIDATE_ERR.OK
 }
 
 /**

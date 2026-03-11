@@ -188,7 +188,17 @@ describe('RFC-043: Silicon Linker', () => {
 
     it('should validate correct SAB format', () => {
       const buffer = createLinkerSAB({ nodeCapacity: 32 })
-      expect(validateLinkerSAB(buffer)).toBe(true)
+      expect(validateLinkerSAB(buffer)).toBe(0)
+    })
+
+    it('should validate SAB with custom synapse capacity', () => {
+      const buffer = createLinkerSAB({ nodeCapacity: 64, synapseCapacity: 1024 })
+      expect(validateLinkerSAB(buffer)).toBe(0)
+    })
+
+    it('should validate SAB with multiple worker zones', () => {
+      const buffer = createLinkerSAB({ nodeCapacity: 64, workerZones: 4 })
+      expect(validateLinkerSAB(buffer)).toBe(0)
     })
 
     it('should reject invalid SAB (wrong magic)', () => {
@@ -196,7 +206,23 @@ describe('RFC-043: Silicon Linker', () => {
       const sab = new Int32Array(buffer)
       sab[HDR.MAGIC] = 0x12345678
 
-      expect(validateLinkerSAB(buffer)).toBe(false)
+      expect(validateLinkerSAB(buffer)).toBeLessThan(0)
+    })
+
+    it('should reject SAB with corrupted node capacity', () => {
+      const buffer = createLinkerSAB({ nodeCapacity: 32 })
+      const sab = new Int32Array(buffer)
+      sab[HDR.NODE_CAPACITY] = 0
+
+      expect(validateLinkerSAB(buffer)).toBeLessThan(0)
+    })
+
+    it('should reject SAB with corrupted synapse capacity', () => {
+      const buffer = createLinkerSAB({ nodeCapacity: 32 })
+      const sab = new Int32Array(buffer)
+      sab[HDR.SYNAPSE_CAPACITY] = 100 // not power of 2
+
+      expect(validateLinkerSAB(buffer)).toBeLessThan(0)
     })
 
     it('should extract config from existing SAB', () => {

@@ -84,6 +84,8 @@ export {
   getZoneConfigTableOffset,
   getReturnQueueBufferOffset,
   getReturnQueueForZone,
+  // Task 079: Validation error codes
+  VALIDATE_ERR,
 } from './constants'
 
 // Types from constants
