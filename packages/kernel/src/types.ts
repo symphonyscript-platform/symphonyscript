@@ -64,6 +64,14 @@ export interface LinkerConfig {
    * When > 1, enables multi-zone heap partitioning with per-zone SPSC FreeLists.
    */
   workerZones?: number
+  /**
+   * Enable runtime debug mode (Task 077).
+   * When true, writes DEBUG.ENABLED to HDR.DEBUG_FLAGS in the SAB header.
+   * Replaces process.env.NODE_ENV with an O(1) integer flag readable from
+   * any context (main thread, Worker, AudioWorklet).
+   * Default: false.
+   */
+  debug?: boolean
 }
 
 /**

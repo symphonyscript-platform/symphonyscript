@@ -9,6 +9,7 @@ import {
   NODE,
   COMMIT,
   ERROR,
+  DEBUG,
   NULL_PTR,
   PACKED,
   SEQ,
@@ -584,9 +585,8 @@ export class SiliconSynapse implements ISiliconLinker {
    * @returns Node pointer, or NULL_PTR if heap exhausted or free list corrupted
    */
   allocNode(): NodePtr {
-    // RFC-055: Debug-mode SPSC invariant check
-    // isAudioContext is true when running inside poll() (AudioWorklet's process() callback)
-    if (process.env.NODE_ENV !== 'production' && !this.isAudioContext) {
+    // RFC-055: Debug-mode SPSC invariant check (Task 077: SAB flag, not process.env)
+    if ((Atomics.load(this.sab, HDR.DEBUG_FLAGS) & DEBUG.ENABLED) && !this.isAudioContext) {
       console.warn(
         'SPSC WARNING: allocNode() called outside Worker context. ' +
         'Use Ring Buffer commands (insertAsync) instead. See RFC-055.'
@@ -612,8 +612,8 @@ export class SiliconSynapse implements ISiliconLinker {
    * @param ptr - Node to free
    */
   freeNode(ptr: NodePtr): void {
-    // RFC-055: Debug-mode SPSC invariant check
-    if (process.env.NODE_ENV !== 'production' && !this.isAudioContext) {
+    // RFC-055: Debug-mode SPSC invariant check (Task 077: SAB flag, not process.env)
+    if ((Atomics.load(this.sab, HDR.DEBUG_FLAGS) & DEBUG.ENABLED) && !this.isAudioContext) {
       console.warn(
         'SPSC WARNING: freeNode() called outside Worker context. ' +
         'Use Ring Buffer commands (deleteAsync) instead. See RFC-055.'

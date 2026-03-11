@@ -48,6 +48,8 @@ export {
   COMMIT,
   // Error codes
   ERROR,
+  // Debug flags (Task 077)
+  DEBUG,
   // Memory calculation
   calculateSABSize,
   HEAP_START_OFFSET,

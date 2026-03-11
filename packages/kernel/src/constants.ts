@@ -61,7 +61,7 @@ export const KNUTH_HASH_CONST = 2654435761
  * │ 8      │ 2         │ PPQ                │ u32     │ Pulses/quarter │
  * │ 12     │ 3         │ BPM                │ u32     │ Tempo          │
  * │ 16     │ 4         │ HEAD_PTR           │ u32     │ First node     │
- * │ 20     │ 5         │ RESERVED_5         │ u32     │ Padding/align  │
+ * │ 20     │ 5         │ DEBUG_FLAGS        │ u32     │ Runtime debug  │
  * │ 24-31  │ 6-7       │ FREE_LIST_HEAD     │ i64     │ Ver+Ptr (ABA)  │
  * │ 32     │ 8         │ COMMIT_FLAG        │ u32     │ 0/1/2 sync     │
  * │ 36     │ 9         │ PLAYHEAD_TICK      │ u32     │ Audio position │
@@ -170,8 +170,8 @@ export const HDR = {
   BPM: 3,
   /** [ATOMIC] Byte offset to first node in chain (0 = empty) */
   HEAD_PTR: 4,
-  /** Reserved for alignment (old FREE_LIST_PTR slot) */
-  RESERVED_5: 5,
+  /** [Task 077] Runtime debug flags (replaces process.env.NODE_ENV) */
+  DEBUG_FLAGS: 5,
   /** [ATOMIC] 64-bit tagged pointer (version|ptr) - occupies i32 indices 6-7 */
   FREE_LIST_HEAD_LOW: 6,
   /** Upper 32 bits of FREE_LIST_HEAD (access via BigInt64Array) */
@@ -448,6 +448,25 @@ export const COMMIT = {
   PENDING: 1,
   /** Consumer acknowledged, Linker can clear */
   ACK: 2
+} as const
+
+// =============================================================================
+// Debug Flags (Task 077)
+// =============================================================================
+
+/**
+ * DEBUG_FLAGS bit masks for runtime debug mode.
+ *
+ * Stored in HDR.DEBUG_FLAGS as a numeric bitmask. Read with
+ * `Atomics.load(sab, HDR.DEBUG_FLAGS) & DEBUG.ENABLED` — O(1) integer
+ * comparison, zero allocation, available in any context (main thread,
+ * Worker, AudioWorklet), and directly translatable to Rust.
+ *
+ * Set once at init time via `createLinkerSAB({ debug: true })`.
+ */
+export const DEBUG = {
+  /** Bit 0: debug mode on/off */
+  ENABLED: 1
 } as const
 
 // =============================================================================

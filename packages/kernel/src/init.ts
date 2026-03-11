@@ -13,6 +13,7 @@ import {
   REG,
   COMMIT,
   ERROR,
+  DEBUG,
   NULL_PTR,
   calculateSABSize,
   getIdentityTableOffset,
@@ -51,7 +52,8 @@ const DEFAULT_CONFIG_BASE = {
   bpm: DEFAULT_BPM,
   safeZoneTicks: DEFAULT_SAFE_ZONE_TICKS,
   prngSeed: 12345,
-  workerZones: 1
+  workerZones: 1,
+  debug: false
 } as const
 
 /**
@@ -111,7 +113,8 @@ export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer | null
   const cfg: Required<LinkerConfig> = {
     ...baseCfg,
     synapseCapacity: effectiveSynapseCapacity,
-    workerZones: effectiveWorkerZones
+    workerZones: effectiveWorkerZones,
+    debug: config?.debug ?? false
   }
 
   // Calculate total size needed (RFC-056: includes zone config + return queues when workerZones > 1)
@@ -137,6 +140,9 @@ export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer | null
 
   // Initialize register bank
   initializeRegisters(sab, cfg)
+
+  // Task 077: Write debug flag to SAB header (replaces process.env.NODE_ENV)
+  sab[HDR.DEBUG_FLAGS] = cfg.debug ? DEBUG.ENABLED : 0
 
   if (effectiveWorkerZones === 1) {
     // LEGACY MODE: Identical to current behavior
@@ -488,7 +494,8 @@ export function getLinkerConfig(buffer: SharedArrayBuffer): Required<LinkerConfi
     bpm: sab[HDR.BPM],
     safeZoneTicks: sab[HDR.SAFE_ZONE_TICKS],
     prngSeed: sab[REG.PRNG_SEED],
-    workerZones: sab[HDR.ZONE_COUNT] || 1
+    workerZones: sab[HDR.ZONE_COUNT] || 1,
+    debug: (sab[HDR.DEBUG_FLAGS] & DEBUG.ENABLED) !== 0
   }
 }
 
@@ -508,10 +515,16 @@ export function resetLinkerSAB(buffer: SharedArrayBuffer): void {
   const nodeCapacity = sab[HDR.NODE_CAPACITY]
   const workerZones = sab[HDR.ZONE_COUNT] || 1
 
+  // Task 077: Preserve DEBUG_FLAGS across reset (config value, not runtime state)
+  const debugFlags = sab[HDR.DEBUG_FLAGS]
+
   // Reset synchronization state
   sab[HDR.COMMIT_FLAG] = COMMIT.IDLE
   sab[HDR.PLAYHEAD_TICK] = 0
   sab[HDR.ERROR_FLAG] = ERROR.OK
+
+  // Task 077: Restore debug flags
+  sab[HDR.DEBUG_FLAGS] = debugFlags
 
   if (workerZones === 1) {
     // LEGACY MODE: Re-initialize free list (RFC-044: Only Zone A, not Zone B)
