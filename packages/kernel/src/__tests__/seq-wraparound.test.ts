@@ -9,7 +9,6 @@ import {
   NODE,
   OPCODE,
   FLAG,
-  SEQ,
   unpackPitch
 } from '../index'
 
@@ -68,10 +67,8 @@ describe('seqChanged — modular distance check', () => {
     expect(seqChanged(0, 0x7FFFFF)).toBe(true)
   })
 
-  it('returns true when distance equals SEQ_HALF exactly', () => {
-    // before === after but distance >= SEQ_HALF catches full half-cycle wrap
-    // This case is: before !== after, so it returns true regardless
-    expect(seqChanged(0, SEQ.SEQ_HALF)).toBe(true)
+  it('returns true when values differ by half-range', () => {
+    expect(seqChanged(0, 0x800000)).toBe(true)
   })
 
   it('returns false for small same values across range', () => {

@@ -1003,6 +1003,8 @@ export class SiliconBridge {
       if (ptr >= 0) {
         outSourceIds[count - 1 - i] = sourceId
         loaded = loaded + 1
+      } else {
+        outSourceIds[count - 1 - i] = 0
       }
       i = i - 1
     }

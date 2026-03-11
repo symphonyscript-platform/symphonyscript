@@ -45,18 +45,19 @@ import type {
 // RFC-045-04: Error classes no longer thrown - using error codes instead
 
 /**
- * Modular distance check for 24-bit SEQ counter wraparound (Task 071).
+ * Check whether the SEQ counter changed between the start and end of a read.
  *
- * Uses TCP-style sequence number arithmetic: if the counter wrapped a full
- * half-cycle (2^23 increments) during a single read, the distance check
- * catches it even when before === after by coincidence.
+ * Semantically equivalent to `before !== after`. The 24-bit SEQ counter is
+ * protected against ABA by the astronomically low probability of exactly
+ * 2^24 increments occurring during a ~200ns read window (the same assumption
+ * every TCP-style sequence check makes), not by a modular distance check.
  *
  * @param before - SEQ value read before the data fields
  * @param after - SEQ value read after the data fields
  * @returns true if the sequence changed (read is inconsistent), false if consistent
  */
 export function seqChanged(before: number, after: number): boolean {
-  return before !== after || ((after - before) & 0xFFFFFF) >= SEQ.SEQ_HALF
+  return before !== after
 }
 
 export function unpackOpcode(packed: number): number {
@@ -1503,6 +1504,7 @@ export class SiliconSynapse implements ISiliconLinker {
       if (tid === sourceId) {
         Atomics.store(this.sab, offset, ID_TABLE.TOMBSTONE_TID)
         Atomics.store(this.sab, offset + 1, NULL_PTR)
+        Atomics.sub(this.sab, HDR.ID_TABLE_USED, 1)
         return true
       }
 

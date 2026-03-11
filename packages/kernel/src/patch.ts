@@ -77,9 +77,20 @@ export class AttributePatcher {
   /**
    * Increment the SEQ counter for ABA protection.
    * Called before any attribute mutation.
+   *
+   * Uses a CAS loop to increment only the upper 24 SEQ bits while
+   * preserving the lower 8 FLAGS_EXT bits across the 0xFFFFFF→0 wraparound.
+   * A naive Atomics.add(1 << SEQ_SHIFT) would overflow Int32 and clear FLAGS_EXT.
    */
   private bumpSeq(offset: number): void {
-    Atomics.add(this.sab, offset + NODE.SEQ_FLAGS, 1 << SEQ.SEQ_SHIFT)
+    const idx = offset + NODE.SEQ_FLAGS
+    let old: number
+    let next: number
+    do {
+      old = Atomics.load(this.sab, idx)
+      const seq = ((old >>> SEQ.SEQ_SHIFT) + 1) & 0xFFFFFF
+      next = (old & SEQ.FLAGS_EXT_MASK) | (seq << SEQ.SEQ_SHIFT)
+    } while (Atomics.compareExchange(this.sab, idx, old, next) !== old)
   }
 
   /**
