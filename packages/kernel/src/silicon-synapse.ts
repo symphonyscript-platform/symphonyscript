@@ -2079,15 +2079,18 @@ export class SiliconSynapse implements ISiliconLinker {
     }
 
     // While-head deletion loop (zero-alloc)
+    // K-005 BUG FIX: Only free Zone A nodes to the free list.
+    // Zone B nodes are skipped — the Bridge calls localAllocator.reset()
+    // after clear to bulk-reclaim all Zone B memory at once.
     let headPtr = Atomics.load(this.sab, HDR.HEAD_PTR)
     while (headPtr !== NULL_PTR) {
       const headOffset = this.nodeOffset(headPtr)
       const nextPtr = Atomics.load(this.sab, headOffset + NODE.NEXT_PTR)
 
-      // Return node to free list
-      this.freeList.free(headPtr)
+      if (headPtr < this.zoneBStartPtr) {
+        this.freeList.free(headPtr)
+      }
 
-      // Move to next
       headPtr = nextPtr
     }
 

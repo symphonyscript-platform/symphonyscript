@@ -1110,6 +1110,11 @@ export class SiliconBridge {
     // Clear bridge state
     // (linker.executeClear already cleared idTable, symTable, and synapseTable)
 
+    // K-005 BUG FIX: Reset Zone B allocator to reclaim all Zone B memory at once.
+    // executeClear() intentionally skips Zone B nodes, so we bulk-reset here.
+    const nodeCapacity = Atomics.load(this.sab, HDR.NODE_CAPACITY)
+    this.localAllocator.reset(nodeCapacity)
+
     // Reset SynapseAllocator tracking counters (RFC-045)
     this.synapseAllocator.clear()
 

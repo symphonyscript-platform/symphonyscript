@@ -64,4 +64,66 @@ describe('K-005: Zone B Reclamation', () => {
     it('should handle reclaim ring wrap-around', () => {
         // TODO: Implement stress test once basic reuse works (Future Task)
     })
+
+    it('executeClear should not free Zone B nodes to Zone A free list', () => {
+        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })
+        const linker = new SiliconSynapse(sab)
+        const bridge = new SiliconBridge(linker)
+
+        // Record Zone A free count before inserting
+        const freeCountBefore = linker.getFreeCount()
+
+        // Insert 3 notes via Bridge (allocates Zone B nodes)
+        bridge._insertNoteImmediate({ pitch: 60, velocity: 100, duration: 480, baseTick: 0 })
+        bridge._insertNoteImmediate({ pitch: 64, velocity: 100, duration: 480, baseTick: 480 })
+        bridge._insertNoteImmediate({ pitch: 67, velocity: 100, duration: 480, baseTick: 960 })
+
+        expect(linker.getNodeCount()).toBe(3)
+
+        // Zone A free count should be unchanged (nodes came from Zone B)
+        expect(linker.getFreeCount()).toBe(freeCountBefore)
+
+        // Clear all nodes
+        bridge.clear()
+
+        expect(linker.getNodeCount()).toBe(0)
+
+        // BUG FIX VERIFICATION: Zone A free count must remain unchanged.
+        // Before the fix, executeClear freed Zone B pointers into Zone A free list,
+        // inflating the count by 3 and risking double-use corruption.
+        expect(linker.getFreeCount()).toBe(freeCountBefore)
+    })
+
+    it('clear then re-insert should not cause pointer corruption', () => {
+        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })
+        const linker = new SiliconSynapse(sab)
+        const bridge = new SiliconBridge(linker)
+
+        // Insert notes (Zone B)
+        const id1 = bridge._insertNoteImmediate({ pitch: 60, velocity: 100, duration: 480, baseTick: 0 })
+        const id2 = bridge._insertNoteImmediate({ pitch: 64, velocity: 100, duration: 480, baseTick: 480 })
+        expect(id1).toBeGreaterThan(0)
+        expect(id2).toBeGreaterThan(0)
+        expect(linker.getNodeCount()).toBe(2)
+
+        // Clear
+        bridge.clear()
+        expect(linker.getNodeCount()).toBe(0)
+
+        // Re-insert after clear — Zone B allocator was reset, so new nodes
+        // get fresh Zone B pointers without corrupting Zone A.
+        const id3 = bridge._insertNoteImmediate({ pitch: 72, velocity: 100, duration: 480, baseTick: 0 })
+        const id4 = bridge._insertNoteImmediate({ pitch: 76, velocity: 100, duration: 480, baseTick: 480 })
+        expect(id3).toBeGreaterThan(0)
+        expect(id4).toBeGreaterThan(0)
+        expect(linker.getNodeCount()).toBe(2)
+
+        // Verify notes are readable and correct
+        let pitch3 = -1
+        let pitch4 = -1
+        bridge.readNote(id3, (p) => { pitch3 = p })
+        bridge.readNote(id4, (p) => { pitch4 = p })
+        expect(pitch3).toBe(72)
+        expect(pitch4).toBe(76)
+    })
 })
