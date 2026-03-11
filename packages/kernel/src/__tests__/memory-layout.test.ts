@@ -58,6 +58,7 @@ describe('Memory Layout Validation', () => {
       // nodeCapacity=256 means ID table capacity=512
       // Inserting 400 entries will force quadratic probing into high slots (>= 256)
       const linker = SiliconSynapse.create({ nodeCapacity: 256, safeZoneTicks: 0 })
+      linker.setAudioContext(true)
 
       // Insert enough entries to force quadratic probing into high slots
       const entries: Array<{ sourceId: number; ptr: number }> = []
@@ -101,6 +102,7 @@ describe('Memory Layout Validation', () => {
     it('should handle quadratic probing correctly without memory corruption', () => {
       // Use small capacity to maximize probing
       const linker = SiliconSynapse.create({ nodeCapacity: 64, safeZoneTicks: 0 })
+      linker.setAudioContext(true)
 
       // Insert entries with sourceIds that will hash to similar slots
       // This forces quadratic probing to higher slot indices

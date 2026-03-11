@@ -43,7 +43,9 @@ import {
  * Create a test linker with small capacity for faster tests.
  */
 function createTestLinker(nodeCapacity = 64): SiliconSynapse {
-  return SiliconSynapse.create({ nodeCapacity, safeZoneTicks: 0 })
+  const linker = SiliconSynapse.create({ nodeCapacity, safeZoneTicks: 0 })
+  linker.setAudioContext(true)
+  return linker
 }
 
 /**
@@ -628,6 +630,7 @@ describe('RFC-043: Silicon Linker', () => {
         safeZoneTicks: 960 // 2 beats
       })
       const linker = new SiliconSynapse(buffer)
+      linker.setAudioContext(true)
 
       const sab = new Int32Array(buffer)
 
@@ -653,6 +656,7 @@ describe('RFC-043: Silicon Linker', () => {
         safeZoneTicks: 960
       })
       const linker = new SiliconSynapse(buffer)
+      linker.setAudioContext(true)
 
       // Set playhead at tick 0
       const sab = new Int32Array(buffer)

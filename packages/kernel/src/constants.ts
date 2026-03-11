@@ -498,7 +498,9 @@ export const ERROR = {
   /** [RFC-058] Invalid worker zones (must be 1-8) */
   INVALID_WORKER_ZONES: 9,
   /** [Task 075] Ring buffer full after spin timeout */
-  RING_FULL: 10
+  RING_FULL: 10,
+  /** [Task 080] SPSC invariant violation (cross-context alloc/free) */
+  SPSC_VIOLATION: 11
 } as const
 
 // =============================================================================

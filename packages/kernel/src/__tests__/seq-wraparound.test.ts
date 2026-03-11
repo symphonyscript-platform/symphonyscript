@@ -18,7 +18,9 @@ import {
 // =============================================================================
 
 function createTestLinker(nodeCapacity = 64): SiliconSynapse {
-  return SiliconSynapse.create({ nodeCapacity, safeZoneTicks: 0 })!
+  const linker = SiliconSynapse.create({ nodeCapacity, safeZoneTicks: 0 })!
+  linker.setAudioContext(true)
+  return linker
 }
 
 function noteData(

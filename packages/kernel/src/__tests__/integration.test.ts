@@ -39,6 +39,7 @@ function createTestPair(options?: {
     safeZoneTicks: options?.safeZoneTicks ?? 0
   })
   const linker = new SiliconSynapse(buffer)
+  linker.setAudioContext(true)
   const consumer = new MockConsumer(buffer, options?.tickRate ?? 24)
   // RFC-044: Consumer needs linker reference to process commands
   consumer.setLinker(linker)

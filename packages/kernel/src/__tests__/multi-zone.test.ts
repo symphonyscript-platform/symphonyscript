@@ -443,6 +443,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
       const sab = new Int32Array(buffer)
 
       const linker = new SiliconSynapse(buffer)
+      linker.setAudioContext(true)
       linker.allocNode()
       linker.allocNode()
 

@@ -580,17 +580,21 @@ export class SiliconSynapse implements ISiliconLinker {
    * Allocate a node from the free list.
    *
    * RFC-055 SPSC Invariant: Only the Worker thread (AudioWorklet) may call this.
-   * In debug mode, warns if called outside audio context.
+   * Task 080: Hard-fails in production (sets ERROR.SPSC_VIOLATION, returns NULL_PTR).
    *
-   * @returns Node pointer, or NULL_PTR if heap exhausted or free list corrupted
+   * @returns Node pointer, or NULL_PTR if SPSC violation, heap exhausted, or free list corrupted
    */
   allocNode(): NodePtr {
-    // RFC-055: Debug-mode SPSC invariant check (Task 077: SAB flag, not process.env)
-    if ((Atomics.load(this.sab, HDR.DEBUG_FLAGS) & DEBUG.ENABLED) && !this.isAudioContext) {
-      console.warn(
-        'SPSC WARNING: allocNode() called outside Worker context. ' +
-        'Use Ring Buffer commands (insertAsync) instead. See RFC-055.'
-      )
+    // RFC-055 SPSC invariant: allocNode is Worker-only (Task 080: hard-fail in production)
+    if (!this.isAudioContext) {
+      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.SPSC_VIOLATION)
+      if (Atomics.load(this.sab, HDR.DEBUG_FLAGS) & DEBUG.ENABLED) {
+        console.warn(
+          'SPSC VIOLATION: allocNode() called outside Worker context. ' +
+          'Use Ring Buffer commands (insertAsync) instead. See RFC-055.'
+        )
+      }
+      return NULL_PTR
     }
     const ptr = this.freeList.alloc()
     if (ptr === NULL_PTR) {
@@ -607,17 +611,21 @@ export class SiliconSynapse implements ISiliconLinker {
    * Return a node to the free list.
    *
    * RFC-055 SPSC Invariant: Only the Worker thread (AudioWorklet) may call this.
-   * In debug mode, warns if called outside audio context.
+   * Task 080: Hard-fails in production (sets ERROR.SPSC_VIOLATION, returns without freeing).
    *
    * @param ptr - Node to free
    */
   freeNode(ptr: NodePtr): void {
-    // RFC-055: Debug-mode SPSC invariant check (Task 077: SAB flag, not process.env)
-    if ((Atomics.load(this.sab, HDR.DEBUG_FLAGS) & DEBUG.ENABLED) && !this.isAudioContext) {
-      console.warn(
-        'SPSC WARNING: freeNode() called outside Worker context. ' +
-        'Use Ring Buffer commands (deleteAsync) instead. See RFC-055.'
-      )
+    // RFC-055 SPSC invariant: freeNode is Worker-only (Task 080: hard-fail in production)
+    if (!this.isAudioContext) {
+      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.SPSC_VIOLATION)
+      if (Atomics.load(this.sab, HDR.DEBUG_FLAGS) & DEBUG.ENABLED) {
+        console.warn(
+          'SPSC VIOLATION: freeNode() called outside Worker context. ' +
+          'Use Ring Buffer commands (deleteAsync) instead. See RFC-055.'
+        )
+      }
+      return
     }
     this.freeList.free(ptr)
   }
