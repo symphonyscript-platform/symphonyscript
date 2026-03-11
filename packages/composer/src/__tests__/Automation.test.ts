@@ -1,7 +1,7 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
 import { SynapticDrums } from '../clips/SynapticDrums';
 import { Clip } from '../Clip';
-import { NoteOperation, CurveType } from '../types';
+import { NoteOperation, CurveType, AutomationTarget } from '../types';
 import { createTestBridge } from '../test-bridge';
 
 describe('Automation (Task 035)', () => {
@@ -14,22 +14,27 @@ describe('Automation (Task 035)', () => {
     describe('SynapticClip.automate()', () => {
         it('returns this for chaining', () => {
             const melody = new SynapticMelody(mockBridge);
-            const result = melody.automate('volume', 0.5);
+            const result = melody.automate(AutomationTarget.VOLUME, 0.5);
             expect(result).toBe(melody);
         });
 
         it('automate does not throw', () => {
             const melody = new SynapticMelody(mockBridge);
-            expect(() => melody.automate('volume', 0.8)).not.toThrow();
+            expect(() => melody.automate(AutomationTarget.VOLUME, 0.8)).not.toThrow();
         });
     });
 
     describe('Automation targets', () => {
-        const targets: Array<'volume' | 'pan' | 'filter' | 'resonance' | 'attack' | 'release'> = 
-            ['volume', 'filter', 'resonance', 'attack', 'release'];
+        const targets: AutomationTarget[] = [
+            AutomationTarget.VOLUME,
+            AutomationTarget.FILTER,
+            AutomationTarget.RESONANCE,
+            AutomationTarget.ATTACK,
+            AutomationTarget.RELEASE,
+        ];
 
         targets.forEach(target => {
-            it(`supports ${target} target`, () => {
+            it(`supports target ${target}`, () => {
                 const melody = new SynapticMelody(mockBridge);
                 expect(() => melody.automate(target, 0.5)).not.toThrow();
             });
@@ -37,7 +42,7 @@ describe('Automation (Task 035)', () => {
 
         it('supports pan target with negative value', () => {
             const melody = new SynapticMelody(mockBridge);
-            expect(() => melody.automate('pan', -0.5)).not.toThrow();
+            expect(() => melody.automate(AutomationTarget.PAN, -0.5)).not.toThrow();
         });
     });
 
@@ -45,49 +50,49 @@ describe('Automation (Task 035)', () => {
         describe('volume', () => {
             it('accepts 0', () => {
                 const melody = new SynapticMelody(mockBridge);
-                expect(() => melody.automate('volume', 0)).not.toThrow();
+                expect(() => melody.automate(AutomationTarget.VOLUME, 0)).not.toThrow();
             });
 
             it('accepts 1', () => {
                 const melody = new SynapticMelody(mockBridge);
-                expect(() => melody.automate('volume', 1)).not.toThrow();
+                expect(() => melody.automate(AutomationTarget.VOLUME, 1)).not.toThrow();
             });
 
             it('rejects < 0', () => {
                 const melody = new SynapticMelody(mockBridge);
-                expect(() => melody.automate('volume', -0.1)).toThrow('volume value must be 0-1');
+                expect(() => melody.automate(AutomationTarget.VOLUME, -0.1)).toThrow('volume value must be 0-1');
             });
 
             it('rejects > 1', () => {
                 const melody = new SynapticMelody(mockBridge);
-                expect(() => melody.automate('volume', 1.1)).toThrow('volume value must be 0-1');
+                expect(() => melody.automate(AutomationTarget.VOLUME, 1.1)).toThrow('volume value must be 0-1');
             });
         });
 
         describe('pan', () => {
             it('accepts -1', () => {
                 const melody = new SynapticMelody(mockBridge);
-                expect(() => melody.automate('pan', -1)).not.toThrow();
+                expect(() => melody.automate(AutomationTarget.PAN, -1)).not.toThrow();
             });
 
             it('accepts 0', () => {
                 const melody = new SynapticMelody(mockBridge);
-                expect(() => melody.automate('pan', 0)).not.toThrow();
+                expect(() => melody.automate(AutomationTarget.PAN, 0)).not.toThrow();
             });
 
             it('accepts 1', () => {
                 const melody = new SynapticMelody(mockBridge);
-                expect(() => melody.automate('pan', 1)).not.toThrow();
+                expect(() => melody.automate(AutomationTarget.PAN, 1)).not.toThrow();
             });
 
             it('rejects < -1', () => {
                 const melody = new SynapticMelody(mockBridge);
-                expect(() => melody.automate('pan', -1.1)).toThrow('Pan value must be -1 to 1');
+                expect(() => melody.automate(AutomationTarget.PAN, -1.1)).toThrow('Pan value must be -1 to 1');
             });
 
             it('rejects > 1', () => {
                 const melody = new SynapticMelody(mockBridge);
-                expect(() => melody.automate('pan', 1.1)).toThrow('Pan value must be -1 to 1');
+                expect(() => melody.automate(AutomationTarget.PAN, 1.1)).toThrow('Pan value must be -1 to 1');
             });
         });
     });
@@ -95,7 +100,7 @@ describe('Automation (Task 035)', () => {
     describe('Curve types', () => {
         it('accepts curve parameter', () => {
             const melody = new SynapticMelody(mockBridge);
-            expect(() => melody.automate('volume', 1.0, 4, CurveType.LINEAR)).not.toThrow();
+            expect(() => melody.automate(AutomationTarget.VOLUME, 1.0, 4, CurveType.LINEAR)).not.toThrow();
         });
     });
 
@@ -140,7 +145,7 @@ describe('Automation (Task 035)', () => {
             const melody = new SynapticMelody(mockBridge);
             const cursor = melody.note('C4', 0.5);
 
-            const clip = cursor.automate('volume', 0.8);
+            const clip = cursor.automate(AutomationTarget.VOLUME, 0.8);
 
             expect(clip).toBe(melody);
 

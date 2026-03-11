@@ -4,7 +4,7 @@ import { MelodyChordCursor } from '../cursors/MelodyChordCursor';
 import { FrozenClip } from './FrozenClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
-import { ClipNode, EuclideanMelodyOptions, ArpeggioOptions, ScaleMode, OperationsSource, NoteOperation } from '../types';
+import { ClipNode, EuclideanMelodyOptions, ArpeggioOptions, ArpPattern, ScaleMode, OperationsSource, NoteOperation } from '../types';
 import { romanToChord } from '../utils/romanAdapter';
 import { euclidean, rotatePattern } from '@symphonyscript/theory';
 import { parsePitch } from '../utils/pitch';
@@ -449,7 +449,7 @@ export class SynapticMelody extends SynapticClip {
      */
     arpeggiate(pitches: (string | number)[], rate: number, options?: ArpeggioOptions): this {
         const {
-            pattern = 'up',
+            pattern = ArpPattern.UP,
             velocity = 0.8,
             gate = 0.8,
             octaves = 1,
@@ -493,34 +493,31 @@ export class SynapticMelody extends SynapticClip {
      * Apply arpeggio pattern ordering to pitches.
      * @internal
      */
-    private applyArpPattern(pitches: number[], pattern: string, seed?: number): number[] {
+    private applyArpPattern(pitches: number[], pattern: ArpPattern, seed?: number): number[] {
         const sorted = new Array<number>(pitches.length);
         for (let i = 0; i < pitches.length; i++) sorted[i] = pitches[i];
         sorted.sort(sortPitchesAsc);
 
         switch (pattern) {
-            case 'up':
+            case ArpPattern.UP:
                 return sorted;
 
-            case 'down':
+            case ArpPattern.DOWN:
                 return [...sorted].reverse();
 
-            case 'upDown': {
-                // Up then down (excluding duplicate at peak)
+            case ArpPattern.UP_DOWN: {
                 const down = [...sorted].reverse().slice(1);
                 return [...sorted, ...down];
             }
 
-            case 'downUp': {
-                // Down then up (excluding duplicate at bottom)
+            case ArpPattern.DOWN_UP: {
                 const up = [...sorted].slice(1);
                 return [...[...sorted].reverse(), ...up];
             }
 
-            case 'random': {
+            case ArpPattern.RANDOM: {
                 const rng = new SeededRandom(seed ?? Date.now());
                 const shuffled = [...sorted];
-                // Fisher-Yates shuffle
                 for (let i = shuffled.length - 1; i > 0; i--) {
                     const j = Math.floor(rng.next() * (i + 1));
                     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
@@ -528,8 +525,7 @@ export class SynapticMelody extends SynapticClip {
                 return shuffled;
             }
 
-            case 'converge': {
-                // Outer → inner: first, last, second, second-last, ...
+            case ArpPattern.CONVERGE: {
                 const result: number[] = [];
                 let left = 0;
                 let right = sorted.length - 1;
@@ -544,14 +540,12 @@ export class SynapticMelody extends SynapticClip {
                 return result;
             }
 
-            case 'diverge': {
-                // Inner → outer: middle outward
+            case ArpPattern.DIVERGE: {
                 const result: number[] = [];
                 const mid = Math.floor(sorted.length / 2);
                 let left = mid;
                 let right = mid + 1;
 
-                // Add middle element(s)
                 if (sorted.length % 2 === 1) {
                     result.push(sorted[mid]);
                     left = mid - 1;
@@ -560,7 +554,6 @@ export class SynapticMelody extends SynapticClip {
                     right = mid;
                 }
 
-                // Expand outward
                 while (left >= 0 || right < sorted.length) {
                     if (right < sorted.length) {
                         result.push(sorted[right]);

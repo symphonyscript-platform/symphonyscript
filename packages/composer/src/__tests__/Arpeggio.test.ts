@@ -1,7 +1,7 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
 import { Clip } from '../Clip';
 import { createTestBridge } from '../test-bridge';
-import { NoteOperation } from '../types';
+import { NoteOperation, ArpPattern } from '../types';
 
 describe('Arpeggio Generator', () => {
     let mockBridge: ReturnType<typeof createTestBridge>;
@@ -85,7 +85,7 @@ describe('Arpeggio Generator', () => {
 
     describe('pattern: up', () => {
         it('plays notes in ascending order', () => {
-            melody.arpeggiate(['G4', 'C4', 'E4'], 0.25, { pattern: 'up' });
+            melody.arpeggiate(['G4', 'C4', 'E4'], 0.25, { pattern: ArpPattern.UP });
 
             const result = melody.build();
             const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
@@ -99,7 +99,7 @@ describe('Arpeggio Generator', () => {
 
     describe('pattern: down', () => {
         it('plays notes in descending order', () => {
-            melody.arpeggiate(['C4', 'E4', 'G4'], 0.25, { pattern: 'down' });
+            melody.arpeggiate(['C4', 'E4', 'G4'], 0.25, { pattern: ArpPattern.DOWN });
 
             const result = melody.build();
             const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
@@ -113,7 +113,7 @@ describe('Arpeggio Generator', () => {
 
     describe('pattern: upDown', () => {
         it('plays up then down (no duplicate at peak)', () => {
-            melody.arpeggiate(['C4', 'E4', 'G4'], 0.25, { pattern: 'upDown' });
+            melody.arpeggiate(['C4', 'E4', 'G4'], 0.25, { pattern: ArpPattern.UP_DOWN });
 
             const result = melody.build();
             const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
@@ -130,7 +130,7 @@ describe('Arpeggio Generator', () => {
 
     describe('pattern: downUp', () => {
         it('plays down then up (no duplicate at bottom)', () => {
-            melody.arpeggiate(['C4', 'E4', 'G4'], 0.25, { pattern: 'downUp' });
+            melody.arpeggiate(['C4', 'E4', 'G4'], 0.25, { pattern: ArpPattern.DOWN_UP });
 
             const result = melody.build();
             const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
@@ -148,10 +148,10 @@ describe('Arpeggio Generator', () => {
     describe('pattern: random', () => {
         it('produces same order with same seed', () => {
             const melody1 = new SynapticMelody(mockBridge);
-            melody1.arpeggiate(['C4', 'E4', 'G4', 'B4'], 0.25, { pattern: 'random', seed: 42 });
+            melody1.arpeggiate(['C4', 'E4', 'G4', 'B4'], 0.25, { pattern: ArpPattern.RANDOM, seed: 42 });
 
             const melody2 = new SynapticMelody(mockBridge);
-            melody2.arpeggiate(['C4', 'E4', 'G4', 'B4'], 0.25, { pattern: 'random', seed: 42 });
+            melody2.arpeggiate(['C4', 'E4', 'G4', 'B4'], 0.25, { pattern: ArpPattern.RANDOM, seed: 42 });
 
             const notes1 = melody1.build().operations.filter(op => op.kind === 'note').map(op => (op as NoteOperation).pitch);
             const notes2 = melody2.build().operations.filter(op => op.kind === 'note').map(op => (op as NoteOperation).pitch);
@@ -162,11 +162,11 @@ describe('Arpeggio Generator', () => {
         it('produces different order with different seed', () => {
             const bridge1 = createTestBridge();
             const melody1 = new SynapticMelody(bridge1);
-            melody1.arpeggiate(['C4', 'E4', 'G4', 'B4'], 0.25, { pattern: 'random', seed: 42 });
+            melody1.arpeggiate(['C4', 'E4', 'G4', 'B4'], 0.25, { pattern: ArpPattern.RANDOM, seed: 42 });
 
             const bridge2 = createTestBridge();
             const melody2 = new SynapticMelody(bridge2);
-            melody2.arpeggiate(['C4', 'E4', 'G4', 'B4'], 0.25, { pattern: 'random', seed: 123 });
+            melody2.arpeggiate(['C4', 'E4', 'G4', 'B4'], 0.25, { pattern: ArpPattern.RANDOM, seed: 123 });
 
             const notes1 = melody1.build().operations.filter(op => op.kind === 'note').map(op => (op as NoteOperation).pitch);
             const notes2 = melody2.build().operations.filter(op => op.kind === 'note').map(op => (op as NoteOperation).pitch);
@@ -178,7 +178,7 @@ describe('Arpeggio Generator', () => {
 
     describe('pattern: converge', () => {
         it('plays outer to inner (first, last, second, second-last, ...)', () => {
-            melody.arpeggiate(['C4', 'E4', 'G4', 'B4'], 0.25, { pattern: 'converge' });
+            melody.arpeggiate(['C4', 'E4', 'G4', 'B4'], 0.25, { pattern: ArpPattern.CONVERGE });
 
             const result = melody.build();
             const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
@@ -194,7 +194,7 @@ describe('Arpeggio Generator', () => {
 
     describe('pattern: diverge', () => {
         it('plays inner to outer (middle outward)', () => {
-            melody.arpeggiate(['C4', 'E4', 'G4', 'B4'], 0.25, { pattern: 'diverge' });
+            melody.arpeggiate(['C4', 'E4', 'G4', 'B4'], 0.25, { pattern: ArpPattern.DIVERGE });
 
             const result = melody.build();
             const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
@@ -205,7 +205,7 @@ describe('Arpeggio Generator', () => {
         });
 
         it('handles odd number of notes', () => {
-            melody.arpeggiate(['C4', 'E4', 'G4'], 0.25, { pattern: 'diverge' });
+            melody.arpeggiate(['C4', 'E4', 'G4'], 0.25, { pattern: ArpPattern.DIVERGE });
 
             const result = melody.build();
             const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
@@ -247,7 +247,7 @@ describe('Arpeggio Generator', () => {
     describe('Clip factory integration', () => {
         it('Clip.melody().arpeggiate() works', () => {
             const result = Clip.melody('test')
-                .arpeggiate(['C4', 'E4', 'G4'], 0.25, { pattern: 'up' })
+                .arpeggiate(['C4', 'E4', 'G4'], 0.25, { pattern: ArpPattern.UP })
                 .build();
 
             const noteOps = result.operations.filter(op => op.kind === 'note');

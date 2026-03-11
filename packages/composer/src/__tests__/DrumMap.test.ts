@@ -4,7 +4,7 @@
  */
 
 import { Clip } from '../Clip';
-import { NoteOperation } from '../types';
+import { NoteOperation, DrumType } from '../types';
 
 describe('DrumMap (Task 040)', () => {
     describe('Default GM Mapping', () => {
@@ -278,7 +278,7 @@ describe('DrumMap (Task 040)', () => {
             drums.euclidean({
                 hits: 2,
                 steps: 4,
-                drum: 'kick',
+                drum: DrumType.KICK,
                 stepDuration: 0.25,
             });
             

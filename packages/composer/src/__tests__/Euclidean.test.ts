@@ -1,7 +1,7 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
 import { SynapticDrums } from '../clips/SynapticDrums';
 import { Clip } from '../Clip';
-import { NoteOperation } from '../types';
+import { NoteOperation, DrumType } from '../types';
 import { createTestBridge } from '../test-bridge';
 
 describe('Euclidean Rhythm Generator', () => {
@@ -203,7 +203,7 @@ describe('Euclidean Rhythm Generator', () => {
             drums.euclidean({
                 hits: 4,
                 steps: 16,
-                drum: 'kick',
+                drum: DrumType.KICK,
                 stepDuration: 0.25
             });
 
@@ -217,7 +217,7 @@ describe('Euclidean Rhythm Generator', () => {
             drums.euclidean({
                 hits: 4,
                 steps: 16,
-                drum: 'kick',
+                drum: DrumType.KICK,
                 stepDuration: 0.25
             });
 
@@ -234,7 +234,7 @@ describe('Euclidean Rhythm Generator', () => {
             drums.euclidean({
                 hits: 4,
                 steps: 16,
-                drum: 'snare',
+                drum: DrumType.SNARE,
                 stepDuration: 0.25
             });
 
@@ -251,7 +251,7 @@ describe('Euclidean Rhythm Generator', () => {
             drums.euclidean({
                 hits: 8,
                 steps: 16,
-                drum: 'hat',
+                drum: DrumType.HAT,
                 stepDuration: 0.25
             });
 
@@ -270,7 +270,7 @@ describe('Euclidean Rhythm Generator', () => {
             drumsNoRotation.euclidean({
                 hits: 3,
                 steps: 8,
-                drum: 'kick',
+                drum: DrumType.KICK,
                 stepDuration: 0.25,
                 rotation: 0
             });
@@ -280,7 +280,7 @@ describe('Euclidean Rhythm Generator', () => {
             drumsWithRotation.euclidean({
                 hits: 3,
                 steps: 8,
-                drum: 'kick',
+                drum: DrumType.KICK,
                 stepDuration: 0.25,
                 rotation: 2
             });
@@ -304,7 +304,7 @@ describe('Euclidean Rhythm Generator', () => {
             drums.euclidean({
                 hits: 4,
                 steps: 8,
-                drum: 'kick',
+                drum: DrumType.KICK,
                 stepDuration: 0.25,
                 repeat: 3
             });
@@ -320,7 +320,7 @@ describe('Euclidean Rhythm Generator', () => {
             drums.euclidean({
                 hits: 4,
                 steps: 16,
-                drum: 'kick',
+                drum: DrumType.KICK,
                 stepDuration: 0.125,
                 repeat: 1
             });
@@ -333,7 +333,7 @@ describe('Euclidean Rhythm Generator', () => {
             const result = drums.euclidean({
                 hits: 4,
                 steps: 16,
-                drum: 'kick',
+                drum: DrumType.KICK,
                 stepDuration: 0.25
             });
 
@@ -361,7 +361,7 @@ describe('Euclidean Rhythm Generator', () => {
                 .euclidean({
                     hits: 4,
                     steps: 16,
-                    drum: 'kick',
+                    drum: DrumType.KICK,
                     stepDuration: 0.25
                 })
                 .build();

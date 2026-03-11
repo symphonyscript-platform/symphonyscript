@@ -65,9 +65,17 @@ export interface PitchBendOperation {
  * Aftertouch operation for MIDI pressure messages.
  * Channel aftertouch affects all notes, poly aftertouch affects specific notes.
  */
+/**
+ * Aftertouch type: channel (all notes) or poly (specific note).
+ */
+export const enum AftertouchType {
+    CHANNEL = 0,
+    POLY = 1,
+}
+
 export interface AftertouchOperation {
     kind: 'aftertouch';
-    type: 'channel' | 'poly';
+    type: AftertouchType;
     value: number;       // 0-127 (scaled from 0-1 input)
     note?: number;       // MIDI note for poly aftertouch
     tick: number;
@@ -76,7 +84,14 @@ export interface AftertouchOperation {
 /**
  * Automation target parameters.
  */
-export type AutomationTarget = 'volume' | 'pan' | 'filter' | 'resonance' | 'attack' | 'release';
+export const enum AutomationTarget {
+    VOLUME = 0,
+    PAN = 1,
+    FILTER = 2,
+    RESONANCE = 3,
+    ATTACK = 4,
+    RELEASE = 5,
+}
 
 /**
  * Curve type for automation, dynamics, and tempo transitions.
@@ -262,13 +277,24 @@ export interface EuclideanMelodyOptions {
 /**
  * Options for generating Euclidean rhythms on drum clips.
  */
+/**
+ * Drum type for Euclidean rhythm patterns.
+ */
+export const enum DrumType {
+    KICK = 0,
+    SNARE = 1,
+    HAT = 2,
+    CLAP = 3,
+    TOM = 4,
+}
+
 export interface EuclideanDrumOptions {
     /** Number of hits to place */
     hits: number;
     /** Total number of steps in the pattern */
     steps: number;
     /** Drum sound to use */
-    drum: 'kick' | 'snare' | 'hat' | 'clap' | 'tom';
+    drum: DrumType;
     /** Duration of each step */
     stepDuration: number;
     /** Velocity for hits (0-1, default: 0.8) */
@@ -285,21 +311,22 @@ export interface EuclideanDrumOptions {
 
 /**
  * Arpeggio pattern types.
- * - 'up': ascending order
- * - 'down': descending order
- * - 'upDown': ascending then descending
- * - 'downUp': descending then ascending
- * - 'random': random order (use seed for reproducibility)
- * - 'converge': outer → inner (first, last, second, second-last, ...)
- * - 'diverge': inner → outer (middle outward)
  */
-export type ArpPattern = 'up' | 'down' | 'upDown' | 'downUp' | 'random' | 'converge' | 'diverge';
+export const enum ArpPattern {
+    UP = 0,
+    DOWN = 1,
+    UP_DOWN = 2,
+    DOWN_UP = 3,
+    RANDOM = 4,
+    CONVERGE = 5,
+    DIVERGE = 6,
+}
 
 /**
  * Options for arpeggio generation.
  */
 export interface ArpeggioOptions {
-    /** Arpeggio pattern (default: 'up') */
+    /** Arpeggio pattern (default: ArpPattern.UP) */
     pattern?: ArpPattern;
     /** Velocity for notes (0-1, default: 0.8) */
     velocity?: number;
@@ -398,9 +425,6 @@ export interface ScopeOp {
 // ============================================================================
 // Tempo Envelope Types (Task 042)
 // ============================================================================
-
-/** @deprecated Use CurveType for tempo transitions */
-export type TempoCurve = CurveType;
 
 /**
  * A single keyframe in a tempo envelope.

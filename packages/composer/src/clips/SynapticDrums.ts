@@ -1,7 +1,7 @@
 import { SynapticClip } from './SynapticClip';
 import { DrumsHitCursor } from '../cursors/DrumsHitCursor';
 import { SiliconBridge } from '@symphonyscript/kernel';
-import { EuclideanDrumOptions, DrumMap } from '../types';
+import { EuclideanDrumOptions, DrumMap, DrumType } from '../types';
 import { euclidean, rotatePattern } from '@symphonyscript/theory';
 import { parsePitch } from '../utils/pitch';
 
@@ -39,6 +39,15 @@ const STANDARD_DRUM_SLOT: Record<string, DrumSlot> = {
 const DEFAULT_PITCHES = new Uint8Array([
     36, 38, 42, 46, 49, 51, 48, 45, 43, 39, 37,
 ]);
+
+/** Maps DrumType enum values to standard drum slot indices for pitch lookup. */
+const DRUM_TYPE_TO_SLOT: readonly DrumSlot[] = [
+    DrumSlot.KICK,   // DrumType.KICK = 0
+    DrumSlot.SNARE,  // DrumType.SNARE = 1
+    DrumSlot.HAT,    // DrumType.HAT = 2
+    DrumSlot.CLAP,   // DrumType.CLAP = 3
+    DrumSlot.TOM1,   // DrumType.TOM = 4
+];
 
 /**
  * SynapticDrums
@@ -180,7 +189,7 @@ export class SynapticDrums extends SynapticClip {
     euclidean(
         hitsOrOptions: number | EuclideanDrumOptions,
         steps?: number,
-        drum?: 'kick' | 'snare' | 'hat' | 'clap' | 'tom',
+        drum?: DrumType,
         stepDuration?: number,
         velocity?: number,
         rotation?: number,
@@ -188,7 +197,7 @@ export class SynapticDrums extends SynapticClip {
     ): this {
         let hits: number;
         let stepsVal: number;
-        let drumVal: 'kick' | 'snare' | 'hat' | 'clap' | 'tom';
+        let drumVal: DrumType;
         let stepDurationVal: number;
         let velocityVal: number;
         let rotationVal: number;
@@ -221,11 +230,11 @@ export class SynapticDrums extends SynapticClip {
             pattern = rotatePattern(pattern, rotationVal);
         }
 
-        const hitTarget = drumVal === 'tom' ? 'tom1' : drumVal;
+        const pitch = this._drumPitches[DRUM_TYPE_TO_SLOT[drumVal]];
         for (let r = 0; r < repeatVal; r++) {
             for (const isHit of pattern) {
                 if (isHit) {
-                    this.hit(hitTarget, stepDurationVal).velocity(velocityVal).commit();
+                    this.hit(pitch, stepDurationVal).velocity(velocityVal).commit();
                 }
                 this.advanceTick(stepDurationVal);
             }

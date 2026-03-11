@@ -146,26 +146,23 @@ export class MelodyChordCursor extends SynapticMelodyBaseCursor {
         const sorted = [...pitches].sort((a, b) => a - b);
 
         switch (pattern) {
-            case 'up':
+            case ArpPattern.UP:
                 return sorted;
 
-            case 'down':
+            case ArpPattern.DOWN:
                 return [...sorted].reverse();
 
-            case 'upDown': {
-                // Up then down (excluding duplicate at peak)
+            case ArpPattern.UP_DOWN: {
                 const down = [...sorted].reverse().slice(1);
                 return [...sorted, ...down];
             }
 
-            case 'downUp': {
-                // Down then up (excluding duplicate at bottom)
+            case ArpPattern.DOWN_UP: {
                 const up = [...sorted].slice(1);
                 return [...[...sorted].reverse(), ...up];
             }
 
-            case 'random': {
-                // Use seeded RNG for deterministic randomization
+            case ArpPattern.RANDOM: {
                 const rng = this.clip.getSeededRng();
                 const shuffled = [...sorted];
                 for (let i = shuffled.length - 1; i > 0; i--) {
@@ -175,8 +172,7 @@ export class MelodyChordCursor extends SynapticMelodyBaseCursor {
                 return shuffled;
             }
 
-            case 'converge': {
-                // Outer → inner: first, last, second, second-last, ...
+            case ArpPattern.CONVERGE: {
                 const result: number[] = [];
                 let left = 0;
                 let right = sorted.length - 1;
@@ -191,14 +187,12 @@ export class MelodyChordCursor extends SynapticMelodyBaseCursor {
                 return result;
             }
 
-            case 'diverge': {
-                // Inner → outer: middle outward
+            case ArpPattern.DIVERGE: {
                 const result: number[] = [];
                 const mid = Math.floor(sorted.length / 2);
                 let left = mid;
                 let right = mid + 1;
 
-                // Add middle element(s)
                 if (sorted.length % 2 === 1) {
                     result.push(sorted[mid]);
                     left = mid - 1;
@@ -207,7 +201,6 @@ export class MelodyChordCursor extends SynapticMelodyBaseCursor {
                     right = mid;
                 }
 
-                // Expand outward
                 while (left >= 0 || right < sorted.length) {
                     if (right < sorted.length) {
                         result.push(sorted[right]);

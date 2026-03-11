@@ -6,6 +6,7 @@ import { parsePitch } from '../utils/pitch';
 import { FrozenClip } from './FrozenClip';
 
 const sortVelocityPoints = (a: VelocityPoint, b: VelocityPoint) => a.tick - b.tick;
+const AUTOMATION_TARGET_NAMES: readonly string[] = ['volume', 'pan', 'filter', 'resonance', 'attack', 'release'];
 
 /**
  * SynapticClip - Orchestration Logic for Neural Audio Clippings.
@@ -203,15 +204,13 @@ export abstract class SynapticClip extends SynapticNode {
      * @throws Error if value is out of range for the target
      */
     automate(target: AutomationTarget, value: number, rampBeats?: number, curve?: CurveType): this {
-        // Validate value range based on target
-        if (target === 'pan') {
+        if (target === AutomationTarget.PAN) {
             if (value < -1 || value > 1) {
                 throw new Error(`Pan value must be -1 to 1, got ${value}`);
             }
         } else {
-            // All other targets use 0-1 range
             if (value < 0 || value > 1) {
-                throw new Error(`${target} value must be 0-1, got ${value}`);
+                throw new Error(`${AUTOMATION_TARGET_NAMES[target]} value must be 0-1, got ${value}`);
             }
         }
 
@@ -225,7 +224,7 @@ export abstract class SynapticClip extends SynapticNode {
      * @param rampBeats - Duration to ramp (instant if undefined)
      */
     volume(value: number, rampBeats?: number): this {
-        return this.automate('volume', value, rampBeats);
+        return this.automate(AutomationTarget.VOLUME, value, rampBeats);
     }
 
     /**
@@ -234,7 +233,7 @@ export abstract class SynapticClip extends SynapticNode {
      * @param rampBeats - Duration to ramp (instant if undefined)
      */
     pan(value: number, rampBeats?: number): this {
-        return this.automate('pan', value, rampBeats);
+        return this.automate(AutomationTarget.PAN, value, rampBeats);
     }
 
     stack(): this {
