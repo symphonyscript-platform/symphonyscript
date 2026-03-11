@@ -173,50 +173,20 @@ export interface ISiliconLinker {
   // --- Read Operations ---
 
   /**
-   * Read node data at pointer with zero-allocation callback pattern.
-   * Returns false if contention detected, true if read succeeded.
+   * Read raw node fields into a caller-owned Int32Array(8).
    *
-   * CRITICAL: Callback function must be pre-bound/hoisted to avoid allocations.
-   * DO NOT pass inline arrow functions - they allocate objects.
+   * SeqLock read: retries until seq_before === seq_after.
+   * On success (true), buf[0..7] is a consistent snapshot.
+   * On failure (false), buf[NODE.NEXT_PTR] is still usable for chain traversal.
+   *
+   * @param ptr - Node byte pointer
+   * @param buf - Caller-owned Int32Array of length >= 8
+   * @returns true if consistent snapshot obtained, false if NULL_PTR or contention
    */
-  readNode(
-    ptr: NodePtr,
-    cb: (
-      ptr: number,
-      opcode: number,
-      pitch: number,
-      velocity: number,
-      duration: number,
-      baseTick: number,
-      nextPtr: number,
-      sourceId: number,
-      flags: number,
-      seq: number
-    ) => void
-  ): boolean
+  readNodeRaw(ptr: NodePtr, buf: Int32Array): boolean
 
   /** Get head of chain. */
   getHead(): NodePtr
-
-  /**
-   * Traverse all nodes in chain order with zero-allocation callback pattern.
-   *
-   * CRITICAL: Callback function must be pre-bound/hoisted to avoid allocations.
-   * DO NOT pass inline arrow functions - they allocate objects.
-   */
-  traverse(
-    cb: (
-      ptr: number,
-      opcode: number,
-      pitch: number,
-      velocity: number,
-      duration: number,
-      baseTick: number,
-      flags: number,
-      sourceId: number,
-      seq: number
-    ) => void
-  ): void
 
   // --- Register Operations ---
 

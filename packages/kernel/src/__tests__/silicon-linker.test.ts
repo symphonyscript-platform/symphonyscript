@@ -21,14 +21,18 @@ import {
   ERROR,
   NULL_PTR,
   DEFAULT_PPQ,
-  // RFC-045-05: Error classes no longer thrown - using error codes
   CMD,
   RingBuffer,
   LocalAllocator,
   PACKED,
   getZoneSplitIndex,
   HEAP_START_OFFSET,
-  NODE_SIZE_BYTES
+  NODE_SIZE_BYTES,
+  unpackOpcode,
+  unpackPitch,
+  unpackVelocity,
+  unpackFlags,
+  unpackSeq
 } from '../index'
 
 // =============================================================================
@@ -61,8 +65,10 @@ function noteData(
   ]
 }
 
+const _readBuf = new Int32Array(8)
+
 /**
- * Helper to read a node using callback pattern.
+ * Helper to read a node using readNodeRaw + unpack helpers.
  */
 function readNodeData(linker: SiliconSynapse, ptr: number): {
   opcode: number
@@ -75,15 +81,25 @@ function readNodeData(linker: SiliconSynapse, ptr: number): {
   flags: number
   seq: number
 } | undefined {
-  let result: ReturnType<typeof readNodeData>
-  const success = linker.readNode(ptr, (p, opcode, pitch, velocity, duration, baseTick, nextPtr, sourceId, flags, seq) => {
-    result = { opcode, pitch, velocity, duration, baseTick, nextPtr, sourceId, flags, seq }
-  })
-  return success ? result : undefined
+  const ok = linker.readNodeRaw(ptr, _readBuf)
+  if (!ok) return undefined
+  return {
+    opcode: unpackOpcode(_readBuf[NODE.PACKED_A]),
+    pitch: unpackPitch(_readBuf[NODE.PACKED_A]),
+    velocity: unpackVelocity(_readBuf[NODE.PACKED_A]),
+    duration: _readBuf[NODE.DURATION],
+    baseTick: _readBuf[NODE.BASE_TICK],
+    nextPtr: _readBuf[NODE.NEXT_PTR],
+    sourceId: _readBuf[NODE.SOURCE_ID],
+    flags: unpackFlags(_readBuf[NODE.PACKED_A]),
+    seq: unpackSeq(_readBuf[NODE.SEQ_FLAGS])
+  }
 }
 
+const _collectBuf = new Int32Array(8)
+
 /**
- * Helper to collect all nodes from traverse into an array for test assertions.
+ * Helper to collect all nodes via readNodeRaw + while loop.
  */
 function collectNodes(linker: SiliconSynapse): Array<{
   ptr: number
@@ -108,9 +124,24 @@ function collectNodes(linker: SiliconSynapse): Array<{
     seq: number
   }> = []
 
-  linker.traverse((ptr, opcode, pitch, velocity, duration, baseTick, flags, sourceId, seq) => {
-    nodes.push({ ptr, opcode, pitch, velocity, duration, baseTick, flags, sourceId, seq })
-  })
+  let ptr = linker.getHead()
+  while (ptr !== NULL_PTR) {
+    const ok = linker.readNodeRaw(ptr, _collectBuf)
+    if (ok) {
+      nodes.push({
+        ptr,
+        opcode: unpackOpcode(_collectBuf[NODE.PACKED_A]),
+        pitch: unpackPitch(_collectBuf[NODE.PACKED_A]),
+        velocity: unpackVelocity(_collectBuf[NODE.PACKED_A]),
+        duration: _collectBuf[NODE.DURATION],
+        baseTick: _collectBuf[NODE.BASE_TICK],
+        flags: unpackFlags(_collectBuf[NODE.PACKED_A]),
+        sourceId: _collectBuf[NODE.SOURCE_ID],
+        seq: unpackSeq(_collectBuf[NODE.SEQ_FLAGS])
+      })
+    }
+    ptr = _collectBuf[NODE.NEXT_PTR]
+  }
 
   return nodes
 }

@@ -31,7 +31,6 @@ import {
   ZONE_CONFIG_STRIDE,
   getZoneConfigTableOffset
 } from './constants'
-// Note: PACKED and SEQ are used directly in readNode for zero-alloc versioned reads
 import { FreeList } from './free-list'
 import { AttributePatcher } from './patch'
 import { RingBuffer } from './ring-buffer'
@@ -57,6 +56,26 @@ import type {
  */
 export function seqChanged(before: number, after: number): boolean {
   return before !== after || ((after - before) & 0xFFFFFF) >= SEQ.SEQ_HALF
+}
+
+export function unpackOpcode(packed: number): number {
+  return (packed & PACKED.OPCODE_MASK) >>> PACKED.OPCODE_SHIFT
+}
+
+export function unpackPitch(packed: number): number {
+  return (packed & PACKED.PITCH_MASK) >>> PACKED.PITCH_SHIFT
+}
+
+export function unpackVelocity(packed: number): number {
+  return (packed & PACKED.VELOCITY_MASK) >>> PACKED.VELOCITY_SHIFT
+}
+
+export function unpackFlags(packed: number): number {
+  return packed & PACKED.FLAGS_MASK
+}
+
+export function unpackSeq(seqFlags: number): number {
+  return (seqFlags & SEQ.SEQ_MASK) >>> SEQ.SEQ_SHIFT
 }
 
 /**
@@ -1009,92 +1028,6 @@ export class SiliconSynapse implements ISiliconLinker {
   // ===========================================================================
 
   /**
-   * Read node data at pointer with zero-allocation callback pattern.
-   *
-   * This method implements the versioned-read loop (v1.5) INTERNALLY using
-   * local stack variables to prevent torn reads during concurrent attribute
-   * mutations. NO object allocations occur during this read.
-   *
-   * **Zero-Alloc, Audio-Realtime**: Returns false if contention detected (>50 spins).
-   * Caller must handle false return gracefully by skipping processing for one frame.
-   *
-   * CRITICAL: Callback function must be pre-bound/hoisted to avoid allocations.
-   * DO NOT pass inline arrow functions - they allocate objects.
-   *
-   * RFC-045-04: Returns false instead of throwing for NULL_PTR.
-   *
-   * @param ptr - Node byte pointer
-   * @param cb - Callback receiving node data as primitive arguments
-   * @returns true if read succeeded, false if NULL_PTR or contention detected
-   */
-  readNode(
-    ptr: NodePtr,
-    cb: (
-      ptr: number,
-      opcode: number,
-      pitch: number,
-      velocity: number,
-      duration: number,
-      baseTick: number,
-      nextPtr: number,
-      sourceId: number,
-      flags: number,
-      seq: number
-    ) => void
-  ): boolean {
-    if (ptr === NULL_PTR) {
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
-      return false // RFC-045-04: Return error instead of throwing
-    }
-
-    const offset = this.nodeOffset(ptr)
-
-    // Local stack variables for versioned read (ZERO ALLOCATION)
-    let seq1: number, seq2: number
-    let packed: number, duration: number, baseTick: number, nextPtr: number, sourceId: number
-    let retries = 0
-
-    // **AUDIO-REALTIME CONSTRAINT**: Max 50 spins, no yield
-    const MAX_SPINS = 50
-
-    do {
-      // Contention exceeded threshold - return false to skip this node
-      if (retries >= MAX_SPINS) {
-        return false
-      }
-
-      // Read SEQ before reading fields (version number)
-      seq1 = (Atomics.load(this.sab, offset + NODE.SEQ_FLAGS) & SEQ.SEQ_MASK) >>> SEQ.SEQ_SHIFT
-
-      // Read all fields atomically
-      packed = Atomics.load(this.sab, offset + NODE.PACKED_A)
-      duration = Atomics.load(this.sab, offset + NODE.DURATION)
-      baseTick = Atomics.load(this.sab, offset + NODE.BASE_TICK)
-      nextPtr = Atomics.load(this.sab, offset + NODE.NEXT_PTR)
-      sourceId = Atomics.load(this.sab, offset + NODE.SOURCE_ID)
-
-      // Read SEQ after reading fields
-      seq2 = (Atomics.load(this.sab, offset + NODE.SEQ_FLAGS) & SEQ.SEQ_MASK) >>> SEQ.SEQ_SHIFT
-
-      // If SEQ changed (including wraparound), writer was mutating during our read - retry
-      if (seqChanged(seq1, seq2)) {
-        retries = retries + 1
-      }
-    } while (seqChanged(seq1, seq2))
-
-    // SEQ is stable - extract fields from packed and invoke callback
-    const opcode = (packed & PACKED.OPCODE_MASK) >>> PACKED.OPCODE_SHIFT
-    const pitch = (packed & PACKED.PITCH_MASK) >>> PACKED.PITCH_SHIFT
-    const velocity = (packed & PACKED.VELOCITY_MASK) >>> PACKED.VELOCITY_SHIFT
-    const flags = packed & PACKED.FLAGS_MASK
-
-    // Invoke callback with stack variables (zero allocation)
-    cb(ptr, opcode, pitch, velocity, duration, baseTick, nextPtr, sourceId, flags, seq1)
-
-    return true
-  }
-
-  /**
    * Get head of chain.
    */
   getHead(): NodePtr {
@@ -1102,103 +1035,49 @@ export class SiliconSynapse implements ISiliconLinker {
   }
 
   /**
-   * Traverse all nodes in chain order with zero-allocation callback pattern.
+   * Read raw node fields into a caller-owned Int32Array(8).
    *
-   * Uses versioned read loop (v1.5) to prevent torn reads during traversal.
-   * All node data is passed directly to callback as stack variables - no objects created.
+   * SeqLock read: retries until seq_before === seq_after (via seqChanged).
+   * On success (true), buf[0..7] is a consistent snapshot of all 8 node i32 fields.
+   * On failure (false), buf[NODE.NEXT_PTR] is still individually atomic and usable
+   * for chain continuation; other fields may be torn.
    *
-   * **CRITICAL PERFORMANCE NOTE:** Consumers MUST hoist/pre-bind their callback function.
-   * Passing inline arrow functions will allocate objects and defeat the Zero-Alloc purpose.
-   *
-   * **Contention Handling:** If a node read experiences contention, this method will retry
-   * until a consistent read is obtained. Data integrity is prioritized over performance.
-   * Safety bailout after 1,000 retries sets ERROR_FLAG and skips the node.
-   *
-   * RFC-045-04: Returns boolean - false if severe contention occurred.
-   *
-   * @param cb - Callback function receiving node data as primitive arguments
-   * @returns true if all nodes traversed, false if contention bailout occurred
+   * @param ptr - Node byte pointer
+   * @param buf - Caller-owned Int32Array of length >= 8
+   * @returns true if consistent snapshot obtained, false if NULL_PTR or contention
    */
-  traverse(
-    cb: (
-      ptr: number,
-      opcode: number,
-      pitch: number,
-      velocity: number,
-      duration: number,
-      baseTick: number,
-      flags: number,
-      sourceId: number,
-      seq: number
-    ) => void
-  ): boolean {
-    let ptr = this.getHead()
-    let hadContention = false
-
-    while (ptr !== NULL_PTR) {
-      const offset = this.nodeOffset(ptr)
-
-      // Versioned read loop - retry until we get a consistent snapshot
-      let seq1: number, seq2: number
-      let packed: number,
-        duration: number,
-        baseTick: number,
-        nextPtr: number,
-        sourceId: number
-      let retries = 0
-      let bailedOut = false
-
-      do {
-        // Read SEQ before reading fields (version number)
-        seq1 =
-          (Atomics.load(this.sab, offset + NODE.SEQ_FLAGS) & SEQ.SEQ_MASK) >>> SEQ.SEQ_SHIFT
-
-        // Read all fields atomically
-        packed = Atomics.load(this.sab, offset + NODE.PACKED_A)
-        duration = Atomics.load(this.sab, offset + NODE.DURATION)
-        baseTick = Atomics.load(this.sab, offset + NODE.BASE_TICK)
-        nextPtr = Atomics.load(this.sab, offset + NODE.NEXT_PTR)
-        sourceId = Atomics.load(this.sab, offset + NODE.SOURCE_ID)
-
-        // Read SEQ after reading fields
-        seq2 =
-          (Atomics.load(this.sab, offset + NODE.SEQ_FLAGS) & SEQ.SEQ_MASK) >>> SEQ.SEQ_SHIFT
-
-        // If SEQ changed (including wraparound), writer was mutating during our read - retry
-        if (seqChanged(seq1, seq2)) {
-          // Safety bailout: prevent infinite loop on severe contention
-          if (retries >= 1000) {
-            // RFC-045-04: Set error flag and skip node instead of throwing
-            Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.KERNEL_PANIC)
-            hadContention = true
-            bailedOut = true
-            // Skip to next node using NEXT_PTR from last read
-            ptr = nextPtr
-            break
-          }
-          retries = retries + 1
-        }
-      } while (seqChanged(seq1, seq2))
-
-      // If we bailed out due to contention, continue to next iteration
-      if (bailedOut) {
-        continue
-      }
-
-      // SEQ is stable - extract opcode/pitch/velocity/flags from packed field
-      const opcode = (packed & PACKED.OPCODE_MASK) >>> PACKED.OPCODE_SHIFT
-      const pitch = (packed & PACKED.PITCH_MASK) >>> PACKED.PITCH_SHIFT
-      const velocity = (packed & PACKED.VELOCITY_MASK) >>> PACKED.VELOCITY_SHIFT
-      const flags = packed & PACKED.FLAGS_MASK
-
-      // Invoke callback with stack variables (zero allocation)
-      cb(ptr, opcode, pitch, velocity, duration, baseTick, flags, sourceId, seq1)
-
-      // Advance to next node
-      ptr = nextPtr
+  readNodeRaw(ptr: NodePtr, buf: Int32Array): boolean {
+    if (ptr === NULL_PTR) {
+      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+      return false
     }
 
-    return !hadContention
+    const offset = this.nodeOffset(ptr)
+    const MAX_SPINS = 50
+    let retries = 0
+
+    while (retries < MAX_SPINS) {
+      const seq1 = (Atomics.load(this.sab, offset + NODE.SEQ_FLAGS) & SEQ.SEQ_MASK) >>> SEQ.SEQ_SHIFT
+
+      buf[0] = Atomics.load(this.sab, offset + NODE.PACKED_A)
+      buf[1] = Atomics.load(this.sab, offset + NODE.BASE_TICK)
+      buf[2] = Atomics.load(this.sab, offset + NODE.DURATION)
+      buf[3] = Atomics.load(this.sab, offset + NODE.NEXT_PTR)
+      buf[4] = Atomics.load(this.sab, offset + NODE.PREV_PTR)
+      buf[5] = Atomics.load(this.sab, offset + NODE.SOURCE_ID)
+      buf[6] = Atomics.load(this.sab, offset + NODE.SEQ_FLAGS)
+      buf[7] = Atomics.load(this.sab, offset + NODE.LAST_PASS_ID)
+
+      const seq2 = (buf[6] & SEQ.SEQ_MASK) >>> SEQ.SEQ_SHIFT
+
+      if (!seqChanged(seq1, seq2)) {
+        return true
+      }
+
+      retries = retries + 1
+    }
+
+    return false
   }
 
   // ===========================================================================

@@ -11,7 +11,7 @@
 // - No for...of/for...in (use index-based while loops)
 // - No inline arrow functions as arguments
 
-import { SiliconSynapse } from './silicon-synapse'
+import { SiliconSynapse, unpackPitch, unpackVelocity, unpackFlags } from './silicon-synapse'
 import {
   OPCODE,
   NULL_PTR,
@@ -190,87 +190,14 @@ export class SiliconBridge {
   // Pre-Bound Callback Handlers (RFC-045-04: bound once at construction)
   // =========================================================================
 
-  // Bound handler references (assigned in constructor)
-  private handleReadNoteNode: (
-    ptr: number,
-    opcode: number,
-    pitch: number,
-    velocity: number,
-    duration: number,
-    baseTick: number,
-    nextPtr: number,
-    sourceId: number,
-    flags: number,
-    seq: number
-  ) => void
-
-  private handleTraverseNode: (
-    ptr: number,
-    opcode: number,
-    pitch: number,
-    velocity: number,
-    duration: number,
-    baseTick: number,
-    flags: number,
-    sourceId: number,
-    seq: number
-  ) => void
-
-  private handleGetSourceIdNode: (
-    ptr: number,
-    opcode: number,
-    pitch: number,
-    velocity: number,
-    duration: number,
-    baseTick: number,
-    nextPtr: number,
-    sourceId: number,
-    flags: number,
-    seq: number
-  ) => void
-
   private handleGetSourceLocationLookup: (fileHash: number, line: number, column: number) => void
-
-  private handleTraverseSourceIdsNode: (
-    ptr: number,
-    opcode: number,
-    pitch: number,
-    velocity: number,
-    duration: number,
-    baseTick: number,
-    flags: number,
-    sourceId: number,
-    seq: number
-  ) => void
-
   private handleSnapshotEntry: (slot: number, sourcePtr: number, targetPtr: number, weightData: number) => void
 
-  // Traverse callback state
-  private traverseNotesCallback:
-    | ((
-      sourceId: number,
-      pitch: number,
-      velocity: number,
-      duration: number,
-      baseTick: number,
-      muted: boolean
-    ) => void)
-    | null = null
-
-  // ReadNote callback state
-  private readNoteCallback:
-    | ((pitch: number, velocity: number, duration: number, baseTick: number, muted: boolean) => void)
-    | null = null
-
-  // GetSourceId temporary state
-  private _getSourceIdResult: number = 0
-  private _getSourceIdIsActive: boolean = false
+  // Pre-allocated read buffer for readNodeRaw (Task 073: caller-owned)
+  private readonly nodeBuf: Int32Array
 
   // GetSourceLocation callback state
   private getSourceLocationCallback: ((line: number, column: number) => void) | null = null
-
-  // TraverseSourceIds callback state
-  private traverseSourceIdsCallback: ((sourceId: number) => void) | null = null
 
   // Snapshot streaming callback state
   private snapshotOnSynapse: ((sourceId: number, targetId: number, weight: number, jitter: number) => void) | null =
@@ -316,6 +243,9 @@ export class SiliconBridge {
     this.structBaseTicks = new Int32Array(SiliconBridge.STRUCT_RING_CAPACITY)
     this.structFlags = new Int8Array(SiliconBridge.STRUCT_RING_CAPACITY)
 
+    // Task 073: Pre-allocate read buffer for readNodeRaw (caller-owned, init-time only)
+    this.nodeBuf = new Int32Array(8)
+
     // Initialize fired ring to NULL_PTR
     let i = 0
     while (i < SiliconBridge.FIRED_RING_CAPACITY) {
@@ -324,11 +254,7 @@ export class SiliconBridge {
     }
 
     // RFC-045-04: Pre-bind handlers once at construction (avoids per-call closures)
-    this.handleReadNoteNode = this._handleReadNoteNode.bind(this)
-    this.handleTraverseNode = this._handleTraverseNode.bind(this)
-    this.handleGetSourceIdNode = this._handleGetSourceIdNode.bind(this)
     this.handleGetSourceLocationLookup = this._handleGetSourceLocationLookup.bind(this)
-    this.handleTraverseSourceIdsNode = this._handleTraverseSourceIdsNode.bind(this)
     this.handleSnapshotEntry = this._handleSnapshotEntry.bind(this)
   }
 
@@ -444,18 +370,17 @@ export class SiliconBridge {
   /**
    * Get SOURCE_ID for a NodePtr.
    * Returns undefined if node is not active or not found.
-   *
-   * **Zero-Alloc Implementation**: Uses hoisted handler.
    */
   getSourceId(ptr: NodePtr): number | undefined {
     if (ptr === NULL_PTR) return undefined
 
-    this._getSourceIdResult = 0
-    this._getSourceIdIsActive = false
+    const ok = this.linker.readNodeRaw(ptr, this.nodeBuf)
+    if (!ok) return undefined
 
-    this.linker.readNode(ptr, this.handleGetSourceIdNode)
+    const flags = unpackFlags(this.nodeBuf[NODE.PACKED_A])
+    if ((flags & FLAG.ACTIVE) === 0) return undefined
 
-    return this._getSourceIdIsActive ? this._getSourceIdResult : undefined
+    return this.nodeBuf[NODE.SOURCE_ID]
   }
 
   /**
@@ -500,12 +425,19 @@ export class SiliconBridge {
    * @param cb - Callback invoked with each sourceId
    */
   traverseSourceIds(cb: (sourceId: number) => void): void {
-    const prevCb = this.traverseSourceIdsCallback
-    this.traverseSourceIdsCallback = cb
+    const buf = this.nodeBuf
+    let ptr = this.linker.getHead()
 
-    this.linker.traverse(this.handleTraverseSourceIdsNode)
-
-    this.traverseSourceIdsCallback = prevCb
+    while (ptr !== NULL_PTR) {
+      const ok = this.linker.readNodeRaw(ptr, buf)
+      if (ok) {
+        const sourceId = buf[NODE.SOURCE_ID]
+        if (sourceId > 0) {
+          cb(sourceId)
+        }
+      }
+      ptr = buf[NODE.NEXT_PTR]
+    }
   }
 
   /**
@@ -1177,27 +1109,6 @@ export class SiliconBridge {
   // ===========================================================================
 
   /**
-   * Prototype method for readNode callback (bound in constructor).
-   * @internal
-   */
-  private _handleReadNoteNode(
-    _ptr: number,
-    _opcode: number,
-    pitch: number,
-    velocity: number,
-    duration: number,
-    baseTick: number,
-    _nextPtr: number,
-    _sourceId: number,
-    flags: number,
-    _seq: number
-  ): void {
-    if (this.readNoteCallback !== null) {
-      this.readNoteCallback(pitch, velocity, duration, baseTick, (flags & 0x02) !== 0)
-    }
-  }
-
-  /**
    * Read note data by SOURCE_ID with zero-allocation callback pattern.
    *
    * @param sourceId - Source ID to read
@@ -1211,55 +1122,15 @@ export class SiliconBridge {
     const ptr = this.getNodePtr(sourceId)
     if (ptr === undefined) return false
 
-    const prevCb = this.readNoteCallback
-    this.readNoteCallback = cb
+    const buf = this.nodeBuf
+    const ok = this.linker.readNodeRaw(ptr, buf)
+    if (!ok) return false
 
-    const success = this.linker.readNode(ptr, this.handleReadNoteNode)
-
-    this.readNoteCallback = prevCb
-    return success
-  }
-
-  /**
-   * Prototype method for traverse callback (bound in constructor).
-   * @internal
-   */
-  private _handleTraverseNode(
-    _ptr: number,
-    _opcode: number,
-    pitch: number,
-    velocity: number,
-    duration: number,
-    baseTick: number,
-    flags: number,
-    sourceId: number,
-    _seq: number
-  ): void {
-    if (sourceId !== 0 && this.traverseNotesCallback !== null) {
-      this.traverseNotesCallback(sourceId, pitch, velocity, duration, baseTick, (flags & 0x02) !== 0)
-    }
-  }
-
-  /**
-   * Prototype method for getSourceId callback (bound in constructor).
-   * @internal
-   */
-  private _handleGetSourceIdNode(
-    _ptr: number,
-    _opcode: number,
-    _pitch: number,
-    _velocity: number,
-    _duration: number,
-    _baseTick: number,
-    _nextPtr: number,
-    sourceId: number,
-    flags: number,
-    _seq: number
-  ): void {
-    this._getSourceIdIsActive = (flags & 0x01) !== 0
-    if (this._getSourceIdIsActive) {
-      this._getSourceIdResult = sourceId
-    }
+    const pitch = unpackPitch(buf[NODE.PACKED_A])
+    const velocity = unpackVelocity(buf[NODE.PACKED_A])
+    const flags = unpackFlags(buf[NODE.PACKED_A])
+    cb(pitch, velocity, buf[NODE.DURATION], buf[NODE.BASE_TICK], (flags & FLAG.MUTED) !== 0)
+    return true
   }
 
   /**
@@ -1269,26 +1140,6 @@ export class SiliconBridge {
   private _handleGetSourceLocationLookup(_fileHash: number, line: number, column: number): void {
     if (this.getSourceLocationCallback !== null) {
       this.getSourceLocationCallback(line, column)
-    }
-  }
-
-  /**
-   * Prototype method for traverseSourceIds callback (bound in constructor).
-   * @internal
-   */
-  private _handleTraverseSourceIdsNode(
-    _ptr: number,
-    _opcode: number,
-    _pitch: number,
-    _velocity: number,
-    _duration: number,
-    _baseTick: number,
-    _flags: number,
-    sourceId: number,
-    _seq: number
-  ): void {
-    if (sourceId > 0 && this.traverseSourceIdsCallback !== null) {
-      this.traverseSourceIdsCallback(sourceId)
     }
   }
 
@@ -1307,12 +1158,27 @@ export class SiliconBridge {
       muted: boolean
     ) => void
   ): void {
-    const prevCb = this.traverseNotesCallback
-    this.traverseNotesCallback = cb
+    const buf = this.nodeBuf
+    let ptr = this.linker.getHead()
 
-    this.linker.traverse(this.handleTraverseNode)
-
-    this.traverseNotesCallback = prevCb
+    while (ptr !== NULL_PTR) {
+      const ok = this.linker.readNodeRaw(ptr, buf)
+      if (ok) {
+        const sourceId = buf[NODE.SOURCE_ID]
+        if (sourceId !== 0) {
+          const packed = buf[NODE.PACKED_A]
+          cb(
+            sourceId,
+            unpackPitch(packed),
+            unpackVelocity(packed),
+            buf[NODE.DURATION],
+            buf[NODE.BASE_TICK],
+            (unpackFlags(packed) & FLAG.MUTED) !== 0
+          )
+        }
+      }
+      ptr = buf[NODE.NEXT_PTR]
+    }
   }
 
   // ===========================================================================

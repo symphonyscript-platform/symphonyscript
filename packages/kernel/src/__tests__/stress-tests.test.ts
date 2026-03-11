@@ -686,10 +686,15 @@ describe('Stress Tests: Concurrent Operations', () => {
     })()
 
     const traversePromise = (async () => {
+      const buf = new Int32Array(8)
       for (let i = 0; i < 100; i++) {
         let count = 0
-        linker.traverse(() => { count++ })
-        // Count should always be consistent (not torn)
+        let ptr = linker.getHead()
+        while (ptr !== NULL_PTR) {
+          linker.readNodeRaw(ptr, buf)
+          count++
+          ptr = buf[NODE.NEXT_PTR]
+        }
         expect(count).toBeGreaterThanOrEqual(0)
         await new Promise(r => setTimeout(r, 0))
       }
@@ -734,9 +739,15 @@ describe('Stress Tests: Concurrent Operations', () => {
 
     await Promise.all([insertPromise, deletePromise])
 
-    // Verify chain integrity - traverse should not crash
+    // Verify chain integrity - readNodeRaw traversal should not crash
     let traverseCount = 0
-    linker.traverse(() => { traverseCount++ })
+    const buf2 = new Int32Array(8)
+    let tPtr = linker.getHead()
+    while (tPtr !== NULL_PTR) {
+      linker.readNodeRaw(tPtr, buf2)
+      traverseCount++
+      tPtr = buf2[NODE.NEXT_PTR]
+    }
 
     // Should have some nodes (inserted minus deleted)
     expect(traverseCount).toBeGreaterThan(0)

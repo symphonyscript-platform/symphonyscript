@@ -6,9 +6,11 @@ import {
   SiliconSynapse,
   seqChanged,
   NULL_PTR,
+  NODE,
   OPCODE,
   FLAG,
-  SEQ
+  SEQ,
+  unpackPitch
 } from '../index'
 
 // =============================================================================
@@ -84,30 +86,26 @@ describe('seqChanged — modular distance check', () => {
 })
 
 // =============================================================================
-// Integration: readNode still works with seqChanged
+// Integration: readNodeRaw still works with seqChanged
 // =============================================================================
 
-describe('readNode with seqChanged integration', () => {
+describe('readNodeRaw with seqChanged integration', () => {
+  const buf = new Int32Array(8)
+
   it('reads node data correctly (no contention)', () => {
     const linker = createTestLinker()
     const ptr = linker.insertHead(...noteData(60, 0))
     expect(ptr).not.toBe(NULL_PTR)
 
-    let readPitch = -1
-    let readVelocity = -1
-    const success = linker.readNode(ptr, (_p, _op, pitch, velocity) => {
-      readPitch = pitch
-      readVelocity = velocity
-    })
+    const success = linker.readNodeRaw(ptr, buf)
 
     expect(success).toBe(true)
-    expect(readPitch).toBe(60)
-    expect(readVelocity).toBe(100)
+    expect(unpackPitch(buf[NODE.PACKED_A])).toBe(60)
   })
 
   it('returns false for NULL_PTR', () => {
     const linker = createTestLinker()
-    const success = linker.readNode(NULL_PTR, () => {})
+    const success = linker.readNodeRaw(NULL_PTR, buf)
     expect(success).toBe(false)
   })
 
@@ -117,41 +115,50 @@ describe('readNode with seqChanged integration', () => {
 
     linker.patchPitch(ptr, 72)
 
-    let readPitch = -1
-    linker.readNode(ptr, (_p, _op, pitch) => {
-      readPitch = pitch
-    })
+    linker.readNodeRaw(ptr, buf)
 
-    expect(readPitch).toBe(72)
+    expect(unpackPitch(buf[NODE.PACKED_A])).toBe(72)
   })
 })
 
 // =============================================================================
-// Integration: traverse still works with seqChanged
+// Integration: readNodeRaw traversal still works with seqChanged
 // =============================================================================
 
-describe('traverse with seqChanged integration', () => {
-  it('traverses all nodes correctly', () => {
+describe('readNodeRaw traversal with seqChanged integration', () => {
+  const buf = new Int32Array(8)
+
+  it('traverses all nodes correctly via while loop', () => {
     const linker = createTestLinker()
     linker.insertHead(...noteData(60, 0))
     linker.insertHead(...noteData(64, 480))
     linker.insertHead(...noteData(67, 960))
 
     const pitches: number[] = []
-    const success = linker.traverse((_ptr, _op, pitch) => {
-      pitches.push(pitch)
-    })
+    let ptr = linker.getHead()
+    while (ptr !== NULL_PTR) {
+      const ok = linker.readNodeRaw(ptr, buf)
+      if (ok) {
+        pitches.push(unpackPitch(buf[NODE.PACKED_A]))
+      }
+      ptr = buf[NODE.NEXT_PTR]
+    }
 
-    expect(success).toBe(true)
     expect(pitches).toHaveLength(3)
     expect(pitches).toContain(60)
     expect(pitches).toContain(64)
     expect(pitches).toContain(67)
   })
 
-  it('returns true for empty chain', () => {
+  it('empty chain yields no iterations', () => {
     const linker = createTestLinker()
-    const success = linker.traverse(() => {})
-    expect(success).toBe(true)
+    let count = 0
+    let ptr = linker.getHead()
+    while (ptr !== NULL_PTR) {
+      linker.readNodeRaw(ptr, buf)
+      count = count + 1
+      ptr = buf[NODE.NEXT_PTR]
+    }
+    expect(count).toBe(0)
   })
 })

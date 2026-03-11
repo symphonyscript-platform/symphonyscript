@@ -9,9 +9,15 @@ import {
   OPCODE,
   HDR,
   REG,
+  NODE,
   COMMIT,
   NULL_PTR,
   writeGrooveTemplate,
+  unpackOpcode,
+  unpackPitch,
+  unpackVelocity,
+  unpackFlags,
+  unpackSeq
 } from '../'
 import { getGrooveTemplateOffset } from '../constants'
 import { MockConsumer } from '../mock-consumer'
@@ -54,8 +60,10 @@ function note(pitch: number, baseTick: number, duration = 96): [number, number, 
   ]
 }
 
+const _intBuf = new Int32Array(8)
+
 /**
- * Helper to collect all nodes from traverse into an array for test assertions.
+ * Helper to collect all nodes via readNodeRaw + while loop.
  */
 function collectNodes(linker: SiliconSynapse): Array<{
   ptr: number
@@ -80,9 +88,24 @@ function collectNodes(linker: SiliconSynapse): Array<{
     seq: number
   }> = []
 
-  linker.traverse((ptr, opcode, pitch, velocity, duration, baseTick, flags, sourceId, seq) => {
-    nodes.push({ ptr, opcode, pitch, velocity, duration, baseTick, flags, sourceId, seq })
-  })
+  let ptr = linker.getHead()
+  while (ptr !== NULL_PTR) {
+    const ok = linker.readNodeRaw(ptr, _intBuf)
+    if (ok) {
+      nodes.push({
+        ptr,
+        opcode: unpackOpcode(_intBuf[NODE.PACKED_A]),
+        pitch: unpackPitch(_intBuf[NODE.PACKED_A]),
+        velocity: unpackVelocity(_intBuf[NODE.PACKED_A]),
+        duration: _intBuf[NODE.DURATION],
+        baseTick: _intBuf[NODE.BASE_TICK],
+        flags: unpackFlags(_intBuf[NODE.PACKED_A]),
+        sourceId: _intBuf[NODE.SOURCE_ID],
+        seq: unpackSeq(_intBuf[NODE.SEQ_FLAGS])
+      })
+    }
+    ptr = _intBuf[NODE.NEXT_PTR]
+  }
 
   return nodes
 }
