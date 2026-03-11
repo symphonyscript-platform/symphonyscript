@@ -119,6 +119,9 @@ export class SiliconSynapse implements ISiliconLinker {
   // Workers support it, main thread throws TypeError
   private readonly canAtomicsWait: boolean
 
+  // Pre-allocated scratch buffer for idTableRebuild (stores [fileHash, lineCol] pairs)
+  private _symRebuildBuf: Int32Array
+
   // RFC-056: Multi-zone support
   private zoneIndex: number
 
@@ -135,6 +138,7 @@ export class SiliconSynapse implements ISiliconLinker {
     this.heapStartI32 = HEAP_START_OFFSET / 4
     // M-002: Use Atomics.load for thread-safe header access
     this.nodeCapacity = Atomics.load(this.sab, HDR.NODE_CAPACITY)
+    this._symRebuildBuf = new Int32Array(this.nodeCapacity * 2)
     this.zoneIndex = zoneIndex
 
     // Calculate Zone B start pointer (byte offset) for reclamation check
@@ -1540,8 +1544,13 @@ export class SiliconSynapse implements ISiliconLinker {
   }
 
   /**
-   * Rebuild the Identity Table from the live chain.
+   * Rebuild the Identity Table and Symbol Table from the live chain.
    * Task 3.5: Addresses spec debt — no way to rebuild ID table after clearing.
+   *
+   * BUG-2 FIX: Also rebuilds the Symbol Table. The Identity and Symbol Tables
+   * use parallel slot positions (same hash/probe sequence). After clearing
+   * tombstones, entries may rehash to different slots. Without rebuilding the
+   * Symbol Table in sync, symTableLookup would read stale data at wrong slots.
    *
    * **Use Case:** After idTableClear() or when tombstones exceed threshold.
    *
@@ -1554,11 +1563,11 @@ export class SiliconSynapse implements ISiliconLinker {
       return -1
     }
 
-    // 1. Clear table (removes all tombstones)
-    this.idTableClear()
+    const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
+    const mask = capacity - 1
 
-    // 2. Traverse chain and re-insert all sourceIds
-    let count = 0
+    // Pass 1: Save symbol data before clearing (entries may move to new slots)
+    let saveCount = 0
     let ptr = Atomics.load(this.sab, HDR.HEAD_PTR)
 
     while (ptr !== NULL_PTR) {
@@ -1566,7 +1575,61 @@ export class SiliconSynapse implements ISiliconLinker {
       const sourceId = Atomics.load(this.sab, offset + NODE.SOURCE_ID)
 
       if (sourceId > 0) {
+        let slot = this.idTableHash(sourceId) & mask
+        let step = 1
+        let probes = 0
+        let fileHash = 0
+        let lineCol = 0
+
+        while (probes < capacity) {
+          const idOffset = this.idTableSlotOffset(slot)
+          const tid = Atomics.load(this.sab, idOffset)
+
+          if (tid === ID_TABLE.EMPTY_TID) break
+          if (tid === sourceId) {
+            const symOffset = this.symTableSlotOffset(slot)
+            fileHash = Atomics.load(this.sab, symOffset)
+            lineCol = Atomics.load(this.sab, symOffset + 1)
+            break
+          }
+
+          slot = (slot + step) & mask
+          step = step + 1
+          probes = probes + 1
+        }
+
+        this._symRebuildBuf[saveCount * 2] = fileHash
+        this._symRebuildBuf[saveCount * 2 + 1] = lineCol
+        saveCount = saveCount + 1
+      }
+
+      ptr = Atomics.load(this.sab, offset + NODE.NEXT_PTR)
+    }
+
+    // Clear both tables (removes all tombstones)
+    this.idTableClear()
+    this.symTableClear()
+
+    // Pass 2: Re-insert identity entries and restore symbol data at new slots
+    let count = 0
+    ptr = Atomics.load(this.sab, HDR.HEAD_PTR)
+
+    while (ptr !== NULL_PTR) {
+      const offset = this.nodeOffset(ptr)
+      const sourceId = Atomics.load(this.sab, offset + NODE.SOURCE_ID)
+
+      if (sourceId > 0) {
         this.idTableInsert(sourceId, ptr)
+
+        const fileHash = this._symRebuildBuf[count * 2]
+        const lineCol = this._symRebuildBuf[count * 2 + 1]
+
+        if (fileHash !== SYM_TABLE.EMPTY_ENTRY) {
+          const line = (lineCol >>> SYM_TABLE.LINE_SHIFT) & SYM_TABLE.MAX_LINE
+          const column = lineCol & SYM_TABLE.COLUMN_MASK
+          this.symTableStore(sourceId, fileHash, line, column)
+        }
+
         count = count + 1
       }
 
