@@ -477,7 +477,9 @@ export const ERROR = {
   /** [RFC-058] Invalid synapse capacity (must be power of 2) */
   INVALID_SYNAPSE_CAPACITY: 8,
   /** [RFC-058] Invalid worker zones (must be 1-8) */
-  INVALID_WORKER_ZONES: 9
+  INVALID_WORKER_ZONES: 9,
+  /** [Task 075] Ring buffer full after spin timeout */
+  RING_FULL: 10
 } as const
 
 // =============================================================================
@@ -908,7 +910,9 @@ export const BRIDGE_ERR = {
   /** Synapse Table full */
   TABLE_FULL: -2,
   /** Invalid pointer */
-  INVALID_PTR: -3
+  INVALID_PTR: -3,
+  /** [Task 075] Ring buffer full after spin timeout */
+  RING_FULL: -4
 } as const
 
 /**

@@ -24,6 +24,7 @@ import {
   SYN_PACK,
   SYNAPSE_TABLE,
   BRIDGE_ERR,
+  ERROR,
   SOURCE_ID,
   getSynapseTableOffset,
   REVERSE_INDEX,
@@ -494,9 +495,12 @@ export class SiliconBridge {
    * Write command to ring buffer with spin-wait backpressure (Task 060).
    * Blocks until space available or 500ms timeout. Prevents silent command drops.
    *
-   * @throws Error with "KERNEL_PANIC: Ring buffer timeout" if Audio Thread unresponsive
+   * Task 075: Returns error code instead of throwing. Sets HDR.ERROR_FLAG on failure
+   * so the AudioWorklet can also detect the fault.
+   *
+   * @returns 0 on success, BRIDGE_ERR.RING_FULL on timeout
    */
-  private writeOrSpin(cmd: number, param1: number, param2: number, param3: number = 0): void {
+  private writeOrSpin(cmd: number, param1: number, param2: number, param3: number = 0): number {
     const MAX_SPIN_MS = 500
     const startTime = performance.now()
 
@@ -504,13 +508,14 @@ export class SiliconBridge {
       const result = this.ringBuffer.write(cmd, param1, param2, param3)
       if (result === RING_ERR.OK) {
         Atomics.notify(this.sab, HDR.YIELD_SLOT, 1)
-        return
+        return 0
       }
 
       Atomics.notify(this.sab, HDR.YIELD_SLOT, 1)
 
       if (performance.now() - startTime > MAX_SPIN_MS) {
-        throw new Error('KERNEL_PANIC: Ring buffer timeout - Audio Thread unresponsive')
+        Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.RING_FULL)
+        return BRIDGE_ERR.RING_FULL
       }
     }
   }
@@ -565,7 +570,8 @@ export class SiliconBridge {
     Atomics.store(this.sab, offset + NODE.SEQ_FLAGS, 0)
     Atomics.store(this.sab, offset + NODE.LAST_PASS_ID, 0)
 
-    this.writeOrSpin(CMD.INSERT, ptr, prevPtr)
+    const ringErr = this.writeOrSpin(CMD.INSERT, ptr, prevPtr)
+    if (ringErr !== 0) return ringErr
     return ptr
   }
 
@@ -581,9 +587,9 @@ export class SiliconBridge {
    * @param weight - Connection weight (0-65535), default 500
    * @param jitter - Micro-timing deviation in ticks (0-65535), default 0
    */
-  connectAsync(srcPtr: NodePtr, tgtPtr: NodePtr, weight: number = 500, jitter: number = 0): void {
+  connectAsync(srcPtr: NodePtr, tgtPtr: NodePtr, weight: number = 500, jitter: number = 0): number {
     const packedWJ = (weight << 16) | (jitter & 0xFFFF)
-    this.writeOrSpin(CMD.CONNECT, srcPtr, tgtPtr, packedWJ)
+    return this.writeOrSpin(CMD.CONNECT, srcPtr, tgtPtr, packedWJ)
   }
 
   /**
@@ -592,8 +598,8 @@ export class SiliconBridge {
    * @param srcPtr - Byte offset to source node (trigger point)
    * @param tgtPtr - Byte offset to target node, or NULL_PTR for "disconnect all"
    */
-  disconnectAsync(srcPtr: NodePtr, tgtPtr: NodePtr = NULL_PTR): void {
-    this.writeOrSpin(CMD.DISCONNECT, srcPtr, tgtPtr, 0)
+  disconnectAsync(srcPtr: NodePtr, tgtPtr: NodePtr = NULL_PTR): number {
+    return this.writeOrSpin(CMD.DISCONNECT, srcPtr, tgtPtr, 0)
   }
 
   /**
@@ -603,8 +609,8 @@ export class SiliconBridge {
    *
    * @param ptr - Byte offset to node to delete
    */
-  deleteAsync(ptr: NodePtr): void {
-    this.writeOrSpin(CMD.DELETE, ptr, 0, 0)
+  deleteAsync(ptr: NodePtr): number {
+    return this.writeOrSpin(CMD.DELETE, ptr, 0, 0)
   }
 
   /**
@@ -649,7 +655,8 @@ export class SiliconBridge {
     this.disconnectAllToTarget(ptr)
 
     // Queue delete command (Task 060: use writeOrSpin for backpressure)
-    this.writeOrSpin(CMD.DELETE, ptr, 0, 0)
+    const ringErr = this.writeOrSpin(CMD.DELETE, ptr, 0, 0)
+    if (ringErr !== 0) return ringErr
 
     // Process commands immediately to make it synchronous
     this.linker.processCommands()
@@ -891,13 +898,16 @@ export class SiliconBridge {
           this.disconnectAllToTarget(ptr)
 
           // Queue delete command (Task 060: use writeOrSpin)
-          this.writeOrSpin(CMD.DELETE, ptr, 0, 0)
+          const ringErr = this.writeOrSpin(CMD.DELETE, ptr, 0, 0)
+          if (ringErr !== 0) {
+            if (this.onError !== null) this.onError(ringErr)
+          } else {
+            // Unregister immediately (worker will process delete)
+            this.unregisterMapping(sourceId)
 
-          // Unregister immediately (worker will process delete)
-          this.unregisterMapping(sourceId)
-
-          if (this.onStructuralApplied !== null) {
-            this.onStructuralApplied('delete', sourceId)
+            if (this.onStructuralApplied !== null) {
+              this.onStructuralApplied('delete', sourceId)
+            }
           }
         } else if (this.onError !== null) {
           this.onError(BRIDGE_ERR.NOT_FOUND)
@@ -1074,9 +1084,10 @@ export class SiliconBridge {
    *
    * RFC-045-FINAL: Routes through command ring + processCommands for synchronous clear.
    */
-  clear(): void {
+  clear(): number {
     // Queue CLEAR command (Task 060: use writeOrSpin)
-    this.writeOrSpin(CMD.CLEAR, 0, 0, 0)
+    const ringErr = this.writeOrSpin(CMD.CLEAR, 0, 0, 0)
+    if (ringErr !== 0) return ringErr
 
     // Process command immediately
     this.linker.processCommands()
@@ -1102,6 +1113,8 @@ export class SiliconBridge {
     // Reset struct ring
     this.structHead = 0
     this.structTail = 0
+
+    return 0
   }
 
   // ===========================================================================
