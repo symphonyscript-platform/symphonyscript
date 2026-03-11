@@ -39,7 +39,7 @@ export { romanToChord, toTheoryKeyContext } from './utils/romanAdapter';
 
 // Types
 export { ScaleMode, Accidental, CurveType, DynamicsType, AutomationTarget, ArpPattern, AftertouchType, DrumType } from './types';
-export type { ClipNode, ClipBuilder, TrackNode, SessionNode, NoteOperation, LoopOp, ClipOp, CCOperation, PitchBendOperation, AftertouchOperation, AutomationOperation, ScaleContext, DegreeOptions, KeyContext, EuclideanMelodyOptions, EuclideanDrumOptions, ArpeggioOptions, HumanizeSettings, QuantizeSettings, FreezeOptions, ScopeIsolation, ScopeOp, DrumMap, TempoKeyframe, TempoEnvelopeOp, ClipOperation, OperationsSource } from './types';
+export type { ClipNode, ClipBuilder, TrackNode, SessionNode, NoteOperation, LoopOp, ClipOp, CCOperation, PitchBendOperation, AftertouchOperation, AutomationOperation, ScaleContext, DegreeOptions, KeyContext, EuclideanMelodyOptions, EuclideanDrumOptions, ArpeggioOptions, HumanizeSettings, QuantizeSettings, FreezeOptions, ScopeIsolation, ScopeOp, DrumMap, TempoKeyframe, TempoEnvelopeOp, ClipOperation, OperationsSource, VelocityPoint } from './types';
 export { SCHEMA_VERSION } from './types';
 
 // FrozenClip

@@ -68,10 +68,11 @@ export interface PitchBendOperation {
 /**
  * Aftertouch type: channel (all notes) or poly (specific note).
  */
-export const enum AftertouchType {
-    CHANNEL = 0,
-    POLY = 1,
-}
+export const AftertouchType = {
+    CHANNEL: 0,
+    POLY: 1,
+} as const;
+export type AftertouchType = (typeof AftertouchType)[keyof typeof AftertouchType];
 
 export interface AftertouchOperation {
     kind: 'aftertouch';
@@ -84,26 +85,28 @@ export interface AftertouchOperation {
 /**
  * Automation target parameters.
  */
-export const enum AutomationTarget {
-    VOLUME = 0,
-    PAN = 1,
-    FILTER = 2,
-    RESONANCE = 3,
-    ATTACK = 4,
-    RELEASE = 5,
-}
+export const AutomationTarget = {
+    VOLUME: 0,
+    PAN: 1,
+    FILTER: 2,
+    RESONANCE: 3,
+    ATTACK: 4,
+    RELEASE: 5,
+} as const;
+export type AutomationTarget = (typeof AutomationTarget)[keyof typeof AutomationTarget];
 
 /**
  * Curve type for automation, dynamics, and tempo transitions.
  */
-export const enum CurveType {
-    LINEAR = 0,
-    EXPONENTIAL = 1,
-    SMOOTH = 2,
-    EASE_IN = 3,
-    EASE_OUT = 4,
-    EASE_IN_OUT = 5,
-}
+export const CurveType = {
+    LINEAR: 0,
+    EXPONENTIAL: 1,
+    SMOOTH: 2,
+    EASE_IN: 3,
+    EASE_OUT: 4,
+    EASE_IN_OUT: 5,
+} as const;
+export type CurveType = (typeof CurveType)[keyof typeof CurveType];
 
 /**
  * Automation operation for parameter changes over time.
@@ -117,16 +120,17 @@ export interface AutomationOperation {
     tick: number;
 }
 
-export const enum ScaleMode {
-    NONE = 0,
-    MAJOR = 1,
-    MINOR = 2,
-    DORIAN = 3,
-    PHRYGIAN = 4,
-    LYDIAN = 5,
-    MIXOLYDIAN = 6,
-    LOCRIAN = 7,
-}
+export const ScaleMode = {
+    NONE: 0,
+    MAJOR: 1,
+    MINOR: 2,
+    DORIAN: 3,
+    PHRYGIAN: 4,
+    LYDIAN: 5,
+    MIXOLYDIAN: 6,
+    LOCRIAN: 7,
+} as const;
+export type ScaleMode = (typeof ScaleMode)[keyof typeof ScaleMode];
 
 export interface ScaleContext {
     root: string;      // 'C', 'G', 'F#', etc.
@@ -165,12 +169,13 @@ export interface KeyContext {
  * - FLAT: Lower by semitone
  * - NATURAL: Use natural (override key signature)
  */
-export const enum Accidental {
-    NONE = 0,
-    SHARP = 1,
-    FLAT = 2,
-    NATURAL = 3,
-}
+export const Accidental = {
+    NONE: 0,
+    SHARP: 1,
+    FLAT: 2,
+    NATURAL: 3,
+} as const;
+export type Accidental = (typeof Accidental)[keyof typeof Accidental];
 
 // ============================================================================
 // Track Types (RFC-020)
@@ -221,26 +226,15 @@ export interface SessionNode {
 // Dynamics Types (Task 024)
 // ============================================================================
 
-export const enum DynamicsType {
-    NONE = 0,
-    STATIC = 1,
-    CRESCENDO = 2,
-    DECRESCENDO = 3,
-    RAMP = 4,
-    CURVE = 5,
-}
-
-/**
- * Dynamics operation for gradual volume changes.
- */
-export interface DynamicsOp {
-    kind: 'dynamics';
-    type: DynamicsType;
-    from: number;       // Starting velocity (0-1)
-    to: number;         // Ending velocity (0-1)
-    duration: number;   // Duration in ticks
-    curve?: CurveType;
-}
+export const DynamicsType = {
+    NONE: 0,
+    STATIC: 1,
+    CRESCENDO: 2,
+    DECRESCENDO: 3,
+    RAMP: 4,
+    CURVE: 5,
+} as const;
+export type DynamicsType = (typeof DynamicsType)[keyof typeof DynamicsType];
 
 /**
  * A single point on a velocity curve.
@@ -280,13 +274,14 @@ export interface EuclideanMelodyOptions {
 /**
  * Drum type for Euclidean rhythm patterns.
  */
-export const enum DrumType {
-    KICK = 0,
-    SNARE = 1,
-    HAT = 2,
-    CLAP = 3,
-    TOM = 4,
-}
+export const DrumType = {
+    KICK: 0,
+    SNARE: 1,
+    HAT: 2,
+    CLAP: 3,
+    TOM: 4,
+} as const;
+export type DrumType = (typeof DrumType)[keyof typeof DrumType];
 
 export interface EuclideanDrumOptions {
     /** Number of hits to place */
@@ -312,15 +307,16 @@ export interface EuclideanDrumOptions {
 /**
  * Arpeggio pattern types.
  */
-export const enum ArpPattern {
-    UP = 0,
-    DOWN = 1,
-    UP_DOWN = 2,
-    DOWN_UP = 3,
-    RANDOM = 4,
-    CONVERGE = 5,
-    DIVERGE = 6,
-}
+export const ArpPattern = {
+    UP: 0,
+    DOWN: 1,
+    UP_DOWN: 2,
+    DOWN_UP: 3,
+    RANDOM: 4,
+    CONVERGE: 5,
+    DIVERGE: 6,
+} as const;
+export type ArpPattern = (typeof ArpPattern)[keyof typeof ArpPattern];
 
 /**
  * Options for arpeggio generation.

@@ -1405,7 +1405,7 @@ export class SiliconSynapse implements ISiliconLinker {
     const mask = capacity - 1
 
     // Triangular number probing: slot += step; step++ (full coverage for power-of-2)
-    let slot = this.idTableHash(sourceId) & mask
+    let slot = this.idTableHash(sourceId)
     let step = 1
     let probes = 0
     while (probes < capacity) {
@@ -1450,7 +1450,7 @@ export class SiliconSynapse implements ISiliconLinker {
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
     const mask = capacity - 1
 
-    let slot = this.idTableHash(sourceId) & mask
+    let slot = this.idTableHash(sourceId)
     let step = 1
     let probes = 0
     while (probes < capacity) {
@@ -1490,7 +1490,7 @@ export class SiliconSynapse implements ISiliconLinker {
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
     const mask = capacity - 1
 
-    let slot = this.idTableHash(sourceId) & mask
+    let slot = this.idTableHash(sourceId)
     let step = 1
     let probes = 0
     while (probes < capacity) {
@@ -1577,7 +1577,7 @@ export class SiliconSynapse implements ISiliconLinker {
       const sourceId = Atomics.load(this.sab, offset + NODE.SOURCE_ID)
 
       if (sourceId > 0) {
-        let slot = this.idTableHash(sourceId) & mask
+        let slot = this.idTableHash(sourceId)
         let step = 1
         let probes = 0
         let fileHash = 0
@@ -1677,7 +1677,7 @@ export class SiliconSynapse implements ISiliconLinker {
     const mask = capacity - 1
 
     // Triangular number probing — must match Identity Table probing
-    let slot = this.idTableHash(sourceId) & mask
+    let slot = this.idTableHash(sourceId)
     let step = 1
     let probes = 0
     while (probes < capacity) {
@@ -1718,7 +1718,7 @@ export class SiliconSynapse implements ISiliconLinker {
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
     const mask = capacity - 1
 
-    let slot = this.idTableHash(sourceId) & mask
+    let slot = this.idTableHash(sourceId)
     let step = 1
     let probes = 0
     while (probes < capacity) {
@@ -1766,7 +1766,7 @@ export class SiliconSynapse implements ISiliconLinker {
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
     const mask = capacity - 1
 
-    let slot = this.idTableHash(sourceId) & mask
+    let slot = this.idTableHash(sourceId)
     let step = 1
     let probes = 0
     while (probes < capacity) {

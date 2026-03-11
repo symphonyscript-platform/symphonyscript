@@ -1117,9 +1117,6 @@ export class SiliconBridge {
     const nodeCapacity = Atomics.load(this.sab, HDR.NODE_CAPACITY)
     this.localAllocator.reset(nodeCapacity)
 
-    // Reset SynapseAllocator tracking counters (RFC-045)
-    this.synapseAllocator.clear()
-
     // Reset fired ring
     this.firedRingHead = 0
     let i = 0
