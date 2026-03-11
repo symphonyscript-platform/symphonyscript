@@ -89,8 +89,8 @@ export class SiliconSynapse implements ISiliconLinker {
   // RFC-044: Command processing state
   private commandBuffer: Int32Array // Pre-allocated buffer for reading commands
 
-  // [RFC-054] Synapse Allocator for CMD.CONNECT/DISCONNECT
-  private synapseAllocator: SynapseAllocator
+  // [RFC-054] Synapse Allocator for CMD.CONNECT/DISCONNECT (injected by SiliconBridge)
+  private synapseAllocator: SynapseAllocator | null = null
 
   // RFC-045-04: Context-aware mutex behavior
   private isAudioContext: boolean = false
@@ -140,9 +140,6 @@ export class SiliconSynapse implements ISiliconLinker {
     // RFC-044: Initialize Command Ring Buffer infrastructure
     this.ringBuffer = new RingBuffer(this.sab)
     this.commandBuffer = new Int32Array(4) // Pre-allocate for zero-alloc reads
-
-    // [RFC-054] Initialize Synapse Allocator for async connect/disconnect
-    this.synapseAllocator = new SynapseAllocator(buffer)
 
     // Task 3.3: Detect Atomics.wait support ONCE at construction (not in hot path)
     this.canAtomicsWait = this._detectAtomicsWaitSupport()
@@ -275,6 +272,17 @@ export class SiliconSynapse implements ISiliconLinker {
    */
   getZoneIndex(): number {
     return this.zoneIndex
+  }
+
+  /**
+   * Inject a SynapseAllocator instance (Task 072: Singleton ownership by SiliconBridge).
+   *
+   * SiliconBridge owns the sole SynapseAllocator and injects it here so that
+   * CMD.CONNECT / CMD.DISCONNECT / compaction all operate on the same instance.
+   * When no allocator is set, synapse operations become no-ops returning error codes.
+   */
+  setSynapseAllocator(allocator: SynapseAllocator): void {
+    this.synapseAllocator = allocator
   }
 
   // ===========================================================================
@@ -1914,6 +1922,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * @returns Number of live synapses after compaction, or -1 if mutex failed
    */
   compactSynapseTable(): number {
+    if (this.synapseAllocator === null) return -1
     return this.synapseAllocator.compactTableSafe(
       () => this._acquireChainMutex(),
       () => this._releaseChainMutex()
@@ -1931,6 +1940,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * @returns Number of live synapses after compaction, 0 if not needed, or -1 if mutex failed
    */
   maybeCompactSynapseTable(): number {
+    if (this.synapseAllocator === null) return 0
     return this.synapseAllocator.maybeCompactSafe(
       () => this._acquireChainMutex(),
       () => this._releaseChainMutex()
@@ -2127,6 +2137,11 @@ export class SiliconSynapse implements ISiliconLinker {
    * @returns true on success, false on error (ERROR_FLAG set)
    */
   private executeConnect(srcPtr: NodePtr, tgtPtr: NodePtr, packedWJ: number): boolean {
+    if (this.synapseAllocator === null) {
+      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+      return false
+    }
+
     // 1. Validate pointers are in valid heap range
     if (!this.isValidHeapPtr(srcPtr) || !this.isValidHeapPtr(tgtPtr)) {
       Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
@@ -2154,6 +2169,11 @@ export class SiliconSynapse implements ISiliconLinker {
    * @returns true on success, false on error (ERROR_FLAG set)
    */
   private executeDisconnect(srcPtr: NodePtr, tgtPtr: NodePtr): boolean {
+    if (this.synapseAllocator === null) {
+      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+      return false
+    }
+
     // Validate source pointer
     if (!this.isValidHeapPtr(srcPtr)) {
       Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
@@ -2211,6 +2231,11 @@ export class SiliconSynapse implements ISiliconLinker {
     this.idTableClear()
     this.symTableClear()
     this.synapseTableClear()
+
+    // Reset allocator tracking counters if injected
+    if (this.synapseAllocator !== null) {
+      this.synapseAllocator.clear()
+    }
 
     // Track operation for telemetry
     this._incrementTelemetry()

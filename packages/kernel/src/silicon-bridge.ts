@@ -292,9 +292,9 @@ export class SiliconBridge {
     this.localAllocator = new LocalAllocator(this.sab, nodeCapacity)
     this.ringBuffer = new RingBuffer(this.sab)
 
-    // RFC-045: Initialize Synapse Graph infrastructure
-    // RFC-045: Initialize Synapse Graph infrastructure
+    // RFC-045: Initialize Synapse Graph infrastructure (Task 072: sole owner)
     this.synapseAllocator = new SynapseAllocator(sab)
+    linker.setSynapseAllocator(this.synapseAllocator)
     this.learningRate = options.learningRate ?? 10
     this.synapseTableOffsetI32 = getSynapseTableOffset(nodeCapacity) / 4
     this.synapseCapacity = this.sab[HDR.SYNAPSE_CAPACITY] // K-002: dynamic
