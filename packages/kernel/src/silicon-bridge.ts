@@ -1046,12 +1046,14 @@ export class SiliconBridge {
     }
 
     // Insert in reverse order to maintain sorted chain, but use pre-generated sourceIds
+    // Task 060: Check insertAsync return to prevent silent drops
     let i = noteCount - 1
+    let loaded = 0
     while (i >= 0) {
       const note = notes[i]
       const sourceId = i < outSourceIds.length ? outSourceIds[i] : this._advanceSourceId()
 
-      this.insertAsync(
+      const result = this.insertAsync(
         OPCODE.NOTE,
         note.pitch,
         note.velocity,
@@ -1062,19 +1064,27 @@ export class SiliconBridge {
         undefined
       )
 
+      if (result >= 0) {
+        loaded = loaded + 1
+      } else if (i < outSourceIds.length) {
+        outSourceIds[i] = 0
+      }
+
       i = i - 1
     }
-    const loaded = Math.min(noteCount, outSourceIds.length)
 
     // Process all commands at once
     this.linker.processCommands()
 
-    // Register mappings
+    // Register mappings (skip zeroed entries from failed inserts)
     let j = 0
-    while (j < loaded) {
-      const ptr = this.linker.idTableLookup(outSourceIds[j])
-      if (ptr !== NULL_PTR) {
-        this.registerMapping(outSourceIds[j], ptr, undefined)
+    const maxJ = Math.min(noteCount, outSourceIds.length)
+    while (j < maxJ) {
+      if (outSourceIds[j] !== 0) {
+        const ptr = this.linker.idTableLookup(outSourceIds[j])
+        if (ptr !== NULL_PTR) {
+          this.registerMapping(outSourceIds[j], ptr, undefined)
+        }
       }
       j = j + 1
     }
