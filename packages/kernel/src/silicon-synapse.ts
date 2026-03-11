@@ -1383,10 +1383,8 @@ export class SiliconSynapse implements ISiliconLinker {
 
   /**
  * Insert a sourceId → NodePtr mapping into the Identity Table.
- * Uses quadratic probing for collision resolution (RFC-047-50).
- *
- * **Atomic Strictness**: All slot reads/writes use Atomics for thread safety.
- * **Load Factor Enforcement**: Sets ERROR_FLAG if load factor exceeds 75%.
+ * Uses triangular number probing for collision resolution (Task 078).
+ * Probing sequence: slot += step; step++ — guarantees full coverage for power-of-2 capacity.
  *
  * @param sourceId - Source ID (must be > 0)
  * @param ptr - Node pointer
@@ -1396,23 +1394,21 @@ export class SiliconSynapse implements ISiliconLinker {
     if (sourceId <= 0) return false
 
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
-    const baseSlot = this.idTableHash(sourceId)
+    const mask = capacity - 1
 
-    // Quadratic probing: slot = (base + probe^2) % capacity
-    // This reduces primary clustering compared to linear probing
-    let probe = 0
-    while (probe < capacity) {
-      const slot = (baseSlot + probe * probe) & (capacity - 1)
+    // Triangular number probing: slot += step; step++ (full coverage for power-of-2)
+    let slot = this.idTableHash(sourceId) & mask
+    let step = 1
+    let probes = 0
+    while (probes < capacity) {
       const offset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, offset)
 
       if (tid === ID_TABLE.EMPTY_TID || tid === ID_TABLE.TOMBSTONE_TID) {
-        // Empty or tombstone slot - insert here
         Atomics.store(this.sab, offset, sourceId)
         Atomics.store(this.sab, offset + 1, ptr)
         const newUsed = Atomics.add(this.sab, HDR.ID_TABLE_USED, 1) + 1
 
-        // Load factor enforcement: warn if > 75% full
         if (newUsed / capacity > ID_TABLE.LOAD_FACTOR_WARNING) {
           Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.LOAD_FACTOR_WARNING)
         }
@@ -1421,23 +1417,21 @@ export class SiliconSynapse implements ISiliconLinker {
       }
 
       if (tid === sourceId) {
-        // Already exists - update ptr
         Atomics.store(this.sab, offset + 1, ptr)
         return true
       }
 
-      probe = probe + 1
+      slot = (slot + step) & mask
+      step = step + 1
+      probes = probes + 1
     }
 
-    // Table full
     return false
   }
 
   /**
    * Lookup a NodePtr by sourceId in the Identity Table.
-   * Uses quadratic probing for collision resolution (RFC-047-50).
-   *
-   * **Atomic Strictness**: All slot reads use Atomics for thread safety.
+   * Uses triangular number probing for collision resolution (Task 078).
    *
    * @param sourceId - Source ID to lookup
    * @returns NodePtr if found, NULL_PTR if not found
@@ -1446,37 +1440,35 @@ export class SiliconSynapse implements ISiliconLinker {
     if (sourceId <= 0) return NULL_PTR
 
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
-    const baseSlot = this.idTableHash(sourceId)
+    const mask = capacity - 1
 
-    let probe = 0
-    while (probe < capacity) {
-      const slot = (baseSlot + probe * probe) & (capacity - 1)
+    let slot = this.idTableHash(sourceId) & mask
+    let step = 1
+    let probes = 0
+    while (probes < capacity) {
       const offset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, offset)
 
       if (tid === ID_TABLE.EMPTY_TID) {
-        // Empty slot - not found
         return NULL_PTR
       }
 
       if (tid === sourceId) {
-        // Found
         return Atomics.load(this.sab, offset + 1)
       }
 
-      probe = probe + 1
+      slot = (slot + step) & mask
+      step = step + 1
+      probes = probes + 1
     }
 
-    // Not found after full scan
     return NULL_PTR
   }
 
   /**
    * Remove a sourceId from the Identity Table.
    * Marks the slot as a tombstone (TID = -1).
-   * Uses quadratic probing for collision resolution (RFC-047-50).
-   *
-   * **Atomic Strictness**: All slot reads/writes use Atomics for thread safety.
+   * Uses triangular number probing for collision resolution (Task 078).
    *
    * NOTE: Tombstones accumulate over time and degrade lookup performance.
    * Call idTableRepack() during bridge.clear() to eliminate tombstones.
@@ -1488,30 +1480,30 @@ export class SiliconSynapse implements ISiliconLinker {
     if (sourceId <= 0) return false
 
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
-    const baseSlot = this.idTableHash(sourceId)
+    const mask = capacity - 1
 
-    let probe = 0
-    while (probe < capacity) {
-      const slot = (baseSlot + probe * probe) & (capacity - 1)
+    let slot = this.idTableHash(sourceId) & mask
+    let step = 1
+    let probes = 0
+    while (probes < capacity) {
       const offset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, offset)
 
       if (tid === ID_TABLE.EMPTY_TID) {
-        // Empty slot - not found
         return false
       }
 
       if (tid === sourceId) {
-        // Found - mark as tombstone
         Atomics.store(this.sab, offset, ID_TABLE.TOMBSTONE_TID)
         Atomics.store(this.sab, offset + 1, NULL_PTR)
         return true
       }
 
-      probe = probe + 1
+      slot = (slot + step) & mask
+      step = step + 1
+      probes = probes + 1
     }
 
-    // Not found
     return false
   }
 
@@ -1599,11 +1591,10 @@ export class SiliconSynapse implements ISiliconLinker {
 
   /**
    * Store a packed SourceLocation in the Symbol Table for a sourceId.
-   * Uses quadratic probing: slot = (baseSlot + probe²) % capacity
+   * Uses triangular number probing (Task 078) matching the Identity Table.
    *
-   * **Race-Free Write Order**: This method can be called BEFORE idTableInsert
-   * to prevent transient states where Identity Table has an entry but Symbol
-   * Table doesn't. It finds the slot independently using the same hash/probe logic.
+   * **Race-Free Write Order**: This method can be called BEFORE idTableInsert.
+   * It finds the slot independently using the same hash/probe logic.
    *
    * @param sourceId - Source ID
    * @param fileHash - Hash of the file path
@@ -1615,19 +1606,17 @@ export class SiliconSynapse implements ISiliconLinker {
     if (sourceId <= 0) return false
 
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
-    const baseSlot = this.idTableHash(sourceId)
+    const mask = capacity - 1
 
-    // Quadratic probing: slot = (base + probe^2) % capacity
-    // Must match Identity Table probing for consistent slot resolution
-    let probe = 0
-    while (probe < capacity) {
-      const slot = (baseSlot + probe * probe) & (capacity - 1)
+    // Triangular number probing — must match Identity Table probing
+    let slot = this.idTableHash(sourceId) & mask
+    let step = 1
+    let probes = 0
+    while (probes < capacity) {
       const idOffset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, idOffset)
 
-      // Empty slot or matching sourceId - this is where we write
       if (tid === ID_TABLE.EMPTY_TID || tid === ID_TABLE.TOMBSTONE_TID || tid === sourceId) {
-        // Store location in Symbol Table at this slot
         const symOffset = this.symTableSlotOffset(slot)
         const lineCol = ((line & SYM_TABLE.MAX_LINE) << SYM_TABLE.LINE_SHIFT) |
           (column & SYM_TABLE.COLUMN_MASK)
@@ -1636,16 +1625,17 @@ export class SiliconSynapse implements ISiliconLinker {
         return true
       }
 
-      probe = probe + 1
+      slot = (slot + step) & mask
+      step = step + 1
+      probes = probes + 1
     }
 
-    // Table full
     return false
   }
 
   /**
    * Lookup a packed SourceLocation by sourceId with zero-allocation callback.
-   * Uses quadratic probing to match Identity Table (RFC-047-50).
+   * Uses triangular number probing to match Identity Table (Task 078).
    *
    * @param sourceId - Source ID to lookup
    * @param cb - Callback receiving (fileHash, line, column) if found
@@ -1658,51 +1648,46 @@ export class SiliconSynapse implements ISiliconLinker {
     if (sourceId <= 0) return false
 
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
-    const baseSlot = this.idTableHash(sourceId)
+    const mask = capacity - 1
 
-    // Quadratic probing: slot = (base + probe^2) % capacity
-    // Must match Identity Table probing for consistent slot resolution
-    let probe = 0
-    while (probe < capacity) {
-      const slot = (baseSlot + probe * probe) & (capacity - 1)
+    let slot = this.idTableHash(sourceId) & mask
+    let step = 1
+    let probes = 0
+    while (probes < capacity) {
       const idOffset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, idOffset)
 
       if (tid === ID_TABLE.EMPTY_TID) {
-        // Empty slot - sourceId not found
         return false
       }
 
       if (tid === sourceId) {
-        // Found the slot - read from Symbol Table at same slot
         const symOffset = this.symTableSlotOffset(slot)
         const fileHash = Atomics.load(this.sab, symOffset)
         const lineCol = Atomics.load(this.sab, symOffset + 1)
 
-        // Check if location was stored (fileHash != 0)
         if (fileHash === SYM_TABLE.EMPTY_ENTRY) {
           return false
         }
 
-        // Unpack and invoke callback
         const line = (lineCol >>> SYM_TABLE.LINE_SHIFT) & SYM_TABLE.MAX_LINE
         const column = lineCol & SYM_TABLE.COLUMN_MASK
         cb(fileHash, line, column)
         return true
       }
 
-      // Continue probing past tombstones (quadratic)
-      probe = probe + 1
+      slot = (slot + step) & mask
+      step = step + 1
+      probes = probes + 1
     }
 
-    // Not found after full scan
     return false
   }
 
   /**
    * Remove a SourceLocation from the Symbol Table.
    * Clears the entry at the slot corresponding to sourceId.
-   * Uses quadratic probing to match Identity Table (RFC-047-50).
+   * Uses triangular number probing to match Identity Table (Task 078).
    *
    * @param sourceId - Source ID whose location should be removed
    * @returns true if removed, false if not found
@@ -1711,34 +1696,31 @@ export class SiliconSynapse implements ISiliconLinker {
     if (sourceId <= 0) return false
 
     const capacity = Atomics.load(this.sab, HDR.ID_TABLE_CAPACITY)
-    const baseSlot = this.idTableHash(sourceId)
+    const mask = capacity - 1
 
-    // Quadratic probing: slot = (base + probe^2) % capacity
-    // Must match Identity Table probing for consistent slot resolution
-    let probe = 0
-    while (probe < capacity) {
-      const slot = (baseSlot + probe * probe) & (capacity - 1)
+    let slot = this.idTableHash(sourceId) & mask
+    let step = 1
+    let probes = 0
+    while (probes < capacity) {
       const idOffset = this.idTableSlotOffset(slot)
       const tid = Atomics.load(this.sab, idOffset)
 
       if (tid === ID_TABLE.EMPTY_TID) {
-        // Empty slot - sourceId not found
         return false
       }
 
       if (tid === sourceId) {
-        // Found the slot - clear Symbol Table entry at same slot
         const symOffset = this.symTableSlotOffset(slot)
         Atomics.store(this.sab, symOffset, SYM_TABLE.EMPTY_ENTRY)
         Atomics.store(this.sab, symOffset + 1, 0)
         return true
       }
 
-      // Continue probing past tombstones (quadratic)
-      probe = probe + 1
+      slot = (slot + step) & mask
+      step = step + 1
+      probes = probes + 1
     }
 
-    // Not found
     return false
   }
 

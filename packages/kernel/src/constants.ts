@@ -108,7 +108,7 @@ export const KNUTH_HASH_CONST = 2654435761
  * ├─────────────────────────────────────────────────────────────────────┤
  * │ IDENTITY TABLE (dynamic offset)              capacity × 8 bytes    │
  * ├─────────────────────────────────────────────────────────────────────┤
- * │ Quadratic-probe hash table: [TID: i32, NodePtr: u32] × capacity    │
+ * │ Triangular-number probe hash table: [TID: i32, NodePtr: u32] × cap  │
  * │   TID = 0  : Empty slot                                             │
  * │   TID = -1 : Tombstone (deleted, will be cleaned on rebuild)       │
  * │   TID > 0  : Active entry (Knuth multiplicative hash)              │
@@ -511,8 +511,8 @@ export const ERROR = {
  * The Identity Table is a fixed-size hash table stored in the SAB that maps
  * Temporal IDs (TID) to NodePtr values for zero-allocation lookups.
  *
- * Structure: Quadratic-probe hash table with [TID: i32, NodePtr: u32] entries.
- * Uses slot = (baseSlot + probe²) % capacity to reduce primary clustering.
+ * Structure: Triangular-number probe hash table with [TID: i32, NodePtr: u32] entries.
+ * Uses slot += step; step++ (guarantees full coverage for power-of-2 capacity).
  * - TID = 0: Empty slot
  * - TID = -1: Tombstone (deleted entry)
  * - TID > 0: Active entry
