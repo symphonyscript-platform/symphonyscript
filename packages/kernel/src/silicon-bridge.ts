@@ -263,16 +263,6 @@ export class SiliconBridge {
   // Source ID Generation
   // ===========================================================================
 
-  /**
-   * Generate a SOURCE_ID from a source location.
-   * Uses a hash of file:line:column for uniqueness.
-   *
-   * CRITICAL: SourceIds must fit in positive Int32 range (1 to 2^31-1).
-   * RFC-045-04: Implements wraparound at MAX to prevent overflow.
-   */
-  /**
-   * Get the underlying SharedArrayBuffer.
-   */
   getSAB(): SharedArrayBuffer {
     return this.linker.getSAB()
   }

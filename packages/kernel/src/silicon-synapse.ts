@@ -186,11 +186,6 @@ export class SiliconSynapse implements ISiliconLinker {
   }
 
   /**
-   * Get the underlying SharedArrayBuffer.
-   */
-
-
-  /**
    * Create a Silicon Linker with a new SAB.
    *
    * RFC-058: Returns null if configuration is invalid (zero-allocation error handling).
