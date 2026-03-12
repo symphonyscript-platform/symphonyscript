@@ -519,7 +519,7 @@ export class SiliconBridge {
       Atomics.notify(this.sab, HDR.YIELD_SLOT, 1)
 
       if (performance.now() - startTime > MAX_SPIN_MS) {
-        Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.RING_FULL)
+        Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.RING_FULL)
         return BRIDGE_ERR.RING_FULL
       }
     }

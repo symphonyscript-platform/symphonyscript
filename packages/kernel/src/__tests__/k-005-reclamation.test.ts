@@ -6,6 +6,8 @@ import {
     SiliconBridge,
     SiliconSynapse,
     createLinkerSAB,
+    HDR,
+    ERROR,
     NODE_SIZE_BYTES
 } from '../index'
 
@@ -61,8 +63,69 @@ describe('K-005: Zone B Reclamation', () => {
         expect(ptr2).toBe(ptr1)
     })
 
-    it('should handle reclaim ring wrap-around', () => {
-        // TODO: Implement stress test once basic reuse works (Future Task)
+    it('R-001: should not advance tail or overwrite slot when reclaim ring is full', () => {
+        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })
+        const linker = new SiliconSynapse(sab)
+        const bridge = new SiliconBridge(linker)
+        const view = new Int32Array(sab)
+
+        const sourceId = bridge._insertNoteImmediate({ pitch: 60, velocity: 100, duration: 480, baseTick: 0 })
+        const ptr = bridge.getNodePtr(sourceId)
+        expect(ptr).toBeDefined()
+
+        // Force a tiny full ring to hit overflow branch deterministically:
+        // full when (tail - head) >= capacity.
+        Atomics.store(view, HDR.RECLAIM_RB_CAPACITY, 2)
+        Atomics.store(view, HDR.RECLAIM_RB_HEAD, 7)
+        Atomics.store(view, HDR.RECLAIM_RB_TAIL, 9) // occupancy = 2 (full)
+
+        const ringDataI32 = Atomics.load(view, HDR.RECLAIM_RING_PTR) / 4
+        const tailBefore = Atomics.load(view, HDR.RECLAIM_RB_TAIL)
+        const slotIdx = tailBefore & 1 // mask for capacity=2
+        const sentinel = 0x12345678
+        Atomics.store(view, ringDataI32 + slotIdx, sentinel)
+        Atomics.store(view, HDR.ERROR_FLAG, ERROR.OK)
+
+        const result = bridge.deleteNoteImmediate(sourceId)
+        expect(result).toBe(0)
+
+        // R-001 correctness: full ring must not mutate data or tail.
+        expect(Atomics.load(view, HDR.RECLAIM_RB_TAIL)).toBe(tailBefore)
+        expect(Atomics.load(view, ringDataI32 + slotIdx)).toBe(sentinel)
+        expect(Atomics.load(view, HDR.ERROR_FLAG) & ERROR.RECLAIM_OVERFLOW).toBe(ERROR.RECLAIM_OVERFLOW)
+
+        // Lock/release behavior is preserved (mutex not leaked on overflow branch).
+        expect(linker.acquireMutex()).toBe(true)
+        linker.releaseMutex()
+    })
+
+    it('R-001: should enqueue reclaim pointer when ring is not full', () => {
+        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })
+        const linker = new SiliconSynapse(sab)
+        const bridge = new SiliconBridge(linker)
+        const view = new Int32Array(sab)
+
+        const sourceId = bridge._insertNoteImmediate({ pitch: 64, velocity: 100, duration: 480, baseTick: 0 })
+        const ptr = bridge.getNodePtr(sourceId)
+        expect(ptr).toBeDefined()
+        const nodePtr = ptr as number
+
+        Atomics.store(view, HDR.RECLAIM_RB_CAPACITY, 2)
+        Atomics.store(view, HDR.RECLAIM_RB_HEAD, 11)
+        Atomics.store(view, HDR.RECLAIM_RB_TAIL, 12) // occupancy = 1 (not full)
+
+        const ringDataI32 = Atomics.load(view, HDR.RECLAIM_RING_PTR) / 4
+        const tailBefore = Atomics.load(view, HDR.RECLAIM_RB_TAIL)
+        const slotIdx = tailBefore & 1
+        Atomics.store(view, ringDataI32 + slotIdx, -1)
+        Atomics.store(view, HDR.ERROR_FLAG, ERROR.OK)
+
+        const result = bridge.deleteNoteImmediate(sourceId)
+        expect(result).toBe(0)
+
+        expect(Atomics.load(view, HDR.RECLAIM_RB_TAIL)).toBe(tailBefore + 1)
+        expect(Atomics.load(view, ringDataI32 + slotIdx)).toBe(nodePtr)
+        expect(Atomics.load(view, HDR.ERROR_FLAG) & ERROR.RECLAIM_OVERFLOW).toBe(0)
     })
 
     it('executeClear should not free Zone B nodes to Zone A free list', () => {

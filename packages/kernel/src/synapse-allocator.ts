@@ -51,6 +51,8 @@ export class SynapseAllocator extends SynapseView {
   clear(): void {
     this.usedSlots = 0
     this.tombstoneCount = 0
+    Atomics.store(this.sab, HDR.SYNAPSE_USED_SLOTS, 0)
+    Atomics.store(this.sab, HDR.SYNAPSE_TOMBSTONES, 0)
   }
 
   /**
@@ -123,6 +125,7 @@ export class SynapseAllocator extends SynapseView {
     }
 
     this.usedSlots++
+    Atomics.store(this.sab, HDR.SYNAPSE_USED_SLOTS, this.usedSlots)
 
     // M-001: Update SYNAPSE_COUNT telemetry
     Atomics.add(this.sab, HDR.SYNAPSE_COUNT, 1)
@@ -147,6 +150,7 @@ export class SynapseAllocator extends SynapseView {
       if (currentTarget !== NULL_PTR && (targetPtr === undefined || currentTarget === targetPtr)) {
         Atomics.store(this.sab, offset + SYNAPSE.TARGET_PTR, NULL_PTR)
         this.tombstoneCount++
+        Atomics.store(this.sab, HDR.SYNAPSE_TOMBSTONES, this.tombstoneCount)
         // M-001: Update SYNAPSE_COUNT telemetry
         Atomics.add(this.sab, HDR.SYNAPSE_COUNT, -1)
         if (targetPtr !== undefined) return
@@ -283,6 +287,8 @@ export class SynapseAllocator extends SynapseView {
 
     // M-001: Reset SYNAPSE_COUNT to accurate live count after compaction
     Atomics.store(this.sab, HDR.SYNAPSE_COUNT, liveCount)
+    Atomics.store(this.sab, HDR.SYNAPSE_USED_SLOTS, liveCount)
+    Atomics.store(this.sab, HDR.SYNAPSE_TOMBSTONES, 0)
 
     return liveCount
   }
@@ -319,7 +325,7 @@ export class SynapseAllocator extends SynapseView {
       probes++
     }
     // Should never happen during compaction
-    Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.KERNEL_PANIC)
+    Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.KERNEL_PANIC)
   }
 
   // ===========================================================================

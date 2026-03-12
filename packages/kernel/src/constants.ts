@@ -66,7 +66,7 @@ export const KNUTH_HASH_CONST = 2654435761
  * │ 32     │ 8         │ COMMIT_FLAG        │ u32     │ 0/1/2 sync     │
  * │ 36     │ 9         │ PLAYHEAD_TICK      │ u32     │ Audio position │
  * │ 40     │ 10        │ SAFE_ZONE_TICKS    │ u32     │ Edit boundary  │
- * │ 44     │ 11        │ ERROR_FLAG         │ u32     │ Error code     │
+ * │ 44     │ 11        │ ERROR_FLAG         │ u32     │ Error bitmask  │
  * │ 48     │ 12        │ NODE_COUNT         │ u32     │ Live nodes     │
  * │ 52     │ 13        │ FREE_COUNT         │ u32     │ Free nodes     │
  * │ 56     │ 14        │ NODE_CAPACITY      │ u32     │ Max nodes      │
@@ -182,7 +182,7 @@ export const HDR = {
   PLAYHEAD_TICK: 9,
   /** Safe zone distance in ticks (structural edits blocked within) */
   SAFE_ZONE_TICKS: 10,
-  /** [ATOMIC] Error flag: OK=0, HEAP_EXHAUSTED=1, SAFE_ZONE=2, INVALID_PTR=3 */
+  /** [ATOMIC] Error bitmask flag: 0=OK, non-zero=one or more error bits set */
   ERROR_FLAG: 11,
   /** [ATOMIC] Total allocated nodes (live chain) */
   NODE_COUNT: 12,
@@ -256,7 +256,15 @@ export const HDR = {
   /** [RFC-056] Number of worker zones (1 = legacy single-zone mode) */
   ZONE_COUNT: 42,
   /** [RFC-056] Byte offset to zone configuration table (0 = legacy mode) */
-  ZONE_CONFIG_OFFSET: 43
+  ZONE_CONFIG_OFFSET: 43,
+
+  // -------------------------------------------------------------------------
+  // Synapse Counter Header (RFC-059 R-007)
+  // -------------------------------------------------------------------------
+  /** [RFC-059 R-007] [ATOMIC] Synapse table total used slots (live + tombstones) */
+  SYNAPSE_USED_SLOTS: 44,
+  /** [RFC-059 R-007] [ATOMIC] Synapse table tombstone count */
+  SYNAPSE_TOMBSTONES: 45
 } as const
 
 /**
@@ -472,33 +480,38 @@ export const DEBUG = {
 // =============================================================================
 
 /**
- * ERROR_FLAG values.
+ * ERROR_FLAG bitmask values.
+ * Multiple bits may be set simultaneously.
  */
 export const ERROR = {
   /** No error */
   OK: 0,
   /** Heap exhausted (no free nodes) */
-  HEAP_EXHAUSTED: 1,
+  HEAP_EXHAUSTED: 1 << 0,
   /** Safe zone violation (edit too close to playhead) */
-  SAFE_ZONE: 2,
+  SAFE_ZONE: 1 << 1,
   /** Invalid pointer encountered */
-  INVALID_PTR: 3,
+  INVALID_PTR: 1 << 2,
   /** [v1.5] Kernel panic: mutex deadlock or catastrophic failure */
-  KERNEL_PANIC: 4,
+  KERNEL_PANIC: 1 << 3,
   /** [v1.5] Identity Table load factor exceeded 75% warning */
-  LOAD_FACTOR_WARNING: 5,
+  LOAD_FACTOR_WARNING: 1 << 4,
   /** [RFC-045-04] Free list corruption detected */
-  FREE_LIST_CORRUPT: 6,
+  FREE_LIST_CORRUPT: 1 << 5,
   /** [RFC-045-04] Unknown command opcode received */
-  UNKNOWN_OPCODE: 7,
+  UNKNOWN_OPCODE: 1 << 6,
+  /** [RFC-059] Ring buffer full after spin timeout */
+  RING_FULL: 1 << 7,
+  /** [RFC-059] SPSC invariant violation (cross-context alloc/free) */
+  SPSC_VIOLATION: 1 << 8,
+  /** [RFC-059] Reclaim ring overflow (producer outpaced consumer) */
+  RECLAIM_OVERFLOW: 1 << 9,
+  /** [RFC-059] CAS retry budget exhausted */
+  CAS_EXHAUSTION: 1 << 10,
   /** [RFC-058] Invalid synapse capacity (must be power of 2) */
-  INVALID_SYNAPSE_CAPACITY: 8,
+  INVALID_SYNAPSE_CAPACITY: 1 << 11,
   /** [RFC-058] Invalid worker zones (must be 1-8) */
-  INVALID_WORKER_ZONES: 9,
-  /** [Task 075] Ring buffer full after spin timeout */
-  RING_FULL: 10,
-  /** [Task 080] SPSC invariant violation (cross-context alloc/free) */
-  SPSC_VIOLATION: 11
+  INVALID_WORKER_ZONES: 1 << 12
 } as const
 
 // =============================================================================
@@ -582,7 +595,9 @@ export const CONCURRENCY = {
   /** Dead-Man's Switch: panic after this many mutex acquisition attempts (~200ms with 1ms yields) */
   MUTEX_PANIC_THRESHOLD: 200,
   /** [RFC-045-04] Maximum spins for audio-safe try-lock (~300ns, sub-microsecond) */
-  AUDIO_SAFE_MAX_SPINS: 3
+  AUDIO_SAFE_MAX_SPINS: 3,
+  /** [RFC-059] Maximum CAS retries for attribute patching before failure */
+  CAS_MAX_RETRIES: 64
 } as const
 
 // =============================================================================
@@ -1040,7 +1055,7 @@ export function getZoneSplitIndex(nodeCapacity: number): number {
  * Calculate total SAB size needed for given node capacity.
  *
  * Layout:
- * - Header + Registers + Command Ring + Reclaim Ring + Synapse Header + Multi-Zone: 176 bytes (44 × i32)
+ * - Header + Registers + Command Ring + Reclaim Ring + Synapse Header + Multi-Zone + Synapse Counters: 184 bytes (46 × i32)
  * - Node Heap: nodeCapacity × 32 bytes
  * - Identity Table: nodeCapacity × 2 × 8 bytes (RFC-047-50: 2x capacity for load factor)
  * - Symbol Table: nodeCapacity × 8 bytes (fileHash + lineCol per entry)
@@ -1062,7 +1077,7 @@ export function calculateSABSize(nodeCapacity: number, synapseCapacity?: number,
   const effectiveWorkerZones = workerZones ?? 1
   
   // Existing regions
-  const headerSize = HEAP_START_OFFSET // 176 bytes (RFC-056)
+  const headerSize = HEAP_START_OFFSET // 184 bytes (RFC-059 R-007)
   const heapSize = nodeCapacity * NODE_SIZE_BYTES
   const identityTableSize = nodeCapacity * 2 * ID_TABLE.ENTRY_SIZE_BYTES // RFC-047-50: 2x capacity
   const symbolTableSize = nodeCapacity * 2 * SYM_TABLE.ENTRY_SIZE_BYTES // Must match Identity Table capacity
@@ -1096,10 +1111,11 @@ export function calculateSABSize(nodeCapacity: number, synapseCapacity?: number,
  * - Reclaim Ring Header (36-39): 4 × 4 = 16 bytes
  * - Synapse Header (40-41): 2 × 4 = 8 bytes
  * - Multi-Zone Header (42-43): 2 × 4 = 8 bytes (RFC-056)
+ * - Synapse Counter Header (44-45): 2 × 4 = 8 bytes (RFC-059 R-007)
  *
- * Total: 64 + 28 + 36 + 16 + 16 + 8 + 8 = 176 bytes (indices 0-43)
+ * Total: 64 + 28 + 36 + 16 + 16 + 8 + 8 + 8 = 184 bytes (indices 0-45)
  */
-export const HEAP_START_OFFSET = 176
+export const HEAP_START_OFFSET = 184
 
 /**
  * Calculate i32 index where node heap begins.

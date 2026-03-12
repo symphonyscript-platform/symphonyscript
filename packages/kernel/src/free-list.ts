@@ -234,7 +234,7 @@ export class FreeList {
     // Validate pointer before dereferencing (defensive programming)
     if (!this.isValidPtr(head)) {
       // ZERO-ALLOCATION: Set error flag instead of throwing
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.FREE_LIST_CORRUPT)
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.FREE_LIST_CORRUPT)
       return NULL_PTR
     }
 
@@ -281,7 +281,7 @@ export class FreeList {
 
       if (targetZone === -1) {
         // Invalid pointer (out of heap range)
-        Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.FREE_LIST_CORRUPT)
+        Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.FREE_LIST_CORRUPT)
         return
       }
 
@@ -308,7 +308,7 @@ export class FreeList {
   private _localFree(ptr: NodePtr): void {
     if (!this.isValidPtr(ptr)) {
       // ZERO-ALLOCATION: Set error flag instead of throwing
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.FREE_LIST_CORRUPT)
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.FREE_LIST_CORRUPT)
       return
     }
 
@@ -347,7 +347,7 @@ export class FreeList {
       if (!success) {
         // Return Queue full - this is a serious error in production
         // Set error flag but don't lose the pointer (it will leak)
-        Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.FREE_LIST_CORRUPT)
+        Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.FREE_LIST_CORRUPT)
       }
     }
   }

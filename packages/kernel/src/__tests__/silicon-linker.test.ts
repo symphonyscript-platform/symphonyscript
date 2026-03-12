@@ -24,6 +24,7 @@ import {
   CMD,
   RingBuffer,
   LocalAllocator,
+  AttributePatcher,
   PACKED,
   getZoneSplitIndex,
   HEAP_START_OFFSET,
@@ -34,6 +35,7 @@ import {
   unpackFlags,
   unpackSeq
 } from '../index'
+import { CONCURRENCY } from '../constants'
 
 // =============================================================================
 // Helper Functions
@@ -291,7 +293,7 @@ describe('RFC-043: Silicon Linker', () => {
       // Next allocation should fail
       const ptr = linker.allocNode()
       expect(ptr).toBe(NULL_PTR)
-      expect(linker.getError()).toBe(ERROR.HEAP_EXHAUSTED)
+      expect(linker.getError() & ERROR.HEAP_EXHAUSTED).toBe(ERROR.HEAP_EXHAUSTED)
     })
 
     it('should free nodes back to free list', () => {
@@ -494,6 +496,57 @@ describe('RFC-043: Silicon Linker', () => {
       expect((node?.flags ?? 0) & FLAG.MUTED).toBe(0)
     })
 
+    it('R-006: patchMuted should preserve non-muted flags', () => {
+      const linker = createTestLinker()
+      const ptr = linker.insertHead(OPCODE.NOTE, 60, 100, 96, 0, 60000, FLAG.ACTIVE)
+
+      linker.patchMuted(ptr, true)
+      let node = readNodeData(linker, ptr)
+      expect(node).toBeDefined()
+      expect((node?.flags ?? 0) & FLAG.ACTIVE).toBe(FLAG.ACTIVE)
+      expect((node?.flags ?? 0) & FLAG.MUTED).toBe(FLAG.MUTED)
+
+      linker.patchMuted(ptr, false)
+      node = readNodeData(linker, ptr)
+      expect(node).toBeDefined()
+      expect((node?.flags ?? 0) & FLAG.ACTIVE).toBe(FLAG.ACTIVE)
+      expect((node?.flags ?? 0) & FLAG.MUTED).toBe(0)
+    })
+
+    it('R-005: should set CAS_EXHAUSTION when CAS retries are exhausted', () => {
+      const linker = createTestLinker()
+      const ptr = linker.insertHead(...noteData(60, 0))
+      const sab = new Int32Array(linker.getSAB())
+      const patcher = new AttributePatcher(sab, sab[HDR.NODE_CAPACITY])
+      const packedAIndex = ptr / 4 + NODE.PACKED_A
+      const originalCompareExchange = Atomics.compareExchange
+
+      const compareExchangeSpy = jest
+        .spyOn(Atomics, 'compareExchange')
+        .mockImplementation((typedArray: any, index: any, expected: any, replacement: any) => {
+          if (typedArray === sab && index === packedAIndex) {
+            return expected ^ FLAG.MUTED
+          }
+          return (originalCompareExchange as any)(typedArray, index, expected, replacement)
+        })
+
+      try {
+        const ok = patcher.patchMuted(ptr, true)
+        expect(ok).toBe(true)
+
+        const flags = unpackFlags(Atomics.load(sab, packedAIndex))
+        expect(flags & FLAG.MUTED).toBe(0)
+        expect(linker.getError() & ERROR.CAS_EXHAUSTION).toBe(ERROR.CAS_EXHAUSTION)
+
+        const packedACalls = compareExchangeSpy.mock.calls.filter(
+          (args) => args[0] === sab && args[1] === packedAIndex
+        )
+        expect(packedACalls).toHaveLength(CONCURRENCY.CAS_MAX_RETRIES)
+      } finally {
+        compareExchangeSpy.mockRestore()
+      }
+    })
+
     it('should clamp pitch to MIDI range', () => {
       const linker = createTestLinker()
       const ptr = linker.insertHead(...noteData(60, 0))
@@ -647,7 +700,7 @@ describe('RFC-043: Silicon Linker', () => {
       // RFC-045-05: insertNode now returns NULL_PTR on error
       const result = linker.insertNode(ptr1, ...noteData(67, 2500))
       expect(result).toBe(NULL_PTR)
-      expect(linker.getError()).toBe(ERROR.SAFE_ZONE)
+      expect(linker.getError() & ERROR.SAFE_ZONE).toBe(ERROR.SAFE_ZONE)
     })
 
     it('should allow insertion outside safe zone', () => {
@@ -765,7 +818,7 @@ describe('RFC-043: Silicon Linker', () => {
       const sab = new Int32Array(linker.getSAB())
       // Calculate groove start dynamically: after node heap
       const nodeCapacity = sab[HDR.NODE_CAPACITY]
-      const grooveStart = 128 + nodeCapacity * 32 // HEAP_START_OFFSET + nodeCapacity * NODE_SIZE_BYTES
+      const grooveStart = HEAP_START_OFFSET + nodeCapacity * NODE_SIZE_BYTES
 
       linker.setGroove(grooveStart, 8)
 
@@ -796,7 +849,7 @@ describe('RFC-043: Silicon Linker', () => {
       linker.allocNode()
       linker.allocNode() // Should fail
 
-      expect(linker.getError()).toBe(ERROR.HEAP_EXHAUSTED)
+      expect(linker.getError() & ERROR.HEAP_EXHAUSTED).toBe(ERROR.HEAP_EXHAUSTED)
     })
 
     it('should clear error flag', () => {
@@ -806,10 +859,59 @@ describe('RFC-043: Silicon Linker', () => {
       linker.allocNode()
       linker.allocNode()
 
-      expect(linker.getError()).toBe(ERROR.HEAP_EXHAUSTED)
+      expect(linker.getError() & ERROR.HEAP_EXHAUSTED).toBe(ERROR.HEAP_EXHAUSTED)
 
       linker.clearError()
       expect(linker.getError()).toBe(ERROR.OK)
+    })
+
+    it('R-003: should retain both bits when multiple errors accumulate', () => {
+      const linker = createTestLinker(8)
+      const sab = new Int32Array(linker.getSAB())
+
+      Atomics.or(sab, HDR.ERROR_FLAG, ERROR.RING_FULL)
+      Atomics.or(sab, HDR.ERROR_FLAG, ERROR.SPSC_VIOLATION)
+
+      const mask = linker.getError()
+      expect(mask & ERROR.RING_FULL).toBe(ERROR.RING_FULL)
+      expect(mask & ERROR.SPSC_VIOLATION).toBe(ERROR.SPSC_VIOLATION)
+    })
+
+    it('R-003: should clear only selected bit via clearErrorBit', () => {
+      const linker = createTestLinker(8)
+      const sab = new Int32Array(linker.getSAB())
+
+      Atomics.or(sab, HDR.ERROR_FLAG, ERROR.RING_FULL)
+      Atomics.or(sab, HDR.ERROR_FLAG, ERROR.SPSC_VIOLATION)
+
+      linker.clearErrorBit(ERROR.RING_FULL)
+
+      const mask = linker.getError()
+      expect(mask & ERROR.RING_FULL).toBe(0)
+      expect(mask & ERROR.SPSC_VIOLATION).toBe(ERROR.SPSC_VIOLATION)
+    })
+
+    it('R-003: clearError should reset ERROR_FLAG to ERROR.OK', () => {
+      const linker = createTestLinker(8)
+      const sab = new Int32Array(linker.getSAB())
+
+      Atomics.or(sab, HDR.ERROR_FLAG, ERROR.RECLAIM_OVERFLOW)
+      Atomics.or(sab, HDR.ERROR_FLAG, ERROR.CAS_EXHAUSTION)
+      expect(linker.getError()).not.toBe(ERROR.OK)
+
+      linker.clearError()
+      expect(linker.getError()).toBe(ERROR.OK)
+    })
+
+    it('R-003: should use RFC-059 bit positions for mapped error flags', () => {
+      expect(ERROR.RING_FULL).toBe(1 << 7)
+      expect(ERROR.SPSC_VIOLATION).toBe(1 << 8)
+      expect(ERROR.RECLAIM_OVERFLOW).toBe(1 << 9)
+      expect(ERROR.CAS_EXHAUSTION).toBe(1 << 10)
+
+      // Keep init-validation bits non-conflicting with RFC-059 runtime bits.
+      expect(ERROR.INVALID_SYNAPSE_CAPACITY).toBe(1 << 11)
+      expect(ERROR.INVALID_WORKER_ZONES).toBe(1 << 12)
     })
 
     it('should return NULL_PTR on insertHead when heap exhausted', () => {
@@ -825,7 +927,7 @@ describe('RFC-043: Silicon Linker', () => {
       // RFC-045-05: insertHead now returns NULL_PTR on error
       const ptr3 = linker.insertHead(...noteData(67, 192))
       expect(ptr3).toBe(NULL_PTR)
-      expect(linker.getError()).toBe(ERROR.HEAP_EXHAUSTED)
+      expect(linker.getError() & ERROR.HEAP_EXHAUSTED).toBe(ERROR.HEAP_EXHAUSTED)
     })
 
     // Task 4.1: Test UNKNOWN_OPCODE error handling
@@ -850,7 +952,7 @@ describe('RFC-043: Silicon Linker', () => {
       // Process the invalid command
       linker.processCommands()
 
-      expect(linker.getError()).toBe(ERROR.UNKNOWN_OPCODE)
+      expect(linker.getError() & ERROR.UNKNOWN_OPCODE).toBe(ERROR.UNKNOWN_OPCODE)
     })
   })
 

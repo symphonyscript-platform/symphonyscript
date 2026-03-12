@@ -5,6 +5,7 @@
 import {
     createLinkerSAB,
     getLinkerConfig,
+    resetLinkerSAB,
     HDR
 } from '../index'
 
@@ -39,6 +40,23 @@ describe('K-002: Synapse Table Scalability', () => {
         const sabView = new Int32Array(sab)
 
         expect(sabView[HDR.SYNAPSE_COUNT]).toBe(0)
+        expect(sabView[HDR.SYNAPSE_USED_SLOTS]).toBe(0)
+        expect(sabView[HDR.SYNAPSE_TOMBSTONES]).toBe(0)
+    })
+
+    it('R-007: should reset persisted synapse counters to 0 on resetLinkerSAB', () => {
+        const sab = createLinkerSAB({ nodeCapacity: 1024 })
+        const sabView = new Int32Array(sab)
+
+        Atomics.store(sabView, HDR.SYNAPSE_COUNT, 7)
+        Atomics.store(sabView, HDR.SYNAPSE_USED_SLOTS, 11)
+        Atomics.store(sabView, HDR.SYNAPSE_TOMBSTONES, 4)
+
+        resetLinkerSAB(sab)
+
+        expect(sabView[HDR.SYNAPSE_COUNT]).toBe(0)
+        expect(sabView[HDR.SYNAPSE_USED_SLOTS]).toBe(0)
+        expect(sabView[HDR.SYNAPSE_TOMBSTONES]).toBe(0)
     })
 
     it('should create appropriately sized SAB for small synapse capacity', () => {

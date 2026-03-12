@@ -451,7 +451,8 @@ export class SiliconSynapse implements ISiliconLinker {
     // - Audio context: Return false (acceptable, retry next block)
     // - Main context: Kernel panic (deadlock detected)
     if (!this.isAudioContext) {
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.KERNEL_PANIC)
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.CAS_EXHAUSTION)
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.KERNEL_PANIC)
     }
 
     return false
@@ -587,7 +588,7 @@ export class SiliconSynapse implements ISiliconLinker {
   allocNode(): NodePtr {
     // RFC-055 SPSC invariant: allocNode is Worker-only (Task 080: hard-fail in production)
     if (!this.isAudioContext) {
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.SPSC_VIOLATION)
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.SPSC_VIOLATION)
       if (Atomics.load(this.sab, HDR.DEBUG_FLAGS) & DEBUG.ENABLED) {
         console.warn(
           'SPSC VIOLATION: allocNode() called outside Worker context. ' +
@@ -598,11 +599,8 @@ export class SiliconSynapse implements ISiliconLinker {
     }
     const ptr = this.freeList.alloc()
     if (ptr === NULL_PTR) {
-      // Only set HEAP_EXHAUSTED if no error is already set (e.g., FREE_LIST_CORRUPT)
-      const currentError = Atomics.load(this.sab, HDR.ERROR_FLAG)
-      if (currentError === ERROR.OK) {
-        Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.HEAP_EXHAUSTED)
-      }
+      // Bitmask semantics: accumulate exhaustion with any pre-existing bits.
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.HEAP_EXHAUSTED)
     }
     return ptr
   }
@@ -618,7 +616,7 @@ export class SiliconSynapse implements ISiliconLinker {
   freeNode(ptr: NodePtr): void {
     // RFC-055 SPSC invariant: freeNode is Worker-only (Task 080: hard-fail in production)
     if (!this.isAudioContext) {
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.SPSC_VIOLATION)
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.SPSC_VIOLATION)
       if (Atomics.load(this.sab, HDR.DEBUG_FLAGS) & DEBUG.ENABLED) {
         console.warn(
           'SPSC VIOLATION: freeNode() called outside Worker context. ' +
@@ -726,7 +724,7 @@ export class SiliconSynapse implements ISiliconLinker {
     const safeZone = Atomics.load(this.sab, HDR.SAFE_ZONE_TICKS)
 
     if (targetTick - playhead < safeZone && targetTick >= playhead) {
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.SAFE_ZONE)
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.SAFE_ZONE)
       return false
     }
     return true
@@ -971,7 +969,7 @@ export class SiliconSynapse implements ISiliconLinker {
       const currentHead = Atomics.load(this.sab, HDR.HEAD_PTR)
       if (currentHead !== ptr) {
         // Head changed - this shouldn't happen with mutex, set error and abort
-        Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+        Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
         this._releaseChainMutex()
         return false
       }
@@ -999,22 +997,28 @@ export class SiliconSynapse implements ISiliconLinker {
 
     if (ptr >= this.zoneBStartPtr) {
       // Zone B (Main Thread Owned) -> Push to Reclaim Ring
+      // Order matters:
+      // 1) Read producer/consumer indices
+      // 2) Detect full ring before touching slot data
+      // 3) On success: store slot, then publish tail (release ordering)
       const tail = Atomics.load(this.sab, HDR.RECLAIM_RB_TAIL)
       const capacity = Atomics.load(this.sab, HDR.RECLAIM_RB_CAPACITY)
 
-      // Calculate write position (power-of-2 mask)
-      const mask = capacity - 1
-      const idx = tail & mask
+      const head = Atomics.load(this.sab, HDR.RECLAIM_RB_HEAD)
+      if (tail - head >= capacity) {
+        Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.RECLAIM_OVERFLOW)
+      } else {
+        // Calculate write position (power-of-2 mask)
+        const mask = capacity - 1
+        const idx = tail & mask
+        const ringDataOffset = Atomics.load(this.sab, HDR.RECLAIM_RING_PTR)
+        const ringDataI32 = ringDataOffset / 4
 
-      // Calculate buffer offset
-      const ringDataOffset = Atomics.load(this.sab, HDR.RECLAIM_RING_PTR)
-      const ringDataI32 = ringDataOffset / 4
-
-      // Write pointer atomically (release semantics on ARM)
-      Atomics.store(this.sab, ringDataI32 + idx, ptr)
-
-      // Commit write (consumer will see data due to acquire-release)
-      Atomics.store(this.sab, HDR.RECLAIM_RB_TAIL, tail + 1)
+        // Write pointer atomically (release semantics on ARM)
+        Atomics.store(this.sab, ringDataI32 + idx, ptr)
+        // Commit write (consumer will see data due to acquire-release)
+        Atomics.store(this.sab, HDR.RECLAIM_RB_TAIL, tail + 1)
+      }
     } else {
       // Zone A (Worker Owned) -> Free List
       this.freeList.free(ptr)
@@ -1061,7 +1065,7 @@ export class SiliconSynapse implements ISiliconLinker {
    */
   readNodeRaw(ptr: NodePtr, buf: Int32Array): boolean {
     if (ptr === NULL_PTR) {
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
       return false
     }
 
@@ -1198,22 +1202,14 @@ export class SiliconSynapse implements ISiliconLinker {
   /**
    * Get current error flag value from the SAB.
    *
-   * Error codes are defined in `constants.ts` under the `ERROR` constant.
-   * Common values:
-   * - `ERROR.OK` (0): No error
-   * - `ERROR.HEAP_EXHAUSTED` (1): Free list depleted
-   * - `ERROR.SAFE_ZONE` (2): Edit within safe zone rejected
-   * - `ERROR.INVALID_PTR` (3): Invalid pointer operation
-   * - `ERROR.KERNEL_PANIC` (4): Deadlock or severe contention
-   * - `ERROR.LOAD_FACTOR_WARNING` (5): Identity Table >75% full
-   * - `ERROR.FREE_LIST_CORRUPT` (6): Free list corruption detected
-   * - `ERROR.UNKNOWN_OPCODE` (7): Unknown command opcode
+   * Error bits are defined in `constants.ts` under the `ERROR` constant.
+   * The returned value is a bitmask; multiple bits may be set simultaneously.
    *
-   * @returns The current error code (0 = no error)
+   * @returns The current error bitmask (`ERROR.OK` means no error)
    *
    * @remarks
-   * Error flags are set atomically by operations that encounter errors.
-   * Check this value after operations that can fail to determine the cause.
+   * Error bits are set atomically by operations that encounter errors.
+   * Check bits with `(mask & ERROR.X) !== 0`.
    * Call `clearError()` after handling to reset the flag.
    */
   getError(): number {
@@ -1231,6 +1227,15 @@ export class SiliconSynapse implements ISiliconLinker {
    */
   clearError(): void {
     Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.OK)
+  }
+
+  /**
+   * Clear a specific error bit while preserving all other bits.
+   *
+   * @param bit - ERROR.* bit to clear
+   */
+  clearErrorBit(bit: number): void {
+    Atomics.and(this.sab, HDR.ERROR_FLAG, ~bit)
   }
 
   /**
@@ -1418,7 +1423,7 @@ export class SiliconSynapse implements ISiliconLinker {
         const newUsed = Atomics.add(this.sab, HDR.ID_TABLE_USED, 1) + 1
 
         if (newUsed / capacity > ID_TABLE.LOAD_FACTOR_WARNING) {
-          Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.LOAD_FACTOR_WARNING)
+          Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.LOAD_FACTOR_WARNING)
         }
 
         return true
@@ -1538,10 +1543,10 @@ export class SiliconSynapse implements ISiliconLinker {
 
     // Reset used count and clear load factor warning
     Atomics.store(this.sab, HDR.ID_TABLE_USED, 0)
-    // Clear ERROR_FLAG only if it was LOAD_FACTOR_WARNING
+    // Clear only LOAD_FACTOR_WARNING bit if currently present.
     const currentError = Atomics.load(this.sab, HDR.ERROR_FLAG)
-    if (currentError === ERROR.LOAD_FACTOR_WARNING) {
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.OK)
+    if ((currentError & ERROR.LOAD_FACTOR_WARNING) !== 0) {
+      Atomics.and(this.sab, HDR.ERROR_FLAG, ~ERROR.LOAD_FACTOR_WARNING)
     }
   }
 
@@ -1944,7 +1949,7 @@ export class SiliconSynapse implements ISiliconLinker {
           break
         default:
           // Unknown opcode - set error flag (zero-allocation)
-          Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.UNKNOWN_OPCODE)
+          Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.UNKNOWN_OPCODE)
       }
 
       commandsProcessed = commandsProcessed + 1
@@ -1982,7 +1987,7 @@ export class SiliconSynapse implements ISiliconLinker {
     // Validate ptr is in valid range
     const ptrOffset = ptr / 4
     if (ptrOffset < this.heapStartI32 || ptr >= this.buffer.byteLength) {
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
       this._releaseChainMutex()
       return false
     }
@@ -2000,7 +2005,7 @@ export class SiliconSynapse implements ISiliconLinker {
       // Validate prevPtr is in valid range
       const prevPtrOffset = prevPtr / 4
       if (prevPtrOffset < this.heapStartI32 || prevPtr >= this.buffer.byteLength) {
-        Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+        Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
         this._releaseChainMutex()
         return false
       }
@@ -2022,7 +2027,7 @@ export class SiliconSynapse implements ISiliconLinker {
       const inserted = this.idTableInsert(sourceId, ptr)
       if (!inserted) {
         // Table full - set error flag (node is linked but unmapped - degraded state)
-        Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.LOAD_FACTOR_WARNING)
+        Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.LOAD_FACTOR_WARNING)
       }
     }
 
@@ -2072,13 +2077,13 @@ export class SiliconSynapse implements ISiliconLinker {
    */
   private executeConnect(srcPtr: NodePtr, tgtPtr: NodePtr, packedWJ: number): boolean {
     if (this.synapseAllocator === null) {
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
       return false
     }
 
     // 1. Validate pointers are in valid heap range
     if (!this.isValidHeapPtr(srcPtr) || !this.isValidHeapPtr(tgtPtr)) {
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
       return false
     }
 
@@ -2104,13 +2109,13 @@ export class SiliconSynapse implements ISiliconLinker {
    */
   private executeDisconnect(srcPtr: NodePtr, tgtPtr: NodePtr): boolean {
     if (this.synapseAllocator === null) {
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
       return false
     }
 
     // Validate source pointer
     if (!this.isValidHeapPtr(srcPtr)) {
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
       return false
     }
 
@@ -2121,7 +2126,7 @@ export class SiliconSynapse implements ISiliconLinker {
     } else {
       // Disconnect specific synapse
       if (!this.isValidHeapPtr(tgtPtr)) {
-        Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
+        Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.INVALID_PTR)
         return false
       }
       this.synapseAllocator.disconnect(srcPtr, tgtPtr)

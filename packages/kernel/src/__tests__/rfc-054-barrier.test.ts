@@ -8,6 +8,7 @@ import {
     createLinkerSAB,
     OPCODE,
     HDR,
+    ERROR,
     NULL_PTR,
     SYNAPSE_TABLE,
     SYNAPSE,
@@ -240,7 +241,7 @@ describe('RFC-054: Native Phase Guardrails', () => {
             const sab = new Int32Array(buffer)
 
             // Clear any existing error
-            Atomics.store(sab, HDR.ERROR_FLAG, 0)
+            Atomics.store(sab, HDR.ERROR_FLAG, ERROR.OK)
 
             // Try to connect with invalid pointers (beyond buffer size)
             const invalidPtr = buffer.byteLength + 100
@@ -249,7 +250,7 @@ describe('RFC-054: Native Phase Guardrails', () => {
 
             // Should set ERROR.INVALID_PTR
             const errorFlag = Atomics.load(sab, HDR.ERROR_FLAG)
-            expect(errorFlag).not.toBe(0) // Error was set
+            expect(errorFlag & ERROR.INVALID_PTR).toBe(ERROR.INVALID_PTR)
         })
     })
 

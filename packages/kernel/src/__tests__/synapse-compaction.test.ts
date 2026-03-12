@@ -5,10 +5,12 @@
 import {
     SynapseAllocator,
     createLinkerSAB,
+    HDR,
     SYNAPSE_TABLE,
     SYNAPSE,
     NULL_PTR
 } from '../index'
+import { SynapseView } from '../synapse-view'
 
 // Helper to access private/protected properties for verification
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,6 +19,93 @@ function getPrivate(obj: any, prop: string): any {
 }
 
 describe('K-001: Synapse Compaction & Lazy Allocation', () => {
+    it('R-007: should persist usedSlots and tombstoneCount across re-instantiation', () => {
+        const sab = createLinkerSAB({ nodeCapacity: 1024 })
+        const allocatorA = new SynapseAllocator(sab)
+        const sabView = new Int32Array(sab)
+
+        allocatorA.connect(1000, 2000, 100, 0)
+        allocatorA.connect(1001, 2001, 100, 0)
+        allocatorA.connect(1002, 2002, 100, 0)
+        allocatorA.disconnect(1001, 2001)
+
+        expect(Atomics.load(sabView, HDR.SYNAPSE_USED_SLOTS)).toBe(3)
+        expect(Atomics.load(sabView, HDR.SYNAPSE_TOMBSTONES)).toBe(1)
+
+        const allocatorB = new SynapseAllocator(sab)
+        const viewB = new SynapseView(sab)
+
+        expect(allocatorB.getUsedSlots()).toBe(3)
+        expect(allocatorB.getActiveSlots()).toBe(2)
+        expect(viewB.getUsedSlots()).toBe(3)
+        expect(viewB.getActiveSlots()).toBe(2)
+        expect(viewB.getTombstoneRatio()).toBeCloseTo(1 / 3)
+    })
+
+    it('R-007: should persist cleared counters as zero across re-instantiation', () => {
+        const sab = createLinkerSAB({ nodeCapacity: 1024 })
+        const allocatorA = new SynapseAllocator(sab)
+        const sabView = new Int32Array(sab)
+
+        allocatorA.connect(3000, 4000, 100, 0)
+        allocatorA.connect(3001, 4001, 100, 0)
+        allocatorA.disconnect(3000, 4000)
+        expect(Atomics.load(sabView, HDR.SYNAPSE_USED_SLOTS)).toBe(2)
+        expect(Atomics.load(sabView, HDR.SYNAPSE_TOMBSTONES)).toBe(1)
+
+        allocatorA.clear()
+        expect(Atomics.load(sabView, HDR.SYNAPSE_USED_SLOTS)).toBe(0)
+        expect(Atomics.load(sabView, HDR.SYNAPSE_TOMBSTONES)).toBe(0)
+
+        const allocatorB = new SynapseAllocator(sab)
+        const viewB = new SynapseView(sab)
+
+        expect(allocatorB.getUsedSlots()).toBe(0)
+        expect(allocatorB.getActiveSlots()).toBe(0)
+        expect(allocatorB.getTombstoneRatio()).toBe(0)
+        expect(allocatorB.getLoadFactor()).toBe(0)
+
+        expect(viewB.getUsedSlots()).toBe(0)
+        expect(viewB.getActiveSlots()).toBe(0)
+        expect(viewB.getTombstoneRatio()).toBe(0)
+        expect(viewB.getLoadFactor()).toBe(0)
+    })
+
+    it('R-007: should persist compacted counters across re-instantiation', () => {
+        const sab = createLinkerSAB({ nodeCapacity: 1024 })
+        const allocatorA = new SynapseAllocator(sab)
+        const sabView = new Int32Array(sab)
+        const capacity = sabView[HDR.SYNAPSE_CAPACITY]
+
+        allocatorA.connect(5000, 6000, 100, 0)
+        allocatorA.connect(5001, 6001, 100, 0)
+        allocatorA.connect(5002, 6002, 100, 0)
+        allocatorA.connect(5003, 6003, 100, 0)
+        allocatorA.disconnect(5001, 6001)
+        allocatorA.disconnect(5003, 6003)
+
+        expect(Atomics.load(sabView, HDR.SYNAPSE_USED_SLOTS)).toBe(4)
+        expect(Atomics.load(sabView, HDR.SYNAPSE_TOMBSTONES)).toBe(2)
+
+        const compacted = allocatorA.compactTable()
+        expect(compacted).toBe(2)
+        expect(Atomics.load(sabView, HDR.SYNAPSE_USED_SLOTS)).toBe(2)
+        expect(Atomics.load(sabView, HDR.SYNAPSE_TOMBSTONES)).toBe(0)
+
+        const allocatorB = new SynapseAllocator(sab)
+        const viewB = new SynapseView(sab)
+
+        expect(allocatorB.getUsedSlots()).toBe(2)
+        expect(allocatorB.getActiveSlots()).toBe(2)
+        expect(allocatorB.getTombstoneRatio()).toBe(0)
+        expect(allocatorB.getLoadFactor()).toBe(2 / capacity)
+
+        expect(viewB.getUsedSlots()).toBe(2)
+        expect(viewB.getActiveSlots()).toBe(2)
+        expect(viewB.getTombstoneRatio()).toBe(0)
+        expect(viewB.getLoadFactor()).toBe(2 / capacity)
+    })
+
     it('should lazy allocate staging buffers only on compaction', () => {
         const sab = createLinkerSAB({ nodeCapacity: 1024 })
         const allocator = new SynapseAllocator(sab)

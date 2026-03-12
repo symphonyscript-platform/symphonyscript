@@ -86,8 +86,8 @@ export interface EditResult {
   error?: string
 }
 
-// RFC-045-04: Error classes removed - using error codes via Atomics.store instead
-// See ERROR constant in constants.ts for error code definitions
+// RFC-045-04: Error classes removed - using ERROR_FLAG bitmask bits via Atomics ops
+// See ERROR constant in constants.ts for bit definitions
 
 // RFC-045-04 ISSUE-024: SynapseData and BrainSnapshot DELETED
 // Use BrainSnapshotArrays for zero-allocation snapshot/restore operations
@@ -220,6 +220,9 @@ export interface ISiliconLinker {
 
   /** Clear error flag. */
   clearError(): void
+
+  /** Clear a specific error bit from the error bitmask. */
+  clearErrorBit(bit: number): void
 
   /** Get node count. */
   getNodeCount(): number

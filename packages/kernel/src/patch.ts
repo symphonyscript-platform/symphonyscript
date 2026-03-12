@@ -9,6 +9,9 @@ import {
   PACKED,
   SEQ,
   FLAG,
+  CONCURRENCY,
+  HDR,
+  ERROR,
   NULL_PTR,
   HEAP_START_OFFSET
 } from './constants'
@@ -108,7 +111,8 @@ export class AttributePatcher {
     shift: number,
     value: number
   ): void {
-    while (true) {
+    let attempts = 0
+    while (attempts < CONCURRENCY.CAS_MAX_RETRIES) {
       const current = Atomics.load(this.sab, offset + NODE.PACKED_A)
       const newPacked = (current & ~mask) | ((value << shift) & mask)
 
@@ -126,24 +130,22 @@ export class AttributePatcher {
       if (result === current) {
         return // CAS succeeded
       }
-      // CAS failed, retry
+      attempts = attempts + 1
     }
+    Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.CAS_EXHAUSTION)
   }
 
   /**
-   * Atomically update PACKED_A with a given update function using CAS loop.
-   * Task 3.4: For flag operations that need custom update logic.
+   * Atomically set bits in PACKED_A using bounded CAS retries.
    *
    * @param offset - Node i32 offset
-   * @param updateFn - Function that takes current value and returns new value
+   * @param flag - Bitmask to set
    */
-  private casUpdatePackedAFn(
-    offset: number,
-    updateFn: (current: number) => number
-  ): void {
-    while (true) {
+  private casSetFlag(offset: number, flag: number): void {
+    let attempts = 0
+    while (attempts < CONCURRENCY.CAS_MAX_RETRIES) {
       const current = Atomics.load(this.sab, offset + NODE.PACKED_A)
-      const newPacked = updateFn(current)
+      const newPacked = current | flag
 
       if (newPacked === current) {
         return // No change needed
@@ -159,8 +161,40 @@ export class AttributePatcher {
       if (result === current) {
         return // CAS succeeded
       }
-      // CAS failed, retry
+      attempts = attempts + 1
     }
+    Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.CAS_EXHAUSTION)
+  }
+
+  /**
+   * Atomically clear bits in PACKED_A using bounded CAS retries.
+   *
+   * @param offset - Node i32 offset
+   * @param flag - Bitmask to clear
+   */
+  private casClearFlag(offset: number, flag: number): void {
+    let attempts = 0
+    while (attempts < CONCURRENCY.CAS_MAX_RETRIES) {
+      const current = Atomics.load(this.sab, offset + NODE.PACKED_A)
+      const newPacked = current & ~flag
+
+      if (newPacked === current) {
+        return // No change needed
+      }
+
+      const result = Atomics.compareExchange(
+        this.sab,
+        offset + NODE.PACKED_A,
+        current,
+        newPacked
+      )
+
+      if (result === current) {
+        return // CAS succeeded
+      }
+      attempts = attempts + 1
+    }
+    Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.CAS_EXHAUSTION)
   }
 
   /**
@@ -273,10 +307,11 @@ export class AttributePatcher {
     // Bump SEQ for ABA protection
     this.bumpSeq(offset)
 
-    // Task 3.4: CAS loop for atomic PACKED_A flag update
-    this.casUpdatePackedAFn(offset, (current) =>
-      muted ? current | FLAG.MUTED : current & ~FLAG.MUTED
-    )
+    if (muted) {
+      this.casSetFlag(offset, FLAG.MUTED)
+    } else {
+      this.casClearFlag(offset, FLAG.MUTED)
+    }
     return true
   }
 

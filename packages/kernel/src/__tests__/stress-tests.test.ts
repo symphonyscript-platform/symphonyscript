@@ -56,7 +56,7 @@ describe('Stress Tests: Heap Exhaustion', () => {
 
     // Verify error flag
     const sab = new Int32Array(linker.getSAB())
-    expect(sab[HDR.ERROR_FLAG]).toBe(ERROR.HEAP_EXHAUSTED)
+    expect(sab[HDR.ERROR_FLAG] & ERROR.HEAP_EXHAUSTED).toBe(ERROR.HEAP_EXHAUSTED)
   })
 
   it('should recover after freeing all nodes', () => {
@@ -528,7 +528,7 @@ describe('Stress Tests: Error Paths', () => {
     linker.processCommands()
 
     // Should have set error flag
-    expect(sabView[HDR.ERROR_FLAG]).toBe(ERROR.UNKNOWN_OPCODE)
+    expect(sabView[HDR.ERROR_FLAG] & ERROR.UNKNOWN_OPCODE).toBe(ERROR.UNKNOWN_OPCODE)
   })
 
   it('should set INVALID_PTR error for out-of-bounds pointer', () => {
@@ -546,7 +546,7 @@ describe('Stress Tests: Error Paths', () => {
     linker.processCommands()
 
     // Should have set error flag
-    expect(sabView[HDR.ERROR_FLAG]).toBe(ERROR.INVALID_PTR)
+    expect(sabView[HDR.ERROR_FLAG] & ERROR.INVALID_PTR).toBe(ERROR.INVALID_PTR)
   })
 
   it('should detect corrupted free list head', () => {
@@ -564,7 +564,7 @@ describe('Stress Tests: Error Paths', () => {
     // Attempt allocation - should detect invalid pointer in free list
     const ptr = linker.allocNode()
     expect(ptr).toBe(NULL_PTR)
-    expect(sabView[HDR.ERROR_FLAG]).toBe(ERROR.FREE_LIST_CORRUPT)
+    expect(sabView[HDR.ERROR_FLAG] & ERROR.FREE_LIST_CORRUPT).toBe(ERROR.FREE_LIST_CORRUPT)
   })
 
   it('should clean up Identity Table and Symbol Table on executeDelete', () => {

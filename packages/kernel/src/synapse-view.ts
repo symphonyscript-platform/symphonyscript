@@ -52,6 +52,10 @@ export class SynapseView {
         // Calculate reverse index offset (ISSUE-016) - K-002: pass dynamic capacity
         const reverseByteOffset = getReverseIndexOffset(nodeCapacity, this.capacity)
         this.reverseIndexI32 = reverseByteOffset / 4
+
+        // RFC-059 R-007: Restore persisted counters when re-instantiating over existing SAB
+        this.usedSlots = Atomics.load(this.sab, HDR.SYNAPSE_USED_SLOTS)
+        this.tombstoneCount = Atomics.load(this.sab, HDR.SYNAPSE_TOMBSTONES)
     }
 
     // ===========================================================================
@@ -80,7 +84,7 @@ export class SynapseView {
     // ===========================================================================
 
     /**
-     * Find the Head slot for a source pointer using Linear Probe.
+     * Find the Head slot for a source pointer using triangular probing.
      * @param sourcePtr - The Trigger Node
      * @returns Slot index or -1 if not found
      */
@@ -89,6 +93,7 @@ export class SynapseView {
 
         // Hash to find ideal slot
         let slot = this.hash(sourcePtr)
+        let step = 1
         let probes = 0
 
         while (probes < this.capacity) {
@@ -104,7 +109,8 @@ export class SynapseView {
                 return -1
             }
 
-            slot = (slot + 1) % this.capacity
+            slot = (slot + step) & this.hashMask
+            step++
             probes++
         }
         return -1

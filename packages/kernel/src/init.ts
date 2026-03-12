@@ -130,7 +130,9 @@ export function createLinkerSAB(config?: LinkerConfig): SharedArrayBuffer | null
 
   // K-002: Store synapse capacity in header
   sab[HDR.SYNAPSE_CAPACITY] = effectiveSynapseCapacity
-  sab[HDR.SYNAPSE_COUNT] = 0
+  Atomics.store(sab, HDR.SYNAPSE_COUNT, 0)
+  Atomics.store(sab, HDR.SYNAPSE_USED_SLOTS, 0)
+  Atomics.store(sab, HDR.SYNAPSE_TOMBSTONES, 0)
 
   // RFC-056: Store zone configuration in header
   sab[HDR.ZONE_COUNT] = effectiveWorkerZones
@@ -569,7 +571,9 @@ export function resetLinkerSAB(buffer: SharedArrayBuffer): void {
 
   // Re-initialize Synapse Table (K-002: read capacity from header)
   initializeSynapseTable(sab, nodeCapacity, synapseCapacity)
-  sab[HDR.SYNAPSE_COUNT] = 0
+  Atomics.store(sab, HDR.SYNAPSE_COUNT, 0)
+  Atomics.store(sab, HDR.SYNAPSE_USED_SLOTS, 0)
+  Atomics.store(sab, HDR.SYNAPSE_TOMBSTONES, 0)
 }
 
 /**
