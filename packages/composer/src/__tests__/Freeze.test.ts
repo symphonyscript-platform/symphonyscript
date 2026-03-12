@@ -12,13 +12,16 @@ describe('Freeze (Task 038)', () => {
     });
 
     describe('FrozenClip class', () => {
-        it('stores clipNode', () => {
+        it('captures frozen notes without exposing clipNode operations', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.note('C4', 0.5).commit();
             const frozen = melody.freeze();
 
-            expect(frozen.clipNode).toBeDefined();
-            expect(frozen.clipNode.operations).toHaveLength(1);
+            let count = 0;
+            frozen.visitNotes(() => {
+                count++;
+            });
+            expect(count).toBe(1);
         });
 
         it('stores options', () => {
@@ -226,7 +229,7 @@ describe('Freeze (Task 038)', () => {
             const frozen = riff.freeze();
 
             expect(frozen).toBeInstanceOf(FrozenClip);
-            expect(frozen.clipNode.name).toBe('riff');
+            expect(frozen.name).toBe('riff');
         });
 
         it('Clip.melody().play(frozen) works', () => {

@@ -748,8 +748,8 @@ export abstract class SynapticClip extends SynapticNode {
     }
 
     /**
-     * Freeze clip metadata and kernel reference for reuse.
-     * Task 058 strict mode: no operation snapshot is created.
+     * Freeze clip into a design-time note snapshot for composition-time reuse.
+     * Task 067 MARK decision: FrozenClip is not an operation-array artifact.
      */
     freeze(options?: FreezeOptions): FrozenClip {
         const freezeOpts: FreezeOptions = {

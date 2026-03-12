@@ -351,7 +351,8 @@ export class SynapticMelody extends SynapticClip {
      * @design-time Called during clip composition only. Do not call during
      * playback hot paths.
      *
-     * @param clip - Source clip (SynapticClip or FrozenClip). ClipNode is rejected.
+     * @param clip - Source clip (SynapticClip or design-time FrozenClip snapshot).
+     * ClipNode is rejected.
      */
     play(clip: SynapticClip | FrozenClip | ClipNode): this {
         if (!(clip instanceof SynapticClip) && !(clip instanceof FrozenClip)) {

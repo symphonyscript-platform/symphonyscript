@@ -2,11 +2,13 @@ import { FreezeOptions } from '../types';
 import { SynapticClip } from './SynapticClip';
 
 /**
- * Frozen clip handle for efficient clip reuse without operation snapshots.
+ * Design-time frozen clip snapshot for composition-time reuse.
  *
- * Task 058 strict mode:
- * - No operation arrays are stored here.
- * - Source clip kernel state remains the single source of truth.
+ * Task 067 decision: MARK FrozenClip as design-time only.
+ * - This class is NOT operation-array-centric (`clipNode.operations` / `toOperations()`).
+ * - It snapshots kernel note primitives at freeze time for deterministic reuse.
+ * - It is intended for authoring APIs like `play(frozen)` and `loop(_, frozen)`,
+ *   not as a runtime/playback source of truth.
  */
 export class FrozenClip {
     public readonly name: string;
@@ -56,7 +58,7 @@ export class FrozenClip {
     }
 
     /**
-     * Visit frozen note snapshot.
+     * Visit the frozen note snapshot captured at freeze time.
      */
     visitNotes(
         cb: (sourceId: number, pitch: number, velocity: number, duration: number, tick: number, muted: boolean, expressionId?: number) => void

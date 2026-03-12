@@ -2,11 +2,10 @@
  * Tests for OperationsSource interface and toOperations() method.
  * Task 046: Enable clips and frozen clips to provide operations.
  * Task 058: Uses createTestBridge (traverseNotes) for build/toOperations.
+ * Task 067: FrozenClip is design-time and not operation-array-centric.
  */
 
 import { SynapticMelody } from '../clips/SynapticMelody';
-import { FrozenClip } from '../clips/FrozenClip';
-import { OperationsSource, ClipOperation } from '../types';
 import { createTestBridge } from '../test-bridge';
 
 describe('OperationsSource Interface', () => {
@@ -62,42 +61,27 @@ describe('OperationsSource Interface', () => {
         });
     });
 
-    describe('FrozenClip.toOperations()', () => {
-        it('returns frozen operations', () => {
+    describe('FrozenClip snapshot API', () => {
+        it('visits frozen notes', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.note('C4', 1).commit();
             melody.note('E4', 1).commit();
 
             const frozen = melody.freeze();
-            const ops = frozen.toOperations();
+            let noteCount = 0;
+            frozen.visitNotes(() => {
+                noteCount++;
+            });
 
-            expect(ops.length).toBe(2);
-            expect(ops[0].kind).toBe('note');
-            expect(ops[1].kind).toBe('note');
+            expect(noteCount).toBe(2);
         });
 
-        it('returns shallow copy (safe to modify)', () => {
+        it('stores design-time name metadata', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.note('C4', 1).commit();
+            melody.name('riff').note('C4', 1).commit();
 
             const frozen = melody.freeze();
-            const ops1 = frozen.toOperations();
-            const ops2 = frozen.toOperations();
-
-            // Should be different array instances
-            expect(ops1).not.toBe(ops2);
-            expect(ops1).toEqual(ops2);
-        });
-
-        it('implements OperationsSource interface', () => {
-            const melody = new SynapticMelody(mockBridge);
-            melody.note('C4', 1).commit();
-
-            const frozen = melody.freeze();
-
-            // Type check - FrozenClip should be assignable to OperationsSource
-            const source: OperationsSource = frozen;
-            expect(typeof source.toOperations).toBe('function');
+            expect(frozen.name).toBe('riff');
         });
     });
 
@@ -141,7 +125,7 @@ describe('OperationsSource Interface', () => {
             expect(ops.length).toBe(2);
         });
 
-        it('accepts FrozenClip (implements OperationsSource)', () => {
+        it('accepts FrozenClip design-time snapshot', () => {
             const sourceBridge = createTestBridge();
             const source = new SynapticMelody(sourceBridge);
             source.note('C4', 1).commit();

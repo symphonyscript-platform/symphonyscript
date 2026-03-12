@@ -2,7 +2,7 @@
 
 **Priority:** HIGH  
 **Category:** Architecture Decision  
-**Status:** Open  
+**Status:** Completed  
 **Created:** 2026-02-08  
 **Source:** Composer & Kernel Remediation Plan - Gap Analysis
 
@@ -54,6 +54,17 @@ export class FrozenClip implements OperationsSource {
 - Keep FrozenClip as-is
 - Document clearly it's for design/export, not playback
 - Accept allocations as they're not in hot path
+
+## Decision
+
+**Chosen:** Option C — MARK as design-time only.
+
+### Rationale
+
+- Post-Task 058, `FrozenClip` is already detached from `operations[]` and uses primitive note snapshots sourced from kernel traversal.
+- Deleting it now would create unnecessary API churn (`freeze()`, `play(frozen)`, `loop(_, frozen)`) with no direct architecture gain.
+- Full kernel-snapshot refactor adds complexity and migration risk while direct-to-kernel composition is still stabilizing.
+- Marking `FrozenClip` as design-time keeps composition ergonomics and keeps runtime kernel authority intact.
 
 ## Files to Modify
 
