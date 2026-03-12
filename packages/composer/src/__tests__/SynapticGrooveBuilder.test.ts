@@ -53,4 +53,20 @@ describe('SynapticGrooveBuilder (RFC-049 Remediation)', () => {
         expect(template.velocities[0]).toBeCloseTo(0.5);
         expect(template.velocities[1]).toBeCloseTo(0.8);
     });
+
+    it('returns views and invalidates them on builder reuse', () => {
+        const first = builder
+            .step(0.0).velocity(0.2)
+            .step(0.05).velocity(0.7)
+            .freeze();
+
+        expect(first.velocities.buffer).toBe(builder.velocities.buffer);
+        expect(first.durations.buffer).toBe(builder.durations.buffer);
+        expect(first.offsets.buffer).toBe(builder.offsets.buffer);
+        expect(first.probabilities.buffer).toBe(builder.probabilities.buffer);
+
+        // Reusing the builder rewrites shared backing buffers.
+        builder.step(0.0).velocity(0.95).freeze();
+        expect(first.velocities[0]).toBeCloseTo(0.95);
+    });
 });
