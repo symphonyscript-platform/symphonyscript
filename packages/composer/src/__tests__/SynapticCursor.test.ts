@@ -18,6 +18,8 @@ class MockClip extends SynapticClip {
     control = jest.fn().mockImplementation(() => this);
     stack = jest.fn().mockImplementation(() => this);
     setLoopRegion = jest.fn().mockImplementation(() => this);
+    pushState = jest.fn().mockImplementation(() => this);
+    popState = jest.fn().mockImplementation(() => this);
 }
 
 class TestCursor extends SynapticCursor {
@@ -83,6 +85,15 @@ describe('SynapticCursor (Phase 1)', () => {
             cursor.tempo(120);
             expect(cursor.commitCalls).toBe(1);
             expect(clip.tempo).toHaveBeenCalledWith(120);
+        });
+
+        it('popState() commits pending note before clip.popState', () => {
+            cursor.hasPending = true;
+            const res = cursor.popState();
+
+            expect(cursor.commitCalls).toBe(1);
+            expect(clip.popState).toHaveBeenCalledTimes(1);
+            expect(res).toBe(clip);
         });
     });
 });

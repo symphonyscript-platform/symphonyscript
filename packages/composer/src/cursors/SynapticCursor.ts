@@ -1,6 +1,6 @@
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { SynapticClip } from '../clips/SynapticClip';
-import { ClipNode, AutomationTarget, CurveType, ScopeIsolation, TempoKeyframe } from '../types';
+import { ClipNode, AutomationTarget, CurveType, TempoKeyframe } from '../types';
 
 /**
  * Base SynapticCursor
@@ -247,16 +247,17 @@ export abstract class SynapticCursor {
     /**
      * Task 063: Delegate to clip.pushState (zero-allocation state stack).
      */
-    pushState(options: ScopeIsolation): SynapticClip {
+    pushState(): SynapticClip {
         this._commit();
-        return this.clip.pushState(options);
+        return this.clip.pushState();
     }
 
     /**
      * Task 063: Delegate to clip.popState.
      */
-    popState(options: ScopeIsolation): SynapticClip {
-        return this.clip.popState(options);
+    popState(): SynapticClip {
+        this._commit();
+        return this.clip.popState();
     }
 
     /**

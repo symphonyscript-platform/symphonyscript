@@ -1,7 +1,7 @@
 import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
 import { SynapticNode } from '@symphonyscript/synaptic';
-import { ClipNode, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsType, CurveType, VelocityPoint, HumanizeSettings, QuantizeSettings, AutomationTarget, FreezeOptions, ScopeIsolation, TempoKeyframe, ArpPattern, PITCH_CLASS_TO_ROOT } from '../types';
+import { ClipNode, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsType, CurveType, VelocityPoint, HumanizeSettings, QuantizeSettings, AutomationTarget, FreezeOptions, TempoKeyframe, ArpPattern, PITCH_CLASS_TO_ROOT } from '../types';
 import { parsePitch } from '../utils/pitch';
 import { FrozenClip } from './FrozenClip';
 
@@ -85,18 +85,18 @@ export abstract class SynapticClip extends SynapticNode {
     // MPE voice expression ID (Task 036)
     protected _expressionId: number | null = null;
 
-    // Task 063: Pre-allocated state stack for pushState/popState (zero-allocation)
+    // Task 063: Pre-allocated primitive state stack for pushState/popState.
     private static readonly MAX_STACK_DEPTH = 16;
+    private static readonly STACK_FRAME_SIZE = 9; // tempo + dynamics(6) + time-signature(2)
     private readonly _stateStackNum: Float64Array;
-    private readonly _stateStackRef: (VelocityPoint[] | null)[];
+    private readonly _stateStackCurve: Array<VelocityPoint[] | null>;
     private _stackPtr: number = 0;
 
     constructor(bridge: SiliconBridge, seed: number = 0) {
         super(bridge);
         this.humanizeRng = new SeededRandom(seed);
-        // Task 063: Pre-allocate state stack slots (9 numbers per frame: tempo, dyn×6, ts×2)
-        this._stateStackNum = new Float64Array(SynapticClip.MAX_STACK_DEPTH * 9);
-        this._stateStackRef = new Array(SynapticClip.MAX_STACK_DEPTH);
+        this._stateStackNum = new Float64Array(SynapticClip.MAX_STACK_DEPTH * SynapticClip.STACK_FRAME_SIZE);
+        this._stateStackCurve = new Array<VelocityPoint[] | null>(SynapticClip.MAX_STACK_DEPTH).fill(null);
     }
 
     // Abstract methods that the real implementation will provide
@@ -770,59 +770,47 @@ export abstract class SynapticClip extends SynapticNode {
 
     /**
      * Task 063: Push current state onto pre-allocated stack (zero-allocation).
-     * Call popState(options) to restore. Max depth: 16.
+     * Call popState() to restore. Max depth: 16.
      */
-    pushState(options: ScopeIsolation): this {
+    pushState(): this {
         if (this._stackPtr >= SynapticClip.MAX_STACK_DEPTH) {
             throw new Error('SynapticClip: state stack overflow (max 16)');
         }
-        const base = this._stackPtr * 9;
-        if (options.tempo) {
-            this._stateStackNum[base + 0] = this.currentTempo;
-        }
-        if (options.dynamics) {
-            this._stateStackNum[base + 1] = this._dynType;
-            this._stateStackNum[base + 2] = this._dynStart;
-            this._stateStackNum[base + 3] = this._dynDuration;
-            this._stateStackNum[base + 4] = this._dynFrom;
-            this._stateStackNum[base + 5] = this._dynTo;
-            this._stateStackNum[base + 6] = this._dynCurve;
-            this._stateStackRef[this._stackPtr] = this.velocityCurvePoints;
-        }
-        if (options.timeSignature) {
-            this._stateStackNum[base + 7] = this.timeSignatureNumerator;
-            this._stateStackNum[base + 8] = this.timeSignatureDenominator;
-        }
+        const base = this._stackPtr * SynapticClip.STACK_FRAME_SIZE;
+        this._stateStackNum[base + 0] = this.currentTempo;
+        this._stateStackNum[base + 1] = this._dynType;
+        this._stateStackNum[base + 2] = this._dynStart;
+        this._stateStackNum[base + 3] = this._dynDuration;
+        this._stateStackNum[base + 4] = this._dynFrom;
+        this._stateStackNum[base + 5] = this._dynTo;
+        this._stateStackNum[base + 6] = this._dynCurve;
+        this._stateStackNum[base + 7] = this.timeSignatureNumerator;
+        this._stateStackNum[base + 8] = this.timeSignatureDenominator;
+        this._stateStackCurve[this._stackPtr] = this.velocityCurvePoints;
         this._stackPtr++;
         return this;
     }
 
     /**
      * Task 063: Pop state from stack and restore (zero-allocation).
-     * options must match the corresponding pushState(options).
      */
-    popState(options: ScopeIsolation): this {
+    popState(): this {
         if (this._stackPtr <= 0) {
             throw new Error('SynapticClip: state stack underflow');
         }
         this._stackPtr--;
-        const base = this._stackPtr * 9;
-        if (options.tempo) {
-            this.currentTempo = this._stateStackNum[base + 0];
-        }
-        if (options.dynamics) {
-            this._dynType = this._stateStackNum[base + 1] as DynamicsType;
-            this._dynStart = this._stateStackNum[base + 2];
-            this._dynDuration = this._stateStackNum[base + 3];
-            this._dynFrom = this._stateStackNum[base + 4];
-            this._dynTo = this._stateStackNum[base + 5];
-            this._dynCurve = this._stateStackNum[base + 6] as CurveType;
-            this.velocityCurvePoints = this._stateStackRef[this._stackPtr];
-        }
-        if (options.timeSignature) {
-            this.timeSignatureNumerator = this._stateStackNum[base + 7];
-            this.timeSignatureDenominator = this._stateStackNum[base + 8];
-        }
+        const base = this._stackPtr * SynapticClip.STACK_FRAME_SIZE;
+        this.currentTempo = this._stateStackNum[base + 0];
+        this._dynType = this._stateStackNum[base + 1] as DynamicsType;
+        this._dynStart = this._stateStackNum[base + 2];
+        this._dynDuration = this._stateStackNum[base + 3];
+        this._dynFrom = this._stateStackNum[base + 4];
+        this._dynTo = this._stateStackNum[base + 5];
+        this._dynCurve = this._stateStackNum[base + 6] as CurveType;
+        this.velocityCurvePoints = this._stateStackCurve[this._stackPtr];
+        this._stateStackCurve[this._stackPtr] = null;
+        this.timeSignatureNumerator = this._stateStackNum[base + 7];
+        this.timeSignatureDenominator = this._stateStackNum[base + 8];
         return this;
     }
 

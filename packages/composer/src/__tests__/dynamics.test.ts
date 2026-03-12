@@ -178,6 +178,33 @@ describe('Dynamics methods', () => {
             // tick 0: 0.3, tick 2: 0.9
             expect(velocities[0]).toBeLessThan(velocities[1]);
         });
+
+        it('restores previous curve across pushState/popState', () => {
+            const baseline = new SynapticMelody(createTestBridge());
+            baseline.velocityCurve([
+                { tick: 0, velocity: 0.2 },
+                { tick: 2, velocity: 0.8 }
+            ], 2);
+            baseline.advanceTick(1);
+            baseline.note('C4', 1).commit();
+            const baselineVelocity = baseline.build().operations[0].velocity;
+
+            melody.velocityCurve([
+                { tick: 0, velocity: 0.2 },
+                { tick: 2, velocity: 0.8 }
+            ], 2);
+            melody.pushState();
+            melody.velocityCurve([
+                { tick: 0, velocity: 1.0 },
+                { tick: 2, velocity: 1.0 }
+            ], 2);
+            melody.popState();
+            melody.advanceTick(1);
+            melody.note('C4', 1).commit();
+
+            const resultVelocity = melody.build().operations[0].velocity;
+            expect(resultVelocity).toBe(baselineVelocity);
+        });
     });
 
     describe('dynamics auto-clear', () => {

@@ -15,17 +15,17 @@ describe('Isolate (Task 063: pushState/popState)', () => {
     describe('SynapticClip.pushState/popState', () => {
         it('returns this for chaining', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.pushState({ tempo: true });
+            melody.pushState();
             melody.note('C4', 0.5).commit();
-            const result = melody.popState({ tempo: true });
+            const result = melody.popState();
             expect(result).toBe(melody);
         });
 
         it('notes from scope appear in build', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.pushState({ tempo: true });
+            melody.pushState();
             melody.note('C4', 0.5).commit();
-            melody.popState({ tempo: true });
+            melody.popState();
 
             const result = melody.build();
             expect(result.operations).toHaveLength(1);
@@ -34,11 +34,11 @@ describe('Isolate (Task 063: pushState/popState)', () => {
 
         it('multiple notes in scope appear in build', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.pushState({ tempo: true });
+            melody.pushState();
             melody.note('C4', 0.5).commit();
             melody.advanceTick(0.5);
             melody.note('D4', 0.5).commit();
-            melody.popState({ tempo: true });
+            melody.popState();
 
             const result = melody.build();
             expect(result.operations).toHaveLength(2);
@@ -49,10 +49,10 @@ describe('Isolate (Task 063: pushState/popState)', () => {
         it('pushState/popState options restore state', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.tempo(100);
-            melody.pushState({ tempo: true, dynamics: true });
+            melody.pushState();
             melody.tempo(200);
             melody.note('C4', 0.5).commit();
-            melody.popState({ tempo: true, dynamics: true });
+            melody.popState();
 
             const result = melody.build();
             expect(result.tempo).toBe(100);
@@ -64,10 +64,10 @@ describe('Isolate (Task 063: pushState/popState)', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.tempo(120);
 
-            melody.pushState({ tempo: true });
+            melody.pushState();
             melody.tempo(180);
             melody.note('C4', 0.5).commit();
-            melody.popState({ tempo: true });
+            melody.popState();
 
             const result = melody.build();
             expect(result.tempo).toBe(120);
@@ -89,10 +89,10 @@ describe('Isolate (Task 063: pushState/popState)', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.timeSignature(4, 4);
 
-            melody.pushState({ timeSignature: true });
+            melody.pushState();
             melody.timeSignature(3, 4);
             melody.note('C4', 0.5).commit();
-            melody.popState({ timeSignature: true });
+            melody.popState();
 
             const result = melody.build();
             expect(result.timeSignature).toEqual([4, 4]);
@@ -114,15 +114,15 @@ describe('Isolate (Task 063: pushState/popState)', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.tempo(120);
 
-            melody.pushState({ tempo: true });
+            melody.pushState();
             melody.tempo(140);
             melody.note('C4', 0.5).commit();
-            melody.popState({ tempo: true });
+            melody.popState();
 
-            melody.pushState({ tempo: true });
+            melody.pushState();
             melody.tempo(160);
             melody.note('D4', 0.5).commit();
-            melody.popState({ tempo: true });
+            melody.popState();
 
             const result = melody.build();
             expect(result.operations).toHaveLength(2);
@@ -134,10 +134,10 @@ describe('Isolate (Task 063: pushState/popState)', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.tempo(100);
 
-            melody.pushState({ tempo: true });
+            melody.pushState();
             melody.tempo(150);
             melody.note('C4', 0.5).commit();
-            melody.popState({ tempo: true });
+            melody.popState();
 
             const result = melody.build();
             expect(result.tempo).toBe(100);
@@ -149,9 +149,9 @@ describe('Isolate (Task 063: pushState/popState)', () => {
             const melody = new SynapticMelody(mockBridge);
             melody.note('A4', 0.5).commit();
 
-            melody.pushState({ tempo: true });
+            melody.pushState();
             melody.note('B4', 0.5).commit();
-            melody.popState({ tempo: true });
+            melody.popState();
 
             melody.advanceTick(0.5);
             melody.note('C4', 0.5).commit();
@@ -167,9 +167,9 @@ describe('Isolate (Task 063: pushState/popState)', () => {
             const melody = new SynapticMelody(mockBridge);
             const cursor = melody.note('C4', 0.5);
 
-            cursor.pushState({ tempo: true });
+            cursor.pushState();
             cursor.note('D4', 0.5).commit();
-            const clip = cursor.popState({ tempo: true });
+            const clip = cursor.popState();
 
             expect(clip).toBe(melody);
 
@@ -183,10 +183,10 @@ describe('Isolate (Task 063: pushState/popState)', () => {
         it('Clip.melody().pushState/popState works', () => {
             const melody = Clip.melody('test');
             melody.tempo(120);
-            melody.pushState({ tempo: true });
+            melody.pushState();
             melody.tempo(180);
             melody.note('C4', 0.5).commit();
-            melody.popState({ tempo: true });
+            melody.popState();
 
             const result = melody.build();
             expect(result.operations).toHaveLength(1);
@@ -198,7 +198,7 @@ describe('Isolate (Task 063: pushState/popState)', () => {
     describe('Edge cases', () => {
         it('empty scope', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.pushState({ tempo: true }).popState({ tempo: true });
+            melody.pushState().popState();
 
             const result = melody.build();
             expect(result.operations).toHaveLength(0);
@@ -206,9 +206,9 @@ describe('Isolate (Task 063: pushState/popState)', () => {
 
         it('scope with only CC operations returns no notes', () => {
             const melody = new SynapticMelody(mockBridge);
-            melody.pushState({ tempo: true });
+            melody.pushState();
             melody.control(1, 64);
-            melody.popState({ tempo: true });
+            melody.popState();
 
             const result = melody.build();
             expect(result.operations).toHaveLength(0);
@@ -219,11 +219,11 @@ describe('Isolate (Task 063: pushState/popState)', () => {
             melody.tempo(100);
             melody.timeSignature(4, 4);
 
-            melody.pushState({ tempo: true, dynamics: true, timeSignature: true });
+            melody.pushState();
             melody.tempo(200);
             melody.timeSignature(7, 8);
             melody.note('C4', 0.5).commit();
-            melody.popState({ tempo: true, dynamics: true, timeSignature: true });
+            melody.popState();
 
             const result = melody.build();
             expect(result.tempo).toBe(100);
@@ -235,14 +235,14 @@ describe('Isolate (Task 063: pushState/popState)', () => {
         it('throws on stack overflow', () => {
             const melody = new SynapticMelody(mockBridge);
             for (let i = 0; i < 16; i++) {
-                melody.pushState({ tempo: true });
+                melody.pushState();
             }
-            expect(() => melody.pushState({ tempo: true })).toThrow('state stack overflow');
+            expect(() => melody.pushState()).toThrow('state stack overflow');
         });
 
         it('throws on stack underflow', () => {
             const melody = new SynapticMelody(mockBridge);
-            expect(() => melody.popState({ tempo: true })).toThrow('state stack underflow');
+            expect(() => melody.popState()).toThrow('state stack underflow');
         });
     });
 });
