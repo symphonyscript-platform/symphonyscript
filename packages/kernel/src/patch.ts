@@ -87,13 +87,15 @@ export class AttributePatcher {
    */
   private bumpSeq(offset: number): void {
     const idx = offset + NODE.SEQ_FLAGS
-    let old: number
-    let next: number
-    do {
-      old = Atomics.load(this.sab, idx)
+    let attempts = 0
+    while (attempts < CONCURRENCY.CAS_MAX_RETRIES) {
+      const old = Atomics.load(this.sab, idx)
       const seq = ((old >>> SEQ.SEQ_SHIFT) + 1) & 0xFFFFFF
-      next = (old & SEQ.FLAGS_EXT_MASK) | (seq << SEQ.SEQ_SHIFT)
-    } while (Atomics.compareExchange(this.sab, idx, old, next) !== old)
+      const next = (old & SEQ.FLAGS_EXT_MASK) | (seq << SEQ.SEQ_SHIFT)
+      if (Atomics.compareExchange(this.sab, idx, old, next) === old) return
+      attempts = attempts + 1
+    }
+    Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.CAS_EXHAUSTION)
   }
 
   /**

@@ -120,7 +120,7 @@ A "safe zone" around the playhead prevents edits too close to what the audio thr
     const playhead = Atomics.load(this.sab, HDR.PLAYHEAD_TICK)
     const safeZone = Atomics.load(this.sab, HDR.SAFE_ZONE_TICKS)
     if (targetTick - playhead < safeZone && targetTick >= playhead) {
-      Atomics.store(this.sab, HDR.ERROR_FLAG, ERROR.SAFE_ZONE)
+      Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.SAFE_ZONE)
       return false
     }
     return true
