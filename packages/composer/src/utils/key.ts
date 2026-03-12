@@ -19,16 +19,17 @@ type NoteLetter = typeof NOTE_LETTERS[number];
 
 /**
  * Parsed note result (out-parameter pattern).
- * letter: 0–6 (C–B), accidental: -1 flat / 0 natural / 1 sharp, octave: number.
+ * letter: 0–6 (C–B), accidental: -1 flat / 0 natural / 1 sharp.
  */
 interface ParsedNote {
     letter: number;
     accidental: number;
+    octaveStart: number;
     octave: number;
 }
 
 /** Module-level reusable result (zero-allocation). */
-const PARSED_NOTE: ParsedNote = { letter: 0, accidental: 0, octave: 4 };
+const PARSED_NOTE: ParsedNote = { letter: 0, accidental: 0, octaveStart: 1, octave: 0 };
 
 /** O(1) mapping from local letter index to true note index. */
 const BASE_LETTER_MAP = [5, 6, 0, 1, 2, 3, 4] as const;
@@ -41,44 +42,46 @@ const BASE_LETTER_MAP = [5, 6, 0, 1, 2, 3, 4] as const;
  * - Sharps: G, D, A, E, B, F#, C# (add F#, C#, G#, D#, A#, E#, B#)
  * - Flats: F, Bb, Eb, Ab, Db, Gb, Cb (add Bb, Eb, Ab, Db, Gb, Cb, Fb)
  */
-const KEY_SIGNATURES: Record<string, Partial<Record<NoteLetter, 'sharp' | 'flat'>>> = {
+const KEY_SIGNATURES_MAJOR: Record<string, Partial<Record<NoteLetter, 'sharp' | 'flat'>>> = {
     // Major keys - sharps
-    'C:major': {},
-    'G:major': { F: 'sharp' },
-    'D:major': { F: 'sharp', C: 'sharp' },
-    'A:major': { F: 'sharp', C: 'sharp', G: 'sharp' },
-    'E:major': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp' },
-    'B:major': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp' },
-    'F#:major': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp', E: 'sharp' },
-    'C#:major': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp', E: 'sharp', B: 'sharp' },
+    C: {},
+    G: { F: 'sharp' },
+    D: { F: 'sharp', C: 'sharp' },
+    A: { F: 'sharp', C: 'sharp', G: 'sharp' },
+    E: { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp' },
+    B: { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp' },
+    'F#': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp', E: 'sharp' },
+    'C#': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp', E: 'sharp', B: 'sharp' },
 
     // Major keys - flats
-    'F:major': { B: 'flat' },
-    'Bb:major': { B: 'flat', E: 'flat' },
-    'Eb:major': { B: 'flat', E: 'flat', A: 'flat' },
-    'Ab:major': { B: 'flat', E: 'flat', A: 'flat', D: 'flat' },
-    'Db:major': { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat' },
-    'Gb:major': { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat', C: 'flat' },
-    'Cb:major': { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat', C: 'flat', F: 'flat' },
+    F: { B: 'flat' },
+    Bb: { B: 'flat', E: 'flat' },
+    Eb: { B: 'flat', E: 'flat', A: 'flat' },
+    Ab: { B: 'flat', E: 'flat', A: 'flat', D: 'flat' },
+    Db: { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat' },
+    Gb: { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat', C: 'flat' },
+    Cb: { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat', C: 'flat', F: 'flat' },
+};
 
+const KEY_SIGNATURES_MINOR: Record<string, Partial<Record<NoteLetter, 'sharp' | 'flat'>>> = {
     // Minor keys - sharps (relative to major: A=C, E=G, B=D, etc.)
-    'A:minor': {},
-    'E:minor': { F: 'sharp' },
-    'B:minor': { F: 'sharp', C: 'sharp' },
-    'F#:minor': { F: 'sharp', C: 'sharp', G: 'sharp' },
-    'C#:minor': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp' },
-    'G#:minor': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp' },
-    'D#:minor': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp', E: 'sharp' },
-    'A#:minor': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp', E: 'sharp', B: 'sharp' },
+    A: {},
+    E: { F: 'sharp' },
+    B: { F: 'sharp', C: 'sharp' },
+    'F#': { F: 'sharp', C: 'sharp', G: 'sharp' },
+    'C#': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp' },
+    'G#': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp' },
+    'D#': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp', E: 'sharp' },
+    'A#': { F: 'sharp', C: 'sharp', G: 'sharp', D: 'sharp', A: 'sharp', E: 'sharp', B: 'sharp' },
 
     // Minor keys - flats
-    'D:minor': { B: 'flat' },
-    'G:minor': { B: 'flat', E: 'flat' },
-    'C:minor': { B: 'flat', E: 'flat', A: 'flat' },
-    'F:minor': { B: 'flat', E: 'flat', A: 'flat', D: 'flat' },
-    'Bb:minor': { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat' },
-    'Eb:minor': { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat', C: 'flat' },
-    'Ab:minor': { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat', C: 'flat', F: 'flat' },
+    D: { B: 'flat' },
+    G: { B: 'flat', E: 'flat' },
+    C: { B: 'flat', E: 'flat', A: 'flat' },
+    F: { B: 'flat', E: 'flat', A: 'flat', D: 'flat' },
+    Bb: { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat' },
+    Eb: { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat', C: 'flat' },
+    Ab: { B: 'flat', E: 'flat', A: 'flat', D: 'flat', G: 'flat', C: 'flat', F: 'flat' },
 };
 
 /**
@@ -116,25 +119,25 @@ function parseNoteName(note: string, out: ParsedNote = PARSED_NOTE): ParsedNote 
     }
 
     if (octaveStart >= len) return null;
+    out.octaveStart = octaveStart;
 
-    let octave = 0;
-    let isNegative = false;
     let i = octaveStart;
+    let sign = 1;
 
     if (note.charCodeAt(i) === 45) { // '-'
-        isNegative = true;
+        sign = -1;
         i++;
     }
 
     if (i >= len) return null;
 
+    let octave = 0;
     for (; i < len; i++) {
         const d = note.charCodeAt(i);
         if (d < 48 || d > 57) return null;
         octave = octave * 10 + (d - 48);
     }
-
-    out.octave = isNegative ? -octave : octave;
+    out.octave = sign * octave;
 
     return out;
 }
@@ -167,18 +170,19 @@ export function applyKeySignature(
     if (!parsed) return noteName;
 
     const letter = letterToNoteLetter(parsed.letter);
+    const octave = String(parsed.octave);
 
     // Override NATURAL: strip accidental
     if (overrideAccidental === Accidental.NATURAL) {
-        return letter + String(parsed.octave);
+        return letter + octave;
     }
 
     // Override SHARP or FLAT
     if (overrideAccidental === Accidental.SHARP) {
-        return letter + '#' + String(parsed.octave);
+        return letter + '#' + octave;
     }
     if (overrideAccidental === Accidental.FLAT) {
-        return letter + 'b' + String(parsed.octave);
+        return letter + 'b' + octave;
     }
 
     // Note already has accidental → respect it
@@ -187,14 +191,14 @@ export function applyKeySignature(
     // No key context → return as-is
     if (!keyContext) return noteName;
 
-    const modeStr = scaleModeToKeyString(keyContext.mode);
-    const keyStr = keyContext.root + ':' + modeStr;
-    const keyAccidentals = KEY_SIGNATURES[keyStr];
+    const keyAccidentals = keyContext.mode === ScaleMode.MINOR
+        ? KEY_SIGNATURES_MINOR[keyContext.root]
+        : KEY_SIGNATURES_MAJOR[keyContext.root];
     if (!keyAccidentals) return noteName;
 
     const keyAccidental = keyAccidentals[letter];
     if (keyAccidental) {
-        return letter + (keyAccidental === 'sharp' ? '#' : 'b') + String(parsed.octave);
+        return letter + (keyAccidental === 'sharp' ? '#' : 'b') + octave;
     }
     return noteName;
 }
@@ -203,6 +207,12 @@ export function applyKeySignature(
  * Check if a note name has an explicit accidental.
  */
 export function hasExplicitAccidental(noteName: string): boolean {
-    const match = noteName.match(/^[A-Ga-g]([#b])/);
-    return match !== null && match[1] !== '';
+    if (noteName.length < 2) return false;
+
+    const c0 = noteName.charCodeAt(0);
+    const isLetter = (c0 >= 65 && c0 <= 71) || (c0 >= 97 && c0 <= 103);
+    if (!isLetter) return false;
+
+    const c1 = noteName.charCodeAt(1);
+    return c1 === 35 || c1 === 98; // # or b
 }

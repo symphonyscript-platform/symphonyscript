@@ -259,6 +259,16 @@ describe('applyKeySignature utility', () => {
         expect(applyKeySignature('F#4', ctx)).toBe('F#4');
         expect(applyKeySignature('Bb4', ctx)).toBe('Bb4');
     });
+
+    it('canonicalizes octave formatting when applying key accidental', () => {
+        const ctx: KeyContext = { root: 'G', mode: ScaleMode.MAJOR };
+        expect(applyKeySignature('F004', ctx)).toBe('F#4');
+    });
+
+    it('preserves original formatting when note is unchanged', () => {
+        const ctx: KeyContext = { root: 'C', mode: ScaleMode.MAJOR };
+        expect(applyKeySignature('F004', ctx)).toBe('F004');
+    });
 });
 
 describe('hasExplicitAccidental utility', () => {
@@ -275,5 +285,10 @@ describe('hasExplicitAccidental utility', () => {
     it('returns false for natural notes', () => {
         expect(hasExplicitAccidental('F4')).toBe(false);
         expect(hasExplicitAccidental('C')).toBe(false);
+    });
+
+    it('returns false for invalid note prefixes', () => {
+        expect(hasExplicitAccidental('1#4')).toBe(false);
+        expect(hasExplicitAccidental('_b4')).toBe(false);
     });
 });
