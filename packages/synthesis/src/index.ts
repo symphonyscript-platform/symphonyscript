@@ -2,13 +2,16 @@
  * @packageDocumentation
  * @module @symphonyscript/synthesis
  *
- * This package serves as the "Showroom" for high-level instruments built on the DSP layer.
- * Future implementations will include:
- * - FM Synthesizers
- * - Samplers
- * - Physical Modeling Instruments
+ * This package provides high-level synthesis factories built on top of
+ * `@symphonyscript/dsp` runtime primitives.
  *
- * Currently empty pending DSP maturity.
+ * Available:
+ * - Subtractive synth convenience factory (`createSubtractiveInstrument`)
+ *
+ * Planned:
+ * - FM synthesizer factory (`createFMSynth`)
  */
 
-export { };
+export type { FMSynthOptions, SubtractiveSynthOptions } from './factory-types';
+export { createFMSynth } from './fm';
+export { createSubtractiveInstrument } from './subtractive';
