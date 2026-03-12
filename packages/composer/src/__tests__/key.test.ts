@@ -32,6 +32,14 @@ describe('Key signature context', () => {
             const ctx = melody.getKeyContext();
             expect(ctx).toEqual({ root: 'F', mode: ScaleMode.MAJOR });
         });
+
+        it('stores key root as primitive pitch class internally', () => {
+            melody.key('Bb', ScaleMode.MAJOR);
+
+            expect((melody as any)._keyRootPitchClass).toBe(10);
+            expect(typeof (melody as any)._keyRootPitchClass).toBe('number');
+            expect(melody.getKeyContext()).toEqual({ root: 'Bb', mode: ScaleMode.MAJOR });
+        });
     });
 
     describe('accidental()', () => {

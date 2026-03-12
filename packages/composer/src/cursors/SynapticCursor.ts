@@ -203,6 +203,22 @@ export abstract class SynapticCursor {
     }
 
     /**
+     * Escape: Alias for control().
+     */
+    cc(controller: number, value: number): SynapticClip {
+        this._commit();
+        return this.clip.cc(controller, value);
+    }
+
+    /**
+     * Escape: Send pitch bend and return to clip.
+     */
+    pitchBend(value: number): SynapticClip {
+        this._commit();
+        return this.clip.pitchBend(value);
+    }
+
+    /**
      * Escape: Send MIDI Aftertouch and return to clip.
      * @param value - Pressure value (0-1, normalized)
      * @param note - Note for poly aftertouch (omit for channel)

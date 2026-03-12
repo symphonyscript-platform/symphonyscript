@@ -34,13 +34,14 @@ export abstract class SynapticClip extends SynapticNode {
     protected _scaleMode: ScaleMode = ScaleMode.NONE;
     protected _scaleOctave: number = 4;
 
-    // Key context for automatic accidentals (RFC-022)
-    protected keyContext: KeyContext | null = null;
+    // Key context for automatic accidentals (RFC-022, flattened primitives)
+    protected _keyRootPitchClass: number = -1; // -1 = no key, 0-11 = pitch class
+    protected _keyRootUsesFlat: boolean = false;
+    protected _keyMode: ScaleMode = ScaleMode.NONE;
     protected nextAccidental: Accidental | null = null;
 
     // Escape state (persisted user intent)
     protected transposeOffset: number = 0;
-    protected currentScale: string | null = null;
     protected _arpeggioPattern: ArpPattern | null = null;
     protected _arpeggioRate: number = 0.125;
     protected _arpeggioGate: number = 0.8;
@@ -79,8 +80,13 @@ export abstract class SynapticClip extends SynapticNode {
     protected _humanizeVelOut: number = 0;
     protected _humanizeTickOut: number = 0;
 
-    // Quantize settings (Task 032)
-    protected _quantizeSettings: QuantizeSettings | null = null;
+    // Quantize settings (Task 032, flattened primitives)
+    protected _quantizeEnabled: boolean = false;
+    protected _quantizeGrid: number = 0;
+    protected _quantizeStrength: number = 1;
+    protected _quantizeStrengthSet: boolean = false;
+    protected _quantizeDuration: boolean = false;
+    protected _quantizeDurationSet: boolean = false;
 
     // MPE voice expression ID (Task 036)
     protected _expressionId: number | null = null;
@@ -111,6 +117,7 @@ export abstract class SynapticClip extends SynapticNode {
     }
 
     tempo(bpm: number): this {
+        this.bridge.setBpm(bpm);
         this.currentTempo = bpm;
         return this;
     }
@@ -171,6 +178,29 @@ export abstract class SynapticClip extends SynapticNode {
             OPCODE.CC,
             controller,
             value,
+            0,
+            this.getCurrentTick(),
+            false,
+            this.generateSourceId()
+        );
+        return this;
+    }
+
+    /**
+     * Alias for control() that emits MIDI CC immediately.
+     */
+    cc(controller: number, value: number): this {
+        return this.control(controller, value);
+    }
+
+    /**
+     * Send a pitch bend event at the current tick.
+     */
+    pitchBend(value: number): this {
+        this.bridge.insertAsync(
+            OPCODE.BEND,
+            value,
+            0,
             0,
             this.getCurrentTick(),
             false,
@@ -293,7 +323,11 @@ export abstract class SynapticClip extends SynapticNode {
     }
 
     scale(scaleName: string): this {
-        this.currentScale = scaleName;
+        const parsed = this.parseScaleName(scaleName);
+        if (parsed !== null) {
+            this._scaleRoot = parsed[0];
+            this._scaleMode = parsed[1];
+        }
         return this;
     }
 
@@ -328,7 +362,9 @@ export abstract class SynapticClip extends SynapticNode {
      * @param mode - Key mode (ScaleMode.MAJOR or ScaleMode.MINOR)
      */
     key(root: string, mode: ScaleMode): this {
-        this.keyContext = { root, mode };
+        this._keyRootPitchClass = parsePitch(root + '4') % 12;
+        this._keyRootUsesFlat = root.includes('b');
+        this._keyMode = mode;
         return this;
     }
 
@@ -336,7 +372,48 @@ export abstract class SynapticClip extends SynapticNode {
      * Get current key context.
      */
     getKeyContext(): KeyContext | null {
-        return this.keyContext;
+        if (this._keyRootPitchClass < 0) return null;
+        const flatRoots = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+        const root = this._keyRootUsesFlat
+            ? flatRoots[this._keyRootPitchClass]
+            : PITCH_CLASS_TO_ROOT[this._keyRootPitchClass];
+        return { root, mode: this._keyMode };
+    }
+
+    private parseScaleName(scaleName: string): [number, ScaleMode] | null {
+        const normalized = scaleName.trim().replace(/[_-]+/g, ' ');
+        const match = /^([A-Ga-g])([#b]?)(?:\s+)?(major|minor|dorian|phrygian|lydian|mixolydian|locrian|maj|min|ionian|aeolian)?$/i.exec(normalized);
+        if (!match) return null;
+        const root = `${match[1].toUpperCase()}${match[2] ?? ''}`;
+        const modeToken = (match[3] ?? 'major').toLowerCase();
+        const pitchClass = parsePitch(root + '4') % 12;
+        const mode = this.parseScaleMode(modeToken);
+        return [pitchClass, mode];
+    }
+
+    private parseScaleMode(token: string): ScaleMode {
+        switch (token) {
+            case 'major':
+            case 'maj':
+            case 'ionian':
+                return ScaleMode.MAJOR;
+            case 'minor':
+            case 'min':
+            case 'aeolian':
+                return ScaleMode.MINOR;
+            case 'dorian':
+                return ScaleMode.DORIAN;
+            case 'phrygian':
+                return ScaleMode.PHRYGIAN;
+            case 'lydian':
+                return ScaleMode.LYDIAN;
+            case 'mixolydian':
+                return ScaleMode.MIXOLYDIAN;
+            case 'locrian':
+                return ScaleMode.LOCRIAN;
+            default:
+                return ScaleMode.NONE;
+        }
     }
 
     /**
@@ -462,9 +539,14 @@ export abstract class SynapticClip extends SynapticNode {
         this._humEnabled = true;
         this._humSeed = settings.seed ?? -1;
         if (settings.seed !== undefined) {
-            this.humanizeRng = new SeededRandom(settings.seed);
+            // Task 062: avoid one-shot allocation by reseeding the existing RNG.
+            this.reseedHumanizeRng(settings.seed);
         }
         return this;
+    }
+
+    protected reseedHumanizeRng(seed: number): void {
+        (this.humanizeRng as unknown as { state: number }).state = seed >>> 0;
     }
 
     /**
@@ -497,11 +579,12 @@ export abstract class SynapticClip extends SynapticNode {
      * @param duration - Quantize duration too (default false)
      */
     quantize(grid: number, strength?: number, duration?: boolean): this {
-        this._quantizeSettings = {
-            grid,
-            strength,
-            duration
-        };
+        this._quantizeEnabled = true;
+        this._quantizeGrid = grid;
+        this._quantizeStrength = strength ?? 1;
+        this._quantizeStrengthSet = strength !== undefined;
+        this._quantizeDuration = duration ?? false;
+        this._quantizeDurationSet = duration !== undefined;
         return this;
     }
 
@@ -509,7 +592,12 @@ export abstract class SynapticClip extends SynapticNode {
      * Get current quantize settings.
      */
     getQuantizeSettings(): QuantizeSettings | null {
-        return this._quantizeSettings;
+        if (!this._quantizeEnabled) return null;
+        return {
+            grid: this._quantizeGrid,
+            strength: this._quantizeStrengthSet ? this._quantizeStrength : undefined,
+            duration: this._quantizeDurationSet ? this._quantizeDuration : undefined
+        };
     }
 
     /**
@@ -518,9 +606,9 @@ export abstract class SynapticClip extends SynapticNode {
      * @returns Quantized tick value
      */
     protected applyQuantize(tick: number): number {
-        if (!this._quantizeSettings) return tick;
-
-        const { grid, strength = 1 } = this._quantizeSettings;
+        if (!this._quantizeEnabled) return tick;
+        const grid = this._quantizeGrid;
+        const strength = this._quantizeStrength;
 
         // Snap to nearest grid point
         const snappedTick = Math.round(tick / grid) * grid;
@@ -535,9 +623,9 @@ export abstract class SynapticClip extends SynapticNode {
      * @returns Quantized duration value
      */
     protected applyQuantizeDuration(duration: number): number {
-        if (!this._quantizeSettings || !this._quantizeSettings.duration) return duration;
-
-        const { grid, strength = 1 } = this._quantizeSettings;
+        if (!this._quantizeEnabled || !this._quantizeDuration) return duration;
+        const grid = this._quantizeGrid;
+        const strength = this._quantizeStrength;
 
         // Snap to nearest grid point (minimum 1 grid unit)
         const snappedDuration = Math.max(grid, Math.round(duration / grid) * grid);

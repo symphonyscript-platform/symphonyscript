@@ -3,6 +3,7 @@ import { SynapticDrums } from '../clips/SynapticDrums';
 import { Clip } from '../Clip';
 import { NoteOperation } from '../types';
 import { createTestBridge } from '../test-bridge';
+import { OPCODE } from '@symphonyscript/kernel';
 
 describe('Control CC (Task 033)', () => {
     let mockBridge: ReturnType<typeof createTestBridge>;
@@ -11,11 +12,51 @@ describe('Control CC (Task 033)', () => {
         mockBridge = createTestBridge();
     });
 
+    describe('Tempo direct write', () => {
+        it('tempo() writes BPM directly to the bridge', () => {
+            const melody = new SynapticMelody(mockBridge);
+            melody.tempo(132);
+
+            expect(mockBridge.setBpm).toHaveBeenCalledTimes(1);
+            expect(mockBridge.setBpm).toHaveBeenCalledWith(132);
+            expect(melody.build().tempo).toBe(132);
+        });
+    });
+
     describe('SynapticClip.control()', () => {
         it('returns this for chaining', () => {
             const melody = new SynapticMelody(mockBridge);
             const result = melody.control(1, 64);
             expect(result).toBe(melody);
+        });
+
+        it('cc() alias emits CC via bridge immediately', () => {
+            const melody = new SynapticMelody(mockBridge);
+            melody.cc(74, 80);
+            expect(mockBridge.insertAsync).toHaveBeenCalledWith(
+                OPCODE.CC,
+                74,
+                80,
+                0,
+                0,
+                false,
+                expect.any(Number)
+            );
+        });
+
+        it('pitchBend() emits bend via bridge immediately', () => {
+            const melody = new SynapticMelody(mockBridge);
+            melody.advanceTick(1.5);
+            melody.pitchBend(2048);
+            expect(mockBridge.insertAsync).toHaveBeenCalledWith(
+                OPCODE.BEND,
+                2048,
+                0,
+                0,
+                1.5,
+                false,
+                expect.any(Number)
+            );
         });
 
         it('control does not affect notes', () => {
@@ -154,6 +195,30 @@ describe('Control CC (Task 033)', () => {
             const result = melody.build();
             const noteOps = result.operations.filter(op => op.kind === 'note') as NoteOperation[];
             expect(noteOps).toHaveLength(2);
+        });
+
+        it('cursor cc() and pitchBend() escape to clip', () => {
+            const melody = new SynapticMelody(mockBridge);
+            const clip = melody.note('C4', 0.5).cc(1, 64).pitchBend(512);
+            expect(clip).toBe(melody);
+            expect(mockBridge.insertAsync).toHaveBeenCalledWith(
+                OPCODE.CC,
+                1,
+                64,
+                0,
+                0,
+                false,
+                expect.any(Number)
+            );
+            expect(mockBridge.insertAsync).toHaveBeenCalledWith(
+                OPCODE.BEND,
+                512,
+                0,
+                0,
+                0,
+                false,
+                expect.any(Number)
+            );
         });
     });
 

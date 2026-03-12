@@ -32,6 +32,20 @@ describe('Scale context and degree()', () => {
         });
     });
 
+    describe('scale() shorthand', () => {
+        it('parses root+mode into primitive scale context', () => {
+            melody.scale('D dorian');
+
+            const ctx = melody.getScaleContext();
+            expect(ctx).toEqual({ root: 'D', mode: ScaleMode.DORIAN, octave: 4 });
+        });
+
+        it('does not keep legacy string-backed scale state', () => {
+            melody.scale('C major');
+            expect((melody as any).currentScale).toBeUndefined();
+        });
+    });
+
     describe('degree()', () => {
         it('throws without scale context', () => {
             expect(() => melody.degree(1)).toThrow('degree() requires setScale() to be called first');
