@@ -1,7 +1,7 @@
 // =============================================================================
 // SymphonyScript - Silicon Linker Attribute Patching (RFC-043)
 // =============================================================================
-// Immediate attribute patching with SEQ counter updates for ABA protection.
+// Immediate attribute patching with two-phase SeqLock updates.
 
 import {
   NODE,
@@ -78,14 +78,28 @@ export class AttributePatcher {
   }
 
   /**
-   * Increment the SEQ counter for ABA protection.
-   * Called before any attribute mutation.
+   * Phase 1 of SeqLock writer protocol: mark write in progress (even -> odd).
    *
-   * Uses a CAS loop to increment only the upper 24 SEQ bits while
-   * preserving the lower 8 FLAGS_EXT bits across the 0xFFFFFF→0 wraparound.
-   * A naive Atomics.add(1 << SEQ_SHIFT) would overflow Int32 and clear FLAGS_EXT.
+   * Uses a CAS loop to increment only the upper 24 SEQ bits while preserving
+   * lower 8 FLAGS_EXT bits across the 0xFFFFFF -> 0 wraparound.
    */
-  private bumpSeq(offset: number): void {
+  private bumpSeqStart(offset: number): void {
+    const idx = offset + NODE.SEQ_FLAGS
+    let attempts = 0
+    while (attempts < CONCURRENCY.CAS_MAX_RETRIES) {
+      const old = Atomics.load(this.sab, idx)
+      const seq = ((old >>> SEQ.SEQ_SHIFT) + 1) & 0xFFFFFF
+      const next = (old & SEQ.FLAGS_EXT_MASK) | (seq << SEQ.SEQ_SHIFT)
+      if (Atomics.compareExchange(this.sab, idx, old, next) === old) return
+      attempts = attempts + 1
+    }
+    Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.CAS_EXHAUSTION)
+  }
+
+  /**
+   * Phase 2 of SeqLock writer protocol: mark write complete (odd -> even).
+   */
+  private bumpSeqEnd(offset: number): void {
     const idx = offset + NODE.SEQ_FLAGS
     let attempts = 0
     while (attempts < CONCURRENCY.CAS_MAX_RETRIES) {
@@ -215,11 +229,12 @@ export class AttributePatcher {
     // Clamp pitch to valid MIDI range
     pitch = Math.max(0, Math.min(127, pitch | 0))
 
-    // Bump SEQ for ABA protection
-    this.bumpSeq(offset)
+    // Two-phase SeqLock writer protocol: even -> odd -> even
+    this.bumpSeqStart(offset)
 
     // Task 3.4: CAS loop for atomic PACKED_A update
     this.casUpdatePackedA(offset, PACKED.PITCH_MASK, PACKED.PITCH_SHIFT, pitch)
+    this.bumpSeqEnd(offset)
     return true
   }
 
@@ -239,11 +254,12 @@ export class AttributePatcher {
     // Clamp velocity to valid MIDI range
     velocity = Math.max(0, Math.min(127, velocity | 0))
 
-    // Bump SEQ for ABA protection
-    this.bumpSeq(offset)
+    // Two-phase SeqLock writer protocol: even -> odd -> even
+    this.bumpSeqStart(offset)
 
     // Task 3.4: CAS loop for atomic PACKED_A update
     this.casUpdatePackedA(offset, PACKED.VELOCITY_MASK, PACKED.VELOCITY_SHIFT, velocity)
+    this.bumpSeqEnd(offset)
     return true
   }
 
@@ -262,11 +278,12 @@ export class AttributePatcher {
     // Ensure duration is non-negative integer
     duration = Math.max(0, duration | 0)
 
-    // Bump SEQ for ABA protection
-    this.bumpSeq(offset)
+    // Two-phase SeqLock writer protocol: even -> odd -> even
+    this.bumpSeqStart(offset)
 
     // Direct write to DURATION field
     Atomics.store(this.sab, offset + NODE.DURATION, duration)
+    this.bumpSeqEnd(offset)
     return true
   }
 
@@ -285,11 +302,12 @@ export class AttributePatcher {
     // Ensure baseTick is non-negative integer
     baseTick = Math.max(0, baseTick | 0)
 
-    // Bump SEQ for ABA protection
-    this.bumpSeq(offset)
+    // Two-phase SeqLock writer protocol: even -> odd -> even
+    this.bumpSeqStart(offset)
 
     // Direct write to BASE_TICK field
     Atomics.store(this.sab, offset + NODE.BASE_TICK, baseTick)
+    this.bumpSeqEnd(offset)
     return true
   }
 
@@ -306,14 +324,15 @@ export class AttributePatcher {
     if (!this.validatePtr(ptr)) return false
     const offset = this.nodeOffset(ptr)
 
-    // Bump SEQ for ABA protection
-    this.bumpSeq(offset)
+    // Two-phase SeqLock writer protocol: even -> odd -> even
+    this.bumpSeqStart(offset)
 
     if (muted) {
       this.casSetFlag(offset, FLAG.MUTED)
     } else {
       this.casClearFlag(offset, FLAG.MUTED)
     }
+    this.bumpSeqEnd(offset)
     return true
   }
 
@@ -329,11 +348,12 @@ export class AttributePatcher {
     if (!this.validatePtr(ptr)) return false
     const offset = this.nodeOffset(ptr)
 
-    // Bump SEQ for ABA protection
-    this.bumpSeq(offset)
+    // Two-phase SeqLock writer protocol: even -> odd -> even
+    this.bumpSeqStart(offset)
 
     // Direct write to SOURCE_ID field
     Atomics.store(this.sab, offset + NODE.SOURCE_ID, sourceId | 0)
+    this.bumpSeqEnd(offset)
     return true
   }
 
@@ -365,14 +385,21 @@ export class AttributePatcher {
     count: number
   ): boolean {
     if (!this.validatePtr(ptr)) return false
+    if (count < 1 || count > 4) return false
+    if (o1 < 0 || o1 >= NODE_SIZE_I32) return false
+    if (count >= 2 && (o2 < 0 || o2 >= NODE_SIZE_I32)) return false
+    if (count >= 3 && (o3 < 0 || o3 >= NODE_SIZE_I32)) return false
+    if (count >= 4 && (o4 < 0 || o4 >= NODE_SIZE_I32)) return false
     const offset = this.nodeOffset(ptr)
 
-    this.bumpSeq(offset)
+    // Two-phase SeqLock writer protocol: even -> odd -> even
+    this.bumpSeqStart(offset)
 
     if (count >= 1) Atomics.store(this.sab, offset + o1, v1)
     if (count >= 2) Atomics.store(this.sab, offset + o2, v2)
     if (count >= 3) Atomics.store(this.sab, offset + o3, v3)
     if (count >= 4) Atomics.store(this.sab, offset + o4, v4)
+    this.bumpSeqEnd(offset)
 
     return true
   }

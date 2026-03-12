@@ -29,6 +29,7 @@ import {
   getZoneSplitIndex,
   HEAP_START_OFFSET,
   NODE_SIZE_BYTES,
+  NODE_SIZE_I32,
   unpackOpcode,
   unpackPitch,
   unpackVelocity,
@@ -654,6 +655,75 @@ describe('RFC-043: Silicon Linker', () => {
       expect(result).toBe(false)
     })
 
+    it('should return false for patchMultiple when count is out of range', () => {
+      const linker = createTestLinker()
+      const ptr = linker.insertHead(...noteData(60, 0))
+
+      const countTooLow = linker.patchMultiple(ptr,
+        NODE.DURATION, 480,
+        0, 0,
+        0, 0,
+        0, 0,
+        0
+      )
+      expect(countTooLow).toBe(false)
+
+      const countTooHigh = linker.patchMultiple(ptr,
+        NODE.DURATION, 480,
+        NODE.BASE_TICK, 120,
+        NODE.SOURCE_ID, 9001,
+        NODE.NEXT_PTR, NULL_PTR,
+        5
+      )
+      expect(countTooHigh).toBe(false)
+    })
+
+    it('should return false for patchMultiple when active offset is out of bounds', () => {
+      const linker = createTestLinker()
+      const ptr = linker.insertHead(...noteData(60, 0))
+
+      const badFirstOffset = linker.patchMultiple(ptr,
+        NODE_SIZE_I32, 480,
+        0, 0,
+        0, 0,
+        0, 0,
+        1
+      )
+      expect(badFirstOffset).toBe(false)
+
+      const badSecondOffset = linker.patchMultiple(ptr,
+        NODE.DURATION, 480,
+        -1, 120,
+        0, 0,
+        0, 0,
+        2
+      )
+      expect(badSecondOffset).toBe(false)
+    })
+
+    it('should not write any fields when patchMultiple validation fails', () => {
+      const linker = createTestLinker()
+      const ptr = linker.insertHead(...noteData(60, 0, 96))
+      const before = readNodeData(linker, ptr)
+      expect(before).toBeDefined()
+
+      const result = linker.patchMultiple(ptr,
+        NODE.DURATION, 480,
+        NODE_SIZE_I32, 120,
+        0, 0,
+        0, 0,
+        2
+      )
+      expect(result).toBe(false)
+
+      const after = readNodeData(linker, ptr)
+      expect(after).toBeDefined()
+      expect(after?.duration).toBe(before?.duration)
+      expect(after?.baseTick).toBe(before?.baseTick)
+      expect(after?.sourceId).toBe(before?.sourceId)
+      expect(after?.seq).toBe(before?.seq)
+    })
+
     it('should patch three fields in one call', () => {
       const linker = createTestLinker()
       const ptr = linker.insertHead(...noteData(60, 0))
@@ -782,6 +852,47 @@ describe('RFC-043: Silicon Linker', () => {
       linker.setPrngSeed(42)
 
       expect(sab[REG.PRNG_SEED]).toBe(42)
+    })
+  })
+
+  // ===========================================================================
+  // 7.5 Telemetry
+  // ===========================================================================
+  describe('7.5 Telemetry', () => {
+    it('should expose monotonic telemetry reads as bigint', () => {
+      const linker = createTestLinker(64)
+
+      const t0 = linker.readTelemetry()
+      const ptr1 = linker.insertHead(...noteData(60, 0))
+      const t1 = linker.readTelemetry()
+      const ptr2 = linker.insertHead(...noteData(64, 96))
+      const t2 = linker.readTelemetry()
+      linker.deleteNode(ptr1)
+      const t3 = linker.readTelemetry()
+      linker.deleteNode(ptr2)
+      const t4 = linker.readTelemetry()
+
+      expect(typeof t0).toBe('bigint')
+      expect(t1).toBeGreaterThanOrEqual(t0)
+      expect(t2).toBeGreaterThanOrEqual(t1)
+      expect(t3).toBeGreaterThanOrEqual(t2)
+      expect(t4).toBeGreaterThanOrEqual(t3)
+      expect(t4 - t0).toBe(4n)
+    })
+
+    it('should read 64-bit telemetry consistently across low-word wrap carry', () => {
+      const linker = createTestLinker(64)
+      const sab = new Int32Array(linker.getSAB())
+
+      Atomics.store(sab, HDR.TELEMETRY_OPS_LOW, -1) // 0xFFFFFFFF
+      Atomics.store(sab, HDR.TELEMETRY_OPS_HIGH, 7)
+
+      const before = linker.readTelemetry()
+      linker.insertHead(...noteData(67, 192))
+      const after = linker.readTelemetry()
+
+      expect(before).toBe((7n << 32n) | 0xffff_ffffn)
+      expect(after).toBe(before + 1n)
     })
   })
 

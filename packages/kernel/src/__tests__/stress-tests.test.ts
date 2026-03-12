@@ -478,7 +478,7 @@ describe('Stress Tests: 64-bit Tagged Pointer', () => {
     expect(seenPtrs.size).toBeLessThanOrEqual(4)
   })
 
-  it('should increment SEQ counter on each free (stale reference detection)', () => {
+  it('should increment SEQ counter by 2 on each free (stale reference detection)', () => {
     // RFC-055: SPSC FreeList no longer uses 64-bit version counter.
     // Instead, SEQ counter in NODE.SEQ_FLAGS is incremented for stale reference detection.
     const sab = createLinkerSAB({ nodeCapacity: 8 })
@@ -500,11 +500,11 @@ describe('Stress Tests: 64-bit Tagged Pointer', () => {
     // Free the node
     linker.freeNode(ptr)
 
-    // SEQ should have incremented
+    // SEQ should have incremented by 2 (even-stable invariant)
     const newSeqFlags = sabView[nodeOffset + SEQ_FLAGS_OFFSET]
     const newSeq = (newSeqFlags >>> SEQ_SHIFT) & 0xFFFFFF
 
-    expect(newSeq).toBeGreaterThan(initialSeq)
+    expect(newSeq).toBe(initialSeq + 2)
   })
 })
 
@@ -710,7 +710,7 @@ describe('Stress Tests: Data Integrity', () => {
     expect(sabView[offset2 + NODE.DURATION]).toBe(0)
   })
 
-  it('should increment SEQ on every attribute patch', () => {
+  it('should increment SEQ by 2 on every attribute patch', () => {
     const linker = createTestLinker()
     const sab = new Int32Array(linker.getSAB())
 
@@ -727,7 +727,7 @@ describe('Stress Tests: Data Integrity', () => {
     const seqFlagsAfter = Atomics.load(sab, offset + NODE.SEQ_FLAGS)
     const seqAfter = seqFlagsAfter >>> 8
 
-    expect(seqAfter).toBe(seqBefore + 1)
+    expect(seqAfter).toBe(seqBefore + 2)
   })
 })
 
@@ -909,8 +909,8 @@ describe('Stress Tests: Concurrent Operations', () => {
 
     await Promise.all(patchPromises)
 
-    // SEQ should have incremented by exactly patchCount from the post-insert value
+    // SEQ should have incremented by exactly patchCount * 2 (two-phase writer)
     const finalSeq = Atomics.load(sab, offset + NODE.SEQ_FLAGS) >>> 8
-    expect(finalSeq).toBe(seqAfterInsert + patchCount)
+    expect(finalSeq).toBe(seqAfterInsert + patchCount * 2)
   })
 })

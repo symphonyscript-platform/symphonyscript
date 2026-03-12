@@ -942,12 +942,11 @@ export class SiliconBridge {
     const ringDataI32 = ringDataOffset / 4
 
     let currentHead = head
-
     while (currentHead !== tail) {
       const idx = currentHead & mask
-      const ptr = this.sab[ringDataI32 + idx]
+      const ptr = Atomics.load(this.sab, ringDataI32 + idx)
       this.localAllocator.free(ptr)
-      currentHead++
+      currentHead = (currentHead + 1) & mask
     }
 
     Atomics.store(this.sab, HDR.RECLAIM_RB_HEAD, currentHead)

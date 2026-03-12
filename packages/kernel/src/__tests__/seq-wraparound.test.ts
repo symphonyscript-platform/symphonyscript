@@ -118,6 +118,31 @@ describe('readNodeRaw with seqChanged integration', () => {
 
     expect(unpackPitch(buf[NODE.PACKED_A])).toBe(72)
   })
+
+  it('rejects odd sequence while write is in progress', () => {
+    const linker = createTestLinker()
+    const ptr = linker.insertHead(...noteData(60, 0))
+    const sab = new Int32Array(linker.getSAB())
+    const offset = ptr / 4
+
+    // Simulate writer phase-1 state (odd seq => in-progress write)
+    Atomics.store(sab, offset + NODE.SEQ_FLAGS, (3 << 8))
+    Atomics.store(sab, offset + NODE.PACKED_A, (OPCODE.NOTE << 24) | (72 << 16) | (100 << 8) | FLAG.ACTIVE)
+
+    const success = linker.readNodeRaw(ptr, buf)
+    expect(success).toBe(false)
+  })
+
+  it('accepts only stable even snapshots', () => {
+    const linker = createTestLinker()
+    const ptr = linker.insertHead(...noteData(60, 0))
+    const sab = new Int32Array(linker.getSAB())
+    const offset = ptr / 4
+
+    Atomics.store(sab, offset + NODE.SEQ_FLAGS, (4 << 8))
+    const success = linker.readNodeRaw(ptr, buf)
+    expect(success).toBe(true)
+  })
 })
 
 // =============================================================================

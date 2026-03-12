@@ -63,7 +63,7 @@ describe('K-005: Zone B Reclamation', () => {
         expect(ptr2).toBe(ptr1)
     })
 
-    it('R-001: should not advance tail or overwrite slot when reclaim ring is full', () => {
+    it('R-001: should not advance tail or overwrite slot when reclaim ring is full (modular)', () => {
         const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })
         const linker = new SiliconSynapse(sab)
         const bridge = new SiliconBridge(linker)
@@ -74,14 +74,14 @@ describe('K-005: Zone B Reclamation', () => {
         expect(ptr).toBeDefined()
 
         // Force a tiny full ring to hit overflow branch deterministically:
-        // full when (tail - head) >= capacity.
-        Atomics.store(view, HDR.RECLAIM_RB_CAPACITY, 2)
-        Atomics.store(view, HDR.RECLAIM_RB_HEAD, 7)
-        Atomics.store(view, HDR.RECLAIM_RB_TAIL, 9) // occupancy = 2 (full)
+        // modular full when nextTail === head.
+        Atomics.store(view, HDR.RECLAIM_RB_CAPACITY, 8)
+        Atomics.store(view, HDR.RECLAIM_RB_HEAD, 3)
+        Atomics.store(view, HDR.RECLAIM_RB_TAIL, 2) // nextTail=(2+1)&7 => 3 => full
 
         const ringDataI32 = Atomics.load(view, HDR.RECLAIM_RING_PTR) / 4
         const tailBefore = Atomics.load(view, HDR.RECLAIM_RB_TAIL)
-        const slotIdx = tailBefore & 1 // mask for capacity=2
+        const slotIdx = tailBefore & 7 // mask for capacity=8
         const sentinel = 0x12345678
         Atomics.store(view, ringDataI32 + slotIdx, sentinel)
         Atomics.store(view, HDR.ERROR_FLAG, ERROR.OK)
@@ -99,7 +99,7 @@ describe('K-005: Zone B Reclamation', () => {
         linker.releaseMutex()
     })
 
-    it('R-001: should enqueue reclaim pointer when ring is not full', () => {
+    it('R-001: should enqueue reclaim pointer and wrap tail modulo capacity', () => {
         const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })
         const linker = new SiliconSynapse(sab)
         const bridge = new SiliconBridge(linker)
@@ -110,22 +110,62 @@ describe('K-005: Zone B Reclamation', () => {
         expect(ptr).toBeDefined()
         const nodePtr = ptr as number
 
-        Atomics.store(view, HDR.RECLAIM_RB_CAPACITY, 2)
-        Atomics.store(view, HDR.RECLAIM_RB_HEAD, 11)
-        Atomics.store(view, HDR.RECLAIM_RB_TAIL, 12) // occupancy = 1 (not full)
+        Atomics.store(view, HDR.RECLAIM_RB_CAPACITY, 8)
+        Atomics.store(view, HDR.RECLAIM_RB_HEAD, 3)
+        Atomics.store(view, HDR.RECLAIM_RB_TAIL, 7) // not full, nextTail wraps to 0
 
         const ringDataI32 = Atomics.load(view, HDR.RECLAIM_RING_PTR) / 4
         const tailBefore = Atomics.load(view, HDR.RECLAIM_RB_TAIL)
-        const slotIdx = tailBefore & 1
+        const slotIdx = tailBefore & 7
         Atomics.store(view, ringDataI32 + slotIdx, -1)
         Atomics.store(view, HDR.ERROR_FLAG, ERROR.OK)
 
         const result = bridge.deleteNoteImmediate(sourceId)
         expect(result).toBe(0)
 
-        expect(Atomics.load(view, HDR.RECLAIM_RB_TAIL)).toBe(tailBefore + 1)
+        expect(Atomics.load(view, HDR.RECLAIM_RB_TAIL)).toBe(0)
         expect(Atomics.load(view, ringDataI32 + slotIdx)).toBe(nodePtr)
         expect(Atomics.load(view, HDR.ERROR_FLAG) & ERROR.RECLAIM_OVERFLOW).toBe(0)
+    })
+
+    it('R-001: pollReclaim should drain wrapped ring and preserve empty semantics', () => {
+        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })
+        const linker = new SiliconSynapse(sab)
+        const bridge = new SiliconBridge(linker)
+        const view = new Int32Array(sab)
+
+        const localAlloc = getPrivate(bridge, 'localAllocator')
+        const ptrA = localAlloc.alloc()
+        const ptrB = localAlloc.alloc()
+        const ptrC = localAlloc.alloc()
+
+        expect(ptrA).toBeGreaterThan(0)
+        expect(ptrB).toBeGreaterThan(0)
+        expect(ptrC).toBeGreaterThan(0)
+
+        Atomics.store(view, HDR.RECLAIM_RB_CAPACITY, 8)
+        Atomics.store(view, HDR.RECLAIM_RB_HEAD, 7)
+        Atomics.store(view, HDR.RECLAIM_RB_TAIL, 2) // entries at [7,0,1]
+
+        const ringDataI32 = Atomics.load(view, HDR.RECLAIM_RING_PTR) / 4
+        Atomics.store(view, ringDataI32 + 7, ptrA)
+        Atomics.store(view, ringDataI32 + 0, ptrB)
+        Atomics.store(view, ringDataI32 + 1, ptrC)
+
+        bridge.flushStructural() // calls pollReclaim()
+
+        expect(Atomics.load(view, HDR.RECLAIM_RB_HEAD)).toBe(2)
+        expect(Atomics.load(view, HDR.RECLAIM_RB_TAIL)).toBe(2)
+
+        // LIFO free-list order after draining A -> B -> C is C, B, A.
+        expect(localAlloc.alloc()).toBe(ptrC)
+        expect(localAlloc.alloc()).toBe(ptrB)
+        expect(localAlloc.alloc()).toBe(ptrA)
+
+        // Empty ring remains stable on additional polls.
+        bridge.flushStructural()
+        expect(Atomics.load(view, HDR.RECLAIM_RB_HEAD)).toBe(2)
+        expect(Atomics.load(view, HDR.RECLAIM_RB_TAIL)).toBe(2)
     })
 
     it('executeClear should not free Zone B nodes to Zone A free list', () => {

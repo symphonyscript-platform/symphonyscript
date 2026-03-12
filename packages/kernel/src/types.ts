@@ -230,6 +230,9 @@ export interface ISiliconLinker {
   /** Get free count. */
   getFreeCount(): number
 
+  /** Read telemetry operation counter as a consistent 64-bit value. */
+  readTelemetry(): bigint
+
   /** Reset linker state (clear chain and tables). */
   reset(): void
 

@@ -37,6 +37,14 @@ import type { NodePtr } from './types'
  * - Only the AudioWorklet thread may call alloc() or free()
  * - No CAS needed - simple atomic load/store with memory barriers
  * - Zero BigInt allocation (eliminates GC pressure in hot path)
+   *
+   * Runtime enforcement boundary:
+   * - FreeList itself is a low-level primitive and assumes SPSC contract.
+   * - Public kernel APIs enforce that contract before reaching here:
+   *   `SiliconSynapse.allocNode()/freeNode()` gate calls with `isAudioContext`
+   *   and hard-fail with ERROR.SPSC_VIOLATION outside audio context.
+   * - processCommands()/poll() execute on the audio side, so command-driven frees
+   *   also satisfy the same single-owner mutation model.
  *
  * RFC-056 Multi-Zone:
  * - Each zone has its own FreeList with bounded heap region
@@ -223,7 +231,9 @@ export class FreeList {
    */
   alloc(): NodePtr {
     // MEMORY BARRIER: Atomics.load ensures visibility of head pointer
-    // SPSC: No CAS needed - single producer/consumer guarantees no races
+    // SPSC: No CAS needed - single producer/consumer guarantees no races.
+    // A CAS loop here would add overhead without improving correctness under
+    // the enforced single-writer contract (see class-level enforcement note).
     const head = Atomics.load(this.sab, this.freeListHeadOffset)
 
     // Heap exhausted - zero-allocation error path
@@ -314,10 +324,11 @@ export class FreeList {
 
     const offset = this.nodeOffset(ptr)
 
-    // VERSIONING: Increment SEQ to invalidate stale references
-    // SEQ is upper 24 bits of SEQ_FLAGS (SEQ.SEQ_SHIFT = 8)
+    // VERSIONING: Increment SEQ by 2 to preserve even-stable invariant.
+    // Stable nodes must have even SEQ; odd is reserved for in-progress writes.
+    // SEQ is upper 24 bits of SEQ_FLAGS (SEQ.SEQ_SHIFT = 8).
     // MEMORY BARRIER: Atomic add ensures visibility to readers
-    Atomics.add(this.sab, offset + NODE.SEQ_FLAGS, 1 << SEQ.SEQ_SHIFT)
+    Atomics.add(this.sab, offset + NODE.SEQ_FLAGS, 2 << SEQ.SEQ_SHIFT)
 
     // MEMORY BARRIER: Load current head with acquire semantics
     const head = Atomics.load(this.sab, this.freeListHeadOffset)
@@ -327,7 +338,8 @@ export class FreeList {
     Atomics.store(this.sab, offset + NODE.PACKED_A, head)
 
     // LINEARIZATION POINT: Make freed node the new head
-    // SPSC: No CAS needed - single writer guarantee
+    // SPSC: No CAS needed - single writer guarantee from SiliconSynapse
+    // audio-context gating + command execution ownership.
     Atomics.store(this.sab, this.freeListHeadOffset, ptr)
 
     // MEMORY BARRIER: Atomic increment for cross-thread visibility

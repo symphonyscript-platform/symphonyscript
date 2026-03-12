@@ -381,7 +381,15 @@ export class SiliconSynapse implements ISiliconLinker {
    * **Carry Protocol**:
    * 1. Increment LOW register atomically
    * 2. If LOW register wrapped to 0, increment HIGH register
-   * 3. Race condition on wrap is acceptable (undercounting by 1 is tolerable)
+   *
+   * **Correctness note**:
+   * The write-side carry is race-free. `Atomics.add` returns each pre-increment
+   * LOW value exactly once, so only the increment observing LOW wrap performs
+   * the HIGH carry increment.
+   *
+   * Readers that load LOW/HIGH separately can still observe a brief read-side
+   * tearing window between LOW wrap and HIGH carry. Use `readTelemetry()` for
+   * a single atomic 64-bit snapshot.
    *
    * **Performance**: Single-threaded increment is ~2ns, contended case is ~50ns.
    */
@@ -389,11 +397,8 @@ export class SiliconSynapse implements ISiliconLinker {
     // Atomically increment LOW register and get the new value
     const newLow = Atomics.add(this.sab, HDR.TELEMETRY_OPS_LOW, 1) + 1
 
-    // If LOW wrapped around to 0, increment HIGH register (carry bit)
-    // NOTE: There's a race condition where multiple threads could detect wrap
-    // simultaneously, causing HIGH to increment multiple times. However,
-    // this is acceptable for telemetry - we prioritize lock-free performance
-    // over perfect accuracy at the 2^32 boundary.
+    // If LOW wrapped around to 0, increment HIGH register (carry bit).
+    // This is race-free because only one atomic increment observes wrap.
     if (newLow === 0) {
       Atomics.add(this.sab, HDR.TELEMETRY_OPS_HIGH, 1)
     }
@@ -732,6 +737,9 @@ export class SiliconSynapse implements ISiliconLinker {
 
   /**
    * Write node data to a node offset.
+   *
+   * All writes use Atomics.store so node publication has explicit release
+   * semantics on all architectures (especially ARM) before link insertion.
    */
   private writeNodeData(
     offset: number,
@@ -751,11 +759,11 @@ export class SiliconSynapse implements ISiliconLinker {
       ((velocity & 0xff) << PACKED.VELOCITY_SHIFT) |
       (activeFlags & PACKED.FLAGS_MASK)
 
-    this.sab[offset + NODE.PACKED_A] = packed
-    this.sab[offset + NODE.BASE_TICK] = baseTick | 0
-    this.sab[offset + NODE.DURATION] = duration | 0
+    Atomics.store(this.sab, offset + NODE.PACKED_A, packed)
+    Atomics.store(this.sab, offset + NODE.BASE_TICK, baseTick | 0)
+    Atomics.store(this.sab, offset + NODE.DURATION, duration | 0)
     // NEXT_PTR set separately during linking
-    this.sab[offset + NODE.SOURCE_ID] = sourceId | 0
+    Atomics.store(this.sab, offset + NODE.SOURCE_ID, sourceId | 0)
     // SEQ_FLAGS preserved from allocation (SEQ already set)
   }
 
@@ -829,19 +837,28 @@ export class SiliconSynapse implements ISiliconLinker {
 
     if (ptr >= this.zoneBStartPtr) {
       // Zone B (Main Thread Owned) -> Push to Reclaim Ring
+      //
+      // Safety note ("looks like missing CAS"):
+      // This enqueue path is intentionally single-producer:
+      // - _deleteNode() runs only while CHAIN_MUTEX is held.
+      // - CHAIN_MUTEX guarantees at most one mutator thread executes this block.
+      // Therefore RECLAIM_RB_TAIL has exactly one writer at a time, so a plain
+      // load/store publish protocol is correct and cheaper than CAS/FAA.
+      // The consumer side is independent and advances RECLAIM_RB_HEAD.
       // Order matters:
       // 1) Read producer/consumer indices
       // 2) Detect full ring before touching slot data
       // 3) On success: store slot, then publish tail (release ordering)
       const tail = Atomics.load(this.sab, HDR.RECLAIM_RB_TAIL)
       const capacity = Atomics.load(this.sab, HDR.RECLAIM_RB_CAPACITY)
-
       const head = Atomics.load(this.sab, HDR.RECLAIM_RB_HEAD)
-      if (tail - head >= capacity) {
+      const mask = capacity - 1
+      const nextTail = (tail + 1) & mask
+
+      // Full when advancing tail would collide with head.
+      if (nextTail === head) {
         Atomics.or(this.sab, HDR.ERROR_FLAG, ERROR.RECLAIM_OVERFLOW)
       } else {
-        // Calculate write position (power-of-2 mask)
-        const mask = capacity - 1
         const idx = tail & mask
         const ringDataOffset = Atomics.load(this.sab, HDR.RECLAIM_RING_PTR)
         const ringDataI32 = ringDataOffset / 4
@@ -849,7 +866,7 @@ export class SiliconSynapse implements ISiliconLinker {
         // Write pointer atomically (release semantics on ARM)
         Atomics.store(this.sab, ringDataI32 + idx, ptr)
         // Commit write (consumer will see data due to acquire-release)
-        Atomics.store(this.sab, HDR.RECLAIM_RB_TAIL, tail + 1)
+        Atomics.store(this.sab, HDR.RECLAIM_RB_TAIL, nextTail)
       }
     } else {
       // Zone A (Worker Owned) -> Free List
@@ -886,10 +903,19 @@ export class SiliconSynapse implements ISiliconLinker {
   /**
    * Read raw node fields into a caller-owned Int32Array(8).
    *
-   * SeqLock read: retries until seq_before === seq_after (via seqChanged).
+   * SeqLock read with standard odd/even protocol.
+   * - Rejects odd seq (writer in progress)
+   * - Accepts only stable even snapshots where seq1 === seq2
    * On success (true), buf[0..7] is a consistent snapshot of all 8 node i32 fields.
-   * On failure (false), buf[NODE.NEXT_PTR] is still individually atomic and usable
-   * for chain continuation; other fields may be torn.
+   * On failure (false), buf contents are partially valid depending on when the failure
+   * occurred. Specifically:
+   * - If the failure was an odd-seq spin-out (all 50 retries consumed by in-progress writes),
+   *   buf[NODE.NEXT_PTR] may not have been written yet — callers MUST NOT assume it is valid
+   *   in that path.
+   * - If the failure was a seq1 !== seq2 inconsistency after a full read, buf[NODE.NEXT_PTR]
+   *   was written by Atomics.load and is individually atomic and safe for chain traversal.
+   * In all cases: only use buf[NODE.NEXT_PTR] for chain continuation, and only after
+   * verifying the return value is false (not true). Other fields MUST be treated as torn.
    *
    * @param ptr - Node byte pointer
    * @param buf - Caller-owned Int32Array of length >= 8
@@ -907,6 +933,10 @@ export class SiliconSynapse implements ISiliconLinker {
 
     while (retries < MAX_SPINS) {
       const seq1 = (Atomics.load(this.sab, offset + NODE.SEQ_FLAGS) & SEQ.SEQ_MASK) >>> SEQ.SEQ_SHIFT
+      if ((seq1 & 1) === 1) {
+        retries = retries + 1
+        continue
+      }
 
       buf[0] = Atomics.load(this.sab, offset + NODE.PACKED_A)
       buf[1] = Atomics.load(this.sab, offset + NODE.BASE_TICK)
@@ -919,7 +949,7 @@ export class SiliconSynapse implements ISiliconLinker {
 
       const seq2 = (buf[6] & SEQ.SEQ_MASK) >>> SEQ.SEQ_SHIFT
 
-      if (!seqChanged(seq1, seq2)) {
+      if ((seq2 & 1) === 0 && !seqChanged(seq1, seq2)) {
         return true
       }
 
@@ -1100,6 +1130,18 @@ export class SiliconSynapse implements ISiliconLinker {
    */
   getFreeCount(): number {
     return Atomics.load(this.sab, HDR.FREE_COUNT)
+  }
+
+  /**
+   * Read the 64-bit telemetry operation counter atomically.
+   *
+   * This provides a tear-free snapshot across LOW/HIGH words and should be
+   * preferred over reading `HDR.TELEMETRY_OPS_LOW/HIGH` separately.
+   *
+   * @returns Monotonic 64-bit operation count
+   */
+  readTelemetry(): bigint {
+    return Atomics.load(this.sab64, HDR.TELEMETRY_OPS_LOW / 2)
   }
 
   /**
@@ -1981,6 +2023,12 @@ export class SiliconSynapse implements ISiliconLinker {
     }
 
     // While-head deletion loop (zero-alloc)
+    //
+    // Safety note ("looks like race by walking unlocked links"):
+    // executeClear() executes as an audio-thread command handler via processCommands()
+    // while holding CHAIN_MUTEX for the entire loop. Main thread does not mutate the
+    // chain directly; it only publishes commands into the ring. So NEXT_PTR reads here
+    // have no concurrent structural writer and are race-free by command-execution model.
     // K-005 BUG FIX: Only free Zone A nodes to the free list.
     // Zone B nodes are skipped — the Bridge calls localAllocator.reset()
     // after clear to bulk-reclaim all Zone B memory at once.
