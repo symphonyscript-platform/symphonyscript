@@ -1,6 +1,5 @@
 import { SynapticMelody } from './SynapticMelody';
 import { SiliconBridge } from '@symphonyscript/kernel';
-import { CCOperation } from '../types';
 
 /**
  * WindBuilder - Wind instrument builder with breath control support.
@@ -17,8 +16,6 @@ import { CCOperation } from '../types';
  * ```
  */
 export class WindBuilder extends SynapticMelody {
-    private ccOperations: CCOperation[] = [];
-
     constructor(bridge: SiliconBridge) {
         super(bridge);
     }
@@ -33,12 +30,7 @@ export class WindBuilder extends SynapticMelody {
         if (amount < 0 || amount > 1) {
             throw new Error(`breath() amount must be 0-1, got ${amount}`);
         }
-        this.ccOperations.push({
-            kind: 'cc',
-            controller: 2,
-            value: Math.floor(amount * 127),
-            tick: this.getCurrentTick()
-        });
+        this.control(2, Math.floor(amount * 127));
         return this;
     }
 
@@ -52,24 +44,7 @@ export class WindBuilder extends SynapticMelody {
         if (amount < 0 || amount > 1) {
             throw new Error(`expressionCC() amount must be 0-1, got ${amount}`);
         }
-        this.ccOperations.push({
-            kind: 'cc',
-            controller: 11,
-            value: Math.floor(amount * 127),
-            tick: this.getCurrentTick()
-        });
+        this.control(11, Math.floor(amount * 127));
         return this;
-    }
-
-    /**
-     * Build and return the ClipNode AST structure.
-     * Includes both note operations and CC operations.
-     */
-    override build() {
-        const baseClip = super.build();
-        return {
-            ...baseClip,
-            operations: [...baseClip.operations, ...this.ccOperations]
-        };
     }
 }

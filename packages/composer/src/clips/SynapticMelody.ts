@@ -4,7 +4,7 @@ import { MelodyChordCursor } from '../cursors/MelodyChordCursor';
 import { FrozenClip } from './FrozenClip';
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
-import { ClipNode, EuclideanMelodyOptions, ArpeggioOptions, ArpPattern, ScaleMode, OperationsSource, NoteOperation } from '../types';
+import { ClipNode, EuclideanMelodyOptions, ArpeggioOptions, ArpPattern, ScaleMode } from '../types';
 import { romanToChord } from '../utils/romanAdapter';
 import { euclidean, rotatePattern } from '@symphonyscript/theory';
 import { parsePitch } from '../utils/pitch';
@@ -321,23 +321,23 @@ export class SynapticMelody extends SynapticClip {
     }
 
     /**
-     * Execute a builder function multiple times, or loop an OperationsSource.
+     * Execute a builder function multiple times, or loop another clip source.
      * Each iteration adds operations at the current tick position.
      *
      * @design-time Called during clip composition only. Closure allocations
      * are acceptable. Do not call during playback hot paths.
      *
      * @param count - Number of repetitions
-     * @param source - Builder function or OperationsSource to loop
+     * @param source - Builder function or clip source to loop
      */
-    loop(count: number, source: ((clip: SynapticMelody) => void) | OperationsSource): this {
+    loop(count: number, source: ((clip: SynapticMelody) => void) | SynapticClip | FrozenClip | ClipNode): this {
         if (typeof source === 'function') {
             // Builder function
             for (let i = 0; i < count; i++) {
                 source(this);
             }
         } else {
-            // OperationsSource - play it count times
+            // Clip source - play it count times
             for (let i = 0; i < count; i++) {
                 this.play(source);
             }
@@ -346,51 +346,56 @@ export class SynapticMelody extends SynapticClip {
     }
 
     /**
-     * Insert operations from another clip at current tick position.
+     * Insert notes from another clip at current tick position.
      *
      * @design-time Called during clip composition only. Do not call during
      * playback hot paths.
      *
-     * @param clip - Source clip (SynapticMelody, ClipNode, FrozenClip, or OperationsSource)
+     * @param clip - Source clip (SynapticClip or FrozenClip). ClipNode is rejected.
      */
-    play(clip: SynapticMelody | ClipNode | FrozenClip | OperationsSource): this {
-        // Get operations from source
-        let operations: ClipNode['operations'];
+    play(clip: SynapticClip | FrozenClip | ClipNode): this {
+        if (!(clip instanceof SynapticClip) && !(clip instanceof FrozenClip)) {
+            throw new Error('SynapticMelody.play() only accepts SynapticClip or FrozenClip; ClipNode is not supported');
+        }
+
+        const tickOffset = this.getCurrentTick();
+        let maxTick = 0;
 
         if (clip instanceof FrozenClip) {
-            operations = clip.clipNode.operations;
-        } else if ('toOperations' in clip && typeof clip.toOperations === 'function') {
-            // OperationsSource interface
-            operations = clip.toOperations();
-        } else if ('build' in clip && typeof clip.build === 'function') {
-            // ClipBuilder (SynapticMelody, etc.)
-            operations = clip.build().operations;
-        } else {
-            // ClipNode
-            operations = (clip as ClipNode).operations;
-        }
-
-        // Task 058: Flush each note directly to Kernel (no operations push)
-        const tickOffset = this.getCurrentTick();
-        for (const op of operations) {
-            if (op.kind === 'note') {
-                const n = op as NoteOperation;
+            clip.visitNotes((_sourceId, pitch, velocity, duration, tick, muted) => {
                 this.flushNote(
-                    n.pitch,
-                    n.velocity / 127,
-                    n.duration,
-                    n.tick + tickOffset,
-                    n.muted,
+                    pitch,
+                    velocity / 127,
+                    duration,
+                    tick + tickOffset,
+                    muted,
                     this.generateSourceId()
                 );
-            }
+
+                const end = tick + duration;
+                if (end > maxTick) {
+                    maxTick = end;
+                }
+            });
+        } else {
+            clip.visitKernelNotes((_sourceId, pitch, velocity, duration, tick, muted) => {
+                this.flushNote(
+                    pitch,
+                    velocity / 127,
+                    duration,
+                    tick + tickOffset,
+                    muted,
+                    this.generateSourceId()
+                );
+
+                const end = tick + duration;
+                if (end > maxTick) {
+                    maxTick = end;
+                }
+            });
         }
 
-        // Advance tick by source clip duration
-        const maxTick = operations.reduce(
-            (max, op) => op.kind === 'note' ? Math.max(max, op.tick + op.duration) : max,
-            0
-        );
+        // Advance tick by source clip duration.
         this.advanceTick(maxTick);
 
         return this;

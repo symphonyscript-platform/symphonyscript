@@ -1,6 +1,6 @@
 import { SiliconBridge } from '@symphonyscript/kernel';
 import { SynapticClip } from '../clips/SynapticClip';
-import { ClipNode, AutomationTarget, CurveType, ScopeIsolation, TempoKeyframe, ClipOperation } from '../types';
+import { ClipNode, AutomationTarget, CurveType, ScopeIsolation, TempoKeyframe } from '../types';
 
 /**
  * Base SynapticCursor
@@ -289,8 +289,7 @@ export abstract class SynapticCursor {
     }
 
     /**
-     * Escape: Commit pending note and build the clip.
-     * Enables fluent chaining: melody.note('C4', 1).build()
+     * Escape: Commit pending note and build clip metadata.
      */
     build(): ClipNode {
         this._commit();
@@ -298,11 +297,11 @@ export abstract class SynapticCursor {
     }
 
     /**
-     * Escape: Commit pending note and return operations array.
-     * Enables fluent chaining: melody.note('C4', 1).toOperations()
+     * Escape: Commit pending note and return operation snapshot (strict mode: empty).
      */
-    toOperations(): ClipOperation[] {
+    toOperations(): ClipNode['operations'] {
         this._commit();
         return this.clip.toOperations();
     }
+
 }

@@ -1,5 +1,6 @@
 import { SynapticMelody } from '../clips/SynapticMelody';
 import { createTestBridge } from '../test-bridge';
+import { ClipNode, SCHEMA_VERSION } from '../types';
 
 describe('SynapticMelody.loop()', () => {
     let melody: SynapticMelody;
@@ -66,5 +67,21 @@ describe('SynapticMelody.loop()', () => {
 
         expect(called).toBe(false);
         expect(melody.build().operations.length).toBe(0);
+    });
+
+    it('throws when looping a ClipNode source', () => {
+        const sourceClip: ClipNode = {
+            _version: SCHEMA_VERSION,
+            kind: 'clip',
+            name: 'Source',
+            operations: [
+                { kind: 'note', pitch: 60, velocity: 100, duration: 0.5, tick: 0, muted: false, sourceId: 1 }
+            ]
+        };
+
+        expect(() => melody.loop(2, sourceClip)).toThrow(
+            'SynapticMelody.play() only accepts SynapticClip or FrozenClip; ClipNode is not supported'
+        );
+        expect(melody.build().operations).toHaveLength(0);
     });
 });

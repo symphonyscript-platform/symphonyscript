@@ -1,47 +1,77 @@
-import { ClipNode, FreezeOptions, ClipOperation, OperationsSource } from '../types';
+import { FreezeOptions } from '../types';
+import { SynapticClip } from './SynapticClip';
 
 /**
- * A frozen (pre-compiled) clip for efficient reuse.
- * Frozen clips can be played multiple times without re-expansion.
- * Implements OperationsSource for use with loop() and play().
+ * Frozen clip handle for efficient clip reuse without operation snapshots.
  *
- * @design-time This class is intended for clip composition and export only.
- * Do not use FrozenClip in playback hot paths. Allocations (toOperations spread,
- * filter() in getters) are acceptable during design-time clip setup.
+ * Task 058 strict mode:
+ * - No operation arrays are stored here.
+ * - Source clip kernel state remains the single source of truth.
  */
-export class FrozenClip implements OperationsSource {
+export class FrozenClip {
+    public readonly name: string;
+    private readonly sourceIds: number[] = [];
+    private readonly pitches: number[] = [];
+    private readonly velocities: number[] = [];
+    private readonly durations: number[] = [];
+    private readonly ticks: number[] = [];
+    private readonly muted: boolean[] = [];
+    private readonly expressionIds: number[] = [];
+
     constructor(
-        public readonly clipNode: ClipNode,
+        public readonly source: SynapticClip,
         public readonly options: FreezeOptions
-    ) {}
+    ) {
+        this.name = source.getClipName();
+        source.visitKernelNotes((sourceId, pitch, velocity, duration, tick, isMuted, expressionId) => {
+            this.sourceIds.push(sourceId);
+            this.pitches.push(pitch);
+            this.velocities.push(velocity);
+            this.durations.push(duration);
+            this.ticks.push(tick);
+            this.muted.push(isMuted);
+            this.expressionIds.push(expressionId ?? 0);
+        });
+    }
 
     /**
      * Get the total duration of the frozen clip in beats.
      */
     get duration(): number {
-        const noteOps = this.clipNode.operations.filter(op => op.kind === 'note');
-        if (noteOps.length === 0) return 0;
-        return noteOps.reduce((max, op) => {
-            if (op.kind === 'note') {
-                return Math.max(max, op.tick + op.duration);
+        let max = 0;
+        for (let i = 0; i < this.ticks.length; i++) {
+            const end = this.ticks[i] + this.durations[i];
+            if (end > max) {
+                max = end;
             }
-            return max;
-        }, 0);
+        }
+        return max;
     }
 
     /**
      * Get the number of notes in the frozen clip.
      */
     get noteCount(): number {
-        return this.clipNode.operations.filter(op => op.kind === 'note').length;
+        return this.ticks.length;
     }
 
     /**
-     * Returns the frozen operations array.
-     * Implements OperationsSource interface for use with loop() and play().
-     * @returns Array of operations (shallow copy for safety)
+     * Visit frozen note snapshot.
      */
-    toOperations(): ClipOperation[] {
-        return [...this.clipNode.operations];
+    visitNotes(
+        cb: (sourceId: number, pitch: number, velocity: number, duration: number, tick: number, muted: boolean, expressionId?: number) => void
+    ): void {
+        for (let i = 0; i < this.ticks.length; i++) {
+            const expressionId = this.expressionIds[i];
+            cb(
+                this.sourceIds[i],
+                this.pitches[i],
+                this.velocities[i],
+                this.durations[i],
+                this.ticks[i],
+                this.muted[i],
+                expressionId === 0 ? undefined : expressionId
+            );
+        }
     }
 }

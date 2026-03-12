@@ -1,7 +1,7 @@
 import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
 import { SeededRandom } from '@symphonyscript/core';
 import { SynapticNode } from '@symphonyscript/synaptic';
-import { ClipNode, NoteOperation, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsType, CurveType, VelocityPoint, HumanizeSettings, QuantizeSettings, CCOperation, AftertouchOperation, AutomationOperation, AutomationTarget, FreezeOptions, ScopeIsolation, TempoKeyframe, TempoEnvelopeOp, ClipOperation, OperationsSource, ArpPattern, PitchBendOperation, PITCH_CLASS_TO_ROOT } from '../types';
+import { ClipNode, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsType, CurveType, VelocityPoint, HumanizeSettings, QuantizeSettings, AutomationTarget, FreezeOptions, ScopeIsolation, TempoKeyframe, ArpPattern, PITCH_CLASS_TO_ROOT } from '../types';
 import { parsePitch } from '../utils/pitch';
 import { FrozenClip } from './FrozenClip';
 
@@ -23,8 +23,8 @@ const AUTOMATION_TARGET_NAMES: readonly string[] = ['volume', 'pan', 'filter', '
  * CLARIFICATION:
  * - Actual audio-thread-safe zero-allocation operations reside in `@symphonyscript/kernel`.
  * 
- * Task 058: Kernel is the single source of truth. No operations[] array.
- * build() and toOperations() read from Kernel via bridge.traverseNotes().
+ * Task 058: Kernel is the single source of truth. No operations[] buffering
+ * and no operations reconstruction from kernel traversal at runtime.
  */
 export abstract class SynapticClip extends SynapticNode {
     protected clipName: string = '';
@@ -715,16 +715,22 @@ export abstract class SynapticClip extends SynapticNode {
     }
 
     /**
-     * Build and return the ClipNode AST structure.
-     * Task 058: Reads from Kernel via bridge.traverseNotes() (single source of truth).
+     * Return clip name metadata.
+     */
+    getClipName(): string {
+        return this.clipName;
+    }
+
+    /**
+     * Build and return ClipNode metadata.
+     * Task 058 strict mode: note operation materialization is removed.
      */
     build(): ClipNode {
-        const operations = this.toOperations();
         return {
             _version: SCHEMA_VERSION,
             kind: 'clip',
             name: this.clipName,
-            operations,
+            operations: [],
             tempo: this.currentTempo,
             timeSignature: [this.timeSignatureNumerator, this.timeSignatureDenominator],
             swing: this.swingAmount,
@@ -737,47 +743,29 @@ export abstract class SynapticClip extends SynapticNode {
         };
     }
 
-    /**
-     * Returns operations from Kernel. Implements OperationsSource for loop() and play().
-     * Task 058: Reads via bridge.traverseNotes() (cold path).
-     */
-    toOperations(): ClipOperation[] {
-        const ops: NoteOperation[] = [];
-        const cb = (sourceId: number, pitch: number, velocity: number, duration: number, tick: number, muted: boolean, expressionId?: number) => {
-            ops.push({
-                kind: 'note',
-                pitch,
-                velocity,
-                duration,
-                tick,
-                muted,
-                sourceId,
-                ...(expressionId !== undefined && expressionId !== 0 ? { expressionId } : {})
-            });
-        };
-        this.bridge.traverseNotes(cb as any);
-        return ops;
+    toOperations(): ClipNode['operations'] {
+        return [];
     }
 
     /**
-     * Freeze the clip for efficient reuse. Task 058: Reads from Kernel via toOperations().
+     * Freeze clip metadata and kernel reference for reuse.
+     * Task 058 strict mode: no operation snapshot is created.
      */
     freeze(options?: FreezeOptions): FrozenClip {
-        const clipNode: ClipNode = {
-            _version: SCHEMA_VERSION,
-            kind: 'clip',
-            name: this.clipName,
-            operations: this.toOperations().map(op => ({ ...op })),
-            tempo: this.currentTempo,
-            timeSignature: [this.timeSignatureNumerator, this.timeSignatureDenominator],
-            swing: this.swingAmount,
-            groove: this.currentGroove
-        };
         const freezeOpts: FreezeOptions = {
             bpm: options?.bpm ?? this.currentTempo,
             timeSignature: options?.timeSignature ?? [this.timeSignatureNumerator, this.timeSignatureDenominator]
         };
-        return new FrozenClip(clipNode, freezeOpts);
+        return new FrozenClip(this, freezeOpts);
+    }
+
+    /**
+     * Visit notes currently committed in the backing kernel bridge.
+     */
+    visitKernelNotes(
+        cb: (sourceId: number, pitch: number, velocity: number, duration: number, tick: number, muted: boolean, expressionId?: number) => void
+    ): void {
+        this.bridge.traverseNotes(cb as any);
     }
 
     /**
@@ -980,17 +968,31 @@ export abstract class SynapticClip extends SynapticNode {
      * @returns this for chaining
      */
     preview(bpm: number = 120): this {
-        const clip = this.build();
-        const noteOps = clip.operations.filter(op => op.kind === 'note') as NoteOperation[];
+        const notePitches: number[] = [];
+        const noteTicks: number[] = [];
+        const noteDurations: number[] = [];
+        this.visitKernelNotes((_sourceId, pitch, velocity, duration, tick) => {
+            if (velocity > 0) {
+                notePitches.push(pitch);
+                noteTicks.push(tick);
+                noteDurations.push(duration);
+            }
+        });
 
-        if (noteOps.length === 0) {
-            console.log(`Clip: ${clip.name} (${bpm} BPM)`);
+        if (notePitches.length === 0) {
+            console.log(`Clip: ${this.clipName} (${bpm} BPM)`);
             console.log('(empty)');
             return this;
         }
 
         // Find time range
-        const maxTick = noteOps.reduce((max, op) => Math.max(max, op.tick + op.duration), 0);
+        let maxTick = 0;
+        for (let i = 0; i < notePitches.length; i++) {
+            const endTick = noteTicks[i] + noteDurations[i];
+            if (endTick > maxTick) {
+                maxTick = endTick;
+            }
+        }
         const totalBars = Math.ceil(maxTick / 4); // 4 beats per bar
         const barsToShow = Math.max(totalBars, 1);
 
@@ -1000,7 +1002,7 @@ export abstract class SynapticClip extends SynapticNode {
         const stepDuration = 0.25; // 1/16th note in beats
 
         // Collect unique pitches, sorted high to low
-        const pitches = [...new Set(noteOps.map(op => op.pitch))].sort((a, b) => b - a);
+        const pitches = [...new Set(notePitches)].sort((a, b) => b - a);
 
         // Build grid for each pitch
         const grid: Map<number, string[]> = new Map();
@@ -1009,12 +1011,15 @@ export abstract class SynapticClip extends SynapticNode {
         }
 
         // Fill in notes
-        for (const op of noteOps) {
-            const pitchGrid = grid.get(op.pitch);
+        for (let i = 0; i < notePitches.length; i++) {
+            const pitch = notePitches[i];
+            const tick = noteTicks[i];
+            const duration = noteDurations[i];
+            const pitchGrid = grid.get(pitch);
             if (!pitchGrid) continue;
 
-            const startStep = Math.floor(op.tick / stepDuration);
-            const durationSteps = Math.ceil(op.duration / stepDuration);
+            const startStep = Math.floor(tick / stepDuration);
+            const durationSteps = Math.ceil(duration / stepDuration);
 
             // Mark onset
             if (startStep >= 0 && startStep < totalSteps) {
@@ -1030,7 +1035,7 @@ export abstract class SynapticClip extends SynapticNode {
         }
 
         // Render output
-        console.log(`Clip: ${clip.name} (${bpm} BPM)`);
+        console.log(`Clip: ${this.clipName} (${bpm} BPM)`);
 
         // Beat header
         let beatHeader = 'Beat: ';

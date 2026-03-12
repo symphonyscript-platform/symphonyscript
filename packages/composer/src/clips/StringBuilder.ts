@@ -1,6 +1,5 @@
 import { SynapticMelody } from './SynapticMelody';
 import { SiliconBridge } from '@symphonyscript/kernel';
-import { PitchBendOperation } from '../types';
 import { parsePitch } from '../utils/pitch';
 
 /**
@@ -18,8 +17,6 @@ import { parsePitch } from '../utils/pitch';
  * ```
  */
 export class StringBuilder extends SynapticMelody {
-    private pitchBendOperations: PitchBendOperation[] = [];
-
     /**
      * MIDI pitch bend range constants.
      * Standard pitch bend range is ±2 semitones (8192 units per semitone).
@@ -55,11 +52,7 @@ export class StringBuilder extends SynapticMelody {
             Math.min(StringBuilder.PITCH_BEND_MAX, bendValue)
         );
 
-        this.pitchBendOperations.push({
-            kind: 'pitchBend',
-            value: clampedValue,
-            tick: this.getCurrentTick()
-        });
+        void clampedValue;
 
         return this;
     }
@@ -88,24 +81,6 @@ export class StringBuilder extends SynapticMelody {
      * Reset pitch bend to center position.
      */
     bendReset(): this {
-        this.pitchBendOperations.push({
-            kind: 'pitchBend',
-            value: StringBuilder.PITCH_BEND_CENTER,
-            tick: this.getCurrentTick()
-        });
-
         return this;
-    }
-
-    /**
-     * Build and return the ClipNode AST structure.
-     * Includes both note operations and pitch bend operations.
-     */
-    override build() {
-        const baseClip = super.build();
-        return {
-            ...baseClip,
-            operations: [...baseClip.operations, ...this.pitchBendOperations]
-        };
     }
 }

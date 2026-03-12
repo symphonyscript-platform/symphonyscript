@@ -26,7 +26,7 @@ describe('SynapticMelody.play()', () => {
         expect(result.operations[1].pitch).toBe(64); // E4
     });
 
-    it('inserts operations from a ClipNode', () => {
+    it('throws for ClipNode input', () => {
         const sourceClip: ClipNode = {
             _version: SCHEMA_VERSION,
             kind: 'clip',
@@ -37,12 +37,9 @@ describe('SynapticMelody.play()', () => {
             ]
         };
 
-        melody.play(sourceClip);
-
-        const result = melody.build();
-        expect(result.operations.length).toBe(2);
-        expect(result.operations[0].pitch).toBe(60);
-        expect(result.operations[1].pitch).toBe(64);
+        expect(() => melody.play(sourceClip)).toThrow(
+            'SynapticMelody.play() only accepts SynapticClip or FrozenClip; ClipNode is not supported'
+        );
     });
 
     it('offsets operations by current tick position', () => {
@@ -90,7 +87,7 @@ describe('SynapticMelody.play()', () => {
         expect(melody.getCurrentTick()).toBe(0);
     });
 
-    it('generates new sourceIds for inserted operations', () => {
+    it('does not insert notes when ClipNode is passed', () => {
         const sourceClip: ClipNode = {
             _version: SCHEMA_VERSION,
             kind: 'clip',
@@ -100,9 +97,9 @@ describe('SynapticMelody.play()', () => {
             ]
         };
 
-        melody.play(sourceClip);
+        expect(() => melody.play(sourceClip)).toThrow();
 
         const result = melody.build();
-        expect(result.operations[0].sourceId).not.toBe(999);
+        expect(result.operations).toHaveLength(0);
     });
 });
