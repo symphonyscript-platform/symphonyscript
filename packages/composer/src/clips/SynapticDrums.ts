@@ -1,7 +1,7 @@
 import { SynapticClip } from './SynapticClip';
 import { DrumsHitCursor } from '../cursors/DrumsHitCursor';
 import { SiliconBridge } from '@symphonyscript/kernel';
-import { EuclideanDrumOptions, DrumMap, DrumType } from '../types';
+import { EuclideanDrumOptions, DrumType } from '../types';
 import { euclidean, rotatePattern } from '@symphonyscript/theory';
 import { parsePitch } from '../utils/pitch';
 
@@ -60,8 +60,6 @@ export class SynapticDrums extends SynapticClip {
     private sourceIdCounter: number = 0;
     /** Standard drums: O(1) array lookup. */
     private readonly _drumPitches: Uint8Array;
-    /** Custom drum names. Lazily allocated only when needed. */
-    private _customMap: Map<string, number> | null = null;
 
     constructor(bridge: SiliconBridge) {
         super(bridge);
@@ -69,25 +67,9 @@ export class SynapticDrums extends SynapticClip {
         this._drumPitches = new Uint8Array(DEFAULT_PITCHES);
     }
 
-    /**
-     * Create a new drum builder with custom mapping.
-     * Mutates in place (no object spread).
-     * @param mapping - Custom drum name to pitch mapping
-     * @returns this for chaining
-     */
-    withMapping(mapping: DrumMap): this {
-        for (const k in mapping) {
-            if (!Object.prototype.hasOwnProperty.call(mapping, k)) continue;
-            const raw = mapping[k];
-            const pitch = typeof raw === 'number' ? raw : parsePitch(raw);
-            const key = k.toLowerCase();
-            const slot = STANDARD_DRUM_SLOT[key];
-            if (slot !== undefined) {
-                this._drumPitches[slot] = pitch;
-            } else {
-                (this._customMap ??= new Map()).set(key, pitch);
-            }
-        }
+    /** Override a standard drum slot pitch in O(1). */
+    mapDrum(drum: DrumType, pitch: number): this {
+        this._drumPitches[DRUM_TYPE_TO_SLOT[drum]] = pitch;
         return this;
     }
 
@@ -104,10 +86,6 @@ export class SynapticDrums extends SynapticClip {
         const slot = STANDARD_DRUM_SLOT[key];
         if (slot !== undefined) {
             return this._drumPitches[slot];
-        }
-        const custom = this._customMap?.get(key);
-        if (custom !== undefined) {
-            return custom;
         }
         return parsePitch(name);
     }
