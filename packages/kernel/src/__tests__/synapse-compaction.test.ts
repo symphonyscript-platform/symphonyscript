@@ -187,4 +187,66 @@ describe('K-001: Synapse Compaction & Lazy Allocation', () => {
         expect(count).toBe(500)
         expect(allocator.getUsedSlots()).toBe(500)
     })
+
+    it('R-008: should find all colliding entries with triangular probing', () => {
+        const sab = createLinkerSAB({ nodeCapacity: 256, synapseCapacity: 16 })
+        const allocator = new SynapseAllocator(sab)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const allocatorAny = allocator as any
+        const originalHash = allocatorAny.hash as (key: number) => number
+        allocatorAny.hash = (_key: number) => 0
+
+        const slots: number[] = []
+        try {
+            for (let i = 0; i < 8; i++) {
+                const sourcePtr = 1000 + i
+                const targetPtr = 2000 + i
+                const ptr = allocator.connect(sourcePtr, targetPtr, 100, 0)
+                expect(ptr).toBeGreaterThan(0)
+
+                const slot = allocator.findHeadSlot(sourcePtr)
+                expect(slot).toBeGreaterThanOrEqual(0)
+                slots.push(slot)
+            }
+        } finally {
+            allocatorAny.hash = originalHash
+        }
+
+        // All entries hash to same ideal slot and must still occupy unique slots.
+        expect(new Set(slots).size).toBe(slots.length)
+    })
+
+    it('R-008: should preserve colliding entries across compaction reinsertion', () => {
+        const sab = createLinkerSAB({ nodeCapacity: 256, synapseCapacity: 32 })
+        const allocator = new SynapseAllocator(sab)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const allocatorAny = allocator as any
+        const originalHash = allocatorAny.hash as (key: number) => number
+        allocatorAny.hash = (_key: number) => 0
+
+        try {
+            for (let i = 0; i < 8; i++) {
+                const sourcePtr = 3000 + i
+                const targetPtr = 4000 + i
+                const ptr = allocator.connect(sourcePtr, targetPtr, 100, 0)
+                expect(ptr).toBeGreaterThan(0)
+            }
+
+            for (let i = 0; i < 4; i++) {
+                allocator.disconnect(3000 + i, 4000 + i)
+            }
+
+            const compacted = allocator.compactTable()
+            expect(compacted).toBe(4)
+
+            for (let i = 0; i < 4; i++) {
+                expect(allocator.findHeadSlot(3000 + i)).toBe(-1)
+            }
+            for (let i = 4; i < 8; i++) {
+                expect(allocator.findHeadSlot(3000 + i)).not.toBe(-1)
+            }
+        } finally {
+            allocatorAny.hash = originalHash
+        }
+    })
 })

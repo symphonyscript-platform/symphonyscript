@@ -290,7 +290,7 @@ const targetTick = Atomics.load(this.sab, offset + NODE.BASE_TICK)
 
 ### Task 3.1: NODE_COUNT Using Atomics.add/sub ✅ FIXED
 
-**Verification:** `_insertNode()`, `_insertHead()`, and `_deleteNode()` use `Atomics.add()`/`Atomics.sub()`.
+**Verification:** Legacy private insert helpers (removed in RFC-059 R-002) and `_deleteNode()` use `Atomics.add()`/`Atomics.sub()`.
 
 ```typescript:653:654:packages/kernel/src/silicon-synapse.ts
 // Increment NODE_COUNT (node is now linked)

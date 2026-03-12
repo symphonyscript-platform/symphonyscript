@@ -216,7 +216,7 @@ describe('Stress Tests: Synapse Table Collision', () => {
 
     expect(targetPtrs.length).toBeGreaterThanOrEqual(10) // At least some should succeed
 
-    // Connect source to all targets via ring buffer (tests linear probe chaining)
+    // Connect source to all targets via ring buffer (tests triangular probe chaining)
     const ringBuffer = new RingBuffer(sabView)
     for (const targetPtr of targetPtrs) {
       // Pack weight (500) and jitter (0) into single i32: weight in upper 16 bits

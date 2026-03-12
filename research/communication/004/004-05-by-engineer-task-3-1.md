@@ -40,8 +40,8 @@ Atomics.sub(this.sab, HDR.NODE_COUNT, 1)   // Decrement
 
 | Location | Method | Operation | Line |
 |----------|--------|-----------|------|
-| 1 | `_insertNode()` | Increment | 625 |
-| 2 | `_insertHead()` | Increment | 703 |
+| 1 | Legacy private insert helper (removed in RFC-059 R-002) | Increment | 625 |
+| 2 | Legacy private insert helper (removed in RFC-059 R-002) | Increment | 703 |
 | 3 | `_deleteNode()` | Decrement | 777 |
 | 4 | `executeInsert()` | Increment | 1837 |
 
@@ -59,8 +59,8 @@ Atomics.sub(this.sab, HDR.NODE_COUNT, 1)   // Decrement
 ## Files Changed
 
 1. `packages/kernel/src/silicon-synapse.ts`
-   - Line 625: `_insertNode()` - changed to `Atomics.add`
-   - Line 703: `_insertHead()` - changed to `Atomics.add`
+   - Line 625: legacy private insert helper (removed in RFC-059 R-002) - changed to `Atomics.add`
+   - Line 703: legacy private insert helper (removed in RFC-059 R-002) - changed to `Atomics.add`
    - Line 777: `_deleteNode()` - changed to `Atomics.sub`
    - Line 1837: `executeInsert()` - changed to `Atomics.add`
 

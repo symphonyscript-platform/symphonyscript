@@ -509,8 +509,8 @@ export class SiliconSynapse implements ISiliconLinker {
    * - newPtr points to a valid, initialized node
    * - afterPtr points to a valid node in the chain
    *
-   * This is the extracted linking logic from insertNode(), used by both
-   * the old insertNode() method and the new RFC-044 executeInsert().
+   * This is the core linking primitive used by RFC-044 command processing
+   * via executeInsert().
    *
    * @param newPtr - Pointer to node to link (already allocated and written)
    * @param afterPtr - Pointer to node to insert after
@@ -545,8 +545,8 @@ export class SiliconSynapse implements ISiliconLinker {
    * - Node data is already written to SAB
    * - newPtr points to a valid, initialized node
    *
-   * This is the extracted linking logic from insertHead(), used by both
-   * the old insertHead() method and the new RFC-044 executeInsert().
+   * This is the core head-linking primitive used by RFC-044 command processing
+   * via executeInsert().
    *
    * @param newPtr - Pointer to node to link (already allocated and written)
    */
@@ -757,174 +757,6 @@ export class SiliconSynapse implements ISiliconLinker {
     // NEXT_PTR set separately during linking
     this.sab[offset + NODE.SOURCE_ID] = sourceId | 0
     // SEQ_FLAGS preserved from allocation (SEQ already set)
-  }
-
-  /**
-   * Insert a new node after the given node.
-   *
-   * The Atomic Order of Operations (RFC-043 §7.4.2):
-   * 1. Check safe zone
-   * 2. Allocate NoteX from Free List
-   * 3. Write all attributes to NoteX
-   * 4. Link Future: NoteX.NEXT_PTR = NoteB, NoteX.PREV_PTR = NoteA
-   * 5. Update NoteB.PREV_PTR = NoteX (if NoteB exists)
-   * 6. Atomic Splice: NoteA.NEXT_PTR = NoteX
-   * 7. Signal COMMIT_FLAG
-   *
-   * RFC-045-04: Returns NULL_PTR on error (check ERROR_FLAG for details).
-   *
-   * @param afterPtr - Node to insert after
-   * @param opcode - Node opcode
-   * @param pitch - MIDI pitch
-   * @param velocity - MIDI velocity
-   * @param duration - Duration in ticks
-   * @param baseTick - Base tick
-   * @param sourceId - Source ID
-   * @param flags - Initial flags
-   * @returns Pointer to new node, or NULL_PTR on error
-   */
-  private _insertNode(
-    afterPtr: NodePtr,
-    opcode: number,
-    pitch: number,
-    velocity: number,
-    duration: number,
-    baseTick: number,
-    sourceId: number,
-    flags: number
-  ): NodePtr {
-    // Allocate new node first (before acquiring mutex)
-    const newPtr = this.allocNode()
-    if (newPtr === NULL_PTR) {
-      // ERROR_FLAG already set by allocNode
-      return NULL_PTR
-    }
-    const newOffset = this.nodeOffset(newPtr)
-
-    // Write all attributes (before acquiring mutex)
-    this.writeNodeData(newOffset, opcode, pitch, velocity, duration, baseTick, sourceId, flags)
-
-    // **v1.5 CHAIN MUTEX**: Protect structural mutation
-    if (!this._acquireChainMutex()) {
-      // Deadlock detected - free the node and return error
-      this.freeNode(newPtr)
-      return NULL_PTR
-    }
-
-    // 1. Check safe zone INSIDE mutex (playhead may have moved during wait)
-    const afterOffset = this.nodeOffset(afterPtr)
-    const targetTick = this.sab[afterOffset + NODE.BASE_TICK]
-    if (!this.checkSafeZone(targetTick)) {
-      // Safe zone violation - free node and release mutex
-      this.freeNode(newPtr)
-      this._releaseChainMutex()
-      return NULL_PTR
-    }
-
-    // 2. Link Future: NoteX.NEXT_PTR = NoteB, NoteX.PREV_PTR = NoteA
-    const noteBPtr = Atomics.load(this.sab, afterOffset + NODE.NEXT_PTR)
-    Atomics.store(this.sab, newOffset + NODE.NEXT_PTR, noteBPtr)
-    Atomics.store(this.sab, newOffset + NODE.PREV_PTR, afterPtr)
-
-    // 3. Update NoteB.PREV_PTR = NoteX (if NoteB exists)
-    if (noteBPtr !== NULL_PTR) {
-      const noteBOffset = this.nodeOffset(noteBPtr)
-      Atomics.store(this.sab, noteBOffset + NODE.PREV_PTR, newPtr)
-    }
-
-    // 4. Atomic Splice: NoteA.NEXT_PTR = NoteX
-    Atomics.store(this.sab, afterOffset + NODE.NEXT_PTR, newPtr)
-
-    // 5. Increment NODE_COUNT (node is now linked)
-    Atomics.add(this.sab, HDR.NODE_COUNT, 1)
-
-    // 6. Signal structural change
-    Atomics.store(this.sab, HDR.COMMIT_FLAG, COMMIT.PENDING)
-
-    // Release mutex and return success
-    this._releaseChainMutex()
-    return newPtr
-  }
-
-  /**
-   * Insert a new node at the head of the chain.
-   *
-   * Uses Chain Mutex (v1.5) to protect structural mutations from concurrent workers.
-   *
-   * RFC-045-04: Returns NULL_PTR on error (check ERROR_FLAG for details).
-   *
-   * @param opcode - Node opcode
-   * @param pitch - MIDI pitch
-   * @param velocity - MIDI velocity
-   * @param duration - Duration in ticks
-   * @param baseTick - Base tick
-   * @param sourceId - Source ID
-   * @param flags - Initial flags
-   * @returns Pointer to new node, or NULL_PTR on error
-   */
-  private _insertHead(
-    opcode: number,
-    pitch: number,
-    velocity: number,
-    duration: number,
-    baseTick: number,
-    sourceId: number,
-    flags: number
-  ): NodePtr {
-    // Allocate new node first (before acquiring mutex)
-    const newPtr = this.allocNode()
-    if (newPtr === NULL_PTR) {
-      // ERROR_FLAG already set by allocNode
-      return NULL_PTR
-    }
-    const newOffset = this.nodeOffset(newPtr)
-
-    // Write attributes (before acquiring mutex)
-    this.writeNodeData(newOffset, opcode, pitch, velocity, duration, baseTick, sourceId, flags)
-
-    // **v1.5 CHAIN MUTEX**: Protect structural mutation
-    if (!this._acquireChainMutex()) {
-      // Deadlock detected - free the node and return error
-      this.freeNode(newPtr)
-      return NULL_PTR
-    }
-
-    // Check safe zone INSIDE mutex (playhead may have moved during wait)
-    if (!this.checkSafeZone(baseTick)) {
-      // Safe zone violation - free node and release mutex
-      this.freeNode(newPtr)
-      this._releaseChainMutex()
-      return NULL_PTR
-    }
-
-    // Load current head (mutex guarantees exclusive access - no CAS needed)
-    const currentHead = Atomics.load(this.sab, HDR.HEAD_PTR)
-
-    // Link new node to current head
-    Atomics.store(this.sab, newOffset + NODE.NEXT_PTR, currentHead)
-    Atomics.store(this.sab, newOffset + NODE.PREV_PTR, NULL_PTR) // New head has no prev
-
-    // Update old head's PREV_PTR to point to new head
-    if (currentHead !== NULL_PTR) {
-      const currentHeadOffset = this.nodeOffset(currentHead)
-      Atomics.store(this.sab, currentHeadOffset + NODE.PREV_PTR, newPtr)
-    }
-
-    // Update HEAD_PTR (simple store - mutex guarantees no concurrent modification)
-    Atomics.store(this.sab, HDR.HEAD_PTR, newPtr)
-
-    // Increment NODE_COUNT (node is now linked)
-    Atomics.add(this.sab, HDR.NODE_COUNT, 1)
-
-    // Signal structural change
-    Atomics.store(this.sab, HDR.COMMIT_FLAG, COMMIT.PENDING)
-
-    // Track operation for telemetry
-    this._incrementTelemetry()
-
-    // Release mutex and return success
-    this._releaseChainMutex()
-    return newPtr
   }
 
   /**

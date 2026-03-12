@@ -106,12 +106,12 @@ To support `loop(16).note().note()` (Reverse Polish Notation style definition), 
 2.  `barrierId` (The immutable phase barrier at the end).
 
 When `addNote` is called:
-*   If `barrierId` exists: Insert NewNote **after** `writeId`. The existing `_insertNode` splicing logic automatically links `NewNote -> Barrier`.
+*   If `barrierId` exists: Insert NewNote **after** `writeId`. The legacy splice helper still handles linking `NewNote -> Barrier` (`_linkNode` remains); RFC-059 R-002 removed only dead private insert APIs.
 *   Correct chaining: `writeId` → `NewNote` → `barrierId`.
 *   Update `writeId` = `NewNote`.
 
 **Splicing Verification:**
-The existing `_insertNode` (silicon-synapse.ts lines 508-520) correctly implements doubly-linked list splicing:
+The legacy splice helper (silicon-synapse.ts lines 508-520; `_linkNode` still active) correctly implements doubly-linked list splicing; RFC-059 R-002 removed only dead private insert APIs:
 - Line 509: Reads `noteBPtr` (current next of afterPtr)
 - Line 510: Sets `newNode.NEXT_PTR = noteBPtr`
 - Line 516: Updates `noteB.PREV_PTR = newNode`

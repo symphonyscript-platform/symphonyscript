@@ -15,7 +15,7 @@ This RFC addresses eight defects and design gaps identified during a comprehensi
 | # | Severity | Title | Files Affected |
 |---|----------|-------|----------------|
 | R-001 | **CRITICAL** | Reclaim Ring has no overflow check | `silicon-synapse.ts` |
-| R-002 | LOW | Dead code: `_insertNode` / `_insertHead` | `silicon-synapse.ts` |
+| R-002 | LOW | Dead code: legacy private insert helpers | `silicon-synapse.ts` |
 | R-003 | MODERATE | Single error flag (last-writer-wins) | `constants.ts`, all consumers |
 | R-004 | LOW | Backpressure ownership clarification | `silicon-bridge.ts` (doc only) |
 | R-005 | MODERATE | Unbounded CAS loops in `AttributePatcher` | `patch.ts` |
@@ -83,13 +83,13 @@ if (ptr >= this.zoneBStartPtr) {
 
 ---
 
-### R-002: Remove Dead Code (`_insertNode`, `_insertHead`)
+### R-002: Remove Dead Code (Legacy Private Insert Helpers)
 
 **Severity**: LOW — Maintenance liability, no runtime impact.
 
 #### 3.2.1 Problem
 
-The private methods `_insertNode()` (lines 788–849) and `_insertHead()` (lines 867–930) are never called. The test helpers `insertHead()` and `insertNode()` route through `ringBuffer.write()` → `processCommands()` → `executeInsert()`. These ~140 lines of dead code:
+The legacy private insert helpers (lines 788–849 and 867–930) were never called. The test helpers `insertHead()` and `insertNode()` route through `ringBuffer.write()` → `processCommands()` → `executeInsert()`. These ~140 lines of dead code:
 
 - Diverge from the actual insert path (`executeInsert`)
 - Risk being mistakenly called, bypassing the ring buffer protocol
@@ -97,7 +97,7 @@ The private methods `_insertNode()` (lines 788–849) and `_insertHead()` (lines
 
 #### 3.2.2 Fix
 
-Delete `_insertNode()` and `_insertHead()` from `SiliconSynapse`. No callers exist; no tests reference them.
+Delete the legacy private insert helpers from `SiliconSynapse`. No callers exist; no tests reference them.
 
 ---
 

@@ -366,8 +366,8 @@ Atomics.sub(this.sab, HDR.NODE_COUNT, 1)
 ```
 
 **Locations to update:**
-- Line 598-599 (`_insertNode`)
-- Line 677-678 (`_insertHead`)
+- Line 598-599 (legacy private insert helper, removed in RFC-059 R-002)
+- Line 677-678 (legacy private insert helper, removed in RFC-059 R-002)
 - Line 752-753 (`_deleteNode`)
 - Line 1776-1777 (`executeInsert`)
 

@@ -96,7 +96,12 @@ export class RingBuffer {
    *
    * @remarks
    * This method uses atomic operations to ensure thread-safe communication.
-   * The Worker must process commands fast enough to prevent overflow.
+   * Producer-side backpressure is owned by the producer: callers must handle
+   * `RING_ERR.FULL` (retry/spin/yield policy) before enqueue succeeds.
+   * `SiliconBridge.writeOrSpin()` is the canonical producer-side backpressure
+   * strategy.
+   * `SiliconSynapse` is the consumer and must not implement producer retry
+   * behavior.
    */
   write(opcode: number, param1: number, param2: number, param3: number = 0): number {
     const head = Atomics.load(this.sab, HDR.RB_HEAD)

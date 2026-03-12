@@ -335,11 +335,11 @@ for (let probe = 0; probe < capacity; probe++) {
 
 ---
 
-#### [LOW] [NAMING]: `_insertNode` and `_insertHead` Are Private But Exposed via Test Helpers
+#### [LOW] [NAMING]: Legacy private insert helpers were exposed via test helpers
 
 **Location**: `silicon-synapse.ts:1935-2007`
 
-**Evidence**: `insertHead()` and `insertNode()` are public test helpers that call `_insertHead` and `_insertNode`.
+**Evidence**: `insertHead()` and `insertNode()` were public test helpers that called legacy private insert helpers (removed in RFC-059 R-002).
 
 **Violation**: Internal naming convention (`_` prefix) leaks to public API via wrappers.
 

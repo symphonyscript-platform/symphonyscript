@@ -300,6 +300,7 @@ export class SynapseAllocator extends SynapseView {
   private _insertDirect(sourcePtr: number, targetPtr: number, weightData: number): void {
     const idealSlot = this.hash(sourcePtr)
     let slot = idealSlot
+    let step = 1
     let probes = 0
 
     while (probes < this.capacity) { // K-002: dynamic
@@ -321,7 +322,8 @@ export class SynapseAllocator extends SynapseView {
         this.usedSlots++
         return
       }
-      slot = (slot + 1) % this.capacity // K-002: dynamic
+      slot = (slot + step) & this.hashMask
+      step++
       probes++
     }
     // Should never happen during compaction
@@ -333,17 +335,19 @@ export class SynapseAllocator extends SynapseView {
   // ===========================================================================
 
   /**
-   * Find the next empty slot starting from a seed index.
+   * Find the next empty slot starting from a seed index via triangular probing.
    */
   private findEmptySlot(startSlot: number): number {
-    let slot = startSlot % this.capacity
+    let slot = startSlot & this.hashMask
+    let step = 1
     let probes = 0
 
     while (probes < this.capacity) {
       const offset = this.offsetForSlot(slot)
       const source = Atomics.load(this.sab, offset + SYNAPSE.SOURCE_PTR)
       if (source === NULL_PTR) return slot
-      slot = (slot + 1) % this.capacity
+      slot = (slot + step) & this.hashMask
+      step++
       probes++
     }
     return -1
