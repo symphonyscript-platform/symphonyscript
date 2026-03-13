@@ -27,14 +27,6 @@ export interface FMVoiceOptions {
     modId: number;
     carrierId: number;
     modulatorRatio: number;
-    modulationIndex: number;
-    envelopeParams: {
-        attackSec: number;
-        decaySec: number;
-        sustainLevel: number;
-        releaseSec: number;
-    };
-    gain: number;
 }
 
 const MOD_ID = 1;
@@ -146,9 +138,6 @@ export function createFMSynth(options: FMSynthOptions = {}): BasicInstrumentType
             modId: MOD_ID,
             carrierId: CARRIER_ID,
             modulatorRatio,
-            modulationIndex,
-            envelopeParams: { attackSec, decaySec, sustainLevel, releaseSec },
-            gain,
         });
     };
 
