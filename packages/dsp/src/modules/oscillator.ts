@@ -7,7 +7,14 @@ const MIN_PULSE_WIDTH = 1e-6;
 const MAX_PULSE_WIDTH = 1 - MIN_PULSE_WIDTH;
 const DEFAULT_SAMPLE_RATE = 48000;
 
-const EMPTY_INPUTS: readonly PortDescriptor[] = [];
+const OSCILLATOR_INPUTS_FM: readonly PortDescriptor[] = [
+    {
+        id: 0,
+        rate: PortRate.AUDIO,
+        channelCount: 1,
+        name: 'fm',
+    },
+];
 const OSCILLATOR_OUTPUTS: readonly PortDescriptor[] = [
     {
         id: 0,
@@ -31,6 +38,8 @@ export const OscillatorParam = {
     DETUNE_CENTS: 1,
     WAVEFORM: 2,
     PULSE_WIDTH: 3,
+    MODULATION_INDEX: 4,
+    MODULATOR_RATIO: 5,
 } as const;
 
 export type OscillatorParam = (typeof OscillatorParam)[keyof typeof OscillatorParam];
@@ -62,6 +71,20 @@ function sanitizePulseWidth(value: number): number {
     return value;
 }
 
+function sanitizeModulationIndex(value: number): number {
+    if (!Number.isFinite(value) || value < 0) {
+        return 0;
+    }
+    return value;
+}
+
+function sanitizeModulatorRatio(value: number): number {
+    if (!Number.isFinite(value) || value <= 0) {
+        return 1;
+    }
+    return value;
+}
+
 function sanitizeWaveform(value: number): OscillatorWaveform {
     if (!Number.isFinite(value)) {
         return OscillatorWaveform.SINE;
@@ -89,7 +112,7 @@ function normalizePhase(phase: number): number {
 export class OscillatorModule implements DSPModule {
     public readonly type = ModuleType.OSCILLATOR;
     public readonly id: number;
-    public readonly inputs = EMPTY_INPUTS;
+    public readonly inputs = OSCILLATOR_INPUTS_FM;
     public readonly outputs = OSCILLATOR_OUTPUTS;
 
     private sampleRate: number;
@@ -98,6 +121,8 @@ export class OscillatorModule implements DSPModule {
     private detuneCents = 0;
     private waveform: OscillatorWaveform = OscillatorWaveform.SINE;
     private pulseWidth = 0.5;
+    private modulationIndex = 0;
+    private modulatorRatio = 1;
 
     constructor(id: number, sampleRate = DEFAULT_SAMPLE_RATE) {
         this.id = id;
@@ -105,7 +130,7 @@ export class OscillatorModule implements DSPModule {
     }
 
     public process(
-        _inputBuffers: readonly AudioBuffer[],
+        inputBuffers: readonly AudioBuffer[],
         outputBuffers: readonly AudioBuffer[],
         blockSize: number
     ): void {
@@ -122,11 +147,28 @@ export class OscillatorModule implements DSPModule {
         const sampleRate = this.sampleRate;
         const pulsePhase = TWO_PI * this.pulseWidth;
         const detuneRatio = Math.pow(2, this.detuneCents / 1200);
-        const phaseIncrement = (TWO_PI * this.frequency * detuneRatio) / sampleRate;
+        const baseFreq = this.frequency * detuneRatio;
         const waveform = this.waveform;
         let phase = this.phase;
 
+        const fmInput = inputBuffers[0];
+        const hasFM =
+            this.modulationIndex > 0 &&
+            fmInput !== undefined &&
+            fmInput.data.length >= blockSize;
+        const modFreq = hasFM ? baseFreq * this.modulatorRatio : 0;
+
         for (let i = 0; i < blockSize; i += 1) {
+            let phaseIncrement: number;
+            if (hasFM) {
+                const modSample = fmInput.data[i];
+                phaseIncrement =
+                    (TWO_PI / sampleRate) *
+                    (baseFreq + this.modulationIndex * modFreq * modSample);
+            } else {
+                phaseIncrement = (TWO_PI * baseFreq) / sampleRate;
+            }
+
             let sample = 0;
             if (waveform === OscillatorWaveform.SINE) {
                 sample = Math.sin(phase);
@@ -164,6 +206,14 @@ export class OscillatorModule implements DSPModule {
         }
         if (paramId === OscillatorParam.PULSE_WIDTH) {
             this.pulseWidth = sanitizePulseWidth(value);
+            return;
+        }
+        if (paramId === OscillatorParam.MODULATION_INDEX) {
+            this.modulationIndex = sanitizeModulationIndex(value);
+            return;
+        }
+        if (paramId === OscillatorParam.MODULATOR_RATIO) {
+            this.modulatorRatio = sanitizeModulatorRatio(value);
         }
     }
 
@@ -179,6 +229,12 @@ export class OscillatorModule implements DSPModule {
         }
         if (paramId === OscillatorParam.PULSE_WIDTH) {
             return this.pulseWidth;
+        }
+        if (paramId === OscillatorParam.MODULATION_INDEX) {
+            return this.modulationIndex;
+        }
+        if (paramId === OscillatorParam.MODULATOR_RATIO) {
+            return this.modulatorRatio;
         }
         return 0;
     }

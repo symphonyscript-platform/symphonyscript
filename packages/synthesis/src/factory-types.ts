@@ -15,5 +15,16 @@ export interface SubtractiveSynthOptions {
 }
 
 export interface FMSynthOptions {
-    // TODO(RFC-SYNTH-FM): define FM operator/algorithm options.
+    name?: string;
+    maxVoices?: number;
+    sampleRate?: number;
+    blockSize?: number;
+    stealPolicy?: StealPolicy;
+    modulationIndex?: number;
+    modulatorRatio?: number;
+    attackSec?: number;
+    decaySec?: number;
+    sustainLevel?: number;
+    releaseSec?: number;
+    gain?: number;
 }

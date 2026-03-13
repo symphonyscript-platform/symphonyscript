@@ -80,6 +80,56 @@ describe('oscillator module', () => {
         expect(negative).toBe(75);
     });
 
+    test('FM input applies phase modulation when modulationIndex > 0', () => {
+        const modulator = new OscillatorModule(1, 48000);
+        modulator.setParameter(OscillatorParam.FREQUENCY, 220);
+        modulator.setParameter(OscillatorParam.WAVEFORM, OscillatorWaveform.SINE);
+
+        const carrier = new OscillatorModule(2, 48000);
+        carrier.setParameter(OscillatorParam.FREQUENCY, 440);
+        carrier.setParameter(OscillatorParam.WAVEFORM, OscillatorWaveform.SINE);
+        carrier.setParameter(OscillatorParam.MODULATION_INDEX, 3);
+        carrier.setParameter(OscillatorParam.MODULATOR_RATIO, 1);
+
+        const modOut = createAudioBuffer(1, 64);
+        modulator.process([], [modOut], 64);
+
+        const carrierOut = createAudioBuffer(1, 64);
+        carrier.process([modOut], [carrierOut], 64);
+
+        let hasNonZero = false;
+        for (let i = 0; i < 64; i += 1) {
+            if (carrierOut.data[i] !== 0) {
+                hasNonZero = true;
+                break;
+            }
+        }
+        expect(hasNonZero).toBe(true);
+
+        const carrierPlain = createAudioBuffer(1, 64);
+        carrier.setParameter(OscillatorParam.MODULATION_INDEX, 0);
+        carrier.reset();
+        carrier.process([], [carrierPlain], 64);
+
+        let different = false;
+        for (let i = 0; i < 64; i += 1) {
+            if (carrierOut.data[i] !== carrierPlain.data[i]) {
+                different = true;
+                break;
+            }
+        }
+        expect(different).toBe(true);
+    });
+
+    test('MODULATION_INDEX and MODULATOR_RATIO are sanitized', () => {
+        const osc = new OscillatorModule(1, 48000);
+        osc.setParameter(OscillatorParam.MODULATION_INDEX, -1);
+        osc.setParameter(OscillatorParam.MODULATOR_RATIO, 0);
+
+        expect(osc.getParameter(OscillatorParam.MODULATION_INDEX)).toBe(0);
+        expect(osc.getParameter(OscillatorParam.MODULATOR_RATIO)).toBe(1);
+    });
+
     test('invalid params are sanitized and process does not throw', () => {
         const osc = new OscillatorModule(1, 48000);
         osc.setParameter(OscillatorParam.FREQUENCY, -123);
