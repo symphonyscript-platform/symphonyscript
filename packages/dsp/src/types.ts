@@ -72,6 +72,7 @@ export interface PlanStep {
 
 export interface CompiledPlan {
     readonly steps: readonly PlanStep[];
+    readonly moduleIds: readonly number[];
     readonly arena: Float32Array;
     readonly bufferDescriptors: readonly BufferDescriptor[];
     readonly outputChannelCount: number;

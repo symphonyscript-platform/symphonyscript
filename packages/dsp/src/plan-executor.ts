@@ -124,6 +124,17 @@ export function createExecutionContext(
         }
     }
 
+    for (let i = 0; i < plan.steps.length; i += 1) {
+        const step = plan.steps[i];
+        const expectedId = plan.moduleIds[i];
+        const actualModule = modules[step.moduleIndex];
+        if (actualModule.id !== expectedId) {
+            throw new Error(
+                `module order mismatch: step ${i} expects module id ${expectedId} but modules[${step.moduleIndex}] has id ${actualModule.id}`
+            );
+        }
+    }
+
     const { stepInputBuffers, stepOutputBuffers } = resolveStepBuffers(plan, descriptorBuffers);
 
     return {

@@ -160,8 +160,14 @@ export function compileGraph(def: GraphDefinition, blockSize: number): CompiledP
     // TODO(RFC-061): implement lifetime-based buffer reuse instead of one buffer per module.
     const arena = new Float32Array(moduleCount * blockSize);
 
+    const moduleIds: number[] = [];
+    for (let i = 0; i < order.length; i += 1) {
+        moduleIds.push(def.modules[order[i]].id);
+    }
+
     return {
         steps,
+        moduleIds,
         arena,
         bufferDescriptors,
         outputChannelCount: 1,

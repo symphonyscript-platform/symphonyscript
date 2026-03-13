@@ -32,6 +32,7 @@ describe('plan executor', () => {
                 { moduleIndex: 0, inputBufferIndices: [], outputBufferIndices: [0] },
                 { moduleIndex: 1, inputBufferIndices: [0], outputBufferIndices: [1] },
             ],
+            moduleIds: [100, 200],
             arena: new Float32Array(blockSize * 2),
             bufferDescriptors: [
                 { offset: 0, channelCount: 1, blockSize },
@@ -67,9 +68,34 @@ describe('plan executor', () => {
         expect(Array.from(ctx.descriptorBuffers[1].data)).toEqual([2, 4, 6, 8]);
     });
 
+    test('module order mismatch throws during context creation', () => {
+        const plan: CompiledPlan = {
+            steps: [
+                { moduleIndex: 0, inputBufferIndices: [], outputBufferIndices: [0] },
+                { moduleIndex: 1, inputBufferIndices: [0], outputBufferIndices: [1] },
+            ],
+            moduleIds: [100, 200],
+            arena: new Float32Array(16),
+            bufferDescriptors: [
+                { offset: 0, channelCount: 1, blockSize: 8 },
+                { offset: 8, channelCount: 1, blockSize: 8 },
+            ],
+            outputChannelCount: 1,
+        };
+        const modules: readonly DSPModule[] = [
+            createTestModule(200, () => {}),
+            createTestModule(100, () => {}),
+        ];
+
+        expect(() => createExecutionContext(plan, modules)).toThrow(
+            /module order mismatch: step 0 expects module id 100 but modules\[0\] has id 200/i
+        );
+    });
+
     test('invalid moduleIndex in step throws during context creation', () => {
         const plan: CompiledPlan = {
             steps: [{ moduleIndex: 1, inputBufferIndices: [], outputBufferIndices: [0] }],
+            moduleIds: [1],
             arena: new Float32Array(8),
             bufferDescriptors: [{ offset: 0, channelCount: 1, blockSize: 8 }],
             outputChannelCount: 1,
@@ -82,6 +108,7 @@ describe('plan executor', () => {
     test('invalid buffer descriptor range throws during context creation', () => {
         const plan: CompiledPlan = {
             steps: [{ moduleIndex: 0, inputBufferIndices: [], outputBufferIndices: [0] }],
+            moduleIds: [1],
             arena: new Float32Array(8),
             bufferDescriptors: [{ offset: 6, channelCount: 1, blockSize: 4 }],
             outputChannelCount: 1,
@@ -95,6 +122,7 @@ describe('plan executor', () => {
         const blockSize = 4;
         const plan: CompiledPlan = {
             steps: [{ moduleIndex: 0, inputBufferIndices: [], outputBufferIndices: [0] }],
+            moduleIds: [1],
             arena: new Float32Array(blockSize),
             bufferDescriptors: [{ offset: 0, channelCount: 1, blockSize }],
             outputChannelCount: 1,

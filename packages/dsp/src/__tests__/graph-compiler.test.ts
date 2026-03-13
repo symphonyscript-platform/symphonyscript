@@ -34,6 +34,7 @@ describe('graph compiler', () => {
 
         expect(plan.steps).toHaveLength(3);
         expect(plan.steps.map((step) => step.moduleIndex)).toEqual([0, 1, 2]);
+        expect(plan.moduleIds).toEqual([1, 2, 3]);
         expect(plan.steps[0]?.inputBufferIndices).toEqual([]);
         expect(plan.steps[1]?.inputBufferIndices).toEqual([0]);
         expect(plan.steps[2]?.inputBufferIndices).toEqual([1]);
