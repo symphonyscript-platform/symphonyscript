@@ -135,9 +135,9 @@ export function compileGraph(def: GraphDefinition, blockSize: number): CompiledP
             const key = `${moduleDef.id}:${portId}`;
             bufferIndexByModuleAndPort.set(key, runningBufferIndex);
             bufferDescriptors.push({
-                channelCount: 1,
+                channelCount: 0,
                 blockSize,
-                offset: runningBufferIndex * blockSize,
+                offset: 0,
             });
             runningBufferIndex += 1;
         }
@@ -182,9 +182,6 @@ export function compileGraph(def: GraphDefinition, blockSize: number): CompiledP
         });
     }
 
-    const totalBufferCount = bufferDescriptors.length;
-    const arena = new Float32Array(totalBufferCount * blockSize);
-
     const moduleIds: number[] = [];
     for (let i = 0; i < order.length; i += 1) {
         moduleIds.push(def.modules[order[i]].id);
@@ -193,7 +190,8 @@ export function compileGraph(def: GraphDefinition, blockSize: number): CompiledP
     return {
         steps,
         moduleIds,
-        arena,
+        wires: def.wires,
+        arena: new Float32Array(0),
         bufferDescriptors,
         outputChannelCount: 1,
     };

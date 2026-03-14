@@ -110,11 +110,54 @@ function resolvePlanBlockSize(plan: CompiledPlan): number {
     return blockSize;
 }
 
+function buildResolvedPlan(
+    plan: CompiledPlan,
+    modules: readonly DSPModule[],
+    blockSize: number
+): CompiledPlan {
+    const descriptorCount = plan.bufferDescriptors.length;
+    const resolvedDescriptors: { offset: number; channelCount: number; blockSize: number }[] = [];
+    let runningOffset = 0;
+
+    for (let i = 0; i < plan.steps.length; i += 1) {
+        const step = plan.steps[i];
+        const module = modules[step.moduleIndex];
+        for (let portId = 0; portId < step.outputBufferIndices.length; portId += 1) {
+            const bufferIndex = step.outputBufferIndices[portId];
+            const channelCount = module.outputs[portId]?.channelCount ?? 1;
+            if (!Number.isInteger(channelCount) || channelCount < 1) {
+                throw new Error(
+                    `bufferDescriptors[${bufferIndex}]: module ${module.id} output port ${portId} has invalid channelCount ${channelCount}`
+                );
+            }
+            resolvedDescriptors[bufferIndex] = {
+                offset: runningOffset,
+                channelCount,
+                blockSize,
+            };
+            runningOffset += channelCount * blockSize;
+        }
+    }
+
+    for (let i = 0; i < descriptorCount; i += 1) {
+        if (resolvedDescriptors[i] === undefined) {
+            throw new Error(`internal: missing resolved descriptor for buffer index ${i}`);
+        }
+    }
+
+    const arena = new Float32Array(runningOffset);
+
+    return {
+        ...plan,
+        bufferDescriptors: resolvedDescriptors,
+        arena,
+    };
+}
+
 export function createExecutionContext(
     plan: CompiledPlan,
     modules: readonly DSPModule[]
 ): ExecutionContext {
-    const descriptorBuffers = resolveDescriptorBuffers(plan);
     const blockSize = resolvePlanBlockSize(plan);
 
     for (let i = 0; i < plan.steps.length; i += 1) {
@@ -135,10 +178,54 @@ export function createExecutionContext(
         }
     }
 
-    const { stepInputBuffers, stepOutputBuffers } = resolveStepBuffers(plan, descriptorBuffers);
+    const resolvedPlan = buildResolvedPlan(plan, modules, blockSize);
+
+    const moduleIdToStepIndex = new Map<number, number>();
+    for (let i = 0; i < plan.moduleIds.length; i += 1) {
+        moduleIdToStepIndex.set(plan.moduleIds[i], i);
+    }
+
+    for (let w = 0; w < plan.wires.length; w += 1) {
+        const wire = plan.wires[w];
+        const sourceStepIndex = moduleIdToStepIndex.get(wire.sourceModuleId);
+        const targetStepIndex = moduleIdToStepIndex.get(wire.targetModuleId);
+        if (sourceStepIndex === undefined || targetStepIndex === undefined) {
+            continue;
+        }
+        const sourceBufferIndex = plan.steps[sourceStepIndex].outputBufferIndices[wire.sourcePortId];
+        if (sourceBufferIndex === undefined) {
+            continue;
+        }
+        const sourceCh = resolvedPlan.bufferDescriptors[sourceBufferIndex]?.channelCount ?? 0;
+        const targetModule = modules[plan.steps[targetStepIndex].moduleIndex];
+        const targetCh = targetModule.inputs[wire.targetPortId]?.channelCount ?? 0;
+        if (sourceCh !== targetCh) {
+            throw new Error(
+                `channel count mismatch: wire from module ${wire.sourceModuleId} port ${wire.sourcePortId} → module ${wire.targetModuleId} port ${wire.targetPortId}: source has ${sourceCh} channels, target expects ${targetCh}`
+            );
+        }
+    }
+
+    for (let stepIndex = 0; stepIndex < plan.steps.length; stepIndex += 1) {
+        const step = plan.steps[stepIndex];
+        const module = modules[step.moduleIndex];
+        for (let portId = 0; portId < step.outputBufferIndices.length; portId += 1) {
+            const bufferIndex = step.outputBufferIndices[portId];
+            const expectedCh = module.outputs[portId]?.channelCount ?? 1;
+            const actualCh = resolvedPlan.bufferDescriptors[bufferIndex]?.channelCount;
+            if (actualCh !== expectedCh) {
+                throw new Error(
+                    `module order mismatch: step ${stepIndex} buffer ${bufferIndex} expects channelCount ${expectedCh} from module ${module.id} but descriptor has ${actualCh}`
+                );
+            }
+        }
+    }
+
+    const descriptorBuffers = resolveDescriptorBuffers(resolvedPlan);
+    const { stepInputBuffers, stepOutputBuffers } = resolveStepBuffers(resolvedPlan, descriptorBuffers);
 
     return {
-        plan,
+        plan: resolvedPlan,
         modules,
         descriptorBuffers,
         stepInputBuffers,

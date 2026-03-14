@@ -2,8 +2,8 @@ import { ModuleType } from '../constants';
 import { compileGraph } from '../graph-compiler';
 import { createExecutionContext, executePlan } from '../plan-executor';
 import { createAudioBuffer } from '../buffer-utils';
-import { SplitModule } from '../modules/split';
-import { MergeModule } from '../modules/merge';
+import { CopySplitModule } from '../modules/split';
+import { SumMergeModule } from '../modules/merge';
 import type { AudioBuffer, CompiledPlan, DSPModule, PortDescriptor } from '../types';
 
 const EMPTY_PORTS: readonly PortDescriptor[] = [];
@@ -69,6 +69,7 @@ describe('split module', () => {
                 },
             ],
             moduleIds: [10, 20],
+            wires: [],
             arena: new Float32Array(4 * blockSize),
             bufferDescriptors: [
                 { offset: 0, channelCount: 1, blockSize },
@@ -80,7 +81,7 @@ describe('split module', () => {
         };
 
         const source = createSourceModule(10, 0.5);
-        const split = new SplitModule(20, 3);
+        const split = new CopySplitModule(20, 3);
 
         const modules: readonly DSPModule[] = [source, split];
         const ctx = createExecutionContext(plan, modules);
@@ -109,6 +110,7 @@ describe('merge module', () => {
                 { moduleIndex: 2, inputBufferIndices: [0, 1], outputBufferIndices: [2] },
             ],
             moduleIds: [10, 11, 20],
+            wires: [],
             arena: new Float32Array(3 * blockSize),
             bufferDescriptors: [
                 { offset: 0, channelCount: 1, blockSize },
@@ -120,7 +122,7 @@ describe('merge module', () => {
 
         const sourceA = createSourceModule(10, 0.3);
         const sourceB = createSourceModule(11, 0.7);
-        const merge = new MergeModule(20, 2);
+        const merge = new SumMergeModule(20, 2);
 
         const modules: readonly DSPModule[] = [sourceA, sourceB, merge];
         const ctx = createExecutionContext(plan, modules);
@@ -141,6 +143,7 @@ describe('merge module', () => {
                 { moduleIndex: 2, inputBufferIndices: [0, 1], outputBufferIndices: [2] },
             ],
             moduleIds: [10, 11, 20],
+            wires: [],
             arena: new Float32Array(3 * blockSize),
             bufferDescriptors: [
                 { offset: 0, channelCount: 1, blockSize },
@@ -152,7 +155,7 @@ describe('merge module', () => {
 
         const sourceA = createSourceModule(10, 1);
         const sourceB = createSourceModule(11, 0);
-        const merge = new MergeModule(20, 2);
+        const merge = new SumMergeModule(20, 2);
 
         const modules: readonly DSPModule[] = [sourceA, sourceB, merge];
         const ctx = createExecutionContext(plan, modules);

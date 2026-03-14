@@ -39,7 +39,7 @@ describe('graph compiler', () => {
         expect(plan.steps[1]?.inputBufferIndices).toEqual([0]);
         expect(plan.steps[2]?.inputBufferIndices).toEqual([1]);
         expect(plan.bufferDescriptors).toHaveLength(3);
-        expect(plan.arena.length).toBe(3 * 64);
+        expect(plan.arena.length).toBe(0);
         expect(plan.outputChannelCount).toBe(1);
     });
 

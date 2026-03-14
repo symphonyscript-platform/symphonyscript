@@ -32,9 +32,11 @@ export {
     NoiseParam,
     NoiseWaveform,
 } from './modules/noise';
-export { MergeModule } from './modules/merge';
+export { MonoToStereoModule } from './modules/mono-to-stereo';
+export { SumMergeModule } from './modules/merge';
 export { PannerModule, PannerParam } from './modules/panner';
-export { SplitModule } from './modules/split';
+export { CopySplitModule } from './modules/split';
+export { StereoToMonoModule } from './modules/stereo-to-mono';
 export {
     OscillatorModule,
     OscillatorParam,

@@ -49,7 +49,10 @@ export interface ModuleDefinition {
     readonly id: number;
     readonly type: ModuleType;
     readonly initialParameters: readonly ParameterValue[];
-    /** Output port count; default 1. Use >1 for modules like Split with multiple outputs. */
+    /**
+     * Output port count; default 1. Use >1 for modules like CopySplit with multiple outputs.
+     * @deprecated Derivable from `module.outputs.length` once channel metadata is integrated. Will be removed when RFC §6.5 Decision 3 is implemented.
+     */
     readonly outputPortCount?: number;
 }
 
@@ -75,6 +78,8 @@ export interface PlanStep {
 export interface CompiledPlan {
     readonly steps: readonly PlanStep[];
     readonly moduleIds: readonly number[];
+    /** Wire definitions for channel validation. Empty for manually-constructed plans. */
+    readonly wires: readonly Wire[];
     readonly arena: Float32Array;
     readonly bufferDescriptors: readonly BufferDescriptor[];
     readonly outputChannelCount: number;

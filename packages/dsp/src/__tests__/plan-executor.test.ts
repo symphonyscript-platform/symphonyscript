@@ -1,4 +1,5 @@
-import { ModuleType } from '../constants';
+import { ModuleType, PortRate } from '../constants';
+import { compileGraph } from '../graph-compiler';
 import { createExecutionContext, executePlan } from '../plan-executor';
 import type { AudioBuffer, CompiledPlan, DSPModule, PortDescriptor } from '../types';
 
@@ -33,6 +34,7 @@ describe('plan executor', () => {
                 { moduleIndex: 1, inputBufferIndices: [0], outputBufferIndices: [1] },
             ],
             moduleIds: [100, 200],
+            wires: [],
             arena: new Float32Array(blockSize * 2),
             bufferDescriptors: [
                 { offset: 0, channelCount: 1, blockSize },
@@ -75,6 +77,7 @@ describe('plan executor', () => {
                 { moduleIndex: 1, inputBufferIndices: [0], outputBufferIndices: [1] },
             ],
             moduleIds: [100, 200],
+            wires: [],
             arena: new Float32Array(16),
             bufferDescriptors: [
                 { offset: 0, channelCount: 1, blockSize: 8 },
@@ -96,6 +99,7 @@ describe('plan executor', () => {
         const plan: CompiledPlan = {
             steps: [{ moduleIndex: 1, inputBufferIndices: [], outputBufferIndices: [0] }],
             moduleIds: [1],
+            wires: [],
             arena: new Float32Array(8),
             bufferDescriptors: [{ offset: 0, channelCount: 1, blockSize: 8 }],
             outputChannelCount: 1,
@@ -105,24 +109,12 @@ describe('plan executor', () => {
         expect(() => createExecutionContext(plan, modules)).toThrow(/moduleIndex out of range/i);
     });
 
-    test('invalid buffer descriptor range throws during context creation', () => {
-        const plan: CompiledPlan = {
-            steps: [{ moduleIndex: 0, inputBufferIndices: [], outputBufferIndices: [0] }],
-            moduleIds: [1],
-            arena: new Float32Array(8),
-            bufferDescriptors: [{ offset: 6, channelCount: 1, blockSize: 4 }],
-            outputChannelCount: 1,
-        };
-        const modules: readonly DSPModule[] = [createTestModule(1, () => {})];
-
-        expect(() => createExecutionContext(plan, modules)).toThrow(/range exceeds arena length/i);
-    });
-
     test('executePlan throws on mismatched blockSize override', () => {
         const blockSize = 4;
         const plan: CompiledPlan = {
             steps: [{ moduleIndex: 0, inputBufferIndices: [], outputBufferIndices: [0] }],
             moduleIds: [1],
+            wires: [],
             arena: new Float32Array(blockSize),
             bufferDescriptors: [{ offset: 0, channelCount: 1, blockSize }],
             outputChannelCount: 1,
@@ -131,5 +123,51 @@ describe('plan executor', () => {
         const ctx = createExecutionContext(plan, modules);
 
         expect(() => executePlan(ctx, blockSize + 1)).toThrow(/blockSize mismatch/i);
+    });
+
+    test('channel count mismatch throws with exact error format', () => {
+        const blockSize = 64;
+        const plan = compileGraph(
+            {
+                modules: [
+                    { id: 1, type: ModuleType.GAIN, initialParameters: [] },
+                    { id: 2, type: ModuleType.GAIN, initialParameters: [] },
+                ],
+                wires: [
+                    { sourceModuleId: 1, sourcePortId: 0, targetModuleId: 2, targetPortId: 0 },
+                ],
+                outputPortModuleId: 2,
+                outputPortId: 0,
+            },
+            blockSize
+        );
+
+        const stereoOutputModule: DSPModule = {
+            type: ModuleType.GAIN,
+            id: 1,
+            inputs: EMPTY_PORTS,
+            outputs: [{ id: 0, rate: PortRate.AUDIO, channelCount: 2, name: 'out' }],
+            process: () => {},
+            setParameter: () => {},
+            getParameter: () => 0,
+            reset: () => {},
+        };
+
+        const monoInputModule: DSPModule = {
+            type: ModuleType.GAIN,
+            id: 2,
+            inputs: [{ id: 0, rate: PortRate.AUDIO, channelCount: 1, name: 'in' }],
+            outputs: EMPTY_PORTS,
+            process: () => {},
+            setParameter: () => {},
+            getParameter: () => 0,
+            reset: () => {},
+        };
+
+        const modules = [stereoOutputModule, monoInputModule];
+
+        expect(() => createExecutionContext(plan, modules)).toThrow(
+            /channel count mismatch: wire from module 1 port 0 → module 2 port 0: source has 2 channels, target expects 1/
+        );
     });
 });

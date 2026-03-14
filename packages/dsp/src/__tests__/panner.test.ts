@@ -32,6 +32,7 @@ describe('panner module', () => {
                 { moduleIndex: 1, inputBufferIndices: [0], outputBufferIndices: [1, 2] },
             ],
             moduleIds: [10, 20],
+            wires: [],
             arena: new Float32Array(3 * BLOCK_SIZE),
             bufferDescriptors: [
                 { offset: 0, channelCount: 1, blockSize: BLOCK_SIZE },
@@ -66,6 +67,7 @@ describe('panner module', () => {
                 { moduleIndex: 1, inputBufferIndices: [0], outputBufferIndices: [1, 2] },
             ],
             moduleIds: [10, 20],
+            wires: [],
             arena: new Float32Array(3 * BLOCK_SIZE),
             bufferDescriptors: [
                 { offset: 0, channelCount: 1, blockSize: BLOCK_SIZE },
@@ -99,6 +101,7 @@ describe('panner module', () => {
                 { moduleIndex: 1, inputBufferIndices: [0], outputBufferIndices: [1, 2] },
             ],
             moduleIds: [10, 20],
+            wires: [],
             arena: new Float32Array(3 * BLOCK_SIZE),
             bufferDescriptors: [
                 { offset: 0, channelCount: 1, blockSize: BLOCK_SIZE },

@@ -23,7 +23,7 @@ const MERGE_OUTPUT: readonly PortDescriptor[] = [
     },
 ];
 
-export class MergeModule implements DSPModule {
+export class SumMergeModule implements DSPModule {
     public readonly type = ModuleType.MERGE;
     public readonly id: number;
     public readonly inputs: readonly PortDescriptor[];

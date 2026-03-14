@@ -28,6 +28,8 @@ export const ModuleType = {
     MERGE: 11,
     OUTPUT: 12,
     NOISE: 13,
+    MONO_TO_STEREO: 14,
+    STEREO_TO_MONO: 15,
 } as const;
 
 export type ModuleType = (typeof ModuleType)[keyof typeof ModuleType];

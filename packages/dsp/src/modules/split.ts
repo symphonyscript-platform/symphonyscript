@@ -23,7 +23,7 @@ const SPLIT_INPUT: readonly PortDescriptor[] = [
     },
 ];
 
-export class SplitModule implements DSPModule {
+export class CopySplitModule implements DSPModule {
     public readonly type = ModuleType.SPLIT;
     public readonly id: number;
     public readonly inputs = SPLIT_INPUT;
