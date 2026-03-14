@@ -296,14 +296,14 @@ export const PARAM_TABLE = {
 } as const;
 
 export const PARAM = {
-  RAW_VALUE:      0,  // Bridge-written input (Q16.16, converted from 0–1000 API range)
+  RAW_VALUE:      0,  // Bridge or audio engine written (Q16.16)
   CURVED_VALUE:   1,  // After spatial curve (audio engine owned)
   SMOOTHED_VALUE: 2,  // After temporal smoothing (audio engine owned)
   TARGET_VALUE:   3,  // Smoother internal target (audio engine owned)
   PACKED_CFG_A:   4,  // (CurveType<<24) | (SmoothType<<23) | (SmoothFactor & 0x7FFFFF)
-  PACKED_CFG_B:   5,  // CurveParam (e.g., power k, or LUT Index)
-  FLAGS:          6,  // ACTIVE | BIPOLAR
-  RESERVED:       7,  // Future: bezier smoothing phase accumulator
+  PACKED_CFG_B:   5,  // External: CurveParam. Internal: (Waveform<<24) | (FrequencyQ8_24)
+  FLAGS:          6,  // ACTIVE | BIPOLAR | INTERNAL_SOURCE
+  PHASE:          7,  // LFO phase accumulator (audio engine owned). Also: future bezier smooth phase.
 } as const;
 ```
 
@@ -333,8 +333,26 @@ Bits 22–0: SmoothFactor (23 bits, Q16.16 fractional)
 ```
 Bit 0: ACTIVE (parameter is in use, included in batch loop)
 Bit 1: BIPOLAR (range is -1.0 to +1.0 instead of 0.0 to 1.0)
-Bits 2–31: Reserved
+Bit 2: INTERNAL_SOURCE (0 = external/bridge-driven, 1 = audio engine generates RAW_VALUE)
+Bits 3–31: Reserved
 ```
+
+When `INTERNAL_SOURCE` is set, `PACKED_CFG_B` encodes the LFO waveform and frequency:
+
+```
+PACKED_CFG_B (when INTERNAL_SOURCE = 1):
+  Bits 31–24: Waveform (8 bits)
+    0x00 = SINE
+    0x01 = TRIANGLE
+    0x02 = SQUARE
+    0x03 = SAW
+    0x04 = LUT (custom shape from LUT_POOL, index in bits 0–23)
+
+  Bits 23–0: Frequency (Q8.24 fixed-point Hz)
+    Example: 4.0 Hz = 4 << 24 = 67108864
+```
+
+`PHASE` (offset +7) is the phase accumulator, owned by the audio engine. Incremented each block by `(frequency * blockSamples / sampleRate)` scaled to a 0–`2³²` wrap-around cycle.
 
 #### 5.2.4 SPSC Ownership
 
@@ -660,8 +678,18 @@ for each paramId in 0..ACTIVE_PARAM_COUNT:
     param = PARAMETER_TABLE[paramId]
     if !(param.FLAGS & ACTIVE): continue
 
+    // Step 0: Internal source generation (LFO)
+    if (param.FLAGS & INTERNAL_SOURCE):
+        phase = param.PHASE
+        waveform = (param.PACKED_CFG_B >> 24) & 0xFF
+        raw = generateWaveform(phase, waveform)  // pure math, zero alloc
+        Atomics.store(sab, paramOffset + PARAM.RAW_VALUE, raw)
+        phaseIncrement = computePhaseIncrement(param.PACKED_CFG_B, blockSize, sampleRate)
+        Atomics.store(sab, paramOffset + PARAM.PHASE, (phase + phaseIncrement) & 0xFFFFFFFF)
+    else:
+        raw = param.RAW_VALUE  // externally written by bridge
+
     // Step 1: Spatial curve
-    raw = param.RAW_VALUE
     curved = applyCurve(raw, param.PACKED_CFG_A, param.PACKED_CFG_B)
     Atomics.store(sab, paramOffset + PARAM.CURVED_VALUE, curved)
 
@@ -827,11 +855,20 @@ Framework provides 1024 slots. User assigns meaning. Compiles to plain numbers.
 const Intensity = Param.create(PARAM.Intensity)
   .smooth(0.95)           // Exponential, factor 0.95
   .curve('easeIn')        // Spatial curve
-  .bipolar(false);        // 0–1 range (not -1 to +1)
+  .bipolar(false);        // 0–1000 range
 
 const SongProgress = Param.create(PARAM.SongProgress)
   .smooth(0.3, 'linear')  // Linear, rate 0.3
   .curve([0.42, 0, 0.58, 1]);  // Cubic bezier via LUT
+
+// Internal LFO source — audio engine generates value each block
+const Vibrato = Param.create(PARAM.Vibrato)
+  .lfo('sine', 4.0)       // Sine wave at 4Hz
+  .bipolar(true);          // -1000 to +1000
+
+const Tremolo = Param.create(PARAM.Tremolo)
+  .lfo('triangle', 2.0)   // Triangle at 2Hz
+  .smooth(0.05);           // Smooth the LFO output (rounds corners)
 ```
 
 #### 9.2.1 Param Interface
@@ -848,6 +885,9 @@ interface IParam {
 
   /** Set range polarity. */
   bipolar(enabled: boolean): this;
+
+  /** Set as internal LFO source. Audio engine generates value each block. */
+  lfo(waveform: 'sine' | 'triangle' | 'square' | 'saw', frequencyHz: number): this;
 
   /** Register this parameter with the bridge (writes config to SAB). */
   register(bridge: SiliconBridge): void;
@@ -1400,7 +1440,89 @@ The jitter field (bits 16–31) is zeroed and reserved. The `SYN_PACK.JITTER_MAS
 
 ---
 
-## 14. Open Questions
+## 14. Mechanical Specifications
+
+### 14.1 Modulator Allocator
+
+Free-list, mirroring node allocation in `free-list.ts`. `HDR.MOD_ALLOC_HEAD` points to the first free slot. Each free slot uses `NEXT_MOD_PTR` (+7) to chain to the next free slot.
+
+- `CMD.CREATE_MOD`: Worker pops from free list (CAS on `MOD_ALLOC_HEAD`).
+- `CMD.DELETE_MOD`: Worker pushes back to free list.
+- Initialized during `initSAB()` as a linked chain of all slots.
+
+### 14.2 Error Handling
+
+Follows existing `BRIDGE_ERR` pattern:
+
+```typescript
+export const BRIDGE_ERR = {
+  // ... existing ...
+  MOD_TABLE_FULL: -5,   // MODULATION_TABLE exhausted
+  LUT_POOL_FULL:  -6,   // LUT_POOL exhausted
+} as const;
+```
+
+`createModulator()` and `allocLut()` return error codes. Bridge-side only — the audio thread never allocates.
+
+### 14.3 Parameter Deregistration
+
+Set `FLAGS.ACTIVE = 0`. Modulators still referencing the slot read the frozen `SMOOTHED_VALUE`. No auto-deletion of linked modulators — they become no-ops. If the slot is reused via `Param.create()` with the same ID, existing modulators seamlessly read the new parameter.
+
+### 14.4 Pre-Baked Shape LUT Slots
+
+Slots 0–7 reserved for built-in shapes. Initialized during `initSAB()`. User LUTs start at slot 8.
+
+```typescript
+export const LUT_BUILTIN_COUNT = 8;
+```
+
+| Slot | Shape | Output | Method |
+|:---|:---|:---|:---|
+| 0 | Linear (identity) | 0 → 1 | `.linear()` |
+| 1 | Centered | -1 → 0 → +1 | `.centered()` |
+| 2 | Diverge (V) | 1 → 0 → 1 | `.diverge()` |
+| 3 | Converge (Inv-V) | -1 → 1 → -1 | `.converge()` |
+| 4 | Symmetric (sine) | -1 → +1 | `.symmetric()` |
+| 5 | Ducker | 0 → -1 | `.ducker()` |
+| 6–7 | Reserved | — | — |
+
+### 14.5 Zero-Allocation Debug Inspection
+
+Caller provides a pre-allocated buffer. Bridge fills it via `Atomics.load`. No objects created.
+
+```typescript
+// SiliconBridge
+inspectParam(paramId: number, out: Int32Array): void {
+  const offset = this.paramTableOffsetI32 + paramId * PARAM_TABLE.STRIDE_I32;
+  for (let i = 0; i < 8; i++) {
+    out[i] = Atomics.load(this.sab, offset + i);
+  }
+}
+
+inspectMod(modOffset: number, out: Int32Array): void {
+  const offsetI32 = modOffset / 4;
+  for (let i = 0; i < 8; i++) {
+    out[i] = Atomics.load(this.sab, offsetI32 + i);
+  }
+}
+```
+
+Consistent with `readNodeRaw()` pattern.
+
+### 14.6 Tempo Modulation — Per-Block Recalculation
+
+The sequencer reads `PARAMETER_TABLE[TEMPO].SMOOTHED_VALUE` at the start of each block and derives `samplesPerTick`. Within the block, `samplesPerTick` is constant.
+
+- At 120 BPM: ~185 blocks per beat. Tempo ramps are imperceptibly smooth.
+- Max timing error: `tempoChange × blockDuration` ≈ 0.1 ticks at 2.7ms blocks. Below human perception.
+- Industry standard: Ableton, Logic, Cubase all update tempo per buffer.
+- Parameter smoothing handles gradual transitions (no step functions).
+
+No sub-block subdivision. No variable-rate tick accumulation.
+
+---
+
+## 15. Open Questions
 
 None. All architectural decisions are locked.
 
@@ -1430,3 +1552,10 @@ None. All architectural decisions are locked.
 | 18 | Dual-layer polarity | Parameter polarity (input domain) + modulator polarity (output direction) are independent. MOD_POLARITY bit in PACKED_CFG_A |
 | 19 | 0–1000 normalized input | Integer API, bridge converts to Q16.16. Domain-agnostic. Matches synapse weight range |
 | 20 | Named shape presets + method aliases | `.centered()`, `.diverge()`, `.converge()`, `.symmetric()`, `.ducker()`. `.direct()` aliases `.tapRaw()` |
+| 21 | LFO as internal parameter source | `FLAGS.INTERNAL_SOURCE` + `PACKED_CFG_B` = waveform+freq. Audio engine generates RAW_VALUE. Same signal chain |
+| 22 | Per-block tempo recalculation | Sequencer reads SMOOTHED_VALUE, derives samplesPerTick. Constant within block. Industry standard |
+| 23 | Free-list modulator allocator | `MOD_ALLOC_HEAD` in header. Pop on CREATE_MOD, push on DELETE_MOD. Mirrors node free-list |
+| 24 | TABLE_FULL error handling | `BRIDGE_ERR.MOD_TABLE_FULL`, `LUT_POOL_FULL`. Bridge-side only. Zero-allocation |
+| 25 | Parameter deregistration | `FLAGS.ACTIVE = 0`. Modulators read frozen value. No auto-cleanup |
+| 26 | Pre-baked shape LUT slots 0–7 | Built-in shapes initialized at `initSAB()`. User LUTs start at slot 8 |
+| 27 | Zero-alloc debug inspection | `inspectParam(id, out)` / `inspectMod(ptr, out)` with caller-owned Int32Array |
