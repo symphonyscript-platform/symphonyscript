@@ -333,7 +333,8 @@ Bits 31–24: TargetProperty (8 bits)
   0x04 = FILTER_CUTOFF
   0x05 = VOLUME
   0x06 = PAN
-  0x07–0xFF = Reserved (user-extensible)
+  0x07 = SYNAPSE_WEIGHT  // Clip-level modulation (Section 9.7)
+  0x08–0xFF = Reserved (user-extensible)
 
 Bits 23–16: TapSource (8 bits)
   0x00 = SMOOTHED_VALUE (default — pre-smoothed parameter)
@@ -832,6 +833,9 @@ class Modulator {
 
   /** Pan modulator. Range: -1 to +1, clamped. */
   static pan(param: IParam): IPanModulator;
+
+  /** Synapse weight modulator. Range: 0–1000, clamped. Clip-level gating. */
+  static synapseWeight(param: IParam): ISynapseWeightModulator;
 }
 ```
 
@@ -899,6 +903,12 @@ interface IVolumeModulator extends IModulatorBase<IVolumeModulator> {
 interface IPanModulator extends IModulatorBase<IPanModulator> {
   // Pan-specific: base/amount in -1 to +1 range
   // Default: clamped to [-65536, 65536]
+}
+
+interface ISynapseWeightModulator extends IModulatorBase<ISynapseWeightModulator> {
+  // Synapse weight: range 0–1000 (0 = clip doesn't fire, 1000 = full)
+  // Default: CLAMP_0_1 = true (clamped to [0, 1000])
+  // Applied during synapse resolution, not voice rendering
 }
 ```
 
@@ -968,6 +978,80 @@ setParam(paramId: number, value: number): void {
   Atomics.store(this.sab, offset + PARAM.RAW_VALUE, toFixed16(value));
 }
 ```
+
+### 9.7 Clip-Level Modulation (Synapse Weight Modulation)
+
+Modulation can target **synapse weights**, not just note properties. This enables clip-level gating — controlling whether an entire clip fires based on parameter state.
+
+#### 9.7.1 Semantics
+
+| Level | Controls | Evaluated at | Zero means |
+|:---|:---|:---|:---|
+| **Note-level** (velocity, pitch, etc.) | Individual note properties | Voice render time | Silent note (voice still allocated) |
+| **Clip-level** (synapse weight) | Whether the clip plays at all | Synapse resolution time | Skip entire clip — no notes scheduled, no voices allocated, zero DSP cost |
+
+Clip-level modulation is strictly cheaper than note-level: if effective weight = 0, the sequencer skips the target clip entirely.
+
+#### 9.7.2 Mechanism
+
+Synapse weight modulation uses the same `MODULATION_TABLE` as note-level modulation. The modulator's `TargetProperty = SYNAPSE_WEIGHT` (0x07). The `TARGET_PTR` points to the synapse entry rather than a node.
+
+During synapse resolution (when a clip ends and outgoing synapses are evaluated):
+
+```
+for each synapse from sourcePtr:
+    effectiveWeight = synapse.WEIGHT
+    if synapse has HAS_MODULATORS:
+        effectiveWeight = effectiveWeight + Σ(mod deltas for SYNAPSE_WEIGHT)
+        effectiveWeight = clamp(effectiveWeight, 0, 1000)
+    if effectiveWeight > 0:
+        fire noteOn events on targetPtr with velocity scaled by (effectiveWeight / 1000)
+```
+
+#### 9.7.3 API
+
+**Reusable modulator:**
+
+```typescript
+const sceneGate = Modulator.synapseWeight(Scene)
+  .base(1000)         // Full weight at Scene=0
+  .amount(-1000)       // Drops to 0 at Scene=1
+  .easeIn();
+
+parent.linkTo(verseClip, sceneGate);    // Verse fades out as Scene rises
+```
+
+**Inline cursor:**
+
+```typescript
+parent.linkTo(verseClip)
+  .mod(Scene).base(1000).amount(-1000).easeIn()
+```
+
+### 9.8 Crossfade as Composition Pattern
+
+Crossfade is **not a primitive** — it is a composition pattern achieved by binding opposing synapse weight modulators to the same parameter on parallel synapses.
+
+#### 9.8.1 Example
+
+```typescript
+const Scene = Param.create(PARAM.Scene).smooth(0.9);
+
+parent.linkTo(verseClip)
+  .mod(Scene).base(1000).amount(-1000)    // 1000→0 as Scene goes 0→1
+
+parent.linkTo(chorusClip)
+  .mod(Scene).base(0).amount(1000)        // 0→1000 as Scene goes 0→1
+```
+
+#### 9.8.2 Behavior During Transition
+
+1. **Scene at 0.0:** Verse weight = 1000 (fires), Chorus weight = 0 (skipped).
+2. **Scene at 0.5 (mid-crossfade):** Both weights > 0. Both clips fire simultaneously. Verse notes at 50% velocity, chorus notes at 50% velocity.
+3. **Scene at 1.0:** Verse weight = 0 (skipped), Chorus weight = 1000 (fires).
+4. **Verse's active voices** ring out naturally via DSP-layer ADSR release tails (polyphonic persistence, Section 11.1).
+
+The smoothing factor on the `Scene` parameter controls crossfade speed. No crossfade-specific code exists in the engine.
 
 ---
 
@@ -1087,6 +1171,83 @@ if any modulator in chain has CLAMP_0_1:
 
 ---
 
+## 12A. Deterministic Synapse Resolution (Replaces Stochastic Selection)
+
+### 12A.1 Removal of Randomized Weight Distribution
+
+The existing `SynapticCursor` class implements **stochastic (PRNG-based) synapse selection**: when multiple synapses share the same source, a weighted random roll picks one winner. This is **removed entirely**.
+
+**Why:** With deterministic parameter-driven modulation, randomized selection is unnecessary and harmful:
+- Non-reproducible playback (PRNG state diverges across runs)
+- Unpredictable routing conflicts with the deterministic modulation model
+- Modulated synapse weights provide strictly superior control over routing
+
+### 12A.2 New Model: All-Fire with Weight Gating
+
+All synapses with effective weight > 0 fire. Weight acts as a **velocity multiplier**, not a probability:
+
+```
+for each synapse from sourcePtr:
+    effectiveWeight = evaluateSynapseWeight(synapse)  // includes modulation
+    if effectiveWeight > 0:
+        velocityScale = effectiveWeight / 1000
+        for each note in targetClip within [startTick, endTick):
+            fire noteOn(pitch, originalVelocity × velocityScale)
+```
+
+This transforms the synapse graph from "choose one path" to "fan out to all active paths, weighted."
+
+### 12A.3 SynapticCursor Deletion
+
+`packages/synaptic/src/SynapticCursor.ts` is **deleted in its entirety**. Its surviving logic folds into the kernel-side `Sequencer`:
+
+| SynapticCursor method | Destination |
+|:---|:---|
+| `findHeadSlot()` (hash lookup) | `Sequencer` or `SynapseResolver` helper |
+| `collectCandidates()` (chain traversal) | `Sequencer` — simplified to "collect all, no selection" |
+| `selectWinner()` | **Deleted** — no selection, all weight > 0 fire |
+| `nextRandom()` / `prngState` / `setSeed()` | **Deleted** — no PRNG |
+| `pendingJitter` / `hasJitter()` / `consumeJitter()` | **Deleted** — timing variation via modulation |
+| `candJitters` array | **Deleted** |
+| Quota enforcement | `Sequencer` (retained — prevents runaway fan-out) |
+| Plasticity callback | `Sequencer` (retained if plasticity feature is kept) |
+
+### 12A.4 Synapse Table Field Changes
+
+**`WEIGHT_DATA` (offset +2):**
+
+| Before | After |
+|:---|:---|
+| `weight(16b) \| jitter(16b)` | `weight(16b) \| reserved(16b)` |
+
+The jitter field (bits 16–31) is zeroed and reserved. The `SYN_PACK.JITTER_MASK` and `JITTER_SHIFT` constants are removed.
+
+### 12A.5 API Changes
+
+| Method | Before | After |
+|:---|:---|:---|
+| `SynapticNode.linkTo()` | `linkTo(target, weight?, jitter?)` | `linkTo(target, weight?)` |
+| `SiliconBridge.connect()` | `connect(srcId, tgtId, weight?, jitter?)` | `connect(srcId, tgtId, weight?)` |
+| `SiliconBridge.connectAsync()` | `connectAsync(srcPtr, tgtPtr, weight?, jitter?)` | `connectAsync(srcPtr, tgtPtr, weight?)` |
+| `SynapseAllocator.connect()` | `connect(src, tgt, weight, jitter)` | `connect(src, tgt, weight)` |
+| `SynapseResolutionCallback` | `(targetPtr, jitter, weight, synapsePtr)` | Removed (no callback-based resolution) |
+
+### 12A.6 Files Affected
+
+| File | Change |
+|:---|:---|
+| `SynapticCursor.ts` | **Deleted** |
+| `SynapticNode.ts` | Remove `jitter` param from `linkTo()` / `connect()` |
+| `silicon-bridge.ts` | Remove `jitter` from `connect()`, `connectAsync()`, snapshots |
+| `synapse-allocator.ts` | Remove `jitter` from `connect()`, update `WEIGHT_DATA` packing |
+| `constants.ts` | Remove `SYN_PACK.JITTER_MASK/SHIFT`, mark bits 16–31 as reserved |
+| `types.ts` | Remove `jitter` from `SynapseResolutionCallback`, `SynapseSnapshot` |
+| `integration.test.ts` | Remove jitter test cases |
+| `rfc-054-barrier.test.ts` | Update weight/jitter packing tests |
+| `stress-tests.test.ts` | Update packed weight references |
+
+---
+
 ## 13. Migration Plan
 
 ### 13.1 Node Size Migration (32B → 64B)
@@ -1127,15 +1288,17 @@ if any modulator in chain has CLAMP_0_1:
 
 1. **Phase 1 — Constants + Node expansion.** Update `constants.ts`. All dependent code auto-adjusts via `NODE_SIZE_I32` / `NODE_SIZE_BYTES`. Update `Int32Array(8)` allocations. Run existing test suite — must pass with zero behavioral changes.
 
-2. **Phase 2 — New SAB tables.** Add `PARAMETER_TABLE`, `MODULATION_TABLE`, `LUT_POOL` constants, offset functions, and `calculateSABSize()` updates. Add initialization code in `init.ts`.
+2. **Phase 2 — Stochastic removal.** Delete `SynapticCursor.ts`. Remove `jitter` from all APIs. Remove `SYN_PACK.JITTER_*` constants. Implement deterministic all-fire resolution. Update all affected tests.
 
-3. **Phase 3 — Command protocol.** Add `CMD.CREATE_MOD` / `CMD.DELETE_MOD` handlers to `processCommands()` in `silicon-synapse.ts`.
+3. **Phase 3 — New SAB tables.** Add `PARAMETER_TABLE`, `MODULATION_TABLE`, `LUT_POOL` constants, offset functions, and `calculateSABSize()` updates. Add initialization code in `init.ts`.
 
-4. **Phase 4 — Bridge integration.** Add `setParam()`, modulator allocation, LUT deduplication to `SiliconBridge`.
+4. **Phase 4 — Command protocol.** Add `CMD.CREATE_MOD` / `CMD.DELETE_MOD` handlers to `processCommands()` in `silicon-synapse.ts`.
 
-5. **Phase 5 — Sequencer extraction.** Move `routeNodeEvents` logic to kernel-side `Sequencer`. Add parameter batch evaluation loop.
+5. **Phase 5 — Bridge integration.** Add `setParam()`, modulator allocation, LUT deduplication to `SiliconBridge`.
 
-6. **Phase 6 — Composition API.** Implement `Param`, `Modulator` factories, and inline cursors in `packages/composer`.
+6. **Phase 6 — Sequencer extraction.** Move `routeNodeEvents` logic to kernel-side `Sequencer`. Add parameter batch evaluation loop. Include synapse resolution (all-fire model).
+
+7. **Phase 7 — Composition API.** Implement `Param`, `Modulator` factories (including `Modulator.synapseWeight()`), inline cursors, and `linkTo()` modulation in `packages/composer` and `packages/synaptic`.
 
 ---
 
@@ -1163,3 +1326,6 @@ None. All architectural decisions are locked.
 | 12 | Typed modulator factories + inline cursors | DX, property-specific methods, two paths same output |
 | 13 | Dual-layer smoothing | Param-level global + mod-level per-binding, TapSource escape hatch |
 | 14 | Parameters as entities | Config objects (curve + smooth + flags), registered with bridge |
+| 15 | Clip-level synapse weight modulation | Modulate synapse weight for clip gating — weight 0 = skip entire clip |
+| 16 | Crossfade as composition pattern | Not a primitive — opposing weight modulators on same param, DSP handles tails |
+| 17 | Deterministic all-fire synapse resolution | All weight > 0 fire. Removes PRNG, SynapticCursor, jitter. Weight = velocity scale |
