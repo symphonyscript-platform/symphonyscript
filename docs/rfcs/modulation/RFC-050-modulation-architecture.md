@@ -155,6 +155,62 @@ Effective = clamp(NodeBase + Σ(Deltaᵢ), min, max)  // if CLAMP_0_1 bit set
 Effective = NodeBase + Σ(Deltaᵢ)                    // if CLAMP_0_1 bit clear
 ```
 
+### 4.5 Input Normalization (0–1000)
+
+All parameters accept **integer input in the 0–1000 range** at the API boundary:
+
+| Polarity | API Range | Internal Q16.16 Range |
+|:---|:---|:---|
+| Unipolar | `0–1000` | `0–65536` |
+| Bipolar | `-1000–1000` | `-65536–65536` |
+
+The bridge converts at the boundary:
+
+```typescript
+// Bridge conversion: 0–1000 → Q16.16
+const fixed = (value * 65536 / 1000) | 0;
+```
+
+**Why 0–1000:**
+- Integer API — no `.0` suffixes, no float precision bugs
+- 1000 steps exceeds MIDI resolution (128) by 8×
+- Matches existing synapse weight range (also 0–1000)
+- Modulation engine is domain-agnostic: it doesn't care whether the developer's original input is MIDI (0–127), percentage (0–100), or decibels. They normalize to 0–1000 before calling `setParam()`.
+
+The audio thread **never sees 0–1000**. All smoothing, curve evaluation, and delta math operates on Q16.16, giving sub-step precision (65.536 internal steps per API step) for smooth interpolation.
+
+### 4.6 Dual-Layer Polarity
+
+**Parameter polarity** (input domain) and **modulator polarity** (output behavior) are independent:
+
+**Parameter polarity** = what range the raw input lives in. Inherent to the parameter's nature:
+
+| Parameter | Polarity | API Range | Why |
+|:---|:---|:---|:---|
+| Volume | Unipolar | 0–1000 | Volume can't be negative |
+| Intensity | Unipolar | 0–1000 | Absence to presence |
+| Pan | Bipolar | -1000–1000 | Left/right, center is zero |
+| Swing | Bipolar | -1000–1000 | Behind/ahead of beat |
+| Pitch Bend | Bipolar | -1000–1000 | Down/up from center |
+
+Set on `Param.create()`. Stored in `PARAM.FLAGS.BIPOLAR` (bit 1).
+
+**Modulator polarity** = can this modulator push the target property below its base value?
+
+- **Unipolar mod:** `delta ∈ [0, Amount]` — only adds
+- **Bipolar mod:** `delta ∈ [-Amount, +Amount]` — swings both ways
+
+Set on the modulator (`.unipolar()` / `.bipolar()`). Stored in `PACKED_CFG_A` bit 14. Each factory sets a natural default.
+
+Under the hood, bipolar remapping is a single operation after the curve lookup:
+
+```
+// Unipolar: curvedInput stays in [0, 65536]
+// Bipolar:  curvedInput = (curvedInput * 2) - 65536 → [-65536, +65536]
+```
+
+A **unipolar** parameter (Intensity: 0–1000) can feed a **bipolar** modulator (pitch: ±12 semitones). A **bipolar** parameter (Swing: -1000–1000) can feed a **unipolar** modulator (only adds velocity, never reduces).
+
 ---
 
 ## 5. Memory Layout
@@ -240,7 +296,7 @@ export const PARAM_TABLE = {
 } as const;
 
 export const PARAM = {
-  RAW_VALUE:      0,  // Bridge-written input (Q16.16, 0.0–1.0)
+  RAW_VALUE:      0,  // Bridge-written input (Q16.16, converted from 0–1000 API range)
   CURVED_VALUE:   1,  // After spatial curve (audio engine owned)
   SMOOTHED_VALUE: 2,  // After temporal smoothing (audio engine owned)
   TARGET_VALUE:   3,  // Smoother internal target (audio engine owned)
@@ -345,9 +401,13 @@ Bit 15: CLAMP_0_1
   0 = Unclamped (full Int32 range)
   1 = Clamped to [0, 65536]
 
-Bits 14–0: SmoothFactor (15 bits, modulator-level smoothing)
+Bit 14: MOD_POLARITY
+  0 = Unipolar (delta ∈ [0, Amount]) — default for velocity, volume
+  1 = Bipolar (delta ∈ [-Amount, +Amount]) — default for pitch, pan, tempo
+
+Bits 13–0: SmoothFactor (14 bits, modulator-level smoothing)
   0 = No modulator smoothing (pass-through)
-  >0 = Exponential smooth: current += (target - current) × (factor / 32768)
+  >0 = Exponential smooth: current += (target - current) × (factor / 16384)
 ```
 
 #### 5.3.3 PACKED_CFG_B Bit Layout
@@ -855,19 +915,53 @@ interface IModulatorBase<T extends IModulatorBase<T>> {
   /** Set modulator curve — named preset or bezier control points. */
   curve(type: string | [number, number, number, number]): T;
 
-  /** Shorthand: linear curve (no transform). */
+  // --- Polarity ---
+
+  /** Unipolar output: delta ∈ [0, Amount]. */
+  unipolar(): T;
+
+  /** Bipolar output: delta ∈ [-Amount, +Amount]. */
+  bipolar(): T;
+
+  // --- Built-in curve shapes ---
+
+  /** Linear (no transform). */
   linear(): T;
 
-  /** Shorthand: quadratic ease-in. */
+  /** Quadratic ease-in. */
   easeIn(): T;
 
-  /** Shorthand: quadratic ease-out. */
+  /** Quadratic ease-out. */
   easeOut(): T;
 
-  /** Select tap source for parameter value. */
-  tapSmoothed(): T;  // Default
+  /** Bipolar linear: -1 → 0 → +1. Standard panning/pitch seesaw. */
+  centered(): T;
+
+  /** V-shape: 1 → 0 → 1. Increase away from center. */
+  diverge(): T;
+
+  /** Inverse V: -1 → 1 → -1. Increase at center, decrease at extremes. */
+  converge(): T;
+
+  /** Sine wave: smooth bipolar wobble. Vibrato, organic modulation. */
+  symmetric(): T;
+
+  /** Inverted linear: 0 → -1. Turns value down as param rises. */
+  ducker(): T;
+
+  // --- Tap source (aliases: tapRaw/direct, tapCurved, tapSmoothed) ---
+
+  /** Read SMOOTHED_VALUE (default — inherits parameter personality). */
+  tapSmoothed(): T;
+
+  /** Read CURVED_VALUE (skip smoothing, keep spatial curve). */
   tapCurved(): T;
+
+  /** Read RAW_VALUE (bypass all processing — direct human input). */
   tapRaw(): T;
+
+  /** Alias for tapRaw(). */
+  direct(): T;
 }
 ```
 
@@ -875,39 +969,40 @@ interface IModulatorBase<T extends IModulatorBase<T>> {
 
 ```typescript
 interface IVelocityModulator extends IModulatorBase<IVelocityModulator> {
-  // Velocity-specific: base/amount in normalized 0–1 range
-  // Default: CLAMP_0_1 = true
+  // Default polarity: UNIPOLAR (only adds velocity)
+  // Default clamping: CLAMP_0_1 = true
 }
 
 interface IPitchModulator extends IModulatorBase<IPitchModulator> {
   /** Convenience: set amount in octaves (amount × 12). */
   octaves(n: number): this;
-  // Default: CLAMP_0_1 = false (pitch is unbounded)
+  // Default polarity: BIPOLAR (pitch bends both ways)
+  // Default clamping: CLAMP_0_1 = false (unbounded)
 }
 
 interface ITempoModulator extends IModulatorBase<ITempoModulator> {
-  // Tempo-specific: base/amount in BPM
-  // Default: floor clamp at 20 BPM
+  // Default polarity: BIPOLAR (speed up or slow down)
+  // Default clamping: floor clamp at 20 BPM
 }
 
 interface IFilterModulator extends IModulatorBase<IFilterModulator> {
-  // Filter-specific: base/amount in Hz
-  // Default: CLAMP_0_1 = false
+  // Default polarity: UNIPOLAR
+  // Default clamping: CLAMP_0_1 = false (unbounded Hz)
 }
 
 interface IVolumeModulator extends IModulatorBase<IVolumeModulator> {
-  // Volume-specific: base/amount in normalized 0–1 range
-  // Default: CLAMP_0_1 = true
+  // Default polarity: UNIPOLAR (only adds volume)
+  // Default clamping: CLAMP_0_1 = true
 }
 
 interface IPanModulator extends IModulatorBase<IPanModulator> {
-  // Pan-specific: base/amount in -1 to +1 range
-  // Default: clamped to [-65536, 65536]
+  // Default polarity: BIPOLAR (left/right)
+  // Default clamping: clamped to [-65536, 65536]
 }
 
 interface ISynapseWeightModulator extends IModulatorBase<ISynapseWeightModulator> {
-  // Synapse weight: range 0–1000 (0 = clip doesn't fire, 1000 = full)
-  // Default: CLAMP_0_1 = true (clamped to [0, 1000])
+  // Default polarity: UNIPOLAR
+  // Default clamping: CLAMP_0_1 = true (0–1000)
   // Applied during synapse resolution, not voice rendering
 }
 ```
@@ -966,16 +1061,19 @@ The cursor IS `Modulator.velocity()` (or whichever property) + escape methods. S
 ### 9.6 Runtime Parameter Updates
 
 ```typescript
-// Live parameter scrubbing (e.g., from UI slider or MIDI controller)
-bridge.setParam(PARAM.Intensity, 0.75);  // Atomics.store → instant
-bridge.setParam(PARAM.CrowdEnergy, 0.5);
+// Live parameter scrubbing (0–1000 integer input)
+bridge.setParam(PARAM.Intensity, 750);      // Unipolar: 75%
+bridge.setParam(PARAM.Swing, -300);          // Bipolar: 30% behind beat
+bridge.setParam(PARAM.CrowdEnergy, 500);     // Unipolar: 50%
 ```
 
 ```typescript
 // Inside SiliconBridge
 setParam(paramId: number, value: number): void {
   const offset = this.paramTableOffsetI32 + paramId * PARAM_TABLE.STRIDE_I32;
-  Atomics.store(this.sab, offset + PARAM.RAW_VALUE, toFixed16(value));
+  // Convert 0–1000 → Q16.16
+  const fixed = (value * 65536 / 1000) | 0;
+  Atomics.store(this.sab, offset + PARAM.RAW_VALUE, fixed);
 }
 ```
 
@@ -1329,3 +1427,6 @@ None. All architectural decisions are locked.
 | 15 | Clip-level synapse weight modulation | Modulate synapse weight for clip gating — weight 0 = skip entire clip |
 | 16 | Crossfade as composition pattern | Not a primitive — opposing weight modulators on same param, DSP handles tails |
 | 17 | Deterministic all-fire synapse resolution | All weight > 0 fire. Removes PRNG, SynapticCursor, jitter. Weight = velocity scale |
+| 18 | Dual-layer polarity | Parameter polarity (input domain) + modulator polarity (output direction) are independent. MOD_POLARITY bit in PACKED_CFG_A |
+| 19 | 0–1000 normalized input | Integer API, bridge converts to Q16.16. Domain-agnostic. Matches synapse weight range |
+| 20 | Named shape presets + method aliases | `.centered()`, `.diverge()`, `.converge()`, `.symmetric()`, `.ducker()`. `.direct()` aliases `.tapRaw()` |
