@@ -4,6 +4,7 @@
  */
 import { BasicEngine, BasicMixer } from '@symphonyscript/dsp';
 import { createSubtractiveInstrument } from '@symphonyscript/synthesis';
+import '@symphonyscript/web/processor';
 
 const BLOCK_SIZE = 128;
 
@@ -22,5 +23,3 @@ function createEngine(sampleRate: number, blockSize: number): BasicEngine {
 
 (globalThis as unknown as { __SYMPHONYSCRIPT_ENGINE_FACTORY__?: (sr: number, bs: number) => unknown }).__SYMPHONYSCRIPT_ENGINE_FACTORY__ =
     createEngine;
-
-await import('@symphonyscript/web/processor');
