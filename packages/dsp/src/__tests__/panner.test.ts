@@ -1,4 +1,4 @@
-import { ModuleType } from '../constants';
+import { ModuleType, PortRate } from '../constants';
 import { createExecutionContext, executePlan } from '../plan-executor';
 import { createAudioBuffer } from '../buffer-utils';
 import { PannerModule, PannerParam } from '../modules/panner';
@@ -6,12 +6,14 @@ import type { AudioBuffer, CompiledPlan, DSPModule } from '../types';
 
 const BLOCK_SIZE = 64;
 
+const MONO_OUTPUT = [{ id: 0, rate: PortRate.AUDIO, channelCount: 1, name: 'out' }];
+
 function createSourceModule(id: number, value: number): DSPModule {
     return {
         type: ModuleType.GAIN,
         id,
         inputs: [],
-        outputs: [],
+        outputs: MONO_OUTPUT,
         process: (_in, outputs, blockSize) => {
             const out = outputs[0];
             if (out) {

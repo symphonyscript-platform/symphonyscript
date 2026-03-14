@@ -1,4 +1,4 @@
-import { ModuleType } from '../constants';
+import { ModuleType, PortRate } from '../constants';
 import { compileGraph } from '../graph-compiler';
 import { createExecutionContext, executePlan } from '../plan-executor';
 import { createAudioBuffer } from '../buffer-utils';
@@ -7,13 +7,16 @@ import { SumMergeModule } from '../modules/merge';
 import type { AudioBuffer, CompiledPlan, DSPModule, PortDescriptor } from '../types';
 
 const EMPTY_PORTS: readonly PortDescriptor[] = [];
+const MONO_OUTPUT: readonly PortDescriptor[] = [
+    { id: 0, rate: PortRate.AUDIO, channelCount: 1, name: 'out' },
+];
 
 function createSourceModule(id: number, fillValue: number): DSPModule {
     return {
         type: ModuleType.GAIN,
         id,
         inputs: EMPTY_PORTS,
-        outputs: EMPTY_PORTS,
+        outputs: MONO_OUTPUT,
         process: (_in, outputs, blockSize) => {
             const out = outputs[0];
             if (out) {

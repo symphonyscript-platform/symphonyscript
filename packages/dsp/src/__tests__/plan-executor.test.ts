@@ -4,6 +4,9 @@ import { createExecutionContext, executePlan } from '../plan-executor';
 import type { AudioBuffer, CompiledPlan, DSPModule, PortDescriptor } from '../types';
 
 const EMPTY_PORTS: readonly PortDescriptor[] = [];
+const MONO_OUTPUT: readonly PortDescriptor[] = [
+    { id: 0, rate: PortRate.AUDIO, channelCount: 1, name: 'out' },
+];
 
 function createTestModule(
     id: number,
@@ -17,7 +20,7 @@ function createTestModule(
         type: ModuleType.GAIN,
         id,
         inputs: EMPTY_PORTS,
-        outputs: EMPTY_PORTS,
+        outputs: MONO_OUTPUT,
         process: processImpl,
         setParameter: () => {},
         getParameter: () => 0,
@@ -157,7 +160,7 @@ describe('plan executor', () => {
             type: ModuleType.GAIN,
             id: 2,
             inputs: [{ id: 0, rate: PortRate.AUDIO, channelCount: 1, name: 'in' }],
-            outputs: EMPTY_PORTS,
+            outputs: MONO_OUTPUT,
             process: () => {},
             setParameter: () => {},
             getParameter: () => 0,
@@ -168,6 +171,52 @@ describe('plan executor', () => {
 
         expect(() => createExecutionContext(plan, modules)).toThrow(
             /channel count mismatch: wire from module 1 port 0 → module 2 port 0: source has 2 channels, target expects 1/
+        );
+    });
+
+    test('missing target port throws with distinct error', () => {
+        const blockSize = 64;
+        const plan = compileGraph(
+            {
+                modules: [
+                    { id: 1, type: ModuleType.GAIN, initialParameters: [] },
+                    { id: 2, type: ModuleType.GAIN, initialParameters: [] },
+                ],
+                wires: [
+                    { sourceModuleId: 1, sourcePortId: 0, targetModuleId: 2, targetPortId: 0 },
+                ],
+                outputPortModuleId: 2,
+                outputPortId: 0,
+            },
+            blockSize
+        );
+
+        const sourceModule: DSPModule = {
+            type: ModuleType.GAIN,
+            id: 1,
+            inputs: EMPTY_PORTS,
+            outputs: [{ id: 0, rate: PortRate.AUDIO, channelCount: 1, name: 'out' }],
+            process: () => {},
+            setParameter: () => {},
+            getParameter: () => 0,
+            reset: () => {},
+        };
+
+        const targetModuleNoInputs: DSPModule = {
+            type: ModuleType.GAIN,
+            id: 2,
+            inputs: [],
+            outputs: MONO_OUTPUT,
+            process: () => {},
+            setParameter: () => {},
+            getParameter: () => 0,
+            reset: () => {},
+        };
+
+        const modules = [sourceModule, targetModuleNoInputs];
+
+        expect(() => createExecutionContext(plan, modules)).toThrow(
+            /missing target port: wire from module 1 port 0 → module 2 port 0: target module has no input port 0/
         );
     });
 });

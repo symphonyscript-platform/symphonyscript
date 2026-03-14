@@ -124,7 +124,13 @@ function buildResolvedPlan(
         const module = modules[step.moduleIndex];
         for (let portId = 0; portId < step.outputBufferIndices.length; portId += 1) {
             const bufferIndex = step.outputBufferIndices[portId];
-            const channelCount = module.outputs[portId]?.channelCount ?? 1;
+            const portDescriptor = module.outputs[portId];
+            if (portDescriptor === undefined) {
+                throw new Error(
+                    `bufferDescriptors[${bufferIndex}]: module ${module.id} has no output port ${portId}`
+                );
+            }
+            const channelCount = portDescriptor.channelCount;
             if (!Number.isInteger(channelCount) || channelCount < 1) {
                 throw new Error(
                     `bufferDescriptors[${bufferIndex}]: module ${module.id} output port ${portId} has invalid channelCount ${channelCount}`
@@ -196,9 +202,21 @@ export function createExecutionContext(
         if (sourceBufferIndex === undefined) {
             continue;
         }
-        const sourceCh = resolvedPlan.bufferDescriptors[sourceBufferIndex]?.channelCount ?? 0;
+        const sourceDescriptor = resolvedPlan.bufferDescriptors[sourceBufferIndex];
+        if (sourceDescriptor === undefined) {
+            throw new Error(
+                `internal: source buffer ${sourceBufferIndex} missing from resolved plan`
+            );
+        }
+        const sourceCh = sourceDescriptor.channelCount;
         const targetModule = modules[plan.steps[targetStepIndex].moduleIndex];
-        const targetCh = targetModule.inputs[wire.targetPortId]?.channelCount ?? 0;
+        const targetPortDescriptor = targetModule.inputs[wire.targetPortId];
+        if (targetPortDescriptor === undefined) {
+            throw new Error(
+                `missing target port: wire from module ${wire.sourceModuleId} port ${wire.sourcePortId} → module ${wire.targetModuleId} port ${wire.targetPortId}: target module has no input port ${wire.targetPortId}`
+            );
+        }
+        const targetCh = targetPortDescriptor.channelCount;
         if (sourceCh !== targetCh) {
             throw new Error(
                 `channel count mismatch: wire from module ${wire.sourceModuleId} port ${wire.sourcePortId} → module ${wire.targetModuleId} port ${wire.targetPortId}: source has ${sourceCh} channels, target expects ${targetCh}`
@@ -206,12 +224,22 @@ export function createExecutionContext(
         }
     }
 
+    // Re-validate output channel counts. buildResolvedPlan populates descriptors from
+    // module.outputs; when two steps share the same output buffer index (malformed plan),
+    // the last write wins. This loop catches that case: the overwritten step's module
+    // declares a different channelCount than what ended up in the resolved plan.
     for (let stepIndex = 0; stepIndex < plan.steps.length; stepIndex += 1) {
         const step = plan.steps[stepIndex];
         const module = modules[step.moduleIndex];
         for (let portId = 0; portId < step.outputBufferIndices.length; portId += 1) {
             const bufferIndex = step.outputBufferIndices[portId];
-            const expectedCh = module.outputs[portId]?.channelCount ?? 1;
+            const outputPortDescriptor = module.outputs[portId];
+            if (outputPortDescriptor === undefined) {
+                throw new Error(
+                    `module order mismatch: step ${stepIndex} buffer ${bufferIndex}: module ${module.id} has no output port ${portId}`
+                );
+            }
+            const expectedCh = outputPortDescriptor.channelCount;
             const actualCh = resolvedPlan.bufferDescriptors[bufferIndex]?.channelCount;
             if (actualCh !== expectedCh) {
                 throw new Error(
