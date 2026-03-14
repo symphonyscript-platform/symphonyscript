@@ -84,6 +84,43 @@ describe('reverb module', () => {
         }
     });
 
+    test('damping=1 still produces audible tail', () => {
+        const reverb = new ReverbModule(1, sampleRate);
+        reverb.setParameter(ReverbParam.DAMPING, 1);
+        reverb.setParameter(ReverbParam.ROOM_SIZE, 0.8);
+        reverb.setParameter(ReverbParam.MIX, 1);
+
+        const inputWithSignal = createAudioBuffer(1, blockSize);
+        inputWithSignal.data.fill(0);
+        inputWithSignal.data[0] = 1;
+
+        const inputSilent = createAudioBuffer(1, blockSize);
+        inputSilent.data.fill(0);
+
+        const minCombDelay = 1617;
+        const blocksToFill = Math.ceil(minCombDelay / blockSize) + 1;
+
+        reverb.process([inputWithSignal], [createAudioBuffer(1, blockSize)], blockSize);
+        for (let b = 1; b < blocksToFill; b += 1) {
+            inputWithSignal.data[0] = 0;
+            reverb.process([inputWithSignal], [createAudioBuffer(1, blockSize)], blockSize);
+        }
+
+        const outTail = createAudioBuffer(1, blockSize);
+        for (let b = 0; b < 4; b += 1) {
+            reverb.process([inputSilent], [outTail], blockSize);
+        }
+
+        let hasNonZeroInTail = false;
+        for (let i = 0; i < blockSize; i += 1) {
+            if (outTail.data[i] !== 0) {
+                hasNonZeroInTail = true;
+                break;
+            }
+        }
+        expect(hasNonZeroInTail).toBe(true);
+    });
+
     test('reset produces silence after input stops', () => {
         const reverb = new ReverbModule(1, sampleRate);
         reverb.setParameter(ReverbParam.ROOM_SIZE, 0.8);

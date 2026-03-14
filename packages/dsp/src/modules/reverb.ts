@@ -119,7 +119,7 @@ export class ReverbModule implements DSPModule {
 
         const feedback =
             0.7 + this.roomSize * 0.28;
-        const damp = this.damping;
+        const damp = this.damping * 0.95;
         const mixVal = this.mix;
         const dryGain = 1 - mixVal;
 
