@@ -1,0 +1,3 @@
+Start Engineer/Reviewer pairs. do not forget the policy - Reviewer rejects? you assess (check git diff manually). Reviewer approves? you asssess even more (fake approval is dangerous). Reviewer spits out objectively wrong review (e.g.: does not reflect reality OR goes against the RFC)? you re-launch a new reviewer with more effective prompt. Start.
+
+Confirm you understand
