@@ -1559,3 +1559,529 @@ None. All architectural decisions are locked.
 | 25 | Parameter deregistration | `FLAGS.ACTIVE = 0`. Modulators read frozen value. No auto-cleanup |
 | 26 | Pre-baked shape LUT slots 0–7 | Built-in shapes initialized at `initSAB()`. User LUTs start at slot 8 |
 | 27 | Zero-alloc debug inspection | `inspectParam(id, out)` / `inspectMod(ptr, out)` with caller-owned Int32Array |
+
+---
+
+## Appendix B: Reference Implementation Code
+
+These implementations are provided to eliminate guesswork for implementing agents.
+
+### B.1 `generateWaveform()` — LFO Waveform Generation
+
+```typescript
+/**
+ * Generate a waveform sample from a phase accumulator.
+ * Pure math, zero allocation. Audio thread safe.
+ *
+ * @param phase - Unsigned 32-bit phase accumulator (0 wraps to 2^32)
+ * @param waveform - Waveform type (0=SINE, 1=TRIANGLE, 2=SQUARE, 3=SAW)
+ * @returns Q16.16 fixed-point output in [-65536, +65536] (bipolar)
+ */
+function generateWaveform(phase: number, waveform: number): number {
+  // Normalize phase to 0–65536 range (Q16.16 fraction of cycle)
+  const norm = (phase >>> 16) & 0xFFFF;  // Top 16 bits → 0–65535
+
+  switch (waveform) {
+    case 0: { // SINE — 4th-order Taylor approximation, no Math.sin
+      // Map norm to [-π, +π] as Q16.16
+      // norm 0 = -π, norm 32768 = 0, norm 65535 = +π
+      let x = norm - 32768;               // [-32768, +32767] = [-0.5, +0.5] in Q16
+      x = (x * 201) >> 6;                 // Scale to [-π, +π] as Q16.16 (201/64 ≈ π)
+      // Compute sin(x) via x - x³/6 + x⁵/120 (all in fixed-point)
+      const x2 = (x * x) >> 16;           // x²
+      const x3 = (x2 * x) >> 16;          // x³
+      const x5 = (x3 * x2) >> 16;         // x⁵
+      return x - ((x3 * 10923) >> 16) + ((x5 * 546) >> 16);
+      // 10923 ≈ 65536/6, 546 ≈ 65536/120
+    }
+    case 1: { // TRIANGLE — linearly ramps up then down
+      if (norm < 16384) {
+        return (norm * 4);                 // 0 → +65536 (first quarter)
+      } else if (norm < 49152) {
+        return 131072 - (norm * 4);        // +65536 → -65536 (middle half)
+      } else {
+        return (norm * 4) - 262144;        // -65536 → 0 (last quarter)
+      }
+    }
+    case 2: // SQUARE — binary: +1 or -1
+      return norm < 32768 ? 65536 : -65536;
+    case 3: // SAW — linear ramp from -1 to +1
+      return (norm * 2) - 65536;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Compute phase increment per audio block.
+ * @param packedCfgB - PACKED_CFG_B containing frequency in Q8.24
+ * @param blockSize - Samples per block (e.g., 128)
+ * @param sampleRate - Audio sample rate (e.g., 48000)
+ * @returns Phase increment (unsigned 32-bit, wraps at 2^32)
+ */
+function computePhaseIncrement(
+  packedCfgB: number,
+  blockSize: number,
+  sampleRate: number
+): number {
+  const freqQ8_24 = packedCfgB & 0x00FFFFFF;
+  const freqHz = freqQ8_24 / (1 << 24);
+  // Full cycle = 2^32 phase units. Per sample = (2^32 * freq) / sampleRate.
+  // Per block = per sample * blockSize.
+  return ((4294967296 * freqHz) / sampleRate * blockSize) >>> 0;
+}
+```
+
+### B.2 Newton-Raphson Cubic Bézier Solver (LUT Computation)
+
+```typescript
+/**
+ * Compute a 256-entry LUT for a cubic bézier curve.
+ * Called on the main thread (bridge-side) when a new bezier curve is registered.
+ *
+ * @param x1, y1, x2, y2 - Bézier control points (CSS cubic-bezier format)
+ * @param lutSlot - Target LUT_POOL slot index
+ * @param sabI32 - SharedArrayBuffer as Int32Array
+ * @param lutPoolOffsetI32 - Offset to LUT_POOL in i32 indices
+ */
+function computeBezierLut(
+  x1: number, y1: number, x2: number, y2: number,
+  lutSlot: number,
+  sabI32: Int32Array,
+  lutPoolOffsetI32: number
+): void {
+  const slotOffset = lutPoolOffsetI32 + lutSlot * 256;
+
+  for (let i = 0; i < 256; i++) {
+    const targetX = i / 255;              // Evenly spaced input 0.0–1.0
+    const t = solveCubicBezierT(targetX, x1, x2);
+    const y = cubicBezierY(t, y1, y2);
+    const fixed = (y * 65536) | 0;        // Float → Q16.16
+    Atomics.store(sabI32, slotOffset + i, fixed);
+  }
+}
+
+/**
+ * Solve x(t) = targetX for t using Newton-Raphson (8 iterations).
+ * x(t) = 3(1-t)²t·x1 + 3(1-t)t²·x2 + t³
+ */
+function solveCubicBezierT(targetX: number, x1: number, x2: number): number {
+  let t = targetX;  // Initial guess
+
+  for (let i = 0; i < 8; i++) {
+    const t2 = t * t;
+    const t3 = t2 * t;
+    const mt = 1 - t;
+    const mt2 = mt * mt;
+
+    // x(t) = 3·mt²·t·x1 + 3·mt·t²·x2 + t³
+    const x = 3 * mt2 * t * x1 + 3 * mt * t2 * x2 + t3;
+    const err = x - targetX;
+
+    if (Math.abs(err) < 1e-7) break;
+
+    // dx/dt = 3·mt²·x1 + 6·mt·t·(x2-x1) + 3·t²·(1-x2)
+    const dx = 3 * mt2 * x1 + 6 * mt * t * (x2 - x1) + 3 * t2 * (1 - x2);
+
+    if (Math.abs(dx) < 1e-10) break;     // Avoid division by zero
+
+    t = t - err / dx;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;       // Clamp to [0, 1]
+  }
+
+  return t;
+}
+
+/**
+ * Evaluate y(t) for cubic bézier.
+ * y(t) = 3(1-t)²t·y1 + 3(1-t)t²·y2 + t³
+ */
+function cubicBezierY(t: number, y1: number, y2: number): number {
+  const mt = 1 - t;
+  const mt2 = mt * mt;
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return 3 * mt2 * t * y1 + 3 * mt * t2 * y2 + t3;
+}
+```
+
+### B.3 Reference Modulator Factory — `Modulator.velocity()`
+
+```typescript
+/**
+ * Reference implementation of a typed modulator factory.
+ * All other factories (pitch, volume, pan, tempo, filter, synapseWeight)
+ * follow the same pattern — they differ only in:
+ *   1. targetProperty (PACKED_CFG_A bits 31–24)
+ *   2. defaultClamp (PACKED_CFG_A bit 15)
+ *   3. defaultPolarity (PACKED_CFG_A bit 14)
+ *   4. Domain-specific convenience methods
+ */
+class VelocityModulatorConfig implements IVelocityModulator {
+  private _paramId: number;
+  private _base: number = 0;                  // Q16.16
+  private _amount: number = 0;                // Q16.16
+  private _smoothFactor: number = 0;          // 14-bit
+  private _clamp: boolean = true;             // Velocity default: clamped
+  private _polarity: boolean = false;         // Velocity default: unipolar
+  private _tapSource: number = 0x00;          // SMOOTHED (default)
+  private _curveType: number = 0x00;          // LINEAR (default)
+  private _curveParam: number = 0;
+
+  constructor(param: IParam) {
+    this._paramId = param.paramId;
+  }
+
+  base(value: number): this {
+    this._base = (value * 65536 / 1000) | 0;  // 0–1000 → Q16.16
+    return this;
+  }
+
+  amount(value: number): this {
+    this._amount = (value * 65536 / 1000) | 0;
+    return this;
+  }
+
+  smooth(factor: number): this {
+    this._smoothFactor = (factor * 16384) | 0; // 14-bit
+    return this;
+  }
+
+  curve(type: string | [number, number, number, number]): this {
+    if (Array.isArray(type)) {
+      this._curveType = 0x04;   // LUT
+      // LUT index assigned during register() — bridge.allocLut(type)
+    } else {
+      // Named preset → built-in LUT slot
+      switch (type) {
+        case 'centered': this._curveType = 0x04; this._curveParam = 1; break;
+        case 'diverge':  this._curveType = 0x04; this._curveParam = 2; break;
+        // ... etc, mapping to LUT_BUILTIN slots
+      }
+    }
+    return this;
+  }
+
+  unipolar(): this { this._polarity = false; return this; }
+  bipolar(): this  { this._polarity = true; return this; }
+  linear(): this   { this._curveType = 0x00; return this; }
+  easeIn(): this   { this._curveType = 0x01; return this; }
+  easeOut(): this  { this._curveType = 0x01; this._curveParam = 256; return this; }
+  centered(): this { this._curveType = 0x04; this._curveParam = 1; return this; }
+  diverge(): this  { this._curveType = 0x04; this._curveParam = 2; return this; }
+  converge(): this { this._curveType = 0x04; this._curveParam = 3; return this; }
+  symmetric(): this { this._curveType = 0x04; this._curveParam = 4; return this; }
+  ducker(): this   { this._curveType = 0x04; this._curveParam = 5; return this; }
+
+  tapSmoothed(): this { this._tapSource = 0x00; return this; }
+  tapCurved(): this   { this._tapSource = 0x01; return this; }
+  tapRaw(): this      { this._tapSource = 0x02; return this; }
+  direct(): this      { return this.tapRaw(); }  // Alias
+
+  /**
+   * Pack config into MODULATION_TABLE fields.
+   * Called by the bridge when attaching this modulator to a node.
+   */
+  packConfigA(): number {
+    const targetProperty = 0x00; // VELOCITY
+    return (targetProperty << 24)
+         | (this._tapSource << 16)
+         | (this._clamp ? (1 << 15) : 0)
+         | (this._polarity ? (1 << 14) : 0)
+         | (this._smoothFactor & 0x3FFF);
+  }
+
+  packConfigB(): number {
+    return (this._curveType << 24) | (this._curveParam & 0x00FFFFFF);
+  }
+
+  getParamId(): number { return this._paramId; }
+  getBase(): number { return this._base; }
+  getAmount(): number { return this._amount; }
+}
+
+// Factory method on the Modulator class:
+class Modulator {
+  static velocity(param: IParam): IVelocityModulator {
+    return new VelocityModulatorConfig(param);
+  }
+
+  // Other factories follow the same pattern. Only these values differ:
+  // Modulator.pitch():  targetProperty=0x01, clamp=false, polarity=true(bipolar)
+  // Modulator.volume(): targetProperty=0x05, clamp=true,  polarity=false(unipolar)
+  // Modulator.pan():    targetProperty=0x06, clamp=true,  polarity=true(bipolar)
+  // Modulator.tempo():  targetProperty=0x03, clamp=true,  polarity=true(bipolar)
+  // Modulator.filter(): targetProperty=0x04, clamp=false, polarity=false(unipolar)
+  // Modulator.synapseWeight(): targetProperty=0x07, clamp=true, polarity=false(unipolar)
+}
+```
+
+---
+
+## Appendix C: Sequencer Extraction Map
+
+Line-by-line mapping from `packages/web/src/runtime/processor.ts` to the kernel-side `Sequencer`.
+
+### C.1 Source → Destination
+
+| Source (processor.ts) | Lines | Destination | Notes |
+|:---|:---|:---|:---|
+| Tempo calculation: `samplesPerTick = ...` | L88–99 | `Sequencer.computeTempo()` | Reads from `PARAMETER_TABLE[TEMPO].SMOOTHED_VALUE` instead of `linker.getBpm()` |
+| Node traversal loop: `while (ptr !== NULL_PTR)` | L101–115 | `Sequencer.advance(startTick, endTick, ...)` | Main loop body. Add synapse resolution at chain end |
+| `routeNodeEvents()` | L185–234 | `Sequencer.routeNode()` | Extract as method. Add `HAS_MODULATORS` check for lazy eval |
+| `normalizeMidi()` | L236–244 | `Sequencer.normalizeMidi()` | Copy unchanged |
+| `tickToGateOffset()` | L246–259 | `Sequencer.tickToGateOffset()` | Copy unchanged |
+| **New:** Parameter batch evaluation | — | `Sequencer.evaluateParams()` | Section 7.1.1 pseudocode. Runs before traversal |
+| **New:** Synapse resolution | — | `Sequencer.resolveSynapses(sourcePtr)` | All-fire model (Section 12A.2) |
+
+### C.2 `Sequencer` Class Skeleton
+
+```typescript
+// packages/kernel/src/sequencer.ts [NEW]
+
+import { NODE, NULL_PTR, FLAG, OPCODE, PARAM, PARAM_TABLE, MOD, MOD_TABLE } from './constants';
+
+interface IEventSink {
+  noteOn(channelId: number, pitch: number, velocity: number,
+         gateOffset: number, expressionId: number): void;
+  noteOff(channelId: number, pitch: number, expressionId: number): void;
+  controlChange(channelId: number, controller: number, value: number): void;
+}
+
+export class Sequencer {
+  private readonly sabI32: Int32Array;
+  private readonly nodeBuf: Int32Array;         // Pre-allocated, size 16
+  private readonly paramInspect: Int32Array;    // Pre-allocated, size 8
+  private readonly sink: IEventSink;
+
+  // Copied from processor.ts constants (L28–33)
+  private static readonly MIDI_MAX = 127;
+  private static readonly SEC_PER_MIN = 60;
+  private static readonly OPCODE_SHIFT = 24;
+  private static readonly PITCH_SHIFT = 16;
+  private static readonly VEL_SHIFT = 8;
+  private static readonly BYTE_MASK = 0xFF;
+
+  constructor(sabI32: Int32Array, sink: IEventSink) {
+    this.sabI32 = sabI32;
+    this.nodeBuf = new Int32Array(16);          // NODE_SIZE_I32
+    this.paramInspect = new Int32Array(8);
+    this.sink = sink;
+  }
+
+  /**
+   * Main entry point. Called once per audio block.
+   * Source: processor.ts L88–123, refactored.
+   */
+  advance(
+    startTick: number,
+    endTick: number,
+    frameCount: number,
+    sampleRate: number,
+    headPtr: number
+  ): void {
+    // Step 1: Batch parameter evaluation (NEW — Section 7.1.1)
+    this.evaluateParams(frameCount, sampleRate);
+
+    // Step 2: Compute tempo from PARAMETER_TABLE (replaces linker.getBpm())
+    const samplesPerTick = this.computeTempo(sampleRate);
+
+    // Step 3: Node traversal (from processor.ts L101–115)
+    let ptr = headPtr;
+    while (ptr !== NULL_PTR) {
+      this.readNodeRaw(ptr);
+      const nextPtr = this.nodeBuf[NODE.NEXT_PTR];
+      this.routeNode(startTick, endTick, frameCount, samplesPerTick);
+      ptr = nextPtr;
+    }
+  }
+
+  /**
+   * Parameter batch evaluation.
+   * Source: RFC Section 7.1.1 pseudocode (direct transcription).
+   */
+  private evaluateParams(blockSize: number, sampleRate: number): void {
+    // Transcribe Section 7.1.1 pseudocode exactly.
+    // Internal source (LFO) generation + curve + smoothing.
+  }
+
+  /**
+   * Derive samplesPerTick from PARAMETER_TABLE[TEMPO].SMOOTHED_VALUE.
+   * Source: processor.ts L91–97, modified to read from PARAM table.
+   */
+  private computeTempo(sampleRate: number): number {
+    // Read tempo from PARAMETER_TABLE instead of linker.getBpm()
+    // Convert Q16.16 BPM to samplesPerTick
+    // Formula: samplesPerTick = (sampleRate * 60) / (bpm * ppq)
+    return 0; // Implementation follows formula from L96
+  }
+
+  /**
+   * Route events for a single node.
+   * Source: processor.ts L185–234 (routeNodeEvents), copied with HAS_MODULATORS check added.
+   */
+  private routeNode(
+    startTick: number,
+    endTick: number,
+    frameCount: number,
+    samplesPerTick: number
+  ): void {
+    // Exact copy of processor.ts L192–233
+    // ADDITION: Before noteOn, check FLAG.HAS_MODULATORS.
+    // If set, modulated values are resolved by DSP layer during voice render.
+    // Sequencer passes original values; DSP applies modulation lazily.
+  }
+
+  /**
+   * All-fire synapse resolution.
+   * Source: NEW (Section 12A.2).
+   * Called when a clip's chain ends.
+   */
+  private resolveSynapses(sourcePtr: number): void {
+    // Hash lookup → chain traversal → fire all with weight > 0
+    // Weight scales velocity: effectiveVelocity = original × (weight / 1000)
+  }
+
+  // Copied unchanged from processor.ts L236–258:
+  private normalizeMidi(value: number): number { /* L236–244 */ return 0; }
+  private tickToGateOffset(
+    tickDelta: number, frameCount: number, samplesPerTick: number
+  ): number { /* L246–259 */ return 0; }
+
+  private readNodeRaw(ptr: number): void {
+    // Read 16 i32 values from SAB at ptr offset into this.nodeBuf
+  }
+}
+```
+
+### C.3 What Stays in `processor.ts` After Extraction
+
+```typescript
+// packages/web/src/runtime/processor.ts — post-extraction (thin shell)
+class SymphonyScriptProcessor extends AudioWorkletProcessor {
+  private sequencer!: Sequencer;
+  private engine!: Engine;  // implements IEventSink
+
+  public process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+    const output = outputs[0];
+    if (!output) return true;
+    this.clearOutput(output);
+    if (!this.isInitialized || !this.isPlaying) return true;
+
+    this.linker.poll();
+    const startTick = this.linker.getPlayheadTick();
+    const frameCount = output[0]?.length ?? 0;
+    const headPtr = this.linker.getHead();
+
+    this.sequencer.advance(startTick, startTick + ticksInBlock, frameCount,
+                           this.hostSampleRate, headPtr);
+
+    const rendered = this.engine.render();
+    this.copyRenderedBuffer(rendered, output);
+    this.linker.setPlayheadTick(endTick);
+    return true;
+  }
+
+  // clearOutput() and copyRenderedBuffer() stay — they are web-specific (Float32Array I/O)
+  // handleMessage() stays — it is web-specific (MessagePort)
+}
+```
+
+**Key principle:** After extraction, processor.ts has ZERO musical logic. It is only I/O glue: message handling, output clearing, buffer copying. All sequencing, parameter evaluation, and synapse resolution live in `packages/kernel`.
+
+---
+
+## Appendix D: Test Plan
+
+### D.1 Phase 1 — Node Expansion
+
+| Test | Assertion |
+|:---|:---|
+| `NODE_SIZE_I32 === 16` | Constant check |
+| `NODE_SIZE_BYTES === 64` | Constant check |
+| Allocate node, verify 16 i32 slots writable | Write/read all slots 0–15 |
+| `MOD_LIST_HEAD` default is `NULL_PTR` | Verify slot 8 = 0 after allocation |
+| `HAS_MODULATORS` flag unused by default | `PACKED_A & FLAG.HAS_MODULATORS === 0` |
+| Existing tests pass with no behavioral changes | Full suite regression |
+| `nodeBuf = new Int32Array(16)` everywhere | Grep verify, no `Int32Array(8)` remains |
+
+### D.2 Phase 2 — Stochastic Removal
+
+| Test | Assertion |
+|:---|:---|
+| `SynapticCursor.ts` does not exist | File system check |
+| `SYN_PACK.JITTER_MASK` does not exist | Grep verify |
+| `SYN_PACK.JITTER_SHIFT` does not exist | Grep verify |
+| `linkTo(target)` accepts no `jitter` param | TypeScript compile check |
+| `connect()` / `connectAsync()` accept no `jitter` | TypeScript compile check |
+| `WEIGHT_DATA` bits 16–31 are zero | After `connect(src, tgt, 500)`, verify `(weightData >>> 16) === 0` |
+| Multiple synapses from same source all fire | Create 3 synapses with weights 800, 500, 300. Verify all 3 targets receive noteOn |
+| Synapse with weight 0 does NOT fire | Create synapse with weight 0. Verify target receives no noteOn |
+| Weight scales velocity | Weight 500 → velocity = original × 0.5 |
+
+### D.3 Phase 3 — New SAB Tables
+
+| Test | Assertion |
+|:---|:---|
+| `PARAM_TABLE` offset is after Reverse Index | `getParamTableOffset()` returns correct value |
+| `MOD_TABLE` offset is after PARAM_TABLE | `getModTableOffset()` returns correct value |
+| `LUT_POOL` offset is after MOD_TABLE | `getLutPoolOffset()` returns correct value |
+| `calculateSABSize()` includes all 3 new regions | Size ≥ previous + 32KB + 128KB + 128KB |
+| Parameter slot write/read via `Atomics` | Write RAW_VALUE, read back, verify |
+| Modulator slot write/read via `Atomics` | Write all 8 fields, read back, verify |
+| LUT slot write 256 entries | Write LUT, read entry 0 and 255, verify |
+| New HDR fields writable | Write/read PARAM_TABLE_PTR through MOD_ALLOC_HEAD |
+
+### D.4 Phase 4 — Command Protocol
+
+| Test | Assertion |
+|:---|:---|
+| `CMD.CREATE_MOD` links modulator to node | After command, node `MOD_LIST_HEAD` points to mod |
+| `CMD.CREATE_MOD` sets `HAS_MODULATORS` flag | `PACKED_A & FLAG.HAS_MODULATORS !== 0` |
+| Multiple mods form linked list | Create 3 mods on same node. Traverse chain, verify all 3 |
+| `CMD.DELETE_MOD` unlinks modulator | After delete, chain skips deleted mod |
+| Delete last mod clears `HAS_MODULATORS` | Delete all mods on node, verify flag cleared |
+| Delete returns mod to free list | After delete, slot is reusable via next CREATE_MOD |
+
+### D.5 Phase 5 — Bridge Integration
+
+| Test | Assertion |
+|:---|:---|
+| `setParam(id, 750)` writes correct Q16.16 | `Atomics.load` returns `(750 * 65536 / 1000) \| 0 = 49152` |
+| `setParam(id, -300)` writes correct bipolar value | `Atomics.load` returns `(-300 * 65536 / 1000) \| 0 = -19661` |
+| `createModulator()` returns valid mod offset | Offset is within MOD_TABLE range |
+| `createModulator()` when table full returns `BRIDGE_ERR.MOD_TABLE_FULL` | Fill table, verify error on next alloc |
+| LUT dedup: same bezier reuses slot | Alloc [0.42,0,0.58,1] twice. Verify same lutIndex, refCount=2 |
+| LUT free on last ref: slot reusable | Delete both mods using same LUT. Verify slot freed |
+| `inspectParam()` reads all 8 fields | Write known values, inspect, verify buffer matches |
+| `inspectMod()` reads all 8 fields | Same |
+
+### D.6 Phase 6 — Sequencer Extraction
+
+| Test | Assertion |
+|:---|:---|
+| `Sequencer.advance()` fires noteOn for nodes in [start, end) | Same behavior as processor.ts |
+| `Sequencer.advance()` fires noteOff at baseTick + duration | Same |
+| CC events routed correctly | Same |
+| Parameter batch evaluation runs before node traversal | Set param RAW_VALUE, verify SMOOTHED_VALUE updated after advance() |
+| LFO parameter generates changing RAW_VALUE | Create LFO param (sine, 4Hz). Call advance() twice. Verify RAW_VALUE differs |
+| Tempo modulation changes samplesPerTick | Set TEMPO param to 120 then 180 BPM. Verify different tick-to-sample mapping |
+| Synapse resolution: all weight > 0 fire | End-of-clip triggers noteOn on all connected targets |
+| processor.ts has zero musical logic | Grep for `routeNodeEvents`, `normalizeMidi` — not found |
+
+### D.7 Phase 7 — Composition API
+
+| Test | Assertion |
+|:---|:---|
+| `Param.create(0).smooth(0.95)` stores config | Verify PACKED_CFG_A contains smooth factor |
+| `Param.create(0).lfo('sine', 4.0)` sets INTERNAL_SOURCE | Verify FLAGS bit 2 set |
+| `Param.create(0).bipolar(true)` sets BIPOLAR flag | Verify FLAGS bit 1 set |
+| `Param.register(bridge)` writes to PARAMETER_TABLE | All 8 fields written to SAB |
+| `Modulator.velocity(param).amount(500).easeIn()` packs correctly | Verify PACKED_CFG_A: targetProperty=0x00, clamp=1, polarity=0 |
+| `Modulator.pitch(param).bipolar()` defaults bipolar | Verify PACKED_CFG_A bit 14 = 1 |
+| `Modulator.velocity(param).direct()` sets tapSource to RAW | Verify PACKED_CFG_A bits 16–23 = 0x02 |
+| Inline cursor: `.velocity(700).mod(Intensity).amount(300)` creates mod entry | After commit, MODULATION_TABLE slot populated |
+| Two `.mod()` calls on same property sum deltas | Verify both mods in chain, additive |
+| `.linkTo(clip).mod(Scene).base(1000).amount(-1000)` creates SYNAPSE_WEIGHT mod | Verify targetProperty = 0x07 |
+| Built-in shapes: `.centered()` uses LUT slot 1 | Verify PACKED_CFG_B = (0x04 << 24) \| 1 |
+
