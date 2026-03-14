@@ -73,6 +73,40 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3(typescript@5.9.3)(vite@7.3.0(@types/node@24.10.4))
 
+  apps/demo:
+    dependencies:
+      '@symphonyscript/composer':
+        specifier: workspace:*
+        version: link:../../packages/composer
+      '@symphonyscript/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@symphonyscript/dsp':
+        specifier: workspace:*
+        version: link:../../packages/dsp
+      '@symphonyscript/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@symphonyscript/synaptic':
+        specifier: workspace:*
+        version: link:../../packages/synaptic
+      '@symphonyscript/synthesis':
+        specifier: workspace:*
+        version: link:../../packages/synthesis
+      '@symphonyscript/theory':
+        specifier: workspace:*
+        version: link:../../packages/theory
+      '@symphonyscript/web':
+        specifier: workspace:*
+        version: link:../../packages/web
+    devDependencies:
+      typescript:
+        specifier: ~5.9.2
+        version: 5.9.3
+      vite:
+        specifier: ^7.3.0
+        version: 7.3.0(@types/node@24.10.4)
+
   packages/composer:
     dependencies:
       '@symphonyscript/core':
