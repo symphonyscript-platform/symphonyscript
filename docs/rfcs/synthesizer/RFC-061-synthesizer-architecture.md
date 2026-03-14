@@ -515,7 +515,7 @@ A `GraphDefinition` (§5.6): a list of module definitions and wires.
 ### 6.2 Process
 
 1. **Validate**: Ensure no cycles. Ensure port channel counts are compatible (or mark where adapters are needed).
-2. **Insert adapters**: Where a mono output connects to a stereo input, insert an implicit up-mix module. Where channel counts decrease, insert a down-mix module.
+2. **Validate channel counts**: Where a wire connects ports with mismatched channel counts, throw a compile error. No implicit adapters are inserted — see §6.5 Decision 2 and Decision 5.
 3. **Topological sort**: Order modules so that every module's inputs are computed before it runs.
 4. **Allocate buffers**: Assign arena offsets to every inter-module connection. Reuse buffers where possible (if a buffer is consumed before it's needed again, its arena slot can be recycled).
 5. **Emit plan**: Produce a `CompiledPlan` with the sorted steps and the arena.
@@ -527,6 +527,53 @@ A `CompiledPlan` (§5.7): ready to be instantiated as a voice or a send bus effe
 ### 6.4 Compile-Time Only
 
 The compiler runs on the main thread at composition time. It allocates freely (arrays, maps, sorting). The output (`CompiledPlan`) is a flat struct that the audio thread consumes without allocation.
+
+### 6.5 Phase 2 Design Decisions (Addendum)
+
+The following decisions lock the design for Phase 2 implementation. They amend or supersede earlier sections where noted.
+
+**Decision 1: Channel count authority**
+
+`PortDescriptor.channelCount` on each module's `outputs` array is the single source of truth for how many channels a module's output produces. The graph definition (`ModuleDefinition`) does not duplicate this information. The compiler (`compileGraph`) does not need to know channel counts — it remains topology-only.
+
+**Decision 2: Mismatch handling — compile error**
+
+If a wire connects a source port with `channelCount: 2` to a target port that expects `channelCount: 1`, this is a hard error thrown at `createExecutionContext` time. No implicit downmix or upmix is inserted. The error message must identify the wire, both module ids, both port ids, and both channel counts explicitly.
+
+**Decision 3: Arena allocation moves to `createExecutionContext`**
+
+Currently `compileGraph` allocates the arena assuming all buffers are mono (`1 × blockSize`). With multi-channel buffers, buffer sizes differ per module output. Arena allocation must move to `createExecutionContext` where actual module instances are available. `compileGraph` emits buffer descriptors with `channelCount: 0`, and `createExecutionContext` fills in the real channel counts from `module.outputs[portId].channelCount` before allocating the arena.
+
+**Decision 4: `outputPortCount` on `ModuleDefinition` is deprecated**
+
+Once channel metadata is integrated, `outputPortCount` is derivable from `module.outputs.length` and must be removed from `ModuleDefinition`. Mark it `@deprecated` now. The RFC addendum explicitly states this.
+
+**Decision 5: Channel adapters are explicit modules, Mono↔Stereo only in Phase 2**
+
+No implicit adapter insertion by the compiler. If a mono signal needs to feed a stereo input, the graph author inserts an explicit upmix module. Phase 2 supports Mono→Stereo and Stereo→Mono adapter modules only. Surround (5.1/7.1) is out of scope for Phase 2.
+
+**Decision 6: LFO-to-filter wiring deferred**
+
+Do not wire LFO into `createSubtractiveSynth`. This is blocked on the ModulationBus RFC which has not been written yet.
+
+**Decision 7: Surround panning deferred**
+
+`PannerModule` remains stereo-only. Surround requires a VBAP specification that does not exist yet. Mark it explicitly out of scope in the RFC.
+
+**Decision 8: Split/Merge semantics — rename and preserve both**
+
+The current implementation (copy-split, sum-merge) and the RFC §13 semantics (channel-split, channel-merge) are different. Both are valid:
+
+- **CopySplitModule** (formerly `SplitModule`): 1 mono in, N mono out — signal copied to all outputs.
+- **SumMergeModule** (formerly `MergeModule`): N mono in, 1 mono out — signals summed.
+- **ChannelSplitModule** (future): 1 N-channel in, N mono out — channels demultiplexed. Blocked on multi-channel buffer support.
+- **ChannelMergeModule** (future): N mono in, 1 N-channel out — channels multiplexed. Blocked on multi-channel buffer support.
+
+Rename the current modules now. Implement the channel variants when the compiler supports multi-channel.
+
+**Decision 9: Arena layout is planar**
+
+For a multi-channel buffer with `channelCount C` and `blockSize N`, the arena layout is planar: samples `0..N-1` are channel 0, samples `N..2N-1` are channel 1, and so on. `BufferDescriptor.offset` is in float-sample units. This is already how `AudioBuffer.data` is structured — the RFC addendum makes it explicit.
 
 ## 7. Plan Executor
 
