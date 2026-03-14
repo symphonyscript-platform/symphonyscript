@@ -9,5 +9,8 @@ export default defineConfig({
             fileName: () => 'index.mjs',
             formats: ['es'],
         },
+        rollupOptions: {
+            external: ['@symphonyscript/dsp'],
+        },
     },
 });

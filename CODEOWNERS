@@ -1,0 +1,9 @@
+# Public API surfaces - packages must not import other packages' src directly
+/packages/core/src/
+/packages/theory/src/
+/packages/kernel/src/
+/packages/dsp/src/
+/packages/synaptic/src/
+/packages/composer/src/
+/packages/synthesis/src/
+/packages/web/src/

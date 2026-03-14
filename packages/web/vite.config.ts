@@ -16,6 +16,9 @@ export default defineConfig({
                 processor: resolve(__dirname, 'src/runtime/processor.ts')
             },
             formats: ['es']
-        }
+        },
+        rollupOptions: {
+            external: ['@symphonyscript/kernel', '@symphonyscript/dsp'],
+        },
     }
 });

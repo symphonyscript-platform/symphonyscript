@@ -8,9 +8,13 @@ export default defineConfig({
       fileName: 'index'
     },
     rollupOptions: {
-      // Ensure we don't bundle external dependencies
-      external: ['@symphonyscript/kernel']
-    }
+      external: [
+        '@symphonyscript/core',
+        '@symphonyscript/kernel',
+        '@symphonyscript/theory',
+        '@symphonyscript/synaptic',
+      ],
+    },
   },
   plugins: []
 })
