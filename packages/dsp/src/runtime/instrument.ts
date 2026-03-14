@@ -174,8 +174,46 @@ export class BasicInstrument implements Instrument {
         return -1;
     }
 
+    private computeRms(buffer: AudioBuffer): number {
+        const data = buffer.data;
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 1) {
+            const s = data[i];
+            sum += s * s;
+        }
+        return data.length > 0 ? Math.sqrt(sum / data.length) : 0;
+    }
+
     private selectVoiceToSteal(): number {
-        // Current runtime scope only guarantees OLDEST. Other policies fall back to OLDEST.
+        if (this.stealPolicy === StealPolicy.QUIETEST) {
+            let quietestIndex = -1;
+            let lowestRms = Infinity;
+            let countAtLowest = 0;
+
+            for (let i = 0; i < this.voices.length; i += 1) {
+                const voice = this.voices[i];
+                if (voice.state === VoiceState.IDLE) {
+                    continue;
+                }
+                const buf = voice.context.descriptorBuffers[voice.outputBufferIndex];
+                const rms = this.computeRms(buf);
+                if (rms < lowestRms) {
+                    lowestRms = rms;
+                    quietestIndex = i;
+                    countAtLowest = 1;
+                } else if (rms === lowestRms) {
+                    countAtLowest += 1;
+                }
+            }
+
+            if (quietestIndex >= 0 && countAtLowest === 1 && lowestRms > 0) {
+                return quietestIndex;
+            }
+        }
+
+        // QUIETEST falls back to OLDEST when all voices have equal or zero RMS —
+        // zero RMS means all voices are silent or the buffer hasn't been rendered yet,
+        // and in that case age is the most stable tiebreaker.
         let oldestIndex = 0;
         let oldestAge = this.noteAges[0];
         for (let i = 1; i < this.noteAges.length; i += 1) {

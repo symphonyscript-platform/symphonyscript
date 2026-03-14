@@ -49,6 +49,8 @@ export interface ModuleDefinition {
     readonly id: number;
     readonly type: ModuleType;
     readonly initialParameters: readonly ParameterValue[];
+    /** Output port count; default 1. Use >1 for modules like Split with multiple outputs. */
+    readonly outputPortCount?: number;
 }
 
 export interface GraphDefinition {

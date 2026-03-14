@@ -2,7 +2,7 @@ import { ModuleType, StealPolicy, VoiceState } from '../constants';
 import { compileGraph } from '../graph-compiler';
 import { EnvelopeModule, EnvelopeParam } from '../modules/envelope';
 import { OscillatorModule, OscillatorParam, OscillatorWaveform } from '../modules/oscillator';
-import { AmplifierModule } from '../modules/amplifier';
+import { AmplifierModule, AmplifierParam } from '../modules/amplifier';
 import { BasicVoice } from '../runtime/voice';
 import { BasicInstrument } from '../runtime/instrument';
 import type { GraphDefinition } from '../types';
@@ -13,7 +13,7 @@ const AMP_ID = 3;
 const BLOCK_SIZE = 64;
 const SAMPLE_RATE = 48000;
 
-function createVoice(attackSec = 0): BasicVoice {
+function createVoice(attackSec = 0, gain = 1): BasicVoice {
     const graph: GraphDefinition = {
         modules: [
             { id: OSC_ID, type: ModuleType.OSCILLATOR, initialParameters: [] },
@@ -37,6 +37,7 @@ function createVoice(attackSec = 0): BasicVoice {
     env.setParameter(EnvelopeParam.SUSTAIN_LEVEL, 1);
     env.setParameter(EnvelopeParam.RELEASE_SEC, 0.001);
     const amp = new AmplifierModule(AMP_ID);
+    amp.setParameter(AmplifierParam.GAIN, gain);
 
     return new BasicVoice(compiledPlan, [osc, env, amp]);
 }
@@ -142,6 +143,29 @@ describe('runtime voice and instrument', () => {
         }
 
         expect(instrument.getActiveVoiceCount()).toBe(0);
+    });
+
+    test('QUIETEST steals the quieter voice when both active', () => {
+        const instrument = new BasicInstrument(
+            'test',
+            2,
+            StealPolicy.QUIETEST,
+            (() => {
+                const gains = [0.9, 0.1];
+                let i = 0;
+                return () => createVoice(0.001, gains[i++]);
+            })()
+        );
+
+        instrument.noteOn(60, 1, 0, 0);
+        instrument.noteOn(64, 1, 0, 1);
+
+        for (let b = 0; b < 20; b += 1) {
+            instrument.render(BLOCK_SIZE);
+        }
+
+        const stolenIndex = instrument.noteOn(68, 1, 0, 2);
+        expect(stolenIndex).toBe(1);
     });
 
     test('stealing an active voice retriggers envelope attack', () => {

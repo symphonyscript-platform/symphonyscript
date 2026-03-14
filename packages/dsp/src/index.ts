@@ -28,6 +28,14 @@ export {
     LFOWaveform,
 } from './modules/lfo';
 export {
+    NoiseModule,
+    NoiseParam,
+    NoiseWaveform,
+} from './modules/noise';
+export { MergeModule } from './modules/merge';
+export { PannerModule, PannerParam } from './modules/panner';
+export { SplitModule } from './modules/split';
+export {
     OscillatorModule,
     OscillatorParam,
     OscillatorWaveform,

@@ -103,6 +103,18 @@ export function validateGraph(def: GraphDefinition): void {
     topologicalSort(def, indexById);
 }
 
+// TODO(RFC-061): validate outputPortCount against module.outputs.length at context creation time
+function getOutputPortCount(moduleDef: { outputPortCount?: number }): number {
+    const n = moduleDef.outputPortCount;
+    if (n === undefined || n < 1) {
+        return 1;
+    }
+    if (!Number.isInteger(n)) {
+        throw new Error('outputPortCount must be a positive integer');
+    }
+    return n;
+}
+
 export function compileGraph(def: GraphDefinition, blockSize: number): CompiledPlan {
     assertPositiveInteger(blockSize, 'blockSize');
     validateGraph(def);
@@ -110,29 +122,41 @@ export function compileGraph(def: GraphDefinition, blockSize: number): CompiledP
     const order = topologicalSort(def, createModuleIndexById(def));
     const moduleCount = def.modules.length;
 
-    const bufferIndexByModuleId = new Map<number, number>();
+    const bufferIndexByModuleAndPort = new Map<string, number>();
     const bufferDescriptors: BufferDescriptor[] = [];
+    let runningBufferIndex = 0;
+
     for (let i = 0; i < order.length; i += 1) {
         const moduleIndex = order[i];
-        const moduleId = def.modules[moduleIndex].id;
-        const bufferIndex = i;
-        bufferIndexByModuleId.set(moduleId, bufferIndex);
-        bufferDescriptors.push({
-            // TODO(RFC-061): remove mono-only assumption once module channel metadata is integrated.
-            channelCount: 1,
-            blockSize,
-            // Offset is in float-sample units into the shared arena.
-            offset: bufferIndex * blockSize,
-        });
+        const moduleDef = def.modules[moduleIndex];
+        const outputCount = getOutputPortCount(moduleDef);
+
+        for (let portId = 0; portId < outputCount; portId += 1) {
+            const key = `${moduleDef.id}:${portId}`;
+            bufferIndexByModuleAndPort.set(key, runningBufferIndex);
+            bufferDescriptors.push({
+                channelCount: 1,
+                blockSize,
+                offset: runningBufferIndex * blockSize,
+            });
+            runningBufferIndex += 1;
+        }
     }
 
     const steps: PlanStep[] = [];
     for (let i = 0; i < order.length; i += 1) {
         const moduleIndex = order[i];
-        const moduleId = def.modules[moduleIndex].id;
-        const moduleBufferIndex = bufferIndexByModuleId.get(moduleId);
-        if (moduleBufferIndex === undefined) {
+        const moduleDef = def.modules[moduleIndex];
+        const moduleId = moduleDef.id;
+        const outputCount = getOutputPortCount(moduleDef);
+        const firstIndex = bufferIndexByModuleAndPort.get(`${moduleId}:0`);
+        if (firstIndex === undefined) {
             throw new Error(`internal compiler error: missing buffer for module id ${moduleId}`);
+        }
+
+        const outputBufferIndices: number[] = [];
+        for (let portId = 0; portId < outputCount; portId += 1) {
+            outputBufferIndices.push(firstIndex + portId);
         }
 
         const inputBufferIndices: number[] = [];
@@ -141,10 +165,11 @@ export function compileGraph(def: GraphDefinition, blockSize: number): CompiledP
             if (wire.targetModuleId !== moduleId) {
                 continue;
             }
-            const sourceBufferIndex = bufferIndexByModuleId.get(wire.sourceModuleId);
+            const sourceKey = `${wire.sourceModuleId}:${wire.sourcePortId}`;
+            const sourceBufferIndex = bufferIndexByModuleAndPort.get(sourceKey);
             if (sourceBufferIndex === undefined) {
                 throw new Error(
-                    `internal compiler error: missing source buffer for module id ${wire.sourceModuleId}`
+                    `internal compiler error: missing source buffer for module id ${wire.sourceModuleId} port ${wire.sourcePortId}`
                 );
             }
             inputBufferIndices.push(sourceBufferIndex);
@@ -153,12 +178,12 @@ export function compileGraph(def: GraphDefinition, blockSize: number): CompiledP
         steps.push({
             moduleIndex,
             inputBufferIndices,
-            outputBufferIndices: [moduleBufferIndex],
+            outputBufferIndices,
         });
     }
 
-    // TODO(RFC-061): implement lifetime-based buffer reuse instead of one buffer per module.
-    const arena = new Float32Array(moduleCount * blockSize);
+    const totalBufferCount = bufferDescriptors.length;
+    const arena = new Float32Array(totalBufferCount * blockSize);
 
     const moduleIds: number[] = [];
     for (let i = 0; i < order.length; i += 1) {

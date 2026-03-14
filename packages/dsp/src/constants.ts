@@ -27,6 +27,7 @@ export const ModuleType = {
     SPLIT: 10,
     MERGE: 11,
     OUTPUT: 12,
+    NOISE: 13,
 } as const;
 
 export type ModuleType = (typeof ModuleType)[keyof typeof ModuleType];
