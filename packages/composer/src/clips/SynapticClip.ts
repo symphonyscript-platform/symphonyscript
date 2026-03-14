@@ -967,14 +967,18 @@ export abstract class SynapticClip extends SynapticNode {
         }
 
         // 7. Final kernel insertion (Task 058: direct write, no operations push)
+        // Convert beats to PPQ ticks for kernel compatibility
+        const ppq = this.bridge.getLinker().getPpq();
+        const tickTicks = Math.round(humanizedTick * ppq);
+        const durationTicks = Math.round(quantizedDuration * ppq);
         const finalVel = Math.floor(humanizedVel * 127);
         const finalExpressionId = (expressionId && expressionId !== 0) ? expressionId : (this._expressionId ?? undefined);
         const ptr = this.bridge.insertAsync(
             OPCODE.NOTE,
             finalPitch,
             finalVel,
-            quantizedDuration,
-            humanizedTick,
+            durationTicks,
+            tickTicks,
             muted,
             sourceId,
             this.exitId,
@@ -987,6 +991,8 @@ export abstract class SynapticClip extends SynapticNode {
                 this.entryId = sourceId;
             }
             this.exitId = sourceId;
+        } else {
+            console.warn('[Composer] insertAsync failed', { ptr, afterSourceId: this.exitId, sourceId, pitch: finalPitch, tick: humanizedTick });
         }
     }
 

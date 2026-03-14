@@ -57,7 +57,7 @@ const DRUM_TYPE_TO_SLOT: readonly DrumSlot[] = [
 export class SynapticDrums extends SynapticClip {
     private cursor: DrumsHitCursor;
     private currentTick: number = 0;
-    private sourceIdCounter: number = 0;
+    private sourceIdCounter: number = 1; // Kernel identity table rejects sourceId 0
     /** Standard drums: O(1) array lookup. */
     private readonly _drumPitches: Uint8Array;
 

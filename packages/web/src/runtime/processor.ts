@@ -53,6 +53,8 @@ class SymphonyScriptProcessor extends AudioWorkletProcessor {
     private isPlaying = false;
     private hostSampleRate = 0;
     private readonly nodeBuf = new Int32Array(8);
+    private _processCallCount = 0;
+    private _noteOnCount = 0;
 
     public constructor(options?: unknown) {
         super(options);
@@ -97,13 +99,23 @@ class SymphonyScriptProcessor extends AudioWorkletProcessor {
         const endTick = startTick + ticksInBlock;
 
         let ptr = linker.getHead();
+        let nodeCount = 0;
         while (ptr !== NULL_PTR) {
+            nodeCount += 1;
             const ok = linker.readNodeRaw(ptr, this.nodeBuf);
             const nextPtr = this.nodeBuf[NODE.NEXT_PTR];
             if (ok) {
+                const prevNoteOn = this._noteOnCount;
                 this.routeNodeEvents(engine, startTick, endTick, frameCount, samplesPerTick);
+                if (this._noteOnCount !== prevNoteOn && this._processCallCount < 10) {
+                    console.log('[Processor] noteOn', this._noteOnCount, 'ptr', ptr, 'startTick', startTick, 'endTick', endTick, 'baseTick', this.nodeBuf[NODE.BASE_TICK], 'duration', this.nodeBuf[NODE.DURATION]);
+                }
             }
             ptr = nextPtr;
+        }
+        this._processCallCount += 1;
+        if (this._processCallCount <= 3 || this._processCallCount % 1000 === 0) {
+            console.log('[Processor] process', this._processCallCount, 'nodes', nodeCount, 'playhead', startTick, '->', endTick);
         }
 
         const rendered = engine.render();
@@ -130,10 +142,31 @@ class SymphonyScriptProcessor extends AudioWorkletProcessor {
                 }
                 this.hostSampleRate = message.sampleRate;
                 this.isInitialized = this.linker !== null;
+                const head = this.linker?.getHead() ?? -1;
+                const nodeCount =
+                    this.linker &&
+                    typeof (this.linker as unknown as { getNodeCount?: () => number }).getNodeCount === 'function'
+                        ? (this.linker as unknown as { getNodeCount(): number }).getNodeCount()
+                        : -1;
+                console.log('[Processor] INIT received:', {
+                    engine: this.engine !== null,
+                    linker: this.linker !== null,
+                    head,
+                    nodeCount,
+                    sampleRate: message.sampleRate,
+                    blockSize: message.blockSize,
+                });
                 break;
             }
             case WORKLET_MESSAGE_TYPE.PLAY:
                 this.isPlaying = true;
+                if (this.linker !== null) {
+                    this.linker.setPlayheadTick(0);
+                }
+                if (this.engine !== null) {
+                    this.engine.reset();
+                }
+                console.log('[Processor] PLAY received');
                 break;
             case WORKLET_MESSAGE_TYPE.PAUSE:
                 this.isPlaying = false;
@@ -180,6 +213,7 @@ class SymphonyScriptProcessor extends AudioWorkletProcessor {
                     samplesPerTick
                 );
                 engine.noteOn(channelId, pitch, velocity, gateOffset, channelId);
+                this._noteOnCount += 1;
             }
 
             const noteEndTick = baseTick + duration;

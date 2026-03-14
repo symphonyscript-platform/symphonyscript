@@ -265,7 +265,7 @@ export class MelodyChordCursor extends SynapticMelodyBaseCursor {
             // Apply pattern ordering
             const orderedPitches = this.applyArpPattern(pitchArray, pattern);
 
-            // Emit each note with sequential timing
+            // Emit each note with sequential timing; drain after each so identity table is ready for next
             let currentTick = this.baseTick;
             for (let i = 0; i < orderedPitches.length; i++) {
                 const sourceId = this.clip.generateSourceId();
@@ -278,6 +278,8 @@ export class MelodyChordCursor extends SynapticMelodyBaseCursor {
                     sourceId,
                     this.expressionId
                 );
+                const linker = this.bridge.getLinker();
+                while (linker.processCommands() > 0) {}
                 currentTick += rate;
             }
         } else {
@@ -287,7 +289,7 @@ export class MelodyChordCursor extends SynapticMelodyBaseCursor {
                 this.sourceIds[i] = this.clip.generateSourceId();
             }
 
-            // 3. Flush each voice via clip mediator
+            // 3. Flush each voice via clip mediator; drain after each so identity table is ready for next
             for (let i = 0; i < voiceIndex; i++) {
                 this.clip.flushNote(
                     this.pitches[i],
@@ -298,6 +300,8 @@ export class MelodyChordCursor extends SynapticMelodyBaseCursor {
                     this.sourceIds[i],
                     this.expressionId
                 );
+                const linker = this.bridge.getLinker();
+                while (linker.processCommands() > 0) {}
             }
         }
 

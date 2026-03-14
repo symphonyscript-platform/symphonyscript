@@ -23,9 +23,11 @@ async function main(): Promise<void> {
 
         const ctx = new AudioContext();
         await ctx.resume();
+        console.log('[Demo] AudioContext ready, sampleRate:', ctx.sampleRate);
 
         const bridge = createSiliconBridge({ nodeCapacity: 2048 });
         initSession(bridge);
+        console.log('[Demo] Bridge created, initSession done');
 
         bridge.setBpm(120);
 
@@ -35,11 +37,18 @@ async function main(): Promise<void> {
             .defaultDuration(0.5)
             .voiceLead(['I', 'IV', 'V', 'I'], 1)
             .voiceLead(['I', 'vi', 'IV', 'V'], 1);
+        console.log('[Demo] Clip composed');
 
         const sab = bridge.getSAB();
-        bridge.getLinker().processCommands();
+        const linker = bridge.getLinker();
+        while (linker.processCommands() > 0) {}
+        const nodeCount = bridge.getMappingCount();
+        const head = linker.getHead();
+        const expectedNodes = 8 * 3; // 8 chords × 3 notes each
+        console.log('[Demo] processCommands done, nodeCount:', nodeCount, 'expected:', expectedNodes, 'head:', head);
 
         await ctx.audioWorklet.addModule(workletUrl);
+        console.log('[Demo] Worklet loaded');
 
         const node = new AudioWorkletNode(ctx, 'symphonyscript-processor', {
             outputChannelCount: [2],
@@ -50,9 +59,11 @@ async function main(): Promise<void> {
             blockSize: BLOCK_SIZE,
             sab,
         });
+        console.log('[Demo] INIT sent, sampleRate:', ctx.sampleRate, 'blockSize:', BLOCK_SIZE);
 
         node.connect(ctx.destination);
         controls.play();
+        console.log('[Demo] Node connected, PLAY sent');
     });
 
     stopBtn.addEventListener('click', () => {

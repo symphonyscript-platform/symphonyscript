@@ -23,3 +23,4 @@ function createEngine(sampleRate: number, blockSize: number): BasicEngine {
 
 (globalThis as unknown as { __SYMPHONYSCRIPT_ENGINE_FACTORY__?: (sr: number, bs: number) => unknown }).__SYMPHONYSCRIPT_ENGINE_FACTORY__ =
     createEngine;
+console.log('[Demo Worklet] Engine factory set');

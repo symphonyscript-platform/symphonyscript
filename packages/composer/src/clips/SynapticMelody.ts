@@ -24,7 +24,7 @@ export class SynapticMelody extends SynapticClip {
     private noteCursor: MelodyNoteCursor;
     private chordCursor: MelodyChordCursor;
     private currentTick: number = 0;
-    private sourceIdCounter: number = 0;
+    private sourceIdCounter: number = 1; // Kernel identity table rejects sourceId 0
 
     // Task 064: Pre-allocated buffers for chord/voicing (zero-allocation)
     private readonly _chordBuffer = new Int8Array(12);
@@ -201,7 +201,9 @@ export class SynapticMelody extends SynapticClip {
         }
         this._prevVoicingLen = 0;
 
+        let chordIndex = 0;
         for (const numeral of numerals) {
+            console.log('[Composer] voiceLead chord', chordIndex, 'numeral', numeral, 'currentTick', this.getCurrentTick(), 'exitId', this.exitId);
             const chordSymbol = romanToChord(numeral, keyCtx);
             if (!chordSymbol) {
                 throw new Error(`Invalid roman numeral in voiceLead: ${numeral}`);
@@ -219,6 +221,7 @@ export class SynapticMelody extends SynapticClip {
             this.copyBuffer(this._voicingBuffer, this._voicingLen, this._prevVoicingBuffer);
             this._prevVoicingLen = this._voicingLen;
             this.advanceTick(duration);
+            chordIndex++;
         }
 
         return this;
@@ -318,6 +321,9 @@ export class SynapticMelody extends SynapticClip {
         let mask = 0;
         for (let i = 0; i < len; i++) mask |= (1 << (buf[i] - root));
         this.chordCursor.harmony(mask, root).duration(duration).commit();
+        // Drain command ring so identity table is updated before next chord's insertAsync
+        const linker = this.bridge.getLinker();
+        while (linker.processCommands() > 0) {}
     }
 
     /**
