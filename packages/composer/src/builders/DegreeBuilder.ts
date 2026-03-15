@@ -1,112 +1,47 @@
-import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import { CompositionBridge } from '@symphonyscript/composer'
 import { degreeToPitch, ScaleMode } from '@symphonyscript/theory'
+import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
 
-export interface DegreeParams {
+export interface DegreeParams extends PitchStepParams {
   degree: number
-  duration: number | null
-  velocity: number | null
-  octaveShift: number
-  accidental: number
-  precise: boolean
-  muted: boolean
 }
 
-export class DegreeBuilder implements PipeStep {
-  private readonly params: DegreeParams
+export class DegreeBuilder extends PitchStepBuilder<DegreeBuilder> {
+  private readonly degree: number
 
   constructor(params: Partial<DegreeParams>) {
-    this.params = {
-      degree: params.degree ?? 1,
-      duration: params.duration ?? null,
-      velocity: params.velocity ?? null,
-      octaveShift: params.octaveShift ?? 0,
-      accidental: params.accidental ?? 0,
-      precise: params.precise ?? false,
-      muted: params.muted ?? false,
-    }
+    super(params)
+    this.degree = params.degree ?? 1
   }
 
-  velocity(velocity: number): DegreeBuilder {
-    return new DegreeBuilder({ ...this.params, velocity })
-  }
-
-  duration(duration: number): DegreeBuilder {
-    return new DegreeBuilder({ ...this.params, duration })
-  }
-
-  sharp(): DegreeBuilder {
-    return new DegreeBuilder({ ...this.params, accidental: this.params.accidental + 1 })
-  }
-
-  flat(): DegreeBuilder {
-    return new DegreeBuilder({ ...this.params, accidental: this.params.accidental - 1 })
-  }
-
-  natural(): DegreeBuilder {
-    return new DegreeBuilder({ ...this.params, accidental: 0 })
-  }
-
-  octave(shift: number): DegreeBuilder {
-    return new DegreeBuilder({ ...this.params, octaveShift: shift })
-  }
-
-  up(octaves: number = 1): DegreeBuilder {
-    return new DegreeBuilder({ ...this.params, octaveShift: this.params.octaveShift + octaves })
-  }
-
-  down(octaves: number = 1): DegreeBuilder {
-    return new DegreeBuilder({ ...this.params, octaveShift: this.params.octaveShift - octaves })
-  }
-
-  precise(): DegreeBuilder {
-    return new DegreeBuilder({ ...this.params, precise: true })
-  }
-
-  muted(): DegreeBuilder {
-    return new DegreeBuilder({ ...this.params, muted: true })
-  }
-
-  accent(): DegreeBuilder {
-    return new DegreeBuilder({ ...this.params, velocity: 1200, precise: true })
+  protected create(params: Partial<PitchStepParams>): DegreeBuilder {
+    return new DegreeBuilder({ ...params, degree: this.degree })
   }
 
   apply(bridge: CompositionBridge): CompositionBridge {
     const pitch = degreeToPitch(
-      this.params.degree,
+      this.degree,
       bridge.scaleRoot,
-      bridge.scaleMode,
+      bridge.scaleMode as ScaleMode,
       4,
-      this.params.accidental,
-      this.params.octaveShift,
+      this.shared.accidental + this.shared.transposeSemitones,
+      this.shared.octaveShift,
     )
 
     if (pitch === null) return bridge
 
-    let target = bridge
+    let target = this.applyFlags(bridge)
 
-    if (this.params.precise) {
-      target = target.withPrecise(true)
+    const scaledDuration = this.resolvedDuration()
+
+    for (let i = 0; i < this.shared.repeatCount; ++i) {
+      target = target.withNote(
+        pitch,
+        scaledDuration,
+        this.shared.velocity ?? undefined,
+      )
     }
 
-    if (this.params.muted) {
-      target = target.withMuted(true)
-    }
-
-    target = target.withNote(
-      pitch,
-      this.params.duration ?? undefined,
-      this.params.velocity ?? undefined,
-    )
-
-    if (this.params.precise) {
-      target = target.withPrecise(false)
-    }
-
-    if (this.params.muted) {
-      target = target.withMuted(false)
-    }
-
-    return target
+    return this.resetFlags(target)
   }
 }
-
