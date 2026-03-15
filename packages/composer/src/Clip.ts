@@ -1,19 +1,15 @@
 import { IClip } from './interfaces/IClip'
 import { PipeStep } from './interfaces/pipe-step'
-import { PipeStepNode } from './interfaces/pipe-step-node'
 import { CompositionBridge } from './interfaces/composition-bridge'
 import { freeze } from './utils/freeze'
 import { FrozenClip } from './interfaces/frozen-clip'
 
 export class Clip implements IClip {
-  constructor(private readonly tail: PipeStepNode | null = null) {
+  constructor(private readonly steps: PipeStep[]) {
   }
 
   static pipe(...steps: PipeStep[]): Clip {
-    return new Clip({
-      prev: null,
-      steps,
-    })
+    return new Clip(steps)
   }
 
   static freeze(clip: IClip): FrozenClip {
@@ -22,27 +18,17 @@ export class Clip implements IClip {
 
   pipe(...steps: PipeStep[]): Clip {
     return new Clip({
-      prev: this.tail,
-      steps,
+      ...this.steps,
+      ...steps,
     })
   }
 
   compose(context: CompositionBridge): CompositionBridge {
-    let current = this.tail
+    const steps = this.steps
     let bridge = context
-    const nodes: PipeStepNode[] = []
 
-    while (current) {
-      nodes.push(current)
-      current = current.prev
-    }
-
-    for (let i = nodes.length - 1; i >= 0; i--) {
-      const steps = nodes[i].steps
-      for (let j = 0; j < steps.length; ++j) {
-        const step = steps[j]
-        bridge = step.apply(bridge)
-      }
+    for (let i = 0; i < steps.length; ++i) {
+      bridge = steps[i].apply(bridge)
     }
 
     return bridge
