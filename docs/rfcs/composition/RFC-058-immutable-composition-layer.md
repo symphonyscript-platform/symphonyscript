@@ -391,7 +391,7 @@ interface IClip<T extends IClip<T, S>, S extends Serializable | Unserializable =
   // === Topology ===
 
   /** Create synapse to target clip with optional weight (0–1000). */
-  linkTo(target: IClip<any, any>, weight?: number): ILinkCursor<T, S>;
+  use(target: IClip<any, any>, weight?: number): ILinkCursor<T, S>;
 
   /** Set loop region boundaries (creates BARRIER node). */
   setLoopRegion(start: number, end: number): T;
@@ -749,7 +749,7 @@ interface IDrumHitCursor<S extends Serializable | Unserializable = Serializable>
 
 ### 7.8 `ILinkCursor<T, S>` — Synapse Configuration Cursor (Immutable)
 
-Returned by `clip.linkTo(target)`. Configures synapse properties before finalizing.
+Returned by `clip.use(target)`. Configures synapse properties before finalizing.
 
 ```typescript
 interface ILinkCursor<T extends IClip<T, S>, S extends Serializable | Unserializable = Serializable> {
