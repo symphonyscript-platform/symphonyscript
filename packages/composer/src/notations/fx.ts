@@ -1,16 +1,12 @@
 import { PipeStep, step } from '@symphonyscript/composer'
-import { ChanceBridge } from '../composition/ChanceBridge'
+import { ChanceBuilder } from '../builders/ChanceBuilder'
 
 /**
  * Probabilistic note emission.
  * Subsequent notes have an independent probability of being emitted.
- * Uses a seeded PRNG for reproducibility.
- *
- * @param probability - 0..1 chance each note is emitted (1 = always, 0 = never)
- * @param seed - Optional seed for reproducibility (defaults to Date.now())
  */
-export function chance(probability: number, seed: number = Date.now()): PipeStep {
-  return step((bridge) => new ChanceBridge(bridge, probability, seed))
+export function chance(probability: number, seed?: number): ChanceBuilder {
+  return new ChanceBuilder({ probability, seed })
 }
 
 /**

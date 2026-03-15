@@ -3,6 +3,8 @@ import { NoteBuilder } from '../builders/NoteBuilder'
 import { TrillBuilder } from '../builders/TrillBuilder'
 import { TremoloBuilder } from '../builders/TremoloBuilder'
 import { GlissandoBuilder } from '../builders/GlissandoBuilder'
+import { TupletBuilder } from '../builders/TupletBuilder'
+import { PolyrhythmBuilder } from '../builders/PolyrhythmBuilder'
 import type { NotePitch } from '../types'
 import { resolvePitch, resolvePitches } from '../utils/pitch'
 
@@ -82,20 +84,12 @@ export function glissando(
 
 /**
  * Tuplet — fit `count` notes into the time of `inBeats` beats.
- * The callback receives a bridge with adjusted default duration.
  */
 export function tuplet(
   count: number,
-  inBeats: number,
-  stepsFn: (bridge: CompositionBridge) => CompositionBridge,
-): PipeStep {
-  return step((bridge) => {
-    const totalDuration = inBeats * bridge.defaultDuration
-    const tupletDuration = Math.round(totalDuration / count)
-    const adjusted = bridge.withDefaultDuration(tupletDuration)
-
-    return stepsFn(adjusted)
-  })
+  inBeats?: number,
+): TupletBuilder {
+  return new TupletBuilder({ count, inBeats })
 }
 
 /**
@@ -103,14 +97,7 @@ export function tuplet(
  */
 export function polyrhythm(
   noteCount: number,
-  overBeats: number,
-  stepsFn: (bridge: CompositionBridge) => CompositionBridge,
-): PipeStep {
-  return step((bridge) => {
-    const totalDuration = overBeats * bridge.defaultDuration
-    const noteDuration = Math.round(totalDuration / noteCount)
-    const adjusted = bridge.withDefaultDuration(noteDuration)
-
-    return stepsFn(adjusted)
-  })
+  overBeats?: number,
+): PolyrhythmBuilder {
+  return new PolyrhythmBuilder({ noteCount, overBeats })
 }

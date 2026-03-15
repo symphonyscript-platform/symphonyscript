@@ -33,6 +33,10 @@ export class DrumHitBuilder implements PipeStep {
     return this.clone({ velocity })
   }
 
+  pitch(pitch: number): DrumHitBuilder {
+    return this.clone({ pitch })
+  }
+
   duration(duration: number): DrumHitBuilder {
     return this.clone({ duration })
   }

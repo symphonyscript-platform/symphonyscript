@@ -1,6 +1,9 @@
-import { CompositionBridge, PipeStep, step } from '@symphonyscript/composer'
-import { GM_DRUM, euclidean, rotatePattern } from '@symphonyscript/theory'
+import { GM_DRUM } from '@symphonyscript/theory'
 import { DrumHitBuilder } from '../builders/DrumHitBuilder'
+import { DrumPatternBuilder } from '../builders/DrumPatternBuilder'
+import { DrumEuclideanBuilder } from '../builders/DrumEuclideanBuilder'
+import { DrumStepsBuilder } from '../builders/DrumStepsBuilder'
+import { RollBuilder } from '../builders/RollBuilder'
 
 // ============================================================================
 // Named Drum Hits
@@ -59,8 +62,8 @@ export function shaker(duration?: number): DrumHitBuilder {
   return new DrumHitBuilder({ pitch: GM_DRUM.CABASA, duration })
 }
 
-/** Any named percussion hit by MIDI pitch. */
-export function hit(pitch: number, duration?: number): DrumHitBuilder {
+/** Any percussion hit by MIDI pitch. */
+export function hit(pitch?: number, duration?: number): DrumHitBuilder {
   return new DrumHitBuilder({ pitch, duration })
 }
 
@@ -74,28 +77,10 @@ export function hit(pitch: number, duration?: number): DrumHitBuilder {
  */
 export function drumPattern(
   notation: string,
-  pitch: number,
+  pitch?: number,
   stepDuration?: number,
-): PipeStep {
-  return step((bridge) => {
-    const duration = stepDuration ?? bridge.defaultDuration
-    let target = bridge
-
-    for (let i = 0; i < notation.length; ++i) {
-      const character = notation[i]
-      if (character === 'x' || character === 'X') {
-        target = target.withNote(pitch, duration)
-      } else {
-        // Both '.' (rest) and '-' (sustain) advance tick.
-        // Sustain means "previous note is still sounding" — since
-        // note duration was already set on the hit, advancing tick
-        // creates the gap-free sustain effect.
-        target = target.withTick(target.tick + duration)
-      }
-    }
-
-    return target
-  })
+): DrumPatternBuilder {
+  return new DrumPatternBuilder({ notation, pitch, stepDuration })
 }
 
 /**
@@ -104,32 +89,12 @@ export function drumPattern(
  */
 export function drumEuclidean(
   hits: number,
-  steps: number,
-  pitch: number,
+  steps?: number,
+  pitch?: number,
   stepDuration?: number,
   rotation?: number,
-): PipeStep {
-  return step((bridge) => {
-    let pattern = euclidean(hits, steps)
-    if (pattern === null) return bridge
-
-    if (rotation !== undefined && rotation !== 0) {
-      pattern = rotatePattern(pattern, rotation)
-    }
-
-    const duration = stepDuration ?? bridge.defaultDuration
-    let target = bridge
-
-    for (let i = 0; i < pattern.length; ++i) {
-      if (pattern[i]) {
-        target = target.withNote(pitch, duration)
-      } else {
-        target = target.withTick(target.tick + duration)
-      }
-    }
-
-    return target
-  })
+): DrumEuclideanBuilder {
+  return new DrumEuclideanBuilder({ hits, steps, pitch, stepDuration, rotation })
 }
 
 /**
@@ -138,23 +103,10 @@ export function drumEuclidean(
  */
 export function drumSteps(
   pattern: number[],
-  pitch: number,
+  pitch?: number,
   stepDuration?: number,
-): PipeStep {
-  return step((bridge) => {
-    const duration = stepDuration ?? bridge.defaultDuration
-    let target = bridge
-
-    for (let i = 0; i < pattern.length; ++i) {
-      if (pattern[i]) {
-        target = target.withNote(pitch, duration)
-      } else {
-        target = target.withTick(target.tick + duration)
-      }
-    }
-
-    return target
-  })
+): DrumStepsBuilder {
+  return new DrumStepsBuilder({ pattern, pitch, stepDuration })
 }
 
 /**
@@ -162,18 +114,8 @@ export function drumSteps(
  */
 export function roll(
   pitch: number,
-  duration: number,
+  duration?: number,
   rate?: number,
-): PipeStep {
-  return step((bridge) => {
-    const hitDuration = rate ?? Math.round(bridge.defaultDuration / 4)
-    const hitCount = Math.floor(duration / hitDuration)
-    let target = bridge
-
-    for (let i = 0; i < hitCount; ++i) {
-      target = target.withNote(pitch, hitDuration)
-    }
-
-    return target
-  })
+): RollBuilder {
+  return new RollBuilder({ pitch, duration, rate })
 }
