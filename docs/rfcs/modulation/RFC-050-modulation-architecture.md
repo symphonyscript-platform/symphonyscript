@@ -1520,6 +1520,206 @@ The sequencer reads `PARAMETER_TABLE[TEMPO].SMOOTHED_VALUE` at the start of each
 
 No sub-block subdivision. No variable-rate tick accumulation.
 
+### 14.7 Expression DSL (`Expr`)
+
+A unified expression system for both **derived parameter values** and **conditional routing**. All expressions are data structures — serializable, kernel-compilable, composable. No closures.
+
+#### 14.7.1 `IExpr` Interface
+
+```typescript
+interface IExpr {
+  readonly type: ExprType;
+  /** Compile to kernel-side packed representation. */
+  compile(): { cfgB: number; auxFields?: number[] };
+  /** Serialize to JSON. */
+  toJSON(): object;
+}
+```
+
+#### 14.7.2 Arithmetic Operators (produce numeric values)
+
+```typescript
+class Expr {
+  /** A + B */
+  static add(a: IParam | IExpr, b: IParam | IExpr): IExpr;
+
+  /** A - B */
+  static sub(a: IParam | IExpr, b: IParam | IExpr): IExpr;
+
+  /** (A × B) >> 16 (Q16.16 multiply) */
+  static mul(a: IParam | IExpr, b: IParam | IExpr): IExpr;
+
+  /** (A << 16) / B (Q16.16 divide, B must be non-zero) */
+  static div(a: IParam | IExpr, b: IParam | IExpr): IExpr;
+
+  /** min(A, B) */
+  static min(a: IParam | IExpr, b: IParam | IExpr): IExpr;
+
+  /** max(A, B) */
+  static max(a: IParam | IExpr, b: IParam | IExpr): IExpr;
+
+  /** |A| (absolute value) */
+  static abs(a: IParam | IExpr): IExpr;
+
+  /** -A (negate) */
+  static neg(a: IParam | IExpr): IExpr;
+
+  /** A + (B - A) × T >> 16 (linear interpolation) */
+  static lerp(a: IParam | IExpr, b: IParam | IExpr, t: IParam | IExpr): IExpr;
+
+  /** (A × scale) >> 16 (scale by constant) */
+  static scale(a: IParam | IExpr, factor: number): IExpr;
+
+  /** Constant value (Q16.16 literal). */
+  static value(n: number): IExpr;
+
+  /** clamp(A, low, high) */
+  static clamp(a: IParam | IExpr, low: number, high: number): IExpr;
+
+  /** A mod B (modulo) */
+  static mod(a: IParam | IExpr, b: IParam | IExpr): IExpr;
+}
+```
+
+#### 14.7.3 Comparison Operators (produce boolean conditions)
+
+```typescript
+class Expr {
+  /** A > threshold */
+  static gt(a: IParam | IExpr, threshold: number): IExpr;
+
+  /** A < threshold */
+  static lt(a: IParam | IExpr, threshold: number): IExpr;
+
+  /** A >= threshold */
+  static gte(a: IParam | IExpr, threshold: number): IExpr;
+
+  /** A <= threshold */
+  static lte(a: IParam | IExpr, threshold: number): IExpr;
+
+  /** |A - threshold| < epsilon (default epsilon = 1) */
+  static eq(a: IParam | IExpr, threshold: number, epsilon?: number): IExpr;
+
+  /** low < A < high */
+  static between(a: IParam | IExpr, low: number, high: number): IExpr;
+
+  /** A < low || A > high */
+  static outside(a: IParam | IExpr, low: number, high: number): IExpr;
+}
+```
+
+#### 14.7.4 Logical Operators (combine conditions)
+
+```typescript
+class Expr {
+  /** A && B (both conditions true) */
+  static and(a: IExpr, b: IExpr): IExpr;
+
+  /** A || B (either condition true) */
+  static or(a: IExpr, b: IExpr): IExpr;
+
+  /** !A (negate condition) */
+  static not(a: IExpr): IExpr;
+}
+```
+
+#### 14.7.5 Kernel Compilation
+
+Expressions compile to packed fields in `PACKED_CFG_B` and auxiliary storage. Simple expressions (single operator, two sources) encode directly. Complex expressions (nested) are flattened into a micro-program stored in the `LUT_POOL` region (reusing slots as instruction storage).
+
+```
+PACKED_CFG_B (when FLAGS.DERIVED = 1, simple expression):
+  Bits 31–28: Operator (4 bits)
+    0x0 = ADD       0x4 = MIN       0x8 = ABS       0xC = MOD
+    0x1 = SUB       0x5 = MAX       0x9 = NEG
+    0x2 = MUL       0x6 = LERP      0xA = SCALE
+    0x3 = DIV       0x7 = CLAMP     0xB = CONST
+
+  Bits 27–16: Source Param A (12 bits = 4096 param IDs)
+  Bits 15–4:  Source Param B (12 bits)
+  Bits 3–0:   Source Param C / flags (for LERP, CLAMP)
+```
+
+For nested expressions, bit 0 of the flags indicates `COMPLEX = 1`, and `PACKED_CFG_B` bits 27–4 encode a LUT_POOL slot index where the flattened instruction sequence resides.
+
+### 14.8 Derived Parameters
+
+A parameter whose `RAW_VALUE` is computed from other parameters' `SMOOTHED_VALUE`s.
+
+#### 14.8.1 Creation API
+
+```typescript
+const FinalPitch = Param.derive(Expr.add(BasePitch, Expr.mul(Scene, Expr.value(12))));
+
+const BlendedVelocity = Param.derive(
+  Expr.lerp(VelocityA, VelocityB, MixParam)
+);
+
+const ClampedIntensity = Param.derive(
+  Expr.clamp(Expr.add(RawIntensity, Boost), 0, 1000)
+);
+```
+
+#### 14.8.2 Parameter Table Encoding
+
+A derived parameter uses the same `PARAMETER_TABLE` slot as any other parameter:
+
+- `FLAGS` bit 3: `DERIVED` (0 = external/LFO source, 1 = computed from expression)
+- `PACKED_CFG_B`: Expression encoding (see Section 14.7.5)
+- `RAW_VALUE`: Audio engine writes the computed result here each block
+- `CURVED_VALUE`, `SMOOTHED_VALUE`: Processed normally after computation
+
+The signal chain is identical: `compute RAW_VALUE from expression → curve → smooth → modulators read SMOOTHED_VALUE`.
+
+#### 14.8.3 Evaluation Order
+
+Derived parameters must be evaluated **after** their source parameters. The batch parameter loop runs in two passes:
+
+```
+Pass 1: Evaluate all non-derived parameters (external + LFO)
+Pass 2: Evaluate all derived parameters (read sources' SMOOTHED_VALUE)
+```
+
+Circular dependencies are prevented at `Param.derive()` time — the bridge rejects expressions that reference the derived parameter itself (directly or transitively).
+
+### 14.9 Conditional Routing via `.when()`
+
+Synapse weight modulators can have conditions that gate their effect:
+
+```typescript
+parent.linkTo(verseClip)
+  .mod(Scene)
+  .base(1000)
+  .amount(-1000)
+  .when(Expr.gt(Scene, 500));     // Only active when Scene > 500
+```
+
+#### 14.9.1 Kernel Encoding
+
+The condition is stored in the modulator's auxiliary field (using a reserved slot in the `MODULATION_TABLE` entry). During evaluation:
+
+```
+conditionMet = evaluateExpr(modulator.condition, PARAMETER_TABLE)
+if (!conditionMet):
+    delta = 0    // modulator is gated off
+else:
+    delta = evaluateNormally()
+```
+
+#### 14.9.2 Dual-Mode `.when()` (RFC-058 Integration)
+
+Both serializable expressions and arrow functions are accepted:
+
+```typescript
+// Serializable — preserves phantom type
+.when(Expr.gt(Scene, 500))
+
+// Arrow — taints clip as Unserializable (RFC-058 phantom type)
+.when(v => v > 500)
+```
+
+The arrow form is evaluated at composition time by the `ClipBridge`. The `Expr` form compiles to kernel-side evaluation.
+
 ---
 
 ## 15. Open Questions
@@ -1559,6 +1759,9 @@ None. All architectural decisions are locked.
 | 25 | Parameter deregistration | `FLAGS.ACTIVE = 0`. Modulators read frozen value. No auto-cleanup |
 | 26 | Pre-baked shape LUT slots 0–7 | Built-in shapes initialized at `initSAB()`. User LUTs start at slot 8 |
 | 27 | Zero-alloc debug inspection | `inspectParam(id, out)` / `inspectMod(ptr, out)` with caller-owned Int32Array |
+| 28 | Unified Expr DSL | Single expression system for derived values AND conditions. Data structures, not closures. Serializable, kernel-compilable |
+| 29 | Derived parameters via `Param.derive(expr)` | `FLAGS.DERIVED` bit. RAW_VALUE computed from source params' SMOOTHED_VALUE. Two-pass evaluation (sources first, derived second) |
+| 30 | Conditional `.when()` with dual mode | `Expr` form is serializable + kernel-compiled. Arrow form taints as `Unserializable` (RFC-058 phantom type). Conditions gate modulator delta to 0 |
 
 ---
 
@@ -2085,3 +2288,22 @@ class SymphonyScriptProcessor extends AudioWorkletProcessor {
 | `.linkTo(clip).mod(Scene).base(1000).amount(-1000)` creates SYNAPSE_WEIGHT mod | Verify targetProperty = 0x07 |
 | Built-in shapes: `.centered()` uses LUT slot 1 | Verify PACKED_CFG_B = (0x04 << 24) \| 1 |
 
+### D.8 Expr DSL & Derived Parameters
+
+| Test | Assertion |
+|:---|:---|
+| `Expr.add(paramA, paramB)` produces correct type | `expr.type === 'add'` |
+| `Expr.gt(param, 500)` produces correct type | `expr.type === 'gt'`, `expr.threshold === 500` |
+| `Expr.and(Expr.gt(a, 500), Expr.lt(b, 300))` nests correctly | `expr.type === 'and'`, children correctly typed |
+| `Expr.value(12).compile()` produces Q16.16 | `cfgB` encodes CONST + `(12 * 65536)` |
+| Simple expr compiles to single PACKED_CFG_B | `Expr.add(paramA, paramB).compile()` → operator=ADD, srcA, srcB packed |
+| Complex nested expr uses LUT_POOL slot | `Expr.add(a, Expr.mul(b, c)).compile()` → COMPLEX flag set, LUT slot index encoded |
+| `Param.derive(Expr.add(A, B))` sets FLAGS.DERIVED | Verify FLAGS bit 3 set |
+| Derived param RAW_VALUE updated after source change | Set A=500, B=300. After evaluateParams(), derived RAW_VALUE = 800 |
+| Derived param respects evaluation order | Derived depends on LFO param. LFO evaluates first, derived reads updated SMOOTHED_VALUE |
+| Circular dependency rejected | `Param.derive(Expr.add(self, B))` throws at derive time |
+| `.when(Expr.gt(Scene, 500))` gates modulator | Set Scene=400 → delta=0. Set Scene=600 → delta=Amount |
+| `.when(Expr.between(S, 200, 800))` range gate | 100→gated, 500→active, 900→gated |
+| `.when(Expr.and(a, b))` compound condition | Both must be true for modulator to be active |
+| `Expr.toJSON()` is valid JSON | Parse back, reconstruct, verify identical compilation |
+| Serializable clip with Expr compiles | `SerializationBridge.materialize(clip.when(Expr.gt(S, 500)))` succeeds |
