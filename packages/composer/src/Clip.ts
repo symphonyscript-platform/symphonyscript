@@ -1,11 +1,50 @@
-import { ClipBuilder } from './ClipBuilder'
+import { IClip } from './interfaces/IClip'
 import { PipeStep } from './interfaces/pipe-step'
+import { PipeStepNode } from './interfaces/pipe-step-node'
+import { CompositionBridge } from './interfaces/composition-bridge'
+import { freeze } from './utils/freeze'
+import { FrozenClip } from './interfaces/frozen-clip'
 
-export class Clip {
-  static pipe(...steps: PipeStep[]): ClipBuilder {
-    return new ClipBuilder({
+export class Clip implements IClip {
+  constructor(private readonly tail: PipeStepNode | null = null) {
+  }
+
+  static pipe(...steps: PipeStep[]): Clip {
+    return new Clip({
       prev: null,
       steps,
     })
+  }
+
+  static freeze(clip: IClip): FrozenClip {
+    return freeze(clip)
+  }
+
+  pipe(...steps: PipeStep[]): Clip {
+    return new Clip({
+      prev: this.tail,
+      steps,
+    })
+  }
+
+  compose(context: CompositionBridge): CompositionBridge {
+    let current = this.tail
+    let bridge = context
+    const nodes: PipeStepNode[] = []
+
+    while (current) {
+      nodes.push(current)
+      current = current.prev
+    }
+
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const steps = nodes[i].steps
+      for (let j = 0; j < steps.length; ++j) {
+        const step = steps[j]
+        bridge = step.apply(bridge)
+      }
+    }
+
+    return bridge
   }
 }

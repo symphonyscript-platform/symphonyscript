@@ -1,4 +1,4 @@
-export interface IFrozenClip {
+export interface FrozenClip {
   readonly noteCount: number
   readonly duration: number
 
