@@ -38,10 +38,30 @@ Requires a tempo automation system that adjusts tick→time mapping.
 If velocity curves need per-tick interpolation (not just per-note),
 this belongs here rather than in the per-note modifier form.
 
+### 7. `voice(id, builderFn)`
+MPE voice scoping — execute a builder callback where all notes
+inherit an `expressionId` for per-note MIDI channel allocation.
+```typescript
+voice(1, v => v.note('C4').note('D4'))  // both notes on MPE channel 1
+```
+Requires MPE channel management and per-voice expression routing.
+
+### 8. `progression(...numerals)` / `voiceLead(numerals[], options?)`
+Roman numeral chord progressions with optional voice leading.
+```typescript
+progression('I', 'IV', 'V', 'I')
+voiceLead(['ii', 'V7', 'I'], { style: 'close', voices: 4 })
+```
+Depends on: chord resolution from theory, voice leading algorithm,
+key context propagation. Not blocked on modulation engine but requires
+`romanToChord` and `voiceLeadChords` utilities to be ported first.
+
 ## Prerequisites
 - Modulation engine with sub-tick CC interpolation
 - Tempo automation system
 - Automation target abstraction (`AutomationTarget`)
+- MPE channel manager (for voice scoping)
+- `romanToChord` / `voiceLeadChords` utilities (for progression/voiceLead)
 
 ## Related
 - RFC-050 composition API (current)
