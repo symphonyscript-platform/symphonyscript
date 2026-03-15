@@ -1,11 +1,11 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { ChanceBridge } from '../composition/ChanceBridge'
-import { ScopedEffectBuilder } from './ScopedEffectBuilder'
+import { ScopedEffectBuilder, ScopeEntry } from './ScopedEffectBuilder'
 
 export interface ChanceParams {
   probability: number
   seed: number | null
-  pipeSteps: PipeStep[]
+  entries: ScopeEntry[]
 }
 
 export class ChanceBuilder extends ScopedEffectBuilder<ChanceBuilder> {
@@ -13,7 +13,7 @@ export class ChanceBuilder extends ScopedEffectBuilder<ChanceBuilder> {
   private readonly _seed: number | null
 
   constructor(params: Partial<ChanceParams>) {
-    super(params.pipeSteps ?? [])
+    super(params.entries ?? [])
     this._probability = params.probability ?? 1
     this._seed = params.seed ?? null
   }
@@ -30,15 +30,15 @@ export class ChanceBuilder extends ScopedEffectBuilder<ChanceBuilder> {
     return new ChanceBridge(bridge, this._probability, this._seed ?? Date.now())
   }
 
-  protected cloneWithSteps(pipeSteps: PipeStep[]): ChanceBuilder {
-    return new ChanceBuilder({ probability: this._probability, seed: this._seed, pipeSteps })
+  protected cloneWithEntries(entries: ScopeEntry[]): ChanceBuilder {
+    return new ChanceBuilder({ probability: this._probability, seed: this._seed, entries })
   }
 
   private clone(overrides: Partial<ChanceParams>): ChanceBuilder {
     return new ChanceBuilder({
       probability: this._probability,
       seed: this._seed,
-      pipeSteps: this.pipeSteps,
+      entries: this.entries,
       ...overrides,
     })
   }

@@ -1,16 +1,16 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { QuantizationBridge, QuantizationBridgeParams } from '../composition/QuantizationBridge'
-import { ScopedEffectBuilder } from './ScopedEffectBuilder'
+import { ScopedEffectBuilder, ScopeEntry } from './ScopedEffectBuilder'
 
 export interface QuantizationParams extends QuantizationBridgeParams {
-  pipeSteps: PipeStep[]
+  entries: ScopeEntry[]
 }
 
 export class QuantizationBuilder extends ScopedEffectBuilder<QuantizationBuilder> {
-  private readonly params: QuantizationBridgeParams
+  private readonly params: Omit<QuantizationParams, 'entries'>
 
   constructor(params: Partial<QuantizationParams>) {
-    super(params.pipeSteps ?? [])
+    super(params.entries ?? [])
     this.params = {
       grid: params.grid ?? 480,
       strength: params.strength ?? 1.0,
@@ -29,11 +29,11 @@ export class QuantizationBuilder extends ScopedEffectBuilder<QuantizationBuilder
     return new QuantizationBridge(bridge, this.params)
   }
 
-  protected cloneWithSteps(pipeSteps: PipeStep[]): QuantizationBuilder {
-    return new QuantizationBuilder({ ...this.params, pipeSteps })
+  protected cloneWithEntries(entries: ScopeEntry[]): QuantizationBuilder {
+    return new QuantizationBuilder({ ...this.params, entries })
   }
 
   private clone(overrides: Partial<QuantizationParams>): QuantizationBuilder {
-    return new QuantizationBuilder({ ...this.params, pipeSteps: this.pipeSteps, ...overrides })
+    return new QuantizationBuilder({ ...this.params, entries: this.entries, ...overrides })
   }
 }

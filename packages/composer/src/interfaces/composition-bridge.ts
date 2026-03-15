@@ -28,6 +28,9 @@ export interface CompositionBridge {
     /** Defer a pitch bend at current tick. */
     withBend(value: number): CompositionBridge
 
+    /** Defer aftertouch at current tick. Omit pitch for channel, provide pitch for poly. */
+    withAftertouch(value: number, pitch?: number): CompositionBridge
+
     // === Deferred Topology (pure — accumulate thunks) ===
 
     /** Defer a synapse connection. */

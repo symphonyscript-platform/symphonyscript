@@ -1,16 +1,16 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import { ScopedEffectBuilder } from './ScopedEffectBuilder'
+import { ScopedEffectBuilder, ScopeEntry } from './ScopedEffectBuilder'
 
 export interface BendParams {
   value: number
-  pipeSteps: PipeStep[]
+  entries: ScopeEntry[]
 }
 
 export class BendBuilder extends ScopedEffectBuilder<BendBuilder> {
   private readonly _value: number
 
   constructor(params: Partial<BendParams>) {
-    super(params.pipeSteps ?? [])
+    super(params.entries ?? [])
     this._value = params.value ?? 0
   }
 
@@ -22,8 +22,8 @@ export class BendBuilder extends ScopedEffectBuilder<BendBuilder> {
     return bridge.withBend(this._value)
   }
 
-  protected cloneWithSteps(pipeSteps: PipeStep[]): BendBuilder {
-    return new BendBuilder({ value: this._value, pipeSteps })
+  protected cloneWithEntries(entries: ScopeEntry[]): BendBuilder {
+    return new BendBuilder({ value: this._value, entries })
   }
 
   /** Reset bend to 0 after scoped steps complete. */
@@ -32,6 +32,6 @@ export class BendBuilder extends ScopedEffectBuilder<BendBuilder> {
   }
 
   private clone(overrides: Partial<BendParams>): BendBuilder {
-    return new BendBuilder({ value: this._value, pipeSteps: this.pipeSteps, ...overrides })
+    return new BendBuilder({ value: this._value, entries: this.entries, ...overrides })
   }
 }

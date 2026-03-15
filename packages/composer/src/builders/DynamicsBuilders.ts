@@ -1,21 +1,21 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { EasingCurve } from '../composition/VelocityRampBridge'
 import { VelocityRampBridge } from '../composition/VelocityRampBridge'
-import { ScopedEffectBuilder } from './ScopedEffectBuilder'
+import { ScopedEffectBuilder, ScopeEntry } from './ScopedEffectBuilder'
 
 export interface CrescendoParams {
   duration: number
   from: number
   to: number
   curve: EasingCurve
-  pipeSteps: PipeStep[]
+  entries: ScopeEntry[]
 }
 
 export class CrescendoBuilder extends ScopedEffectBuilder<CrescendoBuilder> {
-  private readonly params: Omit<CrescendoParams, 'pipeSteps'>
+  private readonly params: Omit<CrescendoParams, 'entries'>
 
   constructor(params: Partial<CrescendoParams>) {
-    super(params.pipeSteps ?? [])
+    super(params.entries ?? [])
     this.params = {
       duration: params.duration ?? 480,
       from: params.from ?? 400,
@@ -50,20 +50,20 @@ export class CrescendoBuilder extends ScopedEffectBuilder<CrescendoBuilder> {
     })
   }
 
-  protected cloneWithSteps(pipeSteps: PipeStep[]): CrescendoBuilder {
-    return new CrescendoBuilder({ ...this.params, pipeSteps })
+  protected cloneWithEntries(entries: ScopeEntry[]): CrescendoBuilder {
+    return new CrescendoBuilder({ ...this.params, entries })
   }
 
   private clone(overrides: Partial<CrescendoParams>): CrescendoBuilder {
-    return new CrescendoBuilder({ ...this.params, pipeSteps: this.pipeSteps, ...overrides })
+    return new CrescendoBuilder({ ...this.params, entries: this.entries, ...overrides })
   }
 }
 
 export class DecrescendoBuilder extends ScopedEffectBuilder<DecrescendoBuilder> {
-  private readonly params: Omit<CrescendoParams, 'pipeSteps'>
+  private readonly params: Omit<CrescendoParams, 'entries'>
 
   constructor(params: Partial<CrescendoParams>) {
-    super(params.pipeSteps ?? [])
+    super(params.entries ?? [])
     this.params = {
       duration: params.duration ?? 480,
       from: params.from ?? 1200,
@@ -98,11 +98,11 @@ export class DecrescendoBuilder extends ScopedEffectBuilder<DecrescendoBuilder> 
     })
   }
 
-  protected cloneWithSteps(pipeSteps: PipeStep[]): DecrescendoBuilder {
-    return new DecrescendoBuilder({ ...this.params, pipeSteps })
+  protected cloneWithEntries(entries: ScopeEntry[]): DecrescendoBuilder {
+    return new DecrescendoBuilder({ ...this.params, entries })
   }
 
   private clone(overrides: Partial<CrescendoParams>): DecrescendoBuilder {
-    return new DecrescendoBuilder({ ...this.params, pipeSteps: this.pipeSteps, ...overrides })
+    return new DecrescendoBuilder({ ...this.params, entries: this.entries, ...overrides })
   }
 }

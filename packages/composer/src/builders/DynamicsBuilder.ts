@@ -1,30 +1,30 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { DynamicsBridge, DynamicsBridgeParams } from '../composition/DynamicsBridge'
-import { ScopedEffectBuilder } from './ScopedEffectBuilder'
+import { ScopedEffectBuilder, ScopeEntry } from './ScopedEffectBuilder'
 
 export interface DynamicsParams extends DynamicsBridgeParams {
-  pipeSteps: PipeStep[]
+  entries: ScopeEntry[]
 }
 
 export class DynamicsBuilder extends ScopedEffectBuilder<DynamicsBuilder> {
-  private readonly params: DynamicsBridgeParams
+  private readonly params: Omit<DynamicsParams, 'entries'>
 
   constructor(params: Partial<DynamicsParams>) {
-    super(params.pipeSteps ?? [])
+    super(params.entries ?? [])
     this.params = {
       startVelocity: params.startVelocity ?? 600,
       endVelocity: params.endVelocity ?? 1000,
       startTick: params.startTick ?? 0,
-      endTick: params.endTick ?? 1920,
+      endTick: params.endTick ?? 480,
     }
   }
 
-  from(startVelocity: number): DynamicsBuilder {
-    return this.clone({ startVelocity })
+  startVelocity(velocity: number): DynamicsBuilder {
+    return this.clone({ startVelocity: velocity })
   }
 
-  to(endVelocity: number): DynamicsBuilder {
-    return this.clone({ endVelocity })
+  endVelocity(velocity: number): DynamicsBuilder {
+    return this.clone({ endVelocity: velocity })
   }
 
   start(tick: number): DynamicsBuilder {
@@ -39,11 +39,11 @@ export class DynamicsBuilder extends ScopedEffectBuilder<DynamicsBuilder> {
     return new DynamicsBridge(bridge, this.params)
   }
 
-  protected cloneWithSteps(pipeSteps: PipeStep[]): DynamicsBuilder {
-    return new DynamicsBuilder({ ...this.params, pipeSteps })
+  protected cloneWithEntries(entries: ScopeEntry[]): DynamicsBuilder {
+    return new DynamicsBuilder({ ...this.params, entries })
   }
 
   private clone(overrides: Partial<DynamicsParams>): DynamicsBuilder {
-    return new DynamicsBuilder({ ...this.params, pipeSteps: this.pipeSteps, ...overrides })
+    return new DynamicsBuilder({ ...this.params, entries: this.entries, ...overrides })
   }
 }

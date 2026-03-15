@@ -32,6 +32,10 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
     return this.rewrap(this.bridge.withBend(value))
   }
 
+  withAftertouch(value: number, pitch?: number): CompositionBridge {
+    return this.rewrap(this.bridge.withAftertouch(value, pitch))
+  }
+
   withConnect(srcId: number, tgtId: number, weight?: number): CompositionBridge {
     return this.rewrap(this.bridge.withConnect(srcId, tgtId, weight))
   }

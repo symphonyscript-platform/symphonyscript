@@ -1,6 +1,6 @@
-import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import { CompositionBridge } from '@symphonyscript/composer'
 import { GrooveBridge, GrooveBridgeParams, GrooveStep } from '../composition/GrooveBridge'
-import { ScopedEffectBuilder } from './ScopedEffectBuilder'
+import { ScopedEffectBuilder, ScopeEntry } from './ScopedEffectBuilder'
 
 const DEFAULT_STEP: GrooveStep = {
   velocity: 1.0,
@@ -9,61 +9,74 @@ const DEFAULT_STEP: GrooveStep = {
 }
 
 export interface GrooveParams extends GrooveBridgeParams {
-  pipeSteps: PipeStep[]
+  entries: ScopeEntry[]
 }
 
 export class GrooveBuilder extends ScopedEffectBuilder<GrooveBuilder> {
-  private readonly params: GrooveBridgeParams
+  private readonly params: Omit<GrooveParams, 'entries'>
 
   constructor(params: Partial<GrooveParams>) {
-    super(params.pipeSteps ?? [])
+    super(params.entries ?? [])
     this.params = {
       steps: params.steps ?? [],
       grid: params.grid ?? 480,
     }
   }
 
-  grid(grid: number): GrooveBuilder {
-    return this.clone({ grid })
+  /** Add a groove step. */
+  step(velocity?: number, timing?: number, probability?: number): GrooveBuilder {
+    const newStep: GrooveStep = {
+      velocity: velocity ?? DEFAULT_STEP.velocity,
+      timing: timing ?? DEFAULT_STEP.timing,
+      probability: probability ?? DEFAULT_STEP.probability,
+    }
+    return this.clone({ steps: [...this.params.steps, newStep] })
   }
 
-  step(): GrooveBuilder {
-    return this.clone({
-      steps: [...this.params.steps, { ...DEFAULT_STEP }],
-    })
-  }
-
-  velocity(velocity: number): GrooveBuilder {
+  velocityLast(velocity: number): GrooveBuilder {
     return this.modifyLast({ velocity })
   }
 
-  timing(timing: number): GrooveBuilder {
+  timingLast(timing: number): GrooveBuilder {
     return this.modifyLast({ timing })
   }
 
-  probability(probability: number): GrooveBuilder {
+  probabilityLast(probability: number): GrooveBuilder {
     return this.modifyLast({ probability })
+  }
+
+  grid(grid: number): GrooveBuilder {
+    return this.clone({ grid })
   }
 
   protected wrap(bridge: CompositionBridge): CompositionBridge {
     return new GrooveBridge(bridge, this.params)
   }
 
-  protected cloneWithSteps(pipeSteps: PipeStep[]): GrooveBuilder {
-    return new GrooveBuilder({ ...this.params, pipeSteps })
+  protected cloneWithEntries(entries: ScopeEntry[]): GrooveBuilder {
+    return new GrooveBuilder({ ...this.params, entries })
   }
 
   private clone(overrides: Partial<GrooveParams>): GrooveBuilder {
-    return new GrooveBuilder({ ...this.params, pipeSteps: this.pipeSteps, ...overrides })
+    return new GrooveBuilder({
+      ...this.params,
+      entries: this.entries,
+      ...overrides,
+    })
   }
 
   private modifyLast(overrides: Partial<GrooveStep>): GrooveBuilder {
-    const grooveSteps = [...this.params.steps]
+    const currentSteps = this.params.steps
 
-    if (grooveSteps.length === 0) return this
+    if (currentSteps.length === 0) {
+      return this.step(overrides.velocity, overrides.timing, overrides.probability)
+    }
 
-    grooveSteps[grooveSteps.length - 1] = { ...grooveSteps[grooveSteps.length - 1], ...overrides }
+    const last = currentSteps[currentSteps.length - 1]
+    const updated = [...currentSteps]
 
-    return this.clone({ steps: grooveSteps })
+    updated[updated.length - 1] = { ...last, ...overrides }
+
+    return this.clone({ steps: updated })
   }
 }

@@ -5,10 +5,6 @@ import { DrumEuclideanBuilder } from '../builders/DrumEuclideanBuilder'
 import { DrumStepsBuilder } from '../builders/DrumStepsBuilder'
 import { RollBuilder } from '../builders/RollBuilder'
 
-// ============================================================================
-// Named Drum Hits
-// ============================================================================
-
 export function kick(duration?: number): DrumHitBuilder {
   return new DrumHitBuilder({ pitch: GM_DRUM.BASS_DRUM_1, duration })
 }
@@ -29,7 +25,7 @@ export function clap(duration?: number): DrumHitBuilder {
   return new DrumHitBuilder({ pitch: GM_DRUM.HAND_CLAP, duration })
 }
 
-export function tom(n: number, duration?: number): DrumHitBuilder {
+export function tom(index: number, duration?: number): DrumHitBuilder {
   const toms = [
     GM_DRUM.HIGH_TOM,
     GM_DRUM.HI_MID_TOM,
@@ -38,7 +34,8 @@ export function tom(n: number, duration?: number): DrumHitBuilder {
     GM_DRUM.HIGH_FLOOR_TOM,
     GM_DRUM.LOW_FLOOR_TOM,
   ]
-  const pitch = toms[Math.min(n - 1, toms.length - 1)] ?? GM_DRUM.HIGH_TOM
+  const pitch = toms[Math.min(index - 1, toms.length - 1)] ?? GM_DRUM.HIGH_TOM
+
   return new DrumHitBuilder({ pitch, duration })
 }
 
@@ -66,10 +63,6 @@ export function shaker(duration?: number): DrumHitBuilder {
 export function hit(pitch?: number, duration?: number): DrumHitBuilder {
   return new DrumHitBuilder({ pitch, duration })
 }
-
-// ============================================================================
-// Drum Patterns
-// ============================================================================
 
 /**
  * Text-based drum pattern.
@@ -118,4 +111,14 @@ export function roll(
   rate?: number,
 ): RollBuilder {
   return new RollBuilder({ pitch, duration, rate })
+}
+
+/** Flam: grace note immediately before the main hit. */
+export function flam(pitch?: number, duration?: number): DrumHitBuilder {
+  return new DrumHitBuilder({ pitch: pitch ?? GM_DRUM.ACOUSTIC_SNARE, duration }).flam()
+}
+
+/** Drag: multiple grace notes before the main hit. */
+export function drag(pitch?: number, duration?: number): DrumHitBuilder {
+  return new DrumHitBuilder({ pitch: pitch ?? GM_DRUM.ACOUSTIC_SNARE, duration }).drag()
 }

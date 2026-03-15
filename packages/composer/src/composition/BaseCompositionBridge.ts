@@ -85,6 +85,17 @@ export class BaseCompositionBridge implements CompositionBridge {
     return this.derive({}, ctx => ctx.insertBend(value, tick, 0))
   }
 
+  withAftertouch(value: number, pitch?: number): BaseCompositionBridge {
+    const tick = this.params.tick
+
+    if (pitch !== undefined) {
+      // Poly aftertouch — per-note pressure
+      return this.derive({}, ctx => ctx.insertCC(0xA0, value, tick, pitch))
+    }
+    // Channel aftertouch
+    return this.derive({}, ctx => ctx.insertCC(0xD0, value, tick, 0))
+  }
+
   withConnect(srcId: number, tgtId: number, weight?: number): BaseCompositionBridge {
     return this.derive({}, ctx => ctx.connect(srcId, tgtId, weight))
   }
