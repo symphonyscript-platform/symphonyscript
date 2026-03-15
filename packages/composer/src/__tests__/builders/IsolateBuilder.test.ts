@@ -1,31 +1,23 @@
 /**
- * Exemplar: Higher-Order Composition Test — IsolateBuilder + StackBuilder
+ * Exemplar: IsolateBuilder Test
  *
- * Tests IsolateBuilder (returned by `isolate()`) and StackBuilder (returned by `stack()`).
- * These are structural composition primitives, not note-level builders.
+ * Tests IsolateBuilder (returned by `isolate()`).
+ * IsolateBuilder is a structural composition primitive that isolates state changes.
  *
  * Covers:
- *   IsolateBuilder:
  *   - Full state isolation (velocity, transpose, tempo don't leak)
  *   - Tick DOES propagate (notes emitted are preserved)
  *   - Thunks (emitted notes) propagate through isolation
  *   - Volume/pan restore emits CC events
  *   - Key context restore (including null → null)
  *   - Empty isolation is a no-op
- *
- *   StackBuilder:
- *   - Parallel branches fork from same tick
- *   - Tick advances to longest branch
- *   - Multiple branches with different content
- *   - Empty stack is a no-op
  */
 
 import { describe, it, expect } from 'vitest'
-import { note } from '../notations/note'
-import { isolate } from '../notations/isolate'
-import { stack } from '../notations/stack'
-import { velocity, transpose, tempo, volume } from '../notations/setters'
-import { createBridge, commitAndCapture } from './test-utils'
+import { note } from '../../notations/note'
+import { isolate } from '../../notations/isolate'
+import { velocity, transpose, tempo, volume } from '../../notations/setters'
+import { createBridge, commitAndCapture } from '../test-utils'
 import { MIDI_CC } from '@symphonyscript/theory'
 
 describe('IsolateBuilder', () => {
@@ -177,94 +169,6 @@ describe('IsolateBuilder', () => {
 
       // still works (empty steps array)
       expect(result.tick).toBe(bridge.tick)
-    })
-  })
-})
-
-// ==========================================================================
-// StackBuilder
-// ==========================================================================
-
-describe('StackBuilder', () => {
-
-  // ========================================================================
-  // Parallel forking
-  // ========================================================================
-
-  describe('parallel forking', () => {
-    it('all branches should start at the same tick', () => {
-      const bridge = createBridge({ defaultDuration: 480 })
-
-      const result = stack(
-        [note('C4')],
-        [note('E4')],
-        [note('G4')],
-      ).apply(bridge)
-
-      const { notes } = commitAndCapture(result)
-      expect(notes).toHaveLength(3)
-      // All notes should start at tick 0
-      expect(notes[0].tick).toBe(0)
-      expect(notes[1].tick).toBe(0)
-      expect(notes[2].tick).toBe(0)
-    })
-
-    it('tick should advance to the longest branch', () => {
-      const bridge = createBridge({ defaultDuration: 480 })
-
-      const result = stack(
-        [note('C4')],                          // 1 note = 480 ticks
-        [note('E4'), note('F4'), note('G4')],  // 3 notes = 1440 ticks
-        [note('A4'), note('B4')],              // 2 notes = 960 ticks
-      ).apply(bridge)
-
-      expect(result.tick).toBe(1440) // longest branch
-    })
-  })
-
-  // ========================================================================
-  // Builder API (.branch())
-  // ========================================================================
-
-  describe('.branch() API', () => {
-    it('should support the .branch() fluent API', () => {
-      const bridge = createBridge({ defaultDuration: 480 })
-
-      const result = stack()
-        .branch(note('C4'), note('E4'))
-        .branch(note('G4'))
-        .apply(bridge)
-
-      const { notes } = commitAndCapture(result)
-      expect(notes).toHaveLength(3)
-      // First branch starts at 0, second branch also starts at 0
-      expect(notes[0].tick).toBe(0)
-      expect(notes[1].tick).toBe(480)
-      expect(notes[2].tick).toBe(0)
-    })
-  })
-
-  // ========================================================================
-  // Edge cases
-  // ========================================================================
-
-  describe('edge cases', () => {
-    it('empty stack should be a no-op', () => {
-      const bridge = createBridge({ defaultDuration: 480 })
-      const result = stack().apply(bridge)
-
-      expect(result.tick).toBe(0)
-      const { notes } = commitAndCapture(result)
-      expect(notes).toHaveLength(0)
-    })
-
-    it('single branch stack should behave like sequential steps', () => {
-      const bridge = createBridge({ defaultDuration: 480 })
-      const result = stack([note('C4'), note('E4')]).apply(bridge)
-
-      expect(result.tick).toBe(960)
-      const { notes } = commitAndCapture(result)
-      expect(notes).toHaveLength(2)
     })
   })
 })

@@ -16,10 +16,10 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { note } from '../notations/note'
-import { humanize } from '../notations/humanize'
-import { createBridge, commitAndCapture } from './test-utils'
-import { CompositionBridge } from '../interfaces/composition-bridge'
+import { note } from '../../notations/note'
+import { humanize } from '../../notations/humanize'
+import { createBridge, commitAndCapture } from '../test-utils'
+import { CompositionBridge } from '../../interfaces/composition-bridge'
 
 describe('HumanizationBuilder', () => {
 
