@@ -3,8 +3,7 @@ import { GlideBridge } from '../composition/GlideBridge'
 
 export function glide(...steps: PipeStep[]): PipeStep {
   return step((bridge) => {
-    const glideBridge = new GlideBridge(bridge)
-    let current = glideBridge as GlideBridge
+    let current = new GlideBridge(bridge)
 
     for (let i = 0; i < steps.length; ++i) {
       current = new GlideBridge(steps[i].apply(current))
