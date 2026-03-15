@@ -3,7 +3,7 @@ import { PitchClass, ScaleMode } from '@symphonyscript/theory'
 import { CompositionBridge } from '@symphonyscript/composer'
 import { ThunkNode } from '../interfaces/thunk-node'
 
-interface BridgeState {
+export interface BaseCompositionBridgeParams {
   tick: number
   velocity: number
   transpose: number
@@ -18,51 +18,72 @@ interface BridgeState {
   precise: boolean
   quantizeGrid: number
   quantizeStrength: number
+  tail: ThunkNode | null,
+  length: number,
 }
-export class BaseCompositionBridge implements CompositionBridge {
-  constructor(
-    readonly tick: number = 0,
-    readonly velocity: number = 800,
-    readonly transpose: number = 0,
-    readonly defaultDuration: number = 1,
-    readonly tempo: number = 120,
-    readonly timeSignatureNum: number = 4,
-    readonly timeSignatureDen: number = 4,
-    readonly scaleRoot: number = 0,
-    readonly scaleMode: ScaleMode = ScaleMode.MAJOR,
-    readonly swing: number = 0,
-    readonly muted: boolean = false,
-    readonly precise: boolean = false,
-    readonly quantizeGrid: number = 0,
-    readonly quantizeStrength: number = 1.0,
 
-    private readonly tail: ThunkNode | null = null,
-    private readonly length: number = 0,
-  ) {}
+export class BaseCompositionBridge implements CompositionBridge {
+  protected readonly params: BaseCompositionBridgeParams
+
+  constructor(params: Partial<BaseCompositionBridgeParams>) {
+    this.params = {
+      tick: params.tick ?? 0,
+      velocity: params.velocity ?? 800,
+      transpose: params.transpose ?? 0,
+      defaultDuration: params.defaultDuration ?? 1,
+      tempo: params.tempo ?? 120,
+      timeSignatureNum: params.timeSignatureNum ?? 4,
+      timeSignatureDen: params.timeSignatureDen ?? 4,
+      scaleRoot: params.scaleRoot ?? 0,
+      scaleMode: params.scaleMode ?? ScaleMode.MAJOR,
+      swing: params.swing ?? 0,
+      muted: params.muted ?? false,
+      precise: params.precise ?? false,
+      quantizeGrid: params.quantizeGrid ?? 0,
+      quantizeStrength: params.quantizeStrength ?? 1.0,
+      tail: params.tail ?? null,
+      length: params.length ?? 0,
+    }
+  }
+
+  get tick() { return this.params.tick }
+  get velocity() { return this.params.velocity }
+  get transpose() { return this.params.transpose }
+  get defaultDuration() { return this.params.defaultDuration }
+  get tempo() { return this.params.tempo }
+  get timeSignatureNum() { return this.params.timeSignatureNum }
+  get timeSignatureDen() { return this.params.timeSignatureDen }
+  get scaleRoot() { return this.params.scaleRoot }
+  get scaleMode() { return this.params.scaleMode }
+  get swing() { return this.params.swing }
+  get muted() { return this.params.muted }
+  get precise() { return this.params.precise }
+  get quantizeGrid() { return this.params.quantizeGrid }
+  get quantizeStrength() { return this.params.quantizeStrength }
 
   withNote(pitch: number, duration?: number, velocity?: number): BaseCompositionBridge {
-    const dur = duration ?? this.defaultDuration
-    const vel = velocity ?? this.velocity
-    const finalPitch = pitch + this.transpose
-    const tick = this.tick
+    const dur = duration ?? this.params.defaultDuration
+    const vel = velocity ?? this.params.velocity
+    const finalPitch = pitch + this.params.transpose
+    const tick = this.params.tick
+    const muted = this.params.muted
 
-    return this.derive({ tick: this.tick + dur }, ctx => {
-      return ctx.insertNote(finalPitch, vel, dur, tick, false, 0)
+    return this.derive({ tick: this.params.tick + dur }, ctx => {
+      return ctx.insertNote(finalPitch, vel, dur, tick, muted, 0)
     })
   }
 
   withCC(controller: number, value: number): BaseCompositionBridge {
-    const tick = this.tick
+    const tick = this.params.tick
 
     return this.derive({}, ctx => ctx.insertCC(controller, value, tick, 0))
   }
 
   withBend(value: number): BaseCompositionBridge {
-    const tick = this.tick
+    const tick = this.params.tick
 
     return this.derive({}, ctx => ctx.insertBend(value, tick, 0))
   }
-
 
   withConnect(srcId: number, tgtId: number, weight?: number): BaseCompositionBridge {
     return this.derive({}, ctx => ctx.connect(srcId, tgtId, weight))
@@ -126,7 +147,7 @@ export class BaseCompositionBridge implements CompositionBridge {
 
   commit(context: ExecutionContext): void {
     const thunks: ((ctx: ExecutionContext) => void)[] = []
-    let current = this.tail
+    let current = this.params.tail
 
     while (current) {
       thunks.push(current.thunk)
@@ -139,26 +160,16 @@ export class BaseCompositionBridge implements CompositionBridge {
   }
 
   private derive(
-    overrides: Partial<BridgeState>,
+    overrides: Partial<BaseCompositionBridgeParams>,
     thunk?: (context: ExecutionContext) => void
   ): BaseCompositionBridge {
     return new BaseCompositionBridge(
-      overrides.tick ?? this.tick,
-      overrides.velocity ?? this.velocity,
-      overrides.transpose ?? this.transpose,
-      overrides.defaultDuration ?? this.defaultDuration,
-      overrides.tempo ?? this.tempo,
-      overrides.timeSignatureNum ?? this.timeSignatureNum,
-      overrides.timeSignatureDen ?? this.timeSignatureDen,
-      overrides.scaleRoot ?? this.scaleRoot,
-      overrides.scaleMode ?? this.scaleMode,
-      overrides.swing ?? this.swing,
-      overrides.muted ?? this.muted,
-      overrides.precise ?? this.precise,
-      overrides.quantizeGrid ?? this.quantizeGrid,
-      overrides.quantizeStrength ?? this.quantizeStrength,
-      thunk ? { thunk, prev: this.tail } : this.tail,
-      thunk ? this.length + 1 : this.length,
+      {
+        ...this.params,
+        ...overrides,
+        tail: thunk ? { thunk, prev: this.params.tail } : this.params.tail,
+        length: thunk ? this.params.length + 1 : this.params.length,
+      },
     )
   }
 }
