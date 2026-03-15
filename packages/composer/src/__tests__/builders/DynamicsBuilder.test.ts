@@ -17,7 +17,6 @@ import { describe, it, expect } from 'vitest'
 import { note } from '../../notations/note'
 import { dynamics } from '../../notations/dynamics'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { CompositionBridge } from '../../interfaces/composition-bridge'
 
 describe('DynamicsBuilder', () => {
 

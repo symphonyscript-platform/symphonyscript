@@ -140,4 +140,23 @@ describe('StepsBuilder', () => {
       expect(notes[0].duration).toBe(60)
     })
   })
+
+  describe('immutability', () => {
+    it('.pattern(), .notes(), .stepDuration() should return new instances', () => {
+      const base = steps([1], ['C4'])
+      const withPattern = base.pattern([1, 1])
+      const withNotes = base.notes(['E4'])
+      const withStepDur = base.stepDuration(60)
+
+      expect(withPattern).not.toBe(base)
+      expect(withNotes).not.toBe(base)
+      expect(withStepDur).not.toBe(base)
+
+      const bridge = createBridge({ defaultDuration: 240 })
+      const baseNotes = commitAndCapture(base.apply(bridge)).notes
+      const patternNotes = commitAndCapture(withPattern.apply(bridge)).notes
+      expect(baseNotes).toHaveLength(1)
+      expect(patternNotes).toHaveLength(2)
+    })
+  })
 })

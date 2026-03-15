@@ -77,6 +77,64 @@ describe('StackBuilder', () => {
   })
 
   // ========================================================================
+  // State isolation and structure
+  // ========================================================================
+
+  describe('state isolation', () => {
+    it('velocity and transpose should not leak between parallel branches', () => {
+      const bridge = createBridge({ velocity: 100 })
+
+      const result = stack(
+        [note('C4').velocity(500)],
+        [note('E4')],  // no explicit velocity — use bridge default
+        [note('G4').transpose(12)],
+      ).apply(bridge)
+
+      const { notes } = commitAndCapture(result)
+      expect(notes).toHaveLength(3)
+      expect(notes[0].velocity).toBe(500)
+      expect(notes[1].velocity).toBe(100)
+      expect(notes[2].pitch).toBe(79)  // G4 + 12 = G5
+    })
+  })
+
+  describe('nested stacks', () => {
+    it('stack within stack should work correctly', () => {
+      const bridge = createBridge({ defaultDuration: 480 })
+      const innerStack = stack([note('E4')], [note('G4')])
+
+      const result = stack(
+        [note('C4')],
+        [innerStack],
+      ).apply(bridge)
+
+      const { notes } = commitAndCapture(result)
+      expect(notes).toHaveLength(3)
+      expect(notes[0].tick).toBe(0)
+      expect(notes[1].tick).toBe(0)
+      expect(notes[2].tick).toBe(0)
+    })
+  })
+
+  describe('unequal durations', () => {
+    it('branches with different durations should place notes at correct ticks', () => {
+      const bridge = createBridge({ defaultDuration: 480 })
+
+      const result = stack(
+        [note('C4').duration(240)],
+        [note('E4').duration(480), note('G4').duration(480)],
+      ).apply(bridge)
+
+      const { notes } = commitAndCapture(result)
+      expect(notes).toHaveLength(3)
+      expect(notes[0]).toMatchObject({ pitch: 60, tick: 0, duration: 240 })
+      expect(notes[1]).toMatchObject({ pitch: 64, tick: 0, duration: 480 })
+      expect(notes[2]).toMatchObject({ pitch: 67, tick: 480, duration: 480 })
+      expect(result.tick).toBe(960)
+    })
+  })
+
+  // ========================================================================
   // Edge cases
   // ========================================================================
 

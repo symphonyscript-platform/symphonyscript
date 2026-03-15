@@ -15,27 +15,26 @@ import { describe, it, expect } from 'vitest'
 import { euclidean } from '../../notations/euclidean'
 import { createBridge, commitAndCapture } from '../test-utils'
 
-describe('euclidean notation', () => {
-
-  it('should return EuclideanBuilder with fluent API', () => {
-    const builder = euclidean(3, 8)
-    expect(builder).toBeDefined()
-    expect(typeof builder.notes).toBe('function')
-    expect(typeof builder.apply).toBe('function')
-  })
-
-  it('should accept optional hits and steps', () => {
-    const withArgs = euclidean(3, 8)
-    const { notes } = commitAndCapture(withArgs.notes(['C4']).apply(createBridge({ defaultDuration: 480 })))
-    expect(notes).toHaveLength(3)
-
-    const noArgs = euclidean()
-    const { notes: notes2 } = commitAndCapture(noArgs.notes(['C4']).apply(createBridge({ defaultDuration: 480 })))
-    expect(notes2).toHaveLength(1) // defaults: hits=1, steps=4 → one hit
-  })
-})
-
 describe('EuclideanBuilder', () => {
+
+  describe('euclidean notation', () => {
+    it('should return EuclideanBuilder with fluent API', () => {
+      const builder = euclidean(3, 8)
+      expect(builder).toBeDefined()
+      expect(typeof builder.notes).toBe('function')
+      expect(typeof builder.apply).toBe('function')
+    })
+
+    it('should accept optional hits and steps', () => {
+      const withArgs = euclidean(3, 8)
+      const { notes } = commitAndCapture(withArgs.notes(['C4']).apply(createBridge({ defaultDuration: 480 })))
+      expect(notes).toHaveLength(3)
+
+      const noArgs = euclidean()
+      const { notes: notes2 } = commitAndCapture(noArgs.notes(['C4']).apply(createBridge({ defaultDuration: 480 })))
+      expect(notes2).toHaveLength(1) // defaults: hits=1, steps=4 → one hit
+    })
+  })
 
   // ========================================================================
   // Tresillo (3,8) with 2 notes

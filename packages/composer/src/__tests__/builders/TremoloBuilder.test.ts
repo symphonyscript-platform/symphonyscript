@@ -106,4 +106,23 @@ describe('TremoloBuilder', () => {
       expect(notes).toHaveLength(2)
     })
   })
+
+  describe('immutability', () => {
+    it('.pitch(), .rate(), .duration() should return new instances', () => {
+      const base = tremolo('C4', 120, 480)
+      const withPitch = base.pitch('E4')
+      const withRate = base.rate(240)
+      const withDuration = base.duration(240)
+
+      expect(withPitch).not.toBe(base)
+      expect(withRate).not.toBe(base)
+      expect(withDuration).not.toBe(base)
+
+      const bridge = createBridge({ defaultDuration: 480 })
+      const baseNotes = commitAndCapture(base.apply(bridge)).notes
+      const pitchNotes = commitAndCapture(withPitch.apply(bridge)).notes
+      expect(pitchNotes[0].pitch).toBe(64) // E4
+      expect(baseNotes[0].pitch).toBe(60) // C4
+    })
+  })
 })
