@@ -51,9 +51,12 @@ export function pan(value: number): FieldSetter {
   )
 }
 
-/** Set key signature context for automatic accidentals. */
-export function key(root: PitchClass, mode: ScaleMode): PipeStep {
-  return step((bridge) => bridge.withKey(root, mode))
+/** Set key signature context for automatic accidentals (or scoped). */
+export function key(root: PitchClass, mode: ScaleMode): FieldSetter {
+  return new FieldSetter(
+    b => b.withKey(root, mode),
+    (r, p) => r.withKey(p.keyRoot as PitchClass, p.keyMode),
+  )
 }
 
 /** Set default duration for notes that don't specify one (or scoped). */

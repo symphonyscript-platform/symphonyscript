@@ -11,6 +11,8 @@ export interface CompositionBridge {
     readonly timeSignatureDen: number
     readonly scaleRoot: number
     readonly scaleMode: ScaleMode
+    readonly keyRoot: number
+    readonly keyMode: ScaleMode
     readonly swing: number
     readonly muted: boolean
     readonly precise: boolean

@@ -14,6 +14,8 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
   get timeSignatureDen() { return this.bridge.timeSignatureDen }
   get scaleRoot() { return this.bridge.scaleRoot }
   get scaleMode() { return this.bridge.scaleMode }
+  get keyRoot() { return this.bridge.keyRoot }
+  get keyMode() { return this.bridge.keyMode }
   get swing() { return this.bridge.swing }
   get muted() { return this.bridge.muted }
   get precise() { return this.bridge.precise }

@@ -13,6 +13,8 @@ export interface BaseCompositionBridgeParams {
   timeSignatureDen: number
   scaleRoot: number
   scaleMode: ScaleMode
+  keyRoot: number
+  keyMode: ScaleMode
   swing: number
   muted: boolean
   precise: boolean
@@ -36,6 +38,8 @@ export class BaseCompositionBridge implements CompositionBridge {
       timeSignatureDen: params.timeSignatureDen ?? 4,
       scaleRoot: params.scaleRoot ?? 0,
       scaleMode: params.scaleMode ?? ScaleMode.MAJOR,
+      keyRoot: params.keyRoot ?? -1,
+      keyMode: params.keyMode ?? ScaleMode.MAJOR,
       swing: params.swing ?? 0,
       muted: params.muted ?? false,
       precise: params.precise ?? false,
@@ -55,6 +59,8 @@ export class BaseCompositionBridge implements CompositionBridge {
   get timeSignatureDen() { return this.params.timeSignatureDen }
   get scaleRoot() { return this.params.scaleRoot }
   get scaleMode() { return this.params.scaleMode }
+  get keyRoot() { return this.params.keyRoot }
+  get keyMode() { return this.params.keyMode }
   get swing() { return this.params.swing }
   get muted() { return this.params.muted }
   get precise() { return this.params.precise }
@@ -133,7 +139,7 @@ export class BaseCompositionBridge implements CompositionBridge {
   }
 
   withKey(root: PitchClass, mode: ScaleMode): BaseCompositionBridge {
-    return this.derive({ scaleRoot: root, scaleMode: mode })
+    return this.derive({ keyRoot: root, keyMode: mode })
   }
 
   withSwing(amount: number): BaseCompositionBridge {

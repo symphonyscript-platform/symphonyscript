@@ -8,5 +8,7 @@ export function note(input?: NotePitch, duration?: number): NoteBuilder {
   }
 
   const pitch = resolvePitch(input)
-  return new NoteBuilder({ pitch, duration })
+  const rawPitch = typeof input === 'string' ? input : null
+
+  return new NoteBuilder({ pitch, rawPitch, duration })
 }

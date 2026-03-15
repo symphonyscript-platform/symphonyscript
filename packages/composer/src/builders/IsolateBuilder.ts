@@ -42,6 +42,7 @@ export class IsolateBuilder implements ScopeBuilder<IsolateBuilder> {
       .withTempo(bridge.tempo)
       .withTimeSignature(bridge.timeSignatureNum, bridge.timeSignatureDen)
       .withScale(bridge.scaleRoot as any, bridge.scaleMode)
+      .withKey(bridge.keyRoot as any, bridge.keyMode)
       .withSwing(bridge.swing)
       .withPrecise(bridge.precise)
       .withQuantize(bridge.quantizeGrid, bridge.quantizeStrength)
