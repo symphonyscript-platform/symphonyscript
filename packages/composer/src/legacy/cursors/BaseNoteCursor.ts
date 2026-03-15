@@ -1,6 +1,6 @@
-import { SynapticCursor } from './SynapticCursor';
-import { SynapticClip } from '../clips/SynapticClip';
-import { SiliconBridge } from '@symphonyscript/kernel';
+import { SynapticCursor } from './SynapticCursor'
+import { SynapticClip } from '../clips/SynapticClip'
+import { SiliconBridge } from '@symphonyscript/kernel'
 
 /**
  * Base note cursor with typed clip reference.

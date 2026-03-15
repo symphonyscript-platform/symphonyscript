@@ -1,14 +1,14 @@
-import { BaseNoteCursor } from './BaseNoteCursor';
-import { SynapticClip } from '../clips/SynapticClip';
+import { BaseNoteCursor } from './BaseNoteCursor'
+import { SynapticClip } from '../clips/SynapticClip'
 
 export abstract class SynapticMelodyBaseCursor extends BaseNoteCursor<SynapticClip> {
+    public isTie: boolean = false;
+    public expressionId: number = 0;
     // State
     protected _detune: number = 0;
     protected _timbre: number = 0;
     protected _pressure: number = 0;
     protected _glide: boolean = false;
-    public isTie: boolean = false;
-    public expressionId: number = 0;
 
     // Modifiers
     detune(val: number): this {

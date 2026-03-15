@@ -1,7 +1,7 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { romanToChord, toTheoryKeyContext } from '../utils/romanAdapter';
-import { ScaleMode, type KeyContext } from '../types';
-import { createTestBridge } from '../test-bridge';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { romanToChord, toTheoryKeyContext } from '../utils/romanAdapter'
+import { type KeyContext, ScaleMode } from '../types'
+import { createTestBridge } from '../test-bridge'
 
 describe('Roman numeral methods', () => {
     let melody: SynapticMelody;

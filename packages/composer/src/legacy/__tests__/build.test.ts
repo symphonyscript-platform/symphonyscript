@@ -1,6 +1,6 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { SCHEMA_VERSION } from '../types';
-import { createTestBridge } from '../test-bridge';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { SCHEMA_VERSION } from '../types'
+import { createTestBridge } from '../test-bridge'
 
 describe('SynapticClip.build()', () => {
     let melody: SynapticMelody;

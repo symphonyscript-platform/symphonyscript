@@ -1,7 +1,7 @@
-import { WindBuilder } from '../clips/WindBuilder';
-import { Clip } from '../Clip';
-import { ScaleMode } from '../types';
-import { createTestBridge } from '../test-bridge';
+import { WindBuilder } from '../clips/WindBuilder'
+import { Clip } from '../Clip'
+import { ScaleMode } from '../types'
+import { createTestBridge } from '../test-bridge'
 
 describe('WindBuilder', () => {
     let wind: WindBuilder;

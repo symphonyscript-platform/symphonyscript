@@ -1,8 +1,8 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { SynapticDrums } from '../clips/SynapticDrums';
-import { Clip } from '../Clip';
-import { createTestBridge } from '../test-bridge';
-import { NoteOperation, HumanizeSettings } from '../types';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { SynapticDrums } from '../clips/SynapticDrums'
+import { Clip } from '../Clip'
+import { createTestBridge } from '../test-bridge'
+import { HumanizeSettings, NoteOperation } from '../types'
 
 describe('Default Humanize (Task 031)', () => {
     let mockBridge: ReturnType<typeof createTestBridge>;

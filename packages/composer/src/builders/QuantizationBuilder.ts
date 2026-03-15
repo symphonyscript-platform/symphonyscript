@@ -17,6 +17,14 @@ export class QuantizationBuilder extends ScopedEffectBuilder<QuantizationBuilder
     }
   }
 
+  grid(grid: number): QuantizationBuilder {
+    return this.clone({ grid })
+  }
+
+  strength(strength: number): QuantizationBuilder {
+    return this.clone({ strength })
+  }
+
   protected wrap(bridge: CompositionBridge): CompositionBridge {
     return new QuantizationBridge(bridge, this.params)
   }
@@ -27,13 +35,5 @@ export class QuantizationBuilder extends ScopedEffectBuilder<QuantizationBuilder
 
   private clone(overrides: Partial<QuantizationParams>): QuantizationBuilder {
     return new QuantizationBuilder({ ...this.params, pipeSteps: this.pipeSteps, ...overrides })
-  }
-
-  grid(grid: number): QuantizationBuilder {
-    return this.clone({ grid })
-  }
-
-  strength(strength: number): QuantizationBuilder {
-    return this.clone({ strength })
   }
 }

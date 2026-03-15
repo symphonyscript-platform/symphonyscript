@@ -1,6 +1,6 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { ScaleMode } from '../types';
-import { createTestBridge } from '../test-bridge';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { ScaleMode } from '../types'
+import { createTestBridge } from '../test-bridge'
 
 describe('Scale context and degree()', () => {
     let melody: SynapticMelody;

@@ -47,6 +47,10 @@ export class HarmonizeBridge extends CompositionBridgeDecorator {
     return this.rewrap(target)
   }
 
+  protected rewrap(bridge: CompositionBridge): HarmonizeBridge {
+    return new HarmonizeBridge(bridge, this.params)
+  }
+
   private findScaleDegree(pitch: number, scaleRoot: number, scaleMode: ScaleMode): number | null {
     // Search degrees 1-14 (two octaves) to find which degree matches this pitch
     for (let degree = 1; degree <= 14; ++degree) {
@@ -61,9 +65,5 @@ export class HarmonizeBridge extends CompositionBridgeDecorator {
     }
 
     return null
-  }
-
-  protected rewrap(bridge: CompositionBridge): HarmonizeBridge {
-    return new HarmonizeBridge(bridge, this.params)
   }
 }

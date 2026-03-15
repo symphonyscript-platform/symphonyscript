@@ -1,5 +1,5 @@
-import { pack } from '@symphonyscript/theory'
 import type { HarmonyMask, Interval24EDO } from '@symphonyscript/theory'
+import { pack } from '@symphonyscript/theory'
 
 /**
  * Chord quality definitions: suffix → 12-TET semitone intervals.

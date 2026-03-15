@@ -1,6 +1,6 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { CurveType } from '../types';
-import { createTestBridge } from '../test-bridge';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { CurveType } from '../types'
+import { createTestBridge } from '../test-bridge'
 
 describe('Dynamics methods', () => {
     let melody: SynapticMelody;

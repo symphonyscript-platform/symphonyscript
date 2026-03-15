@@ -1,15 +1,15 @@
-import { SynapticClip } from './SynapticClip';
-import { MelodyNoteCursor } from '../cursors/MelodyNoteCursor';
-import { MelodyChordCursor } from '../cursors/MelodyChordCursor';
-import { FrozenClip } from './FrozenClip';
-import { SiliconBridge } from '@symphonyscript/kernel';
-import { SeededRandom } from '@symphonyscript/core';
-import { ClipNode, EuclideanMelodyOptions, ArpeggioOptions, ArpPattern, ScaleMode } from '../types';
-import { romanToChord } from '../utils/romanAdapter';
-import { euclidean, rotatePattern } from '@symphonyscript/theory';
-import { parsePitch } from '../utils/pitch';
-import { parseChord } from '../utils/chord';
-import { SCALE_INTERVALS } from '../utils/scales';
+import { SynapticClip } from './SynapticClip'
+import { MelodyNoteCursor } from '../cursors/MelodyNoteCursor'
+import { MelodyChordCursor } from '../cursors/MelodyChordCursor'
+import { FrozenClip } from './FrozenClip'
+import { SiliconBridge } from '@symphonyscript/kernel'
+import { SeededRandom } from '@symphonyscript/core'
+import { ArpeggioOptions, ArpPattern, ClipNode, EuclideanMelodyOptions } from '../types'
+import { romanToChord } from '../utils/romanAdapter'
+import { euclidean, rotatePattern } from '@symphonyscript/theory'
+import { parsePitch } from '../utils/pitch'
+import { parseChord } from '../utils/chord'
+import { SCALE_INTERVALS } from '../utils/scales'
 
 
 const OCTAVE_OFFSETS = [0, -12, 12];
@@ -227,105 +227,6 @@ export class SynapticMelody extends SynapticClip {
         return this;
     }
 
-    /** Task 064: Write chord pitches to _chordBuffer, return length. */
-    private chordSymbolToBuffer(symbol: string): number {
-        const { root, mask } = parseChord(symbol);
-        let len = 0;
-        let interval = 0;
-        let m = mask;
-        while (m !== 0 && len < 12) {
-            if ((m & 1) === 1) {
-                this._chordBuffer[len++] = root + interval;
-            }
-            m >>>= 1;
-            interval++;
-        }
-        return len;
-    }
-
-    /** Task 064: Copy src to _voicingBuffer, sort in place, set _voicingLen. */
-    private copySortToVoicing(src: Int8Array, len: number): void {
-        for (let i = 0; i < len; i++) this._voicingBuffer[i] = src[i];
-        // Insertion sort (zero allocation)
-        for (let i = 1; i < len; i++) {
-            const v = this._voicingBuffer[i];
-            let j = i;
-            while (j > 0 && this._voicingBuffer[j - 1] > v) {
-                this._voicingBuffer[j] = this._voicingBuffer[j - 1];
-                j--;
-            }
-            this._voicingBuffer[j] = v;
-        }
-        this._voicingLen = len;
-    }
-
-    /** Task 064: Copy src to dst. */
-    private copyBuffer(src: Int8Array, len: number, dst: Int8Array): void {
-        for (let i = 0; i < len; i++) dst[i] = src[i];
-    }
-
-    /** Task 064: Find best voicing using _chordBuffer, _prevVoicingBuffer; write to _voicingBuffer. */
-    private findBestVoicingToBuffer(): void {
-        const baseLen = this._chordLen;
-        const prevLen = this._prevVoicingLen;
-
-        // Sort chord into _sortScratch
-        for (let i = 0; i < baseLen; i++) this._sortScratch[i] = this._chordBuffer[i];
-        for (let i = 1; i < baseLen; i++) {
-            const v = this._sortScratch[i];
-            let j = i;
-            while (j > 0 && this._sortScratch[j - 1] > v) {
-                this._sortScratch[j] = this._sortScratch[j - 1];
-                j--;
-            }
-            this._sortScratch[j] = v;
-        }
-
-        let bestCost = Infinity;
-
-        for (let inv = 0; inv < baseLen; inv++) {
-            for (let oIdx = 0; oIdx < 3; oIdx++) {
-                const octOffset = OCTAVE_OFFSETS[oIdx];
-                for (let i = 0; i < baseLen; i++) {
-                    const idx = (i + inv) % baseLen;
-                    let pitch = this._sortScratch[idx] + octOffset;
-                    if (i > 0 && pitch <= this._candidateBuffer[i - 1]) pitch += 12;
-                    this._candidateBuffer[i] = pitch;
-                }
-                const cost = this.voiceMovementCostBuffers(prevLen, baseLen);
-                if (cost < bestCost) {
-                    bestCost = cost;
-                    this.copyBuffer(this._candidateBuffer, baseLen, this._voicingBuffer);
-                    this._voicingLen = baseLen;
-                }
-            }
-        }
-    }
-
-    /** Task 064: Voice movement cost between _prevVoicingBuffer and _candidateBuffer. */
-    private voiceMovementCostBuffers(prevLen: number, candLen: number): number {
-        const minLen = Math.min(prevLen, candLen);
-        let cost = 0;
-        for (let i = 0; i < minLen; i++) {
-            cost += Math.abs(this._prevVoicingBuffer[i] - this._candidateBuffer[i]);
-        }
-        cost += Math.abs(prevLen - candLen) * 12;
-        return cost;
-    }
-
-    /** Task 064: Emit chord from buffer. */
-    private emitChordFromBuffer(buf: Int8Array, len: number, duration: number): void {
-        if (len === 0) return;
-        let root = 127;
-        for (let i = 0; i < len; i++) if (buf[i] < root) root = buf[i];
-        let mask = 0;
-        for (let i = 0; i < len; i++) mask |= (1 << (buf[i] - root));
-        this.chordCursor.harmony(mask, root).duration(duration).commit();
-        // Drain command ring so identity table is updated before next chord's insertAsync
-        const linker = this.bridge.getLinker();
-        while (linker.processCommands() > 0) {}
-    }
-
     /**
      * Execute a builder function multiple times, or loop another clip source.
      * Each iteration adds operations at the current tick position.
@@ -502,6 +403,193 @@ export class SynapticMelody extends SynapticClip {
     }
 
     /**
+     * Execute a builder function within an MPE voice scope.
+     * All notes created inside the builder will be tagged with the expressionId.
+     * @param id - Voice ID (1-15, MPE channel range)
+     * @param builderFn - Builder function that creates notes for this voice
+     * @returns this for chaining
+     * @throws Error if id is out of range (1-15)
+     */
+    voice(id: number, builderFn: (v: SynapticMelody) => SynapticMelody | MelodyNoteCursor | void): this {
+        // Validate MPE channel range
+        if (id < 1 || id > 15) {
+            throw new Error(`Voice ID must be 1-15 (MPE range), got ${id}`);
+        }
+
+        // Store current expression ID
+        const previousExpressionId = this._expressionId;
+
+        // Set expression ID for this voice scope
+        this._expressionId = id;
+
+        // Execute the builder function
+        const result = builderFn(this);
+
+        // If result is a cursor, commit it
+        if (result && result !== this && 'commit' in result) {
+            result.commit();
+        }
+
+        // Restore previous expression ID
+        this._expressionId = previousExpressionId;
+
+        return this;
+    }
+
+    /**
+     * Get the current expression ID (for voice scoping).
+     */
+    getExpressionId(): number | null {
+        return this._expressionId;
+    }
+
+    /**
+     * Set the expression ID directly (for advanced use cases).
+     * @param id - Expression ID (1-15) or null to clear
+     */
+    setExpressionId(id: number | null): this {
+        if (id !== null && (id < 1 || id > 15)) {
+            throw new Error(`Expression ID must be 1-15, got ${id}`);
+        }
+        this._expressionId = id;
+        return this;
+    }
+
+    /**
+     * Execute a builder function in parallel (stacked) mode.
+     * All operations inside the builder are placed at the SAME starting tick,
+     * and the parent tick does NOT advance past the stacked content.
+     *
+     * Overloads:
+     * - `stack()` - Enable polyphonic stacking mode (inherited from SynapticClip)
+     * - `stack(builderFn)` - Execute builder in parallel
+     *
+     * @param builderFn - Builder function to execute in parallel
+     * @returns this for chaining
+     */
+    override stack(builderFn?: (b: SynapticMelody) => SynapticMelody | MelodyNoteCursor | void): this {
+        if (builderFn === undefined) {
+            // No-arg version: enable polyphonic stacking mode
+            return super.stack() as this;
+        }
+
+        // Save current tick position
+        const savedTick = this.getCurrentTick();
+
+        // Execute the builder function
+        const result = builderFn(this);
+
+        // If result is a cursor, commit it
+        if (result && result !== this && 'commit' in result) {
+            result.commit();
+        }
+
+        // Restore tick to saved position (parallel, not sequential)
+        this.currentTick = savedTick;
+
+        return this;
+    }
+
+    /** Task 064: Write chord pitches to _chordBuffer, return length. */
+    private chordSymbolToBuffer(symbol: string): number {
+        const { root, mask } = parseChord(symbol);
+        let len = 0;
+        let interval = 0;
+        let m = mask;
+        while (m !== 0 && len < 12) {
+            if ((m & 1) === 1) {
+                this._chordBuffer[len++] = root + interval;
+            }
+            m >>>= 1;
+            interval++;
+        }
+        return len;
+    }
+
+    /** Task 064: Copy src to _voicingBuffer, sort in place, set _voicingLen. */
+    private copySortToVoicing(src: Int8Array, len: number): void {
+        for (let i = 0; i < len; i++) this._voicingBuffer[i] = src[i];
+        // Insertion sort (zero allocation)
+        for (let i = 1; i < len; i++) {
+            const v = this._voicingBuffer[i];
+            let j = i;
+            while (j > 0 && this._voicingBuffer[j - 1] > v) {
+                this._voicingBuffer[j] = this._voicingBuffer[j - 1];
+                j--;
+            }
+            this._voicingBuffer[j] = v;
+        }
+        this._voicingLen = len;
+    }
+
+    /** Task 064: Copy src to dst. */
+    private copyBuffer(src: Int8Array, len: number, dst: Int8Array): void {
+        for (let i = 0; i < len; i++) dst[i] = src[i];
+    }
+
+    /** Task 064: Find best voicing using _chordBuffer, _prevVoicingBuffer; write to _voicingBuffer. */
+    private findBestVoicingToBuffer(): void {
+        const baseLen = this._chordLen;
+        const prevLen = this._prevVoicingLen;
+
+        // Sort chord into _sortScratch
+        for (let i = 0; i < baseLen; i++) this._sortScratch[i] = this._chordBuffer[i];
+        for (let i = 1; i < baseLen; i++) {
+            const v = this._sortScratch[i];
+            let j = i;
+            while (j > 0 && this._sortScratch[j - 1] > v) {
+                this._sortScratch[j] = this._sortScratch[j - 1];
+                j--;
+            }
+            this._sortScratch[j] = v;
+        }
+
+        let bestCost = Infinity;
+
+        for (let inv = 0; inv < baseLen; inv++) {
+            for (let oIdx = 0; oIdx < 3; oIdx++) {
+                const octOffset = OCTAVE_OFFSETS[oIdx];
+                for (let i = 0; i < baseLen; i++) {
+                    const idx = (i + inv) % baseLen;
+                    let pitch = this._sortScratch[idx] + octOffset;
+                    if (i > 0 && pitch <= this._candidateBuffer[i - 1]) pitch += 12;
+                    this._candidateBuffer[i] = pitch;
+                }
+                const cost = this.voiceMovementCostBuffers(prevLen, baseLen);
+                if (cost < bestCost) {
+                    bestCost = cost;
+                    this.copyBuffer(this._candidateBuffer, baseLen, this._voicingBuffer);
+                    this._voicingLen = baseLen;
+                }
+            }
+        }
+    }
+
+    /** Task 064: Voice movement cost between _prevVoicingBuffer and _candidateBuffer. */
+    private voiceMovementCostBuffers(prevLen: number, candLen: number): number {
+        const minLen = Math.min(prevLen, candLen);
+        let cost = 0;
+        for (let i = 0; i < minLen; i++) {
+            cost += Math.abs(this._prevVoicingBuffer[i] - this._candidateBuffer[i]);
+        }
+        cost += Math.abs(prevLen - candLen) * 12;
+        return cost;
+    }
+
+    /** Task 064: Emit chord from buffer. */
+    private emitChordFromBuffer(buf: Int8Array, len: number, duration: number): void {
+        if (len === 0) return;
+        let root = 127;
+        for (let i = 0; i < len; i++) if (buf[i] < root) root = buf[i];
+        let mask = 0;
+        for (let i = 0; i < len; i++) mask |= (1 << (buf[i] - root));
+        this.chordCursor.harmony(mask, root).duration(duration).commit();
+        // Drain command ring so identity table is updated before next chord's insertAsync
+        const linker = this.bridge.getLinker();
+        while (linker.processCommands() > 0) {}
+    }
+
+    /**
      * Apply arpeggio pattern ordering to pitches.
      * @internal
      */
@@ -582,94 +670,6 @@ export class SynapticMelody extends SynapticClip {
             default:
                 return sorted;
         }
-    }
-
-    /**
-     * Execute a builder function within an MPE voice scope.
-     * All notes created inside the builder will be tagged with the expressionId.
-     * @param id - Voice ID (1-15, MPE channel range)
-     * @param builderFn - Builder function that creates notes for this voice
-     * @returns this for chaining
-     * @throws Error if id is out of range (1-15)
-     */
-    voice(id: number, builderFn: (v: SynapticMelody) => SynapticMelody | MelodyNoteCursor | void): this {
-        // Validate MPE channel range
-        if (id < 1 || id > 15) {
-            throw new Error(`Voice ID must be 1-15 (MPE range), got ${id}`);
-        }
-
-        // Store current expression ID
-        const previousExpressionId = this._expressionId;
-
-        // Set expression ID for this voice scope
-        this._expressionId = id;
-
-        // Execute the builder function
-        const result = builderFn(this);
-
-        // If result is a cursor, commit it
-        if (result && result !== this && 'commit' in result) {
-            result.commit();
-        }
-
-        // Restore previous expression ID
-        this._expressionId = previousExpressionId;
-
-        return this;
-    }
-
-    /**
-     * Get the current expression ID (for voice scoping).
-     */
-    getExpressionId(): number | null {
-        return this._expressionId;
-    }
-
-    /**
-     * Set the expression ID directly (for advanced use cases).
-     * @param id - Expression ID (1-15) or null to clear
-     */
-    setExpressionId(id: number | null): this {
-        if (id !== null && (id < 1 || id > 15)) {
-            throw new Error(`Expression ID must be 1-15, got ${id}`);
-        }
-        this._expressionId = id;
-        return this;
-    }
-
-    /**
-     * Execute a builder function in parallel (stacked) mode.
-     * All operations inside the builder are placed at the SAME starting tick,
-     * and the parent tick does NOT advance past the stacked content.
-     * 
-     * Overloads:
-     * - `stack()` - Enable polyphonic stacking mode (inherited from SynapticClip)
-     * - `stack(builderFn)` - Execute builder in parallel
-     * 
-     * @param builderFn - Builder function to execute in parallel
-     * @returns this for chaining
-     */
-    override stack(builderFn?: (b: SynapticMelody) => SynapticMelody | MelodyNoteCursor | void): this {
-        if (builderFn === undefined) {
-            // No-arg version: enable polyphonic stacking mode
-            return super.stack() as this;
-        }
-
-        // Save current tick position
-        const savedTick = this.getCurrentTick();
-
-        // Execute the builder function
-        const result = builderFn(this);
-
-        // If result is a cursor, commit it
-        if (result && result !== this && 'commit' in result) {
-            result.commit();
-        }
-
-        // Restore tick to saved position (parallel, not sequential)
-        this.currentTick = savedTick;
-
-        return this;
     }
 
     // Note: All escape methods (tempo, swing, transpose, etc.) are inherited from SynapticClip.

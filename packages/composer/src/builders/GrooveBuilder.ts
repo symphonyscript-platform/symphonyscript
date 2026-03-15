@@ -23,18 +23,6 @@ export class GrooveBuilder extends ScopedEffectBuilder<GrooveBuilder> {
     }
   }
 
-  protected wrap(bridge: CompositionBridge): CompositionBridge {
-    return new GrooveBridge(bridge, this.params)
-  }
-
-  protected cloneWithSteps(pipeSteps: PipeStep[]): GrooveBuilder {
-    return new GrooveBuilder({ ...this.params, pipeSteps })
-  }
-
-  private clone(overrides: Partial<GrooveParams>): GrooveBuilder {
-    return new GrooveBuilder({ ...this.params, pipeSteps: this.pipeSteps, ...overrides })
-  }
-
   grid(grid: number): GrooveBuilder {
     return this.clone({ grid })
   }
@@ -55,6 +43,18 @@ export class GrooveBuilder extends ScopedEffectBuilder<GrooveBuilder> {
 
   probability(probability: number): GrooveBuilder {
     return this.modifyLast({ probability })
+  }
+
+  protected wrap(bridge: CompositionBridge): CompositionBridge {
+    return new GrooveBridge(bridge, this.params)
+  }
+
+  protected cloneWithSteps(pipeSteps: PipeStep[]): GrooveBuilder {
+    return new GrooveBuilder({ ...this.params, pipeSteps })
+  }
+
+  private clone(overrides: Partial<GrooveParams>): GrooveBuilder {
+    return new GrooveBuilder({ ...this.params, pipeSteps: this.pipeSteps, ...overrides })
   }
 
   private modifyLast(overrides: Partial<GrooveStep>): GrooveBuilder {

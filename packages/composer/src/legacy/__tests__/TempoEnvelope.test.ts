@@ -3,8 +3,8 @@
  * Task 058: tempoEnvelope no longer stored in operations; tests verify currentTempo and API.
  */
 
-import { Clip } from '../Clip';
-import { CurveType } from '../types';
+import { Clip } from '../Clip'
+import { CurveType } from '../types'
 
 describe('TempoEnvelope (Task 042)', () => {
     describe('Basic Functionality', () => {

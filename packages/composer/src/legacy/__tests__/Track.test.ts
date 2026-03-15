@@ -1,6 +1,6 @@
-import { Track } from '../Track';
-import type { ClipNode, ClipBuilder } from '../types';
-import { SCHEMA_VERSION } from '../types';
+import { Track } from '../Track'
+import type { ClipBuilder, ClipNode } from '../types'
+import { SCHEMA_VERSION } from '../types'
 
 /**
  * Create a minimal ClipNode for testing.

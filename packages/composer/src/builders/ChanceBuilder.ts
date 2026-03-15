@@ -18,6 +18,14 @@ export class ChanceBuilder extends ScopedEffectBuilder<ChanceBuilder> {
     this._seed = params.seed ?? null
   }
 
+  seed(seed: number): ChanceBuilder {
+    return this.clone({ seed })
+  }
+
+  probability(probability: number): ChanceBuilder {
+    return this.clone({ probability })
+  }
+
   protected wrap(bridge: CompositionBridge): CompositionBridge {
     return new ChanceBridge(bridge, this._probability, this._seed ?? Date.now())
   }
@@ -33,13 +41,5 @@ export class ChanceBuilder extends ScopedEffectBuilder<ChanceBuilder> {
       pipeSteps: this.pipeSteps,
       ...overrides,
     })
-  }
-
-  seed(seed: number): ChanceBuilder {
-    return this.clone({ seed })
-  }
-
-  probability(probability: number): ChanceBuilder {
-    return this.clone({ probability })
   }
 }

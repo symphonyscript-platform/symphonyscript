@@ -1,4 +1,4 @@
-import { SynapticGrooveBuilder } from '../groove/SynapticGrooveBuilder';
+import { SynapticGrooveBuilder } from '../groove/SynapticGrooveBuilder'
 
 describe('SynapticGrooveBuilder (RFC-049 Remediation)', () => {
     let builder: SynapticGrooveBuilder;

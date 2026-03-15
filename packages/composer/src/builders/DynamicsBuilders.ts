@@ -1,6 +1,6 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import { VelocityRampBridge } from '../composition/VelocityRampBridge'
 import type { EasingCurve } from '../composition/VelocityRampBridge'
+import { VelocityRampBridge } from '../composition/VelocityRampBridge'
 import { ScopedEffectBuilder } from './ScopedEffectBuilder'
 
 export interface CrescendoParams {
@@ -24,6 +24,22 @@ export class CrescendoBuilder extends ScopedEffectBuilder<CrescendoBuilder> {
     }
   }
 
+  duration(duration: number): CrescendoBuilder {
+    return this.clone({ duration })
+  }
+
+  from(from: number): CrescendoBuilder {
+    return this.clone({ from })
+  }
+
+  to(to: number): CrescendoBuilder {
+    return this.clone({ to })
+  }
+
+  curve(curve: EasingCurve): CrescendoBuilder {
+    return this.clone({ curve })
+  }
+
   protected wrap(bridge: CompositionBridge): CompositionBridge {
     return new VelocityRampBridge(bridge, {
       startTick: bridge.tick,
@@ -41,22 +57,6 @@ export class CrescendoBuilder extends ScopedEffectBuilder<CrescendoBuilder> {
   private clone(overrides: Partial<CrescendoParams>): CrescendoBuilder {
     return new CrescendoBuilder({ ...this.params, pipeSteps: this.pipeSteps, ...overrides })
   }
-
-  duration(duration: number): CrescendoBuilder {
-    return this.clone({ duration })
-  }
-
-  from(from: number): CrescendoBuilder {
-    return this.clone({ from })
-  }
-
-  to(to: number): CrescendoBuilder {
-    return this.clone({ to })
-  }
-
-  curve(curve: EasingCurve): CrescendoBuilder {
-    return this.clone({ curve })
-  }
 }
 
 export class DecrescendoBuilder extends ScopedEffectBuilder<DecrescendoBuilder> {
@@ -70,6 +70,22 @@ export class DecrescendoBuilder extends ScopedEffectBuilder<DecrescendoBuilder> 
       to: params.to ?? 400,
       curve: params.curve ?? 'linear',
     }
+  }
+
+  duration(duration: number): DecrescendoBuilder {
+    return this.clone({ duration })
+  }
+
+  from(from: number): DecrescendoBuilder {
+    return this.clone({ from })
+  }
+
+  to(to: number): DecrescendoBuilder {
+    return this.clone({ to })
+  }
+
+  curve(curve: EasingCurve): DecrescendoBuilder {
+    return this.clone({ curve })
   }
 
   protected wrap(bridge: CompositionBridge): CompositionBridge {
@@ -88,21 +104,5 @@ export class DecrescendoBuilder extends ScopedEffectBuilder<DecrescendoBuilder> 
 
   private clone(overrides: Partial<CrescendoParams>): DecrescendoBuilder {
     return new DecrescendoBuilder({ ...this.params, pipeSteps: this.pipeSteps, ...overrides })
-  }
-
-  duration(duration: number): DecrescendoBuilder {
-    return this.clone({ duration })
-  }
-
-  from(from: number): DecrescendoBuilder {
-    return this.clone({ from })
-  }
-
-  to(to: number): DecrescendoBuilder {
-    return this.clone({ to })
-  }
-
-  curve(curve: EasingCurve): DecrescendoBuilder {
-    return this.clone({ curve })
   }
 }

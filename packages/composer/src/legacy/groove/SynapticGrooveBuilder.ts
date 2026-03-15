@@ -1,4 +1,4 @@
-import { GrooveStepCursor } from './GrooveStepCursor';
+import { GrooveStepCursor } from './GrooveStepCursor'
 
 export interface GrooveTemplate {
     stepsPerBeat: number;
@@ -16,17 +16,15 @@ export interface GrooveTemplate {
  * Sequential Mutable Builder Pattern
  */
 export class SynapticGrooveBuilder {
-    // Config
-    private _stepsPerBeat: number = 4;
-    private _swing: number = 0.5;
-
-    // Buffers (Fixed size)
-    private readonly capacity: number;
     public readonly velocities: Float32Array;
     public readonly durations: Float32Array;
     public readonly offsets: Float32Array;
     public readonly probabilities: Float32Array;
-
+    // Config
+    private _stepsPerBeat: number = 4;
+    private _swing: number = 0.5;
+    // Buffers (Fixed size)
+    private readonly capacity: number;
     // State
     private count: number = 0;
     private cursor: GrooveStepCursor;

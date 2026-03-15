@@ -3,9 +3,9 @@
  * Task 047: Voice-led chord progressions with minimal voice movement.
  */
 
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { NoteOperation, ScaleMode } from '../types';
-import { createTestBridge } from '../test-bridge';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { NoteOperation, ScaleMode } from '../types'
+import { createTestBridge } from '../test-bridge'
 
 describe('SynapticMelody.voiceLead()', () => {
     let mockBridge: ReturnType<typeof createTestBridge>;

@@ -20,8 +20,6 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
   get quantizeGrid() { return this.bridge.quantizeGrid }
   get quantizeStrength() { return this.bridge.quantizeStrength }
 
-  protected abstract rewrap(bridge: CompositionBridge): CompositionBridgeDecorator
-
   withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge {
     return this.rewrap(this.bridge.withNote(pitch, duration, velocity))
   }
@@ -45,6 +43,7 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
   withReclaim(nodePtr: number): CompositionBridge {
     return this.rewrap(this.bridge.withReclaim(nodePtr))
   }
+
   // === Delegated state modifiers — rewrap ===
   withVelocity(v: number): CompositionBridge {
     return this.rewrap(this.bridge.withVelocity(v))
@@ -94,8 +93,9 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
     return this.rewrap(this.bridge.withPrecise(precise))
   }
 
-
   commit(ctx: ExecutionContext) {
     this.bridge.commit(ctx)
   }
+
+  protected abstract rewrap(bridge: CompositionBridge): CompositionBridgeDecorator
 }

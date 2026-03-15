@@ -1,9 +1,9 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { SynapticDrums } from '../clips/SynapticDrums';
-import { Clip } from '../Clip';
-import { NoteOperation } from '../types';
-import { createTestBridge } from '../test-bridge';
-import { OPCODE } from '@symphonyscript/kernel';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { SynapticDrums } from '../clips/SynapticDrums'
+import { Clip } from '../Clip'
+import { NoteOperation } from '../types'
+import { createTestBridge } from '../test-bridge'
+import { OPCODE } from '@symphonyscript/kernel'
 
 describe('Control CC (Task 033)', () => {
     let mockBridge: ReturnType<typeof createTestBridge>;

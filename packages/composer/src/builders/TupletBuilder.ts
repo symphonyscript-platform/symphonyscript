@@ -17,10 +17,6 @@ export class TupletBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<TupletParams>): TupletBuilder {
-    return new TupletBuilder({ ...this.params, ...overrides })
-  }
-
   inBeats(inBeats: number): TupletBuilder {
     return this.clone({ inBeats })
   }
@@ -45,5 +41,9 @@ export class TupletBuilder implements PipeStep {
     }
 
     return target
+  }
+
+  private clone(overrides: Partial<TupletParams>): TupletBuilder {
+    return new TupletBuilder({ ...this.params, ...overrides })
   }
 }

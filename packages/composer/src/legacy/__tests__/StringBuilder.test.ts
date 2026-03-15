@@ -1,7 +1,7 @@
-import { StringBuilder } from '../clips/StringBuilder';
-import { Clip } from '../Clip';
-import { ScaleMode } from '../types';
-import { createTestBridge } from '../test-bridge';
+import { StringBuilder } from '../clips/StringBuilder'
+import { Clip } from '../Clip'
+import { ScaleMode } from '../types'
+import { createTestBridge } from '../test-bridge'
 
 describe('StringBuilder', () => {
     let stringBuilder: StringBuilder;

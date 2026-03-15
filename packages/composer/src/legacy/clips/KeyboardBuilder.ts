@@ -1,5 +1,5 @@
-import { SynapticMelody } from './SynapticMelody';
-import { SiliconBridge } from '@symphonyscript/kernel';
+import { SynapticMelody } from './SynapticMelody'
+import { SiliconBridge } from '@symphonyscript/kernel'
 
 /**
  * KeyboardBuilder - Piano/keyboard instrument builder with sustain pedal support.

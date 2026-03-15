@@ -17,6 +17,36 @@ export abstract class ScopedEffectBuilder<T extends ScopedEffectBuilder<T>> impl
     this.pipeSteps = pipeSteps
   }
 
+  /** Scope this effect to the given steps. */
+  steps(...pipeSteps: PipeStep[]): T {
+    return this.cloneWithSteps(pipeSteps)
+  }
+
+  /** Explicitly mark as a downstream default. Semantic no-op. */
+  default(): T {
+    return this.cloneWithSteps([])
+  }
+
+  apply(bridge: CompositionBridge): CompositionBridge {
+    const outer = bridge
+    const decorated = this.wrap(outer)
+
+    if (this.pipeSteps.length === 0) {
+      // Unscoped — decorate bridge, cascade downstream
+      return decorated
+    }
+
+    // Scoped — apply steps through decorated bridge, then return clean bridge
+    let target = decorated
+    for (let i = 0; i < this.pipeSteps.length; ++i) {
+      target = this.pipeSteps[i].apply(target)
+    }
+
+    // Return the outer (undecorated) bridge at the new tick position.
+    // Events are already committed through the decorator.
+    return this.cleanup(outer.withTick(target.tick))
+  }
+
   /** Decorate the bridge with this effect. */
   protected abstract wrap(bridge: CompositionBridge): CompositionBridge
 
@@ -30,35 +60,5 @@ export abstract class ScopedEffectBuilder<T extends ScopedEffectBuilder<T>> impl
    */
   protected cleanup(bridge: CompositionBridge): CompositionBridge {
     return bridge
-  }
-
-  /** Scope this effect to the given steps. */
-  steps(...pipeSteps: PipeStep[]): T {
-    return this.cloneWithSteps(pipeSteps)
-  }
-
-  /** Explicitly mark as a downstream default. Semantic no-op. */
-  default(): T {
-    return this.cloneWithSteps([])
-  }
-
-  apply(bridge: CompositionBridge): CompositionBridge {
-    const wrapped = this.wrap(bridge)
-
-    if (this.pipeSteps.length === 0) {
-      // Unscoped — decorate bridge, cascade downstream
-      return wrapped
-    }
-
-    // Scoped — apply steps through decorated bridge, then return clean bridge
-    let target = wrapped
-    for (let i = 0; i < this.pipeSteps.length; ++i) {
-      target = this.pipeSteps[i].apply(target)
-    }
-
-    // Return unwrapped bridge at the new tick position
-    // Events are already committed through the decorator
-    const result = bridge.withTick(target.tick)
-    return this.cleanup(result)
   }
 }

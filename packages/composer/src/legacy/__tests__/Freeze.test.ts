@@ -1,8 +1,8 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { FrozenClip } from '../clips/FrozenClip';
-import { Clip } from '../Clip';
-import { NoteOperation } from '../types';
-import { createTestBridge } from '../test-bridge';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { FrozenClip } from '../clips/FrozenClip'
+import { Clip } from '../Clip'
+import { NoteOperation } from '../types'
+import { createTestBridge } from '../test-bridge'
 
 describe('Freeze (Task 038)', () => {
     let mockBridge: ReturnType<typeof createTestBridge>;

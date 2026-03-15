@@ -4,9 +4,9 @@
  * Converts string-based KeyContext to theory's Interval24EDO-based KeyContext.
  */
 
-import { romanToChord as theoryRomanToChord, KEY_ROOT, createKey } from '@symphonyscript/theory';
-import { scaleModeToKeyString } from './key';
-import type { KeyContext } from '../types';
+import { createKey, KEY_ROOT, romanToChord as theoryRomanToChord } from '@symphonyscript/theory'
+import { scaleModeToKeyString } from './key'
+import type { KeyContext } from '../types'
 
 /**
  * Map note names to KEY_ROOT keys.

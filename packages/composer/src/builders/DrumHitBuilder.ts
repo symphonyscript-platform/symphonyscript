@@ -25,10 +25,6 @@ export class DrumHitBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<DrumHitParams>): DrumHitBuilder {
-    return new DrumHitBuilder({ ...this.params, ...overrides })
-  }
-
   velocity(velocity: number): DrumHitBuilder {
     return this.clone({ velocity })
   }
@@ -119,5 +115,9 @@ export class DrumHitBuilder implements PipeStep {
     }
 
     return target
+  }
+
+  private clone(overrides: Partial<DrumHitParams>): DrumHitBuilder {
+    return new DrumHitBuilder({ ...this.params, ...overrides })
   }
 }

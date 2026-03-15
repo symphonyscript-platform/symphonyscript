@@ -22,6 +22,18 @@ export class HumanizationBuilder extends ScopedEffectBuilder<HumanizationBuilder
     }
   }
 
+  velocity(amount: number): HumanizationBuilder {
+    return this.clone({ velocityJitter: amount })
+  }
+
+  timing(amount: number): HumanizationBuilder {
+    return this.clone({ timingAmount: amount })
+  }
+
+  seed(s: number): HumanizationBuilder {
+    return this.clone({ rng: new SeededRandom(s) })
+  }
+
   protected wrap(bridge: CompositionBridge): CompositionBridge {
     return new HumanizationBridge(bridge, this.params)
   }
@@ -39,17 +51,5 @@ export class HumanizationBuilder extends ScopedEffectBuilder<HumanizationBuilder
       pipeSteps: this.pipeSteps,
       ...overrides,
     })
-  }
-
-  velocity(amount: number): HumanizationBuilder {
-    return this.clone({ velocityJitter: amount })
-  }
-
-  timing(amount: number): HumanizationBuilder {
-    return this.clone({ timingAmount: amount })
-  }
-
-  seed(s: number): HumanizationBuilder {
-    return this.clone({ rng: new SeededRandom(s) })
   }
 }

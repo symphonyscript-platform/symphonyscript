@@ -17,6 +17,14 @@ export class SwingBuilder extends ScopedEffectBuilder<SwingBuilder> {
     }
   }
 
+  amount(amount: number): SwingBuilder {
+    return this.clone({ amount })
+  }
+
+  grid(grid: number): SwingBuilder {
+    return this.clone({ grid })
+  }
+
   protected wrap(bridge: CompositionBridge): CompositionBridge {
     return new SwingBridge(bridge, this.params)
   }
@@ -27,13 +35,5 @@ export class SwingBuilder extends ScopedEffectBuilder<SwingBuilder> {
 
   private clone(overrides: Partial<SwingParams>): SwingBuilder {
     return new SwingBuilder({ ...this.params, pipeSteps: this.pipeSteps, ...overrides })
-  }
-
-  amount(amount: number): SwingBuilder {
-    return this.clone({ amount })
-  }
-
-  grid(grid: number): SwingBuilder {
-    return this.clone({ grid })
   }
 }

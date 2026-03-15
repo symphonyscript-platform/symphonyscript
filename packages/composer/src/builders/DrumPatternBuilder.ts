@@ -17,10 +17,6 @@ export class DrumPatternBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<DrumPatternParams>): DrumPatternBuilder {
-    return new DrumPatternBuilder({ ...this.params, ...overrides })
-  }
-
   pitch(pitch: number): DrumPatternBuilder {
     return this.clone({ pitch })
   }
@@ -49,5 +45,9 @@ export class DrumPatternBuilder implements PipeStep {
     }
 
     return target
+  }
+
+  private clone(overrides: Partial<DrumPatternParams>): DrumPatternBuilder {
+    return new DrumPatternBuilder({ ...this.params, ...overrides })
   }
 }

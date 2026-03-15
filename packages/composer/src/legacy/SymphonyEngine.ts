@@ -1,5 +1,4 @@
-
-import { SiliconBridge, SiliconSynapse, createLinkerSAB } from '@symphonyscript/kernel';
+import { createLinkerSAB, SiliconBridge, SiliconSynapse } from '@symphonyscript/kernel'
 
 // Type mapping for the AudioWorklet import string
 // In a real app we'd use a bundler plugin or URL relative import.

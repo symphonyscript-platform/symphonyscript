@@ -3,7 +3,7 @@
  * build() and toOperations() read from Kernel via traverseNotes; mocks must support it.
  */
 
-import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
+import { OPCODE, SiliconBridge } from '@symphonyscript/kernel'
 
 interface TrackedNote {
     sourceId: number;

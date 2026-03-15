@@ -3,8 +3,8 @@
  * Tests scale-degree-based chord creation for SynapticMelody.
  */
 
-import { Clip } from '../Clip';
-import { NoteOperation, ScaleMode } from '../types';
+import { Clip } from '../Clip'
+import { NoteOperation, ScaleMode } from '../types'
 
 describe('DegreeChord (Task 041)', () => {
     describe('Basic Functionality', () => {

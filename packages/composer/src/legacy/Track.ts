@@ -4,19 +4,10 @@
  * Associates clips with instruments and effects for session composition.
  */
 
-import type {
-    EffectType,
-    EffectParamsFor,
-    InsertEffect,
-    SendConfig
-} from '@symphonyscript/theory';
-import {
-    createInsertEffect,
-    createSendConfig,
-    isEffectType
-} from '@symphonyscript/theory';
-import type { ClipNode, ClipBuilder, TrackNode } from './types';
-import { SCHEMA_VERSION } from './types';
+import type { EffectParamsFor, EffectType, InsertEffect, SendConfig } from '@symphonyscript/theory'
+import { createInsertEffect, createSendConfig, isEffectType } from '@symphonyscript/theory'
+import type { ClipBuilder, ClipNode, TrackNode } from './types'
+import { SCHEMA_VERSION } from './types'
 
 /**
  * Track options for construction.

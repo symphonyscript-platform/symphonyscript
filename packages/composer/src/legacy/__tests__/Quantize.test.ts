@@ -1,8 +1,8 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { SynapticDrums } from '../clips/SynapticDrums';
-import { Clip } from '../Clip';
-import { createTestBridge } from '../test-bridge';
-import { NoteOperation, QuantizeSettings } from '../types';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { SynapticDrums } from '../clips/SynapticDrums'
+import { Clip } from '../Clip'
+import { createTestBridge } from '../test-bridge'
+import { NoteOperation } from '../types'
 
 describe('Quantize (Task 032)', () => {
     let mockBridge: ReturnType<typeof createTestBridge>;

@@ -1,5 +1,5 @@
-import { PipeStep } from '@symphonyscript/composer'
 import type { CompositionBridge } from '@symphonyscript/composer'
+import { PipeStep } from '@symphonyscript/composer'
 import { Composable } from '../interfaces/composable'
 
 /** Insert another clip's content at the current tick. */

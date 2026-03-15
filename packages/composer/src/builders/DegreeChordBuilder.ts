@@ -16,10 +16,6 @@ export class DegreeChordBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<DegreeChordParams>): DegreeChordBuilder {
-    return new DegreeChordBuilder({ ...this.params, ...overrides })
-  }
-
   degrees(degrees: number[]): DegreeChordBuilder {
     return this.clone({ degrees })
   }
@@ -54,5 +50,9 @@ export class DegreeChordBuilder implements PipeStep {
     target = target.withTick(startTick + resolvedDuration)
 
     return target
+  }
+
+  private clone(overrides: Partial<DegreeChordParams>): DegreeChordBuilder {
+    return new DegreeChordBuilder({ ...this.params, ...overrides })
   }
 }

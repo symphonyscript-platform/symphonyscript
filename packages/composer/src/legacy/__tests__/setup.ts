@@ -3,11 +3,11 @@
  * Runtime clips no longer materialize operations arrays. Tests that still assert
  * operation-level behavior use this compatibility shim over test bridges only.
  */
-import { initSession } from '../Clip';
-import { createTestBridge } from '../test-bridge';
-import { SynapticClip } from '../clips/SynapticClip';
-import { SynapticCursor } from '../cursors/SynapticCursor';
-import { ClipNode } from '../types';
+import { initSession } from '../Clip'
+import { createTestBridge } from '../test-bridge'
+import { SynapticClip } from '../clips/SynapticClip'
+import { SynapticCursor } from '../cursors/SynapticCursor'
+import { ClipNode } from '../types'
 
 const originalBuild = SynapticClip.prototype.build;
 const originalToOperations = SynapticClip.prototype.toOperations;

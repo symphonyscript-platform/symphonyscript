@@ -1,8 +1,8 @@
-import { MelodyNoteCursor } from '../cursors/MelodyNoteCursor';
-import { MelodyChordCursor } from '../cursors/MelodyChordCursor';
-import { SynapticClip } from '../clips/SynapticClip';
-import { SiliconBridge } from '@symphonyscript/kernel';
-import { ScaleMode } from '../types';
+import { MelodyNoteCursor } from '../cursors/MelodyNoteCursor'
+import { MelodyChordCursor } from '../cursors/MelodyChordCursor'
+import { SynapticClip } from '../clips/SynapticClip'
+import { SiliconBridge } from '@symphonyscript/kernel'
+import { ScaleMode } from '../types'
 
 // Matcher for optional expressionId (can be undefined or number)
 const optional = { asymmetricMatch: () => true };
@@ -15,13 +15,6 @@ const mockBridge = {
 
 class MockClip extends SynapticClip {
     tick = 0;
-    constructor(bridge: SiliconBridge, seed: number = 42) {
-        super(bridge, seed); // Pass seed for deterministic humanization
-    }
-    getCurrentTick() { return this.tick; }
-    advanceTick(t: number): this { this.tick += t; return this; }
-    generateSourceId() { return 999; }
-    commit() { }
     rest = jest.fn();
     tempo = jest.fn();
     timeSignature = jest.fn();
@@ -30,6 +23,18 @@ class MockClip extends SynapticClip {
     control = jest.fn();
     stack = jest.fn();
     setLoopRegion = jest.fn();
+
+    constructor(bridge: SiliconBridge, seed: number = 42) {
+        super(bridge, seed); // Pass seed for deterministic humanization
+    }
+
+    getCurrentTick() { return this.tick; }
+
+    advanceTick(t: number): this { this.tick += t; return this; }
+
+    generateSourceId() { return 999; }
+
+    commit() { }
 }
 
 class MockChordCursor extends MelodyChordCursor {

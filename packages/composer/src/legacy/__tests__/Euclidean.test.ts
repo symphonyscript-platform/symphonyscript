@@ -1,8 +1,8 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { SynapticDrums } from '../clips/SynapticDrums';
-import { Clip } from '../Clip';
-import { NoteOperation, DrumType } from '../types';
-import { createTestBridge } from '../test-bridge';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { SynapticDrums } from '../clips/SynapticDrums'
+import { Clip } from '../Clip'
+import { DrumType, NoteOperation } from '../types'
+import { createTestBridge } from '../test-bridge'
 
 describe('Euclidean Rhythm Generator', () => {
     let mockBridge: ReturnType<typeof createTestBridge>;

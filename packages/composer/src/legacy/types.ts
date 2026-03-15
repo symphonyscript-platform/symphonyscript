@@ -181,7 +181,7 @@ export type Accidental = (typeof Accidental)[keyof typeof Accidental];
 // Track Types (RFC-020)
 // ============================================================================
 
-import type { InsertEffect, SendConfig, EffectBusConfig } from '@symphonyscript/theory';
+import type { EffectBusConfig, InsertEffect, SendConfig } from '@symphonyscript/theory'
 
 /**
  * Track node representing a clip associated with an instrument and effects.

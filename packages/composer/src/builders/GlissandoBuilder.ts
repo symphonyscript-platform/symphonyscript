@@ -19,10 +19,6 @@ export class GlissandoBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<GlissandoParams>): GlissandoBuilder {
-    return new GlissandoBuilder({ ...this.params, ...overrides })
-  }
-
   to(to: NotePitch): GlissandoBuilder {
     return this.clone({ to })
   }
@@ -58,5 +54,9 @@ export class GlissandoBuilder implements PipeStep {
     }
 
     return target
+  }
+
+  private clone(overrides: Partial<GlissandoParams>): GlissandoBuilder {
+    return new GlissandoBuilder({ ...this.params, ...overrides })
   }
 }

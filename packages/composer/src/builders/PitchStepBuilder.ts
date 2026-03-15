@@ -34,8 +34,6 @@ export const DEFAULT_PITCH_STEP_PARAMS: PitchStepParams = {
 }
 
 export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements PipeStep {
-  protected abstract create(params: Partial<PitchStepParams>): T
-
   protected readonly shared: PitchStepParams
 
   protected constructor(shared: Partial<PitchStepParams>) {
@@ -45,11 +43,11 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
     }
   }
 
-  // === Core Modifiers ===
-
   velocity(velocity: number): T {
     return this.create({ ...this.shared, velocity })
   }
+
+  // === Core Modifiers ===
 
   duration(duration: number): T {
     return this.create({ ...this.shared, duration })
@@ -95,11 +93,11 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
     return this.create({ ...this.shared, transposeSemitones: semitones })
   }
 
-  // === Articulations ===
-
   accent(): T {
     return this.create({ ...this.shared, velocity: 1200, precise: true })
   }
+
+  // === Articulations ===
 
   staccato(): T {
     return this.create({ ...this.shared, durationScale: 0.5 })
@@ -122,11 +120,11 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
     })
   }
 
-  // === Expression ===
-
   detune(detune: number): T {
     return this.create({ ...this.shared, detune })
   }
+
+  // === Expression ===
 
   timbre(timbre: number): T {
     return this.create({ ...this.shared, timbre })
@@ -140,9 +138,11 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
     return this.create({ ...this.shared, aftertouch })
   }
 
+  abstract apply(bridge: CompositionBridge): CompositionBridge
+
   // === Apply Helpers ===
 
-  abstract apply(bridge: CompositionBridge): CompositionBridge
+  protected abstract create(params: Partial<PitchStepParams>): T
 
   protected applyFlags(bridge: CompositionBridge): CompositionBridge {
     let target = bridge

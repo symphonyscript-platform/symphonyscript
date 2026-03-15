@@ -1,7 +1,7 @@
-import { KeyboardBuilder } from '../clips/KeyboardBuilder';
-import { Clip } from '../Clip';
-import { ScaleMode } from '../types';
-import { createTestBridge } from '../test-bridge';
+import { KeyboardBuilder } from '../clips/KeyboardBuilder'
+import { Clip } from '../Clip'
+import { ScaleMode } from '../types'
+import { createTestBridge } from '../test-bridge'
 
 describe('KeyboardBuilder', () => {
     let keyboard: KeyboardBuilder;

@@ -1,4 +1,4 @@
-import { ScaleMode } from '../types';
+import { ScaleMode } from '../types'
 
 /**
  * Scale intervals for degree-to-pitch conversion.

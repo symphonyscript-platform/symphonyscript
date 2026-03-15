@@ -19,18 +19,6 @@ export class DynamicsBuilder extends ScopedEffectBuilder<DynamicsBuilder> {
     }
   }
 
-  protected wrap(bridge: CompositionBridge): CompositionBridge {
-    return new DynamicsBridge(bridge, this.params)
-  }
-
-  protected cloneWithSteps(pipeSteps: PipeStep[]): DynamicsBuilder {
-    return new DynamicsBuilder({ ...this.params, pipeSteps })
-  }
-
-  private clone(overrides: Partial<DynamicsParams>): DynamicsBuilder {
-    return new DynamicsBuilder({ ...this.params, pipeSteps: this.pipeSteps, ...overrides })
-  }
-
   from(startVelocity: number): DynamicsBuilder {
     return this.clone({ startVelocity })
   }
@@ -45,5 +33,17 @@ export class DynamicsBuilder extends ScopedEffectBuilder<DynamicsBuilder> {
 
   end(tick: number): DynamicsBuilder {
     return this.clone({ endTick: tick })
+  }
+
+  protected wrap(bridge: CompositionBridge): CompositionBridge {
+    return new DynamicsBridge(bridge, this.params)
+  }
+
+  protected cloneWithSteps(pipeSteps: PipeStep[]): DynamicsBuilder {
+    return new DynamicsBuilder({ ...this.params, pipeSteps })
+  }
+
+  private clone(overrides: Partial<DynamicsParams>): DynamicsBuilder {
+    return new DynamicsBuilder({ ...this.params, pipeSteps: this.pipeSteps, ...overrides })
   }
 }

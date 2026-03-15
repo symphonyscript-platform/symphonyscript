@@ -1,5 +1,5 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { createTestBridge } from '../test-bridge';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { createTestBridge } from '../test-bridge'
 
 describe('Octave methods', () => {
     let melody: SynapticMelody;

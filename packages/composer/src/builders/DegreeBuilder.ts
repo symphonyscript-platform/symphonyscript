@@ -14,10 +14,6 @@ export class DegreeBuilder extends PitchStepBuilder<DegreeBuilder> {
     this._degree = params.degree ?? 1
   }
 
-  protected create(params: Partial<PitchStepParams>): DegreeBuilder {
-    return new DegreeBuilder({ ...params, degree: this._degree })
-  }
-
   degree(degree: number): DegreeBuilder {
     return new DegreeBuilder({ ...this.shared, degree })
   }
@@ -47,5 +43,9 @@ export class DegreeBuilder extends PitchStepBuilder<DegreeBuilder> {
     }
 
     return this.resetFlags(target)
+  }
+
+  protected create(params: Partial<PitchStepParams>): DegreeBuilder {
+    return new DegreeBuilder({ ...params, degree: this._degree })
   }
 }

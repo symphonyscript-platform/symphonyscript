@@ -19,10 +19,6 @@ export class StepsBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<StepsParams>): StepsBuilder {
-    return new StepsBuilder({ ...this.params, ...overrides })
-  }
-
   pattern(pattern: number[]): StepsBuilder {
     return this.clone({ pattern })
   }
@@ -56,5 +52,9 @@ export class StepsBuilder implements PipeStep {
     }
 
     return target
+  }
+
+  private clone(overrides: Partial<StepsParams>): StepsBuilder {
+    return new StepsBuilder({ ...this.params, ...overrides })
   }
 }

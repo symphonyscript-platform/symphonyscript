@@ -1,5 +1,5 @@
-import { FreezeOptions } from '../types';
-import { SynapticClip } from './SynapticClip';
+import { FreezeOptions } from '../types'
+import { SynapticClip } from './SynapticClip'
 
 /**
  * Design-time frozen clip snapshot for composition-time reuse.

@@ -5,8 +5,8 @@
  * Task 067: FrozenClip is design-time and not operation-array-centric.
  */
 
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { createTestBridge } from '../test-bridge';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { createTestBridge } from '../test-bridge'
 
 describe('OperationsSource Interface', () => {
     let mockBridge: ReturnType<typeof createTestBridge>;

@@ -1,6 +1,6 @@
 import { CompositionBridge } from '@symphonyscript/composer'
-import { getScaleIntervals, closeVoicing, openVoicing, drop2Voicing } from '@symphonyscript/theory'
 import type { HarmonyMask, VoiceLeadingStyle } from '@symphonyscript/theory'
+import { closeVoicing, drop2Voicing, getScaleIntervals, openVoicing } from '@symphonyscript/theory'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
 
 export interface HarmonyParams extends PitchStepParams {
@@ -31,32 +31,6 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
     this.strumDirection = params.strumDirection ?? 'up'
     this.spreadAmount = params.spread ?? 0
     this.spreadSeed = params.spreadSeed ?? null
-  }
-
-  protected create(params: Partial<PitchStepParams>): HarmonyBuilder {
-    return new HarmonyBuilder({
-      ...params,
-      mask: this._mask,
-      root: this._root,
-      voicing: this.voicingStyle,
-      strumRate: this.strumRate,
-      strumDirection: this.strumDirection,
-      spread: this.spreadAmount,
-      spreadSeed: this.spreadSeed,
-    })
-  }
-
-  private cloneHarmony(overrides: Partial<HarmonyParams>): HarmonyBuilder {
-    return new HarmonyBuilder({
-      ...this.shared,
-      mask: overrides.mask ?? this._mask,
-      root: overrides.root ?? this._root,
-      voicing: overrides.voicing !== undefined ? overrides.voicing : this.voicingStyle,
-      strumRate: overrides.strumRate !== undefined ? overrides.strumRate : this.strumRate,
-      strumDirection: overrides.strumDirection ?? this.strumDirection,
-      spread: overrides.spread !== undefined ? overrides.spread : this.spreadAmount,
-      spreadSeed: overrides.spreadSeed !== undefined ? overrides.spreadSeed : this.spreadSeed,
-    })
   }
 
   mask(mask: HarmonyMask): HarmonyBuilder {
@@ -161,5 +135,31 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
     }
 
     return this.resetFlags(target)
+  }
+
+  protected create(params: Partial<PitchStepParams>): HarmonyBuilder {
+    return new HarmonyBuilder({
+      ...params,
+      mask: this._mask,
+      root: this._root,
+      voicing: this.voicingStyle,
+      strumRate: this.strumRate,
+      strumDirection: this.strumDirection,
+      spread: this.spreadAmount,
+      spreadSeed: this.spreadSeed,
+    })
+  }
+
+  private cloneHarmony(overrides: Partial<HarmonyParams>): HarmonyBuilder {
+    return new HarmonyBuilder({
+      ...this.shared,
+      mask: overrides.mask ?? this._mask,
+      root: overrides.root ?? this._root,
+      voicing: overrides.voicing !== undefined ? overrides.voicing : this.voicingStyle,
+      strumRate: overrides.strumRate !== undefined ? overrides.strumRate : this.strumRate,
+      strumDirection: overrides.strumDirection ?? this.strumDirection,
+      spread: overrides.spread !== undefined ? overrides.spread : this.spreadAmount,
+      spreadSeed: overrides.spreadSeed !== undefined ? overrides.spreadSeed : this.spreadSeed,
+    })
   }
 }

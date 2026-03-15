@@ -4,7 +4,7 @@
  * Functions for applying key signature accidentals to notes.
  */
 
-import { ScaleMode, type KeyContext, Accidental } from '../types';
+import { Accidental, type KeyContext, ScaleMode } from '../types'
 import { NOTE_TO_SEMITONE } from '@symphonyscript/theory'
 
 /** Convert ScaleMode to key signature lookup string (major/minor only). */

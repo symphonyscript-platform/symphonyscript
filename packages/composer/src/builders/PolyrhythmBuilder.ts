@@ -17,10 +17,6 @@ export class PolyrhythmBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<PolyrhythmParams>): PolyrhythmBuilder {
-    return new PolyrhythmBuilder({ ...this.params, ...overrides })
-  }
-
   overBeats(overBeats: number): PolyrhythmBuilder {
     return this.clone({ overBeats })
   }
@@ -45,5 +41,9 @@ export class PolyrhythmBuilder implements PipeStep {
     }
 
     return target
+  }
+
+  private clone(overrides: Partial<PolyrhythmParams>): PolyrhythmBuilder {
+    return new PolyrhythmBuilder({ ...this.params, ...overrides })
   }
 }

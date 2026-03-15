@@ -1,6 +1,6 @@
-import { BaseNoteCursor } from './BaseNoteCursor';
-import { SynapticClip } from '../clips/SynapticClip';
-import { SiliconBridge } from '@symphonyscript/kernel';
+import { BaseNoteCursor } from './BaseNoteCursor'
+import { SynapticClip } from '../clips/SynapticClip'
+import { SiliconBridge } from '@symphonyscript/kernel'
 
 /**
  * DrumsHitCursor - Task 061 parallel hierarchy

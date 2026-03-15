@@ -50,6 +50,10 @@ export class VelocityRampBridge extends CompositionBridgeDecorator {
     return this.rewrap(this.bridge.withNote(pitch, duration, finalVelocity))
   }
 
+  protected rewrap(bridge: CompositionBridge): VelocityRampBridge {
+    return new VelocityRampBridge(bridge, this.ramp)
+  }
+
   private applyEasing(progress: number): number {
     switch (this.ramp.curve) {
       case 'linear':
@@ -62,9 +66,5 @@ export class VelocityRampBridge extends CompositionBridgeDecorator {
       default:
         return progress
     }
-  }
-
-  protected rewrap(bridge: CompositionBridge): VelocityRampBridge {
-    return new VelocityRampBridge(bridge, this.ramp)
   }
 }

@@ -19,10 +19,6 @@ export class TremoloBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<TremoloParams>): TremoloBuilder {
-    return new TremoloBuilder({ ...this.params, ...overrides })
-  }
-
   rate(rate: number): TremoloBuilder {
     return this.clone({ rate })
   }
@@ -50,5 +46,9 @@ export class TremoloBuilder implements PipeStep {
     }
 
     return target
+  }
+
+  private clone(overrides: Partial<TremoloParams>): TremoloBuilder {
+    return new TremoloBuilder({ ...this.params, ...overrides })
   }
 }

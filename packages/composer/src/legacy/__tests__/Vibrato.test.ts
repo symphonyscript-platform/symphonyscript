@@ -1,6 +1,5 @@
-
-import { SynapticClip } from '../clips/SynapticClip';
-import { createTestBridge } from '../test-bridge';
+import { SynapticClip } from '../clips/SynapticClip'
+import { createTestBridge } from '../test-bridge'
 
 // Concrete implementation of abstract SynapticClip for testing
 class TestClip extends SynapticClip {

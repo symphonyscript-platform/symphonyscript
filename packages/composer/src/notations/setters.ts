@@ -1,6 +1,6 @@
 import { PipeStep, step } from '@symphonyscript/composer'
-import { MIDI_CC } from '@symphonyscript/theory'
 import type { PitchClass, ScaleMode } from '@symphonyscript/theory'
+import { MIDI_CC } from '@symphonyscript/theory'
 
 /** Set transposition for all subsequent notes. */
 export function transpose(semitones: number): PipeStep {

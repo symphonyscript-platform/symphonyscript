@@ -17,10 +17,6 @@ export class RollBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<RollParams>): RollBuilder {
-    return new RollBuilder({ ...this.params, ...overrides })
-  }
-
   duration(duration: number): RollBuilder {
     return this.clone({ duration })
   }
@@ -42,5 +38,9 @@ export class RollBuilder implements PipeStep {
     }
 
     return target
+  }
+
+  private clone(overrides: Partial<RollParams>): RollBuilder {
+    return new RollBuilder({ ...this.params, ...overrides })
   }
 }

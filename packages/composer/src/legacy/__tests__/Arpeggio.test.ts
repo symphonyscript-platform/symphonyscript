@@ -1,7 +1,7 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { Clip } from '../Clip';
-import { createTestBridge } from '../test-bridge';
-import { NoteOperation, ArpPattern } from '../types';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { Clip } from '../Clip'
+import { createTestBridge } from '../test-bridge'
+import { ArpPattern, NoteOperation } from '../types'
 
 describe('Arpeggio Generator', () => {
     let mockBridge: ReturnType<typeof createTestBridge>;

@@ -14,6 +14,10 @@ export class BendBuilder extends ScopedEffectBuilder<BendBuilder> {
     this._value = params.value ?? 0
   }
 
+  value(value: number): BendBuilder {
+    return this.clone({ value })
+  }
+
   protected wrap(bridge: CompositionBridge): CompositionBridge {
     return bridge.withBend(this._value)
   }
@@ -23,15 +27,11 @@ export class BendBuilder extends ScopedEffectBuilder<BendBuilder> {
   }
 
   /** Reset bend to 0 after scoped steps complete. */
-  protected cleanup(bridge: CompositionBridge): CompositionBridge {
+  protected override cleanup(bridge: CompositionBridge): CompositionBridge {
     return bridge.withBend(0)
   }
 
   private clone(overrides: Partial<BendParams>): BendBuilder {
     return new BendBuilder({ value: this._value, pipeSteps: this.pipeSteps, ...overrides })
-  }
-
-  value(value: number): BendBuilder {
-    return this.clone({ value })
   }
 }

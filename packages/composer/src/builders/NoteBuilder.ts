@@ -13,10 +13,6 @@ export class NoteBuilder extends PitchStepBuilder<NoteBuilder> {
     this._pitch = params.pitch ?? 60
   }
 
-  protected create(params: Partial<PitchStepParams>): NoteBuilder {
-    return new NoteBuilder({ ...params, pitch: this._pitch })
-  }
-
   pitch(pitch: number): NoteBuilder {
     return new NoteBuilder({ ...this.shared, pitch })
   }
@@ -40,5 +36,9 @@ export class NoteBuilder extends PitchStepBuilder<NoteBuilder> {
     }
 
     return this.resetFlags(target)
+  }
+
+  protected create(params: Partial<PitchStepParams>): NoteBuilder {
+    return new NoteBuilder({ ...params, pitch: this._pitch })
   }
 }

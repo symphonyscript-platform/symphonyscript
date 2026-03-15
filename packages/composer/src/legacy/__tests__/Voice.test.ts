@@ -1,7 +1,7 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { Clip } from '../Clip';
-import { NoteOperation } from '../types';
-import { createTestBridge } from '../test-bridge';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { Clip } from '../Clip'
+import { NoteOperation } from '../types'
+import { createTestBridge } from '../test-bridge'
 
 describe('Voice (Task 036)', () => {
     let mockBridge: ReturnType<typeof createTestBridge>;

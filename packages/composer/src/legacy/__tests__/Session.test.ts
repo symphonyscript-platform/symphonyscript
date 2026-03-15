@@ -1,7 +1,7 @@
-import { Session } from '../Session';
-import { Track } from '../Track';
-import type { ClipNode, ClipBuilder, TrackNode } from '../types';
-import { SCHEMA_VERSION } from '../types';
+import { Session } from '../Session'
+import { Track } from '../Track'
+import type { ClipBuilder, ClipNode, TrackNode } from '../types'
+import { SCHEMA_VERSION } from '../types'
 
 /**
  * Create a minimal ClipNode for testing.

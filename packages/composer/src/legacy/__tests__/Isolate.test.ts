@@ -1,6 +1,6 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { Clip } from '../Clip';
-import { createTestBridge } from '../test-bridge';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { Clip } from '../Clip'
+import { createTestBridge } from '../test-bridge'
 
 /**
  * Task 063: isolate() removed. Tests use pushState/popState (zero-allocation).

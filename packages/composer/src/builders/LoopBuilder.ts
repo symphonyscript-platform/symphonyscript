@@ -15,10 +15,6 @@ export class LoopBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<LoopParams>): LoopBuilder {
-    return new LoopBuilder({ ...this.params, ...overrides })
-  }
-
   count(count: number): LoopBuilder {
     return this.clone({ count })
   }
@@ -39,5 +35,9 @@ export class LoopBuilder implements PipeStep {
     }
 
     return target
+  }
+
+  private clone(overrides: Partial<LoopParams>): LoopBuilder {
+    return new LoopBuilder({ ...this.params, ...overrides })
   }
 }

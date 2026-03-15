@@ -1,6 +1,6 @@
-import { MelodyChordCursor } from '../cursors/MelodyChordCursor';
-import { SynapticClip } from '../clips/SynapticClip';
-import { SiliconBridge } from '@symphonyscript/kernel';
+import { MelodyChordCursor } from '../cursors/MelodyChordCursor'
+import { SynapticClip } from '../clips/SynapticClip'
+import { SiliconBridge } from '@symphonyscript/kernel'
 
 // Mocks
 const mockInsertAsync = jest.fn();
@@ -10,13 +10,6 @@ const mockBridge = {
 
 class MockClip extends SynapticClip {
     tick = 0;
-    constructor(bridge: SiliconBridge, seed: number = 42) {
-        super(bridge, seed); // Pass seed for deterministic humanization
-    }
-    getCurrentTick() { return this.tick; }
-    advanceTick(t: number): this { this.tick += t; return this; }
-    generateSourceId() { return 100; }
-    commit() { }
     rest = jest.fn();
     tempo = jest.fn();
     timeSignature = jest.fn();
@@ -25,6 +18,18 @@ class MockClip extends SynapticClip {
     control = jest.fn();
     stack = jest.fn();
     setLoopRegion = jest.fn();
+
+    constructor(bridge: SiliconBridge, seed: number = 42) {
+        super(bridge, seed); // Pass seed for deterministic humanization
+    }
+
+    getCurrentTick() { return this.tick; }
+
+    advanceTick(t: number): this { this.tick += t; return this; }
+
+    generateSourceId() { return 100; }
+
+    commit() { }
 }
 
 describe('MelodyChordCursor (Phase 5)', () => {

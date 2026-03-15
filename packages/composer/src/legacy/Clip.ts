@@ -3,7 +3,7 @@
 // =============================================================================
 // High-level DSL factory for composing music.
 
-import { SiliconSynapse, SiliconBridge } from '@symphonyscript/kernel'
+import { SiliconBridge, SiliconSynapse } from '@symphonyscript/kernel'
 import { SynapticMelody } from './clips/SynapticMelody'
 import { SynapticDrums } from './clips/SynapticDrums'
 import { KeyboardBuilder } from './clips/KeyboardBuilder'

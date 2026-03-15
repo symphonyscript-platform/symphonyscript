@@ -1,6 +1,6 @@
-import { SynapticNoteCursor } from '../cursors/SynapticNoteCursor';
-import { SynapticClip } from '../clips/SynapticClip';
-import { SiliconBridge } from '@symphonyscript/kernel';
+import { SynapticNoteCursor } from '../cursors/SynapticNoteCursor'
+import { SynapticClip } from '../clips/SynapticClip'
+import { SiliconBridge } from '@symphonyscript/kernel'
 
 // Mocks
 const mockInsertAsync = jest.fn();
@@ -10,14 +10,6 @@ const mockBridge = {
 
 class MockClip extends SynapticClip {
     tick = 0;
-    constructor(bridge: SiliconBridge, seed: number = 42) {
-        super(bridge, seed); // Pass seed for deterministic humanization
-    }
-    getCurrentTick() { return this.tick; }
-    advanceTick(t: number) { this.tick += t; }
-    generateSourceId() { return 123; }
-
-    commit() { }
     rest = jest.fn().mockImplementation(() => this);
     tempo = jest.fn().mockImplementation(() => this);
     timeSignature = jest.fn().mockImplementation(() => this);
@@ -26,6 +18,18 @@ class MockClip extends SynapticClip {
     control = jest.fn().mockImplementation(() => this);
     stack = jest.fn().mockImplementation(() => this);
     setLoopRegion = jest.fn().mockImplementation(() => this);
+
+    constructor(bridge: SiliconBridge, seed: number = 42) {
+        super(bridge, seed); // Pass seed for deterministic humanization
+    }
+
+    getCurrentTick() { return this.tick; }
+
+    advanceTick(t: number) { this.tick += t; }
+
+    generateSourceId() { return 123; }
+
+    commit() { }
 }
 
 describe('SynapticNoteCursor (Phase 2)', () => {

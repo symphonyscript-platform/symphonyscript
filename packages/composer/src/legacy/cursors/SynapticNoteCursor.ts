@@ -1,7 +1,7 @@
-import { SynapticCursor } from './SynapticCursor';
-import { SynapticClip } from '../clips/SynapticClip';
-import { SiliconBridge } from '@symphonyscript/kernel';
-import { parsePitch } from '../utils/pitch';
+import { SynapticCursor } from './SynapticCursor'
+import { SynapticClip } from '../clips/SynapticClip'
+import { SiliconBridge } from '@symphonyscript/kernel'
+import { parsePitch } from '../utils/pitch'
 
 export class SynapticNoteCursor extends SynapticCursor {
     protected pitch: number = 60; // Middle C default

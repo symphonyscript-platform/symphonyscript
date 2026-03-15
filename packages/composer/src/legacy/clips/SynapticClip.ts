@@ -1,9 +1,26 @@
-import { SiliconBridge, OPCODE } from '@symphonyscript/kernel';
-import { SeededRandom } from '@symphonyscript/core';
-import { SynapticNode } from '@symphonyscript/synaptic';
-import { ClipNode, SCHEMA_VERSION, ScaleContext, ScaleMode, KeyContext, Accidental, DynamicsType, CurveType, VelocityPoint, HumanizeSettings, QuantizeSettings, AutomationTarget, FreezeOptions, TempoKeyframe, ArpPattern, PITCH_CLASS_TO_ROOT } from '../types';
-import { parsePitch } from '../utils/pitch';
-import { FrozenClip } from './FrozenClip';
+import { OPCODE, SiliconBridge } from '@symphonyscript/kernel'
+import { SeededRandom } from '@symphonyscript/core'
+import { SynapticNode } from '@symphonyscript/synaptic'
+import {
+  Accidental,
+  ArpPattern,
+  AutomationTarget,
+  ClipNode,
+  CurveType,
+  DynamicsType,
+  FreezeOptions,
+  HumanizeSettings,
+  KeyContext,
+  PITCH_CLASS_TO_ROOT,
+  QuantizeSettings,
+  ScaleContext,
+  ScaleMode,
+  SCHEMA_VERSION,
+  TempoKeyframe,
+  VelocityPoint
+} from '../types'
+import { parsePitch } from '../utils/pitch'
+import { FrozenClip } from './FrozenClip'
 
 const sortVelocityPoints = (a: VelocityPoint, b: VelocityPoint) => a.tick - b.tick;
 const AUTOMATION_TARGET_NAMES: readonly string[] = ['volume', 'pan', 'filter', 'resonance', 'attack', 'release'];
@@ -27,19 +44,19 @@ const AUTOMATION_TARGET_NAMES: readonly string[] = ['volume', 'pan', 'filter', '
  * and no operations reconstruction from kernel traversal at runtime.
  */
 export abstract class SynapticClip extends SynapticNode {
+    // Task 063: Pre-allocated primitive state stack for pushState/popState.
+    private static readonly MAX_STACK_DEPTH = 16;
+    private static readonly STACK_FRAME_SIZE = 9; // tempo + dynamics(6) + time-signature(2)
     protected clipName: string = '';
-
     // Scale context for degree() resolution (flattened primitives)
     protected _scaleRoot: number = -1;   // -1 = no scale, 0-11 = pitch class
     protected _scaleMode: ScaleMode = ScaleMode.NONE;
     protected _scaleOctave: number = 4;
-
     // Key context for automatic accidentals (RFC-022, flattened primitives)
     protected _keyRootPitchClass: number = -1; // -1 = no key, 0-11 = pitch class
     protected _keyRootUsesFlat: boolean = false;
     protected _keyMode: ScaleMode = ScaleMode.NONE;
     protected nextAccidental: Accidental | null = null;
-
     // Escape state (persisted user intent)
     protected transposeOffset: number = 0;
     protected _arpeggioPattern: ArpPattern | null = null;
@@ -56,10 +73,8 @@ export abstract class SynapticClip extends SynapticNode {
     protected loopEnabled: boolean = false;
     protected loopStart: number = 0;
     protected loopEnd: number = 0;
-
     // RFC-050: Seeded RNG for deterministic humanization
     protected humanizeRng: SeededRandom;
-
     // Dynamics state (Task 024, flattened)
     protected _dynType: DynamicsType = DynamicsType.NONE;
     protected _dynStart: number = 0;
@@ -68,10 +83,8 @@ export abstract class SynapticClip extends SynapticNode {
     protected _dynTo: number = 0;
     protected _dynCurve: CurveType = CurveType.LINEAR;
     protected velocityCurvePoints: VelocityPoint[] | null = null;
-
     // Default duration state (Task 030)
     protected _defaultDuration: number | null = null;
-
     // Humanization settings (Task 031, flattened)
     protected _humVel: number = 0;
     protected _humTiming: number = 0;
@@ -79,7 +92,6 @@ export abstract class SynapticClip extends SynapticNode {
     protected _humSeed: number = -1;    // -1 = not set
     protected _humanizeVelOut: number = 0;
     protected _humanizeTickOut: number = 0;
-
     // Quantize settings (Task 032, flattened primitives)
     protected _quantizeEnabled: boolean = false;
     protected _quantizeGrid: number = 0;
@@ -87,13 +99,8 @@ export abstract class SynapticClip extends SynapticNode {
     protected _quantizeStrengthSet: boolean = false;
     protected _quantizeDuration: boolean = false;
     protected _quantizeDurationSet: boolean = false;
-
     // MPE voice expression ID (Task 036)
     protected _expressionId: number | null = null;
-
-    // Task 063: Pre-allocated primitive state stack for pushState/popState.
-    private static readonly MAX_STACK_DEPTH = 16;
-    private static readonly STACK_FRAME_SIZE = 9; // tempo + dynamics(6) + time-signature(2)
     private readonly _stateStackNum: Float64Array;
     private readonly _stateStackCurve: Array<VelocityPoint[] | null>;
     private _stackPtr: number = 0;
@@ -380,42 +387,6 @@ export abstract class SynapticClip extends SynapticNode {
         return { root, mode: this._keyMode };
     }
 
-    private parseScaleName(scaleName: string): [number, ScaleMode] | null {
-        const normalized = scaleName.trim().replace(/[_-]+/g, ' ');
-        const match = /^([A-Ga-g])([#b]?)(?:\s+)?(major|minor|dorian|phrygian|lydian|mixolydian|locrian|maj|min|ionian|aeolian)?$/i.exec(normalized);
-        if (!match) return null;
-        const root = `${match[1].toUpperCase()}${match[2] ?? ''}`;
-        const modeToken = (match[3] ?? 'major').toLowerCase();
-        const pitchClass = parsePitch(root + '4') % 12;
-        const mode = this.parseScaleMode(modeToken);
-        return [pitchClass, mode];
-    }
-
-    private parseScaleMode(token: string): ScaleMode {
-        switch (token) {
-            case 'major':
-            case 'maj':
-            case 'ionian':
-                return ScaleMode.MAJOR;
-            case 'minor':
-            case 'min':
-            case 'aeolian':
-                return ScaleMode.MINOR;
-            case 'dorian':
-                return ScaleMode.DORIAN;
-            case 'phrygian':
-                return ScaleMode.PHRYGIAN;
-            case 'lydian':
-                return ScaleMode.LYDIAN;
-            case 'mixolydian':
-                return ScaleMode.MIXOLYDIAN;
-            case 'locrian':
-                return ScaleMode.LOCRIAN;
-            default:
-                return ScaleMode.NONE;
-        }
-    }
-
     /**
      * Set accidental override for the next note.
      * @param acc - Accidental to apply (Accidental.SHARP, Accidental.FLAT, or Accidental.NATURAL)
@@ -495,19 +466,6 @@ export abstract class SynapticClip extends SynapticNode {
     }
 
     /**
-     * Emit pitch bend LFO events for vibrato.
-     * @param tick - Start tick
-     * @param duration - Duration in ticks
-     */
-    protected emitVibratoLFO(_tick: number, _duration: number): void {
-        // Task 058: Pitch bend not yet supported by Kernel insertAsync; no-op.
-    }
-
-    // =========================================================================
-    // Default Duration Methods (Task 030)
-    // =========================================================================
-
-    /**
      * Set the default duration for notes that don't specify one.
      * @param duration - Duration in beats (e.g., 0.25 for quarter note, 0.5 for half)
      */
@@ -523,10 +481,6 @@ export abstract class SynapticClip extends SynapticNode {
     getDefaultDuration(): number {
         return this._defaultDuration ?? 1;
     }
-
-    // =========================================================================
-    // Humanization Methods (Task 031)
-    // =========================================================================
 
     /**
      * Set default humanization settings for all notes in the clip.
@@ -545,9 +499,9 @@ export abstract class SynapticClip extends SynapticNode {
         return this;
     }
 
-    protected reseedHumanizeRng(seed: number): void {
-        (this.humanizeRng as unknown as { state: number }).state = seed >>> 0;
-    }
+    // =========================================================================
+    // Default Duration Methods (Task 030)
+    // =========================================================================
 
     /**
      * Get current humanization settings.
@@ -568,7 +522,7 @@ export abstract class SynapticClip extends SynapticNode {
     }
 
     // =========================================================================
-    // Quantize Methods (Task 032)
+    // Humanization Methods (Task 031)
     // =========================================================================
 
     /**
@@ -599,44 +553,6 @@ export abstract class SynapticClip extends SynapticNode {
             duration: this._quantizeDurationSet ? this._quantizeDuration : undefined
         };
     }
-
-    /**
-     * Apply quantization to a tick value.
-     * @param tick - Original tick value
-     * @returns Quantized tick value
-     */
-    protected applyQuantize(tick: number): number {
-        if (!this._quantizeEnabled) return tick;
-        const grid = this._quantizeGrid;
-        const strength = this._quantizeStrength;
-
-        // Snap to nearest grid point
-        const snappedTick = Math.round(tick / grid) * grid;
-
-        // Interpolate based on strength
-        return tick + (snappedTick - tick) * strength;
-    }
-
-    /**
-     * Apply quantization to a duration value.
-     * @param duration - Original duration value
-     * @returns Quantized duration value
-     */
-    protected applyQuantizeDuration(duration: number): number {
-        if (!this._quantizeEnabled || !this._quantizeDuration) return duration;
-        const grid = this._quantizeGrid;
-        const strength = this._quantizeStrength;
-
-        // Snap to nearest grid point (minimum 1 grid unit)
-        const snappedDuration = Math.max(grid, Math.round(duration / grid) * grid);
-
-        // Interpolate based on strength
-        return duration + (snappedDuration - duration) * strength;
-    }
-
-    // =========================================================================
-    // Dynamics Methods (Task 024)
-    // =========================================================================
 
     /**
      * Start a crescendo (gradual increase in velocity).
@@ -675,6 +591,10 @@ export abstract class SynapticClip extends SynapticNode {
         this.velocityCurvePoints = null;
         return this;
     }
+
+    // =========================================================================
+    // Quantize Methods (Task 032)
+    // =========================================================================
 
     /**
      * Ramp velocity to a target value over a duration.
@@ -717,84 +637,6 @@ export abstract class SynapticClip extends SynapticNode {
     }
 
     /**
-     * Calculate velocity based on active dynamics at a given tick.
-     * @param tick - Current tick position
-     * @param baseVelocity - Base velocity to use if no dynamics active
-     * @returns Calculated velocity (0-1)
-     */
-    protected calculateDynamicsVelocity(tick: number, baseVelocity: number): number {
-        if (this._dynType === DynamicsType.NONE) {
-            return baseVelocity;
-        }
-
-        const elapsed = tick - this._dynStart;
-
-        // Check if dynamics have expired
-        if (elapsed >= this._dynDuration) {
-            this._dynType = DynamicsType.NONE;
-            this.velocityCurvePoints = null;
-            return baseVelocity;
-        }
-
-        // Handle custom curve
-        if (this._dynType === DynamicsType.CURVE && this.velocityCurvePoints) {
-            return this.interpolateCurveVelocity(elapsed, this.velocityCurvePoints);
-        }
-
-        // Calculate progress (0-1)
-        const progress = elapsed / this._dynDuration;
-
-        // Apply curve transformation
-        const easedProgress = this.applyCurve(progress, this._dynCurve);
-
-        // Linear interpolation between from and to
-        return this._dynFrom + (this._dynTo - this._dynFrom) * easedProgress;
-    }
-
-    /**
-     * Apply curve transformation to progress value.
-     */
-    protected applyCurve(progress: number, curve: CurveType): number {
-        switch (curve) {
-            case CurveType.LINEAR:
-                return progress;
-            case CurveType.EXPONENTIAL:
-                return progress * progress;
-            case CurveType.EASE_IN:
-                return progress * progress * progress;
-            case CurveType.EASE_OUT:
-                return 1 - Math.pow(1 - progress, 3);
-            default:
-                return progress;
-        }
-    }
-
-    /**
-     * Interpolate velocity from custom curve points.
-     */
-    protected interpolateCurveVelocity(elapsed: number, points: VelocityPoint[]): number {
-        // Find surrounding points
-        let lower = points[0];
-        let upper = points[points.length - 1];
-
-        for (let i = 0; i < points.length - 1; i++) {
-            if (elapsed >= points[i].tick && elapsed < points[i + 1].tick) {
-                lower = points[i];
-                upper = points[i + 1];
-                break;
-            }
-        }
-
-        // Handle edge cases
-        if (elapsed <= lower.tick) return lower.velocity;
-        if (elapsed >= upper.tick) return upper.velocity;
-
-        // Linear interpolation between surrounding points
-        const segmentProgress = (elapsed - lower.tick) / (upper.tick - lower.tick);
-        return lower.velocity + (upper.velocity - lower.velocity) * segmentProgress;
-    }
-
-    /**
      * Set the clip name for identification.
      */
     name(n: string): this {
@@ -808,6 +650,10 @@ export abstract class SynapticClip extends SynapticNode {
     getClipName(): string {
         return this.clipName;
     }
+
+    // =========================================================================
+    // Dynamics Methods (Task 024)
+    // =========================================================================
 
     /**
      * Build and return ClipNode metadata.
@@ -902,10 +748,6 @@ export abstract class SynapticClip extends SynapticNode {
         return this;
     }
 
-    // =========================================================================
-    // RFC-050: Clip-Mediated Flush Architecture
-    // =========================================================================
-
     /**
      * Flush a single note to kernel with all escape transformations applied.
      * @remarks This is the ONLY method that may call bridge.insertAsync()
@@ -957,11 +799,11 @@ export abstract class SynapticClip extends SynapticNode {
 
         // Apply Vibrato LFO (Task 052)
         if (this.vibratoRate > 0 && this.vibratoDepth > 0) {
-            this.emitVibratoLFO(humanizedTick, quantizedDuration); // Use humanized tick/duration? 
-            // Directive says: emitVibratoLFO(tick, duration). 
+            this.emitVibratoLFO(humanizedTick, quantizedDuration); // Use humanized tick/duration?
+            // Directive says: emitVibratoLFO(tick, duration).
             // Usually pitch bend should align with the note.
             // Using tick/duration passed to flushNote or the calculated ones?
-            // "Integrate in flushNote": 
+            // "Integrate in flushNote":
             //    if (this.vibratoRate > 0 ...) this.emitVibratoLFO(tick, duration);
             // I'll use the final timestamps (humanizedTick, quantizedDuration) to match the note's actual position in the stream.
         }
@@ -993,54 +835,6 @@ export abstract class SynapticClip extends SynapticNode {
             this.exitId = sourceId;
         } else {
             console.warn('[Composer] insertAsync failed', { ptr, afterSourceId: this.exitId, sourceId, pitch: finalPitch, tick: humanizedTick });
-        }
-    }
-
-    /**
-     * Apply swing timing transformation.
-     * Derives ticksPerBeat from time signature.
-     */
-    protected applySwing(tick: number): number {
-        // Derive from time signature (4/4 → 1.0 beat, 3/4 → 0.75 beat)
-        const ticksPerBeat = 4.0 / this.timeSignatureDenominator;
-        const beatPhase = tick % ticksPerBeat;
-
-        if (beatPhase > ticksPerBeat / 2) {
-            // Off-beat: delay by swing amount
-            return tick + (this.swingAmount - 0.5) * 0.1;
-        }
-        return tick;
-    }
-
-    /**
-     * Apply velocity humanization using seeded PRNG.
-     * Legacy micro-variation for backward compatibility.
-     */
-    protected applyHumanization(velocity: number): number {
-        const variation = (this.humanizeRng.next() - 0.5) * 0.05; // ±2.5%
-        return Math.max(0, Math.min(1, velocity + variation));
-    }
-
-    /**
-     * Apply humanization settings to velocity and timing.
-     * Writes result to _humanizeVelOut and _humanizeTickOut (no allocation).
-     * @param velocity - Input velocity (0-1)
-     * @param tick - Input tick
-     */
-    protected applyHumanizeSettings(velocity: number, tick: number): void {
-        this._humanizeVelOut = velocity;
-        this._humanizeTickOut = tick;
-
-        if (this._humVel > 0) {
-            const velVariation = (this.humanizeRng.next() - 0.5) * 2 * this._humVel;
-            this._humanizeVelOut = Math.max(0, Math.min(1, velocity + velVariation));
-        }
-
-        if (this._humTiming > 0) {
-            const msPerBeat = 60000 / this.currentTempo;
-            const maxOffsetBeats = this._humTiming / msPerBeat;
-            const timingVariation = (this.humanizeRng.next() - 0.5) * 2 * maxOffsetBeats;
-            this._humanizeTickOut = tick + timingVariation;
         }
     }
 
@@ -1142,6 +936,219 @@ export abstract class SynapticClip extends SynapticNode {
         }
 
         return this;
+    }
+
+    /**
+     * Emit pitch bend LFO events for vibrato.
+     * @param tick - Start tick
+     * @param duration - Duration in ticks
+     */
+    protected emitVibratoLFO(_tick: number, _duration: number): void {
+        // Task 058: Pitch bend not yet supported by Kernel insertAsync; no-op.
+    }
+
+    protected reseedHumanizeRng(seed: number): void {
+        (this.humanizeRng as unknown as { state: number }).state = seed >>> 0;
+    }
+
+    /**
+     * Apply quantization to a tick value.
+     * @param tick - Original tick value
+     * @returns Quantized tick value
+     */
+    protected applyQuantize(tick: number): number {
+        if (!this._quantizeEnabled) return tick;
+        const grid = this._quantizeGrid;
+        const strength = this._quantizeStrength;
+
+        // Snap to nearest grid point
+        const snappedTick = Math.round(tick / grid) * grid;
+
+        // Interpolate based on strength
+        return tick + (snappedTick - tick) * strength;
+    }
+
+    /**
+     * Apply quantization to a duration value.
+     * @param duration - Original duration value
+     * @returns Quantized duration value
+     */
+    protected applyQuantizeDuration(duration: number): number {
+        if (!this._quantizeEnabled || !this._quantizeDuration) return duration;
+        const grid = this._quantizeGrid;
+        const strength = this._quantizeStrength;
+
+        // Snap to nearest grid point (minimum 1 grid unit)
+        const snappedDuration = Math.max(grid, Math.round(duration / grid) * grid);
+
+        // Interpolate based on strength
+        return duration + (snappedDuration - duration) * strength;
+    }
+
+    /**
+     * Calculate velocity based on active dynamics at a given tick.
+     * @param tick - Current tick position
+     * @param baseVelocity - Base velocity to use if no dynamics active
+     * @returns Calculated velocity (0-1)
+     */
+    protected calculateDynamicsVelocity(tick: number, baseVelocity: number): number {
+        if (this._dynType === DynamicsType.NONE) {
+            return baseVelocity;
+        }
+
+        const elapsed = tick - this._dynStart;
+
+        // Check if dynamics have expired
+        if (elapsed >= this._dynDuration) {
+            this._dynType = DynamicsType.NONE;
+            this.velocityCurvePoints = null;
+            return baseVelocity;
+        }
+
+        // Handle custom curve
+        if (this._dynType === DynamicsType.CURVE && this.velocityCurvePoints) {
+            return this.interpolateCurveVelocity(elapsed, this.velocityCurvePoints);
+        }
+
+        // Calculate progress (0-1)
+        const progress = elapsed / this._dynDuration;
+
+        // Apply curve transformation
+        const easedProgress = this.applyCurve(progress, this._dynCurve);
+
+        // Linear interpolation between from and to
+        return this._dynFrom + (this._dynTo - this._dynFrom) * easedProgress;
+    }
+
+    /**
+     * Apply curve transformation to progress value.
+     */
+    protected applyCurve(progress: number, curve: CurveType): number {
+        switch (curve) {
+            case CurveType.LINEAR:
+                return progress;
+            case CurveType.EXPONENTIAL:
+                return progress * progress;
+            case CurveType.EASE_IN:
+                return progress * progress * progress;
+            case CurveType.EASE_OUT:
+                return 1 - Math.pow(1 - progress, 3);
+            default:
+                return progress;
+        }
+    }
+
+    /**
+     * Interpolate velocity from custom curve points.
+     */
+    protected interpolateCurveVelocity(elapsed: number, points: VelocityPoint[]): number {
+        // Find surrounding points
+        let lower = points[0];
+        let upper = points[points.length - 1];
+
+        for (let i = 0; i < points.length - 1; i++) {
+            if (elapsed >= points[i].tick && elapsed < points[i + 1].tick) {
+                lower = points[i];
+                upper = points[i + 1];
+                break;
+            }
+        }
+
+        // Handle edge cases
+        if (elapsed <= lower.tick) return lower.velocity;
+        if (elapsed >= upper.tick) return upper.velocity;
+
+        // Linear interpolation between surrounding points
+        const segmentProgress = (elapsed - lower.tick) / (upper.tick - lower.tick);
+        return lower.velocity + (upper.velocity - lower.velocity) * segmentProgress;
+    }
+
+    // =========================================================================
+    // RFC-050: Clip-Mediated Flush Architecture
+    // =========================================================================
+
+    /**
+     * Apply swing timing transformation.
+     * Derives ticksPerBeat from time signature.
+     */
+    protected applySwing(tick: number): number {
+        // Derive from time signature (4/4 → 1.0 beat, 3/4 → 0.75 beat)
+        const ticksPerBeat = 4.0 / this.timeSignatureDenominator;
+        const beatPhase = tick % ticksPerBeat;
+
+        if (beatPhase > ticksPerBeat / 2) {
+            // Off-beat: delay by swing amount
+            return tick + (this.swingAmount - 0.5) * 0.1;
+        }
+        return tick;
+    }
+
+    /**
+     * Apply velocity humanization using seeded PRNG.
+     * Legacy micro-variation for backward compatibility.
+     */
+    protected applyHumanization(velocity: number): number {
+        const variation = (this.humanizeRng.next() - 0.5) * 0.05; // ±2.5%
+        return Math.max(0, Math.min(1, velocity + variation));
+    }
+
+    /**
+     * Apply humanization settings to velocity and timing.
+     * Writes result to _humanizeVelOut and _humanizeTickOut (no allocation).
+     * @param velocity - Input velocity (0-1)
+     * @param tick - Input tick
+     */
+    protected applyHumanizeSettings(velocity: number, tick: number): void {
+        this._humanizeVelOut = velocity;
+        this._humanizeTickOut = tick;
+
+        if (this._humVel > 0) {
+            const velVariation = (this.humanizeRng.next() - 0.5) * 2 * this._humVel;
+            this._humanizeVelOut = Math.max(0, Math.min(1, velocity + velVariation));
+        }
+
+        if (this._humTiming > 0) {
+            const msPerBeat = 60000 / this.currentTempo;
+            const maxOffsetBeats = this._humTiming / msPerBeat;
+            const timingVariation = (this.humanizeRng.next() - 0.5) * 2 * maxOffsetBeats;
+            this._humanizeTickOut = tick + timingVariation;
+        }
+    }
+
+    private parseScaleName(scaleName: string): [number, ScaleMode] | null {
+        const normalized = scaleName.trim().replace(/[_-]+/g, ' ');
+        const match = /^([A-Ga-g])([#b]?)(?:\s+)?(major|minor|dorian|phrygian|lydian|mixolydian|locrian|maj|min|ionian|aeolian)?$/i.exec(normalized);
+        if (!match) return null;
+        const root = `${match[1].toUpperCase()}${match[2] ?? ''}`;
+        const modeToken = (match[3] ?? 'major').toLowerCase();
+        const pitchClass = parsePitch(root + '4') % 12;
+        const mode = this.parseScaleMode(modeToken);
+        return [pitchClass, mode];
+    }
+
+    private parseScaleMode(token: string): ScaleMode {
+        switch (token) {
+            case 'major':
+            case 'maj':
+            case 'ionian':
+                return ScaleMode.MAJOR;
+            case 'minor':
+            case 'min':
+            case 'aeolian':
+                return ScaleMode.MINOR;
+            case 'dorian':
+                return ScaleMode.DORIAN;
+            case 'phrygian':
+                return ScaleMode.PHRYGIAN;
+            case 'lydian':
+                return ScaleMode.LYDIAN;
+            case 'mixolydian':
+                return ScaleMode.MIXOLYDIAN;
+            case 'locrian':
+                return ScaleMode.LOCRIAN;
+            default:
+                return ScaleMode.NONE;
+        }
     }
 
     /**

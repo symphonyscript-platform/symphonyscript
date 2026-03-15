@@ -1,8 +1,8 @@
-import { SynapticMelodyBaseCursor } from './SynapticMelodyBaseCursor';
-import { SynapticClip } from '../clips/SynapticClip';
-import { SiliconBridge } from '@symphonyscript/kernel';
-import { parseChord } from '../utils/chord';
-import { ArpPattern } from '../types';
+import { SynapticMelodyBaseCursor } from './SynapticMelodyBaseCursor'
+import { SynapticClip } from '../clips/SynapticClip'
+import { SiliconBridge } from '@symphonyscript/kernel'
+import { parseChord } from '../utils/chord'
+import { ArpPattern } from '../types'
 
 // OPCODE 1 = NOTE
 const OPCODE_NOTE = 1;
@@ -139,87 +139,6 @@ export class MelodyChordCursor extends SynapticMelodyBaseCursor {
     }
 
     /**
-     * Apply arpeggio pattern ordering to pitches.
-     * @internal
-     */
-    private applyArpPattern(pitches: number[], pattern: ArpPattern): number[] {
-        const sorted = [...pitches].sort((a, b) => a - b);
-
-        switch (pattern) {
-            case ArpPattern.UP:
-                return sorted;
-
-            case ArpPattern.DOWN:
-                return [...sorted].reverse();
-
-            case ArpPattern.UP_DOWN: {
-                const down = [...sorted].reverse().slice(1);
-                return [...sorted, ...down];
-            }
-
-            case ArpPattern.DOWN_UP: {
-                const up = [...sorted].slice(1);
-                return [...[...sorted].reverse(), ...up];
-            }
-
-            case ArpPattern.RANDOM: {
-                const rng = this.clip.getSeededRng();
-                const shuffled = [...sorted];
-                for (let i = shuffled.length - 1; i > 0; i--) {
-                    const j = Math.floor(rng.next() * (i + 1));
-                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-                }
-                return shuffled;
-            }
-
-            case ArpPattern.CONVERGE: {
-                const result: number[] = [];
-                let left = 0;
-                let right = sorted.length - 1;
-                while (left <= right) {
-                    result.push(sorted[left]);
-                    if (left !== right) {
-                        result.push(sorted[right]);
-                    }
-                    left++;
-                    right--;
-                }
-                return result;
-            }
-
-            case ArpPattern.DIVERGE: {
-                const result: number[] = [];
-                const mid = Math.floor(sorted.length / 2);
-                let left = mid;
-                let right = mid + 1;
-
-                if (sorted.length % 2 === 1) {
-                    result.push(sorted[mid]);
-                    left = mid - 1;
-                } else {
-                    left = mid - 1;
-                    right = mid;
-                }
-
-                while (left >= 0 || right < sorted.length) {
-                    if (right < sorted.length) {
-                        result.push(sorted[right]);
-                        right++;
-                    }
-                    if (left >= 0) {
-                        result.push(sorted[left]);
-                        left--;
-                    }
-                }
-                return result;
-            }
-
-            default:
-                return sorted;
-        }
-    }
-
-    /**
      * Flushes the chord to kernel using inline bit iteration.
      * RFC-050: Delegates each voice to clip.flushNote() for transformation application.
      * Task 051: Resolves arpeggio settings and emits notes sequentially if arpeggiated.
@@ -306,5 +225,86 @@ export class MelodyChordCursor extends SynapticMelodyBaseCursor {
         }
 
         this.hasPending = false;
+    }
+
+    /**
+     * Apply arpeggio pattern ordering to pitches.
+     * @internal
+     */
+    private applyArpPattern(pitches: number[], pattern: ArpPattern): number[] {
+        const sorted = [...pitches].sort((a, b) => a - b);
+
+        switch (pattern) {
+            case ArpPattern.UP:
+                return sorted;
+
+            case ArpPattern.DOWN:
+                return [...sorted].reverse();
+
+            case ArpPattern.UP_DOWN: {
+                const down = [...sorted].reverse().slice(1);
+                return [...sorted, ...down];
+            }
+
+            case ArpPattern.DOWN_UP: {
+                const up = [...sorted].slice(1);
+                return [...[...sorted].reverse(), ...up];
+            }
+
+            case ArpPattern.RANDOM: {
+                const rng = this.clip.getSeededRng();
+                const shuffled = [...sorted];
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(rng.next() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
+                return shuffled;
+            }
+
+            case ArpPattern.CONVERGE: {
+                const result: number[] = [];
+                let left = 0;
+                let right = sorted.length - 1;
+                while (left <= right) {
+                    result.push(sorted[left]);
+                    if (left !== right) {
+                        result.push(sorted[right]);
+                    }
+                    left++;
+                    right--;
+                }
+                return result;
+            }
+
+            case ArpPattern.DIVERGE: {
+                const result: number[] = [];
+                const mid = Math.floor(sorted.length / 2);
+                let left = mid;
+                let right = mid + 1;
+
+                if (sorted.length % 2 === 1) {
+                    result.push(sorted[mid]);
+                    left = mid - 1;
+                } else {
+                    left = mid - 1;
+                    right = mid;
+                }
+
+                while (left >= 0 || right < sorted.length) {
+                    if (right < sorted.length) {
+                        result.push(sorted[right]);
+                        right++;
+                    }
+                    if (left >= 0) {
+                        result.push(sorted[left]);
+                        left--;
+                    }
+                }
+                return result;
+            }
+
+            default:
+                return sorted;
+        }
     }
 }

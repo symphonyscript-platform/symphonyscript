@@ -22,10 +22,6 @@ export class DrumEuclideanBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<DrumEuclideanParams>): DrumEuclideanBuilder {
-    return new DrumEuclideanBuilder({ ...this.params, ...overrides })
-  }
-
   pitch(pitch: number): DrumEuclideanBuilder {
     return this.clone({ pitch })
   }
@@ -68,5 +64,9 @@ export class DrumEuclideanBuilder implements PipeStep {
     }
 
     return target
+  }
+
+  private clone(overrides: Partial<DrumEuclideanParams>): DrumEuclideanBuilder {
+    return new DrumEuclideanBuilder({ ...this.params, ...overrides })
   }
 }

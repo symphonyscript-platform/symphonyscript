@@ -1,5 +1,5 @@
-import { SynapticMelody } from './SynapticMelody';
-import { SiliconBridge } from '@symphonyscript/kernel';
+import { SynapticMelody } from './SynapticMelody'
+import { SiliconBridge } from '@symphonyscript/kernel'
 
 /**
  * WindBuilder - Wind instrument builder with breath control support.

@@ -30,10 +30,6 @@ export class EuclideanBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<EuclideanParams>): EuclideanBuilder {
-    return new EuclideanBuilder({ ...this.params, ...overrides })
-  }
-
   notes(notes: NotePitch[]): EuclideanBuilder {
     return this.clone({ notes })
   }
@@ -97,5 +93,9 @@ export class EuclideanBuilder implements PipeStep {
     }
 
     return target
+  }
+
+  private clone(overrides: Partial<EuclideanParams>): EuclideanBuilder {
+    return new EuclideanBuilder({ ...this.params, ...overrides })
   }
 }

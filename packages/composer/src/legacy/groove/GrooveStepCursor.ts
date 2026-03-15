@@ -1,4 +1,4 @@
-import { SynapticGrooveBuilder, GrooveTemplate } from './SynapticGrooveBuilder';
+import { GrooveTemplate, SynapticGrooveBuilder } from './SynapticGrooveBuilder'
 
 /**
  * GrooveStepCursor

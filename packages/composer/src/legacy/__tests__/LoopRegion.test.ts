@@ -1,6 +1,6 @@
-import { SynapticClip } from '../clips/SynapticClip';
-import { MockConsumer } from '@symphonyscript/kernel';
-import { createTestBridge } from '../test-bridge';
+import { SynapticClip } from '../clips/SynapticClip'
+import { MockConsumer } from '@symphonyscript/kernel'
+import { createTestBridge } from '../test-bridge'
 
 // Concrete Clip Implementation
 class TestClip extends SynapticClip {

@@ -21,10 +21,6 @@ export class TrillBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<TrillParams>): TrillBuilder {
-    return new TrillBuilder({ ...this.params, ...overrides })
-  }
-
   basePitch(basePitch: NotePitch): TrillBuilder {
     return this.clone({ basePitch })
   }
@@ -58,5 +54,9 @@ export class TrillBuilder implements PipeStep {
     }
 
     return target
+  }
+
+  private clone(overrides: Partial<TrillParams>): TrillBuilder {
+    return new TrillBuilder({ ...this.params, ...overrides })
   }
 }

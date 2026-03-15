@@ -1,8 +1,8 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { SynapticDrums } from '../clips/SynapticDrums';
-import { Clip } from '../Clip';
-import { NoteOperation, CurveType, AutomationTarget } from '../types';
-import { createTestBridge } from '../test-bridge';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { SynapticDrums } from '../clips/SynapticDrums'
+import { Clip } from '../Clip'
+import { AutomationTarget, CurveType, NoteOperation } from '../types'
+import { createTestBridge } from '../test-bridge'
 
 describe('Automation (Task 035)', () => {
     let mockBridge: ReturnType<typeof createTestBridge>;

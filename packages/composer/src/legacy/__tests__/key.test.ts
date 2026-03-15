@@ -1,7 +1,7 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { applyKeySignature, hasExplicitAccidental } from '../utils/key';
-import { ScaleMode, Accidental, type KeyContext } from '../types';
-import { createTestBridge } from '../test-bridge';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { applyKeySignature, hasExplicitAccidental } from '../utils/key'
+import { Accidental, type KeyContext, ScaleMode } from '../types'
+import { createTestBridge } from '../test-bridge'
 
 describe('Key signature context', () => {
     let melody: SynapticMelody;

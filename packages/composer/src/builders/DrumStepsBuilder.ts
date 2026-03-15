@@ -17,10 +17,6 @@ export class DrumStepsBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<DrumStepsParams>): DrumStepsBuilder {
-    return new DrumStepsBuilder({ ...this.params, ...overrides })
-  }
-
   pitch(pitch: number): DrumStepsBuilder {
     return this.clone({ pitch })
   }
@@ -48,5 +44,9 @@ export class DrumStepsBuilder implements PipeStep {
     }
 
     return target
+  }
+
+  private clone(overrides: Partial<DrumStepsParams>): DrumStepsBuilder {
+    return new DrumStepsBuilder({ ...this.params, ...overrides })
   }
 }

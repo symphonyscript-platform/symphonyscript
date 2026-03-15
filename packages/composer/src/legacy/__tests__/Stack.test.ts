@@ -3,9 +3,9 @@
  * Task 048: Execute builder function in parallel mode.
  */
 
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { NoteOperation, ScaleMode } from '../types';
-import { createTestBridge } from '../test-bridge';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { NoteOperation, ScaleMode } from '../types'
+import { createTestBridge } from '../test-bridge'
 
 describe('SynapticMelody.stack(builderFn)', () => {
     let mockBridge: ReturnType<typeof createTestBridge>;

@@ -1,6 +1,6 @@
-import { SynapticMelody } from './SynapticMelody';
-import { SiliconBridge } from '@symphonyscript/kernel';
-import { parsePitch } from '../utils/pitch';
+import { SynapticMelody } from './SynapticMelody'
+import { SiliconBridge } from '@symphonyscript/kernel'
+import { parsePitch } from '../utils/pitch'
 
 /**
  * StringBuilder - String instrument builder with pitch bend and slide support.

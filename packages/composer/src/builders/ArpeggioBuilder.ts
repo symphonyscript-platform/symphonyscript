@@ -28,10 +28,6 @@ export class ArpeggioBuilder implements PipeStep {
     }
   }
 
-  private clone(overrides: Partial<ArpeggioParams>): ArpeggioBuilder {
-    return new ArpeggioBuilder({ ...this.params, ...overrides })
-  }
-
   pattern(pattern: ArpPattern): ArpeggioBuilder {
     return this.clone({ pattern })
   }
@@ -106,6 +102,10 @@ export class ArpeggioBuilder implements PipeStep {
     }
 
     return target
+  }
+
+  private clone(overrides: Partial<ArpeggioParams>): ArpeggioBuilder {
+    return new ArpeggioBuilder({ ...this.params, ...overrides })
   }
 
   private buildSequence(pool: number[]): number[] {

@@ -4,19 +4,11 @@
  * Manages multiple tracks and effect buses for complete musical compositions.
  */
 
-import type {
-    EffectType,
-    EffectParamsFor,
-    EffectBusConfig
-} from '@symphonyscript/theory';
-import {
-    createEffectBusConfig,
-    createInsertEffect,
-    isEffectType
-} from '@symphonyscript/theory';
-import type { ClipNode, ClipBuilder, TrackNode, SessionNode } from './types';
-import { SCHEMA_VERSION } from './types';
-import { Track } from './Track';
+import type { EffectBusConfig, EffectParamsFor, EffectType } from '@symphonyscript/theory'
+import { createEffectBusConfig, createInsertEffect, isEffectType } from '@symphonyscript/theory'
+import type { ClipBuilder, ClipNode, SessionNode, TrackNode } from './types'
+import { SCHEMA_VERSION } from './types'
+import { Track } from './Track'
 
 /**
  * Session options for construction.

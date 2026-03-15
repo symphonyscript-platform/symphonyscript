@@ -3,8 +3,8 @@
  * Tests custom drum mapping functionality for SynapticDrums.
  */
 
-import { Clip } from '../Clip';
-import { NoteOperation, DrumType } from '../types';
+import { Clip } from '../Clip'
+import { DrumType, NoteOperation } from '../types'
 
 describe('DrumMap (Task 040)', () => {
     describe('Default GM Mapping', () => {

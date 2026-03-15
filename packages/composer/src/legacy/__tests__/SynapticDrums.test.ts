@@ -1,5 +1,5 @@
-import { SynapticDrums } from '../clips/SynapticDrums';
-import { createTestBridge } from '../test-bridge';
+import { SynapticDrums } from '../clips/SynapticDrums'
+import { createTestBridge } from '../test-bridge'
 
 // Matcher for optional params (afterSourceId, expressionId) which can be undefined or number
 const optional = { asymmetricMatch: () => true };

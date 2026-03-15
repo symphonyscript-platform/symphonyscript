@@ -1,9 +1,9 @@
-import { SynapticClip } from './SynapticClip';
-import { DrumsHitCursor } from '../cursors/DrumsHitCursor';
-import { SiliconBridge } from '@symphonyscript/kernel';
-import { EuclideanDrumOptions, DrumType } from '../types';
-import { euclidean, rotatePattern } from '@symphonyscript/theory';
-import { parsePitch } from '../utils/pitch';
+import { SynapticClip } from './SynapticClip'
+import { DrumsHitCursor } from '../cursors/DrumsHitCursor'
+import { SiliconBridge } from '@symphonyscript/kernel'
+import { DrumType, EuclideanDrumOptions } from '../types'
+import { euclidean, rotatePattern } from '@symphonyscript/theory'
+import { parsePitch } from '../utils/pitch'
 
 /** Standard drum slot indices (O(1) lookup). */
 const enum DrumSlot {

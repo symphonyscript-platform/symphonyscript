@@ -1,6 +1,6 @@
-import { SiliconBridge } from '@symphonyscript/kernel';
-import { SynapticClip } from '../clips/SynapticClip';
-import { ClipNode, AutomationTarget, CurveType, TempoKeyframe } from '../types';
+import { SiliconBridge } from '@symphonyscript/kernel'
+import { SynapticClip } from '../clips/SynapticClip'
+import { AutomationTarget, ClipNode, CurveType, TempoKeyframe } from '../types'
 
 /**
  * Base SynapticCursor
@@ -10,9 +10,9 @@ export abstract class SynapticCursor {
     // State
     public hasPending: boolean = false;
     public baseTick: number = 0;
+    public muted: boolean = false;
     protected _velocity: number = 0.8;
     protected _duration: number = 0.25; // Default 1/4 note
-    public muted: boolean = false;
     protected humanizeAmount: number = 0; // 0 = precise, 1 = fully humanized
     protected _precise: boolean = false; // Task 031: Skip humanization for this note
 

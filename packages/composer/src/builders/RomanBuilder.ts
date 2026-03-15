@@ -1,6 +1,6 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import { degreeToPitch, ScaleMode, ROMAN_DEGREE_MAP } from '@symphonyscript/theory'
 import type { RomanNumeral } from '@symphonyscript/theory'
+import { degreeToPitch, ROMAN_DEGREE_MAP, ScaleMode } from '@symphonyscript/theory'
 
 export interface RomanParams {
   numeral: RomanNumeral
@@ -19,10 +19,6 @@ export class RomanBuilder implements PipeStep {
       inversion: params.inversion ?? 0,
       velocity: params.velocity ?? null,
     }
-  }
-
-  private clone(overrides: Partial<RomanParams>): RomanBuilder {
-    return new RomanBuilder({ ...this.params, ...overrides })
   }
 
   numeral(numeral: RomanNumeral): RomanBuilder {
@@ -78,5 +74,9 @@ export class RomanBuilder implements PipeStep {
     target = target.withTick(startTick + duration)
 
     return target
+  }
+
+  private clone(overrides: Partial<RomanParams>): RomanBuilder {
+    return new RomanBuilder({ ...this.params, ...overrides })
   }
 }

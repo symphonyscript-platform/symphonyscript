@@ -1,11 +1,11 @@
-import { SynapticMelodyBaseCursor } from './SynapticMelodyBaseCursor';
-import { MelodyChordCursor } from './MelodyChordCursor';
-import { SynapticClip } from '../clips/SynapticClip';
-import { SiliconBridge } from '@symphonyscript/kernel';
-import { parsePitch } from '../utils/pitch';
-import { applyKeySignature } from '../utils/key';
-import { ArpPattern } from '../types';
-import { SCALE_INTERVALS } from '../utils/scales';
+import { SynapticMelodyBaseCursor } from './SynapticMelodyBaseCursor'
+import { MelodyChordCursor } from './MelodyChordCursor'
+import { SynapticClip } from '../clips/SynapticClip'
+import { SiliconBridge } from '@symphonyscript/kernel'
+import { parsePitch } from '../utils/pitch'
+import { applyKeySignature } from '../utils/key'
+import { ArpPattern } from '../types'
+import { SCALE_INTERVALS } from '../utils/scales'
 
 /**
  * MelodyNoteCursor - Task 061 parallel hierarchy

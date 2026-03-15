@@ -1,8 +1,8 @@
-import { SynapticMelody } from '../clips/SynapticMelody';
-import { SynapticDrums } from '../clips/SynapticDrums';
-import { Clip } from '../Clip';
-import { createTestBridge } from '../test-bridge';
-import { NoteOperation } from '../types';
+import { SynapticMelody } from '../clips/SynapticMelody'
+import { SynapticDrums } from '../clips/SynapticDrums'
+import { Clip } from '../Clip'
+import { createTestBridge } from '../test-bridge'
+import { NoteOperation } from '../types'
 
 /**
  * Task 058: Aftertouch operations no longer in build().operations.
