@@ -7,7 +7,10 @@ export interface DrumHitParams {
   precise: boolean
   muted: boolean
   flamOffset: number | null
+  flamGraceRatio: number
   dragCount: number
+  dragGap: number
+  dragGraceRatio: number
 }
 
 export class DrumHitBuilder implements PipeStep {
@@ -21,7 +24,10 @@ export class DrumHitBuilder implements PipeStep {
       precise: params.precise ?? false,
       muted: params.muted ?? false,
       flamOffset: params.flamOffset ?? null,
+      flamGraceRatio: params.flamGraceRatio ?? 0.6,
       dragCount: params.dragCount ?? 0,
+      dragGap: params.dragGap ?? 30,
+      dragGraceRatio: params.dragGraceRatio ?? 0.5,
     }
   }
 
@@ -47,14 +53,29 @@ export class DrumHitBuilder implements PipeStep {
     return this.clone({ velocity, precise: true })
   }
 
-  /** Flam — two rapid hits, grace note before main. */
-  flam(offset: number = 15): DrumHitBuilder {
-    return this.clone({ flamOffset: offset })
+  /** Flam — grace note before main hit. */
+  flam(gap: number = 30): DrumHitBuilder {
+    return this.clone({ flamOffset: gap })
   }
 
-  /** Drag — three rapid hits before main. */
-  drag(): DrumHitBuilder {
-    return this.clone({ dragCount: 2 })
+  /** Set the velocity ratio for flam grace note (0–1). */
+  flamRatio(ratio: number): DrumHitBuilder {
+    return this.clone({ flamGraceRatio: ratio })
+  }
+
+  /** Drag — multiple grace notes before main hit. */
+  drag(count: number = 2): DrumHitBuilder {
+    return this.clone({ dragCount: count })
+  }
+
+  /** Set the tick gap between drag grace notes. */
+  dragSpacing(gap: number): DrumHitBuilder {
+    return this.clone({ dragGap: gap })
+  }
+
+  /** Set the velocity ratio for drag grace notes (0–1). */
+  dragRatio(ratio: number): DrumHitBuilder {
+    return this.clone({ dragGraceRatio: ratio })
   }
 
   /** Skip humanization. */
@@ -70,7 +91,6 @@ export class DrumHitBuilder implements PipeStep {
   apply(bridge: CompositionBridge): CompositionBridge {
     const duration = this.params.duration ?? bridge.defaultDuration
     const resolvedVelocity = this.params.velocity ?? bridge.velocity
-    const graceVelocity = Math.max(0, resolvedVelocity - 200)
 
     // Snapshot original flags to restore after this step
     const wasPrecise = bridge.precise
@@ -82,21 +102,26 @@ export class DrumHitBuilder implements PipeStep {
     if (this.params.precise && !wasPrecise) {
       target = target.withPrecise(true)
     }
+
     if (this.params.muted && !wasMuted) {
       target = target.withMuted(true)
     }
 
-    // Emit drag grace notes (rapid hits before the main)
+    // Emit drag grace notes — spaced by dragGap ticks
     if (this.params.dragCount > 0) {
-      const graceInterval = 10
+      const graceVelocity = Math.round(resolvedVelocity * this.params.dragGraceRatio)
+
       for (let i = 0; i < this.params.dragCount; ++i) {
-        target = target.withNote(this.params.pitch, graceInterval, graceVelocity)
+        target = target.withNote(this.params.pitch, duration, graceVelocity)
+        target = target.withTick(bridge.tick + this.params.dragGap * (i + 1))
       }
     }
 
-    // Emit flam grace note
+    // Emit flam grace note — then advance by gap
     if (this.params.flamOffset !== null) {
-      target = target.withNote(this.params.pitch, this.params.flamOffset, graceVelocity)
+      const graceVelocity = Math.round(resolvedVelocity * this.params.flamGraceRatio)
+      target = target.withNote(this.params.pitch, duration, graceVelocity)
+      target = target.withTick(target.tick + this.params.flamOffset)
     }
 
     // Emit main hit
@@ -110,6 +135,7 @@ export class DrumHitBuilder implements PipeStep {
     if (this.params.precise && !wasPrecise) {
       target = target.withPrecise(false)
     }
+
     if (this.params.muted && !wasMuted) {
       target = target.withMuted(false)
     }
