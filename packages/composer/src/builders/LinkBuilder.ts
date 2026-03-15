@@ -59,14 +59,11 @@ export class LinkBuilder implements PipeStep {
     }
 
     // Compose clip through wrapped bridge
-    const composed = clip.compose(wrappedBridge)
-
-    // Unwrap to outer bridge position
-    let result = bridge.withTick(composed.tick)
+    let result = clip.compose(wrappedBridge)
 
     // Apply transforms as post-processors on the clip content
     for (let i = 0; i < transforms.length; ++i) {
-      result = transforms[i].steps(useNotation(clip)).apply(bridge)
+      result = transforms[i].steps(useNotation(clip)).apply(result)
     }
 
     return result

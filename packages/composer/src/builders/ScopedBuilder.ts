@@ -60,10 +60,7 @@ export class ScopedBuilder implements ScopeBuilder<ScopedBuilder> {
     }
 
     // Run entries through the wrapped bridge in user-specified order
-    const target = applyEntries(this._entries, wrappedBridge)
-
-    // Unwrap back to outer bridge at the new tick
-    let result = bridge.withTick(target.tick)
+    let result = applyEntries(this._entries, wrappedBridge)
 
     // Apply transforms as post-processors on the content entries
     for (let i = 0; i < transforms.length; ++i) {
@@ -73,7 +70,7 @@ export class ScopedBuilder implements ScopeBuilder<ScopedBuilder> {
         transformWithContent = transformWithContent.steps(...this._entries[j])
       }
 
-      result = transformWithContent.apply(bridge)
+      result = transformWithContent.apply(result)
     }
 
     return result

@@ -1,6 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { ScopedStepBuilder } from './ScopedStepBuilder'
-import { CompositionBridgeDecorator } from '../composition/CompositionBridgeDecorator'
 
 export interface BendParams {
   value: number
@@ -25,7 +24,7 @@ export class BendBuilder extends ScopedStepBuilder<BendBuilder> {
 
   /** Reset bend to 0 and restore parent state after scoped steps complete. */
   protected onExit(result: CompositionBridge, _parent: CompositionBridge): CompositionBridge {
-    return (result as CompositionBridgeDecorator).unwrap().withBend(0)
+    return result.withBend(0)
   }
 
   protected cloneWithEntries(entries: PipeStep[][]): BendBuilder {
