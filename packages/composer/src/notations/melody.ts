@@ -1,5 +1,8 @@
 import { CompositionBridge, PipeStep, step } from '@symphonyscript/composer'
 import { NoteBuilder } from '../builders/NoteBuilder'
+import { TrillBuilder } from '../builders/TrillBuilder'
+import { TremoloBuilder } from '../builders/TremoloBuilder'
+import { GlissandoBuilder } from '../builders/GlissandoBuilder'
 import type { NotePitch } from '../types'
 import { resolvePitch, resolvePitches } from '../utils/pitch'
 
@@ -35,28 +38,15 @@ export function steps(
 }
 
 /**
- * Trill — rapid alternation between two adjacent pitches.
- * Alternates between the given pitch and a pitch one step above.
+ * Trill — rapid alternation between two pitches.
  */
 export function trill(
   pitch: NotePitch,
-  rate: number,
-  duration: number,
-): PipeStep {
-  return step((bridge) => {
-    const baseMidi = resolvePitch(pitch)
-    const trillMidi = baseMidi + 1 // semitone above
-
-    const hitCount = Math.floor(duration / rate)
-    let target = bridge
-
-    for (let i = 0; i < hitCount; ++i) {
-      const currentPitch = i % 2 === 0 ? baseMidi : trillMidi
-      target = target.withNote(currentPitch, rate)
-    }
-
-    return target
-  })
+  basePitch?: NotePitch,
+  rate?: number,
+  duration?: number,
+): TrillBuilder {
+  return new TrillBuilder({ pitch, basePitch, rate, duration })
 }
 
 /**
@@ -64,20 +54,10 @@ export function trill(
  */
 export function tremolo(
   pitch: NotePitch,
-  rate: number,
-  duration: number,
-): PipeStep {
-  return step((bridge) => {
-    const midi = resolvePitch(pitch)
-    const hitCount = Math.floor(duration / rate)
-    let target = bridge
-
-    for (let i = 0; i < hitCount; ++i) {
-      target = target.withNote(midi, rate)
-    }
-
-    return target
-  })
+  rate?: number,
+  duration?: number,
+): TremoloBuilder {
+  return new TremoloBuilder({ pitch, rate, duration })
 }
 
 /**
@@ -91,33 +71,13 @@ export function grace(pitch: NotePitch, graceDuration: number = 30): NoteBuilder
 
 /**
  * Glissando — chromatic pitch slide from one note to another.
- * Emits a series of chromatic notes (semitone steps) over the duration.
  */
 export function glissando(
   from: NotePitch,
-  to: NotePitch,
-  duration: number,
-): PipeStep {
-  return step((bridge) => {
-    const fromMidi = resolvePitch(from)
-    const toMidi = resolvePitch(to)
-    const direction = toMidi > fromMidi ? 1 : -1
-    const semitoneCount = Math.abs(toMidi - fromMidi)
-
-    if (semitoneCount === 0) {
-      return bridge.withNote(fromMidi, duration)
-    }
-
-    const stepDuration = Math.round(duration / semitoneCount)
-    let target = bridge
-
-    for (let i = 0; i <= semitoneCount; ++i) {
-      const currentPitch = fromMidi + (i * direction)
-      target = target.withNote(currentPitch, stepDuration)
-    }
-
-    return target
-  })
+  to?: NotePitch,
+  duration?: number,
+): GlissandoBuilder {
+  return new GlissandoBuilder({ from, to, duration })
 }
 
 /**
