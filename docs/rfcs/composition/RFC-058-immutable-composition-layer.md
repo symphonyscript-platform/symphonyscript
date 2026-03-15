@@ -788,53 +788,74 @@ class LinkBuilder implements PipeStep {
 
 ---
 
-## 7. The `Clip` Class
+## 7. Clip
 
-Minimal. The entire public API is ~6 methods:
+### 7.1 `IClip` — The Interface
+
+> **Note:** `IClip` is an intentional exception to the "no I-prefix" convention. The `Clip` name is reserved for the class that serves as both implementation and static factory. The I-prefix avoids a name collision while keeping `Clip` as the single developer-facing name.
 
 ```typescript
-interface Clip {
-  /** Execute pipeline against a composition bridge. Returns composed bridge (with accumulated thunks). */
-  compose(bridge: CompositionBridge): CompositionBridge;
-
-  /** Snapshot clip output into a FrozenClip for composition-time reuse. */
-  freeze(): FrozenClip;
-
-  /** Create synapse to target clip. Returns LinkBuilder. */
-  use(target: Clip, weight?: number): LinkBuilder;
-
-  /** Set loop region boundaries. */
-  setLoopRegion(start: number, end: number): Clip;
-
-  /** Reverse content (post-processing via RecordingBridge). */
-  reverse(): Clip;
-
-  /** Time-stretch content by factor. */
-  stretch(factor: number): Clip;
+interface IClip {
+  pipe(...steps: PipeStep[]): IClip
+  compose(context: CompositionBridge): CompositionBridge
 }
 ```
 
-`Clip.pipe()` is a static factory that returns a `Clip`:
+Two methods. All other operations (`use()`, `reverse()`, `stretch()`, `setLoopRegion()`) are notations or session-level concerns.
+
+### 7.2 `Clip` — The Class
+
+`Clip` is both the static entry point and the `IClip` implementation. Internally it uses a persistent linked list of `PipeStepNode` groups for structural sharing across `pipe()` calls:
 
 ```typescript
-class DefaultClip implements Clip {
+interface PipeStepNode {
+  readonly steps: PipeStep[]
+  readonly prev: PipeStepNode | null
+}
+
+class Clip implements IClip {
+  constructor(private readonly tail: PipeStepNode | null = null) {}
+
   static pipe(...steps: PipeStep[]): Clip {
-    return new DefaultClip(steps);
+    return new Clip({ prev: null, steps })
   }
 
-  compose(bridge: CompositionBridge): CompositionBridge {
-    let b = bridge;
-    for (const s of this.steps) {
-      b = s.apply(b);
+  static freeze(clip: IClip): FrozenClip {
+    return freeze(clip)
+  }
+
+  pipe(...steps: PipeStep[]): Clip {
+    return new Clip({ prev: this.tail, steps })
+  }
+
+  compose(context: CompositionBridge): CompositionBridge {
+    let current = this.tail
+    let bridge = context
+    const nodes: PipeStepNode[] = []
+
+    while (current) {
+      nodes.push(current)
+      current = current.prev
     }
-    return b;
+
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const steps = nodes[i].steps
+      for (let j = 0; j < steps.length; ++j) {
+        bridge = steps[j].apply(bridge)
+      }
+    }
+
+    return bridge
   }
 }
 ```
 
-`compose()` runs the pipe steps, returning an `CompositionBridge` with all thunks accumulated. Call `.commit(bridge)` to execute:
+- `Clip.pipe()` — static factory. Creates a `Clip` with a single node (no prev).
+- `clip.pipe()` — instance method. Creates a new `Clip` with the new steps prepended, sharing the existing tail. O(1).
+- `clip.compose()` — collects linked list nodes, reverses to chronological order, applies all steps.
+- `Clip.freeze()` — static utility. Composes against a fresh `CompositionBridge`, commits to a `RecordingBridge`, returns `FrozenClip`.
 
-### 7.1 `FrozenClip`
+### 7.3 `FrozenClip`
 
 ```typescript
 interface FrozenClip {
