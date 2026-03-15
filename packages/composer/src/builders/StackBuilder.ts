@@ -4,15 +4,15 @@ import { appendSteps, applyEntries } from '../utils/scope-entries'
 /**
  * Builder for parallel composition.
  *
- * Each `.steps()` call adds a branch.
+ * Each `.branch()` call adds a parallel branch.
  * All branches fork from the same tick and run independently.
  * After all branches, tick advances to the longest branch's end.
  *
  * Usage:
  *   stack()
- *     .steps(note('C4'), note('E4'))
- *     .steps(use(drumClip))
- *     .steps(chord('Am'), chord('F'))
+ *     .branch(note('C4'), note('E4'))
+ *     .branch(use(drumClip))
+ *     .branch(chord('Am'), chord('F'))
  */
 export class StackBuilder implements PipeStep {
   private readonly branches: PipeStep[][]
@@ -21,8 +21,8 @@ export class StackBuilder implements PipeStep {
     this.branches = branches
   }
 
-  /** Add a branch of inline steps. */
-  steps(...pipeSteps: PipeStep[]): StackBuilder {
+  /** Add a parallel branch. */
+  branch(...pipeSteps: PipeStep[]): StackBuilder {
     return new StackBuilder(appendSteps(this.branches, pipeSteps))
   }
 

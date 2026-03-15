@@ -9,10 +9,12 @@ export interface CompositionBridge {
     readonly tempo: number
     readonly timeSignatureNum: number
     readonly timeSignatureDen: number
-    readonly scaleRoot: number
+    readonly scaleRoot: PitchClass
     readonly scaleMode: ScaleMode
-    readonly keyRoot: number
+    readonly keyRoot: PitchClass | null
     readonly keyMode: ScaleMode
+    readonly volume: number
+    readonly pan: number
     readonly swing: number
     readonly muted: boolean
     readonly precise: boolean
@@ -64,8 +66,14 @@ export interface CompositionBridge {
     /** Return new bridge with specified scale context. */
     withScale(root: PitchClass, mode: ScaleMode): CompositionBridge
 
-    /** Return new bridge with specified key context. */
+    /** Return new bridge with specified key context (null to clear). */
     withKey(root: PitchClass, mode: ScaleMode): CompositionBridge
+
+    /** Return new bridge with specified volume (CC7). Emits CC + tracks state. */
+    withVolume(v: number): CompositionBridge
+
+    /** Return new bridge with specified pan (CC10). Emits CC + tracks state. */
+    withPan(v: number): CompositionBridge
 
     /** Return new bridge with specified swing amount (0.0–1.0). */
     withSwing(amount: number): CompositionBridge

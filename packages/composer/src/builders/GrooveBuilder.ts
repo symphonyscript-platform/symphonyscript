@@ -1,7 +1,7 @@
 import { CompositionBridge } from '@symphonyscript/composer'
 import { SeededRandom } from '@symphonyscript/core'
 import { GrooveBridge, GrooveBridgeParams, GrooveStep } from '../composition/GrooveBridge'
-import { ScopedEffectBuilder } from './ScopedEffectBuilder'
+import { ScopedStepBuilder } from './ScopedStepBuilder'
 import type { PipeStep } from '@symphonyscript/composer'
 import { KNUTH_MULTIPLIER } from '../constants'
 
@@ -16,7 +16,7 @@ export interface GrooveParams extends Omit<GrooveBridgeParams, 'rng'> {
   entries: PipeStep[][]
 }
 
-export class GrooveBuilder extends ScopedEffectBuilder<GrooveBuilder> {
+export class GrooveBuilder extends ScopedStepBuilder<GrooveBuilder> {
   private readonly params: Omit<GrooveParams, 'entries'>
 
   constructor(params: Partial<GrooveParams>) {
@@ -58,10 +58,14 @@ export class GrooveBuilder extends ScopedEffectBuilder<GrooveBuilder> {
     return this.clone({ rng: new SeededRandom(seed) })
   }
 
-  protected wrap(bridge: CompositionBridge): CompositionBridge {
+  protected onEnter(bridge: CompositionBridge): CompositionBridge {
     const rng = this.params.rng ?? new SeededRandom((bridge.tick * KNUTH_MULTIPLIER) | 0)
 
     return new GrooveBridge(bridge, { ...this.params, rng })
+  }
+
+  protected onExit(result: CompositionBridge, parent: CompositionBridge): CompositionBridge {
+    return parent.withTick(result.tick)
   }
 
   protected cloneWithEntries(entries: PipeStep[][]): GrooveBuilder {

@@ -1,7 +1,7 @@
 import { CompositionBridge } from '@symphonyscript/composer'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
-import { applyKeySignature, type KeyContext } from '@symphonyscript/theory'
-import { noteToMidi } from '@symphonyscript/theory'
+import { applyKeySignature, noteToMidi } from '@symphonyscript/theory'
+import type { KeyContext, Interval24EDO } from '@symphonyscript/theory'
 
 export interface NoteParams extends PitchStepParams {
   pitch: number
@@ -25,23 +25,43 @@ export class NoteBuilder extends PitchStepBuilder<NoteBuilder> {
   apply(bridge: CompositionBridge): CompositionBridge {
     let resolvedPitch = this._pitch
 
-    // If we have a raw pitch string and the bridge has a key context, apply key accidentals
-    if (this._rawPitch !== null && bridge.keyRoot >= 0) {
-      const keyContext: KeyContext = {
-        root: bridge.keyRoot as any,
-        mode: bridge.keyMode as any,
-      }
-      const adjusted = applyKeySignature(this._rawPitch, keyContext)
-      if (adjusted !== null) {
-        const midi = noteToMidi(adjusted)
-        if (midi !== null) {
-          resolvedPitch = midi
+    if (this._rawPitch !== null) {
+      if (bridge.keyRoot !== null) {
+        // Key context active — use applyKeySignature with override
+        const keyContext: KeyContext = {
+          root: bridge.keyRoot as unknown as Interval24EDO,
+          mode: bridge.keyMode as unknown as 'major' | 'minor',
+        }
+        const adjusted = applyKeySignature(
+          this._rawPitch,
+          keyContext,
+          this.shared.accidentalOverride ?? undefined,
+        )
+        if (adjusted !== null) {
+          const midi = noteToMidi(adjusted)
+          if (midi !== null) {
+            resolvedPitch = midi
+          }
+        }
+      } else if (this.shared.accidentalOverride === 'natural') {
+        // No key context, .natural() → strip any accidental from the string
+        const adjusted = applyKeySignature(this._rawPitch, null, 'natural')
+        if (adjusted !== null) {
+          const midi = noteToMidi(adjusted)
+          if (midi !== null) {
+            resolvedPitch = midi
+          }
         }
       }
+      // No key, no override → use the pre-resolved pitch as-is
     }
 
+    // For non-string pitches or when raw pitch was not used,
+    // accidental is a numeric semitone offset (legacy behavior for degree/chord compat)
+    const accidentalOffset = this._rawPitch !== null ? 0 : this.shared.accidental
+
     const finalPitch = resolvedPitch
-      + this.shared.accidental
+      + accidentalOffset
       + (this.shared.octaveShift * 12)
       + this.shared.transposeSemitones
 

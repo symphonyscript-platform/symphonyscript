@@ -35,17 +35,25 @@ export class IsolateBuilder implements ScopeBuilder<IsolateBuilder> {
     const result = applyEntries(this.entries, bridge)
 
     // Restore ALL state fields from parent, keep tick (and thunks)
-    return result
+    let restored = result
       .withVelocity(bridge.velocity)
       .withTranspose(bridge.transpose)
       .withDefaultDuration(bridge.defaultDuration)
       .withTempo(bridge.tempo)
       .withTimeSignature(bridge.timeSignatureNum, bridge.timeSignatureDen)
-      .withScale(bridge.scaleRoot as any, bridge.scaleMode)
-      .withKey(bridge.keyRoot as any, bridge.keyMode)
+      .withScale(bridge.scaleRoot, bridge.scaleMode)
+      .withVolume(bridge.volume)
+      .withPan(bridge.pan)
       .withSwing(bridge.swing)
       .withPrecise(bridge.precise)
       .withQuantize(bridge.quantizeGrid, bridge.quantizeStrength)
       .withMuted(bridge.muted)
+
+    // Restore key context only if parent had one
+    if (bridge.keyRoot !== null) {
+      restored = restored.withKey(bridge.keyRoot, bridge.keyMode)
+    }
+
+    return restored
   }
 }

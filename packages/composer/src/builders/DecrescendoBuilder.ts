@@ -1,7 +1,7 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { EasingCurve } from '../composition/VelocityRampBridge'
 import { VelocityRampBridge } from '../composition/VelocityRampBridge'
-import { ScopedEffectBuilder } from './ScopedEffectBuilder'
+import { ScopedStepBuilder } from './ScopedStepBuilder'
 
 export interface DecrescendoParams {
   duration: number
@@ -11,7 +11,7 @@ export interface DecrescendoParams {
   entries: PipeStep[][]
 }
 
-export class DecrescendoBuilder extends ScopedEffectBuilder<DecrescendoBuilder> {
+export class DecrescendoBuilder extends ScopedStepBuilder<DecrescendoBuilder> {
   private readonly params: Omit<DecrescendoParams, 'entries'>
 
   constructor(params: Partial<DecrescendoParams>) {
@@ -40,7 +40,7 @@ export class DecrescendoBuilder extends ScopedEffectBuilder<DecrescendoBuilder> 
     return this.clone({ curve })
   }
 
-  protected wrap(bridge: CompositionBridge): CompositionBridge {
+  protected onEnter(bridge: CompositionBridge): CompositionBridge {
     return new VelocityRampBridge(bridge, {
       startTick: bridge.tick,
       endTick: bridge.tick + this.params.duration,
@@ -48,6 +48,10 @@ export class DecrescendoBuilder extends ScopedEffectBuilder<DecrescendoBuilder> 
       toVelocity: this.params.to,
       curve: this.params.curve,
     })
+  }
+
+  protected onExit(result: CompositionBridge, parent: CompositionBridge): CompositionBridge {
+    return parent.withTick(result.tick)
   }
 
   protected cloneWithEntries(entries: PipeStep[][]): DecrescendoBuilder {

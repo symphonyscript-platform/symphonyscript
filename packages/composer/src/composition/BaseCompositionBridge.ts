@@ -1,5 +1,5 @@
 import { ExecutionContext } from '@symphonyscript/core'
-import { PitchClass, ScaleMode } from '@symphonyscript/theory'
+import { MIDI_CC, PitchClass, ScaleMode } from '@symphonyscript/theory'
 import { CompositionBridge } from '@symphonyscript/composer'
 import { ThunkNode } from '../interfaces/thunk-node'
 
@@ -11,10 +11,12 @@ export interface BaseCompositionBridgeParams {
   tempo: number
   timeSignatureNum: number
   timeSignatureDen: number
-  scaleRoot: number
+  scaleRoot: PitchClass
   scaleMode: ScaleMode
-  keyRoot: number
+  keyRoot: PitchClass | null
   keyMode: ScaleMode
+  volume: number
+  pan: number
   swing: number
   muted: boolean
   precise: boolean
@@ -36,10 +38,12 @@ export class BaseCompositionBridge implements CompositionBridge {
       tempo: params.tempo ?? 120,
       timeSignatureNum: params.timeSignatureNum ?? 4,
       timeSignatureDen: params.timeSignatureDen ?? 4,
-      scaleRoot: params.scaleRoot ?? 0,
+      scaleRoot: params.scaleRoot ?? (0 as PitchClass),
       scaleMode: params.scaleMode ?? ScaleMode.MAJOR,
-      keyRoot: params.keyRoot ?? -1,
+      keyRoot: params.keyRoot ?? null,
       keyMode: params.keyMode ?? ScaleMode.MAJOR,
+      volume: params.volume ?? 100,
+      pan: params.pan ?? 64,
       swing: params.swing ?? 0,
       muted: params.muted ?? false,
       precise: params.precise ?? false,
@@ -61,6 +65,8 @@ export class BaseCompositionBridge implements CompositionBridge {
   get scaleMode() { return this.params.scaleMode }
   get keyRoot() { return this.params.keyRoot }
   get keyMode() { return this.params.keyMode }
+  get volume() { return this.params.volume }
+  get pan() { return this.params.pan }
   get swing() { return this.params.swing }
   get muted() { return this.params.muted }
   get precise() { return this.params.precise }
@@ -140,6 +146,16 @@ export class BaseCompositionBridge implements CompositionBridge {
 
   withKey(root: PitchClass, mode: ScaleMode): BaseCompositionBridge {
     return this.derive({ keyRoot: root, keyMode: mode })
+  }
+
+  withVolume(v: number): BaseCompositionBridge {
+    const tick = this.params.tick
+    return this.derive({ volume: v }, ctx => ctx.insertCC(MIDI_CC.VOLUME, v, tick, 0))
+  }
+
+  withPan(v: number): BaseCompositionBridge {
+    const tick = this.params.tick
+    return this.derive({ pan: v }, ctx => ctx.insertCC(MIDI_CC.PAN, v, tick, 0))
   }
 
   withSwing(amount: number): BaseCompositionBridge {

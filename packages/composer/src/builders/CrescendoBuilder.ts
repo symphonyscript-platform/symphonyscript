@@ -1,4 +1,4 @@
-import { ScopedEffectBuilder } from './ScopedEffectBuilder'
+import { ScopedStepBuilder } from './ScopedStepBuilder'
 import { EasingCurve, VelocityRampBridge } from '../composition/VelocityRampBridge'
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 
@@ -10,7 +10,7 @@ export interface CrescendoParams {
   entries: PipeStep[][]
 }
 
-export class CrescendoBuilder extends ScopedEffectBuilder<CrescendoBuilder> {
+export class CrescendoBuilder extends ScopedStepBuilder<CrescendoBuilder> {
   private readonly params: Omit<CrescendoParams, 'entries'>
 
   constructor(params: Partial<CrescendoParams>) {
@@ -39,7 +39,7 @@ export class CrescendoBuilder extends ScopedEffectBuilder<CrescendoBuilder> {
     return this.clone({ curve })
   }
 
-  protected wrap(bridge: CompositionBridge): CompositionBridge {
+  protected onEnter(bridge: CompositionBridge): CompositionBridge {
     return new VelocityRampBridge(bridge, {
       startTick: bridge.tick,
       endTick: bridge.tick + this.params.duration,
@@ -47,6 +47,10 @@ export class CrescendoBuilder extends ScopedEffectBuilder<CrescendoBuilder> {
       toVelocity: this.params.to,
       curve: this.params.curve,
     })
+  }
+
+  protected onExit(result: CompositionBridge, parent: CompositionBridge): CompositionBridge {
+    return parent.withTick(result.tick)
   }
 
   protected cloneWithEntries(entries: PipeStep[][]): CrescendoBuilder {

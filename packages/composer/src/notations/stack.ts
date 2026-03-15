@@ -6,8 +6,8 @@ import { StackBuilder } from '../builders/StackBuilder'
  *
  * Builder usage:
  *   stack()
- *     .steps(note('C4'), note('E4'))
- *     .use(drumClip)
+ *     .branch(note('C4'), note('E4'))
+ *     .branch(use(drumClip))
  *
  * Shorthand (flat arrays):
  *   stack(
@@ -19,7 +19,7 @@ export function stack(...branches: PipeStep[][]): StackBuilder {
   let builder = new StackBuilder()
 
   for (let i = 0; i < branches.length; ++i) {
-    builder = builder.steps(...branches[i])
+    builder = builder.branch(...branches[i])
   }
 
   return builder

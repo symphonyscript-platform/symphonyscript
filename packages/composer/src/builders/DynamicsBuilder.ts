@@ -1,12 +1,12 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { DynamicsBridge, DynamicsBridgeParams } from '../composition/DynamicsBridge'
-import { ScopedEffectBuilder } from './ScopedEffectBuilder'
+import { ScopedStepBuilder } from './ScopedStepBuilder'
 
 export interface DynamicsParams extends DynamicsBridgeParams {
   entries: PipeStep[][]
 }
 
-export class DynamicsBuilder extends ScopedEffectBuilder<DynamicsBuilder> {
+export class DynamicsBuilder extends ScopedStepBuilder<DynamicsBuilder> {
   private readonly params: Omit<DynamicsParams, 'entries'>
 
   constructor(params: Partial<DynamicsParams>) {
@@ -35,8 +35,12 @@ export class DynamicsBuilder extends ScopedEffectBuilder<DynamicsBuilder> {
     return this.clone({ endTick: tick })
   }
 
-  protected wrap(bridge: CompositionBridge): CompositionBridge {
+  protected onEnter(bridge: CompositionBridge): CompositionBridge {
     return new DynamicsBridge(bridge, this.params)
+  }
+
+  protected onExit(result: CompositionBridge, parent: CompositionBridge): CompositionBridge {
+    return parent.withTick(result.tick)
   }
 
   protected cloneWithEntries(entries: PipeStep[][]): DynamicsBuilder {

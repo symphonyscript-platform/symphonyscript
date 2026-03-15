@@ -16,6 +16,8 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
   get scaleMode() { return this.bridge.scaleMode }
   get keyRoot() { return this.bridge.keyRoot }
   get keyMode() { return this.bridge.keyMode }
+  get volume() { return this.bridge.volume }
+  get pan() { return this.bridge.pan }
   get swing() { return this.bridge.swing }
   get muted() { return this.bridge.muted }
   get precise() { return this.bridge.precise }
@@ -81,6 +83,14 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
 
   withSwing(amount: number): CompositionBridge {
     return this.rewrap(this.bridge.withSwing(amount))
+  }
+
+  withVolume(v: number): CompositionBridge {
+    return this.rewrap(this.bridge.withVolume(v))
+  }
+
+  withPan(v: number): CompositionBridge {
+    return this.rewrap(this.bridge.withPan(v))
   }
 
   withQuantize(grid: number, strength?: number): CompositionBridge {

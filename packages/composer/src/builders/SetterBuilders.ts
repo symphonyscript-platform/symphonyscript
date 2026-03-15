@@ -1,5 +1,5 @@
 import type { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import { ScopedSetterBuilder } from './ScopedSetterBuilder'
+import { ScopedStepBuilder } from './ScopedStepBuilder'
 
 // ============================================================================
 // FieldSetter — generic scoped setter for any bridge state field
@@ -13,7 +13,7 @@ type Restorer = (result: CompositionBridge, parent: CompositionBridge) => Compos
  *
  * Parameterized by closure-captured setter/restorer functions.
  */
-export class FieldSetter extends ScopedSetterBuilder<FieldSetter> {
+export class FieldSetter extends ScopedStepBuilder<FieldSetter> {
   constructor(
     private readonly setter: Setter,
     private readonly restorer: Restorer,
@@ -22,9 +22,9 @@ export class FieldSetter extends ScopedSetterBuilder<FieldSetter> {
     super(entries)
   }
 
-  protected set(bridge: CompositionBridge) { return this.setter(bridge) }
+  protected onEnter(bridge: CompositionBridge) { return this.setter(bridge) }
 
-  protected restore(result: CompositionBridge, parent: CompositionBridge) {
+  protected onExit(result: CompositionBridge, parent: CompositionBridge) {
     return this.restorer(result, parent)
   }
 

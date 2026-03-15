@@ -1,12 +1,12 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { SwingBridge, SwingBridgeParams } from '../composition/SwingBridge'
-import { ScopedEffectBuilder } from './ScopedEffectBuilder'
+import { ScopedStepBuilder } from './ScopedStepBuilder'
 
 export interface SwingParams extends SwingBridgeParams {
   entries: PipeStep[][]
 }
 
-export class SwingBuilder extends ScopedEffectBuilder<SwingBuilder> {
+export class SwingBuilder extends ScopedStepBuilder<SwingBuilder> {
   private readonly params: Omit<SwingParams, 'entries'>
 
   constructor(params: Partial<SwingParams>) {
@@ -25,8 +25,12 @@ export class SwingBuilder extends ScopedEffectBuilder<SwingBuilder> {
     return this.clone({ grid })
   }
 
-  protected wrap(bridge: CompositionBridge): CompositionBridge {
+  protected onEnter(bridge: CompositionBridge): CompositionBridge {
     return new SwingBridge(bridge, this.params)
+  }
+
+  protected onExit(result: CompositionBridge, parent: CompositionBridge): CompositionBridge {
+    return parent.withTick(result.tick)
   }
 
   protected cloneWithEntries(entries: PipeStep[][]): SwingBuilder {

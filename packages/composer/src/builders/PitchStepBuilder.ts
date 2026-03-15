@@ -1,5 +1,6 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { MIDI_CC } from '@symphonyscript/theory'
+import type { AccidentalOverride } from '@symphonyscript/theory'
 
 export interface PitchStepParams {
   duration: number | null
@@ -7,6 +8,7 @@ export interface PitchStepParams {
   velocity: number | null
   octaveShift: number
   accidental: number
+  accidentalOverride: AccidentalOverride | null
   precise: boolean
   muted: boolean
   detune: number | null
@@ -23,6 +25,7 @@ export const DEFAULT_PITCH_STEP_PARAMS: PitchStepParams = {
   velocity: null,
   octaveShift: 0,
   accidental: 0,
+  accidentalOverride: null,
   precise: false,
   muted: false,
   detune: null,
@@ -54,15 +57,15 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
   }
 
   sharp(): T {
-    return this.create({ ...this.shared, accidental: this.shared.accidental + 1 })
+    return this.create({ ...this.shared, accidental: this.shared.accidental + 1, accidentalOverride: 'sharp' })
   }
 
   flat(): T {
-    return this.create({ ...this.shared, accidental: this.shared.accidental - 1 })
+    return this.create({ ...this.shared, accidental: this.shared.accidental - 1, accidentalOverride: 'flat' })
   }
 
   natural(): T {
-    return this.create({ ...this.shared, accidental: 0 })
+    return this.create({ ...this.shared, accidental: 0, accidentalOverride: 'natural' })
   }
 
   octave(shift: number): T {
