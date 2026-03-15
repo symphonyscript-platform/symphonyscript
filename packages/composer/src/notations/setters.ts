@@ -37,3 +37,32 @@ export function key(root: PitchClass, mode: ScaleMode): PipeStep {
   return step((bridge) => bridge.withKey(root, mode))
 }
 
+/** Set default duration for notes that don't specify one. */
+export function defaultDuration(duration: number): PipeStep {
+  return step((bridge) => bridge.withDefaultDuration(duration))
+}
+
+/** Set time signature. */
+export function timeSignature(numerator: number, denominator: number): PipeStep {
+  return step((bridge) => bridge.withTimeSignature(numerator, denominator))
+}
+
+/** Set octave via transpose (octave 4 = neutral). */
+export function octave(n: number): PipeStep {
+  return step((bridge) => bridge.withTranspose((n - 4) * 12))
+}
+
+/** Shift up by n octaves. */
+export function octaveUp(n: number = 1): PipeStep {
+  return step((bridge) => bridge.withTranspose(bridge.transpose + n * 12))
+}
+
+/** Shift down by n octaves. */
+export function octaveDown(n: number = 1): PipeStep {
+  return step((bridge) => bridge.withTranspose(bridge.transpose - n * 12))
+}
+
+/** Disable humanization for subsequent notes. */
+export function precise(): PipeStep {
+  return step((bridge) => bridge.withPrecise(true))
+}

@@ -1,7 +1,7 @@
 import { PipeStep } from './pipe-step'
 import { CompositionBridge } from './composition-bridge'
+import { Composable } from './composable'
 
-export interface IClip {
+export interface IClip extends Composable {
   pipe(...steps: PipeStep[]): IClip
-  compose(context: CompositionBridge): CompositionBridge
 }
