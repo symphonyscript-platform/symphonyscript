@@ -25,7 +25,7 @@ export interface BaseCompositionBridgeParams {
 export class BaseCompositionBridge implements CompositionBridge {
   protected readonly params: BaseCompositionBridgeParams
 
-  constructor(params: Partial<BaseCompositionBridgeParams>) {
+  constructor(params: Partial<BaseCompositionBridgeParams> = {}) {
     this.params = {
       tick: params.tick ?? 0,
       velocity: params.velocity ?? 800,
