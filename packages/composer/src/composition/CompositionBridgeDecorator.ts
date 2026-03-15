@@ -113,5 +113,10 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
     this.bridge.commit(ctx)
   }
 
+  /** Strip this decorator, returning the inner bridge with all accumulated thunks. */
+  unwrap(): CompositionBridge {
+    return this.bridge
+  }
+
   protected abstract rewrap(bridge: CompositionBridge): CompositionBridgeDecorator
 }

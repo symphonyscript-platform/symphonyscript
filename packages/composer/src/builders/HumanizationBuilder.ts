@@ -1,6 +1,7 @@
 import { SeededRandom } from '@symphonyscript/core'
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { HumanizationBridge, HumanizationBridgeParams } from '../composition/HumanizationBridge'
+import { CompositionBridgeDecorator } from '../composition/CompositionBridgeDecorator'
 import { ScopedStepBuilder } from './ScopedStepBuilder'
 import { KNUTH_MULTIPLIER } from '../constants'
 
@@ -41,8 +42,8 @@ export class HumanizationBuilder extends ScopedStepBuilder<HumanizationBuilder> 
     return new HumanizationBridge(bridge, { ...this.params, rng })
   }
 
-  protected onExit(result: CompositionBridge, parent: CompositionBridge): CompositionBridge {
-    return parent.withTick(result.tick)
+  protected onExit(result: CompositionBridge, _parent: CompositionBridge): CompositionBridge {
+    return (result as CompositionBridgeDecorator).unwrap()
   }
 
   protected cloneWithEntries(entries: PipeStep[][]): HumanizationBuilder {

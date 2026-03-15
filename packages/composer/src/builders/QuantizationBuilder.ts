@@ -1,5 +1,6 @@
-import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import type { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { QuantizationBridge, QuantizationBridgeParams } from '../composition/QuantizationBridge'
+import { CompositionBridgeDecorator } from '../composition/CompositionBridgeDecorator'
 import { ScopedStepBuilder } from './ScopedStepBuilder'
 
 export interface QuantizationParams extends QuantizationBridgeParams {
@@ -29,8 +30,8 @@ export class QuantizationBuilder extends ScopedStepBuilder<QuantizationBuilder> 
     return new QuantizationBridge(bridge, this.params)
   }
 
-  protected onExit(result: CompositionBridge, parent: CompositionBridge): CompositionBridge {
-    return parent.withTick(result.tick)
+  protected onExit(result: CompositionBridge, _parent: CompositionBridge): CompositionBridge {
+    return (result as CompositionBridgeDecorator).unwrap()
   }
 
   protected cloneWithEntries(entries: PipeStep[][]): QuantizationBuilder {

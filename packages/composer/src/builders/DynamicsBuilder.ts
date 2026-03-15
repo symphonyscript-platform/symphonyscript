@@ -1,6 +1,7 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { DynamicsBridge, DynamicsBridgeParams } from '../composition/DynamicsBridge'
 import { ScopedStepBuilder } from './ScopedStepBuilder'
+import { CompositionBridgeDecorator } from '../composition/CompositionBridgeDecorator'
 
 export interface DynamicsParams extends DynamicsBridgeParams {
   entries: PipeStep[][]
@@ -39,8 +40,8 @@ export class DynamicsBuilder extends ScopedStepBuilder<DynamicsBuilder> {
     return new DynamicsBridge(bridge, this.params)
   }
 
-  protected onExit(result: CompositionBridge, parent: CompositionBridge): CompositionBridge {
-    return parent.withTick(result.tick)
+  protected onExit(result: CompositionBridge, _parent: CompositionBridge): CompositionBridge {
+    return (result as CompositionBridgeDecorator).unwrap()
   }
 
   protected cloneWithEntries(entries: PipeStep[][]): DynamicsBuilder {

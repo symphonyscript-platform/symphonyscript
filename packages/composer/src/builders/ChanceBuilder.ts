@@ -2,6 +2,7 @@ import { CompositionBridge } from '@symphonyscript/composer'
 import { SeededRandom } from '@symphonyscript/core'
 import { ChanceBridge } from '../composition/ChanceBridge'
 import { ScopedStepBuilder } from './ScopedStepBuilder'
+import { CompositionBridgeDecorator } from '../composition/CompositionBridgeDecorator'
 import type { PipeStep } from '@symphonyscript/composer'
 import { KNUTH_MULTIPLIER } from '../constants'
 
@@ -35,8 +36,8 @@ export class ChanceBuilder extends ScopedStepBuilder<ChanceBuilder> {
     return new ChanceBridge(bridge, this._probability, rng)
   }
 
-  protected onExit(result: CompositionBridge, parent: CompositionBridge): CompositionBridge {
-    return parent.withTick(result.tick)
+  protected onExit(result: CompositionBridge, _parent: CompositionBridge): CompositionBridge {
+    return (result as CompositionBridgeDecorator).unwrap()
   }
 
   protected cloneWithEntries(entries: PipeStep[][]): ChanceBuilder {

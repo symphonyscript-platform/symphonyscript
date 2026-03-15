@@ -2,6 +2,7 @@ import { CompositionBridge } from '@symphonyscript/composer'
 import { SeededRandom } from '@symphonyscript/core'
 import { GrooveBridge, GrooveBridgeParams, GrooveStep } from '../composition/GrooveBridge'
 import { ScopedStepBuilder } from './ScopedStepBuilder'
+import { CompositionBridgeDecorator } from '../composition/CompositionBridgeDecorator'
 import type { PipeStep } from '@symphonyscript/composer'
 import { KNUTH_MULTIPLIER } from '../constants'
 
@@ -64,8 +65,8 @@ export class GrooveBuilder extends ScopedStepBuilder<GrooveBuilder> {
     return new GrooveBridge(bridge, { ...this.params, rng })
   }
 
-  protected onExit(result: CompositionBridge, parent: CompositionBridge): CompositionBridge {
-    return parent.withTick(result.tick)
+  protected onExit(result: CompositionBridge, _parent: CompositionBridge): CompositionBridge {
+    return (result as CompositionBridgeDecorator).unwrap()
   }
 
   protected cloneWithEntries(entries: PipeStep[][]): GrooveBuilder {

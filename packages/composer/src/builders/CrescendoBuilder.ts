@@ -1,6 +1,7 @@
 import { ScopedStepBuilder } from './ScopedStepBuilder'
 import { EasingCurve, VelocityRampBridge } from '../composition/VelocityRampBridge'
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import { CompositionBridgeDecorator } from '../composition/CompositionBridgeDecorator'
 
 export interface CrescendoParams {
   duration: number
@@ -49,8 +50,8 @@ export class CrescendoBuilder extends ScopedStepBuilder<CrescendoBuilder> {
     })
   }
 
-  protected onExit(result: CompositionBridge, parent: CompositionBridge): CompositionBridge {
-    return parent.withTick(result.tick)
+  protected onExit(result: CompositionBridge, _parent: CompositionBridge): CompositionBridge {
+    return (result as CompositionBridgeDecorator).unwrap()
   }
 
   protected cloneWithEntries(entries: PipeStep[][]): CrescendoBuilder {
