@@ -62,3 +62,6 @@ export {
 
 // Helper types
 export * from './types';
+
+// Roman numerals
+export * from './roman';
