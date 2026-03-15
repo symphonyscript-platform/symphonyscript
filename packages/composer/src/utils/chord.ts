@@ -2,7 +2,10 @@ import type { HarmonyMask, Interval24EDO } from '@symphonyscript/theory'
 import { pack } from '@symphonyscript/theory'
 
 /**
- * Chord quality definitions: suffix → 12-TET semitone intervals.
+ * Chord quality lookup: suffix string → 12-TET semitone intervals from root.
+ *
+ * Supports triads, 7ths, and suspensions. Order within each array defines
+ * the interval stack (root is always 0).
  */
 const CHORD_MAP: Readonly<Record<string, readonly number[]>> = {
   // Triads
@@ -27,24 +30,47 @@ const CHORD_MAP: Readonly<Record<string, readonly number[]>> = {
 }
 
 /**
- * Note letter → semitone offset from C.
- * A=9, B=11, C=0, D=2, E=4, F=5, G=7
+ * Note letter → semitone offset from C, indexed by `charCode - 65`.
+ *
+ * | Letter | Code | Offset |
+ * |--------|------|--------|
+ * | A      | 65   | 9      |
+ * | B      | 66   | 11     |
+ * | C      | 67   | 0      |
+ * | D      | 68   | 2      |
+ * | E      | 69   | 4      |
+ * | F      | 70   | 5      |
+ * | G      | 71   | 7      |
  */
-const NOTE_OFFSETS = [9, 11, 0, 2, 4, 5, 7] // charCode 65 (A) through 71 (G)
+const NOTE_OFFSETS = [9, 11, 0, 2, 4, 5, 7]
 
+/**
+ * Result of parsing a chord symbol.
+ */
 export interface ParsedChord {
-  root: number       // MIDI pitch (C4-based, e.g., C=60, G=67)
-  mask: HarmonyMask  // 24-EDO packed bitmask
+  /** Root MIDI pitch in octave 4 (C4=60, C#4=61, ... B4=71). */
+  root: number
+  /** 24-EDO packed interval bitmask for use with `@symphonyscript/theory`. */
+  mask: HarmonyMask
 }
 
 /**
- * Parse a chord symbol into root MIDI pitch and 24-EDO HarmonyMask.
+ * Parse a chord symbol string into a root MIDI pitch and 24-EDO HarmonyMask.
  *
- * Supports: root note (A-G), accidentals (#, b), and chord qualities
- * (maj, m/min, dim, aug, maj7, m7/min7, 7, dim7, m7b5, sus2, sus4).
+ * **Format:** `[A-G][#|b]?[quality]`
  *
- * @param symbol - Chord symbol (e.g., 'Cmaj7', 'Am', 'F#dim')
- * @returns Parsed root pitch and HarmonyMask
+ * **Parsing steps:**
+ * 1. Extract root note letter (A-G) → semitone offset via {@link NOTE_OFFSETS}
+ * 2. Apply optional accidental (`#` = +1, `b` = -1)
+ * 3. Compute root MIDI pitch = 60 + pitchClass
+ * 4. Match remaining suffix against {@link CHORD_MAP}
+ * 5. Convert 12-TET intervals to 24-EDO and pack into HarmonyMask
+ *
+ * @param symbol - Chord symbol (e.g. `'Cmaj7'`, `'Am'`, `'F#dim'`, `'Bbsus4'`)
+ * @returns Parsed root pitch and interval mask
+ * @throws `"Empty chord symbol"` if `symbol` is empty
+ * @throws `"Invalid chord root note"` if first character is not A-G
+ * @throws `"Unknown chord quality"` if suffix is not in CHORD_MAP
  */
 export function parseChord(symbol: string): ParsedChord {
   if (symbol.length === 0) {
