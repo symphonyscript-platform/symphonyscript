@@ -1,4 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import { MIDI_CC } from '@symphonyscript/theory'
 
 export interface NoteParams {
   pitch: number
@@ -12,7 +13,6 @@ export interface NoteParams {
   detune: number | null
   timbre: number | null
   pressure: number | null
-  glide: boolean
 }
 
 export class NoteBuilder implements PipeStep {
@@ -31,7 +31,6 @@ export class NoteBuilder implements PipeStep {
       detune: params.detune ?? null,
       timbre: params.timbre ?? null,
       pressure: params.pressure ?? null,
-      glide: params.glide ?? false,
     }
   }
 
@@ -118,10 +117,6 @@ export class NoteBuilder implements PipeStep {
     return new NoteBuilder({ ...this.params, pressure })
   }
 
-  glide(enable: boolean = true): NoteBuilder {
-    return new NoteBuilder({ ...this.params, glide: enable })
-  }
-
   // === Apply ===
 
   apply(bridge: CompositionBridge): CompositionBridge {
@@ -145,15 +140,11 @@ export class NoteBuilder implements PipeStep {
     }
 
     if (this.params.timbre !== null) {
-      target = target.withCC(74, this.params.timbre)
+      target = target.withCC(MIDI_CC.BRIGHTNESS, this.params.timbre)
     }
 
     if (this.params.pressure !== null) {
-      target = target.withCC(13, this.params.pressure)
-    }
-
-    if (this.params.glide) {
-      target = target.withCC(65, 127)
+      target = target.withCC(MIDI_CC.EFFECT_2, this.params.pressure)
     }
 
     // Resolve duration
@@ -167,11 +158,6 @@ export class NoteBuilder implements PipeStep {
       scaledDuration,
       this.params.velocity ?? undefined,
     )
-
-    // Turn off glide after note
-    if (this.params.glide) {
-      target = target.withCC(65, 0)
-    }
 
     // Reset scoped flags
     if (this.params.precise) {
