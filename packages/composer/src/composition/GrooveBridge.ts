@@ -1,4 +1,5 @@
 import { CompositionBridge } from '@symphonyscript/composer'
+import { SeededRandom } from '@symphonyscript/core'
 import { CompositionBridgeDecorator } from './CompositionBridgeDecorator'
 
 export interface GrooveStep {
@@ -10,15 +11,12 @@ export interface GrooveStep {
 export interface GrooveBridgeParams {
   steps: readonly GrooveStep[]
   grid: number  // grid division in ticks
-  seed: number
+  rng: SeededRandom
 }
 
 export class GrooveBridge extends CompositionBridgeDecorator {
-  private readonly seed: number
-
   constructor(bridge: CompositionBridge, private readonly params: GrooveBridgeParams) {
     super(bridge)
-    this.seed = params.seed
   }
 
   override withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge {
@@ -29,24 +27,19 @@ export class GrooveBridge extends CompositionBridgeDecorator {
     const stepIndex = Math.floor(this.tick / this.params.grid) % this.params.steps.length
     const step = this.params.steps[stepIndex]
 
-    // Advance PRNG
-    const nextSeed = (this.seed * 1664525 + 1013904223) & 0x7fffffff
-
-    if (step.probability < 1.0 && ((nextSeed & 0xffff) / 0xffff) > step.probability) {
-      return new GrooveBridge(
+    if (step.probability < 1.0 && !this.params.rng.bool(step.probability)) {
+      return this.rewrap(
         this.bridge.withTick(this.tick + (duration ?? this.defaultDuration)),
-        { ...this.params, seed: nextSeed },
       )
     }
 
     const vel = Math.round((velocity ?? this.velocity) * step.velocity)
     const tickOffset = Math.round(step.timing * this.params.grid)
 
-    return new GrooveBridge(
+    return this.rewrap(
       this.bridge
         .withTick(this.tick + tickOffset)
         .withNote(pitch, duration, vel),
-      { ...this.params, seed: nextSeed },
     )
   }
 
@@ -54,4 +47,3 @@ export class GrooveBridge extends CompositionBridgeDecorator {
     return new GrooveBridge(bridge, this.params)
   }
 }
-

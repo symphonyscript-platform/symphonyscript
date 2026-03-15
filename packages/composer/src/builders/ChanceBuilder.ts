@@ -1,26 +1,27 @@
-import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import { CompositionBridge } from '@symphonyscript/composer'
+import { SeededRandom } from '@symphonyscript/core'
 import { ChanceBridge } from '../composition/ChanceBridge'
 import { ScopedEffectBuilder, ScopeEntry } from './ScopedEffectBuilder'
 import { KNUTH_MULTIPLIER } from '../constants'
 
 export interface ChanceParams {
   probability: number
-  seed: number | null
+  rng: SeededRandom | null
   entries: ScopeEntry[]
 }
 
 export class ChanceBuilder extends ScopedEffectBuilder<ChanceBuilder> {
   private readonly _probability: number
-  private readonly _seed: number | null
+  private readonly _rng: SeededRandom | null
 
   constructor(params: Partial<ChanceParams>) {
     super(params.entries ?? [])
     this._probability = params.probability ?? 1
-    this._seed = params.seed ?? null
+    this._rng = params.rng ?? null
   }
 
   seed(seed: number): ChanceBuilder {
-    return this.clone({ seed })
+    return this.clone({ rng: new SeededRandom(seed) })
   }
 
   probability(probability: number): ChanceBuilder {
@@ -28,18 +29,19 @@ export class ChanceBuilder extends ScopedEffectBuilder<ChanceBuilder> {
   }
 
   protected wrap(bridge: CompositionBridge): CompositionBridge {
-    const seed = this._seed ?? (bridge.tick * KNUTH_MULTIPLIER) | 0
-    return new ChanceBridge(bridge, this._probability, seed)
+    const rng = this._rng ?? new SeededRandom((bridge.tick * KNUTH_MULTIPLIER) | 0)
+
+    return new ChanceBridge(bridge, this._probability, rng)
   }
 
   protected cloneWithEntries(entries: ScopeEntry[]): ChanceBuilder {
-    return new ChanceBuilder({ probability: this._probability, seed: this._seed, entries })
+    return new ChanceBuilder({ probability: this._probability, rng: this._rng, entries })
   }
 
   private clone(overrides: Partial<ChanceParams>): ChanceBuilder {
     return new ChanceBuilder({
       probability: this._probability,
-      seed: this._seed,
+      rng: this._rng,
       entries: this.entries,
       ...overrides,
     })
