@@ -1,9 +1,10 @@
 import type { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { Composable } from '../interfaces/composable'
 import type { ScopeEntry } from '../utils/scope-entries'
-import { appendStepsEntry, appendClipEntry, applyEntries } from '../utils/scope-entries'
+import { appendClipEntry, appendStepsEntry, applyEntries } from '../utils/scope-entries'
 import { partitionEffects } from '../utils/partition-effects'
 import { TransformEffect } from './TransformEffect'
+import { ScopeBuilder } from '../interfaces/scope-builder'
 
 export interface ScopedParams {
   effects: PipeStep[]
@@ -22,7 +23,7 @@ export interface ScopedParams {
  * transforms post-process (post-composition) — both in user-specified order
  * within their respective phase.
  */
-export class ScopedBuilder implements PipeStep {
+export class ScopedBuilder implements ScopeBuilder {
   private readonly effects: PipeStep[]
   private readonly _entries: ScopeEntry[]
 
