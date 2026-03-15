@@ -5,33 +5,11 @@
  * Bridges the gap between abstract scale theory and playable notes.
  */
 
-import type { HarmonyMask } from '../types';
-import { SCALE, getScaleIntervals } from './scales';
-import { OCTAVE_SIZE } from '../constants';
-import type { NoteName } from '../pitch/notes';
-import { unsafeNoteName } from '../pitch/notes';
-
-// ============================================================================
-// SECTION 1: Types
-// ============================================================================
-
-/**
- * Scale mode names matching legacy system.
- */
-export type ScaleMode =
-    | 'major'
-    | 'minor'
-    | 'harmonicMinor'
-    | 'melodicMinor'
-    | 'dorian'
-    | 'phrygian'
-    | 'lydian'
-    | 'mixolydian'
-    | 'locrian'
-    | 'pentatonicMajor'
-    | 'pentatonicMinor'
-    | 'blues'
-    | 'chromatic';
+import type { HarmonyMask } from '../types'
+import { getScaleIntervals, SCALE } from './scales'
+import type { NoteName } from '../pitch/notes'
+import { unsafeNoteName } from '../pitch/notes'
+import { ScaleMode } from '../enums/scale-mode'
 
 /**
  * Scale context for degree-based notation.
@@ -44,10 +22,6 @@ export interface ScaleContext {
     /** Default octave for degree 1 */
     readonly octave: number;
 }
-
-// ============================================================================
-// SECTION 2: Constants
-// ============================================================================
 
 /**
  * Note names in chromatic order (sharps).
@@ -62,20 +36,30 @@ const NOTE_NAMES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', '
 /**
  * Scale mode to SCALE mask mapping.
  */
-const MODE_TO_SCALE: Readonly<Record<ScaleMode, HarmonyMask>> = {
-    major: SCALE.MAJOR,
-    minor: SCALE.MINOR,
-    harmonicMinor: SCALE.HARMONIC_MINOR,
-    melodicMinor: SCALE.MELODIC_MINOR,
-    dorian: SCALE.DORIAN,
-    phrygian: SCALE.PHRYGIAN,
-    lydian: SCALE.LYDIAN,
-    mixolydian: SCALE.MIXOLYDIAN,
-    locrian: SCALE.LOCRIAN,
-    pentatonicMajor: SCALE.PENTATONIC_MAJOR,
-    pentatonicMinor: SCALE.PENTATONIC_MINOR,
-    blues: SCALE.BLUES,
-    chromatic: SCALE.CHROMATIC,
+const MODE_TO_SCALE: Readonly<Record<ScaleMode, HarmonyMask | undefined>> = {
+    [ScaleMode.NONE]: undefined,
+    [ScaleMode.MAJOR]: SCALE.MAJOR,
+    [ScaleMode.MINOR]: SCALE.MINOR,
+    [ScaleMode.HARMONIC_MINOR]: SCALE.HARMONIC_MINOR,
+    [ScaleMode.MELODIC_MINOR]: SCALE.MELODIC_MINOR,
+    [ScaleMode.DORIAN]: SCALE.DORIAN,
+    [ScaleMode.PHRYGIAN]: SCALE.PHRYGIAN,
+    [ScaleMode.LYDIAN]: SCALE.LYDIAN,
+    [ScaleMode.MIXOLYDIAN]: SCALE.MIXOLYDIAN,
+    [ScaleMode.LOCRIAN]: SCALE.LOCRIAN,
+    [ScaleMode.PENTATONIC_MAJOR]: SCALE.PENTATONIC_MAJOR,
+    [ScaleMode.PENTATONIC_MINOR]: SCALE.PENTATONIC_MINOR,
+    [ScaleMode.BLUES]: SCALE.BLUES,
+    [ScaleMode.CHROMATIC]: SCALE.CHROMATIC,
+    [ScaleMode.WHOLE_TONE]: SCALE.WHOLE_TONE,
+    [ScaleMode.DIMINISHED_HW]: SCALE.DIMINISHED_HW,
+    [ScaleMode.DIMINISHED_WH]: SCALE.DIMINISHED_WH,
+    [ScaleMode.BEBOP_DOMINANT]: SCALE.BEBOP_DOMINANT,
+    [ScaleMode.BEBOP_MAJOR]: SCALE.BEBOP_MAJOR,
+    [ScaleMode.HIRAJOSHI]: SCALE.HIRAJOSHI,
+    [ScaleMode.IN_SEN]: SCALE.IN_SEN,
+    [ScaleMode.HUNGARIAN_MINOR]: SCALE.HUNGARIAN_MINOR,
+    [ScaleMode.PHRYGIAN_DOMINANT]: SCALE.PHRYGIAN_DOMINANT,
 };
 
 /**
@@ -87,10 +71,6 @@ const FLAT_ROOTS = new Set(['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb']);
  * Flat minor roots (use flats for accidentals).
  */
 const FLAT_MINOR_ROOTS = new Set(['D', 'G', 'C', 'F', 'Bb', 'Eb']);
-
-// ============================================================================
-// SECTION 3: Root Parsing
-// ============================================================================
 
 /**
  * Parse root note to semitone offset (0-11).
@@ -122,10 +102,6 @@ export function parseRoot(root: string): number | null {
     // Normalize to 0-11
     return ((semitone % 12) + 12) % 12;
 }
-
-// ============================================================================
-// SECTION 4: Degree to Note Conversion
-// ============================================================================
 
 /**
  * Convert scale degree to concrete note name.
@@ -188,9 +164,9 @@ export function degreeToNote(
         useFlats = true;
     } else if (root.includes('b')) {
         useFlats = true;
-    } else if (mode === 'major' && FLAT_ROOTS.has(root)) {
+    } else if (mode === ScaleMode.MAJOR && FLAT_ROOTS.has(root)) {
         useFlats = true;
-    } else if ((mode === 'minor' || mode === 'dorian' || mode === 'phrygian') && FLAT_MINOR_ROOTS.has(root)) {
+    } else if ((mode === ScaleMode.MINOR || mode === ScaleMode.DORIAN || mode === ScaleMode.PHRYGIAN) && FLAT_MINOR_ROOTS.has(root)) {
         useFlats = true;
     }
 
@@ -261,8 +237,8 @@ export function createScaleContext(
  * @param mode - Mode string to check
  * @returns True if valid ScaleMode
  */
-export function isValidScaleMode(mode: string): mode is ScaleMode {
-    return mode in MODE_TO_SCALE;
+export function isValidScaleMode(mode: number): mode is ScaleMode {
+    return Object.values(ScaleMode).includes(mode);
 }
 
 /**
@@ -271,8 +247,8 @@ export function isValidScaleMode(mode: string): mode is ScaleMode {
  *
  * @returns Array of scale mode names
  */
-export function getSupportedScaleModes(): ScaleMode[] {
-    return Object.keys(MODE_TO_SCALE) as ScaleMode[];
+export function getSupportedScaleModes(): keyof ScaleMode[] {
+    return Object.keys(ScaleMode) as unknown as keyof ScaleMode[];
 }
 
 /**

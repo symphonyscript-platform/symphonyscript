@@ -1,4 +1,4 @@
-import { ScaleMode } from '@symphonyscript/theory'
+import { PitchClass, ScaleMode } from '@symphonyscript/theory'
 import { ExecutionContext } from '@symphonyscript/core'
 
 export interface CompositionBridge {
@@ -12,6 +12,10 @@ export interface CompositionBridge {
     readonly scaleRoot: number
     readonly scaleMode: ScaleMode
     readonly swing: number
+    readonly muted: boolean
+    readonly precise: boolean
+    readonly quantizeGrid: number
+    readonly quantizeStrength: number
 
     // === Deferred Event Methods (pure — accumulate thunks, no side effects) ===
 
@@ -53,10 +57,10 @@ export interface CompositionBridge {
     withTimeSignature(num: number, den: number): CompositionBridge
 
     /** Return new bridge with specified scale context. */
-    withScale(root: string, mode: ScaleMode): CompositionBridge
+    withScale(root: PitchClass, mode: ScaleMode): CompositionBridge
 
     /** Return new bridge with specified key context. */
-    withKey(root: string, mode: ScaleMode): CompositionBridge
+    withKey(root: PitchClass, mode: ScaleMode): CompositionBridge
 
     /** Return new bridge with specified swing amount (0.0–1.0). */
     withSwing(amount: number): CompositionBridge

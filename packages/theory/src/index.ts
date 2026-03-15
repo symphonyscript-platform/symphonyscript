@@ -16,3 +16,5 @@ export * from './rhythm';
 export * from './harmony';
 export * from './util';
 export * from './effects';
+export * from './enums/pitch-class'
+export * from './enums/scale-mode';

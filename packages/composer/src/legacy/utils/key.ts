@@ -5,6 +5,7 @@
  */
 
 import { ScaleMode, type KeyContext, Accidental } from '../types';
+import { NOTE_TO_SEMITONE } from '@symphonyscript/theory'
 
 /** Convert ScaleMode to key signature lookup string (major/minor only). */
 export function scaleModeToKeyString(mode: ScaleMode): 'major' | 'minor' {
@@ -140,6 +141,13 @@ function parseNoteName(note: string, out: ParsedNote = PARSED_NOTE): ParsedNote 
     out.octave = sign * octave;
 
     return out;
+}
+
+export function pitchToSemitone(pitch: string): number | null {
+    const normalized = pitch.charAt(0).toUpperCase() + pitch.slice(1)
+    const semitone = NOTE_TO_SEMITONE[normalized]
+
+    return semitone ?? null
 }
 
 /** Letter index 0-6 to NoteLetter for KEY_SIGNATURES lookup. */
