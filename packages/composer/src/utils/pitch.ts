@@ -11,9 +11,11 @@ export function resolvePitch(input: NotePitch): number {
   if (typeof input === 'number') return input
 
   const midi = noteToMidi(input)
+
   if (midi === null) {
     throw new Error(`Invalid note name: ${input}`)
   }
+
   return midi
 }
 
@@ -24,8 +26,10 @@ export function resolvePitch(input: NotePitch): number {
  */
 export function resolvePitches(inputs: NotePitch[]): number[] {
   const result: number[] = new Array(inputs.length)
+
   for (let i = 0; i < inputs.length; ++i) {
     result[i] = resolvePitch(inputs[i])
   }
+
   return result
 }

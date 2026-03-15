@@ -59,31 +59,33 @@ export class ArpeggioBuilder implements PipeStep {
   apply(bridge: CompositionBridge): CompositionBridge {
     if (this.params.pitches.length === 0) return bridge
 
-    const baseMidis = resolvePitches(this.params.pitches)
+    const pool = this.buildPool(resolvePitches(this.params.pitches))
+    const sequence = this.buildSequence(pool)
 
-    // Expand octaves
+    return this.emitSequence(sequence, bridge)
+  }
+
+  private clone(overrides: Partial<ArpeggioParams>): ArpeggioBuilder {
+    return new ArpeggioBuilder({ ...this.params, ...overrides })
+  }
+
+  /** Expand base pitches across octaves and sort ascending. */
+  private buildPool(baseMidis: number[]): number[] {
     const pool: number[] = []
+
     for (let octave = 0; octave < this.params.octaves; ++octave) {
       for (let i = 0; i < baseMidis.length; ++i) {
         pool.push(baseMidis[i] + (octave * 12))
       }
     }
 
-    // Sort ascending (insertion sort — no closure allocation)
-    for (let i = 1; i < pool.length; ++i) {
-      const current = pool[i]
-      let j = i - 1
-      while (j >= 0 && pool[j] > current) {
-        pool[j + 1] = pool[j]
-        j--
-      }
-      pool[j + 1] = current
-    }
+    pool.sort((a, b) => a - b)
 
-    // Apply pattern
-    const sequence = this.buildSequence(pool)
+    return pool
+  }
 
-    // Emit notes
+  /** Emit the note sequence onto the bridge. */
+  private emitSequence(sequence: number[], bridge: CompositionBridge): CompositionBridge {
     const stepDuration = this.params.rate ?? bridge.defaultDuration
     const noteDuration = Math.round(stepDuration * this.params.gate)
     const restDuration = stepDuration - noteDuration
@@ -104,84 +106,141 @@ export class ArpeggioBuilder implements PipeStep {
     return target
   }
 
-  private clone(overrides: Partial<ArpeggioParams>): ArpeggioBuilder {
-    return new ArpeggioBuilder({ ...this.params, ...overrides })
-  }
-
+  /** Build the ordered sequence from the pool based on pattern. */
   private buildSequence(pool: number[]): number[] {
     switch (this.params.pattern) {
       case 'up':
-        return pool.slice()
+        return this.copyArray(pool)
 
       case 'down':
-        return pool.slice().reverse()
+        return this.reverseArray(pool)
 
-      case 'upDown': {
-        const result = pool.slice()
-        for (let i = pool.length - 2; i > 0; --i) {
-          result.push(pool[i])
-        }
-        return result
-      }
+      case 'upDown':
+        return this.buildUpDown(pool)
 
-      case 'downUp': {
-        const reversed = pool.slice().reverse()
-        const result = reversed.slice()
-        for (let i = reversed.length - 2; i > 0; --i) {
-          result.push(reversed[i])
-        }
-        return result
-      }
+      case 'downUp':
+        return this.buildDownUp(pool)
 
-      case 'random': {
-        const result = pool.slice()
-        // Simple seeded shuffle (Fisher-Yates)
-        let seedValue = this.params.seed ?? Date.now()
-        for (let i = result.length - 1; i > 0; --i) {
-          seedValue = (seedValue * 1664525 + 1013904223) & 0x7fffffff
-          const j = seedValue % (i + 1)
-          const temp = result[i]
-          result[i] = result[j]
-          result[j] = temp
-        }
-        return result
-      }
+      case 'random':
+        return this.buildRandom(pool)
 
-      case 'converge': {
-        const result: number[] = []
-        let left = 0
-        let right = pool.length - 1
-        while (left <= right) {
-          result.push(pool[left])
-          if (left !== right) {
-            result.push(pool[right])
-          }
-          left++
-          right--
-        }
-        return result
-      }
+      case 'converge':
+        return this.buildConverge(pool)
 
-      case 'diverge': {
-        const result: number[] = []
-        const mid = Math.floor(pool.length / 2)
-        let left = mid - 1
-        let right = mid
-
-        if (pool.length % 2 !== 0) {
-          result.push(pool[mid])
-          right = mid + 1
-        }
-
-        while (left >= 0 || right < pool.length) {
-          if (right < pool.length) result.push(pool[right++])
-          if (left >= 0) result.push(pool[left--])
-        }
-        return result
-      }
+      case 'diverge':
+        return this.buildDiverge(pool)
 
       default:
-        return pool.slice()
+        return this.copyArray(pool)
     }
+  }
+
+  private copyArray(source: number[]): number[] {
+    const result = new Array<number>(source.length)
+
+    for (let i = 0; i < source.length; ++i) {
+      result[i] = source[i]
+    }
+
+    return result
+  }
+
+  private reverseArray(source: number[]): number[] {
+    const result = new Array<number>(source.length)
+    const last = source.length - 1
+
+    for (let i = 0; i < source.length; ++i) {
+      result[i] = source[last - i]
+    }
+
+    return result
+  }
+
+  private buildUpDown(pool: number[]): number[] {
+    // up + inner reversed (no duplicated endpoints)
+    const result: number[] = []
+
+    for (let i = 0; i < pool.length; ++i) {
+      result.push(pool[i])
+    }
+
+    for (let i = pool.length - 2; i > 0; --i) {
+      result.push(pool[i])
+    }
+
+    return result
+  }
+
+  private buildDownUp(pool: number[]): number[] {
+    const reversed = this.reverseArray(pool)
+    const result: number[] = []
+
+    for (let i = 0; i < reversed.length; ++i) {
+      result.push(reversed[i])
+    }
+
+    for (let i = reversed.length - 2; i > 0; --i) {
+      result.push(reversed[i])
+    }
+
+    return result
+  }
+
+  private buildRandom(pool: number[]): number[] {
+    const result = this.copyArray(pool)
+    let seedValue = this.params.seed ?? Date.now()
+
+    for (let i = result.length - 1; i > 0; --i) {
+      seedValue = (seedValue * 1664525 + 1013904223) & 0x7fffffff
+      const j = seedValue % (i + 1)
+      const temp = result[i]
+      result[i] = result[j]
+      result[j] = temp
+    }
+
+    return result
+  }
+
+  private buildConverge(pool: number[]): number[] {
+    const result: number[] = []
+    let left = 0
+    let right = pool.length - 1
+
+    while (left <= right) {
+      result.push(pool[left])
+      if (left !== right) {
+        result.push(pool[right])
+      }
+      ++left
+      --right
+    }
+
+    return result
+  }
+
+  private buildDiverge(pool: number[]): number[] {
+    const result: number[] = []
+    const mid = Math.floor(pool.length / 2)
+    let left = mid - 1
+    let right = mid
+
+    if (pool.length % 2 !== 0) {
+      result.push(pool[mid])
+      right = mid + 1
+    }
+
+    while (left >= 0 || right < pool.length) {
+      if (right < pool.length) {
+        result.push(pool[right])
+        ++right
+      }
+
+      if (left >= 0) {
+        result.push(pool[left])
+        --left
+      }
+    }
+
+    return result
   }
 }

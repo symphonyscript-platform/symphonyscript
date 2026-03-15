@@ -1,7 +1,8 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import { euclidean, rotatePattern } from '@symphonyscript/theory'
 import type { NotePitch } from '../types'
 import { resolvePitches } from '../utils/pitch'
+import { applyBinaryPattern } from '../utils/binary-pattern'
+import { generateEuclideanPattern } from '../utils/euclidean-pattern'
 
 export interface EuclideanParams {
   hits: number
@@ -63,33 +64,22 @@ export class EuclideanBuilder implements PipeStep {
   }
 
   apply(bridge: CompositionBridge): CompositionBridge {
-    let pattern = euclidean(this.params.hits, this.params.steps)
-    if (pattern === null || pattern.length === 0) return bridge
+    const pattern = generateEuclideanPattern(
+      this.params.hits,
+      this.params.steps,
+      this.params.rotation,
+    )
 
-    if (this.params.rotation !== 0) {
-      pattern = rotatePattern(pattern, this.params.rotation)
-    }
+    if (pattern === null) return bridge
 
     const pitches = resolvePitches(this.params.notes)
     if (pitches.length === 0) return bridge
 
     const duration = this.params.stepDuration ?? bridge.defaultDuration
     let target = bridge
-    let noteIndex = 0
 
-    for (let repeat = 0; repeat < this.params.repeatCount; ++repeat) {
-      for (let step = 0; step < pattern.length; ++step) {
-        if (pattern[step]) {
-          target = target.withNote(
-            pitches[noteIndex % pitches.length],
-            duration,
-            this.params.velocity ?? undefined,
-          )
-          noteIndex++
-        } else {
-          target = target.withTick(target.tick + duration)
-        }
-      }
+    for (let i = 0; i < this.params.repeatCount; ++i) {
+      target = applyBinaryPattern(pattern, pitches, duration, target, this.params.velocity ?? undefined)
     }
 
     return target

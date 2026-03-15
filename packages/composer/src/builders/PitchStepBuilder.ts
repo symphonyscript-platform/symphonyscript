@@ -168,10 +168,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
     }
 
     if (this.shared.aftertouch !== null) {
-      // TODO: Use bridge.withAftertouch() when available
-      // Aftertouch is a separate MIDI message, not a CC.
-      // Approximating via CC for channel pressure expression.
-      target = target.withCC(MIDI_CC.EXPRESSION, this.shared.aftertouch)
+      target = target.withAftertouch(this.shared.aftertouch)
     }
 
     return target

@@ -1,49 +1,33 @@
-import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import type { PipeStep } from '@symphonyscript/composer'
+import { ScaledDurationBuilder, ScaledDurationParams } from './ScaledDurationBuilder'
 
-export interface TupletParams {
+export interface TupletParams extends ScaledDurationParams {
   count: number
   inBeats: number
-  pipeSteps: PipeStep[]
 }
 
-export class TupletBuilder implements PipeStep {
-  private readonly params: TupletParams
-
+export class TupletBuilder extends ScaledDurationBuilder {
   constructor(params: Partial<TupletParams>) {
-    this.params = {
-      count: params.count ?? 3,
-      inBeats: params.inBeats ?? 2,
+    super({
+      noteCount: params.noteCount ?? params.count ?? 3,
+      overBeats: params.overBeats ?? params.inBeats ?? 2,
       pipeSteps: params.pipeSteps ?? [],
-    }
+    })
   }
 
   inBeats(inBeats: number): TupletBuilder {
-    return this.clone({ inBeats })
+    return new TupletBuilder({ ...this.params, overBeats: inBeats })
   }
 
   count(count: number): TupletBuilder {
-    return this.clone({ count })
+    return new TupletBuilder({ ...this.params, noteCount: count })
   }
 
-  steps(...pipeSteps: PipeStep[]): TupletBuilder {
-    return this.clone({ pipeSteps })
+  override steps(...pipeSteps: PipeStep[]): TupletBuilder {
+    return new TupletBuilder({ ...this.params, pipeSteps })
   }
 
-  apply(bridge: CompositionBridge): CompositionBridge {
-    if (this.params.pipeSteps.length === 0) return bridge
-
-    const totalDuration = this.params.inBeats * bridge.defaultDuration
-    const tupletDuration = Math.round(totalDuration / this.params.count)
-    let target = bridge.withDefaultDuration(tupletDuration)
-
-    for (let i = 0; i < this.params.pipeSteps.length; ++i) {
-      target = this.params.pipeSteps[i].apply(target)
-    }
-
-    return target
-  }
-
-  private clone(overrides: Partial<TupletParams>): TupletBuilder {
+  protected override clone(overrides: Partial<ScaledDurationParams>): TupletBuilder {
     return new TupletBuilder({ ...this.params, ...overrides })
   }
 }

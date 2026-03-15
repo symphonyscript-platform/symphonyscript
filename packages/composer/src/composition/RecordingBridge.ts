@@ -1,10 +1,7 @@
 import { ExecutionContext } from '@symphonyscript/core'
-import type { CapturedNote } from '../interfaces/captured-note'
-import { FrozenClip } from '../interfaces/frozen-clip'
-
-interface RecordedNote extends CapturedNote {
-  readonly sourceId: number
-}
+import type { IFrozenClip } from '../interfaces/frozen-clip'
+import type { RecordedNote, RecordedCC, RecordedBend } from '../interfaces/recorded-events'
+import { FrozenClip } from '../FrozenClip'
 
 /**
  * An ExecutionContext that captures events into arrays
@@ -12,6 +9,8 @@ interface RecordedNote extends CapturedNote {
  */
 export class RecordingBridge implements ExecutionContext {
   private readonly notes: RecordedNote[] = []
+  private readonly ccEvents: RecordedCC[] = []
+  private readonly bendEvents: RecordedBend[] = []
 
   insertNote(
     pitch: number,
@@ -25,12 +24,14 @@ export class RecordingBridge implements ExecutionContext {
     return this.notes.length - 1
   }
 
-  insertCC(_controller: number, _value: number, _tick: number, _sourceId: number): number {
-    return 0
+  insertCC(controller: number, value: number, tick: number, sourceId: number): number {
+    this.ccEvents.push({ controller, value, tick, sourceId })
+    return this.ccEvents.length - 1
   }
 
-  insertBend(_value: number, _tick: number, _sourceId: number): number {
-    return 0
+  insertBend(value: number, tick: number, sourceId: number): number {
+    this.bendEvents.push({ value, tick, sourceId })
+    return this.bendEvents.length - 1
   }
 
   connect(_srcId: number, _tgtId: number, _weight?: number): void {}
@@ -43,29 +44,25 @@ export class RecordingBridge implements ExecutionContext {
     return 480
   }
 
-  toFrozenClip(): FrozenClip {
-    const captured: RecordedNote[] = []
+  toFrozenClip(): IFrozenClip {
+    const capturedNotes: RecordedNote[] = []
 
     for (let i = 0; i < this.notes.length; ++i) {
-      captured.push(this.notes[i])
+      capturedNotes.push(this.notes[i])
     }
 
-    let maxTick = 0
+    const capturedCC: RecordedCC[] = []
 
-    for (let i = 0; i < captured.length; ++i) {
-      const end = captured[i].tick + captured[i].duration
-      if (end > maxTick) maxTick = end
+    for (let i = 0; i < this.ccEvents.length; ++i) {
+      capturedCC.push(this.ccEvents[i])
     }
 
-    return {
-      noteCount: captured.length,
-      duration: maxTick,
-      visitNotes(callback) {
-        for (let i = 0; i < captured.length; ++i) {
-          const note = captured[i]
-          callback(note.sourceId, note.pitch, note.velocity, note.duration, note.tick, note.muted)
-        }
-      },
+    const capturedBends: RecordedBend[] = []
+
+    for (let i = 0; i < this.bendEvents.length; ++i) {
+      capturedBends.push(this.bendEvents[i])
     }
+
+    return new FrozenClip(capturedNotes, capturedCC, capturedBends)
   }
 }

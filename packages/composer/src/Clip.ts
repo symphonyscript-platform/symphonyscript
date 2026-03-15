@@ -2,7 +2,7 @@ import { IClip } from './interfaces/IClip'
 import { PipeStep } from './interfaces/pipe-step'
 import { CompositionBridge } from './interfaces/composition-bridge'
 import { freeze } from './utils/freeze'
-import { FrozenClip } from './interfaces/frozen-clip'
+import { IFrozenClip } from './interfaces/frozen-clip'
 
 export class Clip implements IClip {
   constructor(private readonly steps: PipeStep[]) {
@@ -12,7 +12,7 @@ export class Clip implements IClip {
     return new Clip(steps)
   }
 
-  static freeze(clip: IClip): FrozenClip {
+  static freeze(clip: IClip): IFrozenClip {
     return freeze(clip)
   }
 

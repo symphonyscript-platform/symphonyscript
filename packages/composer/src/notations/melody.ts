@@ -73,7 +73,7 @@ export function tuplet(
   count?: number,
   inBeats?: number,
 ): TupletBuilder {
-  return new TupletBuilder({ count, inBeats })
+  return new TupletBuilder({ noteCount: count, overBeats: inBeats })
 }
 
 /**

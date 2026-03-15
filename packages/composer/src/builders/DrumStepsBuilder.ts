@@ -1,4 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import { applyBinaryPattern } from '../utils/binary-pattern'
 
 export interface DrumStepsParams {
   pattern: number[]
@@ -33,17 +34,8 @@ export class DrumStepsBuilder implements PipeStep {
     if (this.params.pitch === null || this.params.pattern.length === 0) return bridge
 
     const duration = this.params.stepDuration ?? bridge.defaultDuration
-    let target = bridge
 
-    for (let i = 0; i < this.params.pattern.length; ++i) {
-      if (this.params.pattern[i]) {
-        target = target.withNote(this.params.pitch, duration)
-      } else {
-        target = target.withTick(target.tick + duration)
-      }
-    }
-
-    return target
+    return applyBinaryPattern(this.params.pattern, [this.params.pitch], duration, bridge)
   }
 
   private clone(overrides: Partial<DrumStepsParams>): DrumStepsBuilder {

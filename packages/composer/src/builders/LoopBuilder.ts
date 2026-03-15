@@ -5,6 +5,10 @@ export interface LoopParams {
   pipeSteps: PipeStep[]
 }
 
+/**
+ * Loop a set of steps n times.
+ * Also used by repeat() notation as a single-step loop.
+ */
 export class LoopBuilder implements PipeStep {
   private readonly params: LoopParams
 

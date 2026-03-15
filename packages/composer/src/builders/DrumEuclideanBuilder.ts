@@ -1,5 +1,6 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import { euclidean, rotatePattern } from '@symphonyscript/theory'
+import { applyBinaryPattern } from '../utils/binary-pattern'
+import { generateEuclideanPattern } from '../utils/euclidean-pattern'
 
 export interface DrumEuclideanParams {
   hits: number
@@ -45,25 +46,17 @@ export class DrumEuclideanBuilder implements PipeStep {
   apply(bridge: CompositionBridge): CompositionBridge {
     if (this.params.pitch === null) return bridge
 
-    let pattern = euclidean(this.params.hits, this.params.steps)
+    const pattern = generateEuclideanPattern(
+      this.params.hits,
+      this.params.steps,
+      this.params.rotation,
+    )
+
     if (pattern === null) return bridge
 
-    if (this.params.rotation !== 0) {
-      pattern = rotatePattern(pattern, this.params.rotation)
-    }
-
     const duration = this.params.stepDuration ?? bridge.defaultDuration
-    let target = bridge
 
-    for (let i = 0; i < pattern.length; ++i) {
-      if (pattern[i]) {
-        target = target.withNote(this.params.pitch, duration)
-      } else {
-        target = target.withTick(target.tick + duration)
-      }
-    }
-
-    return target
+    return applyBinaryPattern(pattern, [this.params.pitch], duration, bridge)
   }
 
   private clone(overrides: Partial<DrumEuclideanParams>): DrumEuclideanBuilder {

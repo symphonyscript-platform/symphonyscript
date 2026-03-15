@@ -41,27 +41,22 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
     return this.cloneHarmony({ root })
   }
 
-  /** Drop-2 voicing — drop second-highest note by an octave. */
   drop2(): HarmonyBuilder {
     return this.cloneHarmony({ voicing: 'drop2' })
   }
 
-  /** Open voicing — spread every other voice up an octave. */
   open(): HarmonyBuilder {
     return this.cloneHarmony({ voicing: 'open' })
   }
 
-  /** Close voicing — keep all voices within one octave. */
   close(): HarmonyBuilder {
     return this.cloneHarmony({ voicing: 'close' })
   }
 
-  /** Strum — arpeggiate chord notes with a small delay between each. */
   strum(rate: number, direction: 'up' | 'down' = 'up'): HarmonyBuilder {
     return this.cloneHarmony({ strumRate: rate, strumDirection: direction })
   }
 
-  /** Spread — add timing offset to each note (humanize chord). */
   spread(amount: number, seed?: number): HarmonyBuilder {
     return this.cloneHarmony({ spread: amount, spreadSeed: seed ?? null })
   }
@@ -74,60 +69,16 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
       + (this.shared.octaveShift * 12)
       + this.shared.transposeSemitones
 
-    // If a voicing style is set, use theory voicing functions
-    let pitches: number[]
-    if (this.voicingStyle !== null) {
-      const voicingFn = this.voicingStyle === 'drop2' ? drop2Voicing
-        : this.voicingStyle === 'open' ? openVoicing
-        : closeVoicing
-
-      // Voicing functions work with mask + octave
-      const rawPitches = voicingFn(this._mask, 4, 4)
-      // Shift to root
-      pitches = new Array(rawPitches.length)
-      for (let i = 0; i < rawPitches.length; ++i) {
-        pitches[i] = rawPitches[i] + resolvedRoot
-      }
-    } else {
-      // Default: extract intervals from mask
-      const intervals = getScaleIntervals(this._mask)
-      pitches = new Array(intervals.length)
-      for (let i = 0; i < intervals.length; ++i) {
-        pitches[i] = resolvedRoot + Math.floor(Number(intervals[i]) / 2)
-      }
-    }
-
+    const pitches = this.resolvePitches(resolvedRoot)
     if (pitches.length === 0) return this.resetFlags(target)
 
     for (let repeat = 0; repeat < this.shared.repeatCount; ++repeat) {
       const repeatStartTick = target.tick
 
       if (this.strumRate !== null && this.strumRate > 0) {
-        // Strum mode: offset each note slightly
-        const strumPitches = this.strumDirection === 'down'
-          ? pitches.slice().reverse()
-          : pitches
-
-        for (let i = 0; i < strumPitches.length; ++i) {
-          const strumOffset = i * this.strumRate
-          target = target
-            .withTick(repeatStartTick + strumOffset)
-            .withNote(strumPitches[i], scaledDuration, this.shared.velocity ?? undefined)
-        }
+        target = this.emitStrum(target, pitches, repeatStartTick, scaledDuration)
       } else {
-        // Simultaneous chord
-        let seedValue = this.spreadSeed ?? Date.now()
-        for (let i = 0; i < pitches.length; ++i) {
-          let spreadOffset = 0
-          if (this.spreadAmount > 0) {
-            seedValue = (seedValue * 1664525 + 1013904223) & 0x7fffffff
-            spreadOffset = (seedValue & 0xffff) % (this.spreadAmount + 1)
-          }
-
-          target = target
-            .withTick(repeatStartTick + spreadOffset)
-            .withNote(pitches[i], scaledDuration, this.shared.velocity ?? undefined)
-        }
+        target = this.emitSimultaneous(target, pitches, repeatStartTick, scaledDuration)
       }
 
       const advanceDuration = scaledDuration ?? bridge.defaultDuration
@@ -148,6 +99,95 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
       spread: this.spreadAmount,
       spreadSeed: this.spreadSeed,
     })
+  }
+
+  /** Resolve pitches from mask using the appropriate voicing function or raw intervals. */
+  private resolvePitches(resolvedRoot: number): number[] {
+    if (this.voicingStyle !== null) {
+      const voicingFn = this.voicingStyle === 'drop2' ? drop2Voicing
+        : this.voicingStyle === 'open' ? openVoicing
+        : closeVoicing
+
+      const rawPitches = voicingFn(this._mask, 4, 4)
+      const pitches = new Array<number>(rawPitches.length)
+
+      for (let i = 0; i < rawPitches.length; ++i) {
+        pitches[i] = rawPitches[i] + resolvedRoot
+      }
+
+      return pitches
+    }
+
+    const intervals = getScaleIntervals(this._mask)
+    const pitches = new Array<number>(intervals.length)
+
+    for (let i = 0; i < intervals.length; ++i) {
+      pitches[i] = resolvedRoot + Math.floor(Number(intervals[i]) / 2)
+    }
+
+    return pitches
+  }
+
+  /** Emit chord notes with strum offset. */
+  private emitStrum(
+    bridge: CompositionBridge,
+    pitches: number[],
+    startTick: number,
+    duration: number | undefined,
+  ): CompositionBridge {
+    let target = bridge
+
+    // Reverse pitches for down strum
+    const ordered = this.strumDirection === 'down'
+      ? this.reverseArray(pitches)
+      : pitches
+
+    for (let i = 0; i < ordered.length; ++i) {
+      const strumOffset = i * this.strumRate!
+      target = target
+        .withTick(startTick + strumOffset)
+        .withNote(ordered[i], duration, this.shared.velocity ?? undefined)
+    }
+
+    return target
+  }
+
+  /** Emit chord notes simultaneously with optional spread. */
+  private emitSimultaneous(
+    bridge: CompositionBridge,
+    pitches: number[],
+    startTick: number,
+    duration: number | undefined,
+  ): CompositionBridge {
+    let target = bridge
+    let seedValue = this.spreadSeed ?? Date.now()
+
+    for (let i = 0; i < pitches.length; ++i) {
+      let spreadOffset = 0
+
+      if (this.spreadAmount > 0) {
+        seedValue = (seedValue * 1664525 + 1013904223) & 0x7fffffff
+        spreadOffset = (seedValue & 0xffff) % (this.spreadAmount + 1)
+      }
+
+      target = target
+        .withTick(startTick + spreadOffset)
+        .withNote(pitches[i], duration, this.shared.velocity ?? undefined)
+    }
+
+    return target
+  }
+
+  /** Imperative array reverse. */
+  private reverseArray(source: number[]): number[] {
+    const result = new Array<number>(source.length)
+    const last = source.length - 1
+
+    for (let i = 0; i < source.length; ++i) {
+      result[i] = source[last - i]
+    }
+
+    return result
   }
 
   private cloneHarmony(overrides: Partial<HarmonyParams>): HarmonyBuilder {

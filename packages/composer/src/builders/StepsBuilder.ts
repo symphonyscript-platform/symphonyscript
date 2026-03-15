@@ -1,6 +1,7 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { NotePitch } from '../types'
 import { resolvePitches } from '../utils/pitch'
+import { applyBinaryPattern } from '../utils/binary-pattern'
 
 export interface StepsParams {
   pattern: number[]
@@ -36,22 +37,8 @@ export class StepsBuilder implements PipeStep {
 
     const duration = this.params.stepDuration ?? bridge.defaultDuration
     const pitches = resolvePitches(this.params.notes)
-    let target = bridge
-    let noteIndex = 0
 
-    for (let i = 0; i < this.params.pattern.length; ++i) {
-      if (this.params.pattern[i]) {
-        target = target.withNote(
-          pitches[noteIndex % pitches.length],
-          duration,
-        )
-        noteIndex++
-      } else {
-        target = target.withTick(target.tick + duration)
-      }
-    }
-
-    return target
+    return applyBinaryPattern(this.params.pattern, pitches, duration, bridge)
   }
 
   private clone(overrides: Partial<StepsParams>): StepsBuilder {

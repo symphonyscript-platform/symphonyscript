@@ -43,47 +43,38 @@ export class DrumHitBuilder implements PipeStep {
     return this.clone({ duration })
   }
 
-  /** Ghost note — reduced velocity. */
   ghost(velocity: number = 300): DrumHitBuilder {
     return this.clone({ velocity })
   }
 
-  /** Accented note — increased velocity. */
   accent(velocity: number = 1200): DrumHitBuilder {
     return this.clone({ velocity, precise: true })
   }
 
-  /** Flam — grace note before main hit. */
   flam(gap: number = 30): DrumHitBuilder {
     return this.clone({ flamOffset: gap })
   }
 
-  /** Set the velocity ratio for flam grace note (0–1). */
   flamRatio(ratio: number): DrumHitBuilder {
     return this.clone({ flamGraceRatio: ratio })
   }
 
-  /** Drag — multiple grace notes before main hit. */
   drag(count: number = 2): DrumHitBuilder {
     return this.clone({ dragCount: count })
   }
 
-  /** Set the tick gap between drag grace notes. */
   dragSpacing(gap: number): DrumHitBuilder {
     return this.clone({ dragGap: gap })
   }
 
-  /** Set the velocity ratio for drag grace notes (0–1). */
   dragRatio(ratio: number): DrumHitBuilder {
     return this.clone({ dragGraceRatio: ratio })
   }
 
-  /** Skip humanization. */
   precise(): DrumHitBuilder {
     return this.clone({ precise: true })
   }
 
-  /** Mute this hit. */
   muted(): DrumHitBuilder {
     return this.clone({ muted: true })
   }
@@ -92,13 +83,32 @@ export class DrumHitBuilder implements PipeStep {
     const duration = this.params.duration ?? bridge.defaultDuration
     const resolvedVelocity = this.params.velocity ?? bridge.velocity
 
-    // Snapshot original flags to restore after this step
     const wasPrecise = bridge.precise
     const wasMuted = bridge.muted
 
+    let target = this.applyFlags(bridge, wasPrecise, wasMuted)
+
+    target = this.emitDragGraceNotes(target, duration, resolvedVelocity)
+    target = this.emitFlamGraceNote(target, duration, resolvedVelocity)
+
+    // Main hit
+    target = target.withNote(
+      this.params.pitch,
+      duration,
+      this.params.velocity ?? undefined,
+    )
+
+    return this.resetFlags(target, wasPrecise, wasMuted)
+  }
+
+  /** Apply local flags only if this builder sets them and the bridge doesn't already have them. */
+  private applyFlags(
+    bridge: CompositionBridge,
+    wasPrecise: boolean,
+    wasMuted: boolean,
+  ): CompositionBridge {
     let target = bridge
 
-    // Apply local flags for this hit only
     if (this.params.precise && !wasPrecise) {
       target = target.withPrecise(true)
     }
@@ -107,31 +117,17 @@ export class DrumHitBuilder implements PipeStep {
       target = target.withMuted(true)
     }
 
-    // Emit drag grace notes — spaced by dragGap ticks
-    if (this.params.dragCount > 0) {
-      const graceVelocity = Math.round(resolvedVelocity * this.params.dragGraceRatio)
+    return target
+  }
 
-      for (let i = 0; i < this.params.dragCount; ++i) {
-        target = target.withNote(this.params.pitch, duration, graceVelocity)
-        target = target.withTick(bridge.tick + this.params.dragGap * (i + 1))
-      }
-    }
+  /** Restore flags only if this builder changed them. */
+  private resetFlags(
+    bridge: CompositionBridge,
+    wasPrecise: boolean,
+    wasMuted: boolean,
+  ): CompositionBridge {
+    let target = bridge
 
-    // Emit flam grace note — then advance by gap
-    if (this.params.flamOffset !== null) {
-      const graceVelocity = Math.round(resolvedVelocity * this.params.flamGraceRatio)
-      target = target.withNote(this.params.pitch, duration, graceVelocity)
-      target = target.withTick(target.tick + this.params.flamOffset)
-    }
-
-    // Emit main hit
-    target = target.withNote(
-      this.params.pitch,
-      duration,
-      this.params.velocity ?? undefined,
-    )
-
-    // Restore original flags
     if (this.params.precise && !wasPrecise) {
       target = target.withPrecise(false)
     }
@@ -139,6 +135,43 @@ export class DrumHitBuilder implements PipeStep {
     if (this.params.muted && !wasMuted) {
       target = target.withMuted(false)
     }
+
+    return target
+  }
+
+  /** Emit drag grace notes spaced by dragGap ticks. */
+  private emitDragGraceNotes(
+    bridge: CompositionBridge,
+    duration: number,
+    resolvedVelocity: number,
+  ): CompositionBridge {
+    if (this.params.dragCount <= 0) return bridge
+
+    const graceVelocity = Math.round(resolvedVelocity * this.params.dragGraceRatio)
+    const startTick = bridge.tick
+    let target = bridge
+
+    for (let i = 0; i < this.params.dragCount; ++i) {
+      target = target.withNote(this.params.pitch, duration, graceVelocity)
+      target = target.withTick(startTick + this.params.dragGap * (i + 1))
+    }
+
+    return target
+  }
+
+  /** Emit flam grace note with gap before main hit. */
+  private emitFlamGraceNote(
+    bridge: CompositionBridge,
+    duration: number,
+    resolvedVelocity: number,
+  ): CompositionBridge {
+    if (this.params.flamOffset === null) return bridge
+
+    const graceVelocity = Math.round(resolvedVelocity * this.params.flamGraceRatio)
+    let target = bridge
+
+    target = target.withNote(this.params.pitch, duration, graceVelocity)
+    target = target.withTick(target.tick + this.params.flamOffset)
 
     return target
   }
