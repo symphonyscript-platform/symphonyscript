@@ -105,15 +105,6 @@ export function octaveDown(n: number = 1): FieldSetter {
   )
 }
 
-/** Set swing amount 0.0–1.0 (or scoped). */
-export function swing(amount: number): FieldSetter {
-  assertRange('swing', amount, 0, 1)
-  return new FieldSetter(
-    b => b.withSwing(amount),
-    (r, p) => r.withSwing(p.swing),
-  )
-}
-
 /** Enable precise mode — skip humanization (or scoped). */
 export function precise(): FieldSetter {
   return new FieldSetter(

@@ -1,6 +1,6 @@
 # RFC-058: Immutable Composition Layer
 
-**Status:** Implemented (Revision 4)
+**Status:** Implemented (Revision 5)
 **Depends on:** None (prerequisite for RFC-050)
 **Supersedes:** RFC-049 (Synaptic Cursor Architecture), RFC-058 Revisions 1–2
 
@@ -241,10 +241,12 @@ interface CompositionBridge {
   readonly tempo: number;
   readonly timeSignatureNum: number;
   readonly timeSignatureDen: number;
-  readonly scaleRoot: number;
+  readonly scaleRoot: PitchClass;
   readonly scaleMode: ScaleMode;
-  readonly keyRoot: number;
+  readonly keyRoot: PitchClass | null;
   readonly keyMode: ScaleMode;
+  readonly volume: number;
+  readonly pan: number;
   readonly swing: number;
   readonly muted: boolean;
   readonly precise: boolean;
@@ -293,8 +295,14 @@ interface CompositionBridge {
   /** Return new bridge with specified scale context. */
   withScale(root: string, mode: ScaleMode): CompositionBridge;
 
-  /** Return new bridge with specified key context. */
-  withKey(root: string, mode: ScaleMode): CompositionBridge;
+  /** Return new bridge with specified key context (null clears). */
+  withKey(root: PitchClass, mode: ScaleMode): CompositionBridge;
+
+  /** Return new bridge with specified volume (CC7). Emits CC + tracks state. */
+  withVolume(v: number): CompositionBridge;
+
+  /** Return new bridge with specified pan (CC10). Emits CC + tracks state. */
+  withPan(v: number): CompositionBridge;
 
   /** Return new bridge with specified swing amount (0.0–1.0). */
   withSwing(amount: number): CompositionBridge;
@@ -610,7 +618,7 @@ function isolate(): IsolateBuilder;
 
 ### 5.4b Setter Notations
 
-Setters return `FieldSetter` (extends `ScopedSetterBuilder`) — support both cascading and `.steps()` scoped modes:
+Setters return `FieldSetter` (extends `ScopedStepBuilder`) — support both cascading and `.steps()` scoped modes:
 
 ```typescript
 // Cascading (sets value downstream):
@@ -620,24 +628,24 @@ tempo(140)
 tempo(140).steps(note('C4'), note('D4'))
 ```
 
-All setter notations:
+All setter notations (validated at construction time):
 
 ```typescript
 function transpose(semitones: number): FieldSetter;
-function velocity(value: number): FieldSetter;
-function tempo(bpm: number): FieldSetter;
+function velocity(value: number): FieldSetter;      // 0–1270
+function tempo(bpm: number): FieldSetter;            // > 0
 function scale(root: PitchClass, mode: ScaleMode): FieldSetter;
 function key(root: PitchClass, mode: ScaleMode): FieldSetter;
-function defaultDuration(duration: number): FieldSetter;
+function defaultDuration(duration: number): FieldSetter;  // > 0
 function timeSignature(num: number, den: number): FieldSetter;
 function octave(n: number): FieldSetter;
 function precise(): FieldSetter;
-function volume(value: number): FieldSetter;
-function pan(value: number): FieldSetter;
+function volume(value: number): FieldSetter;         // 0–127
+function pan(value: number): FieldSetter;            // 0–127
 
-// Relative (non-scoped, plain PipeStep):
-function octaveUp(n?: number): PipeStep;
-function octaveDown(n?: number): PipeStep;
+// Relative shift (also FieldSetter — scoped):
+function octaveUp(n?: number): FieldSetter;
+function octaveDown(n?: number): FieldSetter;
 ```
 
 ### 5.5 Instrument Notations
@@ -674,7 +682,7 @@ function bendReset(): PipeStep;
 function use(clip: Composable): PipeStep;
 
 /** Execute branches in parallel at the same tick. */
-function stack(): StackBuilder;
+function stack(): StackBuilder;  // uses .branch() to add branches
 
 /** Repeat a clip or builder function. */
 function loop(count: number, source: Clip | PipeStep): PipeStep;
@@ -1065,3 +1073,10 @@ Delete old clip classes, cursors, builders. All composition goes through `Clip.p
 | 24 | Late key resolution in NoteBuilder | `rawPitch` string carried alongside MIDI pitch. Key accidentals applied at `apply()` time via `applyKeySignature` |
 | 25 | `isolate()` for full context isolation | Nothing leaks out. Inner steps see parent context but changes don't propagate |
 | 26 | RNG consistency: bridges take SeededRandom, builders resolve null fallback | Deterministic composition via KNUTH_MULTIPLIER * tick fallback |
+| 27 | `ScopedStepBuilder` unifies `ScopedEffectBuilder` + `ScopedSetterBuilder` | Single abstract base with `onEnter()`/`onExit()`. Reduces concept count. Both patterns (wrapping and field-setting) map to enter/exit lifecycle |
+| 28 | `AccidentalOverride` on `PitchStepBuilder` | `.sharp()`/`.flat()`/`.natural()` set override for `applyKeySignature`. Numeric `accidental` kept for degree/chord builders (different semantics) |
+| 29 | `volume`/`pan` as first-class bridge state | `withVolume()`/`withPan()` both emit CC AND track state. Enables proper scoped restore |
+| 30 | `keyRoot: PitchClass \| null` replaces `-1` sentinel | Type-safe null for "no key context". `scaleRoot: PitchClass` eliminates `as any` casts |
+| 31 | Construction-time validation | `assertRange`/`assertPositive` guards on setter notations. Fail fast at build time, not at playback |
+| 32 | `octaveUp`/`octaveDown` as `FieldSetter` | Scoped usage supported: `octaveUp().steps(...)`. Consistent with all other setters |
+| 33 | `StackBuilder.branch()` instead of `.steps()` | `.steps()` universally means "scoped inner steps". `.branch()` means "parallel fork". No more ambiguity |
