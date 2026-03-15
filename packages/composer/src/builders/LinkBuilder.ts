@@ -1,7 +1,7 @@
 import type { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { Composable } from '../interfaces/composable'
 import { partitionEffects } from '../utils/partition-effects'
-import { TransformEffect } from './TransformEffect'
+import { ScopeBuilder } from '../interfaces/scope-builder'
 
 export interface LinkParams {
   clip: Composable
@@ -37,7 +37,7 @@ export class LinkBuilder implements PipeStep {
   }
 
   /** Set effects to apply to this clip (overrides). */
-  effects(...effectList: PipeStep[]): LinkBuilder {
+  effects(...effectList: ScopeBuilder<any>[]): LinkBuilder {
     return this.clone({ effects: effectList })
   }
 

@@ -2,8 +2,8 @@ import { CompositionBridge } from '@symphonyscript/composer'
 import { CompositionBridgeDecorator } from './CompositionBridgeDecorator'
 
 export class TieBridge extends CompositionBridgeDecorator {
-  private lastPitch: number | null
-  private accumulatedDuration: number
+  private readonly lastPitch: number | null
+  private readonly accumulatedDuration: number
 
   constructor(
     bridge: CompositionBridge,

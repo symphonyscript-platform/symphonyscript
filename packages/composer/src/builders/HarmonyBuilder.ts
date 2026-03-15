@@ -2,6 +2,7 @@ import { CompositionBridge } from '@symphonyscript/composer'
 import type { HarmonyMask, VoiceLeadingStyle } from '@symphonyscript/theory'
 import { closeVoicing, drop2Voicing, getScaleIntervals, openVoicing } from '@symphonyscript/theory'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
+import { KNUTH_MULTIPLIER } from '../constants'
 
 export interface HarmonyParams extends PitchStepParams {
   mask: HarmonyMask
@@ -160,7 +161,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
     duration: number | undefined,
   ): CompositionBridge {
     let target = bridge
-    let seedValue = this.spreadSeed ?? Date.now()
+    let seedValue = this.spreadSeed ?? (startTick * KNUTH_MULTIPLIER) | 0
 
     for (let i = 0; i < pitches.length; ++i) {
       let spreadOffset = 0

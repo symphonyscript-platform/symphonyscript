@@ -10,23 +10,23 @@ export class ChanceBridge extends CompositionBridgeDecorator {
   constructor(
     bridge: CompositionBridge,
     private readonly probability: number,
-    private seed: number,
+    private readonly seed: number,
   ) {
     super(bridge)
   }
 
   override withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge {
     // Advance PRNG
-    this.seed = (this.seed * 1664525 + 1013904223) & 0x7fffffff
-    const roll = (this.seed & 0xffff) / 0xffff
+    const nextSeed = (this.seed * 1664525 + 1013904223) & 0x7fffffff
+    const roll = (nextSeed & 0xffff) / 0xffff
 
     if (roll > this.probability) {
       // Skip note — advance tick by duration as if it were a rest
       const actualDuration = duration ?? this.bridge.defaultDuration
-      return this.rewrap(this.bridge.withTick(this.bridge.tick + actualDuration))
+      return new ChanceBridge(this.bridge.withTick(this.bridge.tick + actualDuration), this.probability, nextSeed)
     }
 
-    return this.rewrap(this.bridge.withNote(pitch, duration, velocity))
+    return new ChanceBridge(this.bridge.withNote(pitch, duration, velocity), this.probability, nextSeed)
   }
 
   protected rewrap(bridge: CompositionBridge): ChanceBridge {

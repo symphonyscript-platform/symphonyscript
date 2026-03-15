@@ -3,10 +3,11 @@ import type { PipeStep } from '@symphonyscript/composer'
 import type { Composable } from '../interfaces/composable'
 import {
   type ScopeEntry,
-  replaceStepsEntry,
+  appendStepsEntry,
   appendClipEntry,
   applyEntries,
 } from '../utils/scope-entries'
+import { ScopeBuilder } from '../interfaces/scope-builder'
 
 export type { ScopeEntry } from '../utils/scope-entries'
 
@@ -28,7 +29,7 @@ export type { ScopeEntry } from '../utils/scope-entries'
  * Subclasses implement `wrap(bridge)` to produce a decorated bridge.
  * Optionally override `cleanup(bridge)` for teardown after scoped steps (e.g. bend reset).
  */
-export abstract class ScopedEffectBuilder<T extends ScopedEffectBuilder<T>> implements PipeStep {
+export abstract class ScopedEffectBuilder<T extends ScopedEffectBuilder<T>> implements ScopeBuilder<T> {
   protected readonly entries: ScopeEntry[]
 
   protected constructor(entries: ScopeEntry[]) {
@@ -37,7 +38,7 @@ export abstract class ScopedEffectBuilder<T extends ScopedEffectBuilder<T>> impl
 
   /** Scope this effect to the given steps (overrides previous steps). */
   steps(...pipeSteps: PipeStep[]): T {
-    return this.cloneWithEntries(replaceStepsEntry(this.entries, pipeSteps))
+    return this.cloneWithEntries(appendStepsEntry(this.entries, pipeSteps))
   }
 
   /** Add a clip to the effect scope (accumulates). */

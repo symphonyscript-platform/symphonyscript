@@ -1,6 +1,7 @@
 import { CompositionBridge } from '@symphonyscript/composer'
 import { GrooveBridge, GrooveBridgeParams, GrooveStep } from '../composition/GrooveBridge'
 import { ScopedEffectBuilder, ScopeEntry } from './ScopedEffectBuilder'
+import { KNUTH_MULTIPLIER } from '../constants'
 
 const DEFAULT_STEP: GrooveStep = {
   velocity: 1.0,
@@ -8,7 +9,8 @@ const DEFAULT_STEP: GrooveStep = {
   probability: 1.0,
 }
 
-export interface GrooveParams extends GrooveBridgeParams {
+export interface GrooveParams extends Omit<GrooveBridgeParams, 'seed'> {
+  seed: number | null
   entries: ScopeEntry[]
 }
 
@@ -20,6 +22,7 @@ export class GrooveBuilder extends ScopedEffectBuilder<GrooveBuilder> {
     this.params = {
       steps: params.steps ?? [],
       grid: params.grid ?? 480,
+      seed: params.seed ?? null,
     }
   }
 
@@ -50,7 +53,9 @@ export class GrooveBuilder extends ScopedEffectBuilder<GrooveBuilder> {
   }
 
   protected wrap(bridge: CompositionBridge): CompositionBridge {
-    return new GrooveBridge(bridge, this.params)
+    const seed = this.params.seed ?? (bridge.tick * KNUTH_MULTIPLIER) | 0
+
+    return new GrooveBridge(bridge, { ...this.params, seed })
   }
 
   protected cloneWithEntries(entries: ScopeEntry[]): GrooveBuilder {

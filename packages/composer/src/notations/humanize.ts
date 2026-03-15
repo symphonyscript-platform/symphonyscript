@@ -9,6 +9,6 @@ export function humanize(
   return new HumanizationBuilder({
     velocityJitter,
     timingAmount,
-    rng: new SeededRandom(seed ?? Date.now()),
+    rng: seed !== undefined ? new SeededRandom(seed) : undefined,
   })
 }

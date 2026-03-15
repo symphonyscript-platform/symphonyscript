@@ -1,7 +1,7 @@
 import type { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { Composable } from '../interfaces/composable'
 import type { ScopeEntry } from '../utils/scope-entries'
-import { replaceStepsEntry, appendClipEntry, applyEntries } from '../utils/scope-entries'
+import { appendStepsEntry, appendClipEntry, applyEntries } from '../utils/scope-entries'
 import { partitionEffects } from '../utils/partition-effects'
 import { TransformEffect } from './TransformEffect'
 
@@ -35,7 +35,7 @@ export class ScopedBuilder implements PipeStep {
   steps(...pipeSteps: PipeStep[]): ScopedBuilder {
     return new ScopedBuilder({
       effects: this.effects,
-      entries: replaceStepsEntry(this._entries, pipeSteps),
+      entries: appendStepsEntry(this._entries, pipeSteps),
     })
   }
 

@@ -3,9 +3,10 @@ import type { PipeStep } from '@symphonyscript/composer'
 import type { Composable } from '../interfaces/composable'
 import type { CapturedNote } from '../interfaces/captured-note'
 import type { ScopeEntry } from '../utils/scope-entries'
-import { replaceStepsEntry, appendClipEntry, applyEntries } from '../utils/scope-entries'
+import { appendStepsEntry, appendClipEntry, applyEntries } from '../utils/scope-entries'
 import { BaseCompositionBridge } from '../composition/BaseCompositionBridge'
 import { RecordingBridge } from '../composition/RecordingBridge'
+import { ScopeBuilder } from '../interfaces/scope-builder'
 
 /**
  * Marker + base class for post-processing transforms (reverse, stretch).
@@ -18,7 +19,7 @@ import { RecordingBridge } from '../composition/RecordingBridge'
  */
 const IS_TRANSFORM = Symbol('TransformEffect')
 
-export abstract class TransformEffect<T extends TransformEffect<T>> implements PipeStep {
+export abstract class TransformEffect<T extends TransformEffect<T>> implements ScopeBuilder<T> {
   static readonly IS_TRANSFORM = IS_TRANSFORM
 
   readonly [IS_TRANSFORM] = true
@@ -44,7 +45,7 @@ export abstract class TransformEffect<T extends TransformEffect<T>> implements P
 
   /** Scope this transform to the given steps (overrides previous steps). */
   steps(...pipeSteps: PipeStep[]): T {
-    return this.cloneWithEntries(replaceStepsEntry(this.entries, pipeSteps))
+    return this.cloneWithEntries(appendStepsEntry(this.entries, pipeSteps))
   }
 
   /** Add a clip to the transform scope (accumulates). */

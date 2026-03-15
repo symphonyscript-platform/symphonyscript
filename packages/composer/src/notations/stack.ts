@@ -1,30 +1,26 @@
-import { PipeStep, step } from '@symphonyscript/composer'
+import type { PipeStep } from '@symphonyscript/composer'
+import { StackBuilder } from '../builders/StackBuilder'
 
-export function stack(...branches: PipeStep[][]): PipeStep {
-  return step((bridge) => {
-    const startTick = bridge.tick
-    let maxTick = startTick
-    let current = bridge
+/**
+ * Parallel composition — all branches start at the same tick.
+ *
+ * Builder usage:
+ *   stack()
+ *     .steps(note('C4'), note('E4'))
+ *     .use(drumClip)
+ *
+ * Shorthand (flat arrays):
+ *   stack(
+ *     [note('C4'), note('E4')],
+ *     [kick(), snare()],
+ *   )
+ */
+export function stack(...branches: PipeStep[][]): StackBuilder {
+  let builder = new StackBuilder()
 
-    for (let i = 0; i < branches.length; ++i) {
-      const branch = branches[i]
+  for (let i = 0; i < branches.length; ++i) {
+    builder = builder.steps(...branches[i])
+  }
 
-      // Fork: reset tick to start for each branch
-      let branchBridge = current.withTick(startTick)
-
-      for (let j = 0; j < branch.length; ++j) {
-        branchBridge = branch[j].apply(branchBridge)
-      }
-
-      // Track the furthest tick reached
-      if (branchBridge.tick > maxTick) {
-        maxTick = branchBridge.tick
-      }
-
-      current = branchBridge
-    }
-
-    // Advance to the longest branch's end tick
-    return current.withTick(maxTick)
-  })
+  return builder
 }

@@ -14,21 +14,10 @@ export type ScopeEntry =
 // ============================================================================
 
 /**
- * Replace all 'steps' entries with a single new one at the end.
- * Preserves all 'clip' entries in their original positions.
+ * Append a steps entry to the end of the entries array.
  */
-export function replaceStepsEntry(entries: ScopeEntry[], pipeSteps: PipeStep[]): ScopeEntry[] {
-  const filtered: ScopeEntry[] = []
-
-  for (let i = 0; i < entries.length; ++i) {
-    if (entries[i].kind !== 'steps') {
-      filtered.push(entries[i])
-    }
-  }
-
-  filtered.push({ kind: 'steps', steps: pipeSteps })
-
-  return filtered
+export function appendStepsEntry(entries: ScopeEntry[], pipeSteps: PipeStep[]): ScopeEntry[] {
+  return [...entries, { kind: 'steps', steps: pipeSteps }]
 }
 
 /**

@@ -22,9 +22,9 @@ export class DynamicsBridge extends CompositionBridgeDecorator {
     const { startVelocity, endVelocity, startTick, endTick } = this.params
     const range = endTick - startTick
     const t = range > 0 ? Math.max(0, Math.min(1, (this.tick - startTick) / range)) : 0
-    const vel = Math.round(startVelocity + (endVelocity - startVelocity) * t)
+    const rampedVelocity = Math.round(startVelocity + (endVelocity - startVelocity) * t)
 
-    return this.rewrap(this.bridge.withNote(pitch, duration, vel))
+    return this.rewrap(this.bridge.withNote(pitch, duration, velocity ?? rampedVelocity))
   }
 
   protected rewrap(bridge: CompositionBridge): DynamicsBridge {

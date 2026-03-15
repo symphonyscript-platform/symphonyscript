@@ -10,11 +10,15 @@ export interface GrooveStep {
 export interface GrooveBridgeParams {
   steps: readonly GrooveStep[]
   grid: number  // grid division in ticks
+  seed: number
 }
 
 export class GrooveBridge extends CompositionBridgeDecorator {
+  private readonly seed: number
+
   constructor(bridge: CompositionBridge, private readonly params: GrooveBridgeParams) {
     super(bridge)
+    this.seed = params.seed
   }
 
   override withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge {
@@ -25,20 +29,24 @@ export class GrooveBridge extends CompositionBridgeDecorator {
     const stepIndex = Math.floor(this.tick / this.params.grid) % this.params.steps.length
     const step = this.params.steps[stepIndex]
 
-    if (step.probability < 1.0 && Math.random() > step.probability) {
-      return this.rewrap(
-        this.bridge
-          .withTick(this.tick + (duration ?? this.defaultDuration))
+    // Advance PRNG
+    const nextSeed = (this.seed * 1664525 + 1013904223) & 0x7fffffff
+
+    if (step.probability < 1.0 && ((nextSeed & 0xffff) / 0xffff) > step.probability) {
+      return new GrooveBridge(
+        this.bridge.withTick(this.tick + (duration ?? this.defaultDuration)),
+        { ...this.params, seed: nextSeed },
       )
     }
 
     const vel = Math.round((velocity ?? this.velocity) * step.velocity)
     const tickOffset = Math.round(step.timing * this.params.grid)
 
-    return this.rewrap(
+    return new GrooveBridge(
       this.bridge
         .withTick(this.tick + tickOffset)
-        .withNote(pitch, duration, vel)
+        .withNote(pitch, duration, vel),
+      { ...this.params, seed: nextSeed },
     )
   }
 
@@ -46,3 +54,4 @@ export class GrooveBridge extends CompositionBridgeDecorator {
     return new GrooveBridge(bridge, this.params)
   }
 }
+
