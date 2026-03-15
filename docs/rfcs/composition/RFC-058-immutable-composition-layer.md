@@ -801,6 +801,48 @@ class Clip {
 }
 ```
 
+### 7.11 Implicit Escape Pattern
+
+Cursor interfaces are intentionally focused — they contain only cursor-specific methods and `commit()`. However, **cursor implementations mirror ALL methods of their parent clip type** as implicit escape methods.
+
+When a clip method (e.g., `.note()`, `.chord()`, `.rest()`) is called on a cursor, the implementation implicitly commits the current cursor and delegates to the parent clip:
+
+```typescript
+// Implementation (not in interface):
+class NoteCursor implements INoteCursor<S> {
+  // Cursor-specific methods...
+  velocity(v: number): INoteCursor<S> { /* returns new cursor */ }
+
+  // Escape methods — mirrors ALL of IMelodyClip:
+  note(pitch: string | number, duration?: number): INoteCursor<S> {
+    return this.commit().note(pitch, duration);  // commit self, delegate to parent
+  }
+  chord(symbol: string): IChordCursor<S> {
+    return this.commit().chord(symbol);
+  }
+  rest(duration: number): IMelodyClip<S> {
+    return this.commit().rest(duration);
+  }
+  transpose(semitones: number): IMelodyClip<S> {
+    return this.commit().transpose(semitones);
+  }
+  // ... every IMelodyClip method
+}
+```
+
+**Design rationale:**
+
+- **Interfaces stay focused.** `INoteCursor` only has cursor methods. No interface bloat.
+- **Implementations mirror everything.** No ambiguity about which methods are available — ALL clip methods work on the cursor via escape.
+- **TypeScript's type inference handles the ergonomics.** When the developer uses `const cursor = clip.note('C4')`, the inferred type is the concrete class (with escapes), not the interface. Fluent chaining works naturally:
+
+```typescript
+// All of these work — escape methods visible via type inference:
+clip.note('C4').velocity(0.8).note('E4').ghost().chord('Am').strum(0.1).rest(1)
+```
+
+- **Library boundaries use interfaces.** When typing a parameter as `INoteCursor<S>`, only cursor methods are visible. This is intentional — libraries shouldn't depend on escape methods.
+
 ---
 
 ## 8. Transforms as Bridge Decorators
