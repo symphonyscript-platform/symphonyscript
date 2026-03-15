@@ -23,7 +23,7 @@ export interface ScopedParams {
  * transforms post-process (post-composition) — both in user-specified order
  * within their respective phase.
  */
-export class ScopedBuilder implements ScopeBuilder {
+export class ScopedBuilder implements ScopeBuilder<ScopedBuilder> {
   private readonly effects: PipeStep[]
   private readonly _entries: ScopeEntry[]
 
