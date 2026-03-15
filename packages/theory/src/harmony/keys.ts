@@ -9,6 +9,8 @@ import type { HarmonyMask, Interval24EDO } from '../types';
 import { asHarmonyMask, asInterval24EDO } from '../types';
 import { OCTAVE_SIZE } from '../constants';
 import type { KeyContext } from './progressions';
+import { PitchClass } from '../enums/pitch-class';
+import { ScaleMode } from '../enums/scale-mode';
 
 // ============================================================================
 // SECTION 1: Key Signature Data
@@ -88,13 +90,14 @@ const KEY_SIGNATURE_DATA: Readonly<Record<string, KeySignatureData>> = Object.fr
  * Get the key signature string from a KeyContext.
  */
 function keyContextToString(key: KeyContext): string {
-    // Convert 24-EDO root to note name
+    // Convert PitchClass (24-EDO) root to note name
     const rootNames: Record<number, string> = {
         0: 'C', 2: 'C#', 4: 'D', 6: 'Eb', 8: 'E', 10: 'F',
         12: 'F#', 14: 'G', 16: 'Ab', 18: 'A', 20: 'Bb', 22: 'B'
     };
     const rootName = rootNames[Number(key.root)] ?? 'C';
-    return `${rootName}:${key.mode}`;
+    const modeStr = key.mode === ScaleMode.MINOR ? 'minor' : 'major';
+    return `${rootName}:${modeStr}`;
 }
 
 /**
@@ -253,14 +256,14 @@ export function applyKeyToPitchClass(
  * @returns Relative minor key context, or null if input is not major
  */
 export function getRelativeMinor(majorKey: KeyContext): KeyContext | null {
-    if (majorKey.mode !== 'major') return null;
+    if (majorKey.mode !== ScaleMode.MAJOR) return null;
 
     // Relative minor is 3 semitones (6 in 24-EDO) below
     const minorRoot = asInterval24EDO(
         (Number(majorKey.root) - 6 + OCTAVE_SIZE) % OCTAVE_SIZE
     );
 
-    return { root: minorRoot, mode: 'minor' };
+    return { root: minorRoot as unknown as PitchClass, mode: ScaleMode.MINOR };
 }
 
 /**
@@ -271,14 +274,14 @@ export function getRelativeMinor(majorKey: KeyContext): KeyContext | null {
  * @returns Relative major key context, or null if input is not minor
  */
 export function getRelativeMajor(minorKey: KeyContext): KeyContext | null {
-    if (minorKey.mode !== 'minor') return null;
+    if (minorKey.mode !== ScaleMode.MINOR) return null;
 
     // Relative major is 3 semitones (6 in 24-EDO) above
     const majorRoot = asInterval24EDO(
         (Number(minorKey.root) + 6) % OCTAVE_SIZE
     );
 
-    return { root: majorRoot, mode: 'major' };
+    return { root: majorRoot as unknown as PitchClass, mode: ScaleMode.MAJOR };
 }
 
 /**
@@ -289,8 +292,8 @@ export function getRelativeMajor(minorKey: KeyContext): KeyContext | null {
  * @returns Parallel minor (same root, minor mode)
  */
 export function getParallelMinor(majorKey: KeyContext): KeyContext | null {
-    if (majorKey.mode !== 'major') return null;
-    return { root: majorKey.root, mode: 'minor' };
+    if (majorKey.mode !== ScaleMode.MAJOR) return null;
+    return { root: majorKey.root, mode: ScaleMode.MINOR };
 }
 
 /**
@@ -301,8 +304,8 @@ export function getParallelMinor(majorKey: KeyContext): KeyContext | null {
  * @returns Parallel major (same root, major mode)
  */
 export function getParallelMajor(minorKey: KeyContext): KeyContext | null {
-    if (minorKey.mode !== 'minor') return null;
-    return { root: minorKey.root, mode: 'major' };
+    if (minorKey.mode !== ScaleMode.MINOR) return null;
+    return { root: minorKey.root, mode: ScaleMode.MAJOR };
 }
 
 // ============================================================================

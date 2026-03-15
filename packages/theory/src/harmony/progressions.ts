@@ -10,6 +10,8 @@ import { asHarmonyMask, asInterval24EDO } from '../types';
 import { CHORD, CHORD_MAP } from '../chords';
 import { INTERVAL, OCTAVE_SIZE } from '../constants';
 import { transpose } from '../packer';
+import { PitchClass } from '../enums/pitch-class';
+import { ScaleMode } from '../enums/scale-mode';
 
 // ============================================================================
 // SECTION 1: Types
@@ -19,10 +21,10 @@ import { transpose } from '../packer';
  * Key context for chord resolution.
  */
 export interface KeyContext {
-    /** Root pitch class in 24-EDO (0, 2, 4, ... 22 for C, C#, D, ...) */
-    readonly root: Interval24EDO;
-    /** Mode: major or minor */
-    readonly mode: 'major' | 'minor';
+    /** Root pitch class in 24-EDO */
+    readonly root: PitchClass;
+    /** Mode */
+    readonly mode: ScaleMode;
 }
 
 /**
@@ -115,7 +117,7 @@ const ROMAN_TO_DEGREE: Readonly<Record<string, number>> = {
  */
 export function parseRomanNumeral(
     numeral: string,
-    mode: 'major' | 'minor'
+    mode: ScaleMode
 ): ParsedNumeral | null {
     if (!numeral || typeof numeral !== 'string') return null;
 
@@ -198,7 +200,7 @@ export function parseRomanNumeral(
  * @returns 24-EDO interval from key root
  */
 export function getDegreeInterval(degree: number, key: KeyContext): Interval24EDO {
-    const intervals = key.mode === 'major' ? MAJOR_SCALE_INTERVALS : MINOR_SCALE_INTERVALS;
+    const intervals = key.mode === ScaleMode.MAJOR ? MAJOR_SCALE_INTERVALS : MINOR_SCALE_INTERVALS;
     const idx = ((degree - 1) % 7 + 7) % 7;
     return intervals[idx];
 }
@@ -218,7 +220,7 @@ export function degreeToMask(
     quality?: string
 ): HarmonyMask {
     // Get default quality for this degree
-    const defaults = key.mode === 'major' ? MAJOR_DEGREE_QUALITIES : MINOR_DEGREE_QUALITIES;
+    const defaults = key.mode === ScaleMode.MAJOR ? MAJOR_DEGREE_QUALITIES : MINOR_DEGREE_QUALITIES;
     const effectiveQuality = quality ?? defaults[((degree - 1) % 7 + 7) % 7] ?? '';
 
     // Look up chord mask from map first
@@ -266,7 +268,7 @@ export function romanToMask(numeral: string, key: KeyContext): HarmonyMask | nul
         const targetRoot = asInterval24EDO((Number(key.root) + Number(targetInterval)) % OCTAVE_SIZE);
 
         // Create temporary key context for the target
-        const secondaryKey: KeyContext = { root: targetRoot, mode: 'major' };
+        const secondaryKey: KeyContext = { root: targetRoot as unknown as PitchClass, mode: ScaleMode.MAJOR };
 
         // Resolve chord in secondary key
         return degreeToMask(parsed.degree, secondaryKey, parsed.quality);
@@ -357,7 +359,7 @@ export const PROGRESSION = {
  * @param mode - Major or minor
  * @returns KeyContext
  */
-export function createKey(root: Interval24EDO, mode: 'major' | 'minor'): KeyContext {
+export function createKey(root: PitchClass, mode: ScaleMode): KeyContext {
     return { root, mode };
 }
 
@@ -366,23 +368,23 @@ export function createKey(root: Interval24EDO, mode: 'major' | 'minor'): KeyCont
  * KERNEL-SAFE: Frozen constants.
  */
 export const KEY_ROOT = {
-    C: asInterval24EDO(0),
-    Cs: asInterval24EDO(2),
-    Db: asInterval24EDO(2),
-    D: asInterval24EDO(4),
-    Ds: asInterval24EDO(6),
-    Eb: asInterval24EDO(6),
-    E: asInterval24EDO(8),
-    F: asInterval24EDO(10),
-    Fs: asInterval24EDO(12),
-    Gb: asInterval24EDO(12),
-    G: asInterval24EDO(14),
-    Gs: asInterval24EDO(16),
-    Ab: asInterval24EDO(16),
-    A: asInterval24EDO(18),
-    As: asInterval24EDO(20),
-    Bb: asInterval24EDO(20),
-    B: asInterval24EDO(22),
+    C: PitchClass.C,
+    Cs: PitchClass.Cs,
+    Db: PitchClass.Db,
+    D: PitchClass.D,
+    Ds: PitchClass.Ds,
+    Eb: PitchClass.Eb,
+    E: PitchClass.E,
+    F: PitchClass.F,
+    Fs: PitchClass.Fs,
+    Gb: PitchClass.Gb,
+    G: PitchClass.G,
+    Gs: PitchClass.Gs,
+    Ab: PitchClass.Ab,
+    A: PitchClass.A,
+    As: PitchClass.As,
+    Bb: PitchClass.Bb,
+    B: PitchClass.B,
 } as const;
 
 // ============================================================================
@@ -476,7 +478,7 @@ export function romanToChord(numeral: string, key: KeyContext): string | null {
             // Handle roots not in KEY_ROOT (like enharmonics)
             return null;
         }
-        const secondaryKey: KeyContext = { root: targetPitchClass, mode: 'major' };
+        const secondaryKey: KeyContext = { root: targetPitchClass as unknown as PitchClass, mode: ScaleMode.MAJOR };
 
         // Get root of the secondary chord
         const root = degreeToRoot(parsed.degree, secondaryKey);

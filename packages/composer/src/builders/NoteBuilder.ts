@@ -1,7 +1,7 @@
 import { CompositionBridge } from '@symphonyscript/composer'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
-import { applyKeySignature, noteToMidi, ScaleMode } from '@symphonyscript/theory'
-import type { KeyContext, Interval24EDO } from '@symphonyscript/theory'
+import { applyKeySignature, noteToMidi } from '@symphonyscript/theory'
+import type { KeyContext } from '@symphonyscript/theory'
 
 export interface NoteParams extends PitchStepParams {
   pitch: number
@@ -28,11 +28,9 @@ export class NoteBuilder extends PitchStepBuilder<NoteBuilder> {
     if (this._rawPitch !== null) {
       if (bridge.keyRoot !== null) {
         // Key context active — use applyKeySignature with override
-        // PitchClass is now 0-23 (24-EDO), matching KeyContext.root (Interval24EDO)
-        const modeStr = bridge.keyMode === ScaleMode.MINOR ? 'minor' : 'major'
         const keyContext: KeyContext = {
-          root: bridge.keyRoot as unknown as Interval24EDO,
-          mode: modeStr,
+          root: bridge.keyRoot,
+          mode: bridge.keyMode,
         }
         const adjusted = applyKeySignature(
           this._rawPitch,

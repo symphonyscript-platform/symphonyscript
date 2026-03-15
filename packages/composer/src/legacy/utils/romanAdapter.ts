@@ -43,7 +43,7 @@ export function toTheoryKeyContext(keyContext: KeyContext): ReturnType<typeof cr
     if (!keyRootKey) return null;
 
     const root = KEY_ROOT[keyRootKey];
-    return createKey(root, scaleModeToKeyString(keyContext.mode));
+    return createKey(root, keyContext.mode);
 }
 
 /**
