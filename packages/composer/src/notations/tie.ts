@@ -8,14 +8,7 @@ export function tie(...steps: PipeStep[]): PipeStep {
     let current = tieBridge as TieBridge
 
     for (let i = 0; i < steps.length; ++i) {
-      const step = steps[i]
-      const result = step.apply(current)
-
-      if (result instanceof TieBridge) {
-        current = result
-      } else {
-        current = new TieBridge(result)
-      }
+      current = new TieBridge(steps[i].apply(current))
     }
 
     return current.flush()

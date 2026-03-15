@@ -7,14 +7,7 @@ export function glide(...steps: PipeStep[]): PipeStep {
     let current = glideBridge as GlideBridge
 
     for (let i = 0; i < steps.length; ++i) {
-      const step = steps[i]
-      const result = step.apply(current)
-
-      if (result instanceof GlideBridge) {
-        current = result
-      } else {
-        current = new GlideBridge(result)
-      }
+      current = new GlideBridge(steps[i].apply(current))
     }
 
     return current.flush()
