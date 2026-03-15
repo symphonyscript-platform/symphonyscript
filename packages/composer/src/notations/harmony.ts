@@ -1,8 +1,13 @@
 import { noteToMidi } from '@symphonyscript/theory'
 import { HarmonyBuilder } from '../builders/HarmonyBuilder'
 import type { HarmonyMask } from '@symphonyscript/theory'
+import type { NotePitch } from '../types'
 
-export function harmony(mask: HarmonyMask, root: string | number, duration?: number): HarmonyBuilder {
+export function harmony(
+  mask: HarmonyMask,
+  root: NotePitch,
+  duration?: number,
+): HarmonyBuilder {
   let rootPitch: number
 
   if (typeof root === 'string') {

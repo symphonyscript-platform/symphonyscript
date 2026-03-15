@@ -14,6 +14,7 @@ export interface PitchStepParams {
   pressure: number | null
   repeatCount: number
   transposeSemitones: number
+  aftertouch: number | null
 }
 
 export const DEFAULT_PITCH_STEP_PARAMS: PitchStepParams = {
@@ -29,6 +30,7 @@ export const DEFAULT_PITCH_STEP_PARAMS: PitchStepParams = {
   pressure: null,
   repeatCount: 1,
   transposeSemitones: 0,
+  aftertouch: null,
 }
 
 export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements PipeStep {
@@ -134,6 +136,10 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
     return this.create({ ...this.shared, pressure })
   }
 
+  aftertouch(aftertouch: number): T {
+    return this.create({ ...this.shared, aftertouch })
+  }
+
   // === Apply Helpers ===
 
   abstract apply(bridge: CompositionBridge): CompositionBridge
@@ -159,6 +165,13 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
 
     if (this.shared.pressure !== null) {
       target = target.withCC(MIDI_CC.EFFECT_2, this.shared.pressure)
+    }
+
+    if (this.shared.aftertouch !== null) {
+      // TODO: Use bridge.withAftertouch() when available
+      // Aftertouch is a separate MIDI message, not a CC.
+      // Approximating via CC for channel pressure expression.
+      target = target.withCC(MIDI_CC.EXPRESSION, this.shared.aftertouch)
     }
 
     return target
