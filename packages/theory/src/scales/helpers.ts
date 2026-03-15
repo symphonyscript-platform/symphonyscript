@@ -63,6 +63,46 @@ const MODE_TO_SCALE: Readonly<Record<ScaleMode, HarmonyMask | undefined>> = {
 };
 
 /**
+ * Resolve a scale degree to a MIDI pitch number.
+ * KERNEL-SAFE: Pure arithmetic (no string allocation).
+ *
+ * @param degree - Scale degree (1-indexed, wraps across octaves)
+ * @param rootPitchClass - Root note as pitch class (0-11)
+ * @param mode - Scale mode
+ * @param baseOctave - Base octave for degree 1 (default: 4)
+ * @param alteration - Chromatic alteration in semitones (default: 0)
+ * @param octaveOffset - Additional octave offset (default: 0)
+ * @returns MIDI pitch number or null if invalid mode
+ */
+export function degreeToPitch(
+    degree: number,
+    rootPitchClass: number,
+    mode: ScaleMode,
+    baseOctave: number = 4,
+    alteration: number = 0,
+    octaveOffset: number = 0,
+): number | null {
+    const scaleMask = MODE_TO_SCALE[mode];
+    if (scaleMask === undefined) return null;
+
+    const intervals24 = getScaleIntervals(scaleMask);
+    if (intervals24.length === 0) return null;
+
+    const scaleLen = intervals24.length;
+    const idx = degree - 1;
+
+    const baseIdx = ((idx % scaleLen) + scaleLen) % scaleLen;
+    const octaveFromDegree = Math.floor(idx / scaleLen);
+
+    const intervalSemitone = Math.floor(Number(intervals24[baseIdx]) / 2);
+
+    return (baseOctave + octaveOffset + octaveFromDegree + 1) * 12
+        + rootPitchClass
+        + intervalSemitone
+        + alteration;
+}
+
+/**
  * Flat root notes (use flats for accidentals).
  */
 const FLAT_ROOTS = new Set(['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb']);
@@ -228,27 +268,6 @@ export function createScaleContext(
     if (!Number.isFinite(octave)) return null;
 
     return { root, mode, octave };
-}
-
-/**
- * Check if a mode is valid.
- * KERNEL-SAFE: Pure check.
- *
- * @param mode - Mode string to check
- * @returns True if valid ScaleMode
- */
-export function isValidScaleMode(mode: number): mode is ScaleMode {
-    return Object.values(ScaleMode).includes(mode);
-}
-
-/**
- * Get all supported scale modes.
- * COMPOSER-ONLY: Creates array.
- *
- * @returns Array of scale mode names
- */
-export function getSupportedScaleModes(): keyof ScaleMode[] {
-    return Object.keys(ScaleMode) as unknown as keyof ScaleMode[];
 }
 
 /**
