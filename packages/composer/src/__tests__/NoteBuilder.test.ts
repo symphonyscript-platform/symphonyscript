@@ -157,7 +157,7 @@ describe('NoteBuilder', () => {
     // note('F4').natural() should override that and give F natural.
     it('.natural() should override key signature sharps', () => {
       const bridge = createBridge({
-        keyRoot: 7 as PitchClass, // G
+        keyRoot: 14 as PitchClass, // G (24-EDO)
         keyMode: ScaleMode.MAJOR,
       })
       // note('F4') in G major → F#4 (MIDI 66)
@@ -171,7 +171,7 @@ describe('NoteBuilder', () => {
 
     it('.flat() should override key signature and apply flat', () => {
       const bridge = createBridge({
-        keyRoot: 7 as PitchClass, // G
+        keyRoot: 14 as PitchClass, // G (24-EDO)
         keyMode: ScaleMode.MAJOR,
       })
       // note('B4').flat() in G major → Bb4 (MIDI 70)
