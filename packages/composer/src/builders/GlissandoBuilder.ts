@@ -27,6 +27,10 @@ export class GlissandoBuilder implements PipeStep {
     return this.clone({ to })
   }
 
+  from(from: NotePitch): GlissandoBuilder {
+    return this.clone({ from })
+  }
+
   duration(duration: number): GlissandoBuilder {
     return this.clone({ duration })
   }

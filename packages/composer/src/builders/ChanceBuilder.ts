@@ -24,6 +24,10 @@ export class ChanceBuilder implements PipeStep {
     return this.clone({ seed })
   }
 
+  probability(probability: number): ChanceBuilder {
+    return this.clone({ probability })
+  }
+
   apply(bridge: CompositionBridge): CompositionBridge {
     return new ChanceBridge(
       bridge,

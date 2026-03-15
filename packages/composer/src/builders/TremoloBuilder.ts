@@ -27,6 +27,10 @@ export class TremoloBuilder implements PipeStep {
     return this.clone({ rate })
   }
 
+  pitch(pitch: NotePitch): TremoloBuilder {
+    return this.clone({ pitch })
+  }
+
   duration(duration: number): TremoloBuilder {
     return this.clone({ duration })
   }

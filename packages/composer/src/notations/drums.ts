@@ -76,7 +76,7 @@ export function hit(pitch?: number, duration?: number): DrumHitBuilder {
  * 'x' = hit, '.' = rest (advance tick), '-' = sustain (advance tick, no new hit).
  */
 export function drumPattern(
-  notation: string,
+  notation?: string,
   pitch?: number,
   stepDuration?: number,
 ): DrumPatternBuilder {
@@ -88,7 +88,7 @@ export function drumPattern(
  * Distributes hits evenly across steps using Bjorklund's algorithm.
  */
 export function drumEuclidean(
-  hits: number,
+  hits?: number,
   steps?: number,
   pitch?: number,
   stepDuration?: number,
@@ -102,7 +102,7 @@ export function drumEuclidean(
  * 1 = hit, 0 = rest.
  */
 export function drumSteps(
-  pattern: number[],
+  pattern?: number[],
   pitch?: number,
   stepDuration?: number,
 ): DrumStepsBuilder {
@@ -113,7 +113,7 @@ export function drumSteps(
  * Buzz roll — rapid repeated hits over a duration.
  */
 export function roll(
-  pitch: number,
+  pitch?: number,
   duration?: number,
   rate?: number,
 ): RollBuilder {

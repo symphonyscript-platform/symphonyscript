@@ -25,6 +25,10 @@ export class PolyrhythmBuilder implements PipeStep {
     return this.clone({ overBeats })
   }
 
+  noteCount(noteCount: number): PolyrhythmBuilder {
+    return this.clone({ noteCount })
+  }
+
   steps(...pipeSteps: PipeStep[]): PolyrhythmBuilder {
     return this.clone({ pipeSteps })
   }

@@ -7,20 +7,24 @@ export interface DegreeParams extends PitchStepParams {
 }
 
 export class DegreeBuilder extends PitchStepBuilder<DegreeBuilder> {
-  private readonly degree: number
+  private readonly _degree: number
 
   constructor(params: Partial<DegreeParams>) {
     super(params)
-    this.degree = params.degree ?? 1
+    this._degree = params.degree ?? 1
   }
 
   protected create(params: Partial<PitchStepParams>): DegreeBuilder {
-    return new DegreeBuilder({ ...params, degree: this.degree })
+    return new DegreeBuilder({ ...params, degree: this._degree })
+  }
+
+  degree(degree: number): DegreeBuilder {
+    return new DegreeBuilder({ ...this.shared, degree })
   }
 
   apply(bridge: CompositionBridge): CompositionBridge {
     const pitch = degreeToPitch(
-      this.degree,
+      this._degree,
       bridge.scaleRoot,
       bridge.scaleMode as ScaleMode,
       4,

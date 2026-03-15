@@ -25,6 +25,10 @@ export class RomanBuilder implements PipeStep {
     return new RomanBuilder({ ...this.params, ...overrides })
   }
 
+  numeral(numeral: RomanNumeral): RomanBuilder {
+    return this.clone({ numeral })
+  }
+
   duration(duration: number): RomanBuilder {
     return this.clone({ duration })
   }

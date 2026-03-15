@@ -1,49 +1,30 @@
-import { CompositionBridge, PipeStep, step } from '@symphonyscript/composer'
-import { NoteBuilder } from '../builders/NoteBuilder'
+import { StepsBuilder } from '../builders/StepsBuilder'
 import { TrillBuilder } from '../builders/TrillBuilder'
 import { TremoloBuilder } from '../builders/TremoloBuilder'
 import { GlissandoBuilder } from '../builders/GlissandoBuilder'
 import { TupletBuilder } from '../builders/TupletBuilder'
 import { PolyrhythmBuilder } from '../builders/PolyrhythmBuilder'
+import { NoteBuilder } from '../builders/NoteBuilder'
 import type { NotePitch } from '../types'
-import { resolvePitch, resolvePitches } from '../utils/pitch'
+import { resolvePitch } from '../utils/pitch'
 
 /**
  * Binary step pattern.
  * 1 = play note (cycling through notes), 0 = rest.
  */
 export function steps(
-  pattern: number[],
-  notes: NotePitch[],
+  pattern?: number[],
+  notes?: NotePitch[],
   stepDuration?: number,
-): PipeStep {
-  return step((bridge) => {
-    const duration = stepDuration ?? bridge.defaultDuration
-    const pitches = resolvePitches(notes)
-    let target = bridge
-    let noteIndex = 0
-
-    for (let i = 0; i < pattern.length; ++i) {
-      if (pattern[i]) {
-        target = target.withNote(
-          pitches[noteIndex % pitches.length],
-          duration,
-        )
-        noteIndex++
-      } else {
-        target = target.withTick(target.tick + duration)
-      }
-    }
-
-    return target
-  })
+): StepsBuilder {
+  return new StepsBuilder({ pattern, notes, stepDuration })
 }
 
 /**
  * Trill — rapid alternation between two pitches.
  */
 export function trill(
-  pitch: NotePitch,
+  pitch?: NotePitch,
   basePitch?: NotePitch,
   rate?: number,
   duration?: number,
@@ -55,7 +36,7 @@ export function trill(
  * Tremolo — rapid repeated note.
  */
 export function tremolo(
-  pitch: NotePitch,
+  pitch?: NotePitch,
   rate?: number,
   duration?: number,
 ): TremoloBuilder {
@@ -66,7 +47,10 @@ export function tremolo(
  * Grace note — very short note immediately before the next main note.
  * Returns NoteBuilder for velocity/articulation configuration.
  */
-export function grace(pitch: NotePitch, graceDuration: number = 30): NoteBuilder {
+export function grace(pitch?: NotePitch, graceDuration: number = 30): NoteBuilder {
+  if (pitch === undefined) {
+    return new NoteBuilder({ duration: graceDuration })
+  }
   const midi = resolvePitch(pitch)
   return new NoteBuilder({ pitch: midi, duration: graceDuration })
 }
@@ -75,7 +59,7 @@ export function grace(pitch: NotePitch, graceDuration: number = 30): NoteBuilder
  * Glissando — chromatic pitch slide from one note to another.
  */
 export function glissando(
-  from: NotePitch,
+  from?: NotePitch,
   to?: NotePitch,
   duration?: number,
 ): GlissandoBuilder {
@@ -86,7 +70,7 @@ export function glissando(
  * Tuplet — fit `count` notes into the time of `inBeats` beats.
  */
 export function tuplet(
-  count: number,
+  count?: number,
   inBeats?: number,
 ): TupletBuilder {
   return new TupletBuilder({ count, inBeats })
@@ -96,7 +80,7 @@ export function tuplet(
  * Polyrhythm — evenly space `noteCount` notes over `overBeats` beats.
  */
 export function polyrhythm(
-  noteCount: number,
+  noteCount?: number,
   overBeats?: number,
 ): PolyrhythmBuilder {
   return new PolyrhythmBuilder({ noteCount, overBeats })

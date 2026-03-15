@@ -29,6 +29,10 @@ export class CrescendoBuilder implements PipeStep {
     return this.clone({ from })
   }
 
+  duration(duration: number): CrescendoBuilder {
+    return this.clone({ duration })
+  }
+
   to(to: number): CrescendoBuilder {
     return this.clone({ to })
   }
@@ -66,6 +70,10 @@ export class DecrescendoBuilder implements PipeStep {
 
   from(from: number): DecrescendoBuilder {
     return this.clone({ from })
+  }
+
+  duration(duration: number): DecrescendoBuilder {
+    return this.clone({ duration })
   }
 
   to(to: number): DecrescendoBuilder {

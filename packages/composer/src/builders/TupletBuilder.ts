@@ -25,6 +25,10 @@ export class TupletBuilder implements PipeStep {
     return this.clone({ inBeats })
   }
 
+  count(count: number): TupletBuilder {
+    return this.clone({ count })
+  }
+
   steps(...pipeSteps: PipeStep[]): TupletBuilder {
     return this.clone({ pipeSteps })
   }

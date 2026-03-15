@@ -6,19 +6,23 @@ export interface NoteParams extends PitchStepParams {
 }
 
 export class NoteBuilder extends PitchStepBuilder<NoteBuilder> {
-  private readonly pitch: number
+  private readonly _pitch: number
 
   constructor(params: Partial<NoteParams>) {
     super(params)
-    this.pitch = params.pitch ?? 60
+    this._pitch = params.pitch ?? 60
   }
 
   protected create(params: Partial<PitchStepParams>): NoteBuilder {
-    return new NoteBuilder({ ...params, pitch: this.pitch })
+    return new NoteBuilder({ ...params, pitch: this._pitch })
+  }
+
+  pitch(pitch: number): NoteBuilder {
+    return new NoteBuilder({ ...this.shared, pitch })
   }
 
   apply(bridge: CompositionBridge): CompositionBridge {
-    const finalPitch = this.pitch
+    const finalPitch = this._pitch
       + this.shared.accidental
       + (this.shared.octaveShift * 12)
       + this.shared.transposeSemitones

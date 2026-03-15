@@ -1,11 +1,11 @@
-import { PipeStep, step } from '@symphonyscript/composer'
 import { ChanceBuilder } from '../builders/ChanceBuilder'
+import { PipeStep, step } from '@symphonyscript/composer'
 
 /**
  * Probabilistic note emission.
  * Subsequent notes have an independent probability of being emitted.
  */
-export function chance(probability: number, seed?: number): ChanceBuilder {
+export function chance(probability?: number, seed?: number): ChanceBuilder {
   return new ChanceBuilder({ probability, seed })
 }
 

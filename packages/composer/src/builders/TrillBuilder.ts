@@ -29,6 +29,10 @@ export class TrillBuilder implements PipeStep {
     return this.clone({ basePitch })
   }
 
+  pitch(pitch: NotePitch): TrillBuilder {
+    return this.clone({ pitch })
+  }
+
   rate(rate: number): TrillBuilder {
     return this.clone({ rate })
   }

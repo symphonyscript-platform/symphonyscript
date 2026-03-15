@@ -30,6 +30,14 @@ export class DrumEuclideanBuilder implements PipeStep {
     return this.clone({ pitch })
   }
 
+  hits(hits: number): DrumEuclideanBuilder {
+    return this.clone({ hits })
+  }
+
+  steps(steps: number): DrumEuclideanBuilder {
+    return this.clone({ steps })
+  }
+
   stepDuration(stepDuration: number): DrumEuclideanBuilder {
     return this.clone({ stepDuration })
   }

@@ -25,6 +25,10 @@ export class DrumPatternBuilder implements PipeStep {
     return this.clone({ pitch })
   }
 
+  notation(notation: string): DrumPatternBuilder {
+    return this.clone({ notation })
+  }
+
   stepDuration(stepDuration: number): DrumPatternBuilder {
     return this.clone({ stepDuration })
   }
