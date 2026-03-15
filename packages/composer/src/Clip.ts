@@ -17,10 +17,7 @@ export class Clip implements IClip {
   }
 
   pipe(...steps: PipeStep[]): Clip {
-    return new Clip({
-      ...this.steps,
-      ...steps,
-    })
+    return new Clip([...this.steps, ...steps])
   }
 
   compose(context: CompositionBridge): CompositionBridge {
