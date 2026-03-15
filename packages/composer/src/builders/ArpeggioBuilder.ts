@@ -36,6 +36,10 @@ export class ArpeggioBuilder implements PipeStep {
     return this.clone({ pattern })
   }
 
+  pitches(pitches: NotePitch[]): ArpeggioBuilder {
+    return this.clone({ pitches })
+  }
+
   velocity(velocity: number): ArpeggioBuilder {
     return this.clone({ velocity })
   }

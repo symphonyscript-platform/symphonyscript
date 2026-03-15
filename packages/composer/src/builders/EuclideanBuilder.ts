@@ -38,6 +38,14 @@ export class EuclideanBuilder implements PipeStep {
     return this.clone({ notes })
   }
 
+  hits(hits: number): EuclideanBuilder {
+    return this.clone({ hits })
+  }
+
+  steps(steps: number): EuclideanBuilder {
+    return this.clone({ steps })
+  }
+
   stepDuration(stepDuration: number): EuclideanBuilder {
     return this.clone({ stepDuration })
   }

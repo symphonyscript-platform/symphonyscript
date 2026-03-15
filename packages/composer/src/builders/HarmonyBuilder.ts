@@ -14,18 +14,18 @@ export interface HarmonyParams extends PitchStepParams {
 }
 
 export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
-  private readonly mask: HarmonyMask
-  private readonly root: number
+  private readonly _mask: HarmonyMask
+  private readonly _root: number
   private readonly voicingStyle: VoiceLeadingStyle | null
   private readonly strumRate: number | null
   private readonly strumDirection: 'up' | 'down'
   private readonly spreadAmount: number
   private readonly spreadSeed: number | null
 
-  constructor(params: Partial<HarmonyParams> & { mask: HarmonyMask }) {
+  constructor(params: Partial<HarmonyParams>) {
     super(params)
-    this.mask = params.mask
-    this.root = params.root ?? 60
+    this._mask = params.mask ?? (0 as HarmonyMask)
+    this._root = params.root ?? 60
     this.voicingStyle = params.voicing ?? null
     this.strumRate = params.strumRate ?? null
     this.strumDirection = params.strumDirection ?? 'up'
@@ -36,8 +36,8 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
   protected create(params: Partial<PitchStepParams>): HarmonyBuilder {
     return new HarmonyBuilder({
       ...params,
-      mask: this.mask,
-      root: this.root,
+      mask: this._mask,
+      root: this._root,
       voicing: this.voicingStyle,
       strumRate: this.strumRate,
       strumDirection: this.strumDirection,
@@ -49,14 +49,22 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
   private cloneHarmony(overrides: Partial<HarmonyParams>): HarmonyBuilder {
     return new HarmonyBuilder({
       ...this.shared,
-      mask: overrides.mask ?? this.mask,
-      root: overrides.root ?? this.root,
+      mask: overrides.mask ?? this._mask,
+      root: overrides.root ?? this._root,
       voicing: overrides.voicing !== undefined ? overrides.voicing : this.voicingStyle,
       strumRate: overrides.strumRate !== undefined ? overrides.strumRate : this.strumRate,
       strumDirection: overrides.strumDirection ?? this.strumDirection,
       spread: overrides.spread !== undefined ? overrides.spread : this.spreadAmount,
       spreadSeed: overrides.spreadSeed !== undefined ? overrides.spreadSeed : this.spreadSeed,
     })
+  }
+
+  mask(mask: HarmonyMask): HarmonyBuilder {
+    return this.cloneHarmony({ mask })
+  }
+
+  root(root: number): HarmonyBuilder {
+    return this.cloneHarmony({ root })
   }
 
   /** Drop-2 voicing — drop second-highest note by an octave. */
@@ -87,7 +95,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
   apply(bridge: CompositionBridge): CompositionBridge {
     let target = this.applyFlags(bridge)
     const scaledDuration = this.resolvedDuration()
-    const resolvedRoot = this.root
+    const resolvedRoot = this._root
       + this.shared.accidental
       + (this.shared.octaveShift * 12)
       + this.shared.transposeSemitones
@@ -100,7 +108,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
         : closeVoicing
 
       // Voicing functions work with mask + octave
-      const rawPitches = voicingFn(this.mask, 4, 4)
+      const rawPitches = voicingFn(this._mask, 4, 4)
       // Shift to root
       pitches = new Array(rawPitches.length)
       for (let i = 0; i < rawPitches.length; ++i) {
@@ -108,7 +116,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
       }
     } else {
       // Default: extract intervals from mask
-      const intervals = getScaleIntervals(this.mask)
+      const intervals = getScaleIntervals(this._mask)
       pitches = new Array(intervals.length)
       for (let i = 0; i < intervals.length; ++i) {
         pitches[i] = resolvedRoot + Math.floor(Number(intervals[i]) / 2)

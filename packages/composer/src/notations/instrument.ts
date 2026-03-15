@@ -25,8 +25,3 @@ export function expression(amount: number): PipeStep {
 export function modWheel(amount: number): PipeStep {
   return step((bridge) => bridge.withCC(MIDI_CC.MODULATION, amount))
 }
-
-/** Reset pitch bend to center (0). */
-export function bendReset(): PipeStep {
-  return step((bridge) => bridge.withBend(0))
-}

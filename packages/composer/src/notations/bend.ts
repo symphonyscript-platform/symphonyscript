@@ -1,5 +1,5 @@
-import { PipeStep, step } from '@symphonyscript/composer'
+import { BendBuilder } from '../builders/BendBuilder'
 
-export function bend(value: number): PipeStep {
-  return step((bridge) => bridge.withBend(value))
+export function bend(value?: number): BendBuilder {
+  return new BendBuilder({ value })
 }
