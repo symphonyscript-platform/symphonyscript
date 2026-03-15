@@ -1,4 +1,4 @@
-export const enum ScaleMode {
+export enum ScaleMode {
   NONE = 0,
   MAJOR = 1,
   MINOR = 2,
