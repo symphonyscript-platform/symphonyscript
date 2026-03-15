@@ -10,9 +10,9 @@
 
 This RFC defines the composition layer architecture for SymphonyScript. It replaces the current eager, mutable, cursor-based model with a **pipe-first, functional, immutable** model.
 
-A single `Clip` type holds a pipeline of `PipeStep` functions. All musical operations — notes, chords, drums, transforms, MIDI events — are **standalone functions** passed to `Clip.pipe()`. There are no separate clip types, no cursors, and no escape pattern. Formatter-safe commas delimit operations.
+A single `Clip` type holds a pipeline of `PipeStep` objects. All musical operations — notes, chords, drums, transforms, MIDI events — are **standalone functions** called **notations**, passed to `Clip.pipe()`. There are no separate clip types, no cursors, and no escape pattern. Formatter-safe commas delimit operations.
 
-Two bridge interfaces separate concerns: `IBridge` (low-level, stateless, kernel-facing) and `ICompositionBridge` (high-level, fully immutable, pipe-facing). Composition is **100% pure** — zero side effects until `.commit(bridge)` is called. `ICompositionBridge` accumulates deferred thunks via `withNote()`, `withCC()`, etc. Side effects (SAB writes, serialization, recording) happen only at commit time, against any `IBridge` implementation. Structural sharing via linked list makes immutable cloning O(1).
+Two bridge interfaces separate concerns: `ExecutionContext` (low-level, stateless, kernel-facing) and `CompositionBridge` (high-level, fully immutable, pipe-facing). Composition is **100% pure** — zero side effects until `.commit(bridge)` is called. `CompositionBridge` accumulates deferred thunks via `withNote()`, `withCC()`, etc. Side effects (SAB writes, serialization, recording) happen only at commit time, against any `ExecutionContext` implementation. Structural sharing via linked list makes immutable cloning O(1).
 
 ---
 
@@ -59,7 +59,7 @@ Clip.pipe(note('E2'), palmMute(), note('E4'), harmonic())
 
 **No escape pattern.** Cursors need escape methods (`.note()` on a cursor implicitly commits and creates a new note) to avoid mandatory `.commit()` calls. This requires every cursor implementation to mirror all parent clip methods — 40+ methods duplicated per cursor type, all invisible in the interface. With pipe, there are no cursors, so there's no escape complexity.
 
-**Simplified type system.** The cursor model requires: `IClip<T, S>`, `IMelodyClip<S>`, `IDrumClip<S>`, `INoteCursor<S>`, `IChordCursor<S>`, `IDrumHitCursor<S>`, `ILinkCursor<T, S>` — 7 generic interfaces with phantom types threading through. The pipe model requires: `Clip`, `ICompositionBridge`, `IPipeCompatible` — 3 types. The phantom type for serializability moves to builders where it's simpler.
+**Simplified type system.** The cursor model requires: `IClip<T, S>`, `IMelodyClip<S>`, `IDrumClip<S>`, `INoteCursor<S>`, `IChordCursor<S>`, `IDrumHitCursor<S>`, `ILinkCursor<T, S>` — 7 generic interfaces with phantom types threading through. The pipe model requires: `Clip`, `CompositionBridge`, `PipeStep` — 3 types. The phantom type for serializability moves to builders where it's simpler.
 
 ### 2.3 Why Clips Are Sheet Music
 
@@ -84,49 +84,62 @@ Standalone functions: note(), chord(), kick(), humanize(), etc.
   ↓
 Clip.pipe(step1, step2, step3, ...)  — builds pipeline
   ↓
-clip.materialize(compositionBridge)  — executes pipeline
+clip.compose(compositionBridge)  — executes pipeline
   ↓
-ICompositionBridge delegates to IBridge — SAB writes / serialization / recording
+CompositionBridge delegates to ExecutionContext — SAB writes / serialization / recording
   ↓
 Runtime — Kernel is sole source of truth. Modulation drives expression.
 ```
 
 ### 3.2 The Pipe
 
-`Clip.pipe()` accepts any number of `PipeStep` functions and `IPipeCompatible` builders. It composes them sequentially into a single pipeline:
+`Clip.pipe()` accepts any number of `PipeStep` objects. Every operation — builders and simple transforms alike — implements `PipeStep`:
 
 ```typescript
-type PipeStep = (bridge: ICompositionBridge) => ICompositionBridge;
-
-interface IPipeCompatible {
-  commit(): PipeStep;
+/** All pipe arguments implement this. One method. One interface. */
+interface PipeStep {
+  apply(bridge: CompositionBridge): CompositionBridge;
 }
 
+/** Helper for simple operations that don't need builder configuration. */
+function step(fn: (bridge: CompositionBridge) => CompositionBridge): PipeStep {
+  return { apply: fn };
+}
+```
+
+Usage — every argument is `PipeStep`, uniform type:
+
+```typescript
 const clip = Clip.pipe(
-  note('C4').flat(),           // IPipeCompatible (NoteBuilder)
-  note('E4').velocity(600),    // IPipeCompatible (NoteBuilder)
-  humanize(0.1),               // PipeStep (raw function)
-  chord('Am').drop2(),         // IPipeCompatible (ChordBuilder)
-  sustain(),                   // PipeStep (raw function)
+  note('C4').flat(),           // PipeStep (NoteBuilder)
+  note('E4').velocity(600),    // PipeStep (NoteBuilder)
+  humanize(0.1),               // PipeStep (via step() helper)
+  chord('Am').drop2(),         // PipeStep (ChordBuilder)
+  sustain(),                   // PipeStep (via step() helper)
 );
 ```
 
-`pipe()` auto-detects: builders get `.commit()` called, raw functions pass through:
+`pipe()` is trivial:
 
 ```typescript
 class Clip {
-  static pipe(...steps: (PipeStep | IPipeCompatible)[]): Clip {
-    const resolved = steps.map(s =>
-      typeof s === 'function' ? s : s.commit()
-    );
-    return new Clip(resolved);
+  static pipe(...steps: PipeStep[]): Clip {
+    return new Clip(steps);
+  }
+
+  compose(bridge: CompositionBridge): CompositionBridge {
+    let b = bridge;
+    for (const s of this.steps) {
+      b = s.apply(b);
+    }
+    return b;
   }
 }
 ```
 
 ### 3.3 Full Purity — Zero Side Effects During Composition
 
-`ICompositionBridge` is **fully pure**. `withNote()` does not write to any bridge — it returns a new `ICompositionBridge` with the note **deferred as a thunk**. No side effects until `.commit(bridge)` is called.
+`CompositionBridge` is **fully pure**. `withNote()` does not write to any bridge — it returns a new `CompositionBridge` with the note **deferred as a thunk**. No side effects until `.commit(bridge)` is called.
 
 ```
 Composition (pure):     pipe steps call withNote(), withCC(), with*() → accumulate thunks
@@ -143,7 +156,7 @@ This is safe because pipe functions execute at **construction time** on the main
 Full purity enables:
 - **Transactional semantics.** If a pipe step throws, nothing is written. Discard the bridge — free rollback.
 - **`stack()` branching.** Both branches receive the same bridge — each returns its own fork. No snapshot/restore needed.
-- **Clip reuse.** Same clip materialized N times. No state leakage between materializations.
+- **Clip reuse.** Same clip composed N times. No state leakage between compositions.
 - **Debugging.** Each step produces a snapshot. Trace the full state history.
 - **Optimization window.** Between composition and commit, thunks can be sorted, deduplicated, or batched.
 
@@ -164,12 +177,12 @@ The composition layer and the kernel have fundamentally different needs:
 
 Merging these into one interface would either expose low-level methods to pipe steps (allowing kernel writes during composition) or force the kernel to carry composition state (unnecessary coupling). Two interfaces, separated:
 
-### 4.2 `IBridge` — Low-Level Write Interface
+### 4.2 `ExecutionContext` — Low-Level Write Interface
 
 Stateless. All parameters explicit. Implemented by kernel-facing bridges. **Not visible to pipe steps.**
 
 ```typescript
-interface IBridge {
+interface ExecutionContext {
   /** Insert a note node. Returns node pointer or error code. */
   insertNote(
     pitch: number,
@@ -202,7 +215,7 @@ interface IBridge {
 }
 ```
 
-### 4.3 `IBridge` Implementations
+### 4.3 `ExecutionContext` Implementations
 
 | Implementation | Purpose |
 |:---|:---|
@@ -210,14 +223,14 @@ interface IBridge {
 | `SerializationBridge` | Captures operations as JSON / blob / protobuf |
 | `RecordingBridge` | Captures note data for `FrozenClip` and tests |
 
-### 4.4 `ICompositionBridge` — High-Level Composition Interface
+### 4.4 `CompositionBridge` — High-Level Composition Interface
 
-Fully immutable. Zero side effects. What pipe steps interact with. **Does NOT extend `IBridge`.**
+Fully immutable. Zero side effects. What pipe steps interact with. **Does NOT extend `ExecutionContext`.**
 
-All `with*` methods return a new `ICompositionBridge`. Event methods (`withNote`, `withCC`, `withBend`) accumulate deferred thunks — they do NOT write to any bridge. Side effects happen only at `.commit()` time.
+All `with*` methods return a new `CompositionBridge`. Event methods (`withNote`, `withCC`, `withBend`) accumulate deferred thunks — they do NOT write to any bridge. Side effects happen only at `.commit()` time.
 
 ```typescript
-interface ICompositionBridge {
+interface CompositionBridge {
 
   // === Readonly State ===
 
@@ -235,67 +248,67 @@ interface ICompositionBridge {
   // === Deferred Event Methods (pure — accumulate thunks, no side effects) ===
 
   /** Defer a note. Uses tick/velocity from state unless overridden. Returns new bridge with advanced tick + thunk appended. */
-  withNote(pitch: number, duration?: number, velocity?: number): ICompositionBridge;
+  withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge;
 
   /** Defer a MIDI CC at current tick. */
-  withCC(controller: number, value: number): ICompositionBridge;
+  withCC(controller: number, value: number): CompositionBridge;
 
   /** Defer a pitch bend at current tick. */
-  withBend(value: number): ICompositionBridge;
+  withBend(value: number): CompositionBridge;
 
   // === Deferred Topology (pure — accumulate thunks) ===
 
   /** Defer a synapse connection. */
-  withConnect(srcId: number, tgtId: number, weight?: number): ICompositionBridge;
+  withConnect(srcId: number, tgtId: number, weight?: number): CompositionBridge;
 
   /** Defer a synapse disconnection. */
-  withDisconnect(srcId: number, tgtId: number): ICompositionBridge;
+  withDisconnect(srcId: number, tgtId: number): CompositionBridge;
 
   /** Defer a node reclamation. */
-  withReclaim(nodePtr: number): ICompositionBridge;
+  withReclaim(nodePtr: number): CompositionBridge;
 
   // === Immutable State Modifiers (pure — return new bridge with updated state) ===
 
   /** Return new bridge with specified velocity. */
-  withVelocity(v: number): ICompositionBridge;
+  withVelocity(v: number): CompositionBridge;
 
   /** Return new bridge with specified transpose offset. */
-  withTranspose(s: number): ICompositionBridge;
+  withTranspose(s: number): CompositionBridge;
 
   /** Return new bridge with specified default duration. */
-  withDefaultDuration(d: number): ICompositionBridge;
+  withDefaultDuration(d: number): CompositionBridge;
 
   /** Return new bridge with specified tempo. */
-  withTempo(bpm: number): ICompositionBridge;
+  withTempo(bpm: number): CompositionBridge;
 
   /** Return new bridge with specified time signature. */
-  withTimeSignature(num: number, den: number): ICompositionBridge;
+  withTimeSignature(num: number, den: number): CompositionBridge;
 
   /** Return new bridge with specified scale context. */
-  withScale(root: string, mode: ScaleMode): ICompositionBridge;
+  withScale(root: string, mode: ScaleMode): CompositionBridge;
 
   /** Return new bridge with specified key context. */
-  withKey(root: string, mode: ScaleMode): ICompositionBridge;
+  withKey(root: string, mode: ScaleMode): CompositionBridge;
 
   /** Return new bridge with specified swing amount (0.0–1.0). */
-  withSwing(amount: number): ICompositionBridge;
+  withSwing(amount: number): CompositionBridge;
 
   /** Return new bridge with quantize settings. */
-  withQuantize(grid: number, strength?: number): ICompositionBridge;
+  withQuantize(grid: number, strength?: number): CompositionBridge;
 
   /** Return new bridge with specified tick position. */
-  withTick(tick: number): ICompositionBridge;
+  withTick(tick: number): CompositionBridge;
 
   /** Return new bridge with muted flag. */
-  withMuted(muted: boolean): ICompositionBridge;
+  withMuted(muted: boolean): CompositionBridge;
 
   /** Return new bridge with precise flag (skip humanization). */
-  withPrecise(precise: boolean): ICompositionBridge;
+  withPrecise(precise: boolean): CompositionBridge;
 
   // === Commit (side effects — execute all accumulated thunks) ===
 
   /** Execute all accumulated thunks against the provided bridge. */
-  commit(bridge: IBridge): void;
+  commit(bridge: ExecutionContext): void;
 }
 ```
 
@@ -308,11 +321,11 @@ Instead, `CompositionBridge` uses a **persistent linked list** for thunks. Each 
 ```typescript
 // Linked list node for thunks
 interface ThunkNode {
-  readonly thunk: (bridge: IBridge) => void;
+  readonly thunk: (bridge: ExecutionContext) => void;
   readonly prev: ThunkNode | null;
 }
 
-class CompositionBridge implements ICompositionBridge {
+class CompositionBridge implements CompositionBridge {
   constructor(
     readonly tick: number = 0,
     readonly velocity: number = 800,
@@ -329,7 +342,7 @@ class CompositionBridge implements ICompositionBridge {
     const finalPitch = pitch + this.transpose;
     const tick = this.tick;
     // Capture all values in closure — pure, deferred
-    const thunk = (bridge: IBridge) => {
+    const thunk = (bridge: ExecutionContext) => {
       bridge.insertNote(finalPitch, vel, dur, tick, false, 0);
     };
     return this.derive(
@@ -342,9 +355,9 @@ class CompositionBridge implements ICompositionBridge {
     return this.derive({ velocity: v }); // no thunk added
   }
 
-  commit(bridge: IBridge): void {
+  commit(bridge: ExecutionContext): void {
     // Collect thunks in order (linked list is reversed)
-    const thunks: ((bridge: IBridge) => void)[] = [];
+    const thunks: ((bridge: ExecutionContext) => void)[] = [];
     let node = this._head;
     while (node) {
       thunks.push(node.thunk);
@@ -388,29 +401,29 @@ The linked list gives O(1) forking for `stack()` — both branches share the com
 
 ### 4.6 Transform Decorators
 
-Transforms implement `ICompositionBridge` and wrap another `ICompositionBridge`. They intercept `withNote()` and transform parameters before delegating. Note operations never know about transforms — the bridge handles everything.
+Transforms implement `CompositionBridge` and wrap another `CompositionBridge`. They intercept `withNote()` and transform parameters before delegating. Note operations never know about transforms — the bridge handles everything.
 
 ```typescript
-class HumanizingBridge implements ICompositionBridge {
+class HumanizingBridge implements CompositionBridge {
   constructor(
-    private readonly inner: ICompositionBridge,
+    private readonly inner: CompositionBridge,
     private readonly velAmount: number,
     private readonly timingAmount: number,
     private readonly rng: SeededRandom
   ) {}
 
-  withNote(pitch: number, duration?: number, velocity?: number): ICompositionBridge {
+  withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge {
     const vel = (velocity ?? this.velocity) + jitter(this.velAmount, this.rng);
     const tickOffset = jitter(this.timingAmount, this.rng);
     return this.inner.withTick(this.tick + tickOffset).withNote(pitch, duration, vel);
   }
 
   // All with*() and state accessors delegate to this.inner
-  withVelocity(v: number): ICompositionBridge {
+  withVelocity(v: number): CompositionBridge {
     return new HumanizingBridge(this.inner.withVelocity(v), this.velAmount, this.timingAmount, this.rng);
   }
 
-  commit(bridge: IBridge): void {
+  commit(bridge: ExecutionContext): void {
     this.inner.commit(bridge);  // delegate
   }
 
@@ -432,24 +445,24 @@ Available decorators:
 
 ---
 
-## 5. Standalone Operations
+## 5. Notations
 
-All musical operations are standalone functions grouped by namespace for discoverability.
+All musical operations are standalone functions called **notations**. Each notation returns a `PipeStep`. Notations are grouped by namespace for discoverability.
 
-### 5.1 Organizaton
+### 5.1 Organization
 
 ```typescript
 // Individual imports
-import { note, chord, rest, degree, roman } from '@symphonyscript/melody';
-import { kick, snare, hihat, crash, ride } from '@symphonyscript/drums';
-import { humanize, transpose, swing, quantize } from '@symphonyscript/fx';
-import { sustain, release, breath, bend } from '@symphonyscript/instrument';
+import { note, chord, rest, degree, roman } from '@symphonyscript/notations/melody';
+import { kick, snare, hihat, crash, ride } from '@symphonyscript/notations/drums';
+import { humanize, transpose, swing, quantize } from '@symphonyscript/notations/fx';
+import { sustain, release, breath, bend } from '@symphonyscript/notations/instrument';
 
 // Namespace imports
-import { Melody, Drums, Fx, Instrument } from '@symphonyscript/core';
+import { Melody, Drums, Fx, Instrument } from '@symphonyscript/notations';
 ```
 
-### 5.2 Melody Operations
+### 5.2 Melody Notations
 
 ```typescript
 /** Single note. Returns NoteBuilder for configuration. */
@@ -483,7 +496,7 @@ function euclidean(hits: number, steps: number, notes: (string | number)[], step
 function steps(pattern: number[], notes: (string | number)[], stepDuration: number): PipeStep;
 
 /** Polyrhythm: n notes evenly spaced over m beats. */
-function polyrhythm(notes: number, overBeats: number, fn: (bridge: ICompositionBridge) => ICompositionBridge): PipeStep;
+function polyrhythm(notes: number, overBeats: number, fn: (bridge: CompositionBridge) => CompositionBridge): PipeStep;
 
 /** Trill between current pitch and target. */
 function trill(pitch: string | number, rate: number, duration: number): PipeStep;
@@ -498,7 +511,7 @@ function glissando(from: string | number, to: string | number, duration: number)
 function tremolo(pitch: string | number, rate: number, duration: number): PipeStep;
 
 /** Tuplet time (e.g., triplet: count=3, inBeats=2). */
-function tuplet(count: number, inBeats: number, fn: (bridge: ICompositionBridge) => ICompositionBridge): PipeStep;
+function tuplet(count: number, inBeats: number, fn: (bridge: CompositionBridge) => CompositionBridge): PipeStep;
 
 /** Advance tick without emitting a note. */
 function rest(duration: number): PipeStep;
@@ -513,7 +526,7 @@ function pitchBend(value: number): PipeStep;
 function aftertouch(value: number, note?: string | number): PipeStep;
 ```
 
-### 5.3 Drum Operations
+### 5.3 Drum Notations
 
 ```typescript
 function kick(duration?: number): DrumHitBuilder;
@@ -550,7 +563,7 @@ function drag(hitName?: string): DrumHitBuilder;
 function roll(duration: number, rate?: number): PipeStep;
 ```
 
-### 5.4 Transform Operations (Fx)
+### 5.4 Transform Notations (Fx)
 
 ```typescript
 /** Enable humanization. Wraps bridge with HumanizingBridge. */
@@ -611,7 +624,7 @@ function reverse(): PipeStep;
 function stretch(factor: number): PipeStep;
 ```
 
-### 5.5 Instrument Markings
+### 5.5 Instrument Notations
 
 Named wrappers around `cc()` and `pitchBend()`. Any clip can use them — the instrument layer interprets them at binding time.
 
@@ -638,7 +651,7 @@ function bend(semitones: number): PipeStep;
 function bendReset(): PipeStep;
 ```
 
-### 5.6 Composition Operations
+### 5.6 Composition Notations
 
 ```typescript
 /** Insert another clip's content at current tick. */
@@ -651,24 +664,24 @@ function stack(...branches: PipeStep[]): PipeStep;
 function loop(count: number, source: Clip | PipeStep): PipeStep;
 
 /** Repeat previous step n times. */
-function repeat(n: number, step: PipeStep | IPipeCompatible): PipeStep;
+function repeat(n: number, source: PipeStep): PipeStep;
 
 /** Execute in MPE voice scope. */
-function voice(id: number, fn: (bridge: ICompositionBridge) => ICompositionBridge): PipeStep;
+function voice(id: number, fn: (bridge: CompositionBridge) => CompositionBridge): PipeStep;
 ```
 
 ---
 
 ## 6. Builders
 
-Builders configure multi-property events. They implement `IPipeCompatible` — `pipe()` auto-calls `.commit()`. All builder methods are immutable (return new builder).
+Builders configure multi-property events. They implement `PipeStep` — `pipe()` calls `.apply()` during materialization. All builder methods are immutable (return new builder).
 
 ### 6.1 `NoteBuilder`
 
 Returned by `note()`, `degree()`, `grace()`.
 
 ```typescript
-class NoteBuilder implements IPipeCompatible {
+class NoteBuilder implements PipeStep {
   // Configuration (each returns new NoteBuilder)
   velocity(v: number): NoteBuilder;
   duration(d: number): NoteBuilder;
@@ -693,8 +706,8 @@ class NoteBuilder implements IPipeCompatible {
   // Modulation (RFC-050)
   mod(param: IParam): ModulatorBuilder;
 
-  // Produce PipeStep
-  commit(): PipeStep;
+  // PipeStep implementation
+  apply(bridge: CompositionBridge): CompositionBridge;
 }
 ```
 
@@ -703,7 +716,7 @@ class NoteBuilder implements IPipeCompatible {
 Returned by `chord()`, `degreeChord()`, `roman()`.
 
 ```typescript
-class ChordBuilder implements IPipeCompatible {
+class ChordBuilder implements PipeStep {
   // Properties
   velocity(v: number): ChordBuilder;
   duration(d: number): ChordBuilder;
@@ -728,8 +741,8 @@ class ChordBuilder implements IPipeCompatible {
   // Modulation (RFC-050)
   mod(param: IParam): ModulatorBuilder;
 
-  // Produce PipeStep
-  commit(): PipeStep;
+  // PipeStep implementation
+  apply(bridge: CompositionBridge): CompositionBridge;
 }
 ```
 
@@ -738,7 +751,7 @@ class ChordBuilder implements IPipeCompatible {
 Returned by `kick()`, `snare()`, `hihat()`, etc.
 
 ```typescript
-class DrumHitBuilder implements IPipeCompatible {
+class DrumHitBuilder implements PipeStep {
   velocity(v: number): DrumHitBuilder;
   duration(d: number): DrumHitBuilder;
   ghost(amount?: number): DrumHitBuilder;
@@ -750,8 +763,8 @@ class DrumHitBuilder implements IPipeCompatible {
   // Modulation (RFC-050)
   mod(param: IParam): ModulatorBuilder;
 
-  // Produce PipeStep
-  commit(): PipeStep;
+  // PipeStep implementation
+  apply(bridge: CompositionBridge): CompositionBridge;
 }
 ```
 
@@ -760,7 +773,7 @@ class DrumHitBuilder implements IPipeCompatible {
 Returned by `Clip.use(target)`.
 
 ```typescript
-class LinkBuilder implements IPipeCompatible {
+class LinkBuilder implements PipeStep {
   weight(w: number): LinkBuilder;
   mod(param: IParam): ModulatorBuilder;
 
@@ -768,8 +781,8 @@ class LinkBuilder implements IPipeCompatible {
   when(expr: IExpr): LinkBuilder;
   when(fn: (value: number) => boolean): LinkBuilder;  // taints serializability
 
-  // Produce PipeStep
-  commit(): PipeStep;
+  // PipeStep implementation
+  apply(bridge: CompositionBridge): CompositionBridge;
 }
 ```
 
@@ -780,15 +793,12 @@ class LinkBuilder implements IPipeCompatible {
 Minimal. The entire public API is ~6 methods:
 
 ```typescript
-class Clip {
-  /** Create a clip from pipe steps. Auto-commits IPipeCompatible builders. */
-  static pipe(...steps: (PipeStep | IPipeCompatible)[]): Clip;
-
+interface Clip {
   /** Execute pipeline against a composition bridge. Returns composed bridge (with accumulated thunks). */
-  materialize(bridge: ICompositionBridge): ICompositionBridge;
+  compose(bridge: CompositionBridge): CompositionBridge;
 
   /** Snapshot clip output into a FrozenClip for composition-time reuse. */
-  freeze(): IFrozenClip;
+  freeze(): FrozenClip;
 
   /** Create synapse to target clip. Returns LinkBuilder. */
   use(target: Clip, weight?: number): LinkBuilder;
@@ -804,12 +814,30 @@ class Clip {
 }
 ```
 
-`materialize()` runs the pipe steps, returning an `ICompositionBridge` with all thunks accumulated. Call `.commit(bridge)` to execute:
-
-### 7.1 `IFrozenClip`
+`Clip.pipe()` is a static factory that returns a `Clip`:
 
 ```typescript
-interface IFrozenClip {
+class DefaultClip implements Clip {
+  static pipe(...steps: PipeStep[]): Clip {
+    return new DefaultClip(steps);
+  }
+
+  compose(bridge: CompositionBridge): CompositionBridge {
+    let b = bridge;
+    for (const s of this.steps) {
+      b = s.apply(b);
+    }
+    return b;
+  }
+}
+```
+
+`compose()` runs the pipe steps, returning an `CompositionBridge` with all thunks accumulated. Call `.commit(bridge)` to execute:
+
+### 7.1 `FrozenClip`
+
+```typescript
+interface FrozenClip {
   visitNotes(
     cb: (sourceId: number, pitch: number, velocity: number,
          duration: number, tick: number, muted: boolean) => void
@@ -839,7 +867,7 @@ class LinkBuilder<S extends Serializable | Unserializable = Serializable> {
 ```typescript
 // Compose (pure — no side effects)
 const bridge = new CompositionBridge();
-const composed = clip.materialize(bridge);
+const composed = clip.compose(bridge);
 
 // Commit to kernel (side effects — SAB writes)
 composed.commit(new KernelBridge(sab));
@@ -855,7 +883,7 @@ composed.commit(recorder);
 const frozen = recorder.toFrozenClip();
 ```
 
-Compose once, commit many. The same composed bridge can be committed to any number of `IBridge` targets.
+Compose once, commit many. The same composed bridge can be committed to any number of `ExecutionContext` targets.
 
 ---
 
@@ -863,7 +891,7 @@ Compose once, commit many. The same composed bridge can be committed to any numb
 
 ### 9.1 Tier 1: Parameter Modulation (99%)
 
-Clips are materialized once. Runtime expressiveness comes from RFC-050 modulation:
+Clips are composed once. Runtime expressiveness comes from RFC-050 modulation:
 - Synapse weight routing (which clips play)
 - Velocity/pitch/volume/tempo modulation (how they sound)
 - Crossfade (smooth transitions via opposing weight modulators)
@@ -873,11 +901,11 @@ No clip re-evaluation needed.
 
 ### 9.2 Tier 2: Immutable Hot-Swap (< 1%)
 
-Module re-evaluates → new immutable clip → materialize → reclaim old nodes → resynapse.
+Module re-evaluates → new immutable clip → compose → reclaim old nodes → resynapse.
 
 ```typescript
 const newClip = Clip.pipe(note('D4'), note('F#4'), note('A4'));
-session.replace(oldClip, newClip);  // reclaim + materialize + resynapse
+session.replace(oldClip, newClip);  // reclaim + compose + resynapse
 ```
 
 Atomic. No diffing, no partial updates — old clip is a value, new clip is a value. Swap the reference.
@@ -898,10 +926,10 @@ Direct to DSP via `CMD.DIRECT_NOTE_ON`. No SAB node. No clip.
 ## 10. Full Example
 
 ```typescript
-import { note, chord, rest, degree } from '@symphonyscript/melody';
-import { kick, snare, hihat, crash } from '@symphonyscript/drums';
-import { humanize, transpose, velocity, scale, key, tempo } from '@symphonyscript/fx';
-import { sustain, release } from '@symphonyscript/instrument';
+import { note, chord, rest, degree } from '@symphonyscript/notations/melody';
+import { kick, snare, hihat, crash } from '@symphonyscript/notations/drums';
+import { humanize, transpose, velocity, scale, key, tempo } from '@symphonyscript/notations/fx';
+import { sustain, release } from '@symphonyscript/notations/instrument';
 import { Clip } from '@symphonyscript/core';
 
 // Melody clip
@@ -953,7 +981,7 @@ song.use(beat, 1000);
 
 ### Phase 1: Interfaces + Types
 
-Define `IBridge`, `ICompositionBridge`, `PipeStep`, `IPipeCompatible`. No implementation changes.
+Define `ExecutionContext`, `CompositionBridge`, `PipeStep`. No implementation changes.
 
 ### Phase 2: CompositionBridge + Decorators
 
@@ -965,7 +993,7 @@ Implement all standalone functions (`note()`, `chord()`, `kick()`, etc.) and bui
 
 ### Phase 4: Clip Class
 
-New `Clip` class with `pipe()`, `materialize()`, `freeze()`, `use()`. Deprecate `SynapticClip`, `SynapticMelody`, `SynapticDrums`.
+New `Clip` class with `pipe()`, `compose()`, `freeze()`, `use()`. Deprecate `SynapticClip`, `SynapticMelody`, `SynapticDrums`.
 
 ### Phase 5: Remove Legacy
 
@@ -981,19 +1009,20 @@ Delete old clip classes, cursors, builders. All composition goes through `Clip.p
 | 2 | No separate clip types | Clips are sheet music, not instruments. One `Clip` type |
 | 3 | No cursors | Replaced by standalone builders. No escape pattern complexity |
 | 4 | All operations are standalone functions | Tree-shakeable. Community-extensible. Import-based discoverability |
-| 5 | `IBridge` and `ICompositionBridge` are separate (no inheritance) | Different concerns: stateless I/O vs fully deferred composition. Type system enforces boundary |
-| 6 | `ICompositionBridge` is fully pure | Zero side effects during composition. Thunks deferred until `.commit(bridge)` |
+| 5 | `ExecutionContext` and `CompositionBridge` are separate (no inheritance) | Different concerns: stateless I/O vs fully deferred composition. Type system enforces boundary |
+| 6 | `CompositionBridge` is fully pure | Zero side effects during composition. Thunks deferred until `.commit(bridge)` |
 | 7 | `.commit(bridge)` executes accumulated thunks | Polymorphic: kernel, serialization, recording. Compose once, commit many |
-| 8 | Transforms are ICompositionBridge decorators | Each concern isolated. Note operations don't know about transforms |
+| 8 | Transforms are CompositionBridge decorators | Each concern isolated. Note operations don't know about transforms |
 | 9 | `with*` prefix for ALL methods | State modifiers AND event methods: `withVelocity()`, `withNote()`, `withCC()`. Uniform immutable API |
-| 10 | Builders implement IPipeCompatible | pipe() auto-commits. Clean separation: configure then execute |
+| 10 | Builders implement PipeStep | `apply(bridge)` called during materialization. One interface, one method |
 | 11 | `.use()` for synapse creation | Short, natural: "clip uses another clip" |
 | 12 | Instrument markings are standalone functions | `sustain()`, `breath()`, `bend()` — named wrappers around cc/pitchBend |
-| 13 | Pipe steps never access IBridge directly | Type system prevents kernel writes during composition |
+| 13 | Pipe steps never access ExecutionContext directly | Type system prevents kernel writes during composition |
 | 14 | Construction-time execution, not playback | Pipe runs on main thread. Allocations are free. Kernel is sole runtime truth |
 | 15 | Clips are reusable, stay alive after materialization | Materialize N times into N different bridges |
 | 16 | Namespaced exports for discoverability | `Melody.note()`, `Drums.kick()`, `Fx.humanize()` — IDE autocomplete |
 | 17 | Structural sharing via persistent linked list | O(1) thunk append, O(1) fork for `stack()`, O(n) shared tails |
 | 18 | Transactional composition | If pipe step throws, nothing is written. Discard bridge = free rollback |
 | 19 | Compose once, commit many | Same thunk list committed to kernel, serializer, recorder independently |
-| 20 | RFC-058 lands before RFC-050 | Composition layer is the foundation modulation sits on |
+| 20 | PipeStep creator functions are called "notations" | Musical term. Dictionary-accurate: notes, dynamics, transforms are all musical notations |
+| 21 | RFC-058 lands before RFC-050 | Composition layer is the foundation modulation sits on |
