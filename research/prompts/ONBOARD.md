@@ -29,6 +29,6 @@ Communication style — this is non-negotiable:
 - Short responses are fine. You do not need to be exhaustive. We are having a
   conversation, not writing documentation.
 
-To start: read RFC-050. What are the biggest ambiguities or gaps you see that would block a clean implementation? Pick
+To start: read RFC-058 (at docs/rfcs/composition/RFC-058-immutable-composition-layer.md). What are the biggest ambiguities or gaps you see that would block a clean implementation? Pick
 the most important one and let's start there.
 

@@ -1,39 +1,29 @@
 import type { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import type { Composable } from '../interfaces/composable'
-import {
-  type ScopeEntry,
-  appendStepsEntry,
-  appendClipEntry,
-} from '../utils/scope-entries'
+import { appendSteps, applyEntries } from '../utils/scope-entries'
 
 /**
  * Builder for parallel composition.
  *
- * Each `.steps()` / `.use()` call adds a branch.
+ * Each `.steps()` call adds a branch.
  * All branches fork from the same tick and run independently.
  * After all branches, tick advances to the longest branch's end.
  *
  * Usage:
  *   stack()
  *     .steps(note('C4'), note('E4'))
- *     .use(drumClip)
+ *     .steps(use(drumClip))
  *     .steps(chord('Am'), chord('F'))
  */
 export class StackBuilder implements PipeStep {
-  private readonly branches: ScopeEntry[]
+  private readonly branches: PipeStep[][]
 
-  constructor(branches: ScopeEntry[] = []) {
+  constructor(branches: PipeStep[][] = []) {
     this.branches = branches
   }
 
   /** Add a branch of inline steps. */
   steps(...pipeSteps: PipeStep[]): StackBuilder {
-    return new StackBuilder(appendStepsEntry(this.branches, pipeSteps))
-  }
-
-  /** Add a clip as a branch. */
-  use(clip: Composable): StackBuilder {
-    return new StackBuilder(appendClipEntry(this.branches, clip))
+    return new StackBuilder(appendSteps(this.branches, pipeSteps))
   }
 
   apply(bridge: CompositionBridge): CompositionBridge {
@@ -42,17 +32,13 @@ export class StackBuilder implements PipeStep {
     let result = bridge
 
     for (let i = 0; i < this.branches.length; ++i) {
-      const branch = this.branches[i]
+      const steps = this.branches[i]
 
       // Fork: reset tick to start for each branch, always from original bridge
       let branchBridge = result.withTick(startTick)
 
-      if (branch.kind === 'steps') {
-        for (let j = 0; j < branch.steps.length; ++j) {
-          branchBridge = branch.steps[j].apply(branchBridge)
-        }
-      } else {
-        branchBridge = branch.clip.compose(branchBridge)
+      for (let j = 0; j < steps.length; ++j) {
+        branchBridge = steps[j].apply(branchBridge)
       }
 
       // Track the furthest tick reached

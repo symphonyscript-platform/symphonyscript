@@ -1,14 +1,14 @@
 import { SeededRandom } from '@symphonyscript/core'
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { HumanizationBridge, HumanizationBridgeParams } from '../composition/HumanizationBridge'
-import { ScopedEffectBuilder, ScopeEntry } from './ScopedEffectBuilder'
+import { ScopedEffectBuilder } from './ScopedEffectBuilder'
 import { KNUTH_MULTIPLIER } from '../constants'
 
 export interface HumanizationParams {
   velocityJitter: number
   timingAmount: number
   rng: SeededRandom | null
-  entries: ScopeEntry[]
+  entries: PipeStep[][]
 }
 
 export class HumanizationBuilder extends ScopedEffectBuilder<HumanizationBuilder> {
@@ -41,7 +41,7 @@ export class HumanizationBuilder extends ScopedEffectBuilder<HumanizationBuilder
     return new HumanizationBridge(bridge, { ...this.params, rng })
   }
 
-  protected cloneWithEntries(entries: ScopeEntry[]): HumanizationBuilder {
+  protected cloneWithEntries(entries: PipeStep[][]): HumanizationBuilder {
     return new HumanizationBuilder({ ...this.params, entries })
   }
 

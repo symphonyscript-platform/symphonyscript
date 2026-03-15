@@ -1,15 +1,7 @@
 import type { CompositionBridge } from '@symphonyscript/composer'
 import type { PipeStep } from '@symphonyscript/composer'
-import type { Composable } from '../interfaces/composable'
-import {
-  type ScopeEntry,
-  appendStepsEntry,
-  appendClipEntry,
-  applyEntries,
-} from '../utils/scope-entries'
+import { appendSteps, applyEntries } from '../utils/scope-entries'
 import { ScopeBuilder } from '../interfaces/scope-builder'
-
-export type { ScopeEntry } from '../utils/scope-entries'
 
 // ============================================================================
 // ScopedEffectBuilder
@@ -20,30 +12,21 @@ export type { ScopeEntry } from '../utils/scope-entries'
  * scoped and default (unscoped/downstream) modes.
  *
  * - Scoped:   `effect().steps(note('C4'))` — effect applies only to contained steps
- * - Clip:     `effect().use(clip)` — effect applies to an existing clip (accumulates)
  * - Default:  `effect().default()` or just `effect()` — effect cascades downstream
  *
- * `.steps()` and `.use()` share a single ordered `entries` array,
- * preserving the user's intended execution order.
- *
  * Subclasses implement `wrap(bridge)` to produce a decorated bridge.
- * Optionally override `cleanup(bridge)` for teardown after scoped steps (e.g. bend reset).
+ * Optionally override `cleanup(bridge)` for teardown after scoped steps.
  */
 export abstract class ScopedEffectBuilder<T extends ScopedEffectBuilder<T>> implements ScopeBuilder<T> {
-  protected readonly entries: ScopeEntry[]
+  protected readonly entries: PipeStep[][]
 
-  protected constructor(entries: ScopeEntry[]) {
+  protected constructor(entries: PipeStep[][]) {
     this.entries = entries
   }
 
-  /** Scope this effect to the given steps (overrides previous steps). */
+  /** Add steps to this effect's scope (accumulates). */
   steps(...pipeSteps: PipeStep[]): T {
-    return this.cloneWithEntries(appendStepsEntry(this.entries, pipeSteps))
-  }
-
-  /** Add a clip to the effect scope (accumulates). */
-  use(clip: Composable): T {
-    return this.cloneWithEntries(appendClipEntry(this.entries, clip))
+    return this.cloneWithEntries(appendSteps(this.entries, pipeSteps))
   }
 
   /** Explicitly mark as a downstream default. Semantic no-op. */
@@ -68,7 +51,7 @@ export abstract class ScopedEffectBuilder<T extends ScopedEffectBuilder<T>> impl
   protected abstract wrap(bridge: CompositionBridge): CompositionBridge
 
   /** Clone with updated entries. */
-  protected abstract cloneWithEntries(entries: ScopeEntry[]): T
+  protected abstract cloneWithEntries(entries: PipeStep[][]): T
 
   /**
    * Optional cleanup after scoped steps complete.

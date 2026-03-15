@@ -1,9 +1,9 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { DynamicsBridge, DynamicsBridgeParams } from '../composition/DynamicsBridge'
-import { ScopedEffectBuilder, ScopeEntry } from './ScopedEffectBuilder'
+import { ScopedEffectBuilder } from './ScopedEffectBuilder'
 
 export interface DynamicsParams extends DynamicsBridgeParams {
-  entries: ScopeEntry[]
+  entries: PipeStep[][]
 }
 
 export class DynamicsBuilder extends ScopedEffectBuilder<DynamicsBuilder> {
@@ -39,7 +39,7 @@ export class DynamicsBuilder extends ScopedEffectBuilder<DynamicsBuilder> {
     return new DynamicsBridge(bridge, this.params)
   }
 
-  protected cloneWithEntries(entries: ScopeEntry[]): DynamicsBuilder {
+  protected cloneWithEntries(entries: PipeStep[][]): DynamicsBuilder {
     return new DynamicsBuilder({ ...this.params, entries })
   }
 

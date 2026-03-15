@@ -1,11 +1,11 @@
 import type { CompositionBridge } from '@symphonyscript/composer'
 import type { CapturedNote } from '../interfaces/captured-note'
-import type { ScopeEntry } from './ScopedEffectBuilder'
+import type { PipeStep } from '@symphonyscript/composer'
 import { TransformEffect } from './TransformEffect'
 
 export interface StretchParams {
   factor: number
-  entries: ScopeEntry[]
+  entries: PipeStep[][]
 }
 
 export class StretchBuilder extends TransformEffect<StretchBuilder> {
@@ -20,7 +20,7 @@ export class StretchBuilder extends TransformEffect<StretchBuilder> {
     return new StretchBuilder({ factor, entries: this.entries })
   }
 
-  protected cloneWithEntries(entries: ScopeEntry[]): StretchBuilder {
+  protected cloneWithEntries(entries: PipeStep[][]): StretchBuilder {
     return new StretchBuilder({ factor: this._factor, entries })
   }
 

@@ -1,13 +1,14 @@
 import { CompositionBridge } from '@symphonyscript/composer'
 import { SeededRandom } from '@symphonyscript/core'
 import { ChanceBridge } from '../composition/ChanceBridge'
-import { ScopedEffectBuilder, ScopeEntry } from './ScopedEffectBuilder'
+import { ScopedEffectBuilder } from './ScopedEffectBuilder'
+import type { PipeStep } from '@symphonyscript/composer'
 import { KNUTH_MULTIPLIER } from '../constants'
 
 export interface ChanceParams {
   probability: number
   rng: SeededRandom | null
-  entries: ScopeEntry[]
+  entries: PipeStep[][]
 }
 
 export class ChanceBuilder extends ScopedEffectBuilder<ChanceBuilder> {
@@ -34,7 +35,7 @@ export class ChanceBuilder extends ScopedEffectBuilder<ChanceBuilder> {
     return new ChanceBridge(bridge, this._probability, rng)
   }
 
-  protected cloneWithEntries(entries: ScopeEntry[]): ChanceBuilder {
+  protected cloneWithEntries(entries: PipeStep[][]): ChanceBuilder {
     return new ChanceBuilder({ probability: this._probability, rng: this._rng, entries })
   }
 

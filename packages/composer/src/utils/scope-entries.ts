@@ -1,53 +1,30 @@
 import type { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import type { Composable } from '../interfaces/composable'
 
 // ============================================================================
-// ScopeEntry type — ordered union of steps and clips
-// ============================================================================
-
-export type ScopeEntry =
-  | { readonly kind: 'steps'; readonly steps: PipeStep[] }
-  | { readonly kind: 'clip'; readonly clip: Composable }
-
-// ============================================================================
-// Shared operations on ScopeEntry arrays
+// Scope entries — flat list of PipeStep arrays
 // ============================================================================
 
 /**
- * Append a steps entry to the end of the entries array.
+ * Append pipe steps to the entries array.
  */
-export function appendStepsEntry(entries: ScopeEntry[], pipeSteps: PipeStep[]): ScopeEntry[] {
-  return [...entries, { kind: 'steps', steps: pipeSteps }]
+export function appendSteps(entries: PipeStep[][], pipeSteps: PipeStep[]): PipeStep[][] {
+  return [...entries, pipeSteps]
 }
 
 /**
- * Append a clip entry to the end of the entries array.
- */
-export function appendClipEntry(
-  entries: ScopeEntry[],
-  clip: Composable,
-): ScopeEntry[] {
-  return [...entries, { kind: 'clip', clip }]
-}
-
-/**
- * Iterate scope entries in user-specified order, applying steps and composing clips.
+ * Iterate scope entries in user-specified order, applying steps sequentially.
  */
 export function applyEntries(
-  entries: ScopeEntry[],
+  entries: PipeStep[][],
   bridge: CompositionBridge,
 ): CompositionBridge {
   let target = bridge
 
   for (let i = 0; i < entries.length; ++i) {
-    const entry = entries[i]
+    const steps = entries[i]
 
-    if (entry.kind === 'steps') {
-      for (let j = 0; j < entry.steps.length; ++j) {
-        target = entry.steps[j].apply(target)
-      }
-    } else {
-      target = entry.clip.compose(target)
+    for (let j = 0; j < steps.length; ++j) {
+      target = steps[j].apply(target)
     }
   }
 

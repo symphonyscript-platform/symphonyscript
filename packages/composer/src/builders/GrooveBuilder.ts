@@ -1,7 +1,8 @@
 import { CompositionBridge } from '@symphonyscript/composer'
 import { SeededRandom } from '@symphonyscript/core'
 import { GrooveBridge, GrooveBridgeParams, GrooveStep } from '../composition/GrooveBridge'
-import { ScopedEffectBuilder, ScopeEntry } from './ScopedEffectBuilder'
+import { ScopedEffectBuilder } from './ScopedEffectBuilder'
+import type { PipeStep } from '@symphonyscript/composer'
 import { KNUTH_MULTIPLIER } from '../constants'
 
 const DEFAULT_STEP: GrooveStep = {
@@ -12,7 +13,7 @@ const DEFAULT_STEP: GrooveStep = {
 
 export interface GrooveParams extends Omit<GrooveBridgeParams, 'rng'> {
   rng: SeededRandom | null
-  entries: ScopeEntry[]
+  entries: PipeStep[][]
 }
 
 export class GrooveBuilder extends ScopedEffectBuilder<GrooveBuilder> {
@@ -63,7 +64,7 @@ export class GrooveBuilder extends ScopedEffectBuilder<GrooveBuilder> {
     return new GrooveBridge(bridge, { ...this.params, rng })
   }
 
-  protected cloneWithEntries(entries: ScopeEntry[]): GrooveBuilder {
+  protected cloneWithEntries(entries: PipeStep[][]): GrooveBuilder {
     return new GrooveBuilder({ ...this.params, entries })
   }
 

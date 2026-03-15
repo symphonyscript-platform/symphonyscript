@@ -1,9 +1,6 @@
-import type { CompositionBridge } from '@symphonyscript/composer'
-import type { PipeStep } from '@symphonyscript/composer'
-import type { Composable } from '../interfaces/composable'
+import type { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { CapturedNote } from '../interfaces/captured-note'
-import type { ScopeEntry } from '../utils/scope-entries'
-import { appendStepsEntry, appendClipEntry, applyEntries } from '../utils/scope-entries'
+import { appendSteps, applyEntries } from '../utils/scope-entries'
 import { BaseCompositionBridge } from '../composition/BaseCompositionBridge'
 import { RecordingBridge } from '../composition/RecordingBridge'
 import { ScopeBuilder } from '../interfaces/scope-builder'
@@ -15,7 +12,7 @@ import { ScopeBuilder } from '../interfaces/scope-builder'
  * TransformEffect captures all notes AFTER composition, transforms them,
  * then replays the transformed notes onto the bridge.
  *
- * Supports `.steps()`, `.use()`, and `.default()` like ScopedEffectBuilder.
+ * Supports `.steps()` and `.default()` like ScopedEffectBuilder.
  */
 const IS_TRANSFORM = Symbol('TransformEffect')
 
@@ -24,14 +21,14 @@ export abstract class TransformEffect<T extends TransformEffect<T>> implements S
 
   readonly [IS_TRANSFORM] = true
 
-  protected readonly entries: ScopeEntry[]
+  protected readonly entries: PipeStep[][]
 
-  protected constructor(entries: ScopeEntry[]) {
+  protected constructor(entries: PipeStep[][]) {
     this.entries = entries
   }
 
   /** Clone with updated entries. */
-  protected abstract cloneWithEntries(entries: ScopeEntry[]): T
+  protected abstract cloneWithEntries(entries: PipeStep[][]): T
 
   /**
    * Transform recorded notes and replay them onto the bridge.
@@ -43,14 +40,9 @@ export abstract class TransformEffect<T extends TransformEffect<T>> implements S
     bridge: CompositionBridge,
   ): CompositionBridge
 
-  /** Scope this transform to the given steps (overrides previous steps). */
+  /** Add steps to this transform's scope (accumulates). */
   steps(...pipeSteps: PipeStep[]): T {
-    return this.cloneWithEntries(appendStepsEntry(this.entries, pipeSteps))
-  }
-
-  /** Add a clip to the transform scope (accumulates). */
-  use(clip: Composable): T {
-    return this.cloneWithEntries(appendClipEntry(this.entries, clip))
+    return this.cloneWithEntries(appendSteps(this.entries, pipeSteps))
   }
 
   /** Explicitly mark as a downstream default. */

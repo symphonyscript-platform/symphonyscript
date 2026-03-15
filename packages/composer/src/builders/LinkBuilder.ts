@@ -2,6 +2,7 @@ import type { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { Composable } from '../interfaces/composable'
 import { partitionEffects } from '../utils/partition-effects'
 import { ScopeBuilder } from '../interfaces/scope-builder'
+import { use as useNotation } from '../notations/use'
 
 export interface LinkParams {
   clip: Composable
@@ -65,7 +66,7 @@ export class LinkBuilder implements PipeStep {
 
     // Apply transforms as post-processors on the clip content
     for (let i = 0; i < transforms.length; ++i) {
-      result = transforms[i].use(clip).apply(bridge)
+      result = transforms[i].steps(useNotation(clip)).apply(bridge)
     }
 
     return result
@@ -75,3 +76,4 @@ export class LinkBuilder implements PipeStep {
     return new LinkBuilder({ ...this.params, ...overrides })
   }
 }
+

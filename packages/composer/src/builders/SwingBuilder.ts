@@ -1,9 +1,9 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { SwingBridge, SwingBridgeParams } from '../composition/SwingBridge'
-import { ScopedEffectBuilder, ScopeEntry } from './ScopedEffectBuilder'
+import { ScopedEffectBuilder } from './ScopedEffectBuilder'
 
 export interface SwingParams extends SwingBridgeParams {
-  entries: ScopeEntry[]
+  entries: PipeStep[][]
 }
 
 export class SwingBuilder extends ScopedEffectBuilder<SwingBuilder> {
@@ -29,7 +29,7 @@ export class SwingBuilder extends ScopedEffectBuilder<SwingBuilder> {
     return new SwingBridge(bridge, this.params)
   }
 
-  protected cloneWithEntries(entries: ScopeEntry[]): SwingBuilder {
+  protected cloneWithEntries(entries: PipeStep[][]): SwingBuilder {
     return new SwingBuilder({ ...this.params, entries })
   }
 

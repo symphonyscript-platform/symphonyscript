@@ -1,9 +1,9 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import { ScopedEffectBuilder, ScopeEntry } from './ScopedEffectBuilder'
+import { ScopedEffectBuilder } from './ScopedEffectBuilder'
 
 export interface BendParams {
   value: number
-  entries: ScopeEntry[]
+  entries: PipeStep[][]
 }
 
 export class BendBuilder extends ScopedEffectBuilder<BendBuilder> {
@@ -22,7 +22,7 @@ export class BendBuilder extends ScopedEffectBuilder<BendBuilder> {
     return bridge.withBend(this._value)
   }
 
-  protected cloneWithEntries(entries: ScopeEntry[]): BendBuilder {
+  protected cloneWithEntries(entries: PipeStep[][]): BendBuilder {
     return new BendBuilder({ value: this._value, entries })
   }
 

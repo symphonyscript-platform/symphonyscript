@@ -1,14 +1,14 @@
 import type { CompositionBridge } from '@symphonyscript/composer'
 import type { CapturedNote } from '../interfaces/captured-note'
-import type { ScopeEntry } from './ScopedEffectBuilder'
+import type { PipeStep } from '@symphonyscript/composer'
 import { TransformEffect } from './TransformEffect'
 
 export class ReverseBuilder extends TransformEffect<ReverseBuilder> {
-  constructor(entries: ScopeEntry[] = []) {
+  constructor(entries: PipeStep[][] = []) {
     super(entries)
   }
 
-  protected cloneWithEntries(entries: ScopeEntry[]): ReverseBuilder {
+  protected cloneWithEntries(entries: PipeStep[][]): ReverseBuilder {
     return new ReverseBuilder(entries)
   }
 
