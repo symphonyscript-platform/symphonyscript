@@ -79,6 +79,7 @@ export abstract class TransformEffect<T extends TransformEffect<T>> implements S
     const frozen = recorder.toFrozenClip()
 
     const notes: CapturedNote[] = []
+
     frozen.visitNotes((_sourceId, pitch, velocity, duration, tick, muted) => {
       notes.push({ pitch, velocity, duration, tick, muted })
     })
