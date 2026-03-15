@@ -1,4 +1,5 @@
-import { CrescendoBuilder, DecrescendoBuilder } from '../builders/DynamicsBuilders'
+import { DecrescendoBuilder } from '../builders/DecrescendoBuilder'
+import { CrescendoBuilder } from '../builders/CrescendoBuilder'
 
 export function crescendo(duration?: number): CrescendoBuilder {
   return new CrescendoBuilder({ duration })
