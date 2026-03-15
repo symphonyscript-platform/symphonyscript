@@ -1,9 +1,9 @@
-import { Clip } from './interfaces/clip'
+import { Composer } from './interfaces/composer'
 import { PipeStep } from './interfaces/pipe-step'
 import { PipeStepNode } from './interfaces/pipe-step-node'
 import { CompositionBridge } from './interfaces/composition-bridge'
 
-export class ClipBuilder implements Clip {
+export class ClipBuilder implements Composer {
   constructor(private readonly tail: PipeStepNode | null = null) {
   }
 
