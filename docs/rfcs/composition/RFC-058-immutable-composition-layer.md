@@ -1,6 +1,6 @@
 # RFC-058: Immutable Composition Layer
 
-**Status:** Draft (Revision 3)
+**Status:** Implemented (Revision 4)
 **Depends on:** None (prerequisite for RFC-050)
 **Supersedes:** RFC-049 (Synaptic Cursor Architecture), RFC-058 Revisions 1–2
 
@@ -243,7 +243,13 @@ interface CompositionBridge {
   readonly timeSignatureDen: number;
   readonly scaleRoot: number;
   readonly scaleMode: ScaleMode;
+  readonly keyRoot: number;
+  readonly keyMode: ScaleMode;
   readonly swing: number;
+  readonly muted: boolean;
+  readonly precise: boolean;
+  readonly quantizeGrid: number;
+  readonly quantizeStrength: number;
 
   // === Deferred Event Methods (pure — accumulate thunks, no side effects) ===
 
@@ -563,65 +569,75 @@ function drag(hitName?: string): DrumHitBuilder;
 function roll(duration: number, rate?: number): PipeStep;
 ```
 
-### 5.4 Transform Notations (Fx)
+### 5.4 Transform & Effect Notations (Fx)
+
+Effect notations return `ScopeBuilder`s that support both scoped and cascading modes:
 
 ```typescript
 /** Enable humanization. Wraps bridge with HumanizingBridge. */
-function humanize(velocity: number, timing?: number): PipeStep;
-
-/** Transpose subsequent notes. Wraps bridge with TransposingBridge. */
-function transpose(semitones: number): PipeStep;
+function humanize(velocity: number, timing?: number): HumanizationBuilder;
 
 /** Apply swing timing. */
-function swing(amount: number): PipeStep;
+function swing(amount: number): SwingBuilder;
 
 /** Snap to grid. */
-function quantize(grid: number, strength?: number): PipeStep;
+function quantize(grid: number, strength?: number): QuantizationBuilder;
+
+/** Apply groove template. */
+function groove(probability: number): GrooveBuilder;
+
+/** Mute probability. */
+function chance(probability: number): ChanceBuilder;
 
 /** Gradual velocity increase. */
-function crescendo(duration: number, from?: number, to?: number): PipeStep;
+function crescendo(duration: number, from?: number, to?: number): CrescendoBuilder;
 
 /** Gradual velocity decrease. */
-function decrescendo(duration: number, from?: number, to?: number): PipeStep;
+function decrescendo(duration: number, from?: number, to?: number): DecrescendoBuilder;
 
-/** Set base velocity for subsequent notes. */
-function velocity(v: number): PipeStep;
-
-/** Set default duration for notes that don't specify one. */
-function defaultDuration(beats: number): PipeStep;
-
-/** Set tempo. */
-function tempo(bpm: number): PipeStep;
-
-/** Set time signature. */
-function timeSignature(num: number, den: number): PipeStep;
-
-/** Set scale context. */
-function scale(name: string): PipeStep;
-
-/** Set key context. */
-function key(root: string, mode: ScaleMode): PipeStep;
-
-/** Set octave. */
-function octave(n: number): PipeStep;
-
-/** Shift up by n octaves. */
-function octaveUp(n?: number): PipeStep;
-
-/** Shift down by n octaves. */
-function octaveDown(n?: number): PipeStep;
-
-/** Disable humanization for subsequent notes. */
-function precise(): PipeStep;
-
-/** Set probability for the next note (0.0–1.0). */
-function chance(probability: number): PipeStep;
-
-/** Reverse content (operates on completed clip when used as clip method). */
-function reverse(): PipeStep;
+/** Reverse content. */
+function reverse(): ReverseBuilder;
 
 /** Time-stretch by factor. */
-function stretch(factor: number): PipeStep;
+function stretch(factor: number): StretchBuilder;
+
+/** Compose multiple effects into one scope. */
+function scoped(...effects: PipeStep[]): ScopedBuilder;
+
+/** Full context isolation — state changes inside don't leak out. */
+function isolate(): IsolateBuilder;
+```
+
+### 5.4b Setter Notations
+
+Setters return `FieldSetter` (extends `ScopedSetterBuilder`) — support both cascading and `.steps()` scoped modes:
+
+```typescript
+// Cascading (sets value downstream):
+tempo(140)
+
+// Scoped (auto-restores after):
+tempo(140).steps(note('C4'), note('D4'))
+```
+
+All setter notations:
+
+```typescript
+function transpose(semitones: number): FieldSetter;
+function velocity(value: number): FieldSetter;
+function tempo(bpm: number): FieldSetter;
+function scale(root: PitchClass, mode: ScaleMode): FieldSetter;
+function key(root: PitchClass, mode: ScaleMode): FieldSetter;
+function defaultDuration(duration: number): FieldSetter;
+function timeSignature(num: number, den: number): FieldSetter;
+function octave(n: number): FieldSetter;
+function precise(): FieldSetter;
+function volume(value: number): FieldSetter;
+function pan(value: number): FieldSetter;
+
+// Relative (non-scoped, plain PipeStep):
+function octaveUp(n?: number): PipeStep;
+function octaveDown(n?: number): PipeStep;
 ```
 
 ### 5.5 Instrument Notations
@@ -635,17 +651,17 @@ function sustain(): PipeStep;
 /** Sustain pedal off (CC64 = 0). */
 function release(): PipeStep;
 
-/** Breath controller (CC2). Amount 0–1. */
+/** Breath controller (CC2). Amount 0–127. */
 function breath(amount: number): PipeStep;
 
-/** Expression controller (CC11). Amount 0–1. */
+/** Expression controller (CC11). Amount 0–127. */
 function expression(amount: number): PipeStep;
 
-/** Mod wheel (CC1). Amount 0–1. */
+/** Mod wheel (CC1). Amount 0–127. */
 function modWheel(amount: number): PipeStep;
 
-/** Pitch bend in semitones (-12 to +12). */
-function bend(semitones: number): PipeStep;
+/** Pitch bend (scoped — auto-resets after steps). */
+function bend(value?: number): BendBuilder;
 
 /** Reset pitch bend to center. */
 function bendReset(): PipeStep;
@@ -655,19 +671,16 @@ function bendReset(): PipeStep;
 
 ```typescript
 /** Insert another clip's content at current tick. */
-function play(clip: Clip): PipeStep;
+function use(clip: Composable): PipeStep;
 
 /** Execute branches in parallel at the same tick. */
-function stack(...branches: PipeStep[]): PipeStep;
+function stack(): StackBuilder;
 
 /** Repeat a clip or builder function. */
 function loop(count: number, source: Clip | PipeStep): PipeStep;
 
 /** Repeat previous step n times. */
 function repeat(n: number, source: PipeStep): PipeStep;
-
-/** Execute in MPE voice scope. */
-function voice(id: number, fn: (bridge: CompositionBridge) => CompositionBridge): PipeStep;
 ```
 
 ---
@@ -1036,7 +1049,7 @@ Delete old clip classes, cursors, builders. All composition goes through `Clip.p
 | 8 | Transforms are CompositionBridge decorators | Each concern isolated. Note operations don't know about transforms |
 | 9 | `with*` prefix for ALL methods | State modifiers AND event methods: `withVelocity()`, `withNote()`, `withCC()`. Uniform immutable API |
 | 10 | Builders implement PipeStep | `apply(bridge)` called during materialization. One interface, one method |
-| 11 | `.use()` for synapse creation | Short, natural: "clip uses another clip" |
+| 11 | Removed `.use()` from scope builders | Redundant — `use()` is a notation function usable inside `.steps()`. Simplifies `ScopeEntry` to `PipeStep[][]` |
 | 12 | Instrument markings are standalone functions | `sustain()`, `breath()`, `bend()` — named wrappers around cc/pitchBend |
 | 13 | Pipe steps never access ExecutionContext directly | Type system prevents kernel writes during composition |
 | 14 | Construction-time execution, not playback | Pipe runs on main thread. Allocations are free. Kernel is sole runtime truth |
@@ -1047,3 +1060,8 @@ Delete old clip classes, cursors, builders. All composition goes through `Clip.p
 | 19 | Compose once, commit many | Same thunk list committed to kernel, serializer, recorder independently |
 | 20 | PipeStep creator functions are called "notations" | Musical term. Dictionary-accurate: notes, dynamics, transforms are all musical notations |
 | 21 | RFC-058 lands before RFC-050 | Composition layer is the foundation modulation sits on |
+| 22 | Scoped setters via `FieldSetter` | Single generic class for all setter scoping. Closure-parameterized, zero duplication |
+| 23 | Key context is separate from scale context | `keyRoot`/`keyMode` for accidentals, `scaleRoot`/`scaleMode` for degree-based notation |
+| 24 | Late key resolution in NoteBuilder | `rawPitch` string carried alongside MIDI pitch. Key accidentals applied at `apply()` time via `applyKeySignature` |
+| 25 | `isolate()` for full context isolation | Nothing leaks out. Inner steps see parent context but changes don't propagate |
+| 26 | RNG consistency: bridges take SeededRandom, builders resolve null fallback | Deterministic composition via KNUTH_MULTIPLIER * tick fallback |
