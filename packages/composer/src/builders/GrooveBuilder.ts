@@ -1,5 +1,6 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { GrooveBridge, GrooveBridgeParams, GrooveStep } from '../composition/GrooveBridge'
+import { ScopedEffectBuilder } from './ScopedEffectBuilder'
 
 const DEFAULT_STEP: GrooveStep = {
   velocity: 1.0,
@@ -7,23 +8,39 @@ const DEFAULT_STEP: GrooveStep = {
   probability: 1.0,
 }
 
-export class GrooveBuilder implements PipeStep {
+export interface GrooveParams extends GrooveBridgeParams {
+  pipeSteps: PipeStep[]
+}
+
+export class GrooveBuilder extends ScopedEffectBuilder<GrooveBuilder> {
   private readonly params: GrooveBridgeParams
 
-  constructor(params: Partial<GrooveBridgeParams>) {
+  constructor(params: Partial<GrooveParams>) {
+    super(params.pipeSteps ?? [])
     this.params = {
       steps: params.steps ?? [],
       grid: params.grid ?? 480,
     }
   }
 
+  protected wrap(bridge: CompositionBridge): CompositionBridge {
+    return new GrooveBridge(bridge, this.params)
+  }
+
+  protected cloneWithSteps(pipeSteps: PipeStep[]): GrooveBuilder {
+    return new GrooveBuilder({ ...this.params, pipeSteps })
+  }
+
+  private clone(overrides: Partial<GrooveParams>): GrooveBuilder {
+    return new GrooveBuilder({ ...this.params, pipeSteps: this.pipeSteps, ...overrides })
+  }
+
   grid(grid: number): GrooveBuilder {
-    return new GrooveBuilder({ ...this.params, grid })
+    return this.clone({ grid })
   }
 
   step(): GrooveBuilder {
-    return new GrooveBuilder({
-      ...this.params,
+    return this.clone({
       steps: [...this.params.steps, { ...DEFAULT_STEP }],
     })
   }
@@ -40,17 +57,13 @@ export class GrooveBuilder implements PipeStep {
     return this.modifyLast({ probability })
   }
 
-  apply(bridge: CompositionBridge): CompositionBridge {
-    return new GrooveBridge(bridge, this.params)
-  }
-
   private modifyLast(overrides: Partial<GrooveStep>): GrooveBuilder {
-    const steps = [...this.params.steps]
+    const grooveSteps = [...this.params.steps]
 
-    if (steps.length === 0) return this
+    if (grooveSteps.length === 0) return this
 
-    steps[steps.length - 1] = { ...steps[steps.length - 1], ...overrides }
+    grooveSteps[grooveSteps.length - 1] = { ...grooveSteps[grooveSteps.length - 1], ...overrides }
 
-    return new GrooveBuilder({ ...this.params, steps })
+    return this.clone({ steps: grooveSteps })
   }
 }

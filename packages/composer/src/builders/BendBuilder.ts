@@ -1,45 +1,37 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import { ScopedEffectBuilder } from './ScopedEffectBuilder'
 
 export interface BendParams {
   value: number
   pipeSteps: PipeStep[]
 }
 
-export class BendBuilder implements PipeStep {
-  private readonly params: BendParams
+export class BendBuilder extends ScopedEffectBuilder<BendBuilder> {
+  private readonly _value: number
 
   constructor(params: Partial<BendParams>) {
-    this.params = {
-      value: params.value ?? 0,
-      pipeSteps: params.pipeSteps ?? [],
-    }
+    super(params.pipeSteps ?? [])
+    this._value = params.value ?? 0
+  }
+
+  protected wrap(bridge: CompositionBridge): CompositionBridge {
+    return bridge.withBend(this._value)
+  }
+
+  protected cloneWithSteps(pipeSteps: PipeStep[]): BendBuilder {
+    return new BendBuilder({ value: this._value, pipeSteps })
+  }
+
+  /** Reset bend to 0 after scoped steps complete. */
+  protected cleanup(bridge: CompositionBridge): CompositionBridge {
+    return bridge.withBend(0)
   }
 
   private clone(overrides: Partial<BendParams>): BendBuilder {
-    return new BendBuilder({ ...this.params, ...overrides })
+    return new BendBuilder({ value: this._value, pipeSteps: this.pipeSteps, ...overrides })
   }
 
   value(value: number): BendBuilder {
     return this.clone({ value })
-  }
-
-  steps(...pipeSteps: PipeStep[]): BendBuilder {
-    return this.clone({ pipeSteps })
-  }
-
-  apply(bridge: CompositionBridge): CompositionBridge {
-    if (this.params.pipeSteps.length === 0) {
-      // Setter mode: just set the bend, no auto-reset
-      return bridge.withBend(this.params.value)
-    }
-
-    // Scoped mode: set bend → apply steps → reset bend
-    let target = bridge.withBend(this.params.value)
-
-    for (let i = 0; i < this.params.pipeSteps.length; ++i) {
-      target = this.params.pipeSteps[i].apply(target)
-    }
-
-    return target.withBend(0)
   }
 }
