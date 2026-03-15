@@ -27,7 +27,7 @@ export class ClipBuilder implements Clip {
     for (let i = nodes.length - 1; i >= 0; i--) {
       const steps = nodes[i].steps
       for (let j = 0; j < steps.length; ++j) {
-        const step = steps[i]
+        const step = steps[j]
         bridge = step.apply(bridge)
       }
     }
