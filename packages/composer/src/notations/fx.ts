@@ -1,31 +1,24 @@
-import { CompositionBridge, PipeStep, step } from '@symphonyscript/composer'
+import { PipeStep, step } from '@symphonyscript/composer'
+import { ChanceBridge } from '../composition/ChanceBridge'
 
 /**
  * Probabilistic note emission.
- * Wraps the bridge to randomly skip notes based on probability.
+ * Subsequent notes have an independent probability of being emitted.
+ * Uses a seeded PRNG for reproducibility.
+ *
+ * @param probability - 0..1 chance each note is emitted (1 = always, 0 = never)
+ * @param seed - Optional seed for reproducibility (defaults to Date.now())
  */
-export function chance(probability: number): PipeStep {
-  return step((bridge) => {
-    // probability 0..1: chance that subsequent notes will actually emit
-    // This is a state modifier — the bridge needs to track it
-    // For now, we approximate via muting: if random > probability, mute
-    if (Math.random() > probability) {
-      return bridge.withMuted(true)
-    }
-    return bridge.withMuted(false)
-  })
+export function chance(probability: number, seed: number = Date.now()): PipeStep {
+  return step((bridge) => new ChanceBridge(bridge, probability, seed))
 }
 
 /**
  * Reverse — reverses the tick positions of a composed sequence.
- * This is a clip-level operation, returns a PipeStep that can be
- * applied to reverse the overall tick order.
+ * Requires post-processing of committed thunks via FrozenClip.
+ * TODO: Implement via FrozenClip → reverse tick positions → re-emit
  */
 export function reverse(): PipeStep {
-  // Reverse requires post-processing of committed thunks.
-  // For now this placeholder adjusts nothing — full implementation
-  // requires the Clip class to support post-compose transforms.
-  // TODO: Implement via FrozenClip → reverse tick positions → re-emit
   return step((bridge) => bridge)
 }
 

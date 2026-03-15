@@ -10,6 +10,7 @@ export interface HarmonyParams extends PitchStepParams {
   strumRate: number | null
   strumDirection: 'up' | 'down'
   spread: number
+  spreadSeed: number | null
 }
 
 export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
@@ -19,6 +20,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
   private readonly strumRate: number | null
   private readonly strumDirection: 'up' | 'down'
   private readonly spreadAmount: number
+  private readonly spreadSeed: number | null
 
   constructor(params: Partial<HarmonyParams> & { mask: HarmonyMask }) {
     super(params)
@@ -28,6 +30,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
     this.strumRate = params.strumRate ?? null
     this.strumDirection = params.strumDirection ?? 'up'
     this.spreadAmount = params.spread ?? 0
+    this.spreadSeed = params.spreadSeed ?? null
   }
 
   protected create(params: Partial<PitchStepParams>): HarmonyBuilder {
@@ -39,6 +42,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
       strumRate: this.strumRate,
       strumDirection: this.strumDirection,
       spread: this.spreadAmount,
+      spreadSeed: this.spreadSeed,
     })
   }
 
@@ -51,6 +55,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
       strumRate: overrides.strumRate !== undefined ? overrides.strumRate : this.strumRate,
       strumDirection: overrides.strumDirection ?? this.strumDirection,
       spread: overrides.spread !== undefined ? overrides.spread : this.spreadAmount,
+      spreadSeed: overrides.spreadSeed !== undefined ? overrides.spreadSeed : this.spreadSeed,
     })
   }
 
@@ -74,9 +79,9 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
     return this.cloneHarmony({ strumRate: rate, strumDirection: direction })
   }
 
-  /** Spread — add random timing offset to each note (humanize chord). */
-  spread(amount: number): HarmonyBuilder {
-    return this.cloneHarmony({ spread: amount })
+  /** Spread — add timing offset to each note (humanize chord). */
+  spread(amount: number, seed?: number): HarmonyBuilder {
+    return this.cloneHarmony({ spread: amount, spreadSeed: seed ?? null })
   }
 
   apply(bridge: CompositionBridge): CompositionBridge {
@@ -129,10 +134,13 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
         }
       } else {
         // Simultaneous chord
+        let seedValue = this.spreadSeed ?? Date.now()
         for (let i = 0; i < pitches.length; ++i) {
-          const spreadOffset = this.spreadAmount > 0
-            ? Math.round(Math.random() * this.spreadAmount)
-            : 0
+          let spreadOffset = 0
+          if (this.spreadAmount > 0) {
+            seedValue = (seedValue * 1664525 + 1013904223) & 0x7fffffff
+            spreadOffset = (seedValue & 0xffff) % (this.spreadAmount + 1)
+          }
 
           target = target
             .withTick(repeatStartTick + spreadOffset)

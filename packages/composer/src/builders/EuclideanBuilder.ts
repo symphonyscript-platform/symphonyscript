@@ -1,6 +1,7 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import { euclidean, rotatePattern, noteToMidi } from '@symphonyscript/theory'
+import { euclidean, rotatePattern } from '@symphonyscript/theory'
 import type { NotePitch } from '../types'
+import { resolvePitches } from '../utils/pitch'
 
 export interface EuclideanParams {
   hits: number
@@ -65,21 +66,7 @@ export class EuclideanBuilder implements PipeStep {
       pattern = rotatePattern(pattern, this.params.rotation)
     }
 
-    // Resolve note pitches
-    const pitches: number[] = new Array(this.params.notes.length)
-    for (let i = 0; i < this.params.notes.length; ++i) {
-      const input = this.params.notes[i]
-      if (typeof input === 'string') {
-        const midi = noteToMidi(input)
-        if (midi === null) {
-          throw new Error(`Invalid note in euclidean: ${input}`)
-        }
-        pitches[i] = midi
-      } else {
-        pitches[i] = input
-      }
-    }
-
+    const pitches = resolvePitches(this.params.notes)
     if (pitches.length === 0) return bridge
 
     const duration = this.params.stepDuration ?? bridge.defaultDuration

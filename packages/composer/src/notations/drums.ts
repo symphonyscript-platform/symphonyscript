@@ -70,7 +70,7 @@ export function hit(pitch: number, duration?: number): DrumHitBuilder {
 
 /**
  * Text-based drum pattern.
- * 'x' = hit, '.' = rest, '-' = sustain (extends previous hit).
+ * 'x' = hit, '.' = rest (advance tick), '-' = sustain (advance tick, no new hit).
  */
 export function drumPattern(
   notation: string,
@@ -85,10 +85,13 @@ export function drumPattern(
       const character = notation[i]
       if (character === 'x' || character === 'X') {
         target = target.withNote(pitch, duration)
-      } else if (character === '.') {
+      } else {
+        // Both '.' (rest) and '-' (sustain) advance tick.
+        // Sustain means "previous note is still sounding" — since
+        // note duration was already set on the hit, advancing tick
+        // creates the gap-free sustain effect.
         target = target.withTick(target.tick + duration)
       }
-      // '-' = sustain — skip without advancing tick (previous note holds)
     }
 
     return target

@@ -1,8 +1,7 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import { noteToMidi } from '@symphonyscript/theory'
+import type { ArpPattern } from '@symphonyscript/theory'
 import type { NotePitch } from '../types'
-
-export type ArpPattern = 'up' | 'down' | 'upDown' | 'downUp' | 'random' | 'converge' | 'diverge'
+import { resolvePitches } from '../utils/pitch'
 
 export interface ArpeggioParams {
   pitches: NotePitch[]
@@ -60,20 +59,7 @@ export class ArpeggioBuilder implements PipeStep {
   apply(bridge: CompositionBridge): CompositionBridge {
     if (this.params.pitches.length === 0) return bridge
 
-    // Resolve pitches to MIDI numbers
-    const baseMidis: number[] = []
-    for (let i = 0; i < this.params.pitches.length; ++i) {
-      const input = this.params.pitches[i]
-      if (typeof input === 'string') {
-        const midi = noteToMidi(input)
-        if (midi === null) {
-          throw new Error(`Invalid note in arpeggio: ${input}`)
-        }
-        baseMidis.push(midi)
-      } else {
-        baseMidis.push(input)
-      }
-    }
+    const baseMidis = resolvePitches(this.params.pitches)
 
     // Expand octaves
     const pool: number[] = []

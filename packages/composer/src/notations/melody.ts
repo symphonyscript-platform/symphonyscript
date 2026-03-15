@@ -1,6 +1,7 @@
 import { CompositionBridge, PipeStep, step } from '@symphonyscript/composer'
-import { noteToMidi } from '@symphonyscript/theory'
+import { NoteBuilder } from '../builders/NoteBuilder'
 import type { NotePitch } from '../types'
+import { resolvePitch, resolvePitches } from '../utils/pitch'
 
 /**
  * Binary step pattern.
@@ -13,20 +14,7 @@ export function steps(
 ): PipeStep {
   return step((bridge) => {
     const duration = stepDuration ?? bridge.defaultDuration
-
-    // Resolve pitches
-    const pitches: number[] = new Array(notes.length)
-    for (let i = 0; i < notes.length; ++i) {
-      const input = notes[i]
-      if (typeof input === 'string') {
-        const midi = noteToMidi(input)
-        if (midi === null) throw new Error(`Invalid note in steps: ${input}`)
-        pitches[i] = midi
-      } else {
-        pitches[i] = input
-      }
-    }
-
+    const pitches = resolvePitches(notes)
     let target = bridge
     let noteIndex = 0
 
@@ -47,30 +35,23 @@ export function steps(
 }
 
 /**
- * Trill between two pitches.
- * Rapidly alternates between the current bridge pitch context and the target.
+ * Trill — rapid alternation between two adjacent pitches.
+ * Alternates between the given pitch and a pitch one step above.
  */
 export function trill(
   pitch: NotePitch,
-  basePitch: NotePitch,
   rate: number,
   duration: number,
 ): PipeStep {
   return step((bridge) => {
-    const targetMidi = typeof pitch === 'string'
-      ? noteToMidi(pitch) : pitch
-    const baseMidi = typeof basePitch === 'string'
-      ? noteToMidi(basePitch) : basePitch
-
-    if (targetMidi === null || baseMidi === null) {
-      throw new Error('Invalid pitch in trill')
-    }
+    const baseMidi = resolvePitch(pitch)
+    const trillMidi = baseMidi + 1 // semitone above
 
     const hitCount = Math.floor(duration / rate)
     let target = bridge
 
     for (let i = 0; i < hitCount; ++i) {
-      const currentPitch = i % 2 === 0 ? baseMidi : targetMidi
+      const currentPitch = i % 2 === 0 ? baseMidi : trillMidi
       target = target.withNote(currentPitch, rate)
     }
 
@@ -87,11 +68,7 @@ export function tremolo(
   duration: number,
 ): PipeStep {
   return step((bridge) => {
-    const midi = typeof pitch === 'string'
-      ? noteToMidi(pitch) : pitch
-
-    if (midi === null) throw new Error('Invalid pitch in tremolo')
-
+    const midi = resolvePitch(pitch)
     const hitCount = Math.floor(duration / rate)
     let target = bridge
 
@@ -105,17 +82,11 @@ export function tremolo(
 
 /**
  * Grace note — very short note immediately before the next main note.
- * Steals time from the next note (occupies a tiny duration).
+ * Returns NoteBuilder for velocity/articulation configuration.
  */
-export function grace(pitch: NotePitch, graceDuration: number = 30): PipeStep {
-  return step((bridge) => {
-    const midi = typeof pitch === 'string'
-      ? noteToMidi(pitch) : pitch
-
-    if (midi === null) throw new Error('Invalid pitch in grace')
-
-    return bridge.withNote(midi, graceDuration)
-  })
+export function grace(pitch: NotePitch, graceDuration: number = 30): NoteBuilder {
+  const midi = resolvePitch(pitch)
+  return new NoteBuilder({ pitch: midi, duration: graceDuration })
 }
 
 /**
@@ -128,15 +99,8 @@ export function glissando(
   duration: number,
 ): PipeStep {
   return step((bridge) => {
-    const fromMidi = typeof from === 'string'
-      ? noteToMidi(from) : from
-    const toMidi = typeof to === 'string'
-      ? noteToMidi(to) : to
-
-    if (fromMidi === null || toMidi === null) {
-      throw new Error('Invalid pitch in glissando')
-    }
-
+    const fromMidi = resolvePitch(from)
+    const toMidi = resolvePitch(to)
     const direction = toMidi > fromMidi ? 1 : -1
     const semitoneCount = Math.abs(toMidi - fromMidi)
 

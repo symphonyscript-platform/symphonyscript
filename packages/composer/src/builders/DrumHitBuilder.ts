@@ -69,13 +69,20 @@ export class DrumHitBuilder implements PipeStep {
 
   apply(bridge: CompositionBridge): CompositionBridge {
     const duration = this.params.duration ?? bridge.defaultDuration
+    const resolvedVelocity = this.params.velocity ?? bridge.velocity
+    const graceVelocity = Math.max(0, resolvedVelocity - 200)
+
+    // Snapshot original flags to restore after this step
+    const wasPrecise = bridge.precise
+    const wasMuted = bridge.muted
+
     let target = bridge
 
-    if (this.params.precise) {
+    // Apply local flags for this hit only
+    if (this.params.precise && !wasPrecise) {
       target = target.withPrecise(true)
     }
-
-    if (this.params.muted) {
+    if (this.params.muted && !wasMuted) {
       target = target.withMuted(true)
     }
 
@@ -83,21 +90,13 @@ export class DrumHitBuilder implements PipeStep {
     if (this.params.dragCount > 0) {
       const graceInterval = 10
       for (let i = 0; i < this.params.dragCount; ++i) {
-        target = target.withNote(
-          this.params.pitch,
-          graceInterval,
-          (this.params.velocity ?? bridge.velocity) - 200,
-        )
+        target = target.withNote(this.params.pitch, graceInterval, graceVelocity)
       }
     }
 
     // Emit flam grace note
     if (this.params.flamOffset !== null) {
-      target = target.withNote(
-        this.params.pitch,
-        this.params.flamOffset,
-        (this.params.velocity ?? bridge.velocity) - 200,
-      )
+      target = target.withNote(this.params.pitch, this.params.flamOffset, graceVelocity)
     }
 
     // Emit main hit
@@ -107,12 +106,11 @@ export class DrumHitBuilder implements PipeStep {
       this.params.velocity ?? undefined,
     )
 
-    // Reset flags
-    if (this.params.precise) {
+    // Restore original flags
+    if (this.params.precise && !wasPrecise) {
       target = target.withPrecise(false)
     }
-
-    if (this.params.muted) {
+    if (this.params.muted && !wasMuted) {
       target = target.withMuted(false)
     }
 
