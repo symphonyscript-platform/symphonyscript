@@ -1,5 +1,5 @@
 /**
- * Repeat Notation Test — repeat(count, source) returns LoopBuilder
+ * Repeat cue Test — repeat(count, source) returns LoopBuilder
  *
  * repeat() is a shorthand for looping a single step n times sequentially.
  * Equivalent to loop(count, source).

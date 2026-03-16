@@ -1,7 +1,7 @@
 /**
- * Drums Notation Test — kick(), snare(), drumPattern(), hit(), etc.
+ * Drums cue Test — kick(), snare(), drumPattern(), hit(), etc.
  *
- * Tests drum notation helpers that return DrumHitBuilder or DrumPatternBuilder.
+ * Tests drum cue helpers that return DrumHitBuilder or DrumPatternBuilder.
  * x = hit, . = rest (advance tick), - = sustain (advance tick, no new hit).
  */
 
@@ -112,7 +112,7 @@ describe('drums', () => {
       expect(result.tick).toBe(360)
     })
 
-    it('should return bridge unchanged when notation is empty', () => {
+    it('should return bridge unchanged when cue is empty', () => {
       const bridge = createBridge({ tick: 0 })
       const result = drumPattern('', GM_DRUM.BASS_DRUM_1).apply(bridge)
 
@@ -121,7 +121,7 @@ describe('drums', () => {
       expect(notes).toHaveLength(0)
     })
 
-    it('should return bridge unchanged when pitch is null (via missing notation)', () => {
+    it('should return bridge unchanged when pitch is null (via missing cue)', () => {
       const bridge = createBridge({ tick: 0 })
       const result = drumPattern().apply(bridge)
 
@@ -129,10 +129,10 @@ describe('drums', () => {
       expect(notes).toHaveLength(0)
     })
 
-    it('should support chaining .notation() and .pitch()', () => {
+    it('should support chaining .cue() and .pitch()', () => {
       const bridge = createBridge({ defaultDuration: 120 })
       const result = drumPattern()
-        .notation('x.x')
+        .cue('x.x')
         .pitch(GM_DRUM.CLOSED_HI_HAT)
         .apply(bridge)
       const { notes } = commitAndCapture(result)

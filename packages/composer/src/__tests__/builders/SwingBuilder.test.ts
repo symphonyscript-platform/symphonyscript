@@ -1,5 +1,5 @@
 /**
- * SwingBuilder & swing() notation test
+ * SwingBuilder & swing() cue test
  *
  * Tests SwingBuilder (returned by `swing()`), a ScopedStepBuilder that wraps
  * the bridge in SwingBridge to apply swing timing.
@@ -22,10 +22,10 @@ import { createBridge, commitAndCapture } from '../test-utils'
 describe('SwingBuilder', () => {
 
   // ========================================================================
-  // swing() notation
+  // swing() cue
   // ========================================================================
 
-  describe('swing() notation', () => {
+  describe('swing() cue', () => {
     it('should return SwingBuilder instance', () => {
       expect(swing()).toBeDefined()
       expect(swing().steps).toBeDefined()

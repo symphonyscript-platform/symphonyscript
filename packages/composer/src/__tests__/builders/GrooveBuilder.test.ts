@@ -1,5 +1,5 @@
 /**
- * GrooveBuilder & groove() notation test
+ * GrooveBuilder & groove() cue test
  *
  * Tests GrooveBuilder (returned by `groove()`), a ScopedStepBuilder that wraps
  * the bridge in GrooveBridge to apply per-step velocity scaling, timing offset,
@@ -22,10 +22,10 @@ import { createBridge, commitAndCapture } from '../test-utils'
 describe('GrooveBuilder', () => {
 
   // ========================================================================
-  // groove() notation
+  // groove() cue
   // ========================================================================
 
-  describe('groove() notation', () => {
+  describe('groove() cue', () => {
     it('should return GrooveBuilder instance', () => {
       expect(groove()).toBeDefined()
       expect(groove().steps).toBeDefined()

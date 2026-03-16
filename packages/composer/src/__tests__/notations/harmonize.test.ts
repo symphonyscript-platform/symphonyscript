@@ -1,7 +1,7 @@
 /**
- * Harmonize Notation Test — harmonize(...intervals) adds harmony voices
+ * Harmonize cue Test — harmonize(...intervals) adds harmony voices
  *
- * Tests the harmonize() notation that wraps the bridge in HarmonizeBridge,
+ * Tests the harmonize() cue that wraps the bridge in HarmonizeBridge,
  * adding diatonic harmony voices at the given intervals.
  */
 

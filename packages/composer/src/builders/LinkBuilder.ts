@@ -2,7 +2,7 @@ import type { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { Composable } from '../interfaces/composable'
 import { partitionEffects } from '../utils/partition-effects'
 import { ScopeBuilder } from '../interfaces/scope-builder'
-import { use as useNotation } from '../cues/use'
+import { use as usecue } from '../cues/use'
 
 /**
  * Parameters for {@link LinkBuilder}.
@@ -83,7 +83,7 @@ export class LinkBuilder implements PipeStep {
    * If no effects are configured, delegates directly to {@link Composable.compose}.
    * Otherwise, runs interceptors in order (wrapping the bridge), composes the clip
    * through the wrapped bridge, then applies transforms as post-processors on the
-   * composed content (via {@link use} notation for scoping).
+   * composed content (via {@link use} cue for scoping).
    *
    * @param bridge - Current composition state
 
@@ -110,7 +110,7 @@ export class LinkBuilder implements PipeStep {
 
     // Apply transforms as post-processors on the clip content
     for (let i = 0; i < transforms.length; ++i) {
-      result = transforms[i].steps(useNotation(clip)).apply(result)
+      result = transforms[i].steps(usecue(clip)).apply(result)
     }
 
     return result

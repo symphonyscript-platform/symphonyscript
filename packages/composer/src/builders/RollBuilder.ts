@@ -3,7 +3,7 @@ import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 /**
  * Parameters for {@link RollBuilder}.
  *
- * Used by {@link roll} notation for buzz rolls; pitch is typically a GM drum
+ * Used by {@link roll} cue for buzz rolls; pitch is typically a GM drum
  * MIDI key (e.g. {@link GM_DRUM.BASS_DRUM_1}).
  */
 export interface RollParams {

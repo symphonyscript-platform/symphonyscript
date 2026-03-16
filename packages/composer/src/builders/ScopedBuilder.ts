@@ -7,7 +7,7 @@ import { ScopeBuilder } from '../interfaces/scope-builder'
 /**
  * Internal parameters for {@link ScopedBuilder} construction.
  *
- * Used when cloning or constructing via the notation factory.
+ * Used when cloning or constructing via the cue factory.
  */
 export interface ScopedParams {
   /** Ordered array of effects (interceptors + transforms) to apply. Defaults to `[]`. */

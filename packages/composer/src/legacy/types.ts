@@ -153,7 +153,7 @@ export interface DegreeOptions {
 /**
  * Key signature context for automatic accidental application.
  * 
- * Unlike ScaleContext (used for degree-based notation), KeyContext
+ * Unlike ScaleContext (used for degree-based cue), KeyContext
  * modifies literal note names: note('F4') becomes F#4 in G major.
  */
 export interface KeyContext {

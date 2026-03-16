@@ -1,5 +1,5 @@
 /**
- * Stretch Notation Test — stretch(factor?, ...steps) returns StretchBuilder
+ * Stretch cue Test — stretch(factor?, ...steps) returns StretchBuilder
  *
  * stretch() time-stretches contained notes by factor: tick and duration
  * are multiplied, making the passage longer (factor > 1) or shorter (factor < 1).

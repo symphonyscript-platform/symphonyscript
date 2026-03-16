@@ -1,5 +1,5 @@
 /**
- * voiceLead Notation Test — voiceLead(numerals, duration) VoiceLeadBuilder
+ * voiceLead cue Test — voiceLead(numerals, duration) VoiceLeadBuilder
  *
  * Voice-led chord progression from roman numerals with minimal voice movement.
  */

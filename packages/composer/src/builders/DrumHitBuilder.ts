@@ -31,7 +31,7 @@ export interface DrumHitParams {
  *
  * Emits one main note, with optional grace notes (flam = one before, drag = multiple before).
  * Supports ghost notes (low velocity), accents (high velocity + precise), and muted hits.
- * Often used via notation helpers: {@link kick}, {@link snare}, {@link hit}, {@link flam}, {@link drag}.
+ * Often used via cue helpers: {@link kick}, {@link snare}, {@link hit}, {@link flam}, {@link drag}.
  *
  * All builder methods return new instances (clone-on-set immutability).
  *

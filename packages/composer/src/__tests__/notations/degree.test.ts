@@ -1,5 +1,5 @@
 /**
- * Tests for degree notation.
+ * Tests for degree cue.
  *
  * Covers:
  *   - degree(n, duration) returns DegreeBuilder

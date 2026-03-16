@@ -14,7 +14,7 @@ type Restorer = (result: CompositionBridge, parent: CompositionBridge) => Compos
 /**
  * Generic scoped setter for any bridge state field (velocity, tempo, transpose, etc.).
  *
- * Parameterized by closure-captured setter/restorer functions. Notation factories
+ * Parameterized by closure-captured setter/restorer functions. cue factories
  * such as `velocity()`, `tempo()`, `transpose()`, `duration()`, `scale()`,
  * `key()`, `volume()`, `pan()`, `octaveUp()`, `precise()` return FieldSetter instances.
  *

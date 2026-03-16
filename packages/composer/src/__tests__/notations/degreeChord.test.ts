@@ -1,5 +1,5 @@
 /**
- * degreeChord Notation Test — degreeChord(degrees, duration) DegreeChordBuilder
+ * degreeChord cue Test — degreeChord(degrees, duration) DegreeChordBuilder
  *
  * Emits a chord built from scale degrees using the bridge's scale context.
  */

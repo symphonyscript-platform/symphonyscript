@@ -12,14 +12,14 @@ import { TransformEffect } from './TransformEffect'
  * duration is preserved.
  *
  * Supports `steps()`, `default()`, and `apply()` inherited from {@link TransformEffect}.
- * `apply()` runs the capture-transform-replay pipeline; use the {@link reverse} notation.
+ * `apply()` runs the capture-transform-replay pipeline; use the {@link reverse} cue.
  *
  * @example
  * ```ts
  * reverse()                                    // No steps (pass-through when applied)
  * reverse().steps(note('C4'), note('E4'))     // Emits E4 then C4
  * reverse().steps(chord('Cmaj7'))             // Chord reversed
- * reverse(note('C4'), note('D4'), note('E4')) // Same as .steps(...) via notation
+ * reverse(note('C4'), note('D4'), note('E4')) // Same as .steps(...) via cue
  * reverse().default()                          // Explicit pass-through
  * ```
  */

@@ -19,7 +19,7 @@ export interface ScaledDurationParams {
  * `scaledDuration = round((overBeats * defaultDuration) / noteCount)`.
  * Each contained step runs with this as its `defaultDuration`.
  *
- * {@link TupletBuilder} extends this for tuplet notation (e.g. triplets).
+ * {@link TupletBuilder} extends this for tuplet cue (e.g. triplets).
  * All builder methods return new instances (clone-on-set immutability).
  *
  * @example

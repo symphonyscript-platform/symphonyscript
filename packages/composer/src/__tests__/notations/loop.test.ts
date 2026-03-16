@@ -1,5 +1,5 @@
 /**
- * Loop Notation Test — loop(count?, ...steps) returns LoopBuilder
+ * Loop cue Test — loop(count?, ...steps) returns LoopBuilder
  *
  * loop() creates a LoopBuilder that applies the given steps n times in sequence.
  * Default count is 1 when omitted.

@@ -1,7 +1,7 @@
 /**
- * Chord Notation Test — chord(symbol, duration) HarmonyBuilder
+ * Chord cue Test — chord(symbol, duration) HarmonyBuilder
  *
- * Tests the chord() notation that parses a chord symbol and returns
+ * Tests the chord() cue that parses a chord symbol and returns
  * a HarmonyBuilder which emits chord tones when applied.
  */
 

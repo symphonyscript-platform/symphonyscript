@@ -1,5 +1,5 @@
 /**
- * Aftertouch Notation Test — aftertouch(value, note?)
+ * Aftertouch cue Test — aftertouch(value, note?)
  *
  * Channel aftertouch (value only) or poly aftertouch (value + note).
  * Value range 0–1, mapped to 0–127.

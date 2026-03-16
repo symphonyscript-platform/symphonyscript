@@ -6,7 +6,7 @@ import { TransformEffect } from './TransformEffect'
 /**
  * Parameters for constructing a {@link StretchBuilder}.
  *
- * Used internally; prefer the {@link stretch} notation entry-point.
+ * Used internally; prefer the {@link stretch} cue entry-point.
  */
 export interface StretchParams {
   /** Scaling factor for tick offsets and durations. 1 = no change, 2 = double. Defaults to 1. */

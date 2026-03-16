@@ -22,7 +22,7 @@ import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('LoopBuilder', () => {
 
-  describe('loop() notation', () => {
+  describe('loop() cue', () => {
     it('should return LoopBuilder instance', () => {
       const result = loop(1, note('C4'))
       expect(result).toBeInstanceOf(LoopBuilder)
@@ -96,7 +96,7 @@ describe('LoopBuilder', () => {
     })
   })
 
-  describe('repeat() notation', () => {
+  describe('repeat() cue', () => {
     it('repeat(count, source) should return LoopBuilder', () => {
       const result = repeat(3, note('C4'))
       expect(result).toBeInstanceOf(LoopBuilder)

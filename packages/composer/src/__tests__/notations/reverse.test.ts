@@ -1,5 +1,5 @@
 /**
- * Reverse Notation Test — reverse(...steps) returns ReverseBuilder
+ * Reverse cue Test — reverse(...steps) returns ReverseBuilder
  *
  * reverse() reverses the temporal order of contained notes: the last note
  * becomes first, the first becomes last, etc.

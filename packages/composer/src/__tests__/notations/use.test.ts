@@ -1,5 +1,5 @@
 /**
- * Use Notation Test — use(clip) LinkBuilder inserts another clip's content
+ * Use cue Test — use(clip) LinkBuilder inserts another clip's content
  *
  * use(clip) returns LinkBuilder for configuration (weight, effects).
  * Without effects, clip content is composed at the current tick.

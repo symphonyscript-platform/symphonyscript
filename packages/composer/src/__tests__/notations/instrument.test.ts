@@ -1,7 +1,7 @@
 /**
- * Instrument Notation Test — sustain(), release(), modWheel(), breath(), expression(), bendReset()
+ * Instrument cue Test — sustain(), release(), modWheel(), breath(), expression(), bendReset()
  *
- * Tests instrument control notations that emit MIDI CC events and pitch bend via bridge.
+ * Tests instrument control cues that emit MIDI CC events and pitch bend via bridge.
  */
 
 import { describe, it, expect } from 'vitest'

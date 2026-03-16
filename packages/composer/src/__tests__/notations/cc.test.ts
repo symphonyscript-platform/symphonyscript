@@ -1,7 +1,7 @@
 /**
- * CC Notation Test — cc(controller, value), detune, timbre, pressure return PipeStep
+ * CC cue Test — cc(controller, value), detune, timbre, pressure return PipeStep
  *
- * Tests the cc() notation and its convenience wrappers (detune, timbre, pressure)
+ * Tests the cc() cue and its convenience wrappers (detune, timbre, pressure)
  * that emit MIDI control change events via bridge.withCC().
  */
 

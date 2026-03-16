@@ -19,7 +19,7 @@ const MIDI_C0 = 12
  * Called without arguments, creates a builder at C4 (4800 cents) with no explicit
  * duration (falls back to `bridge.defaultDuration` at apply-time).
  *
- * @param input - Pitch as string notation or absolute cents from C0. Defaults to C4 (4800).
+ * @param input - Pitch as string cue or absolute cents from C0. Defaults to C4 (4800).
  * @param duration - Note duration in ticks. `undefined` = use bridge default.
  *
  * @returns Immutable {@link NoteBuilder} — chain `.velocity()`, `.sharp()`, `.up()`, etc.

@@ -12,7 +12,7 @@ import { resolveDuration, type NoteDuration } from '../utils/duration'
  * programmatic interval sets or theory-layer outputs.
  *
  * @param mask - 24-EDO packed interval bitmask. `undefined` = empty (zero mask).
- * @param root - Root pitch as string notation or MIDI number. `undefined` = C4 (60).
+ * @param root - Root pitch as string cue or MIDI number. `undefined` = C4 (60).
  * @param duration - Duration in ticks for all chord tones. `undefined` = bridge default.
 
  * @returns Immutable {@link HarmonyBuilder}

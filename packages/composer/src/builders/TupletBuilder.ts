@@ -5,7 +5,7 @@ import { ScaledDurationBuilder, ScaledDurationParams } from './ScaledDurationBui
  * Parameters for {@link TupletBuilder}.
  *
  * Extends {@link ScaledDurationParams}. `count` and `inBeats` alias
- * `noteCount` and `overBeats` for tuplet-style notation (e.g. "3 in 2").
+ * `noteCount` and `overBeats` for tuplet-style cue (e.g. "3 in 2").
  */
 export interface TupletParams extends ScaledDurationParams {
   /** Number of notes in the tuplet. Maps to noteCount. Default 3. */

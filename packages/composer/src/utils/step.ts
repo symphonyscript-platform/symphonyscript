@@ -5,7 +5,7 @@ import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
  * functional pipe steps without implementing the full PipeStep interface.
  *
  * Used internally by {@link tie}, {@link glide}, {@link harmonize}, and other
- * notations that wrap bridge logic into a single step.
+ * cues that wrap bridge logic into a single step.
  *
  * @param apply - Function that receives the current bridge and returns the
  *   updated bridge after applying this step (typically immutable).

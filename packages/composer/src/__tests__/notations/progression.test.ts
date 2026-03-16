@@ -1,5 +1,5 @@
 /**
- * Progression Notation Test — progression(numerals, duration?)
+ * Progression cue Test — progression(numerals, duration?)
  *
  * progression() emits chord tones for each roman numeral in sequence.
  * Uses bridge key context (scaleRoot, scaleMode) for resolution.

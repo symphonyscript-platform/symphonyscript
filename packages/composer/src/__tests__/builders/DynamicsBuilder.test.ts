@@ -1,5 +1,5 @@
 /**
- * DynamicsBuilder & dynamics() notation test
+ * DynamicsBuilder & dynamics() cue test
  *
  * Tests DynamicsBuilder (returned by `dynamics()`), a ScopedStepBuilder that wraps
  * the bridge in DynamicsBridge to apply a velocity ramp from startVelocity to
@@ -21,10 +21,10 @@ import { createBridge, commitAndCapture } from '../test-utils'
 describe('DynamicsBuilder', () => {
 
   // ========================================================================
-  // dynamics() notation
+  // dynamics() cue
   // ========================================================================
 
-  describe('dynamics() notation', () => {
+  describe('dynamics() cue', () => {
     it('should return DynamicsBuilder instance', () => {
       expect(dynamics()).toBeDefined()
       expect(dynamics().steps).toBeDefined()

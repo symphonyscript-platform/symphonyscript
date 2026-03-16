@@ -1,7 +1,7 @@
 import { CompositionBridge } from './composition-bridge'
 
 /**
- * Core interface for a single composition step. All builders and notations
+ * Core interface for a single composition step. All builders and cues
  * produce PipeSteps that can be chained via {@link IClip.pipe}.
  */
 export interface PipeStep {

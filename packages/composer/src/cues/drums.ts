@@ -151,12 +151,12 @@ export function hit(pitch?: number, duration?: NoteDuration): DrumHitBuilder {
 }
 
 /**
- * Text-based drum pattern from notation string.
+ * Text-based drum pattern from cue string.
  *
  * `x` = hit, `.` = rest (advance tick), `-` = sustain (advance tick, no new hit).
  * Creates a {@link DrumPatternBuilder} that parses and applies the pattern.
  *
- * @param notation - Pattern string (e.g. `'x.x.x.x.'`).
+ * @param cue - Pattern string (e.g. `'x.x.x.x.'`).
  * @param pitch - GM drum MIDI number. Omit to use bridge/snare default.
  * @param stepDuration - Duration per step in ticks or string. `undefined` = bridge default.
 
@@ -169,12 +169,12 @@ export function hit(pitch?: number, duration?: NoteDuration): DrumHitBuilder {
  * ```
  */
 export function drumPattern(
-  notation?: string,
+  cue?: string,
   pitch?: number,
   stepDuration?: NoteDuration,
 ): DrumPatternBuilder {
   const resolved = stepDuration !== undefined ? resolveDuration(stepDuration) : undefined
-  return new DrumPatternBuilder({ notation, pitch, stepDuration: resolved })
+  return new DrumPatternBuilder({ cue, pitch, stepDuration: resolved })
 }
 
 /**

@@ -1,7 +1,7 @@
 /**
- * Rest Notation Test — rest(duration) advances tick
+ * Rest cue Test — rest(duration) advances tick
  *
- * Tests the rest() notation that returns a PipeStep advancing the bridge tick
+ * Tests the rest() cue that returns a PipeStep advancing the bridge tick
  * by the given duration without emitting notes.
  */
 

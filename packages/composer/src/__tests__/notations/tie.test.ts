@@ -1,5 +1,5 @@
 /**
- * Tie Notation Test — tie(...steps) wraps in TieBridge per step
+ * Tie cue Test — tie(...steps) wraps in TieBridge per step
  *
  * tie() creates a new TieBridge per step (current = new TieBridge(steps[i].apply(current))),
  * so accumulated state does not carry across steps. Each step gets a fresh TieBridge wrapper.

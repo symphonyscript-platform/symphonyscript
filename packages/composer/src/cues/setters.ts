@@ -62,7 +62,7 @@ export function tempo(bpm: number): FieldSetter {
 }
 
 /**
- * Set scale context for degree-based notation (or scoped).
+ * Set scale context for degree-based cue (or scoped).
  *
  * Used by {@link degree} and {@link degreeChord} to resolve scale degrees.
  *
@@ -122,7 +122,7 @@ export function pan(value: number): FieldSetter {
 /**
  * Set key signature context for automatic accidentals (or scoped).
  *
- * Affects how pitches are resolved for key-aware notation (e.g. preferring
+ * Affects how pitches are resolved for key-aware cue (e.g. preferring
  * diatonic spellings).
  *
  * @param root - Key root as {@link PitchClass}.
@@ -141,7 +141,7 @@ export function key(root: PitchClass, mode: ScaleMode | ScaleModeName): FieldSet
 /**
  * Set default duration for notes that don't specify one (or scoped).
  *
- * Accepts string notation (`'4n'`, `'8n.'`, `'4t'`) or tick count.
+ * Accepts string cue (`'4n'`, `'8n.'`, `'4t'`) or tick count.
  *
  * @param d - Duration as string or ticks. Must resolve to positive.
 

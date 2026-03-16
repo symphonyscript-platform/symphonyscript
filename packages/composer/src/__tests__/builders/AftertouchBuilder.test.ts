@@ -106,7 +106,7 @@ describe('AftertouchBuilder', () => {
     })
   })
 
-  describe('chaining with note() notation', () => {
+  describe('chaining with note() cue', () => {
     it('should allow aftertouch then note', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = aftertouch(0.5).apply(bridge)

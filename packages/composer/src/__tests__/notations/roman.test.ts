@@ -1,7 +1,7 @@
 /**
- * Roman Notation Test — roman(numeral, duration) RomanBuilder
+ * Roman cue Test — roman(numeral, duration) RomanBuilder
  *
- * Tests the roman() notation that emits chord tones from a roman numeral
+ * Tests the roman() cue that emits chord tones from a roman numeral
  * in the current key/scale context.
  */
 

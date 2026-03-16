@@ -18,7 +18,7 @@ export interface NoteParams extends PitchStepParams {
   /** Pre-resolved pitch in absolute cents from C0. Defaults to 4800 (C4). */
   pitchCents: number
   /**
-   * Original string pitch notation (e.g. `'C4'`, `'F#5'`).
+   * Original string pitch cue (e.g. `'C4'`, `'F#5'`).
    * Retained for temperament-aware re-resolution at apply-time.
    * `null` when the pitch was provided as a number.
    */

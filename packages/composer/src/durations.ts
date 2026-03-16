@@ -2,7 +2,7 @@
  * Tick constants for common note durations at PPQ 480.
  *
  * Use directly for edge cases where string durations don't cover the need.
- * For most cases, prefer string notation: `'4n'`, `'8n.'`, `'4t'`.
+ * For most cases, prefer string cue: `'4n'`, `'8n.'`, `'4t'`.
  */
 
 /** Whole note (4 beats) = 1920 ticks */

@@ -1,7 +1,7 @@
 /**
  * Exemplar: Setter Test — volume, tempo, transpose (FieldSetter)
  *
- * Tests FieldSetter instances returned by setter notation functions.
+ * Tests FieldSetter instances returned by setter cue functions.
  * FieldSetter extends ScopedStepBuilder — supports both cascading and scoped modes.
  *
  * Covers:

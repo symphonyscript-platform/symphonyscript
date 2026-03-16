@@ -5,7 +5,7 @@ import { resolvePitch } from '../utils/pitch'
 /**
  * Parameters for {@link TrillBuilder}.
  *
- * Used by {@link trill} notation; all fields default to `null` and are
+ * Used by {@link trill} cue; all fields default to `null` and are
  * resolved at apply-time from the bridge when unset.
  */
 export interface TrillParams {

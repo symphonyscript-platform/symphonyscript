@@ -1,7 +1,7 @@
 /**
- * Arpeggio Notation Test — arpeggio(pitches, rate) ArpeggioBuilder
+ * Arpeggio cue Test — arpeggio(pitches, rate) ArpeggioBuilder
  *
- * Tests the arpeggio() notation that emits notes in sequence
+ * Tests the arpeggio() cue that emits notes in sequence
  * from the given pitch list, optionally at a specific rate.
  */
 

@@ -10,7 +10,7 @@ import type { KeyContext } from '../types'
 
 /**
  * Map note names to KEY_ROOT keys.
- * Handles both sharp and flat notation.
+ * Handles both sharp and flat cue.
  */
 const NOTE_TO_KEY_ROOT: Record<string, keyof typeof KEY_ROOT> = {
     'C': 'C',

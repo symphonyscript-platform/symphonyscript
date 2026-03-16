@@ -18,7 +18,7 @@ export interface DrumStepsParams {
  *
  * Applies a `number[]` pattern (1 = hit, 0 = rest) via {@link applyBinaryPattern} using
  * a single drum pitch. Use this when you have a pre-computed pattern (e.g. from
- * {@link generateEuclideanPattern}) or custom array. For text notation like `"x.x."`,
+ * {@link generateEuclideanPattern}) or custom array. For text cue like `"x.x."`,
  * use {@link DrumPatternBuilder}; for euclidean distribution, use {@link DrumEuclideanBuilder}.
  *
  * All builder methods return new instances (clone-on-set immutability).

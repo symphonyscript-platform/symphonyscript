@@ -5,7 +5,7 @@ import { resolvePitch } from '../utils/pitch'
 /**
  * Parameters for {@link TremoloBuilder}.
  *
- * Used by {@link tremolo} notation; all fields default to `null` and are
+ * Used by {@link tremolo} cue; all fields default to `null` and are
  * resolved at apply-time from the bridge when unset.
  */
 export interface TremoloParams {

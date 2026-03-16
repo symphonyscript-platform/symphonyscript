@@ -1,5 +1,5 @@
 /**
- * Scoped Notation Test — scoped(...effects) composes effects into one block
+ * Scoped cue Test — scoped(...effects) composes effects into one block
  *
  * ScopedBuilder wraps effects around steps. Interceptors wrap the bridge before
  * composition; transforms post-process after composition.

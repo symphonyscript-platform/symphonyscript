@@ -1,7 +1,7 @@
 /**
  * HarmonyBuilder Test
  *
- * Tests chord() and harmony() notations:
+ * Tests chord() and harmony() cues:
  *   - chord() chord symbol parsing
  *   - harmony() mask/root
  *   - Immutability

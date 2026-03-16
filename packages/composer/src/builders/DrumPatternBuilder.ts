@@ -5,7 +5,7 @@ import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
  */
 export interface DrumPatternParams {
   /** Text pattern: 'x'/'X' = hit, any other char = rest (advance tick). Defaults to ''. */
-  notation: string
+  cue: string
   /** MIDI pitch for hits. `null` means no emission. */
   pitch: number | null
   /** Duration per step in ticks. `null` uses bridge default. */
@@ -17,7 +17,7 @@ export interface DrumPatternParams {
  *
  * Interprets a string where `x` or `X` = hit and any other character = rest (advance tick).
  * Unlike {@link DrumStepsBuilder}, the pattern is specified as a human-readable string rather
- * than a numeric array. Use for quick notation like `"x.x.x..."` without calling
+ * than a numeric array. Use for quick cue like `"x.x.x..."` without calling
  * {@link generateEuclideanPattern} or {@link applyBinaryPattern} directly.
  *
  * All builder methods return new instances (clone-on-set immutability).
@@ -35,7 +35,7 @@ export class DrumPatternBuilder implements PipeStep {
 
   constructor(params: Partial<DrumPatternParams>) {
     this.params = {
-      notation: params.notation ?? '',
+      cue: params.cue ?? '',
       pitch: params.pitch ?? null,
       stepDuration: params.stepDuration ?? null,
     }
@@ -57,12 +57,12 @@ export class DrumPatternBuilder implements PipeStep {
    *
    * `x` and `X` emit a hit; any other character advances the tick only (rest).
    *
-   * @param notation - Pattern string, e.g. `"x.x.x."` or `"xx..xx.."`
+   * @param cue - Pattern string, e.g. `"x.x.x."` or `"xx..xx.."`
 
-   * @returns New builder with the updated notation
+   * @returns New builder with the updated cue
    */
-  notation(notation: string): DrumPatternBuilder {
-    return this.clone({ notation })
+  cue(cue: string): DrumPatternBuilder {
+    return this.clone({ cue })
   }
 
   /**
@@ -77,22 +77,22 @@ export class DrumPatternBuilder implements PipeStep {
   }
 
   /**
-   * Interpret the notation string and emit hits on `x`/`X` positions, advancing tick on rests.
+   * Interpret the cue string and emit hits on `x`/`X` positions, advancing tick on rests.
    *
-   * Returns the bridge unchanged if pitch is null or notation is empty.
+   * Returns the bridge unchanged if pitch is null or cue is empty.
    *
    * @param bridge - Current composition state
 
    * @returns Updated bridge with drum hits at pattern positions
    */
   apply(bridge: CompositionBridge): CompositionBridge {
-    if (this.params.pitch === null || this.params.notation.length === 0) return bridge
+    if (this.params.pitch === null || this.params.cue.length === 0) return bridge
 
     const duration = this.params.stepDuration ?? bridge.defaultDuration
     let target = bridge
 
-    for (let i = 0; i < this.params.notation.length; ++i) {
-      const character = this.params.notation[i]
+    for (let i = 0; i < this.params.cue.length; ++i) {
+      const character = this.params.cue[i]
       if (character === 'x' || character === 'X') {
         target = target.withNote(this.params.pitch, duration)
       } else {

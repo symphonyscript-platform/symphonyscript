@@ -1,5 +1,5 @@
 /**
- * CrescendoBuilder & crescendo() notation test
+ * CrescendoBuilder & crescendo() cue test
  *
  * Tests CrescendoBuilder (returned by `crescendo()`), a ScopedStepBuilder that wraps
  * the bridge in VelocityRampBridge to increase velocity from `from` to `to`
@@ -21,10 +21,10 @@ import { createBridge, commitAndCapture } from '../test-utils'
 describe('CrescendoBuilder', () => {
 
   // ========================================================================
-  // crescendo() notation
+  // crescendo() cue
   // ========================================================================
 
-  describe('crescendo() notation', () => {
+  describe('crescendo() cue', () => {
     it('should return CrescendoBuilder instance', () => {
       expect(crescendo()).toBeDefined()
       expect(crescendo().steps).toBeDefined()

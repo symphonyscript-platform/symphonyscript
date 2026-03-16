@@ -1,5 +1,5 @@
 /**
- * DecrescendoBuilder & decrescendo() notation test
+ * DecrescendoBuilder & decrescendo() cue test
  *
  * Tests DecrescendoBuilder (returned by `decrescendo()`), a ScopedStepBuilder that wraps
  * the bridge in VelocityRampBridge to decrease velocity from `from` to `to`
@@ -21,10 +21,10 @@ import { createBridge, commitAndCapture } from '../test-utils'
 describe('DecrescendoBuilder', () => {
 
   // ========================================================================
-  // decrescendo() notation
+  // decrescendo() cue
   // ========================================================================
 
-  describe('decrescendo() notation', () => {
+  describe('decrescendo() cue', () => {
     it('should return DecrescendoBuilder instance', () => {
       expect(decrescendo()).toBeDefined()
       expect(decrescendo().steps).toBeDefined()

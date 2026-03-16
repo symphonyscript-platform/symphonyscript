@@ -1,7 +1,7 @@
 /**
- * Melody Notation Tests — trill, grace, glissando, tuplet, polyrhythm
+ * Melody cue Tests — trill, grace, glissando, tuplet, polyrhythm
  *
- * Tests melody notation functions that return builders (TrillBuilder, NoteBuilder,
+ * Tests melody cue functions that return builders (TrillBuilder, NoteBuilder,
  * GlissandoBuilder, TupletBuilder, PolyrhythmBuilder) and their apply behavior.
  */
 

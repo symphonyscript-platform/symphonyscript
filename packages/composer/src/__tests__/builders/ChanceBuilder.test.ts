@@ -1,5 +1,5 @@
 /**
- * ChanceBuilder Test — Builder + chance() notation
+ * ChanceBuilder Test — Builder + chance() cue
  *
  * Tests ChanceBuilder (returned by `chance()`), wrapping inner steps in ChanceBridge.
  * Covers:

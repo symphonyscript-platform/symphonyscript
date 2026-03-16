@@ -1,7 +1,7 @@
 /**
- * Harmony Notation Test — harmony(mask, root?, duration?) HarmonyBuilder
+ * Harmony cue Test — harmony(mask, root?, duration?) HarmonyBuilder
  *
- * Tests the harmony() notation that takes a HarmonyMask and optional root/duration,
+ * Tests the harmony() cue that takes a HarmonyMask and optional root/duration,
  * returning a HarmonyBuilder which emits chord tones when applied.
  */
 

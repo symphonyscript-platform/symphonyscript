@@ -1,5 +1,5 @@
 /**
- * Tests for EuclideanBuilder and euclidean() notation.
+ * Tests for EuclideanBuilder and euclidean() cue.
  *
  * Covers:
  *   - euclidean(hits?, steps?) returns EuclideanBuilder
@@ -17,7 +17,7 @@ import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('EuclideanBuilder', () => {
 
-  describe('euclidean notation', () => {
+  describe('euclidean cue', () => {
     it('should return EuclideanBuilder with fluent API', () => {
       const builder = euclidean(3, 8)
       expect(builder).toBeDefined()

@@ -1,7 +1,7 @@
 /**
- * Bend Notation Test — bend(value) BendBuilder
+ * Bend cue Test — bend(value) BendBuilder
  *
- * Tests the bend() notation that wraps steps in a pitch-bend scope.
+ * Tests the bend() cue that wraps steps in a pitch-bend scope.
  * BendBuilder applies the bend value on enter and resets to 0 on exit.
  */
 

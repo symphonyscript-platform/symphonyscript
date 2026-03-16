@@ -1,5 +1,5 @@
 /**
- * Glide Notation Test — glide(...steps) wraps in GlideBridge per step
+ * Glide cue Test — glide(...steps) wraps in GlideBridge per step
  *
  * glide() creates a new GlideBridge per step, so each step gets a fresh wrapper.
  * Actual behavior: each note adds CC PORTAMENTO 127 (no shared flush 0).
