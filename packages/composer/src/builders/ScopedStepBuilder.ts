@@ -8,35 +8,77 @@ import { ScopeBuilder } from '../interfaces/scope-builder'
 // ============================================================================
 
 /**
- * Abstract base class for scoped steps that support both
- * scoped and default (unscoped/downstream) modes.
+ * Abstract base for scoped effect and setter builders that support both scoped
+ * and default (cascade) modes via onEnter/onExit lifecycle.
  *
- * - Scoped:   `effect().steps(note('C4'))` — applies only to contained steps
- * - Default:  `effect().default()` or just `effect()` — cascades downstream
+ * Implements {@link ScopeBuilder}. In **scoped mode**, the effect/setter
+ * applies only to contained steps passed to `steps()`. In **default mode**
+ * (no steps or after `default()`), the modification cascades downstream for
+ * subsequent pipeline steps.
  *
  * Subclasses implement:
- * - `onEnter(bridge)` — modify bridge before steps (wrap in decorator, set field, etc.)
- * - `onExit(result, parent)` — restore/cleanup after steps complete
+ * - `onEnter(bridge)` — modify bridge before inner steps (e.g. wrap in decorator, set field)
+ * - `onExit(result, parent)` — restore/cleanup after inner steps complete
  *
- * This replaces both ScopedEffectBuilder and ScopedSetterBuilder with one class.
+ * All builder methods return new instances (clone-on-set immutability).
+ *
+ * @example
+ * ```ts
+ * // Scoped: swing applies only to inner notes
+ * swing(0.5).steps(note('C4'), note('D4'))
+ * dynamics(400, 1000).steps(note('C4'), note('C4'))
+ *
+ * // Default: cascade downstream for subsequent steps
+ * swing(0.5).default()
+ * dynamics(400, 1000)
+ *
+ * // Chaining order — steps before or after other setters
+ * swing(0.5).amount(0.6).steps(note('C4'))
+ * ```
  */
 export abstract class ScopedStepBuilder<T extends ScopedStepBuilder<T>> implements ScopeBuilder<T> {
+  /**
+   * Pipe-step groups to apply within this scope. Each element is an array of
+   * steps; groups are applied in order via {@link applyEntries}.
+   * Empty when in default (cascade) mode.
+   */
   protected readonly entries: PipeStep[][]
 
   protected constructor(entries: PipeStep[][]) {
     this.entries = entries
   }
 
-  /** Add steps to this scope (accumulates). */
+  /**
+   * Add pipe steps to this scope. Appends the given steps as a new group;
+   * previous groups are preserved.
+   *
+   * @param pipeSteps - One or more {@link PipeStep}s to run within this scope
+   * @returns New builder instance with the additional steps appended
+   */
   steps(...pipeSteps: PipeStep[]): T {
     return this.cloneWithEntries(appendSteps(this.entries, pipeSteps))
   }
 
-  /** Explicitly mark as a downstream default. Semantic no-op. */
+  /**
+   * Mark as downstream default. Clears scoped entries so that when `apply()` runs,
+   * the modification (from `onEnter`) cascades to subsequent pipeline steps
+   * instead of being scoped to inner content.
+   *
+   * @returns New builder instance with empty entries
+   */
   default(): T {
     return this.cloneWithEntries([])
   }
 
+  /**
+   * Apply this step to the bridge. Runs `onEnter` to modify the bridge, then
+   * either applies inner steps (scoped mode) or returns the modified bridge
+   * (default mode). In scoped mode, runs `onExit` to restore/cleanup after
+   * inner steps complete.
+   *
+   * @param bridge - Current composition state
+   * @returns Updated bridge (after onEnter; after inner steps + onExit when scoped)
+   */
   apply(bridge: CompositionBridge): CompositionBridge {
     const modified = this.onEnter(bridge)
 
@@ -51,22 +93,38 @@ export abstract class ScopedStepBuilder<T extends ScopedStepBuilder<T>> implemen
   }
 
   /**
-   * Modify the bridge before inner steps run.
-   * For effects: wrap in a decorator bridge.
-   * For setters: set a field value.
+   * Modify the bridge before inner steps run. Called by `apply()` before
+   * running scoped steps or returning (default mode).
+   *
+   * Effects (e.g. {@link SwingBuilder}, {@link DynamicsBuilder}): wrap the
+   * bridge in a decorator that intercepts note emission.
+   * Setters (e.g. {@link FieldSetter}): set a bridge field value.
+   *
+   * @param bridge - Current composition state before scoped content
+   * @returns Modified bridge (decorator or field-updated)
    */
   protected abstract onEnter(bridge: CompositionBridge): CompositionBridge
 
   /**
-   * Restore/cleanup after scoped steps complete.
-   * `result` is the bridge after inner steps ran,
-   * `parent` is the original bridge before this step.
+   * Restore or cleanup after scoped steps complete. Called by `apply()` only
+   * in scoped mode, after inner steps have been applied.
    *
-   * For effects: unwrap decorator, restore parent state from `parent`.
-   * For setters: restore original field value from `parent`.
+   * Effects: unwrap the decorator and restore parent state from `parent`.
+   * Setters: restore the original field value from `parent`.
+   *
+   * @param result - Bridge state after inner steps were applied
+   * @param parent - Original bridge before this step (pre-onEnter)
+   * @returns Restored bridge (typically unwrapped or with original field)
    */
   protected abstract onExit(result: CompositionBridge, parent: CompositionBridge): CompositionBridge
 
-  /** Clone with updated entries. */
+  /**
+   * Clone the builder with updated entries. Subclasses must return an instance
+   * of the concrete builder type preserving all builder-specific state.
+   *
+   * @param entries - New pipe-step groups to use
+   * @returns New builder instance with the given entries
+   * @internal
+   */
   protected abstract cloneWithEntries(entries: PipeStep[][]): T
 }

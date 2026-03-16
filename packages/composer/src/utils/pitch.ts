@@ -2,10 +2,22 @@ import { noteToMidi } from '@symphonyscript/theory'
 import type { NotePitch } from '../types'
 
 /**
- * Resolve a NotePitch to a MIDI number.
- * Accepts either a literal note name ('C4', 'F#3') or a raw MIDI number.
+ * NotePitch: a pitch specified either as a literal note name string
+ * ({@link LiteralNoteName}: `[A-G][#|b]?[octave]`, e.g. `'C4'`, `'F#3'`, `'Bb5'`)
+ * or as a raw MIDI number (0–127). Strings are resolved via `noteToMidi`;
+ * numbers pass through unchanged.
+ */
+
+/**
+ * Resolve a {@link NotePitch} to a MIDI number.
  *
- * @throws If the string cannot be parsed as a valid note name.
+ * Numbers pass through unchanged. Strings are parsed via `noteToMidi` from
+ * `@symphonyscript/theory`; invalid names or out-of-range results throw.
+ *
+ * @param input - Literal note name (e.g. `'C4'`, `'F#3'`, `'Bb5'`) or MIDI number (0–127)
+ * @returns The MIDI number for the pitch
+ * @throws `"Invalid note name: <input>"` when input is a string that cannot be parsed
+ *   or yields a pitch outside MIDI range (0–127)
  */
 export function resolvePitch(input: NotePitch): number {
   if (typeof input === 'number') return input
@@ -20,9 +32,15 @@ export function resolvePitch(input: NotePitch): number {
 }
 
 /**
- * Resolve an array of NotePitch values to MIDI numbers.
+ * Resolve an array of {@link NotePitch} values to MIDI numbers.
  *
- * @throws If any string cannot be parsed as a valid note name.
+ * Maps each element through `resolvePitch`. Throws on the first invalid
+ * string; does not validate MIDI range for numeric inputs.
+ *
+ * @param inputs - Array of literal note names or MIDI numbers
+ * @returns Array of MIDI numbers in the same order
+ * @throws `"Invalid note name: <input>"` when any element is a string that
+ *   cannot be parsed or yields a pitch outside MIDI range (0–127)
  */
 export function resolvePitches(inputs: NotePitch[]): number[] {
   const result: number[] = new Array(inputs.length)

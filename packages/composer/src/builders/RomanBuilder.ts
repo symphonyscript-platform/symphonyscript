@@ -2,13 +2,40 @@ import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { RomanNumeral } from '@symphonyscript/theory'
 import { degreeToPitch, ROMAN_DEGREE_MAP, ScaleMode } from '@symphonyscript/theory'
 
+/**
+ * Parameters for {@link RomanBuilder}.
+ *
+ * Resolves roman numerals to diatonic scale degrees via {@link ROMAN_DEGREE_MAP}.
+ */
 export interface RomanParams {
+  /** Roman numeral (e.g. I, iv, V7). Must exist in ROMAN_DEGREE_MAP. */
   numeral: RomanNumeral
+  /** Note duration in ticks. `null` = use bridge default at apply-time. */
   duration: number | null
+  /** Inversion index (0 = root, 1 = first inversion, etc.). Default: 0. */
   inversion: number
+  /** Velocity override. `null` = use bridge default. */
   velocity: number | null
 }
 
+/**
+ * Immutable builder that emits chord tones from a roman numeral.
+ *
+ * Maps numerals (I, iv, V7, etc.) to diatonic scale degrees via {@link ROMAN_DEGREE_MAP},
+ * resolves degrees to MIDI pitches using the bridge's scale context (scaleRoot, scaleMode),
+ * and emits simultaneous notes. Supports inversions by rotating bottom notes up one octave.
+ *
+ * All builder methods return new instances (clone-on-set immutability).
+ *
+ * @example
+ * ```ts
+ * roman('I')                          // Tonic triad (C, E, G in C major)
+ * roman('V7').duration(480)           // Dominant 7th, half-note
+ * roman('vi').velocity(900)           // Submediant minor, louder
+ * roman('ii').inversion(1)            // First inversion (third in bass)
+ * roman('IV', 240).apply(bridge)      // Subdominant, quarter-note
+ * ```
+ */
 export class RomanBuilder implements PipeStep {
   private readonly params: RomanParams
 
@@ -21,22 +48,58 @@ export class RomanBuilder implements PipeStep {
     }
   }
 
+  /**
+   * Set the roman numeral. Must exist in {@link ROMAN_DEGREE_MAP}.
+   *
+   * @param numeral - Roman numeral (e.g. I, iv, V7, ii, bVII)
+   * @returns New RomanBuilder with the updated numeral
+   * @throws When numeral is not in ROMAN_DEGREE_MAP (lookup yields undefined)
+   */
   numeral(numeral: RomanNumeral): RomanBuilder {
     return this.clone({ numeral })
   }
 
+  /**
+   * Set note duration in ticks.
+   *
+   * @param duration - Duration in ticks
+   * @returns New RomanBuilder with the updated duration
+   */
   duration(duration: number): RomanBuilder {
     return this.clone({ duration })
   }
 
+  /**
+   * Set the inversion index. Rotates bottom voices up by 7 diatonic degrees (one octave).
+   *
+   * @param inversion - Inversion count (0 = root position)
+   * @returns New RomanBuilder with the updated inversion
+   */
   inversion(inversion: number): RomanBuilder {
     return this.clone({ inversion })
   }
 
+  /**
+   * Set velocity for emitted chord tones.
+   *
+   * @param velocity - Velocity value (typical range 0–127 or higher for internal scaling)
+   * @returns New RomanBuilder with the updated velocity
+   */
   velocity(velocity: number): RomanBuilder {
     return this.clone({ velocity })
   }
 
+  /**
+   * Resolve the numeral to scale degrees, apply inversion, and emit all chord tones.
+   *
+   * Lookups `ROMAN_DEGREE_MAP[numeral]` for base degrees, rotates by inversion,
+   * resolves each degree via `degreeToPitch` with bridge scale context, then emits
+   * notes at the bridge tick. Advances tick by duration after emission.
+   *
+   * @param bridge - Current composition state (scaleRoot, scaleMode, tick)
+   * @returns Updated bridge with chord notes emitted
+   * @throws When numeral is not in ROMAN_DEGREE_MAP
+   */
   apply(bridge: CompositionBridge): CompositionBridge {
     const baseDegrees = ROMAN_DEGREE_MAP[this.params.numeral]
 
@@ -76,6 +139,7 @@ export class RomanBuilder implements PipeStep {
     return target
   }
 
+  /** @internal Clone with param overrides. */
   private clone(overrides: Partial<RomanParams>): RomanBuilder {
     return new RomanBuilder({ ...this.params, ...overrides })
   }

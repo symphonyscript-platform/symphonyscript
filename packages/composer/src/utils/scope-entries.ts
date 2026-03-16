@@ -5,14 +5,30 @@ import type { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 // ============================================================================
 
 /**
- * Append pipe steps to the entries array.
+ * Append a pipe-step group to the entries array.
+ *
+ * Does not mutate the original array; returns a new array with `pipeSteps` as
+ * the trailing element. Used by {@link ScopedBuilder}, {@link IsolateBuilder},
+ * {@link StackBuilder}, and related scope builders.
+ *
+ * @param entries - Current list of pipe-step groups (order preserved)
+ * @param pipeSteps - Steps to append as a new group
+ * @returns New entries array with `pipeSteps` appended (immutable)
  */
 export function appendSteps(entries: PipeStep[][], pipeSteps: PipeStep[]): PipeStep[][] {
   return [...entries, pipeSteps]
 }
 
 /**
- * Iterate scope entries in user-specified order, applying steps sequentially.
+ * Apply all scope entries to the bridge in sequence.
+ *
+ * Iterates entries in order; within each entry, applies each step via
+ * {@link PipeStep.apply} and chains the resulting bridge to the next step.
+ * Returns the final bridge after all steps have been applied.
+ *
+ * @param entries - Pipe-step groups to apply in order
+ * @param bridge - Initial composition bridge
+ * @returns Final bridge after all steps applied sequentially
  */
 export function applyEntries(
   entries: PipeStep[][],

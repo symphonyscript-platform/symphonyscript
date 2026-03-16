@@ -2,19 +2,35 @@ import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { RomanNumeral } from '@symphonyscript/theory'
 import { degreeToPitch, ROMAN_DEGREE_MAP } from '@symphonyscript/theory'
 
+/**
+ * Parameters for {@link VoiceLeadBuilder}.
+ *
+ * Same structure as {@link ProgressionParams}, but emission uses voice-leading logic.
+ */
 export interface VoiceLeadParams {
+  /** Ordered roman numerals (e.g. I–IV–V–I). */
   numerals: RomanNumeral[]
+  /** Per-chord duration in ticks. `null` = use bridge default. */
   duration: number | null
 }
 
 /**
- * Voice-led chord progression from roman numerals.
- * Minimizes voice movement between consecutive chords by choosing
- * the closest octave placement for each voice.
+ * Immutable builder that emits a voice-led chord progression from roman numerals.
  *
- * Usage:
- *   voiceLead(['I', 'IV', 'V', 'I'])
- *   voiceLead(['I', 'vi', 'IV', 'V']).duration(480)
+ * Unlike {@link ProgressionBuilder}, minimizes voice movement between consecutive chords
+ * by choosing the closest octave placement for each voice (within ±2 octaves). Resolves
+ * numerals via {@link ROMAN_DEGREE_MAP}, then applies `voiceLeadPitches` to each chord
+ * relative to the previous chord's pitches.
+ *
+ * All builder methods return new instances (clone-on-set immutability).
+ *
+ * @example
+ * ```ts
+ * voiceLead(['I', 'IV', 'V', 'I'])             // I–IV–V–I with minimal voice movement
+ * voiceLead(['I', 'vi', 'IV', 'V']).duration(480)
+ * voiceLead(['ii', 'V7', 'I'])                 // ii–V7–I with smooth voice leading
+ * voiceLead([]).apply(bridge)                  // No-op (unchanged bridge)
+ * ```
  */
 export class VoiceLeadBuilder implements PipeStep {
   private readonly params: VoiceLeadParams
@@ -26,14 +42,36 @@ export class VoiceLeadBuilder implements PipeStep {
     }
   }
 
+  /**
+   * Set the chord progression (ordered roman numerals).
+   *
+   * @param numerals - Array of roman numerals (e.g. ['I', 'IV', 'V', 'I'])
+   * @returns New VoiceLeadBuilder with the updated numerals
+   */
   numerals(numerals: RomanNumeral[]): VoiceLeadBuilder {
     return this.clone({ numerals })
   }
 
+  /**
+   * Set per-chord duration in ticks.
+   *
+   * @param duration - Duration in ticks
+   * @returns New VoiceLeadBuilder with the updated duration
+   */
   duration(duration: number): VoiceLeadBuilder {
     return this.clone({ duration })
   }
 
+  /**
+   * Emit each chord with voice-leading: minimizes total pitch movement from the previous chord.
+   *
+   * For each numeral, resolves degrees to raw pitches, then rearranges octave placements
+   * (via `voiceLeadPitches`) so each voice stays as close as possible to the previous chord.
+   * First chord uses default octave placement; subsequent chords optimize relative to prior.
+   *
+   * @param bridge - Current composition state
+   * @returns Updated bridge with voice-led progression emitted
+   */
   apply(bridge: CompositionBridge): CompositionBridge {
     let target = bridge
     let prevPitches: number[] | null = null
@@ -76,7 +114,9 @@ export class VoiceLeadBuilder implements PipeStep {
 
   /**
    * Rearrange pitches to minimize total movement from previous chord.
-   * Uses closest octave placement for each voice.
+   *
+   * For each voice, tests ±2 octave offsets and picks the placement with smallest
+   * distance to the corresponding previous voice (or last voice if fewer voices).
    */
   private voiceLeadPitches(rawPitches: number[], prev: number[]): number[] {
     const result: number[] = []
@@ -104,6 +144,7 @@ export class VoiceLeadBuilder implements PipeStep {
     return result
   }
 
+  /** @internal Clone with param overrides. */
   private clone(overrides: Partial<VoiceLeadParams>): VoiceLeadBuilder {
     return new VoiceLeadBuilder({ ...this.params, ...overrides })
   }
