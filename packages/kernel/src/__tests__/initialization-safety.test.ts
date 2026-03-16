@@ -24,7 +24,7 @@ describe('Initialization Safety (K-003)', () => {
         // Let's rely on importing getZoneSplitIndex if possible, or replicate logic: Math.floor(capacity / 2)
         const splitIndex = Math.floor(capacity / 2)
         const heapStartI32 = HEAP_START_OFFSET / 4
-        const zoneBStartI32 = heapStartI32 + (splitIndex * (32 / 4)) // 32 bytes = 8 ints
+        const zoneBStartI32 = heapStartI32 + (splitIndex * (NODE_SIZE_BYTES / 4))
 
         // Write garbage to the first node of Zone B
         sab[zoneBStartI32 + 0] = 0xDEADBEEF // PACKED_A

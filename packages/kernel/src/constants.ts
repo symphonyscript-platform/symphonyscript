@@ -94,10 +94,10 @@ export const KNUTH_HASH_CONST = 2654435761
  * │ 120    │ 30        │ YIELD_SLOT         │ u32     │ Atomics.wait   │
  * │ 124    │ 31        │ PLAYBACK_OFFSET    │ u32     │ Latency (ms)   │
  * ├─────────────────────────────────────────────────────────────────────┤
- * │ NODE HEAP (128+)                             nodeCapacity × 32 bytes│
+ * │ NODE HEAP (128+)                             nodeCapacity × 40 bytes│
  * ├─────────────────────────────────────────────────────────────────────┤
- * │ Each node: 8 × i32 = 32 bytes (doubly-linked, cache-aligned)       │
- * │   [+0] PACKED_A     : (opcode<<24)|(pitch<<16)|(vel<<8)|flags      │
+ * │ Each node: 10 × i32 = 40 bytes (doubly-linked)                     │
+ * │   [+0] PACKED_A     : (opcode<<24)|(reserved<<16)|(vel<<8)|flags   │
  * │   [+4] BASE_TICK    : Grid-aligned timing (pre-transform)          │
  * │   [+8] DURATION     : Duration in ticks                             │
  * │   [+12] NEXT_PTR    : Byte offset to next node (0=end)             │
@@ -105,6 +105,8 @@ export const KNUTH_HASH_CONST = 2654435761
  * │   [+20] SOURCE_ID   : Editor hash / Temporal ID (TID)              │
  * │   [+24] SEQ_FLAGS   : (sequence<<8)|flags_ext (versioning)         │
  * │   [+28] LAST_PASS_ID: Generation ID for zero-alloc pruning [v1.5]  │
+ * │   [+32] PITCH_F32   : Float32 pitch in cents from C0               │
+ * │   [+36] RESERVED_9  : Reserved for future use                      │
  * ├─────────────────────────────────────────────────────────────────────┤
  * │ IDENTITY TABLE (dynamic offset)              capacity × 8 bytes    │
  * ├─────────────────────────────────────────────────────────────────────┤
@@ -320,13 +322,13 @@ export const REG = {
 // =============================================================================
 
 /**
- * Node structure offsets (8 × i32 = 32 bytes per node).
+ * Node structure offsets (10 × i32 = 40 bytes per node).
  *
- * 32-byte stride provides optimal cache alignment and room for
+ * 40-byte stride supports float32 pitch (continuous cents) alongside
  * doubly-linked list pointers enabling O(1) deletion.
  *
  * Layout:
- * - [+0] PACKED_A: (opcode << 24) | (pitch << 16) | (velocity << 8) | flags
+ * - [+0] PACKED_A: (opcode << 24) | (reserved << 16) | (velocity << 8) | flags
  * - [+1] BASE_TICK: Grid-aligned timing (pre-transform)
  * - [+2] DURATION: Duration in ticks
  * - [+3] NEXT_PTR: Byte offset to next node (0 = end of chain)
@@ -334,9 +336,11 @@ export const REG = {
  * - [+5] SOURCE_ID: Editor location hash / TID for bidirectional mapping
  * - [+6] SEQ_FLAGS: (sequence << 8) | flags_extended
  * - [+7] LAST_PASS_ID: [v1.5] Generation ID for zero-alloc pruning
+ * - [+8] PITCH_F32: Float32 pitch in absolute cents from C0 (via Float32Array view)
+ * - [+9] RESERVED_9: Reserved for future use
  */
 export const NODE = {
-  /** Packed opcode, pitch, velocity, flags */
+  /** Packed opcode, velocity, flags (pitch bits [16-23] reserved) */
   PACKED_A: 0,
   /** Base tick (grid-aligned, pre-transform) */
   BASE_TICK: 1,
@@ -351,13 +355,17 @@ export const NODE = {
   /** Sequence counter (upper 24 bits) + extended flags (lower 8 bits) */
   SEQ_FLAGS: 6,
   /** [v1.5] Last update pass ID (generation-based pruning) */
-  LAST_PASS_ID: 7
+  LAST_PASS_ID: 7,
+  /** Float32 pitch in absolute cents from C0 (read/write via Float32Array view) */
+  PITCH_F32: 8,
+  /** Reserved for future use */
+  RESERVED_9: 9
 } as const
 
 /**
  * Node size in i32 units.
  */
-export const NODE_SIZE_I32 = 8
+export const NODE_SIZE_I32 = 10
 
 /**
  * Node size in bytes.
@@ -370,14 +378,22 @@ export const NODE_SIZE_BYTES = NODE_SIZE_I32 * 4
 
 /**
  * PACKED_A field bit positions and masks.
- * Format: (opcode << 24) | (pitch << 16) | (velocity << 8) | flags
+ * Format: (opcode << 24) | (reserved << 16) | (velocity << 8) | flags
+ *
+ * NOTE: Bits 16-23 were formerly used for pitch (MIDI 0-127). Pitch is now
+ * stored as float32 in the dedicated PITCH_F32 slot (NODE offset +8).
+ * These bits are reserved for future use.
  */
 export const PACKED = {
   /** Opcode: bits 24-31 */
   OPCODE_SHIFT: 24,
   OPCODE_MASK: 0xff000000,
-  /** Pitch: bits 16-23 */
+  /** Reserved: bits 16-23 (formerly pitch, now in PITCH_F32 slot) */
+  RESERVED_SHIFT: 16,
+  RESERVED_MASK: 0x00ff0000,
+  /** @deprecated Use RESERVED_SHIFT. Kept for backward compat during migration. */
   PITCH_SHIFT: 16,
+  /** @deprecated Use RESERVED_MASK. Kept for backward compat during migration. */
   PITCH_MASK: 0x00ff0000,
   /** Velocity: bits 8-15 */
   VELOCITY_SHIFT: 8,

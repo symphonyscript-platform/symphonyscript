@@ -11,7 +11,8 @@
 // - No for...of/for...in (use index-based while loops)
 // - No inline arrow functions as arguments
 
-import { SiliconSynapse, unpackPitch, unpackVelocity, unpackFlags } from './silicon-synapse'
+import { SiliconSynapse, unpackVelocity, unpackFlags } from './silicon-synapse'
+import { atomicStoreF32, atomicLoadF32 } from './f32-atomics'
 import {
   OPCODE,
   NULL_PTR,
@@ -564,8 +565,9 @@ export class SiliconBridge {
     const expressionBits = ((expressionId ?? 0) << FLAG.EXPRESSION_SHIFT) & FLAG.EXPRESSION_MASK
     const flags = (muted ? FLAG.MUTED : 0) | FLAG.ACTIVE | expressionBits
 
+    // Pack opcode, velocity, flags into PACKED_A (pitch bits reserved)
     const packedA =
-      (opcode << PACKED.OPCODE_SHIFT) | (pitch << PACKED.PITCH_SHIFT) | (velocity << PACKED.VELOCITY_SHIFT) | flags
+      (opcode << PACKED.OPCODE_SHIFT) | (velocity << PACKED.VELOCITY_SHIFT) | flags
 
     Atomics.store(this.sab, offset + NODE.PACKED_A, packedA)
     Atomics.store(this.sab, offset + NODE.BASE_TICK, baseTick)
@@ -575,6 +577,8 @@ export class SiliconBridge {
     Atomics.store(this.sab, offset + NODE.SOURCE_ID, sourceId)
     Atomics.store(this.sab, offset + NODE.SEQ_FLAGS, 0)
     Atomics.store(this.sab, offset + NODE.LAST_PASS_ID, 0)
+    // Write pitch as float32 to dedicated slot
+    atomicStoreF32(this.sab, offset + NODE.PITCH_F32, pitch)
 
     const ringErr = this.writeOrSpin(CMD.INSERT, ptr, prevPtr)
     if (ringErr !== 0) return ringErr
@@ -1163,7 +1167,7 @@ export class SiliconBridge {
     const ok = this.linker.readNodeRaw(ptr, buf)
     if (!ok) return false
 
-    const pitch = unpackPitch(buf[NODE.PACKED_A])
+    const pitch = atomicLoadF32(this.sab, (ptr / 4) + NODE.PITCH_F32)
     const velocity = unpackVelocity(buf[NODE.PACKED_A])
     const flags = unpackFlags(buf[NODE.PACKED_A])
     cb(pitch, velocity, buf[NODE.DURATION], buf[NODE.BASE_TICK], (flags & FLAG.MUTED) !== 0)
@@ -1206,7 +1210,7 @@ export class SiliconBridge {
           const packed = buf[NODE.PACKED_A]
           cb(
             sourceId,
-            unpackPitch(packed),
+            atomicLoadF32(this.sab, (ptr / 4) + NODE.PITCH_F32),
             unpackVelocity(packed),
             buf[NODE.DURATION],
             buf[NODE.BASE_TICK],

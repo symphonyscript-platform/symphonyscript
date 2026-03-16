@@ -15,6 +15,7 @@ import {
   NULL_PTR,
   HEAP_START_OFFSET
 } from './constants'
+import { atomicStoreF32 } from './f32-atomics'
 import type { NodePtr } from './types'
 // RFC-045-04: InvalidPointerError no longer thrown - using boolean returns
 
@@ -214,27 +215,24 @@ export class AttributePatcher {
   }
 
   /**
-   * Patch the pitch attribute (bits 16-23 of PACKED_A).
+   * Patch the pitch attribute (Float32 in PITCH_F32 slot).
+   * RFC-060: Pitch is now stored as float32 cents from C0.
    * RFC-045-04: Returns boolean instead of throwing.
-   * Task 3.4: Uses CAS loop for atomic read-modify-write.
    *
    * @param ptr - Node byte pointer
-   * @param pitch - New pitch value (0-127)
-
+   * @param pitch - Pitch in absolute cents from C0 (float32)
+   *
    * @returns true on success, false on invalid pointer
    */
   patchPitch(ptr: NodePtr, pitch: number): boolean {
     if (!this.validatePtr(ptr)) return false
     const offset = this.nodeOffset(ptr)
 
-    // Clamp pitch to valid MIDI range
-    pitch = Math.max(0, Math.min(127, pitch | 0))
-
     // Two-phase SeqLock writer protocol: even -> odd -> even
     this.bumpSeqStart(offset)
 
-    // Task 3.4: CAS loop for atomic PACKED_A update
-    this.casUpdatePackedA(offset, PACKED.PITCH_MASK, PACKED.PITCH_SHIFT, pitch)
+    // Write pitch as float32 to dedicated slot (atomic)
+    atomicStoreF32(this.sab, offset + NODE.PITCH_F32, pitch)
     this.bumpSeqEnd(offset)
     return true
   }

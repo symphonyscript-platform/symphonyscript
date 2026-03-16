@@ -70,7 +70,7 @@ function noteData(
   ]
 }
 
-const _readBuf = new Int32Array(8)
+const _readBuf = new Int32Array(10)
 
 /**
  * Helper to read a node using readNodeRaw + unpack helpers.
@@ -90,7 +90,7 @@ function readNodeData(linker: SiliconSynapse, ptr: number): {
   if (!ok) return undefined
   return {
     opcode: unpackOpcode(_readBuf[NODE.PACKED_A]),
-    pitch: unpackPitch(_readBuf[NODE.PACKED_A]),
+    pitch: new Float32Array(linker.getSAB())[(ptr / 4) + NODE.PITCH_F32],
     velocity: unpackVelocity(_readBuf[NODE.PACKED_A]),
     duration: _readBuf[NODE.DURATION],
     baseTick: _readBuf[NODE.BASE_TICK],
@@ -101,7 +101,7 @@ function readNodeData(linker: SiliconSynapse, ptr: number): {
   }
 }
 
-const _collectBuf = new Int32Array(8)
+const _collectBuf = new Int32Array(10)
 
 /**
  * Helper to collect all nodes via readNodeRaw + while loop.
@@ -136,7 +136,7 @@ function collectNodes(linker: SiliconSynapse): Array<{
       nodes.push({
         ptr,
         opcode: unpackOpcode(_collectBuf[NODE.PACKED_A]),
-        pitch: unpackPitch(_collectBuf[NODE.PACKED_A]),
+        pitch: new Float32Array(linker.getSAB())[(ptr / 4) + NODE.PITCH_F32],
         velocity: unpackVelocity(_collectBuf[NODE.PACKED_A]),
         duration: _collectBuf[NODE.DURATION],
         baseTick: _collectBuf[NODE.BASE_TICK],
@@ -548,15 +548,15 @@ describe('RFC-043: Silicon Linker', () => {
       }
     })
 
-    it('should clamp pitch to MIDI range', () => {
+    it('should store float32 pitch without clamping', () => {
       const linker = createTestLinker()
       const ptr = linker.insertHead(...noteData(60, 0))
 
-      linker.patchPitch(ptr, 200) // Over max
-      expect(readNodeData(linker, ptr)!.pitch).toBe(127)
+      linker.patchPitch(ptr, 4800.5) // Microtonal cent value
+      expect(readNodeData(linker, ptr)!.pitch).toBeCloseTo(4800.5, 1)
 
-      linker.patchPitch(ptr, -10) // Under min
-      expect(readNodeData(linker, ptr)!.pitch).toBe(0)
+      linker.patchPitch(ptr, -100) // Negative cents (valid)
+      expect(readNodeData(linker, ptr)!.pitch).toBeCloseTo(-100, 1)
     })
 
     it('should NOT set COMMIT_FLAG for attribute patches', () => {

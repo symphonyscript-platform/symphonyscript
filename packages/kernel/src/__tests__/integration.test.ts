@@ -61,7 +61,7 @@ function note(pitch: number, baseTick: number, duration = 96): [number, number, 
   ]
 }
 
-const _intBuf = new Int32Array(8)
+const _intBuf = new Int32Array(10)
 
 /**
  * Helper to collect all nodes via readNodeRaw + while loop.
@@ -96,7 +96,7 @@ function collectNodes(linker: SiliconSynapse): Array<{
       nodes.push({
         ptr,
         opcode: unpackOpcode(_intBuf[NODE.PACKED_A]),
-        pitch: unpackPitch(_intBuf[NODE.PACKED_A]),
+        pitch: new Float32Array(linker.getSAB())[(ptr / 4) + NODE.PITCH_F32],
         velocity: unpackVelocity(_intBuf[NODE.PACKED_A]),
         duration: _intBuf[NODE.DURATION],
         baseTick: _intBuf[NODE.BASE_TICK],

@@ -141,7 +141,7 @@ export class LocalAllocator {
    */
   private zeroNode(ptrBytes: number): void {
     const idx = ptrBytes / 4
-    // Unrolled zeroing for NODE_SIZE_I32 (8 ints)
+    // Unrolled zeroing for NODE_SIZE_I32 (10 ints)
     this.sab[idx + 0] = 0
     this.sab[idx + 1] = 0
     this.sab[idx + 2] = 0
@@ -150,6 +150,8 @@ export class LocalAllocator {
     this.sab[idx + 5] = 0
     this.sab[idx + 6] = 0
     this.sab[idx + 7] = 0
+    this.sab[idx + 8] = 0
+    this.sab[idx + 9] = 0
   }
 
   /**

@@ -9,7 +9,6 @@ import {
   NODE,
   OPCODE,
   FLAG,
-  unpackPitch
 } from '../index'
 
 // =============================================================================
@@ -89,7 +88,7 @@ describe('seqChanged — modular distance check', () => {
 // =============================================================================
 
 describe('readNodeRaw with seqChanged integration', () => {
-  const buf = new Int32Array(8)
+  const buf = new Int32Array(10)
 
   it('reads node data correctly (no contention)', () => {
     const linker = createTestLinker()
@@ -99,7 +98,8 @@ describe('readNodeRaw with seqChanged integration', () => {
     const success = linker.readNodeRaw(ptr, buf)
 
     expect(success).toBe(true)
-    expect(unpackPitch(buf[NODE.PACKED_A])).toBe(60)
+    const f32 = new Float32Array(linker.getSAB())
+    expect(f32[(ptr / 4) + NODE.PITCH_F32]).toBe(60)
   })
 
   it('returns false for NULL_PTR', () => {
@@ -116,7 +116,8 @@ describe('readNodeRaw with seqChanged integration', () => {
 
     linker.readNodeRaw(ptr, buf)
 
-    expect(unpackPitch(buf[NODE.PACKED_A])).toBe(72)
+    const f32 = new Float32Array(linker.getSAB())
+    expect(f32[(ptr / 4) + NODE.PITCH_F32]).toBe(72)
   })
 
   it('rejects odd sequence while write is in progress', () => {
@@ -150,7 +151,7 @@ describe('readNodeRaw with seqChanged integration', () => {
 // =============================================================================
 
 describe('readNodeRaw traversal with seqChanged integration', () => {
-  const buf = new Int32Array(8)
+  const buf = new Int32Array(10)
 
   it('traverses all nodes correctly via while loop', () => {
     const linker = createTestLinker()
@@ -163,7 +164,8 @@ describe('readNodeRaw traversal with seqChanged integration', () => {
     while (ptr !== NULL_PTR) {
       const ok = linker.readNodeRaw(ptr, buf)
       if (ok) {
-        pitches.push(unpackPitch(buf[NODE.PACKED_A]))
+        const f32 = new Float32Array(linker.getSAB())
+        pitches.push(f32[(ptr / 4) + NODE.PITCH_F32])
       }
       ptr = buf[NODE.NEXT_PTR]
     }

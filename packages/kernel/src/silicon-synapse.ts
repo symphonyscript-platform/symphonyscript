@@ -15,6 +15,7 @@ import {
   SEQ,
   FLAG,
   NODE_SIZE_I32,
+  NODE_SIZE_BYTES,
   HEAP_START_OFFSET,
   CONCURRENCY,
   ID_TABLE,
@@ -37,6 +38,7 @@ import { AttributePatcher } from './patch'
 import { RingBuffer } from './ring-buffer'
 import { SynapseAllocator } from './synapse-allocator'
 import { createLinkerSAB, resetLinkerSAB } from './init'
+import { atomicStoreF32, atomicLoadF32 } from './f32-atomics'
 import type {
   NodePtr,
   LinkerConfig,
@@ -65,8 +67,8 @@ export function unpackOpcode(packed: number): number {
   return (packed & PACKED.OPCODE_MASK) >>> PACKED.OPCODE_SHIFT
 }
 
-export function unpackPitch(packed: number): number {
-  return (packed & PACKED.PITCH_MASK) >>> PACKED.PITCH_SHIFT
+export function unpackPitch(sab: Int32Array, offset: number): number {
+  return atomicLoadF32(sab, offset + NODE.PITCH_F32)
 }
 
 export function unpackVelocity(packed: number): number {
@@ -144,10 +146,9 @@ export class SiliconSynapse implements ISiliconLinker {
     this.zoneIndex = zoneIndex
 
     // Calculate Zone B start pointer (byte offset) for reclamation check
-    // Formula: HEAP_START + (Index * 32)
     // Note: heapStartI32 is in ints, we need bytes for consistency or use mixed math
     const zoneSplitIndex = getZoneSplitIndex(this.nodeCapacity)
-    this.zoneBStartPtr = (this.heapStartI32 * 4) + (zoneSplitIndex * 32) // 32 = NODE_SIZE_BYTES
+    this.zoneBStartPtr = (this.heapStartI32 * 4) + (zoneSplitIndex * NODE_SIZE_BYTES)
 
     // RFC-055/RFC-056: Initialize FreeList with zone parameters
     const workerZones = Atomics.load(this.sab, HDR.ZONE_COUNT) || 1
@@ -758,11 +759,10 @@ export class SiliconSynapse implements ISiliconLinker {
     sourceId: number,
     flags: number
   ): void {
-    // Pack opcode, pitch, velocity, flags into PACKED_A
+    // Pack opcode, velocity, flags into PACKED_A (pitch bits zeroed/reserved)
     const activeFlags = flags | FLAG.ACTIVE
     const packed =
       (opcode << PACKED.OPCODE_SHIFT) |
-      ((pitch & 0xff) << PACKED.PITCH_SHIFT) |
       ((velocity & 0xff) << PACKED.VELOCITY_SHIFT) |
       (activeFlags & PACKED.FLAGS_MASK)
 
@@ -771,6 +771,8 @@ export class SiliconSynapse implements ISiliconLinker {
     Atomics.store(this.sab, offset + NODE.DURATION, duration | 0)
     // NEXT_PTR set separately during linking
     Atomics.store(this.sab, offset + NODE.SOURCE_ID, sourceId | 0)
+    // Write pitch as float32 to dedicated slot (atomic)
+    atomicStoreF32(this.sab, offset + NODE.PITCH_F32, pitch)
     // SEQ_FLAGS preserved from allocation (SEQ already set)
   }
 
@@ -914,7 +916,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * SeqLock read with standard odd/even protocol.
    * - Rejects odd seq (writer in progress)
    * - Accepts only stable even snapshots where seq1 === seq2
-   * On success (true), buf[0..7] is a consistent snapshot of all 8 node i32 fields.
+   * On success (true), buf[0..7] is a consistent snapshot of the 8 integer node fields.
    * On failure (false), buf contents are partially valid depending on when the failure
    * occurred. Specifically:
    * - If the failure was an odd-seq spin-out (all 50 retries consumed by in-progress writes),
@@ -924,6 +926,9 @@ export class SiliconSynapse implements ISiliconLinker {
    *   was written by Atomics.load and is individually atomic and safe for chain traversal.
    * In all cases: only use buf[NODE.NEXT_PTR] for chain continuation, and only after
    * verifying the return value is false (not true). Other fields MUST be treated as torn.
+   *
+   * NOTE: PITCH_F32 (slot 8) is a float32 and is NOT included in this i32 buffer.
+   * Callers must read pitch separately via `atomicLoadF32(sab, offset + NODE.PITCH_F32)`.
    *
    * @param ptr - Node byte pointer
    * @param buf - Caller-owned Int32Array of length >= 8
@@ -955,6 +960,8 @@ export class SiliconSynapse implements ISiliconLinker {
       buf[5] = Atomics.load(this.sab, offset + NODE.SOURCE_ID)
       buf[6] = Atomics.load(this.sab, offset + NODE.SEQ_FLAGS)
       buf[7] = Atomics.load(this.sab, offset + NODE.LAST_PASS_ID)
+      // PITCH_F32 (slot 8) is float32 — read via atomicLoadF32() by caller
+      // RESERVED_9 (slot 9) is unused
 
       const seq2 = (buf[6] & SEQ.SEQ_MASK) >>> SEQ.SEQ_SHIFT
 
