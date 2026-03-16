@@ -108,7 +108,8 @@ export function grace(pitch?: NotePitch, graceDuration: NoteDuration = 30): Note
     return new NoteBuilder({ duration: resolvedDuration })
   }
   const midi = resolvePitch(pitch)
-  return new NoteBuilder({ pitch: midi, duration: resolvedDuration })
+  const pitchCents = (midi - 12) * 100  // MIDI 12 = C0 = 0 cents
+  return new NoteBuilder({ pitchCents, duration: resolvedDuration })
 }
 
 /**

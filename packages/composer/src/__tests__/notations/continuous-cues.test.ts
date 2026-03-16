@@ -63,14 +63,14 @@ describe('RFC-060: Continuous Pitch Cues', () => {
       expect(typeof builder.apply).toBe('function')
     })
 
-    it('offset(0) emits at MIDI 69 (A4 = 5700 cents → round(5700/100) + 12 = 69)', () => {
+    it('offset(0) emits at 5700 cents (A4)', () => {
       const b = new BaseCompositionBridge()
       const result = offset(0).apply(b) as BaseCompositionBridge
       // Tick should have advanced (note was emitted)
       expect(result.tick).toBeGreaterThan(0)
     })
 
-    it('offset(100) emits at MIDI 70 (5800 cents → 70)', () => {
+    it('offset(100) emits at 5800 cents (100 above A4)', () => {
       const b = new BaseCompositionBridge()
       const result = offset(100).apply(b) as BaseCompositionBridge
       expect(result.tick).toBeGreaterThan(0)

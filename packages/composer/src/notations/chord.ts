@@ -26,7 +26,7 @@ import { resolveDuration, type NoteDuration } from '../utils/duration'
  * chord('Cmaj7')                    // C major 7th, close voicing
  * chord('Am', 960)                  // A minor, whole note
  * chord('F#dim').drop2()            // F# diminished, drop-2 voicing
- * chord().mask(myMask).root(60)     // From raw mask
+ * chord().mask(myMask).root(4800)     // From raw mask, C4 root
  * ```
  */
 export function chord(symbol?: string, duration?: NoteDuration): HarmonyBuilder {
@@ -39,7 +39,7 @@ export function chord(symbol?: string, duration?: NoteDuration): HarmonyBuilder 
 
   return new HarmonyBuilder({
     mask: parsed.mask,
-    root: parsed.root,
+    root: (parsed.root - 12) * 100,  // MIDI → cents (MIDI 12 = C0 = 0 cents)
     duration: resolvedDuration,
   })
 }

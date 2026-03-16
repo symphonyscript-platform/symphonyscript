@@ -154,10 +154,10 @@ export class BaseCompositionBridge implements CompositionBridge {
 
   /**
    * Defer a note at the current tick. Advances tick by duration.
-   * Applies transpose; uses default velocity when omitted. Emits a thunk that
+   * Applies transposeCents; uses default velocity when omitted. Emits a thunk that
    * calls `insertNote` on commit.
    *
-   * @param pitch - MIDI pitch (0–127), before transpose
+   * @param pitch - Pitch in absolute cents from C0
    * @param duration - Note duration in ticks. Default: defaultDuration
    * @param velocity - Override velocity (0–1000). Default: this.velocity
 
@@ -166,7 +166,7 @@ export class BaseCompositionBridge implements CompositionBridge {
   withNote(pitch: number, duration?: number, velocity?: number): BaseCompositionBridge {
     const dur = duration ?? this.params.defaultDuration
     const vel = velocity ?? this.params.velocity
-    const finalPitch = pitch + this.params.transpose
+    const finalPitch = pitch + this.params.transposeCents
     const tick = this.params.tick
     const muted = this.params.muted
 

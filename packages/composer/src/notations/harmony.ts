@@ -32,8 +32,10 @@ export function harmony(
   root?: NotePitch,
   duration?: NoteDuration,
 ): HarmonyBuilder {
-  const rootPitch = root !== undefined ? resolvePitch(root) : undefined
+  const rootMidi = root !== undefined ? resolvePitch(root) : undefined
+  // Convert MIDI → cents (MIDI 12 = C0 = 0 cents)
+  const rootCents = rootMidi !== undefined ? (rootMidi - 12) * 100 : undefined
   const resolvedDuration = resolveDuration(duration)
 
-  return new HarmonyBuilder({ mask, root: rootPitch, duration: resolvedDuration })
+  return new HarmonyBuilder({ mask, root: rootCents, duration: resolvedDuration })
 }

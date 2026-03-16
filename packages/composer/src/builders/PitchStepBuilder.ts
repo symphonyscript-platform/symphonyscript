@@ -16,7 +16,7 @@ export interface PitchStepParams {
   velocity: number | null
   /** Octave shift applied to pitch (e.g. 1 = up one octave). Default: 0. */
   octaveShift: number
-  /** Semitone accidental offset (+1 sharp, -1 flat). Used when `accidentalOverride` is not set. */
+  /** Accidental offset in cents (+100 sharp, -100 flat). Used when `accidentalOverride` is not set. */
   accidental: number
   /** Key-signature override for raw string pitches: `'sharp'`, `'flat'`, `'natural'`, or `null`. */
   accidentalOverride: AccidentalOverride | null
@@ -32,8 +32,8 @@ export interface PitchStepParams {
   pressure: number | null
   /** Number of times to emit the note sequentially. Default: 1. */
   repeatCount: number
-  /** Transpose offset in semitones. Default: 0. */
-  transposeSemitones: number
+  /** Transpose offset in cents. Default: 0. */
+  transposeCents: number
   /** Channel aftertouch value sent with the note. `null` = no aftertouch. */
   aftertouch: number | null
 }
@@ -56,7 +56,7 @@ export const DEFAULT_PITCH_STEP_PARAMS: PitchStepParams = {
   timbre: null,
   pressure: null,
   repeatCount: 1,
-  transposeSemitones: 0,
+  transposeCents: 0,
   aftertouch: null,
 }
 
@@ -116,21 +116,21 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
   }
 
   /**
-   * Raise pitch by one semitone (sharp).
+   * Raise pitch by 100 cents (one equal-tempered semitone).
    *
-   * @returns New builder with accidental offset +1 and override `'sharp'`
+   * @returns New builder with accidental offset +100 and override `'sharp'`
    */
   sharp(): T {
-    return this.create({ ...this.shared, accidental: this.shared.accidental + 1, accidentalOverride: 'sharp' })
+    return this.create({ ...this.shared, accidental: this.shared.accidental + 100, accidentalOverride: 'sharp' })
   }
 
   /**
-   * Lower pitch by one semitone (flat).
+   * Lower pitch by 100 cents (one equal-tempered semitone).
    *
-   * @returns New builder with accidental offset -1 and override `'flat'`
+   * @returns New builder with accidental offset -100 and override `'flat'`
    */
   flat(): T {
-    return this.create({ ...this.shared, accidental: this.shared.accidental - 1, accidentalOverride: 'flat' })
+    return this.create({ ...this.shared, accidental: this.shared.accidental - 100, accidentalOverride: 'flat' })
   }
 
   /**
@@ -207,14 +207,14 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
   }
 
   /**
-   * Transpose pitch by a number of semitones.
+   * Transpose pitch by a number of cents.
    *
-   * @param semitones - Transposition offset
+   * @param cents - Transposition offset in cents (e.g. 700 = up a fifth)
 
    * @returns New builder with the updated transpose
    */
-  transpose(semitones: number): T {
-    return this.create({ ...this.shared, transposeSemitones: semitones })
+  transpose(cents: number): T {
+    return this.create({ ...this.shared, transposeCents: cents })
   }
 
   /**

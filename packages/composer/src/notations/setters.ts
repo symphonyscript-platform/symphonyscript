@@ -5,25 +5,25 @@ import { assertPositive, assertRange } from '../utils/validate'
 import { resolveDuration, type NoteDuration } from '../utils/duration'
 
 /**
- * Set transposition in semitones for all subsequent notes (or scoped).
+ * Set transposition in cents for all subsequent notes (or scoped).
  *
  * Positive = up, negative = down. Use {@link octaveUp} / {@link octaveDown} for
  * octave shifts.
  *
- * @param semitones - Transposition in semitones. Can be negative.
+ * @param cents - Transposition in cents. Can be negative.
 
  * @returns {@link FieldSetter} — chain `.steps()` for scoped use or `.default()` to cascade.
  *
  * @example
  * ```ts
- * transpose(12).steps(note('C4'))    // C4 → C5, scoped
- * transpose(-5).default()            // All downstream down 5 semitones
+ * transpose(1200).steps(note('C4'))    // C4 → C5, scoped
+ * transpose(-700).default()            // All downstream down a fifth
  * ```
  */
-export function transpose(semitones: number): FieldSetter {
+export function transpose(cents: number): FieldSetter {
   return new FieldSetter(
-    b => b.withTranspose(semitones),
-    (r, p) => r.withTranspose(p.transpose),
+    b => b.withTransposeCents(cents),
+    (r, p) => r.withTransposeCents(p.transposeCents),
   )
 }
 
@@ -178,14 +178,14 @@ export function timeSignature(numerator: number, denominator: number): FieldSett
 /**
  * Set octave via transpose. Octave 4 = neutral (no transpose).
  *
- * @param n - Octave number (e.g. 4 = C4, 5 = C5). Transpose = (n - 4) * 12.
+ * @param n - Octave number (e.g. 4 = C4, 5 = C5). Transpose = (n - 4) * 1200 cents.
 
  * @returns {@link FieldSetter}
  */
 export function octave(n: number): FieldSetter {
   return new FieldSetter(
-    b => b.withTranspose((n - 4) * 12),
-    (r, p) => r.withTranspose(p.transpose),
+    b => b.withTransposeCents((n - 4) * 1200),
+    (r, p) => r.withTransposeCents(p.transposeCents),
   )
 }
 
@@ -204,8 +204,8 @@ export function octave(n: number): FieldSetter {
  */
 export function octaveUp(n: number = 1): FieldSetter {
   return new FieldSetter(
-    b => b.withTranspose(b.transpose + n * 12),
-    (r, p) => r.withTranspose(p.transpose),
+    b => b.withTransposeCents(b.transposeCents + n * 1200),
+    (r, p) => r.withTransposeCents(p.transposeCents),
   )
 }
 
@@ -218,8 +218,8 @@ export function octaveUp(n: number = 1): FieldSetter {
  */
 export function octaveDown(n: number = 1): FieldSetter {
   return new FieldSetter(
-    b => b.withTranspose(b.transpose - n * 12),
-    (r, p) => r.withTranspose(p.transpose),
+    b => b.withTransposeCents(b.transposeCents - n * 1200),
+    (r, p) => r.withTransposeCents(p.transposeCents),
   )
 }
 

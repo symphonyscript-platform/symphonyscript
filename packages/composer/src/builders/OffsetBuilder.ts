@@ -21,10 +21,6 @@ const A4_CENTS = 5700
  * Stores a cent offset relative to the tuning reference pitch.
  * At apply-time, resolves to absolute cents:
  * `referenceAbsoluteCents + offsetCents + octaveShift + transposeCents`
- *
- * Until NoteBuilder is migrated to cents (Task 6), converts to
- * MIDI for `withNote()`.
- *
  * @example
  * ```ts
  * offset(0)         // The tuning reference itself (A4 by default)
@@ -46,21 +42,17 @@ export class OffsetBuilder extends PitchStepBuilder<OffsetBuilder> {
    * Resolution pipeline:
    * 1. Absolute cents = A4_CENTS + offsetCents
    * 2. Apply octave shift: + (octaveShift × 1200)
-   * 3. Apply accidental: + (accidental × 100)
-   * 4. Apply transpose: + (transposeSemitones × 100)
-   * 5. Convert to MIDI: cents / 100 (temporary — Task 6 removes this)
+   * 3. Apply accidental (already in cents)
+   * 4. Apply transposeCents
    */
   apply(bridge: CompositionBridge): CompositionBridge {
     // Resolve absolute cents
+    // Accidental is already in cents (sharp=+100, flat=-100)
     const absoluteCents = A4_CENTS
       + this._offsetCents
       + (this.shared.octaveShift * 1200)
-      + (this.shared.accidental * 100)
-      + (this.shared.transposeSemitones * 100)
-
-    // Temporary: convert to MIDI for withNote (Task 6 will use cents directly)
-    // C0 = MIDI 12 (MIDI 0 = C-1), so semitones-from-C0 + 12 = MIDI number
-    const midiPitch = Math.round(absoluteCents / 100) + 12
+      + this.shared.accidental
+      + this.shared.transposeCents
 
     let target = this.applyFlags(bridge)
 
@@ -68,7 +60,7 @@ export class OffsetBuilder extends PitchStepBuilder<OffsetBuilder> {
 
     for (let i = 0; i < this.shared.repeatCount; ++i) {
       target = target.withNote(
-        midiPitch,
+        absoluteCents,
         scaledDuration,
         this.shared.velocity ?? undefined,
       )

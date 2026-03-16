@@ -12,7 +12,7 @@ import { KNUTH_MULTIPLIER } from '../constants'
 export interface HarmonyParams extends PitchStepParams {
   /** 24-EDO interval bitmask defining the chord structure. */
   mask: HarmonyMask
-  /** Root MIDI pitch. Defaults to 60 (C4). */
+  /** Root pitch in absolute cents from C0. Defaults to 4800 (C4). */
   root: number
   /** Voicing algorithm: `'close'`, `'open'`, or `'drop2'`. `null` = raw intervals. */
   voicing: VoiceLeadingStyle | null
@@ -56,7 +56,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
   constructor(params: Partial<HarmonyParams>) {
     super(params)
     this._mask = params.mask ?? (0 as HarmonyMask)
-    this._root = params.root ?? 60
+    this._root = params.root ?? 4800
     this.voicingStyle = params.voicing ?? null
     this.strumRate = params.strumRate ?? null
     this.strumDirection = params.strumDirection ?? 'up'
@@ -79,10 +79,10 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
   }
 
   /**
-   * Set the root MIDI pitch. All chord intervals are computed relative to this.
+   * Set the root pitch in absolute cents from C0.
    *
-   * @param root - MIDI note number (e.g. 60 = C4, 67 = G4)
-
+   * @param root - Absolute cents (e.g. 4800 = C4, 5500 = G4)
+   *
    * @returns New HarmonyBuilder with the updated root
    */
   root(root: number): HarmonyBuilder {
@@ -152,8 +152,8 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
    * Resolve pitches from the harmony mask and emit all chord tones.
    *
    * **Pipeline:**
-   * 1. Compute `resolvedRoot` = root + accidental + octaveShift + transpose
-   * 2. Resolve pitches via voicing function or raw 24-EDO intervals
+   * 1. Compute `resolvedRoot` = root + accidental + octaveShift×1200 + transposeCents (all cents)
+   * 2. Resolve pitches via voicing function or raw 24-EDO intervals (converted to cents)
    * 3. For each repeat: emit notes (strummed or simultaneous), advance tick by duration
    *
    * When `strumRate` is set, notes are offset sequentially. Otherwise, all
@@ -168,8 +168,8 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
     const scaledDuration = this.resolvedDuration()
     const resolvedRoot = this._root
       + this.shared.accidental
-      + (this.shared.octaveShift * 12)
-      + this.shared.transposeSemitones
+      + (this.shared.octaveShift * 1200)
+      + this.shared.transposeCents
 
     const pitches = this.resolvePitches(resolvedRoot)
     if (pitches.length === 0) return this.resetFlags(target)
@@ -208,8 +208,9 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
    * Resolve pitches from mask using the voicing function or raw intervals.
    *
    * With a voicing style set, delegates to the corresponding `@symphonyscript/theory`
-   * voicing function. Otherwise, extracts raw 24-EDO intervals and converts to
-   * 12-TET pitches offset from `resolvedRoot`.
+   * voicing function. Voicing functions return MIDI-space offsets, which are
+   * converted to cent offsets (×100) before adding to resolvedRoot.
+   * Otherwise, extracts raw 24-EDO intervals and converts to cent offsets.
    */
   private resolvePitches(resolvedRoot: number): number[] {
     if (this.voicingStyle !== null) {
@@ -217,21 +218,24 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
         : this.voicingStyle === 'open' ? openVoicing
         : closeVoicing
 
+      // Voicing functions return MIDI-space semitone offsets
       const rawPitches = voicingFn(this._mask, 4, 4)
       const pitches = new Array<number>(rawPitches.length)
 
       for (let i = 0; i < rawPitches.length; ++i) {
-        pitches[i] = rawPitches[i] + resolvedRoot
+        // Convert semitone offset to cents and add to resolved root
+        pitches[i] = (rawPitches[i] * 100) + resolvedRoot
       }
 
       return pitches
     }
 
+    // Raw 24-EDO intervals: each unit = 50 cents (1200/24)
     const intervals = getScaleIntervals(this._mask)
     const pitches = new Array<number>(intervals.length)
 
     for (let i = 0; i < intervals.length; ++i) {
-      pitches[i] = resolvedRoot + Math.floor(Number(intervals[i]) / 2)
+      pitches[i] = resolvedRoot + (Number(intervals[i]) * 50)
     }
 
     return pitches
