@@ -8,3 +8,4 @@
 
 export * from './intervals'
 export * from './temperament'
+export * from './scales'
