@@ -6,11 +6,11 @@ import { DegreeBuilder } from '../builders/DegreeBuilder'
  * Resolves the degree to MIDI pitch using the bridge's scale context (scaleRoot,
  * scaleMode) via `degreeToPitch`. Inherits velocity, duration, accidentals,
  * octave shift, transpose, repeat, and articulations from {@link PitchStepBuilder}.
- * Degrees 1–7 map to scale tones; 0 or 8 resolve to tonic variants.
+ * Degrees 1–7 map to scale tones; 8 = tonic octave above; 0 = 7th degree one octave below (e.g. B3 in C major).
  *
  * Called without arguments, uses default degree 1 (tonic).
  *
- * @param degree - Scale degree (1–7 typical; 0 or 8 = tonic variants). `undefined` = 1.
+ * @param degree - Scale degree (1–7 typical; 8 = tonic above; 0 = 7th below). `undefined` = 1.
  * @param duration - Note duration in ticks. `undefined` = bridge default.
  * @returns Immutable {@link DegreeBuilder} — chain `.velocity()`, `.up()`, `.repeat()`, `.sharp()`, etc.
  *

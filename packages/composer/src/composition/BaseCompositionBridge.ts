@@ -10,7 +10,7 @@ import { ThunkNode } from '../interfaces/thunk-node'
 export interface BaseCompositionBridgeParams {
   /** Current tick position in ticks (PPQ 480). Default: 0 */
   tick: number
-  /** Default velocity (0–127). Default: 800 */
+  /** Default velocity (millivels 0–1270). Default: 800 */
   velocity: number
   /** Transpose offset in semitones. Default: 0 */
   transpose: number
@@ -132,7 +132,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    *
    * @param pitch - MIDI pitch (0–127), before transpose
    * @param duration - Note duration in ticks. Default: defaultDuration
-   * @param velocity - Override velocity (0–127). Default: this.velocity
+   * @param velocity - Override velocity (millivels 0–1270). Default: this.velocity
    * @returns New bridge with tick advanced and note thunk appended
    */
   withNote(pitch: number, duration?: number, velocity?: number): BaseCompositionBridge {
@@ -227,7 +227,7 @@ export class BaseCompositionBridge implements CompositionBridge {
   /**
    * Return a new bridge with the given velocity. Affects subsequent withNote calls.
    *
-   * @param v - Velocity (0–127)
+   * @param v - Velocity (millivels 0–1270)
    * @returns New bridge with updated velocity
    */
   withVelocity(v: number): BaseCompositionBridge {

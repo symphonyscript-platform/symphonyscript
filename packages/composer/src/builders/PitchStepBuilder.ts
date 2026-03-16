@@ -94,7 +94,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
   /**
    * Set velocity for emitted notes.
    *
-   * @param velocity - Velocity value (typical range 0–127 or higher for internal scaling)
+   * @param velocity - Velocity value (millivels 0–1270)
    * @returns New builder with the updated velocity
    */
   velocity(velocity: number): T {

@@ -18,7 +18,7 @@ import { ExecutionContext } from '@symphonyscript/core'
 export interface CompositionBridge {
     /** Current position in ticks (PPQ 480). */
     readonly tick: number
-    /** Default velocity (0–127) for notes when omitted. */
+    /** Default velocity (millivels 0–1270) for notes when omitted. */
     readonly velocity: number
     /** Transpose offset in semitones. */
     readonly transpose: number
@@ -61,7 +61,7 @@ export interface CompositionBridge {
      *
      * @param pitch - MIDI pitch (0–127).
      * @param duration - Note duration in ticks. Default: bridge.defaultDuration.
-     * @param velocity - Note velocity (0–127). Default: bridge.velocity.
+     * @param velocity - Note velocity (millivels 0–1270). Default: bridge.velocity.
      * @returns New bridge with the note thunk and tick advanced by duration.
      */
     withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge
@@ -127,7 +127,7 @@ export interface CompositionBridge {
     /**
      * Return new bridge with specified velocity.
      *
-     * @param v - Velocity (0–127).
+     * @param v - Velocity (millivels 0–1270).
      * @returns New bridge with updated velocity.
      */
     withVelocity(v: number): CompositionBridge

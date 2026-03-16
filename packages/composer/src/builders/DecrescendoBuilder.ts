@@ -10,7 +10,7 @@ import { CompositionBridgeDecorator } from '../composition/CompositionBridgeDeco
 export interface DecrescendoParams {
   /** Length of the diminuendo in ticks. Default 480. */
   duration: number
-  /** Initial velocity. Default 1200 (scaled, or use MIDI range 0–127). */
+  /** Initial velocity. Default 1200 (millivels). */
   from: number
   /** Final velocity. Default 400. */
   to: number

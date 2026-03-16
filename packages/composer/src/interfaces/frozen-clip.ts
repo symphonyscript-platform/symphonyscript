@@ -13,7 +13,7 @@ export interface IFrozenClip {
    * Invoke callback for each note in the snapshot.
    *
    * @param cb - Callback invoked per note. Receives: sourceId (source slot id),
-   *   pitch (MIDI 0–127), velocity (0–127), duration (ticks), tick (ticks), muted.
+   *   pitch (MIDI 0–127), velocity (millivels 0–1270), duration (ticks), tick (ticks), muted.
    */
   visitNotes(
     cb: (sourceId: number, pitch: number, velocity: number,

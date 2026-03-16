@@ -1,7 +1,7 @@
 import { CompositionBridge } from '@symphonyscript/composer'
 import { CompositionBridgeDecorator } from './CompositionBridgeDecorator'
 
-/** Easing curve for velocity ramps: linear, quadratic (exponential), or smoothstep. */
+/** Easing curve for velocity ramps: linear, 'exponential' (uses quadratic t², not true exponential), or smoothstep. */
 export type EasingCurve = 'linear' | 'exponential' | 'smooth'
 
 /**
@@ -12,11 +12,11 @@ export interface VelocityRampParams {
   startTick: number
   /** Tick at which the ramp ends. */
   endTick: number
-  /** Velocity at ramp start (MIDI 0–127). */
+  /** Velocity at ramp start (millivels 0–1270). */
   fromVelocity: number
-  /** Velocity at ramp end (MIDI 0–127). */
+  /** Velocity at ramp end (millivels 0–1270). */
   toVelocity: number
-  /** Easing curve: `linear` (t), `exponential` (t²), or `smooth` (3t² - 2t³). */
+  /** Easing curve: `linear` (t), `exponential` (uses quadratic t², not true exponential), or `smooth` (3t² - 2t³). */
   curve: EasingCurve
 }
 

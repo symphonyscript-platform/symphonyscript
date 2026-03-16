@@ -5,10 +5,10 @@ import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
 /**
  * Parameters for {@link DegreeBuilder}.
  *
- * Extends {@link PitchStepParams} with scale degree (1–7, 0 or 8 = tonic variants).
+ * Extends {@link PitchStepParams} with scale degree (1–7, 8 = tonic above, 0 = 7th below).
  */
 export interface DegreeParams extends PitchStepParams {
-  /** Scale degree (1–7; 0 or 8 resolve to tonic). Default: 1. */
+  /** Scale degree (1–7; 8 = tonic octave above; 0 = 7th degree one octave below). Default: 1. */
   degree: number
 }
 
@@ -39,9 +39,9 @@ export class DegreeBuilder extends PitchStepBuilder<DegreeBuilder> {
   }
 
   /**
-   * Set the scale degree. 1 = tonic, 7 = leading tone; 0 or 8 resolve to tonic variants.
+   * Set the scale degree. 1 = tonic, 7 = leading tone; 8 = tonic octave above; 0 = 7th degree one octave below.
    *
-   * @param degree - Scale degree (1–7 typical; negative/high values wrap via modulo)
+   * @param degree - Scale degree (1–7 typical; 8 = tonic above; 0 = 7th below; negative/high values wrap via modulo)
    * @returns New DegreeBuilder with the updated degree
    */
   degree(degree: number): DegreeBuilder {

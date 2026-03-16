@@ -11,7 +11,7 @@ export interface CrescendoParams {
   duration: number
   /** Initial velocity. Default 400. */
   from: number
-  /** Final velocity. Default 1200 (scaled, or use MIDI range 0–127). */
+  /** Final velocity. Default 1200 (millivels). */
   to: number
   /** Easing curve for the ramp. Default `'linear'`. */
   curve: EasingCurve

@@ -67,7 +67,7 @@ export class ProgressionBuilder implements PipeStep {
   /**
    * Set velocity for all chords in the progression.
    *
-   * @param velocity - Velocity value (typical range 0–127 or higher)
+   * @param velocity - Velocity value (millivels 0–1270)
    * @returns New ProgressionBuilder with the updated velocity
    */
   velocity(velocity: number): ProgressionBuilder {
