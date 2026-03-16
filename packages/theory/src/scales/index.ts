@@ -5,4 +5,4 @@
 
 export * from './scales';
 export * from './helpers';
-export * from './resolve-scale-mode';
+export * from '../../../composer/src/utils/resolve-scale-mode';

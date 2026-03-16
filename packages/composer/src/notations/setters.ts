@@ -1,5 +1,4 @@
-import type { PitchClass, ScaleMode, ScaleModeName } from '@symphonyscript/theory'
-import { resolveScaleMode } from '@symphonyscript/theory'
+import  { PitchClass, resolveScaleMode, ScaleMode, ScaleModeName } from '@symphonyscript/theory'
 import { FieldSetter } from '../builders/SetterBuilders'
 import { assertPositive, assertRange } from '../utils/validate'
 import { resolveDuration, type NoteDuration } from '../utils/duration'
