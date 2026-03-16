@@ -18,3 +18,6 @@ export * from './util';
 export * from './effects';
 export * from './enums/pitch-class'
 export * from './enums/scale-mode';
+
+// RFC-060: Continuous Pitch Model
+export * from './continuous';

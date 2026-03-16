@@ -3,10 +3,11 @@ Architecture).
 
 ## Rules
 
-1. **Read first, act never — until approved.** Before ANY implementation work, you MUST read the full RFC
+1. **Read the RFC first, then scope per task.** Before ANY implementation work, read the full RFC
    at [docs/rfcs/continuity/RFC-060-continuous-pitch-architecture.md](cci:7://file:///Users/torniketsomaia/projects/@tsomaia.tech/symphonyscript/docs/rfcs/continuity/RFC-060-continuous-pitch-architecture.md:0:0-0:0).
-   After reading it, present a summary of your understanding and a proposed task breakdown to the user. Do NOT write any
-   code until the user explicitly approves the task breakdown.
+   Present a task breakdown to the user for approval. For each individual task, read ONLY the files relevant to that
+   task — do not scan the entire codebase upfront. If you need to understand a file's interface, read its type
+   signatures and exports, not every line.
 
 2. **Ask before assuming.** If the RFC is ambiguous, silent, or contradictory on any point, STOP and ask the user for
    clarification. List specific gaps with section references. Do not fill gaps with your own assumptions.
