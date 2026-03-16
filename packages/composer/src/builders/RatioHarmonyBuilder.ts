@@ -1,19 +1,16 @@
 import type { CompositionBridge } from '@symphonyscript/composer'
+import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
 
 /**
  * Parameters for {@link RatioHarmonyBuilder}.
+ *
+ * Extends {@link PitchStepParams} with cent interval offsets and root.
  */
-export interface RatioHarmonyParams {
+export interface RatioHarmonyParams extends PitchStepParams {
   /** Cent intervals from root (e.g. [0, 386, 702] for just major triad). */
   intervals: number[]
   /** Root pitch in absolute cents from C0. Default: 4800 (C4). */
   root: number
-  /** Duration in ticks. `null` = bridge default. */
-  duration: number | null
-  /** Velocity override. `null` = bridge default. */
-  velocity: number | null
-  /** Number of times to emit the chord. Default: 1. */
-  repeatCount: number
 }
 
 /**
@@ -23,80 +20,85 @@ export interface RatioHarmonyParams {
  * cent interval offsets from the root directly. Used by the `ratios()` cue
  * for frequency-ratio-based chord construction.
  *
- * All builder methods return new instances (clone-on-set immutability).
+ * Extends {@link PitchStepBuilder}, inheriting all modifiers:
+ * `.sharp()`, `.flat()`, `.up()`, `.down()`, `.staccato()`, `.transpose()`,
+ * `.detune()`, `.velocity()`, `.repeat()`, `.accent()`, `.marcato()`, etc.
  *
  * @example
  * ```ts
- * new RatioHarmonyBuilder({ intervals: [0, 386, 702], root: 4800 })
+ * ratios([1, 5/4, 3/2]).sharp().up().staccato()
+ * ratios([1, 6/5, 3/2], 5700).velocity(800)
  * ```
  */
-export class RatioHarmonyBuilder {
+export class RatioHarmonyBuilder extends PitchStepBuilder<RatioHarmonyBuilder> {
   private readonly _intervals: number[]
   private readonly _root: number
-  private readonly _duration: number | null
-  private readonly _velocity: number | null
-  private readonly _repeatCount: number
 
   constructor(params: Partial<RatioHarmonyParams>) {
+    super(params)
     this._intervals = params.intervals ?? [0]
     this._root = params.root ?? 4800
-    this._duration = params.duration ?? null
-    this._velocity = params.velocity ?? null
-    this._repeatCount = params.repeatCount ?? 1
   }
 
-  /** Set velocity for all emitted notes. */
-  velocity(v: number): RatioHarmonyBuilder {
+  /**
+   * Set the root pitch in absolute cents from C0.
+   *
+   * @param rootCents - Absolute cents (e.g. 4800 = C4, 5700 = A4)
+   * @returns New RatioHarmonyBuilder with the updated root
+   */
+  root(rootCents: number): RatioHarmonyBuilder {
     return new RatioHarmonyBuilder({
+      ...this.shared,
       intervals: this._intervals,
-      root: this._root,
-      duration: this._duration,
-      velocity: v,
-      repeatCount: this._repeatCount,
-    })
-  }
-
-  /** Set repeat count. */
-  repeat(count: number): RatioHarmonyBuilder {
-    return new RatioHarmonyBuilder({
-      intervals: this._intervals,
-      root: this._root,
-      duration: this._duration,
-      velocity: this._velocity,
-      repeatCount: count,
+      root: rootCents,
     })
   }
 
   /**
    * Emit all interval pitches as simultaneous notes on the bridge.
    *
-   * Each interval is added to the root to produce an absolute cent pitch.
-   * All notes emit at the same tick, then tick advances by duration.
+   * Each interval is added to the root, then accidental, octave shift,
+   * and transpose are applied (all in cents). All notes emit at the same
+   * tick, then tick advances by duration.
    *
    * @param bridge - Current composition state
    * @returns Updated bridge with chord notes emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {
-    let target = bridge
-    const dur = this._duration
+    let target = this.applyFlags(bridge)
+    const scaledDuration = this.resolvedDuration()
 
-    for (let rep = 0; rep < this._repeatCount; ++rep) {
+    const resolvedRoot = this._root
+      + this.shared.accidental
+      + (this.shared.octaveShift * 1200)
+      + this.shared.transposeCents
+
+    for (let rep = 0; rep < this.shared.repeatCount; ++rep) {
       const startTick = target.tick
 
       for (let i = 0; i < this._intervals.length; ++i) {
-        const pitchCents = this._root + this._intervals[i]
+        const pitchCents = resolvedRoot + this._intervals[i]
         target = target.withTick(startTick).withNote(
           pitchCents,
-          dur ?? undefined,
-          this._velocity ?? undefined,
+          scaledDuration,
+          this.shared.velocity ?? undefined,
         )
       }
 
       // Advance tick by duration after all notes emitted
-      const advanceDur = dur ?? target.defaultDuration
+      const advanceDur = scaledDuration ?? bridge.defaultDuration
       target = target.withTick(startTick + advanceDur)
     }
 
-    return target
+    return this.resetFlags(target)
+  }
+
+  /** @internal Creates a new RatioHarmonyBuilder preserving intervals and root. */
+  protected create(params: Partial<PitchStepParams>): RatioHarmonyBuilder {
+    return new RatioHarmonyBuilder({
+      ...params,
+      intervals: this._intervals,
+      root: this._root,
+    })
   }
 }
