@@ -1,4 +1,5 @@
 import { DegreeBuilder } from '../builders/DegreeBuilder'
+import { resolveDuration, type NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link DegreeBuilder} that emits a single pitch from a scale degree.
@@ -24,6 +25,7 @@ import { DegreeBuilder } from '../builders/DegreeBuilder'
  * degree(7).sharp().apply(bridge)      // Leading tone with accidental
  * ```
  */
-export function degree(degree?: number, duration?: number): DegreeBuilder {
-  return new DegreeBuilder({ degree, duration })
+export function degree(degree?: number, duration?: NoteDuration): DegreeBuilder {
+  const resolvedDuration = resolveDuration(duration)
+  return new DegreeBuilder({ degree, duration: resolvedDuration })
 }

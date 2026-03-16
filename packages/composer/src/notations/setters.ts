@@ -1,6 +1,8 @@
-import type { PitchClass, ScaleMode } from '@symphonyscript/theory'
+import type { PitchClass, ScaleMode, ScaleModeName } from '@symphonyscript/theory'
+import { resolveScaleMode } from '@symphonyscript/theory'
 import { FieldSetter } from '../builders/SetterBuilders'
 import { assertPositive, assertRange } from '../utils/validate'
+import { resolveDuration, type NoteDuration } from '../utils/duration'
 
 /**
  * Set transposition in semitones for all subsequent notes (or scoped).
@@ -65,18 +67,20 @@ export function tempo(bpm: number): FieldSetter {
  * Used by {@link degree} and {@link degreeChord} to resolve scale degrees.
  *
  * @param root - Scale root as {@link PitchClass} (e.g. `'C'`, `'F#'`).
- * @param mode - Scale mode (e.g. `'major'`, `'dorian'`).
+ * @param mode - Scale mode as {@link ScaleMode} enum or string (e.g. `'major'`, `'dor'`, `'pent min'`).
 
  * @returns {@link FieldSetter}
  *
  * @example
  * ```ts
  * scale('C', 'major').steps(degree(1), degree(3), degree(5))
+ * scale('D', 'min').default()
  * ```
  */
-export function scale(root: PitchClass, mode: ScaleMode): FieldSetter {
+export function scale(root: PitchClass, mode: ScaleMode | ScaleModeName): FieldSetter {
+  const resolved = resolveScaleMode(mode)
   return new FieldSetter(
-    b => b.withScale(root, mode),
+    b => b.withScale(root, resolved),
     (r, p) => r.withScale(p.scaleRoot, p.scaleMode),
   )
 }
@@ -122,29 +126,33 @@ export function pan(value: number): FieldSetter {
  * diatonic spellings).
  *
  * @param root - Key root as {@link PitchClass}.
- * @param mode - Key mode (e.g. `'major'`, `'minor'`).
+ * @param mode - Key mode as {@link ScaleMode} enum or string (e.g. `'major'`, `'min'`).
 
  * @returns {@link FieldSetter}
  */
-export function key(root: PitchClass, mode: ScaleMode): FieldSetter {
+export function key(root: PitchClass, mode: ScaleMode | ScaleModeName): FieldSetter {
+  const resolved = resolveScaleMode(mode)
   return new FieldSetter(
-    b => b.withKey(root, mode),
+    b => b.withKey(root, resolved),
     (r, p) => p.keyRoot !== null ? r.withKey(p.keyRoot, p.keyMode) : r,
   )
 }
 
 /**
- * Set default duration in ticks for notes that don't specify one (or scoped).
+ * Set default duration for notes that don't specify one (or scoped).
  *
- * @param duration - Duration in ticks. Must be positive.
+ * Accepts string notation (`'4n'`, `'8n.'`, `'4t'`) or tick count.
+ *
+ * @param d - Duration as string or ticks. Must resolve to positive.
 
  * @returns {@link FieldSetter}
- * @throws When `duration` ≤ 0
+ * @throws When resolved duration ≤ 0
  */
-export function defaultDuration(duration: number): FieldSetter {
-  assertPositive('defaultDuration', duration)
+export function duration(d: NoteDuration): FieldSetter {
+  const ticks = resolveDuration(d)
+  assertPositive('duration', ticks)
   return new FieldSetter(
-    b => b.withDefaultDuration(duration),
+    b => b.withDefaultDuration(ticks),
     (r, p) => r.withDefaultDuration(p.defaultDuration),
   )
 }

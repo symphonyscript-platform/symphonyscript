@@ -1,6 +1,7 @@
 import { HarmonyBuilder } from '../builders/HarmonyBuilder'
 import { parseChord } from '../utils/chord'
 import type { HarmonyMask } from '@symphonyscript/theory'
+import { resolveDuration, type NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link HarmonyBuilder} from a chord symbol string.
@@ -28,9 +29,10 @@ import type { HarmonyMask } from '@symphonyscript/theory'
  * chord().mask(myMask).root(60)     // From raw mask
  * ```
  */
-export function chord(symbol?: string, duration?: number): HarmonyBuilder {
+export function chord(symbol?: string, duration?: NoteDuration): HarmonyBuilder {
+  const resolvedDuration = resolveDuration(duration)
   if (symbol === undefined) {
-    return new HarmonyBuilder({ mask: 0 as HarmonyMask, duration })
+    return new HarmonyBuilder({ mask: 0 as HarmonyMask, duration: resolvedDuration })
   }
 
   const parsed = parseChord(symbol)
@@ -38,6 +40,6 @@ export function chord(symbol?: string, duration?: number): HarmonyBuilder {
   return new HarmonyBuilder({
     mask: parsed.mask,
     root: parsed.root,
-    duration,
+    duration: resolvedDuration,
   })
 }

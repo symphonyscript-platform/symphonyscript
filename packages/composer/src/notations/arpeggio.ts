@@ -1,5 +1,6 @@
 import { ArpeggioBuilder } from '../builders/ArpeggioBuilder'
 import type { NotePitch } from '../types'
+import { resolveDuration, type NoteDuration } from '../utils/duration'
 
 /**
  * Create an {@link ArpeggioBuilder} that emits chord or note sequences in sequence.
@@ -27,6 +28,7 @@ import type { NotePitch } from '../types'
  * arpeggio([60, 64, 67]).pattern('random').seed(42)
  * ```
  */
-export function arpeggio(pitches?: NotePitch[], rate?: number): ArpeggioBuilder {
-  return new ArpeggioBuilder({ pitches, rate })
+export function arpeggio(pitches?: NotePitch[], rate?: NoteDuration): ArpeggioBuilder {
+  const resolvedRate = rate !== undefined ? resolveDuration(rate) : undefined
+  return new ArpeggioBuilder({ pitches, rate: resolvedRate })
 }

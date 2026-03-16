@@ -2,6 +2,7 @@ import { HarmonyBuilder } from '../builders/HarmonyBuilder'
 import type { HarmonyMask } from '@symphonyscript/theory'
 import type { NotePitch } from '../types'
 import { resolvePitch } from '../utils/pitch'
+import { resolveDuration, type NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link HarmonyBuilder} from a raw 24-EDO bitmask and root pitch.
@@ -29,9 +30,10 @@ import { resolvePitch } from '../utils/pitch'
 export function harmony(
   mask?: HarmonyMask,
   root?: NotePitch,
-  duration?: number,
+  duration?: NoteDuration,
 ): HarmonyBuilder {
   const rootPitch = root !== undefined ? resolvePitch(root) : undefined
+  const resolvedDuration = resolveDuration(duration)
 
-  return new HarmonyBuilder({ mask, root: rootPitch, duration })
+  return new HarmonyBuilder({ mask, root: rootPitch, duration: resolvedDuration })
 }

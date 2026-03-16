@@ -1,4 +1,5 @@
 import { QuantizationBuilder } from '../builders/QuantizationBuilder'
+import { resolveDuration, type NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link QuantizationBuilder} to snap note timing to a regular grid.
@@ -22,9 +23,10 @@ import { QuantizationBuilder } from '../builders/QuantizationBuilder'
  * quantize()                             // Default grid 480, strength 1
  * ```
  */
-export function quantize(grid?: number, strength?: number): QuantizationBuilder {
+export function quantize(grid?: NoteDuration, strength?: number): QuantizationBuilder {
+  const resolvedGrid = grid !== undefined ? resolveDuration(grid) : undefined
   return new QuantizationBuilder({
-    grid,
+    grid: resolvedGrid,
     strength,
   })
 }

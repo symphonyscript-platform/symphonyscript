@@ -1,6 +1,7 @@
 import { NoteBuilder } from '../builders/NoteBuilder'
 import type { NotePitch } from '../types'
 import { resolvePitch } from '../utils/pitch'
+import { resolveDuration, type NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link NoteBuilder} for single-note emission.
@@ -27,13 +28,14 @@ import { resolvePitch } from '../utils/pitch'
  * note('G4').sharp().up()  // G#5
  * ```
  */
-export function note(input?: NotePitch, duration?: number): NoteBuilder {
+export function note(input?: NotePitch, duration?: NoteDuration): NoteBuilder {
+  const resolvedDuration = resolveDuration(duration)
   if (input === undefined) {
-    return new NoteBuilder({ duration })
+    return new NoteBuilder({ duration: resolvedDuration })
   }
 
   const pitch = resolvePitch(input)
   const rawPitch = typeof input === 'string' ? input : null
 
-  return new NoteBuilder({ pitch, rawPitch, duration })
+  return new NoteBuilder({ pitch, rawPitch, duration: resolvedDuration })
 }

@@ -1,8 +1,10 @@
-export * from './interfaces/IClip'
-export * from './interfaces/composition-bridge'
-export * from './interfaces/frozen-clip'
-export * from './interfaces/pipe-step'
-
-export * from './utils/step'
+export * from './builders'
+export * from './composition'
+export * from './interfaces'
+export * from './notations'
+export * from './utils'
 
 export * from './Clip'
+export * from './durations'
+export * from './FrozenClip'
+export * from './types'

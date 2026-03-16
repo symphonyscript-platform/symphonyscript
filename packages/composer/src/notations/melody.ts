@@ -7,6 +7,7 @@ import { PolyrhythmBuilder } from '../builders/PolyrhythmBuilder'
 import { NoteBuilder } from '../builders/NoteBuilder'
 import type { NotePitch } from '../types'
 import { resolvePitch } from '../utils/pitch'
+import { resolveDuration, type NoteDuration } from '../utils/duration'
 
 /**
  * Binary step pattern. 1 = play note (cycling through notes), 0 = rest.
@@ -28,9 +29,10 @@ import { resolvePitch } from '../utils/pitch'
 export function steps(
   pattern?: number[],
   notes?: NotePitch[],
-  stepDuration?: number,
+  stepDuration?: NoteDuration,
 ): StepsBuilder {
-  return new StepsBuilder({ pattern, notes, stepDuration })
+  const resolvedDuration = stepDuration !== undefined ? resolveDuration(stepDuration) : undefined
+  return new StepsBuilder({ pattern, notes, stepDuration: resolvedDuration })
 }
 
 /**
@@ -53,9 +55,10 @@ export function trill(
   pitch?: NotePitch,
   basePitch?: NotePitch,
   rate?: number,
-  duration?: number,
+  duration?: NoteDuration,
 ): TrillBuilder {
-  return new TrillBuilder({ pitch, basePitch, rate, duration })
+  const resolvedDuration = resolveDuration(duration)
+  return new TrillBuilder({ pitch, basePitch, rate, duration: resolvedDuration })
 }
 
 /**
@@ -76,9 +79,10 @@ export function trill(
 export function tremolo(
   pitch?: NotePitch,
   rate?: number,
-  duration?: number,
+  duration?: NoteDuration,
 ): TremoloBuilder {
-  return new TremoloBuilder({ pitch, rate, duration })
+  const resolvedDuration = resolveDuration(duration)
+  return new TremoloBuilder({ pitch, rate, duration: resolvedDuration })
 }
 
 /**
@@ -98,12 +102,13 @@ export function tremolo(
  * grace(64, 20)                  // MIDI 64, 20-tick grace
  * ```
  */
-export function grace(pitch?: NotePitch, graceDuration: number = 30): NoteBuilder {
+export function grace(pitch?: NotePitch, graceDuration: NoteDuration = 30): NoteBuilder {
+  const resolvedDuration = resolveDuration(graceDuration)
   if (pitch === undefined) {
-    return new NoteBuilder({ duration: graceDuration })
+    return new NoteBuilder({ duration: resolvedDuration })
   }
   const midi = resolvePitch(pitch)
-  return new NoteBuilder({ pitch: midi, duration: graceDuration })
+  return new NoteBuilder({ pitch: midi, duration: resolvedDuration })
 }
 
 /**
@@ -124,9 +129,10 @@ export function grace(pitch?: NotePitch, graceDuration: number = 30): NoteBuilde
 export function glissando(
   from?: NotePitch,
   to?: NotePitch,
-  duration?: number,
+  duration?: NoteDuration,
 ): GlissandoBuilder {
-  return new GlissandoBuilder({ from, to, duration })
+  const resolvedDuration = resolveDuration(duration)
+  return new GlissandoBuilder({ from, to, duration: resolvedDuration })
 }
 
 /**
