@@ -237,7 +237,7 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
   }
 
   /** @internal */
-  withTemperament(t: readonly number[]): CompositionBridge {
+  withTemperament(t: readonly number[] | null): CompositionBridge {
     return this.rewrap(this.bridge.withTemperament(t))
   }
 

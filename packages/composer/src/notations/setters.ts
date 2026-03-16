@@ -1,4 +1,5 @@
 import  { PitchClass, resolveScaleMode, ScaleMode, ScaleModeName } from '@symphonyscript/theory'
+import { resolveTemperament, type TemperamentName } from '@symphonyscript/theory'
 import { FieldSetter } from '../builders/SetterBuilders'
 import { assertPositive, assertRange } from '../utils/validate'
 import { resolveDuration, type NoteDuration } from '../utils/duration'
@@ -233,5 +234,56 @@ export function precise(): FieldSetter {
   return new FieldSetter(
     b => b.withPrecise(true),
     (r, p) => r.withPrecise(p.precise),
+  )
+}
+
+// === RFC-060: Continuous Pitch Cues ===
+
+/**
+ * Set tuning reference frequency in Hz (or scoped).
+ *
+ * Default: 440 Hz (A4). The composer never uses this internally —
+ * all math is in cents. The value passes through to the synthesis edge.
+ *
+ * @param hz - Reference frequency in Hz. Must be positive.
+ *
+ * @returns {@link FieldSetter}
+ * @throws When `hz` ≤ 0
+ *
+ * @example
+ * ```ts
+ * tuning(432).steps(note('A4'))     // A4 = 432 Hz, scoped
+ * tuning(415).default()             // Baroque pitch downstream
+ * ```
+ */
+export function tuning(hz: number): FieldSetter {
+  assertPositive('tuning', hz)
+  return new FieldSetter(
+    b => b.withTuningHz(hz),
+    (r, p) => r.withTuningHz(p.tuningHz),
+  )
+}
+
+/**
+ * Set temperament for note-name resolution (or scoped).
+ *
+ * Accepts a named preset (`'equal'`, `'just'`, `'pythagorean'`, `'meantone'`)
+ * or a custom cent array. Affects how note names map to cent intervals.
+ *
+ * @param input - Preset name or custom 12-tone cent array.
+ *
+ * @returns {@link FieldSetter}
+ *
+ * @example
+ * ```ts
+ * temperament('just').steps(note('E4'))          // E4 = 5186.31 cents
+ * temperament([0, 112, 204, 316, 386, 498, 590, 702, 814, 884, 996, 1088]).default()
+ * ```
+ */
+export function temperament(input: TemperamentName | readonly number[]): FieldSetter {
+  const resolved = resolveTemperament(input)
+  return new FieldSetter(
+    b => b.withTemperament(resolved),
+    (r, p) => r.withTemperament(p.temperament),
   )
 }

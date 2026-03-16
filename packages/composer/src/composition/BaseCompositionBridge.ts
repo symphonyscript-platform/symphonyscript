@@ -436,7 +436,7 @@ export class BaseCompositionBridge implements CompositionBridge {
   }
 
   /** Return a new bridge with specified temperament. */
-  withTemperament(t: readonly number[]): BaseCompositionBridge {
+  withTemperament(t: readonly number[] | null): BaseCompositionBridge {
     return this.derive({ temperament: t })
   }
 

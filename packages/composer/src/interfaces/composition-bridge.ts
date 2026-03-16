@@ -304,7 +304,7 @@ export interface CompositionBridge {
      *
      * @param t - Chromatic interval array (cents from root).
      */
-    withTemperament(t: readonly number[]): CompositionBridge
+    withTemperament(t: readonly number[] | null): CompositionBridge
 
     /**
      * Return new bridge with specified tuning reference.
