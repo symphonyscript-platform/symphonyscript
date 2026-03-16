@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { rest } from '../../notations/rest'
-import { note } from '../../notations/note'
+import { rest } from '../../cues/rest'
+import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('rest', () => {

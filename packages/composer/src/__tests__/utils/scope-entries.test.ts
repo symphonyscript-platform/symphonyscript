@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import { appendSteps, applyEntries } from '../../utils/scope-entries'
 import { step } from '../../utils/step'
-import { note } from '../../notations/note'
+import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('scope-entries', () => {

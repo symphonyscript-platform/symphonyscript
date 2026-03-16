@@ -14,8 +14,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { arpeggio } from '../../notations/arpeggio'
-import { note } from '../../notations/note'
+import { arpeggio } from '../../cues/arpeggio'
+import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('ArpeggioBuilder', () => {

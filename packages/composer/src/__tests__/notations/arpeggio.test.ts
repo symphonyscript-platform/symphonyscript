@@ -6,10 +6,10 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { arpeggio } from '../../notations/arpeggio'
+import { arpeggio } from '../../cues/arpeggio'
 import { ArpeggioBuilder } from '../../builders/ArpeggioBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { note } from '../../notations/note'
+import { note } from '../../cues/note'
 
 describe('arpeggio', () => {
 

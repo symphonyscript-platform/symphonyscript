@@ -4,8 +4,8 @@
 
 import { BaseCompositionBridge } from '../../composition/BaseCompositionBridge'
 import { RecordingBridge } from '../../composition/RecordingBridge'
-import { ratios } from '../../notations/ratios'
-import { note } from '../../notations/note'
+import { ratios } from '../../cues/ratios'
+import { note } from '../../cues/note'
 
 describe('RFC-060 Task 7: Harmony + FrozenClip', () => {
   describe('ratios()', () => {

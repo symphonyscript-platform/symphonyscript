@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { tremolo } from '../../notations/melody'
+import { tremolo } from '../../cues/melody'
 import { TremoloBuilder } from '../../builders/TremoloBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
 

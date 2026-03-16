@@ -15,8 +15,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { note } from '../../notations/note'
-import { groove } from '../../notations/groove'
+import { note } from '../../cues/note'
+import { groove } from '../../cues/groove'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('GrooveBuilder', () => {

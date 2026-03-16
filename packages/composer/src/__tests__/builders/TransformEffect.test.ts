@@ -15,9 +15,9 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { reverse } from '../../notations/reverse'
-import { stretch } from '../../notations/stretch'
-import { note } from '../../notations/note'
+import { reverse } from '../../cues/reverse'
+import { stretch } from '../../cues/stretch'
+import { note } from '../../cues/note'
 import { step } from '../../utils/step'
 import { isTransformEffect } from '../../builders/TransformEffect'
 import { createBridge, commitAndCapture } from '../test-utils'

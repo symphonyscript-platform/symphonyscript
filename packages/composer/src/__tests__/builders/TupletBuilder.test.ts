@@ -8,8 +8,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { tuplet } from '../../notations/melody'
-import { note } from '../../notations/note'
+import { tuplet } from '../../cues/melody'
+import { note } from '../../cues/note'
 import { TupletBuilder } from '../../builders/TupletBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
 import type { CompositionBridge } from '../../interfaces/composition-bridge'

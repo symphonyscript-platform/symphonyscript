@@ -14,9 +14,9 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { note } from '../../notations/note'
-import { isolate } from '../../notations/isolate'
-import { velocity, transpose, tempo, volume } from '../../notations/setters'
+import { note } from '../../cues/note'
+import { isolate } from '../../cues/isolate'
+import { velocity, transpose, tempo, volume } from '../../cues/setters'
 import { createBridge, commitAndCapture } from '../test-utils'
 import { MIDI_CC } from '@symphonyscript/theory'
 

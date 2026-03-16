@@ -14,9 +14,9 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { loop } from '../../notations/loop'
-import { repeat } from '../../notations/repeat'
-import { note } from '../../notations/note'
+import { loop } from '../../cues/loop'
+import { repeat } from '../../cues/repeat'
+import { note } from '../../cues/note'
 import { LoopBuilder } from '../../builders/LoopBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
 

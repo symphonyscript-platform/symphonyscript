@@ -13,8 +13,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { note } from '../../notations/note'
-import { stack } from '../../notations/stack'
+import { note } from '../../cues/note'
+import { stack } from '../../cues/stack'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('StackBuilder', () => {

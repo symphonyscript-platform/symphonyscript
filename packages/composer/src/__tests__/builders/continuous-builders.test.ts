@@ -5,10 +5,10 @@
 import { BaseCompositionBridge } from '../../composition/BaseCompositionBridge'
 import { NoteBuilder } from '../../builders/NoteBuilder'
 import { DegreeBuilder } from '../../builders/DegreeBuilder'
-import { note } from '../../notations/note'
-import { degree } from '../../notations/degree'
-import { offset } from '../../notations/offset'
-import { transpose, octaveUp, octaveDown } from '../../notations/setters'
+import { note } from '../../cues/note'
+import { degree } from '../../cues/degree'
+import { offset } from '../../cues/offset'
+import { transpose, octaveUp, octaveDown } from '../../cues/setters'
 
 /** C0 in MIDI = 12. Cents from C0 = (midi - 12) * 100. */
 const MIDI_C0 = 12

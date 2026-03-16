@@ -8,10 +8,10 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { progression } from '../../notations/progression'
+import { progression } from '../../cues/progression'
 import { ProgressionBuilder } from '../../builders/ProgressionBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { note } from '../../notations/note'
+import { note } from '../../cues/note'
 import { PitchClass, ScaleMode } from '@symphonyscript/theory'
 import type { CompositionBridge } from '../../interfaces/composition-bridge'
 

@@ -13,11 +13,11 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { use } from '../../notations/use'
-import { note } from '../../notations/note'
+import { use } from '../../cues/use'
+import { note } from '../../cues/note'
 import { Clip } from '../../Clip'
-import { sustain } from '../../notations/instrument'
-import { scoped } from '../../notations/scoped'
+import { sustain } from '../../cues/instrument'
+import { scoped } from '../../cues/scoped'
 import { LinkBuilder } from '../../builders/LinkBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
 

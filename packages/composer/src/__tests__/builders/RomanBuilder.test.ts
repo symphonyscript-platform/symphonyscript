@@ -11,8 +11,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { roman } from '../../notations/roman'
-import { note } from '../../notations/note'
+import { roman } from '../../cues/roman'
+import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
 import { PitchClass, ScaleMode } from '@symphonyscript/theory'
 

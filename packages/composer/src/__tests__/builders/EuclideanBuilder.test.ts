@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { euclidean } from '../../notations/euclidean'
+import { euclidean } from '../../cues/euclidean'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('EuclideanBuilder', () => {

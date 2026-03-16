@@ -6,8 +6,8 @@ import { BaseCompositionBridge } from '../../composition/BaseCompositionBridge'
 import {
   tuning,
   temperament,
-} from '../../notations/setters'
-import { offset } from '../../notations/offset'
+} from '../../cues/setters'
+import { offset } from '../../cues/offset'
 
 // Minimal helper: apply a FieldSetter in cascade mode (no scoping)
 function applySetterDefault(setter: { apply(b: any): any }, bridge: BaseCompositionBridge) {

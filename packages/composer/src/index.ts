@@ -1,7 +1,7 @@
 export * from './builders'
 export * from './composition'
 export * from './interfaces'
-export * from './notations'
+export * from './cues'
 export * from './utils'
 
 export * from './Clip'

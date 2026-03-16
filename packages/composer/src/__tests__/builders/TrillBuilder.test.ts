@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { trill } from '../../notations/melody'
+import { trill } from '../../cues/melody'
 import { TrillBuilder } from '../../builders/TrillBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
 import type { CompositionBridge } from '../../interfaces/composition-bridge'

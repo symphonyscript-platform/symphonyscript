@@ -12,14 +12,14 @@ import {
   glissando,
   tuplet,
   polyrhythm,
-} from '../../notations/melody'
+} from '../../cues/melody'
 import { TrillBuilder } from '../../builders/TrillBuilder'
 import { GlissandoBuilder } from '../../builders/GlissandoBuilder'
 import { TupletBuilder } from '../../builders/TupletBuilder'
 import { PolyrhythmBuilder } from '../../builders/PolyrhythmBuilder'
 import { NoteBuilder } from '../../builders/NoteBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { note } from '../../notations/note'
+import { note } from '../../cues/note'
 
 describe('melody', () => {
   describe('trill', () => {

@@ -14,8 +14,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { note } from '../../notations/note'
-import { dynamics } from '../../notations/dynamics'
+import { note } from '../../cues/note'
+import { dynamics } from '../../cues/dynamics'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('DynamicsBuilder', () => {

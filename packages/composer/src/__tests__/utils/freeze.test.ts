@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest'
 import { freeze } from '../../utils/freeze'
 import { Clip } from '../../Clip'
-import { note } from '../../notations/note'
+import { note } from '../../cues/note'
 
 describe('freeze', () => {
 

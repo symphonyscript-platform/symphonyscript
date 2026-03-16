@@ -6,9 +6,9 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { bend } from '../../notations/bend'
+import { bend } from '../../cues/bend'
 import { BendBuilder } from '../../builders/BendBuilder'
-import { note } from '../../notations/note'
+import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('bend', () => {

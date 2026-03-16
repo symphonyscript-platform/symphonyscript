@@ -15,8 +15,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { note } from '../../notations/note'
-import { quantize } from '../../notations/quantize'
+import { note } from '../../cues/note'
+import { quantize } from '../../cues/quantize'
 import { createBridge, commitAndCapture } from '../test-utils'
 import { QuantizationBuilder } from '../../builders/QuantizationBuilder'
 

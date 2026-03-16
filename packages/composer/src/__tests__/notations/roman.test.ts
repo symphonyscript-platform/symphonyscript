@@ -6,11 +6,11 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { roman } from '../../notations/roman'
+import { roman } from '../../cues/roman'
 import { RomanBuilder } from '../../builders/RomanBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
 import { PitchClass, ScaleMode } from '@symphonyscript/theory'
-import { note } from '../../notations/note'
+import { note } from '../../cues/note'
 
 describe('roman', () => {
 

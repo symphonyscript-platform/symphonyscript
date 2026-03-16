@@ -14,8 +14,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { note } from '../../notations/note'
-import { crescendo } from '../../notations/crescendo'
+import { note } from '../../cues/note'
+import { crescendo } from '../../cues/crescendo'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('CrescendoBuilder', () => {

@@ -8,11 +8,11 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { euclidean } from '../notations/euclidean'
-import { tremolo } from '../notations/melody'
-import { swing } from '../notations/swing'
-import { quantize } from '../notations/quantize'
-import { note } from '../notations/note'
+import { euclidean } from '../cues/euclidean'
+import { tremolo } from '../cues/melody'
+import { swing } from '../cues/swing'
+import { quantize } from '../cues/quantize'
+import { note } from '../cues/note'
 import { createBridge, commitAndCapture } from './test-utils'
 
 describe('deep immutability', () => {

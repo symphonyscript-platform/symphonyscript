@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { chord } from '../../notations/chord'
+import { chord } from '../../cues/chord'
 import { HarmonyBuilder } from '../../builders/HarmonyBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
 

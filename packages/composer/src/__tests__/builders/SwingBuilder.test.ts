@@ -15,8 +15,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { note } from '../../notations/note'
-import { swing } from '../../notations/swing'
+import { note } from '../../cues/note'
+import { swing } from '../../cues/swing'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('SwingBuilder', () => {

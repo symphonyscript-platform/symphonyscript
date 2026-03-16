@@ -8,8 +8,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { glide } from '../../notations/glide'
-import { note } from '../../notations/note'
+import { glide } from '../../cues/glide'
+import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
 import { MIDI_CC } from '@symphonyscript/theory'
 

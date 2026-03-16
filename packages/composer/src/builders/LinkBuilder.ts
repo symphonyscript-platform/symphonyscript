@@ -2,7 +2,7 @@ import type { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { Composable } from '../interfaces/composable'
 import { partitionEffects } from '../utils/partition-effects'
 import { ScopeBuilder } from '../interfaces/scope-builder'
-import { use as useNotation } from '../notations/use'
+import { use as useNotation } from '../cues/use'
 
 /**
  * Parameters for {@link LinkBuilder}.

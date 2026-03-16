@@ -12,8 +12,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { aftertouch } from '../../notations/aftertouch'
-import { note } from '../../notations/note'
+import { aftertouch } from '../../cues/aftertouch'
+import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 const CC_CHANNEL_AFTERTOUCH = 0xd0

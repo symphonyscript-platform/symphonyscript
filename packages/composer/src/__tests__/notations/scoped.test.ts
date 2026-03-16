@@ -6,9 +6,9 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { scoped } from '../../notations/scoped'
-import { note } from '../../notations/note'
-import { sustain } from '../../notations/instrument'
+import { scoped } from '../../cues/scoped'
+import { note } from '../../cues/note'
+import { sustain } from '../../cues/instrument'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('scoped', () => {

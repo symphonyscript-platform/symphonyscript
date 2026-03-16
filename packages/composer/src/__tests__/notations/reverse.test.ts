@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { reverse } from '../../notations/reverse'
-import { note } from '../../notations/note'
+import { reverse } from '../../cues/reverse'
+import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
 import { ReverseBuilder } from '../../builders/ReverseBuilder'
 

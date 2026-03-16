@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { roll } from '../../notations/drums'
+import { roll } from '../../cues/drums'
 import { createBridge, commitAndCapture } from '../test-utils'
 import { GM_DRUM } from '@symphonyscript/theory'
 

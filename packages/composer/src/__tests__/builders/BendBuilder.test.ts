@@ -13,8 +13,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { bend } from '../../notations/bend'
-import { note } from '../../notations/note'
+import { bend } from '../../cues/bend'
+import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('BendBuilder', () => {

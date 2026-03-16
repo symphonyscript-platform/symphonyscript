@@ -8,9 +8,9 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { chord } from '../../notations/chord'
-import { harmony } from '../../notations/harmony'
-import { note } from '../../notations/note'
+import { chord } from '../../cues/chord'
+import { harmony } from '../../cues/harmony'
+import { note } from '../../cues/note'
 import { HarmonyBuilder } from '../../builders/HarmonyBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
 import { CHORD } from '@symphonyscript/theory'

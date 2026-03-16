@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { steps } from '../../notations/melody'
+import { steps } from '../../cues/melody'
 import { StepsBuilder } from '../../builders/StepsBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
 

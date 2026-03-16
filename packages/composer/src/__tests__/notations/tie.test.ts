@@ -9,8 +9,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { tie } from '../../notations/tie'
-import { note } from '../../notations/note'
+import { tie } from '../../cues/tie'
+import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('tie', () => {

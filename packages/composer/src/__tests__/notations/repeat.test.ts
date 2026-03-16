@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { repeat } from '../../notations/repeat'
-import { note } from '../../notations/note'
+import { repeat } from '../../cues/repeat'
+import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
 import { LoopBuilder } from '../../builders/LoopBuilder'
 

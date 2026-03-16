@@ -7,8 +7,8 @@
 
 import { describe, it, expect } from 'vitest'
 import { Clip } from '../Clip'
-import { note } from '../notations/note'
-import { loop } from '../notations/loop'
+import { note } from '../cues/note'
+import { loop } from '../cues/loop'
 import { createBridge, commitAndCapture } from './test-utils'
 
 describe('performance', () => {

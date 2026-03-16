@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { glissando } from '../../notations/melody'
+import { glissando } from '../../cues/melody'
 import { createBridge, commitAndCapture } from '../test-utils'
 import { GlissandoBuilder } from '../../builders/GlissandoBuilder'
 

@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { harmonize } from '../../notations/harmonize'
-import { note } from '../../notations/note'
+import { harmonize } from '../../cues/harmonize'
+import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('harmonize', () => {

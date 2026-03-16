@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { kick, snare, drumPattern, hit, roll } from '../../notations/drums'
+import { kick, snare, drumPattern, hit, roll } from '../../cues/drums'
 import { GM_DRUM } from '@symphonyscript/theory'
 import { createBridge, commitAndCapture } from '../test-utils'
 
