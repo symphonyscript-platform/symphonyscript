@@ -18,6 +18,7 @@ Added `preview()` method:
 /**
  * Print ASCII visualization of the clip to console.
  * @param bpm - Tempo for display (default: 120)
+
  * @returns this for chaining
  */
 preview(bpm: number = 120): this

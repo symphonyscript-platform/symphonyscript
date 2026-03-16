@@ -11,6 +11,7 @@ import { DynamicsBuilder } from '../builders/DynamicsBuilder'
  * @param endVelocity - Velocity (0–1000) at the end of the ramp. Default 1000.
  * @param startTick - Tick at which the ramp begins. Default 0.
  * @param endTick - Tick at which the ramp ends. Default 480.
+
  * @returns Immutable {@link DynamicsBuilder} — chain `.startVelocity()`, `.endVelocity()`, `.start()`, `.end()`, `.steps()`, `.default()`
  *
  * @example

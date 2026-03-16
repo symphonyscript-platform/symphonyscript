@@ -9,6 +9,7 @@ import { GrooveBuilder } from '../builders/GrooveBuilder'
  * Chain `.steps()` for scoped application or `.default()` to cascade downstream.
  *
  * @param grid - Grid size in ticks (e.g. 480 for quarter notes). Default 480.
+
  * @returns Immutable {@link GrooveBuilder} — chain `.step()`, `.grid()`, `.seed()`, `.steps()`, `.default()`
  *
  * @example

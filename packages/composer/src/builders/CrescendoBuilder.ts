@@ -52,6 +52,7 @@ export class CrescendoBuilder extends ScopedStepBuilder<CrescendoBuilder> {
    * Set the duration of the crescendo in ticks.
    *
    * @param duration - Length of the ramp in ticks
+
    * @returns New builder with the updated duration
    */
   duration(duration: number): CrescendoBuilder {
@@ -62,6 +63,7 @@ export class CrescendoBuilder extends ScopedStepBuilder<CrescendoBuilder> {
    * Set the initial velocity at the start of the ramp.
    *
    * @param from - Velocity at bridge.tick (start of ramp)
+
    * @returns New builder with the updated from velocity
    */
   from(from: number): CrescendoBuilder {
@@ -72,6 +74,7 @@ export class CrescendoBuilder extends ScopedStepBuilder<CrescendoBuilder> {
    * Set the final velocity at the end of the ramp.
    *
    * @param to - Velocity at bridge.tick + duration
+
    * @returns New builder with the updated to velocity
    */
   to(to: number): CrescendoBuilder {
@@ -82,6 +85,7 @@ export class CrescendoBuilder extends ScopedStepBuilder<CrescendoBuilder> {
    * Set the easing curve for the velocity ramp.
    *
    * @param curve - One of `'linear'`, `'exponential'`, `'smooth'`
+
    * @returns New builder with the updated curve
    */
   curve(curve: EasingCurve): CrescendoBuilder {

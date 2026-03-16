@@ -47,6 +47,7 @@ export class RollBuilder implements PipeStep {
    * Set the total roll duration in ticks.
    *
    * @param duration - Total duration in ticks
+
    * @returns New RollBuilder with the updated duration
    */
   duration(duration: number): RollBuilder {
@@ -57,6 +58,7 @@ export class RollBuilder implements PipeStep {
    * Set the tick interval per hit.
    *
    * @param rate - Ticks per hit
+
    * @returns New RollBuilder with the updated rate
    */
   rate(rate: number): RollBuilder {
@@ -69,6 +71,7 @@ export class RollBuilder implements PipeStep {
    * Hit count = `floor(duration / rate)`. Returns bridge unchanged if pitch is null.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with roll notes emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {

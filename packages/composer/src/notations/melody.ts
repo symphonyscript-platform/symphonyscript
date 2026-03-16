@@ -16,6 +16,7 @@ import { resolvePitch } from '../utils/pitch'
  * @param pattern - Array of 1s and 0s.
  * @param notes - Pitches to cycle on hits. String (e.g. `'C4'`) or MIDI; resolved via {@link resolvePitch}.
  * @param stepDuration - Duration per step in ticks. `undefined` = bridge default.
+
  * @returns {@link StepsBuilder}
  *
  * @example
@@ -39,6 +40,7 @@ export function steps(
  * @param basePitch - Lower pitch. Omit for semitone below.
  * @param rate - Alternation rate (e.g. notes per beat).
  * @param duration - Total trill duration in ticks.
+
  * @returns {@link TrillBuilder}
  *
  * @example
@@ -62,6 +64,7 @@ export function trill(
  * @param pitch - Note to repeat. String or MIDI; resolved via {@link resolvePitch}.
  * @param rate - Repetition rate.
  * @param duration - Total tremolo duration in ticks.
+
  * @returns {@link TremoloBuilder}
  *
  * @example
@@ -86,6 +89,7 @@ export function tremolo(
  *
  * @param pitch - Pitch for the grace note. Omit for C4.
  * @param graceDuration - Grace note duration in ticks. Default 30.
+
  * @returns {@link NoteBuilder} with fixed short duration.
  *
  * @example
@@ -108,6 +112,7 @@ export function grace(pitch?: NotePitch, graceDuration: number = 30): NoteBuilde
  * @param from - Starting pitch. String or MIDI; resolved via {@link resolvePitch}.
  * @param to - Ending pitch. String or MIDI; resolved via {@link resolvePitch}.
  * @param duration - Slide duration in ticks.
+
  * @returns {@link GlissandoBuilder}
  *
  * @example
@@ -131,6 +136,7 @@ export function glissando(
  *
  * @param count - Number of notes in the tuplet.
  * @param inBeats - Number of beats the tuplet occupies.
+
  * @returns {@link TupletBuilder} — call `.steps()` to add the tuplet notes.
  *
  * @example
@@ -153,6 +159,7 @@ export function tuplet(
  *
  * @param noteCount - Number of notes to distribute.
  * @param overBeats - Number of beats to span.
+
  * @returns {@link PolyrhythmBuilder} — call `.steps()` to add the notes.
  *
  * @example

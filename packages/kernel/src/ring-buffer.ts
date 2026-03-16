@@ -92,6 +92,7 @@ export class RingBuffer {
    * @param param1 - First parameter (e.g., node pointer)
    * @param param2 - Second parameter (e.g., prev pointer)
    * @param param3 - Third parameter (e.g., PackedWJ for CONNECT) [RFC-054]
+
    * @returns RING_ERR.OK on success, RING_ERR.FULL if buffer is full
    *
    * @remarks
@@ -133,6 +134,7 @@ export class RingBuffer {
    * Read a command from the ring buffer (Worker Thread / Consumer).
    *
    * @param outCommand - Int32Array[4] to receive the command data
+
    * @returns true if command was read, false if buffer is empty
    *
    * @remarks

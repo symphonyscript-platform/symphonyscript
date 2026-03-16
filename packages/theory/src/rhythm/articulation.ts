@@ -57,6 +57,7 @@ export const ARTICULATION_VELOCITY: Readonly<Record<Articulation, number>> = Obj
  * KERNEL-SAFE: Pure lookup.
  *
  * @param articulation - Articulation type (optional)
+
  * @returns Duration multiplier (1.0 if no articulation)
  */
 export function getArticulationMultiplier(articulation?: Articulation): number {
@@ -69,6 +70,7 @@ export function getArticulationMultiplier(articulation?: Articulation): number {
  * KERNEL-SAFE: Pure lookup.
  *
  * @param articulation - Articulation type (optional)
+
  * @returns Velocity multiplier (1.0 if no articulation)
  */
 export function getArticulationVelocity(articulation?: Articulation): number {
@@ -81,6 +83,7 @@ export function getArticulationVelocity(articulation?: Articulation): number {
  * KERNEL-SAFE: Pure check.
  *
  * @param value - Value to check
+
  * @returns True if value is a valid Articulation
  */
 export function isArticulation(value: string): value is Articulation {

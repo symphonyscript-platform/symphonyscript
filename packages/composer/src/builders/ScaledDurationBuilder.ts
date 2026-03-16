@@ -43,6 +43,7 @@ export class ScaledDurationBuilder implements PipeStep {
    * Set the number of beats the scaled span occupies.
    *
    * @param overBeats - Beats (units of bridge defaultDuration)
+
    * @returns New builder with the updated overBeats
    */
   overBeats(overBeats: number): ScaledDurationBuilder {
@@ -53,6 +54,7 @@ export class ScaledDurationBuilder implements PipeStep {
    * Set the number of notes to fit within the scaled span.
    *
    * @param noteCount - Note count (e.g. 3 for triplet)
+
    * @returns New builder with the updated noteCount
    */
   noteCount(noteCount: number): ScaledDurationBuilder {
@@ -65,6 +67,7 @@ export class ScaledDurationBuilder implements PipeStep {
    * Each step receives `scaledDuration = round((overBeats * defaultDuration) / noteCount)` as its default duration.
    *
    * @param pipeSteps - One or more {@link PipeStep}s
+
    * @returns New builder with the updated steps
    */
   steps(...pipeSteps: PipeStep[]): ScaledDurationBuilder {
@@ -77,6 +80,7 @@ export class ScaledDurationBuilder implements PipeStep {
    * Sets `defaultDuration` to the scaled value, runs each step sequentially, then restores the bridge.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge after all steps applied
    */
   apply(bridge: CompositionBridge): CompositionBridge {

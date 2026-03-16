@@ -74,6 +74,7 @@ const DEFAULT_CONFIG_BASE = {
  * RFC-058: Zero-allocation error handling - returns null on invalid config.
  *
  * @param config - Optional configuration overrides
+
  * @returns Initialized SharedArrayBuffer, or null if config is invalid
  *
  * @remarks
@@ -451,6 +452,7 @@ function initializeSynapseTable(sab: Int32Array, nodeCapacity: number, synapseCa
  * parameters are needed.
  *
  * @param buffer - Buffer to validate
+
  * @returns 0 (VALIDATE_ERR.OK) on success, negative error code on failure
  */
 export function validateLinkerSAB(buffer: SharedArrayBuffer): number {
@@ -499,6 +501,7 @@ export function validateLinkerSAB(buffer: SharedArrayBuffer): number {
  * Get configuration values from an existing SAB.
  *
  * @param buffer - Initialized SharedArrayBuffer
+
  * @returns Configuration extracted from the buffer
  */
 export function getLinkerConfig(buffer: SharedArrayBuffer): Required<LinkerConfig> {
@@ -627,6 +630,7 @@ export function writeGrooveTemplate(
  * @param buffer - SharedArrayBuffer
  * @param templateIndex - Which template slot (0-based)
  * @param outOffsets - Pre-allocated Int32Array to receive offsets (optional for tests)
+
  * @returns Number of offsets read (if outOffsets provided), or array of offsets (if not)
  */
 export function readGrooveTemplate(

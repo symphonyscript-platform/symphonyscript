@@ -7,6 +7,7 @@ import { PipeStep, step } from '@symphonyscript/composer'
  * patterns, or aligning subsequent events to a later tick.
  *
  * @param duration - Silence length in ticks.
+
  * @returns {@link PipeStep} that advances `bridge.tick` by `duration`.
  *
  * @example

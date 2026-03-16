@@ -52,6 +52,7 @@ export class ScopedBuilder implements ScopeBuilder<ScopedBuilder> {
    * in the order they were added.
    *
    * @param pipeSteps - One or more {@link PipeStep}s to run within this scope
+
    * @returns New ScopedBuilder with the appended steps
    */
   steps(...pipeSteps: PipeStep[]): ScopedBuilder {
@@ -77,6 +78,7 @@ export class ScopedBuilder implements ScopeBuilder<ScopedBuilder> {
    *    apply the transform to the composed result.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with effects and content applied
    */
   apply(bridge: CompositionBridge): CompositionBridge {

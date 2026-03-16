@@ -37,6 +37,7 @@ export function release(): PipeStep {
  * Breath controller (CC2). Useful for wind instruments and expression.
  *
  * @param amount - CC value (0–127).
+
  * @returns {@link PipeStep} emitting CC2.
  */
 export function breath(amount: number): PipeStep {
@@ -47,6 +48,7 @@ export function breath(amount: number): PipeStep {
  * Expression controller (CC11). Overall dynamics/volume.
  *
  * @param amount - CC value (0–127).
+
  * @returns {@link PipeStep} emitting CC11.
  */
 export function expression(amount: number): PipeStep {
@@ -57,6 +59,7 @@ export function expression(amount: number): PipeStep {
  * Mod wheel (CC1). Typically controls vibrato depth or filter.
  *
  * @param amount - CC value (0–127).
+
  * @returns {@link PipeStep} emitting CC1.
  */
 export function modWheel(amount: number): PipeStep {

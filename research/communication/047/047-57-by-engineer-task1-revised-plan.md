@@ -42,6 +42,7 @@ Extend `.voice()` method to accept both string and numeric expression IDs. When 
  * Different voice names may map to the same MPE channel due to hash collisions.
  * 
  * @param name - Voice name string
+
  * @returns Numeric expression ID (0-15)
  */
 function hashVoiceName(name: string): number {
@@ -80,6 +81,7 @@ voice(expressionId: number, builderFn: (v: SynapticClip) => void): this {
  * 
  * @param expressionId - MPE expression ID (0-15) or string voice name (hashed to 0-15)
  * @param builderFn - Callback to build notes for this voice
+
  * @returns this for fluent chaining
  * 
  * @example

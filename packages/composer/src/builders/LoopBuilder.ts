@@ -47,6 +47,7 @@ export class LoopBuilder implements PipeStep {
    * Set the number of times to repeat the step sequence.
    *
    * @param count - Loop iterations (≥ 1)
+
    * @returns New LoopBuilder with the updated count
    */
   count(count: number): LoopBuilder {
@@ -57,6 +58,7 @@ export class LoopBuilder implements PipeStep {
    * Set the pipe steps to run each iteration. Replaces any previously configured steps.
    *
    * @param pipeSteps - One or more {@link PipeStep}s to apply in order per iteration
+
    * @returns New LoopBuilder with the specified steps
    */
   steps(...pipeSteps: PipeStep[]): LoopBuilder {
@@ -73,6 +75,7 @@ export class LoopBuilder implements PipeStep {
    * Returns the bridge unchanged when `pipeSteps` is empty.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with all iterations applied
    */
   apply(bridge: CompositionBridge): CompositionBridge {

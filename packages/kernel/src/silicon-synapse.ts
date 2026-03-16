@@ -54,6 +54,7 @@ import type {
  *
  * @param before - SEQ value read before the data fields
  * @param after - SEQ value read after the data fields
+
  * @returns true if the sequence changed (read is inconsistent), false if consistent
  */
 export function seqChanged(before: number, after: number): boolean {
@@ -196,6 +197,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * RFC-058: Returns null if configuration is invalid (zero-allocation error handling).
    *
    * @param config - Optional configuration overrides
+
    * @returns New SiliconSynapse instance, or null if config is invalid
    *
    * @remarks
@@ -228,6 +230,7 @@ export class SiliconSynapse implements ISiliconLinker {
    *
    * @param sab - Existing SharedArrayBuffer (already initialized with workerZones > 1)
    * @param workerId - Unique worker ID (must be > 0, used for zone claiming)
+
    * @returns SiliconSynapse on success, null if no zones available
    */
   static createForZone(sab: SharedArrayBuffer, workerId: number): SiliconSynapse | null {
@@ -256,6 +259,7 @@ export class SiliconSynapse implements ISiliconLinker {
    *
    * @param sab - Int32Array view of SharedArrayBuffer
    * @param workerId - Unique worker ID (must be > 0)
+
    * @returns Zone index (0+) on success, -1 if no zones available
    */
   private static _claimZone(sab: Int32Array, workerId: number): number {
@@ -663,6 +667,7 @@ export class SiliconSynapse implements ISiliconLinker {
    *
    * @param ptr - Node pointer
    * @param sourceId - New source ID
+
    * @returns true if patched, false if invalid pointer
    */
   patchSourceId(ptr: NodePtr, sourceId: number): boolean {
@@ -682,6 +687,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * @param o4 - Fourth field offset
    * @param v4 - Fourth field value
    * @param count - Number of active offset/value pairs (1-4)
+
    * @returns true if patched, false if invalid pointer
    */
   patchMultiple(
@@ -711,6 +717,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * Used by executeConnect/executeDisconnect for pointer safety.
    *
    * @param ptr - Byte offset pointer to validate
+
    * @returns true if pointer is within valid heap bounds, false otherwise
    */
   private isValidHeapPtr(ptr: NodePtr): boolean {
@@ -776,6 +783,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * RFC-045-04: Returns boolean instead of throwing (check ERROR_FLAG for details).
    *
    * @param ptr - Node to delete
+
    * @returns true if deleted, false on error
    */
   private _deleteNode(ptr: NodePtr): boolean {
@@ -919,6 +927,7 @@ export class SiliconSynapse implements ISiliconLinker {
    *
    * @param ptr - Node byte pointer
    * @param buf - Caller-owned Int32Array of length >= 8
+
    * @returns true if consistent snapshot obtained, false if NULL_PTR or contention
    */
   readNodeRaw(ptr: NodePtr, buf: Int32Array): boolean {
@@ -1250,6 +1259,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * modulo division on the hot path.
    *
    * @param sourceId - The source ID to hash
+
    * @returns Slot index in the Identity Table
    */
   private idTableHash(sourceId: number): number {
@@ -1275,6 +1285,7 @@ export class SiliconSynapse implements ISiliconLinker {
  *
  * @param sourceId - Source ID (must be > 0)
  * @param ptr - Node pointer
+
  * @returns true if inserted, false if table full
  */
   idTableInsert(sourceId: number, ptr: NodePtr): boolean {
@@ -1321,6 +1332,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * Uses triangular number probing for collision resolution (Task 078).
    *
    * @param sourceId - Source ID to lookup
+
    * @returns NodePtr if found, NULL_PTR if not found
    */
   idTableLookup(sourceId: number): NodePtr {
@@ -1361,6 +1373,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * Call idTableRepack() during bridge.clear() to eliminate tombstones.
    *
    * @param sourceId - Source ID to remove
+
    * @returns true if removed, false if not found
    */
   idTableRemove(sourceId: number): boolean {
@@ -1547,6 +1560,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * @param fileHash - Hash of the file path
    * @param line - Line number (0-65535)
    * @param column - Column number (0-65535)
+
    * @returns true if stored, false if table full
    */
   symTableStore(sourceId: number, fileHash: number, line: number, column: number): boolean {
@@ -1586,6 +1600,7 @@ export class SiliconSynapse implements ISiliconLinker {
    *
    * @param sourceId - Source ID to lookup
    * @param cb - Callback receiving (fileHash, line, column) if found
+
    * @returns true if found and callback invoked, false if not found
    */
   symTableLookup(
@@ -1637,6 +1652,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * Uses triangular number probing to match Identity Table (Task 078).
    *
    * @param sourceId - Source ID whose location should be removed
+
    * @returns true if removed, false if not found
    */
   symTableRemove(sourceId: number): boolean {
@@ -1850,6 +1866,7 @@ export class SiliconSynapse implements ISiliconLinker {
    *
    * @param ptr - Pointer to node to link (Zone B)
    * @param prevPtr - Pointer to insert after (or NULL_PTR for head)
+
    * @returns true on success, false on error (ERROR_FLAG set)
    */
   private executeInsert(ptr: NodePtr, prevPtr: NodePtr): boolean {
@@ -1918,6 +1935,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * RFC-002 Remediation: Added idTableRemove/symTableRemove calls.
    *
    * @param ptr - Pointer to node to delete
+
    * @returns true on success, false on error
    */
   private executeDelete(ptr: NodePtr): boolean {
@@ -1947,6 +1965,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * @param srcPtr - Byte offset to source node (trigger point)
    * @param tgtPtr - Byte offset to target node (destination)
    * @param packedWJ - Packed weight and jitter: (weight << 16) | (jitter & 0xFFFF)
+
    * @returns true on success, false on error (ERROR_FLAG set)
    */
   private executeConnect(srcPtr: NodePtr, tgtPtr: NodePtr, packedWJ: number): boolean {
@@ -1979,6 +1998,7 @@ export class SiliconSynapse implements ISiliconLinker {
    *
    * @param srcPtr - Byte offset to source node (trigger point)
    * @param tgtPtr - Byte offset to target node, or NULL_PTR for "disconnect all"
+
    * @returns true on success, false on error (ERROR_FLAG set)
    */
   private executeDisconnect(srcPtr: NodePtr, tgtPtr: NodePtr): boolean {

@@ -48,6 +48,7 @@ export class ProgressionBuilder implements PipeStep {
    * Set the chord progression (ordered roman numerals).
    *
    * @param numerals - Array of roman numerals (e.g. ['I', 'IV', 'V', 'I'])
+
    * @returns New ProgressionBuilder with the updated numerals
    */
   numerals(numerals: RomanNumeral[]): ProgressionBuilder {
@@ -58,6 +59,7 @@ export class ProgressionBuilder implements PipeStep {
    * Set per-chord duration in ticks.
    *
    * @param duration - Duration in ticks
+
    * @returns New ProgressionBuilder with the updated duration
    */
   duration(duration: number): ProgressionBuilder {
@@ -68,6 +70,7 @@ export class ProgressionBuilder implements PipeStep {
    * Set velocity for all chords in the progression.
    *
    * @param velocity - Velocity value (0–1000)
+
    * @returns New ProgressionBuilder with the updated velocity
    */
   velocity(velocity: number): ProgressionBuilder {
@@ -81,6 +84,7 @@ export class ProgressionBuilder implements PipeStep {
    * Each chord advances the tick by its duration. Empty numerals array yields unchanged bridge.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with progression chords emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {

@@ -76,6 +76,7 @@ export class SynapticDrums extends SynapticClip {
     /**
      * Resolve a drum name to MIDI pitch.
      * @param name - Drum name or pitch value
+
      * @returns MIDI note number
      */
     resolveDrumPitch(name: string | number): number {

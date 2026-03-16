@@ -45,6 +45,7 @@ export class DynamicsBuilder extends ScopedStepBuilder<DynamicsBuilder> {
    * Set the velocity at the start of the ramp.
    *
    * @param velocity - Velocity (0–1000) at startTick
+
    * @returns New builder with the updated start velocity
    */
   startVelocity(velocity: number): DynamicsBuilder {
@@ -55,6 +56,7 @@ export class DynamicsBuilder extends ScopedStepBuilder<DynamicsBuilder> {
    * Set the velocity at the end of the ramp.
    *
    * @param velocity - Velocity (0–1000) at endTick
+
    * @returns New builder with the updated end velocity
    */
   endVelocity(velocity: number): DynamicsBuilder {
@@ -65,6 +67,7 @@ export class DynamicsBuilder extends ScopedStepBuilder<DynamicsBuilder> {
    * Set the tick at which the ramp begins.
    *
    * @param tick - Start tick of the velocity range
+
    * @returns New builder with the updated start tick
    */
   start(tick: number): DynamicsBuilder {
@@ -75,6 +78,7 @@ export class DynamicsBuilder extends ScopedStepBuilder<DynamicsBuilder> {
    * Set the tick at which the ramp ends.
    *
    * @param tick - End tick of the velocity range
+
    * @returns New builder with the updated end tick
    */
   end(tick: number): DynamicsBuilder {

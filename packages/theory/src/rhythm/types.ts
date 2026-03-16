@@ -55,6 +55,7 @@ export const ARP_PATTERNS: readonly ArpPattern[] = Object.freeze([
  * KERNEL-SAFE: Pure check.
  *
  * @param value - String to check
+
  * @returns True if valid ArpPattern
  */
 export function isArpPattern(value: string): value is ArpPattern {
@@ -66,6 +67,7 @@ export function isArpPattern(value: string): value is ArpPattern {
  * KERNEL-SAFE: Pure regex check.
  *
  * @param value - String to check
+
  * @returns True if valid TimeSignatureString format
  */
 export function isTimeSignatureString(value: string): value is TimeSignatureString {
@@ -77,6 +79,7 @@ export function isTimeSignatureString(value: string): value is TimeSignatureStri
  * KERNEL-SAFE: Pure check.
  *
  * @param value - Value to check
+
  * @returns True if valid MIDI velocity
  */
 export function isValidVelocity(value: number): boolean {

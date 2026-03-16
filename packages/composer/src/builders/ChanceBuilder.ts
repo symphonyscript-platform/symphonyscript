@@ -51,6 +51,7 @@ export class ChanceBuilder extends ScopedStepBuilder<ChanceBuilder> {
    * Set the RNG seed for reproducible probability rolls.
    *
    * @param seed - Integer seed for {@link SeededRandom}
+
    * @returns New builder with the given RNG seed
    */
   seed(seed: number): ChanceBuilder {
@@ -61,6 +62,7 @@ export class ChanceBuilder extends ScopedStepBuilder<ChanceBuilder> {
    * Set the probability that each note is emitted (vs. skipped as a rest).
    *
    * @param probability - Value in 0–1. 0 = never emit, 1 = always emit
+
    * @returns New builder with the updated probability
    */
   probability(probability: number): ChanceBuilder {

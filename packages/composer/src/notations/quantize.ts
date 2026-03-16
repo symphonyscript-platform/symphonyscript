@@ -10,6 +10,7 @@ import { QuantizationBuilder } from '../builders/QuantizationBuilder'
  *
  * @param grid - Grid size in ticks (e.g. 480 for quarter notes at PPQ 480). Default 480.
  * @param strength - Snap amount 0..1: 0 = no quantize, 1 = full snap. Default 1.
+
  * @returns Immutable {@link QuantizationBuilder} — chain `.grid()`, `.strength()`, `.steps()`, `.default()`
  *
  * @example

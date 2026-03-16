@@ -220,6 +220,7 @@ export class AttributePatcher {
    *
    * @param ptr - Node byte pointer
    * @param pitch - New pitch value (0-127)
+
    * @returns true on success, false on invalid pointer
    */
   patchPitch(ptr: NodePtr, pitch: number): boolean {
@@ -245,6 +246,7 @@ export class AttributePatcher {
    *
    * @param ptr - Node byte pointer
    * @param velocity - New velocity value (0-127)
+
    * @returns true on success, false on invalid pointer
    */
   patchVelocity(ptr: NodePtr, velocity: number): boolean {
@@ -269,6 +271,7 @@ export class AttributePatcher {
    *
    * @param ptr - Node byte pointer
    * @param duration - New duration in ticks
+
    * @returns true on success, false on invalid pointer
    */
   patchDuration(ptr: NodePtr, duration: number): boolean {
@@ -293,6 +296,7 @@ export class AttributePatcher {
    *
    * @param ptr - Node byte pointer
    * @param baseTick - New base tick (grid-aligned timing)
+
    * @returns true on success, false on invalid pointer
    */
   patchBaseTick(ptr: NodePtr, baseTick: number): boolean {
@@ -318,6 +322,7 @@ export class AttributePatcher {
    *
    * @param ptr - Node byte pointer
    * @param muted - Whether the node should be muted
+
    * @returns true on success, false on invalid pointer
    */
   patchMuted(ptr: NodePtr, muted: boolean): boolean {
@@ -342,6 +347,7 @@ export class AttributePatcher {
    *
    * @param ptr - Node byte pointer
    * @param sourceId - New source ID
+
    * @returns true on success, false on invalid pointer
    */
   patchSourceId(ptr: NodePtr, sourceId: number): boolean {
@@ -374,6 +380,7 @@ export class AttributePatcher {
    * @param o4 - Fourth field offset
    * @param v4 - Fourth field value
    * @param count - Number of active offset/value pairs (1-4)
+
    * @returns true on success, false on invalid pointer
    */
   patchMultiple(

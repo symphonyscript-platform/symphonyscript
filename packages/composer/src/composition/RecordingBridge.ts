@@ -43,6 +43,7 @@ export class RecordingBridge implements ExecutionContext {
    * @param tick - Start tick (PPQ 480)
    * @param muted - Whether the note is muted
    * @param sourceId - Opaque id for correlation during visit callbacks
+
    * @returns Index of the inserted note (0-based)
    */
   insertNote(
@@ -64,6 +65,7 @@ export class RecordingBridge implements ExecutionContext {
    * @param value - CC value (0–127)
    * @param tick - Event tick (PPQ 480)
    * @param sourceId - Opaque id for correlation during visit callbacks
+
    * @returns Index of the inserted event (0-based)
    */
   insertCC(controller: number, value: number, tick: number, sourceId: number): number {
@@ -77,6 +79,7 @@ export class RecordingBridge implements ExecutionContext {
    * @param value - Pitch bend value (14-bit: 0 = full down, 8192 = center, 16383 = full up)
    * @param tick - Event tick (PPQ 480)
    * @param sourceId - Opaque id for correlation during visit callbacks
+
    * @returns Index of the inserted event (0-based)
    */
   insertBend(value: number, tick: number, sourceId: number): number {

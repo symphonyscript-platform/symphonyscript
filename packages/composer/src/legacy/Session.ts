@@ -61,6 +61,7 @@ export class Session {
      * Create a new Session.
      *
      * @param options - Optional session configuration
+
      * @returns New Session instance
      */
     static create(options?: SessionOptions): Session {
@@ -71,6 +72,7 @@ export class Session {
      * Set the session tempo.
      *
      * @param bpm - Beats per minute (must be positive)
+
      * @returns this for chaining
      */
     tempo(bpm: number): this {
@@ -86,6 +88,7 @@ export class Session {
      *
      * @param numerator - Beats per measure (must be positive integer)
      * @param denominator - Note value for one beat (must be power of 2)
+
      * @returns this for chaining
      */
     timeSignature(numerator: number, denominator: number): this {
@@ -107,6 +110,7 @@ export class Session {
      * Add a track to the session.
      *
      * @param track - Track instance or TrackNode to add
+
      * @returns this for chaining
      */
     add(track: Track | TrackNode): this {
@@ -128,6 +132,7 @@ export class Session {
      * @param name - Track name
      * @param clip - ClipBuilder or ClipNode
      * @param instrument - Instrument identifier
+
      * @returns this for chaining
      */
     track(name: string, clip: ClipBuilder | ClipNode, instrument: string): this {
@@ -152,6 +157,7 @@ export class Session {
      * @param id - Bus identifier
      * @param type - Effect type for the bus
      * @param params - Effect-specific parameters
+
      * @returns this for chaining
      */
     bus<T extends EffectType>(id: string, type: T, params: EffectParamsFor<T>): this {

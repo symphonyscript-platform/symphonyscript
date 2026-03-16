@@ -60,6 +60,7 @@ export class GrooveBuilder extends ScopedStepBuilder<GrooveBuilder> {
    * @param velocity - Velocity scale (1.0 = unchanged). Default 1.0
    * @param timing - Timing offset as fraction of grid (-1 to 1). Default 0 (no offset)
    * @param probability - Probability of sounding (0–1). Default 1.0
+
    * @returns New builder with the step appended
    */
   step(velocity?: number, timing?: number, probability?: number): GrooveBuilder {
@@ -75,6 +76,7 @@ export class GrooveBuilder extends ScopedStepBuilder<GrooveBuilder> {
    * Set velocity of the last groove step.
    *
    * @param velocity - Velocity scale (1.0 = unchanged)
+
    * @returns New builder with last step updated
    */
   velocityLast(velocity: number): GrooveBuilder {
@@ -85,6 +87,7 @@ export class GrooveBuilder extends ScopedStepBuilder<GrooveBuilder> {
    * Set timing offset of the last groove step.
    *
    * @param timing - Fraction of grid for tick offset
+
    * @returns New builder with last step updated
    */
   timingLast(timing: number): GrooveBuilder {
@@ -95,6 +98,7 @@ export class GrooveBuilder extends ScopedStepBuilder<GrooveBuilder> {
    * Set probability of the last groove step.
    *
    * @param probability - Value in 0–1
+
    * @returns New builder with last step updated
    */
   probabilityLast(probability: number): GrooveBuilder {
@@ -105,6 +109,7 @@ export class GrooveBuilder extends ScopedStepBuilder<GrooveBuilder> {
    * Set the grid division in ticks. Step index = floor(tick / grid) % steps.length.
    *
    * @param grid - Grid size in ticks (e.g. 480 = quarter note at 480 PPQ)
+
    * @returns New builder with the updated grid
    */
   grid(grid: number): GrooveBuilder {
@@ -115,6 +120,7 @@ export class GrooveBuilder extends ScopedStepBuilder<GrooveBuilder> {
    * Set the RNG seed for reproducible per-step probability rolls.
    *
    * @param seed - Integer seed for {@link SeededRandom}
+
    * @returns New builder with the given RNG seed
    */
   seed(seed: number): GrooveBuilder {

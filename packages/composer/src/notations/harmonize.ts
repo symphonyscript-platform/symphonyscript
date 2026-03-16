@@ -15,6 +15,7 @@ import { HarmonizeBridge } from '../composition/HarmonizeBridge'
  * Place as the first step in a pipe so subsequent steps emit through the HarmonizeBridge.
  *
  * @param intervals - Diatonic scale degrees to add above each note (e.g. 3, 5 for third + fifth)
+
  * @returns A {@link PipeStep} that wraps the bridge for harmonization
  *
  * @example

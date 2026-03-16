@@ -53,6 +53,7 @@ export class HumanizationBuilder extends ScopedStepBuilder<HumanizationBuilder> 
    * Set velocity jitter. Each note's velocity gets ±jitter added (symmetric range).
    *
    * @param jitter - Max velocity delta (e.g. ±50 for 0–1000 range)
+
    * @returns New builder with the updated velocity jitter
    */
   velocity(jitter: number): HumanizationBuilder {
@@ -63,6 +64,7 @@ export class HumanizationBuilder extends ScopedStepBuilder<HumanizationBuilder> 
    * Set timing jitter. Each note's tick gets ±amount added in ticks.
    *
    * @param amount - Max timing offset in ticks
+
    * @returns New builder with the updated timing jitter
    */
   timing(amount: number): HumanizationBuilder {
@@ -73,6 +75,7 @@ export class HumanizationBuilder extends ScopedStepBuilder<HumanizationBuilder> 
    * Set the RNG seed for reproducible jitter.
    *
    * @param seed - Integer seed for {@link SeededRandom}
+
    * @returns New builder with the given RNG seed
    */
   seed(seed: number): HumanizationBuilder {

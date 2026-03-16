@@ -46,6 +46,7 @@ export abstract class TransformEffect<T extends TransformEffect<T>> implements S
    * Subclasses must override to preserve concrete type in method chains.
    *
    * @param entries - New pipe-step groups for the scope
+
    * @returns New transform instance (concrete subclass)
    */
   protected abstract cloneWithEntries(entries: PipeStep[][]): T
@@ -58,6 +59,7 @@ export abstract class TransformEffect<T extends TransformEffect<T>> implements S
    * @param notes - Notes captured from the scope composition pass
    * @param totalDuration - Total duration of the captured clip in ticks
    * @param bridge - Target bridge to receive transformed notes
+
    * @returns Bridge with transformed notes emitted
    */
   protected abstract replay(
@@ -71,6 +73,7 @@ export abstract class TransformEffect<T extends TransformEffect<T>> implements S
    * Steps are run during the capture phase; their output is then transformed and replayed.
    *
    * @param pipeSteps - Steps to run within this transform's scope (e.g. notes, chords)
+
    * @returns New transform with the appended steps (immutable)
    */
   steps(...pipeSteps: PipeStep[]): T {
@@ -101,6 +104,7 @@ export abstract class TransformEffect<T extends TransformEffect<T>> implements S
    * When `entries` is empty, returns the bridge unchanged.
    *
    * @param bridge - Current composition state
+
    * @returns Bridge with transformed notes replayed at the current tick
    */
   apply(bridge: CompositionBridge): CompositionBridge {
@@ -140,6 +144,7 @@ export abstract class TransformEffect<T extends TransformEffect<T>> implements S
  * interceptors when partitioning a flat effect list.
  *
  * @param step - Any {@link PipeStep} (e.g. from a pipe or steps array)
+
  * @returns `true` if `step` is a TransformEffect (reverse, stretch, etc.)
  */
 export function isTransformEffect(step: PipeStep): step is TransformEffect<any> {

@@ -59,6 +59,7 @@ export class StepsBuilder implements PipeStep {
    * Replace the binary step pattern.
    *
    * @param pattern - Array of 0/1 (or truthy/falsy); 1 = hit, 0 = rest
+
    * @returns New StepsBuilder with the updated pattern
    */
   pattern(pattern: number[]): StepsBuilder {
@@ -71,6 +72,7 @@ export class StepsBuilder implements PipeStep {
    * Resolved via {@link resolvePitches} at apply-time; invalid strings throw.
    *
    * @param notes - Array of literal note names or MIDI numbers (0–127)
+
    * @returns New StepsBuilder with the updated notes
    */
   notes(notes: NotePitch[]): StepsBuilder {
@@ -83,6 +85,7 @@ export class StepsBuilder implements PipeStep {
    * When unset (`null`), the bridge default duration is used at apply-time.
    *
    * @param stepDuration - Duration in ticks
+
    * @returns New StepsBuilder with the updated step duration
    */
   stepDuration(stepDuration: number): StepsBuilder {
@@ -97,6 +100,7 @@ export class StepsBuilder implements PipeStep {
    * Returns the bridge unchanged when `pattern` or `notes` is empty.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with notes emitted on hits; tick advanced for full pattern
    */
   apply(bridge: CompositionBridge): CompositionBridge {

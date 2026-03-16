@@ -46,6 +46,7 @@ export class ChanceBridge extends CompositionBridgeDecorator {
    * @param pitch - MIDI pitch number
    * @param duration - Note duration in ticks; defaults to `defaultDuration`
    * @param velocity - Optional velocity override
+
    * @returns New bridge state wrapping the updated inner bridge
    */
   override withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge {

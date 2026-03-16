@@ -12,6 +12,7 @@ import { VoiceLeadBuilder } from '../builders/VoiceLeadBuilder'
  *
  * @param numerals - Ordered roman numerals (e.g. `['I', 'IV', 'V', 'I']`). Must all exist in {@link ROMAN_DEGREE_MAP}.
  * @param duration - Per-chord duration in ticks. `undefined` = bridge default.
+
  * @returns Immutable {@link VoiceLeadBuilder}
  *
  * @example

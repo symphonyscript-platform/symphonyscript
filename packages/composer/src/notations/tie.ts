@@ -12,6 +12,7 @@ import { TieBridge } from '../composition/TieBridge'
  * than separate attacks.
  *
  * @param steps - One or more {@link PipeStep}s whose output is fed through the tie logic
+
  * @returns A {@link PipeStep} that applies the given steps with tie merging
  *
  * @example

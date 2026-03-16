@@ -44,6 +44,7 @@ export class TieBridge extends CompositionBridgeDecorator {
    * @param pitch - MIDI pitch number
    * @param duration - Note duration in ticks. Falls back to `defaultDuration`.
    * @param velocity - Optional velocity override
+
    * @returns New bridge state (TieBridge wrapping the updated inner bridge)
    */
   override withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge {

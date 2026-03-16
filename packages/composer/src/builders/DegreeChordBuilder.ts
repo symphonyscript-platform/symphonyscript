@@ -45,6 +45,7 @@ export class DegreeChordBuilder implements PipeStep {
    * Set the scale degrees that define the chord.
    *
    * @param degrees - Array of scale degrees (e.g. [1, 3, 5] for triad)
+
    * @returns New DegreeChordBuilder with the updated degrees
    */
   degrees(degrees: number[]): DegreeChordBuilder {
@@ -55,6 +56,7 @@ export class DegreeChordBuilder implements PipeStep {
    * Set note duration in ticks.
    *
    * @param duration - Duration in ticks
+
    * @returns New DegreeChordBuilder with the updated duration
    */
   duration(duration: number): DegreeChordBuilder {
@@ -68,6 +70,7 @@ export class DegreeChordBuilder implements PipeStep {
    * Returns bridge unchanged when degrees array is empty.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with chord notes emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {

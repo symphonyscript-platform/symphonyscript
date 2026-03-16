@@ -89,6 +89,7 @@ export const DURATION = {
  *
  * @param beats - Number of beats
  * @param bpm - Tempo in beats per minute
+
  * @returns Duration in seconds
  */
 export function beatsToSeconds(beats: number, bpm: number): number {
@@ -101,6 +102,7 @@ export function beatsToSeconds(beats: number, bpm: number): number {
  *
  * @param seconds - Duration in seconds
  * @param bpm - Tempo in beats per minute
+
  * @returns Number of beats
  */
 export function secondsToBeats(seconds: number, bpm: number): number {
@@ -116,6 +118,7 @@ export function secondsToBeats(seconds: number, bpm: number): number {
  * KERNEL-SAFE: Returns null on invalid input (no throw).
  *
  * @param sig - Time signature string (e.g., '4/4', '3/4', '6/8')
+
  * @returns ParsedTimeSignature or null if invalid
  */
 export function parseTimeSignature(sig: string): ParsedTimeSignature | null {
@@ -148,6 +151,7 @@ export function parseTimeSignature(sig: string): ParsedTimeSignature | null {
  * Note: In 4/4 time, one beat = quarter note.
  *
  * @param duration - Duration notation or number
+
  * @returns Duration in beats, or null if invalid
  */
 export function parseDuration(duration: NoteDuration): number | null {
@@ -192,6 +196,7 @@ export function parseDuration(duration: NoteDuration): number | null {
  *
  * @param duration - Duration notation or number
  * @param fallback - Fallback value if invalid (default 1.0 = quarter note)
+
  * @returns Duration in beats
  */
 export function getDurationBeats(duration: NoteDuration, fallback: number = 1.0): number {
@@ -205,6 +210,7 @@ export function getDurationBeats(duration: NoteDuration, fallback: number = 1.0)
  *
  * @param duration - Duration notation or number
  * @param bpm - Tempo in beats per minute
+
  * @returns Duration in milliseconds, or null if invalid
  */
 export function durationToMs(duration: NoteDuration, bpm: number): number | null {
@@ -218,6 +224,7 @@ export function durationToMs(duration: NoteDuration, bpm: number): number | null
  * KERNEL-SAFE: Pure check.
  *
  * @param value - Value to check
+
  * @returns True if value is a valid duration
  */
 export function isValidDuration(value: NoteDuration): boolean {

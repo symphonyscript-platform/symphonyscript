@@ -12,6 +12,7 @@ export interface Composable {
    * accumulated state (deferred events, topology, context).
    *
    * @param bridge - The {@link CompositionBridge} to compose into.
+
    * @returns A new bridge with this composable's contributions applied.
    */
   compose(bridge: CompositionBridge): CompositionBridge

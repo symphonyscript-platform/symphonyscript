@@ -79,6 +79,7 @@ function parseNoteName(note: string): { letter: NoteLetter; accidental: string; 
  * @param noteName - Original note (e.g., 'F4')
  * @param keyContext - Key signature context
  * @param overrideAccidental - Explicit accidental override
+
  * @returns Modified note name (e.g., 'F#4' in G major)
  */
 export function applyKeySignature(

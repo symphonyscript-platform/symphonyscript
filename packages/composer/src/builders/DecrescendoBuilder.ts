@@ -53,6 +53,7 @@ export class DecrescendoBuilder extends ScopedStepBuilder<DecrescendoBuilder> {
    * Set the duration of the diminuendo in ticks.
    *
    * @param duration - Length of the ramp in ticks
+
    * @returns New builder with the updated duration
    */
   duration(duration: number): DecrescendoBuilder {
@@ -63,6 +64,7 @@ export class DecrescendoBuilder extends ScopedStepBuilder<DecrescendoBuilder> {
    * Set the initial velocity at the start of the ramp.
    *
    * @param from - Velocity at bridge.tick (start of ramp)
+
    * @returns New builder with the updated from velocity
    */
   from(from: number): DecrescendoBuilder {
@@ -73,6 +75,7 @@ export class DecrescendoBuilder extends ScopedStepBuilder<DecrescendoBuilder> {
    * Set the final velocity at the end of the ramp.
    *
    * @param to - Velocity at bridge.tick + duration
+
    * @returns New builder with the updated to velocity
    */
   to(to: number): DecrescendoBuilder {
@@ -83,6 +86,7 @@ export class DecrescendoBuilder extends ScopedStepBuilder<DecrescendoBuilder> {
    * Set the easing curve for the velocity ramp.
    *
    * @param curve - One of `'linear'`, `'exponential'`, `'smooth'`
+
    * @returns New builder with the updated curve
    */
   curve(curve: EasingCurve): DecrescendoBuilder {

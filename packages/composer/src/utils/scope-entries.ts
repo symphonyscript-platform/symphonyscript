@@ -13,6 +13,7 @@ import type { CompositionBridge, PipeStep } from '@symphonyscript/composer'
  *
  * @param entries - Current list of pipe-step groups (order preserved)
  * @param pipeSteps - Steps to append as a new group
+
  * @returns New entries array with `pipeSteps` appended (immutable)
  */
 export function appendSteps(entries: PipeStep[][], pipeSteps: PipeStep[]): PipeStep[][] {
@@ -28,6 +29,7 @@ export function appendSteps(entries: PipeStep[][], pipeSteps: PipeStep[]): PipeS
  *
  * @param entries - Pipe-step groups to apply in order
  * @param bridge - Initial composition bridge
+
  * @returns Final bridge after all steps applied sequentially
  */
 export function applyEntries(

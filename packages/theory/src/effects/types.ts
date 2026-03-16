@@ -213,6 +213,7 @@ export const FILTER_TYPES: readonly FilterType[] = Object.freeze([
  * KERNEL-SAFE: Pure check.
  *
  * @param value - String to check
+
  * @returns True if valid EffectType
  */
 export function isEffectType(value: string): value is EffectType {
@@ -224,6 +225,7 @@ export function isEffectType(value: string): value is EffectType {
  * KERNEL-SAFE: Pure check.
  *
  * @param value - String to check
+
  * @returns True if valid FilterType
  */
 export function isFilterType(value: string): value is FilterType {
@@ -240,6 +242,7 @@ export function isFilterType(value: string): value is FilterType {
  *
  * @param type - Effect type
  * @param params - Effect parameters
+
  * @returns InsertEffect or null if invalid type
  */
 export function createInsertEffect<T extends EffectType>(
@@ -256,6 +259,7 @@ export function createInsertEffect<T extends EffectType>(
  *
  * @param bus - Target bus name
  * @param amount - Send amount (0-1)
+
  * @returns SendConfig or null if invalid
  */
 export function createSendConfig(bus: string, amount: number): SendConfig | null {
@@ -270,6 +274,7 @@ export function createSendConfig(bus: string, amount: number): SendConfig | null
  *
  * @param name - Bus name
  * @param effects - Effects chain
+
  * @returns EffectBusConfig or null if invalid
  */
 export function createEffectBusConfig(

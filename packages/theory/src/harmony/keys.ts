@@ -105,6 +105,7 @@ function keyContextToString(key: KeyContext): string {
  * KERNEL-SAFE: Pure lookup.
  *
  * @param key - Key context
+
  * @returns Bitmask of sharped pitch classes
  */
 export function getKeySharps(key: KeyContext): HarmonyMask {
@@ -117,6 +118,7 @@ export function getKeySharps(key: KeyContext): HarmonyMask {
  * KERNEL-SAFE: Pure lookup.
  *
  * @param key - Key context
+
  * @returns Bitmask of flatted pitch classes
  */
 export function getKeyFlats(key: KeyContext): HarmonyMask {
@@ -129,6 +131,7 @@ export function getKeyFlats(key: KeyContext): HarmonyMask {
  * KERNEL-SAFE: Pure lookup and bitwise.
  *
  * @param key - Key context
+
  * @returns Combined bitmask of all accidentals
  */
 export function getKeyAccidentals(key: KeyContext): HarmonyMask {
@@ -142,6 +145,7 @@ export function getKeyAccidentals(key: KeyContext): HarmonyMask {
  * KERNEL-SAFE: Pure lookup.
  *
  * @param key - Key context
+
  * @returns True if key is recognized
  */
 export function isValidKey(key: KeyContext): boolean {
@@ -154,6 +158,7 @@ export function isValidKey(key: KeyContext): boolean {
  * KERNEL-SAFE: Pure bitwise.
  *
  * @param key - Key context
+
  * @returns Number of sharps (0-7)
  */
 export function countSharps(key: KeyContext): number {
@@ -172,6 +177,7 @@ export function countSharps(key: KeyContext): number {
  * KERNEL-SAFE: Pure bitwise.
  *
  * @param key - Key context
+
  * @returns Number of flats (0-7)
  */
 export function countFlats(key: KeyContext): number {
@@ -195,6 +201,7 @@ export function countFlats(key: KeyContext): number {
  *
  * @param pitchClass - 24-EDO pitch class
  * @param key - Key context
+
  * @returns True if pitch class is sharped
  */
 export function isSharpedInKey(pitchClass: Interval24EDO, key: KeyContext): boolean {
@@ -208,6 +215,7 @@ export function isSharpedInKey(pitchClass: Interval24EDO, key: KeyContext): bool
  *
  * @param pitchClass - 24-EDO pitch class
  * @param key - Key context
+
  * @returns True if pitch class is flatted
  */
 export function isFlattedInKey(pitchClass: Interval24EDO, key: KeyContext): boolean {
@@ -221,6 +229,7 @@ export function isFlattedInKey(pitchClass: Interval24EDO, key: KeyContext): bool
  *
  * @param pitchClass - Natural pitch class (0, 4, 8, 10, 14, 18, 22)
  * @param key - Key context
+
  * @returns Adjusted pitch class with key signature applied
  */
 export function applyKeyToPitchClass(
@@ -253,6 +262,7 @@ export function applyKeyToPitchClass(
  * KERNEL-SAFE: Pure arithmetic.
  *
  * @param majorKey - Major key context
+
  * @returns Relative minor key context, or null if input is not major
  */
 export function getRelativeMinor(majorKey: KeyContext): KeyContext | null {
@@ -271,6 +281,7 @@ export function getRelativeMinor(majorKey: KeyContext): KeyContext | null {
  * KERNEL-SAFE: Pure arithmetic.
  *
  * @param minorKey - Minor key context
+
  * @returns Relative major key context, or null if input is not minor
  */
 export function getRelativeMajor(minorKey: KeyContext): KeyContext | null {
@@ -289,6 +300,7 @@ export function getRelativeMajor(minorKey: KeyContext): KeyContext | null {
  * KERNEL-SAFE: Pure construction.
  *
  * @param majorKey - Major key context
+
  * @returns Parallel minor (same root, minor mode)
  */
 export function getParallelMinor(majorKey: KeyContext): KeyContext | null {
@@ -301,6 +313,7 @@ export function getParallelMinor(majorKey: KeyContext): KeyContext | null {
  * KERNEL-SAFE: Pure construction.
  *
  * @param minorKey - Minor key context
+
  * @returns Parallel major (same root, major mode)
  */
 export function getParallelMajor(minorKey: KeyContext): KeyContext | null {
@@ -380,6 +393,7 @@ const LETTER_TO_PITCH_CLASS: Readonly<Record<string, number>> = {
  * @param noteName - Note name (e.g., "F4")
  * @param key - Key context (or null for no key)
  * @param overrideAccidental - Explicit accidental ('sharp', 'flat', 'natural')
+
  * @returns Modified note name (e.g., "F#4" in G major), or null if invalid
  */
 export function applyKeySignature(

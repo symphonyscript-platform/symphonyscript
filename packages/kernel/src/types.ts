@@ -189,6 +189,7 @@ export interface ISiliconLinker {
    *
    * @param ptr - Node byte pointer
    * @param buf - Caller-owned Int32Array of length >= 8
+
    * @returns true if consistent snapshot obtained, false if NULL_PTR or contention
    */
   readNodeRaw(ptr: NodePtr, buf: Int32Array): boolean

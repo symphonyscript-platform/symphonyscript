@@ -56,6 +56,7 @@ const CHORD_CODE_REGEX = /^([A-Ga-g][#b]?)(.*)$/;
  * KERNEL-SAFE: Pure check.
  *
  * @param root - String to check
+
  * @returns True if valid root
  */
 export function isChordRoot(root: string): boolean {
@@ -67,6 +68,7 @@ export function isChordRoot(root: string): boolean {
  * COMPOSER-ONLY: String parsing, returns null instead of throw.
  *
  * @param code - Chord code (e.g., "Cmaj7", "F#m", "Bb7")
+
  * @returns ParsedChord or null if invalid
  */
 export function parseChordCode(code: string): ParsedChord | null {
@@ -104,6 +106,7 @@ export function parseChordCode(code: string): ParsedChord | null {
  * COMPOSER-ONLY: Lookup function.
  *
  * @param suffix - Chord suffix
+
  * @returns Human-readable quality name or null
  */
 export function getChordQualityName(suffix: string): string | null {
@@ -140,6 +143,7 @@ export function getChordQualityName(suffix: string): string | null {
  *
  * @param code - Chord code (e.g., "Cmaj7", "F#m")
  * @param octave - Base octave for the root note
+
  * @returns Array of NoteName or null if invalid
  */
 export function chordToNotes(code: string, octave: number): NoteName[] | null {
@@ -179,6 +183,7 @@ export function chordToNotes(code: string, octave: number): NoteName[] | null {
  *
  * @param code - Chord code (e.g., "Cmaj7")
  * @param octave - Base octave for the root note
+
  * @returns Array of MIDI numbers or null if invalid
  */
 export function chordToMidi(code: string, octave: number): number[] | null {
@@ -220,6 +225,7 @@ export function getSupportedChordSuffixes(): string[] {
  * COMPOSER-ONLY: String parsing.
  *
  * @param code - Chord code to check
+
  * @returns True if valid
  */
 export function isValidChordCode(code: string): boolean {
@@ -231,6 +237,7 @@ export function isValidChordCode(code: string): boolean {
  * COMPOSER-ONLY: String parsing.
  *
  * @param code - Chord code
+
  * @returns Number of notes in chord, or null if invalid
  */
 export function getChordSize(code: string): number | null {

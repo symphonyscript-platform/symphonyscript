@@ -75,6 +75,7 @@ export class Track {
      * @param clip - ClipBuilder or ClipNode to use
      * @param instrument - Instrument identifier
      * @param options - Optional track configuration
+
      * @returns New Track instance
      */
     static from(
@@ -89,6 +90,7 @@ export class Track {
      * Set the track tempo.
      *
      * @param bpm - Beats per minute (must be positive)
+
      * @returns this for chaining
      */
     tempo(bpm: number): this {
@@ -104,6 +106,7 @@ export class Track {
      *
      * @param numerator - Beats per measure (must be positive integer)
      * @param denominator - Note value for one beat (must be power of 2)
+
      * @returns this for chaining
      */
     timeSignature(numerator: number, denominator: number): this {
@@ -126,6 +129,7 @@ export class Track {
      *
      * @param type - Effect type (reverb, delay, chorus, etc.)
      * @param params - Effect-specific parameters
+
      * @returns this for chaining
      */
     insert<T extends EffectType>(type: T, params: EffectParamsFor<T>): this {
@@ -147,6 +151,7 @@ export class Track {
      *
      * @param busId - Target bus identifier
      * @param amount - Send amount (0-1)
+
      * @returns this for chaining
      */
     send(busId: string, amount: number): this {

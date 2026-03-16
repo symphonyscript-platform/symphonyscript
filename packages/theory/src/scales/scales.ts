@@ -107,6 +107,7 @@ export const SCALE = {
  *
  * @param scaleMask - Scale as HarmonyMask
  * @param interval - Interval to test (24-EDO, 0-23)
+
  * @returns true if interval is in scale
  */
 export function isInScale(scaleMask: HarmonyMask, interval: number): boolean {
@@ -123,6 +124,7 @@ export function isInScale(scaleMask: HarmonyMask, interval: number): boolean {
  *
  * @param scaleMask - Scale as HarmonyMask
  * @param interval - Interval to quantize (24-EDO)
+
  * @returns Nearest scale degree (0-23)
  */
 export function quantizeToScale(scaleMask: HarmonyMask, interval: number): number {
@@ -156,6 +158,7 @@ export function quantizeToScale(scaleMask: HarmonyMask, interval: number): numbe
  * COMPOSER-ONLY: Allocates array. Do not use in Audio Worklet.
  *
  * @param scaleMask - Scale as HarmonyMask
+
  * @returns Array of Interval24EDO values
  */
 export function getScaleIntervals(scaleMask: HarmonyMask): Interval24EDO[] {
@@ -167,6 +170,7 @@ export function getScaleIntervals(scaleMask: HarmonyMask): Interval24EDO[] {
  * KERNEL-SAFE: Uses bitwise population count.
  *
  * @param scaleMask - Scale as HarmonyMask
+
  * @returns Number of scale degrees
  */
 export function getScaleSize(scaleMask: HarmonyMask): number {

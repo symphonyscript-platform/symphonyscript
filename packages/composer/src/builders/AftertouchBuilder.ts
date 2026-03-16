@@ -43,6 +43,7 @@ export class AftertouchBuilder implements PipeStep {
    * Set the pressure value. Normalized 0–1, mapped to MIDI 0–127 on apply.
    *
    * @param value - Normalized pressure (0–1). Clamped on apply.
+
    * @returns New builder with the updated value
    */
   value(value: number): AftertouchBuilder {
@@ -53,6 +54,7 @@ export class AftertouchBuilder implements PipeStep {
    * Set the target note for polyphonic aftertouch. Omit or clear for channel aftertouch.
    *
    * @param note - String (e.g. 'C4') or MIDI number. Resolved via {@link resolvePitch}
+
    * @returns New builder with the target note
    */
   note(note: NotePitch): AftertouchBuilder {
@@ -65,6 +67,7 @@ export class AftertouchBuilder implements PipeStep {
    * without, emits channel aftertouch.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with aftertouch event emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {

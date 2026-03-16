@@ -53,6 +53,7 @@ export abstract class ScopedStepBuilder<T extends ScopedStepBuilder<T>> implemen
    * previous groups are preserved.
    *
    * @param pipeSteps - One or more {@link PipeStep}s to run within this scope
+
    * @returns New builder instance with the additional steps appended
    */
   steps(...pipeSteps: PipeStep[]): T {
@@ -77,6 +78,7 @@ export abstract class ScopedStepBuilder<T extends ScopedStepBuilder<T>> implemen
    * inner steps complete.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge (after onEnter; after inner steps + onExit when scoped)
    */
   apply(bridge: CompositionBridge): CompositionBridge {
@@ -101,6 +103,7 @@ export abstract class ScopedStepBuilder<T extends ScopedStepBuilder<T>> implemen
    * Setters (e.g. {@link FieldSetter}): set a bridge field value.
    *
    * @param bridge - Current composition state before scoped content
+
    * @returns Modified bridge (decorator or field-updated)
    */
   protected abstract onEnter(bridge: CompositionBridge): CompositionBridge
@@ -114,6 +117,7 @@ export abstract class ScopedStepBuilder<T extends ScopedStepBuilder<T>> implemen
    *
    * @param result - Bridge state after inner steps were applied
    * @param parent - Original bridge before this step (pre-onEnter)
+
    * @returns Restored bridge (typically unwrapped or with original field)
    */
   protected abstract onExit(result: CompositionBridge, parent: CompositionBridge): CompositionBridge
@@ -123,6 +127,7 @@ export abstract class ScopedStepBuilder<T extends ScopedStepBuilder<T>> implemen
    * of the concrete builder type preserving all builder-specific state.
    *
    * @param entries - New pipe-step groups to use
+
    * @returns New builder instance with the given entries
    * @internal
    */

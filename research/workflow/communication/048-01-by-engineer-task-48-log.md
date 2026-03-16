@@ -22,6 +22,7 @@ Added `stack(builderFn)` overload:
  * - `stack(builderFn)` - Execute builder in parallel
  *
  * @param builderFn - Builder function to execute in parallel
+
  * @returns this for chaining
  */
 stack(builderFn?: (b: SynapticMelody) => SynapticMelody | SynapticMelodyNoteCursor | void): this {

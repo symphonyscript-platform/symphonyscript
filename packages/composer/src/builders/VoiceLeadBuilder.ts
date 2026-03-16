@@ -46,6 +46,7 @@ export class VoiceLeadBuilder implements PipeStep {
    * Set the chord progression (ordered roman numerals).
    *
    * @param numerals - Array of roman numerals (e.g. ['I', 'IV', 'V', 'I'])
+
    * @returns New VoiceLeadBuilder with the updated numerals
    */
   numerals(numerals: RomanNumeral[]): VoiceLeadBuilder {
@@ -56,6 +57,7 @@ export class VoiceLeadBuilder implements PipeStep {
    * Set per-chord duration in ticks.
    *
    * @param duration - Duration in ticks
+
    * @returns New VoiceLeadBuilder with the updated duration
    */
   duration(duration: number): VoiceLeadBuilder {
@@ -70,6 +72,7 @@ export class VoiceLeadBuilder implements PipeStep {
    * First chord uses default octave placement; subsequent chords optimize relative to prior.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with voice-led progression emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {

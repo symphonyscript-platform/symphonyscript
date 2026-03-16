@@ -370,6 +370,7 @@ export class FreeList {
    * O(1) lookup using arithmetic (requires equal-sized zones).
    *
    * @param ptr - Node byte pointer
+
    * @returns Zone index (0+) if valid, -1 if out of heap range
    */
   getZoneForPtr(ptr: NodePtr): number {

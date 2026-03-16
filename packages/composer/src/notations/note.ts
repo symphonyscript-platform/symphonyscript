@@ -14,6 +14,7 @@ import { resolvePitch } from '../utils/pitch'
  *
  * @param input - Pitch as string notation or MIDI number. Defaults to C4 (60).
  * @param duration - Note duration in ticks. `undefined` = use bridge default.
+
  * @returns Immutable {@link NoteBuilder} — chain `.velocity()`, `.sharp()`, `.up()`, etc.
  * @throws If `input` is a string that cannot be parsed (e.g. `'invalid'`)
  *

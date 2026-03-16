@@ -50,6 +50,7 @@ export class HarmonizeBridge extends CompositionBridgeDecorator {
    * @param pitch - MIDI pitch of the original note
    * @param duration - Note duration in ticks
    * @param velocity - Optional velocity override
+
    * @returns Updated bridge with original + harmony notes emitted
    */
   override withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge {

@@ -9,6 +9,7 @@ import { LoopBuilder } from '../builders/LoopBuilder'
  *
  * @param count - Number of repetitions (≥ 1).
  * @param source - Single {@link PipeStep} to repeat (note, chord, clip, etc.).
+
  * @returns Immutable {@link LoopBuilder} equivalent to `loop(count, source)`.
  *
  * @example

@@ -42,6 +42,7 @@ export class SwingBuilder extends ScopedStepBuilder<SwingBuilder> {
    * Set the swing amount (strength). Controls how much offbeat notes are delayed.
    *
    * @param amount - Swing ratio 0..1: 0 = straight, 0.5 = triplet swing, 1.0 = dotted swing
+
    * @returns New builder with the updated amount
    */
   amount(amount: number): SwingBuilder {
@@ -52,6 +53,7 @@ export class SwingBuilder extends ScopedStepBuilder<SwingBuilder> {
    * Set the grid division in ticks. Offbeat detection uses `position % (grid * 2)`.
    *
    * @param grid - Grid size in ticks (e.g. 480 for 8th notes at 960 PPQ)
+
    * @returns New builder with the updated grid
    */
   grid(grid: number): SwingBuilder {

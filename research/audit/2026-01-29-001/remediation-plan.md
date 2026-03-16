@@ -202,6 +202,7 @@ export class SynapseAllocator extends SynapseView {
    * 
    * @param acquireMutex - Function to acquire mutex (injected from SiliconSynapse)
    * @param releaseMutex - Function to release mutex
+
    * @returns Number of live synapses after compaction, or -1 if mutex acquisition failed
    */
   compactTableSafe(

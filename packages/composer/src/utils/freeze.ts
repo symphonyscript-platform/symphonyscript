@@ -18,6 +18,7 @@ import { RecordingBridge } from '../composition/RecordingBridge'
  * a read-only snapshot of the clip's output (e.g. for transforms, playback, or export).
  *
  * @param composer - Clip to compose and capture (e.g. from {@link note}, {@link chord}, or piped clips).
+
  * @returns Immutable snapshot of notes, CC events, and bends; use {@link IFrozenClip.visitNotes}
  *   and related visit methods to read data.
  *

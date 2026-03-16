@@ -46,6 +46,7 @@ export class StretchBuilder extends TransformEffect<StretchBuilder> {
    * Set the stretch factor. Note ticks and durations are multiplied by this value.
    *
    * @param factor - Multiplier (e.g. 2 = double length, 0.5 = half)
+
    * @returns New StretchBuilder with the updated factor
    */
   factor(factor: number): StretchBuilder {

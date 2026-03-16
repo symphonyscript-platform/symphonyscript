@@ -13,6 +13,7 @@ export interface IClip extends Composable {
    * additional steps; original clip is unchanged.
    *
    * @param steps - One or more {@link PipeStep}s to apply in sequence during composition.
+
    * @returns A new clip with the appended steps (implementations typically return {@link Clip}).
    */
   pipe(...steps: PipeStep[]): IClip

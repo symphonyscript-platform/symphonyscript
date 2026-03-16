@@ -114,6 +114,7 @@ export const CHORD_SUFFIXES: readonly ChordSuffix[] = Object.freeze([
  * KERNEL-SAFE: Pure check.
  *
  * @param value - String to check
+
  * @returns True if valid ChordRoot
  */
 export function isValidChordRoot(value: string): value is ChordRoot {
@@ -125,6 +126,7 @@ export function isValidChordRoot(value: string): value is ChordRoot {
  * KERNEL-SAFE: Pure check.
  *
  * @param value - String to check
+
  * @returns True if valid ChordSuffix
  */
 export function isChordSuffix(value: string): value is ChordSuffix {

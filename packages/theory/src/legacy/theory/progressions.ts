@@ -174,6 +174,7 @@ export function parseRomanNumeral(numeral: string, mode: 'major' | 'minor'): Par
  * @param degree - Scale degree (1-7)
  * @param keyContext - Key signature context
  * @param accidentalOffset - Semitone offset for modal interchange (b=-1, #=+1)
+
  * @returns Chord root note (e.g., 'G' for degree 5 in C major)
  */
 export function degreeToRoot(
@@ -213,6 +214,7 @@ export function degreeToRoot(
  * 
  * @param numeral - Roman numeral (e.g., 'V7', 'bVII', 'V/V')
  * @param keyContext - Key signature context
+
  * @returns Chord code (e.g., 'G7' for 'V7' in C major)
  */
 export function romanToChord(numeral: string, keyContext: KeyContext): string {

@@ -133,6 +133,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * @param pitch - MIDI pitch (0–127), before transpose
    * @param duration - Note duration in ticks. Default: defaultDuration
    * @param velocity - Override velocity (0–1000). Default: this.velocity
+
    * @returns New bridge with tick advanced and note thunk appended
    */
   withNote(pitch: number, duration?: number, velocity?: number): BaseCompositionBridge {
@@ -152,6 +153,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    *
    * @param controller - MIDI CC number (0–127)
    * @param value - CC value (0–127)
+
    * @returns New bridge with CC thunk appended
    */
   withCC(controller: number, value: number): BaseCompositionBridge {
@@ -164,6 +166,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * Defer a pitch bend event at the current tick.
    *
    * @param value - Pitch bend value (14-bit: 0 = full down, 8192 = center, 16383 = full up)
+
    * @returns New bridge with bend thunk appended
    */
   withBend(value: number): BaseCompositionBridge {
@@ -178,6 +181,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    *
    * @param value - Aftertouch value (0–127)
    * @param pitch - Optional MIDI pitch for poly aftertouch; omit for channel aftertouch
+
    * @returns New bridge with aftertouch thunk appended
    */
   withAftertouch(value: number, pitch?: number): BaseCompositionBridge {
@@ -197,6 +201,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * @param srcId - Source node id
    * @param tgtId - Target node id
    * @param weight - Optional connection weight
+
    * @returns New bridge with connect thunk appended
    */
   withConnect(srcId: number, tgtId: number, weight?: number): BaseCompositionBridge {
@@ -208,6 +213,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    *
    * @param srcId - Source node id
    * @param tgtId - Target node id
+
    * @returns New bridge with disconnect thunk appended
    */
   withDisconnect(srcId: number, tgtId: number): BaseCompositionBridge {
@@ -218,6 +224,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * Defer node reclamation.
    *
    * @param nodePtr - Node pointer to reclaim
+
    * @returns New bridge with reclaim thunk appended
    */
   withReclaim(nodePtr: number): BaseCompositionBridge {
@@ -228,6 +235,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * Return a new bridge with the given velocity. Affects subsequent withNote calls.
    *
    * @param v - Velocity (0–1000)
+
    * @returns New bridge with updated velocity
    */
   withVelocity(v: number): BaseCompositionBridge {
@@ -238,6 +246,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * Return a new bridge with the given transpose offset in semitones.
    *
    * @param s - Transpose in semitones
+
    * @returns New bridge with updated transpose
    */
   withTranspose(s: number): BaseCompositionBridge {
@@ -248,6 +257,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * Return a new bridge with the given default duration in ticks.
    *
    * @param d - Default duration in ticks
+
    * @returns New bridge with updated defaultDuration
    */
   withDefaultDuration(d: number): BaseCompositionBridge {
@@ -258,6 +268,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * Return a new bridge with the given tempo.
    *
    * @param bpm - Tempo in BPM
+
    * @returns New bridge with updated tempo
    */
   withTempo(bpm: number): BaseCompositionBridge {
@@ -269,6 +280,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    *
    * @param num - Numerator (e.g. 4 for 4/4)
    * @param den - Denominator (e.g. 4 for 4/4)
+
    * @returns New bridge with updated time signature
    */
   withTimeSignature(num: number, den: number): BaseCompositionBridge {
@@ -280,6 +292,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    *
    * @param root - Scale root pitch class (0–11)
    * @param mode - Scale mode
+
    * @returns New bridge with updated scale
    */
   withScale(root: PitchClass, mode: ScaleMode): BaseCompositionBridge {
@@ -291,6 +304,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    *
    * @param root - Key root pitch class (0–11)
    * @param mode - Key mode
+
    * @returns New bridge with updated key
    */
   withKey(root: PitchClass, mode: ScaleMode): BaseCompositionBridge {
@@ -301,6 +315,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * Return a new bridge with the given volume. Emits CC7 at current tick and tracks state.
    *
    * @param v - Volume (0–127)
+
    * @returns New bridge with volume CC thunk appended
    */
   withVolume(v: number): BaseCompositionBridge {
@@ -312,6 +327,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * Return a new bridge with the given pan. Emits CC10 at current tick and tracks state.
    *
    * @param v - Pan (0–127, 64 = center)
+
    * @returns New bridge with pan CC thunk appended
    */
   withPan(v: number): BaseCompositionBridge {
@@ -323,6 +339,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * Return a new bridge with the given swing amount.
    *
    * @param amount - Swing amount (0.0–1.0)
+
    * @returns New bridge with updated swing
    */
   withSwing(amount: number): BaseCompositionBridge {
@@ -334,6 +351,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    *
    * @param grid - Quantize grid in ticks; 0 disables quantize
    * @param strength - Quantize strength (0–1). Default: 1.0
+
    * @returns New bridge with updated quantize settings
    */
   withQuantize(grid: number, strength?: number): BaseCompositionBridge {
@@ -344,6 +362,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * Return a new bridge with the given tick position.
    *
    * @param tick - Tick position in ticks (PPQ 480)
+
    * @returns New bridge with updated tick
    */
   withTick(tick: number): BaseCompositionBridge {
@@ -354,6 +373,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * Return a new bridge with the muted flag.
    *
    * @param muted - Whether notes are muted
+
    * @returns New bridge with updated muted state
    */
   withMuted(muted: boolean): BaseCompositionBridge {
@@ -364,6 +384,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * Return a new bridge with the precise flag. When true, skips humanization.
    *
    * @param precise - Whether to skip humanization
+
    * @returns New bridge with updated precise state
    */
   withPrecise(precise: boolean): BaseCompositionBridge {
@@ -399,6 +420,7 @@ export class BaseCompositionBridge implements CompositionBridge {
    * @internal
    * @param overrides - Params to merge over the current state
    * @param thunk - Optional callback to run on commit
+
    * @returns New BaseCompositionBridge instance
    */
   private derive(

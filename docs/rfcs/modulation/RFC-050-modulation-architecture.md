@@ -1778,6 +1778,7 @@ These implementations are provided to eliminate guesswork for implementing agent
  *
  * @param phase - Unsigned 32-bit phase accumulator (0 wraps to 2^32)
  * @param waveform - Waveform type (0=SINE, 1=TRIANGLE, 2=SQUARE, 3=SAW)
+
  * @returns Q16.16 fixed-point output in [-65536, +65536] (bipolar)
  */
 function generateWaveform(phase: number, waveform: number): number {
@@ -1820,6 +1821,7 @@ function generateWaveform(phase: number, waveform: number): number {
  * @param packedCfgB - PACKED_CFG_B containing frequency in Q8.24
  * @param blockSize - Samples per block (e.g., 128)
  * @param sampleRate - Audio sample rate (e.g., 48000)
+
  * @returns Phase increment (unsigned 32-bit, wraps at 2^32)
  */
 function computePhaseIncrement(

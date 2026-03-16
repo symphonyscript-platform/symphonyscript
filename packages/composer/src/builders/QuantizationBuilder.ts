@@ -47,6 +47,7 @@ export class QuantizationBuilder extends ScopedStepBuilder<QuantizationBuilder> 
    * Notes snap toward multiples of this value (e.g. 480 = quarter-note grid at PPQ 480).
    *
    * @param grid - Grid size in ticks (positive)
+
    * @returns New builder with the updated grid
    */
   grid(grid: number): QuantizationBuilder {
@@ -59,6 +60,7 @@ export class QuantizationBuilder extends ScopedStepBuilder<QuantizationBuilder> 
    * Interpolates between original tick and nearest grid point: higher values pull notes closer to the grid.
    *
    * @param strength - 0.0–1.0 (default 1.0)
+
    * @returns New builder with the updated strength
    */
   strength(strength: number): QuantizationBuilder {

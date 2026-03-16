@@ -43,6 +43,7 @@ export class TupletBuilder extends ScaledDurationBuilder {
    * Set the number of beats the tuplet spans.
    *
    * @param inBeats - Beats (units of defaultDuration)
+
    * @returns New TupletBuilder with the updated inBeats
    */
   inBeats(inBeats: number): TupletBuilder {
@@ -53,6 +54,7 @@ export class TupletBuilder extends ScaledDurationBuilder {
    * Set the number of notes in the tuplet.
    *
    * @param count - Note count (e.g. 3 for triplet)
+
    * @returns New TupletBuilder with the updated count
    */
   count(count: number): TupletBuilder {
@@ -66,6 +68,7 @@ export class TupletBuilder extends ScaledDurationBuilder {
    * Step count should match count for correct tuplet behavior.
    *
    * @param pipeSteps - One or more {@link PipeStep}s (e.g. note, chord)
+
    * @returns New TupletBuilder with the updated steps
    */
   override steps(...pipeSteps: PipeStep[]): TupletBuilder {

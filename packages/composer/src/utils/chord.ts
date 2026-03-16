@@ -67,6 +67,7 @@ export interface ParsedChord {
  * 5. Convert 12-TET intervals to 24-EDO and pack into HarmonyMask
  *
  * @param symbol - Chord symbol (e.g. `'Cmaj7'`, `'Am'`, `'F#dim'`, `'Bbsus4'`)
+
  * @returns Parsed root pitch and interval mask
  * @throws `"Empty chord symbol"` if `symbol` is empty
  * @throws `"Invalid chord root note"` if first character is not A-G

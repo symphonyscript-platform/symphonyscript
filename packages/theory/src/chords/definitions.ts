@@ -259,6 +259,7 @@ export const CHORD_MAP: ReadonlyMap<string, HarmonyMask> = new Map([
  * COMPOSER-ONLY: Wrapper around CHORD_MAP.get().
  *
  * @param symbol - Chord symbol (e.g., 'm7', 'maj7', '7')
+
  * @returns HarmonyMask or undefined if not found
  */
 export function getChordMask(symbol: string): HarmonyMask | undefined {

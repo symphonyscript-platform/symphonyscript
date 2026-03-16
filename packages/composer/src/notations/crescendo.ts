@@ -10,6 +10,7 @@ import { CrescendoBuilder } from '../builders/CrescendoBuilder'
  * `.default()` to cascade downstream.
  *
  * @param duration - Length of the ramp in ticks. Default 480.
+
  * @returns Immutable {@link CrescendoBuilder} — chain `.duration()`, `.from()`, `.to()`, `.curve()`, `.steps()`, `.default()`
  *
  * @example
@@ -34,6 +35,7 @@ export function crescendo(duration?: number): CrescendoBuilder {
  * `.default()` to cascade downstream.
  *
  * @param duration - Length of the diminuendo in ticks. Default 480.
+
  * @returns Immutable {@link DecrescendoBuilder} — chain `.duration()`, `.from()`, `.to()`, `.curve()`, `.steps()`, `.default()`
  *
  * @example

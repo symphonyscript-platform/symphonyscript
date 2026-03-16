@@ -12,6 +12,7 @@ import { DegreeBuilder } from '../builders/DegreeBuilder'
  *
  * @param degree - Scale degree (1–7 typical; 8 = tonic above; 0 = 7th below). `undefined` = 1.
  * @param duration - Note duration in ticks. `undefined` = bridge default.
+
  * @returns Immutable {@link DegreeBuilder} — chain `.velocity()`, `.up()`, `.repeat()`, `.sharp()`, etc.
  *
  * @example

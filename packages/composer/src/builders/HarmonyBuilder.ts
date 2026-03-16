@@ -71,6 +71,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
    * Use `pack()` from `@symphonyscript/theory` to create masks from interval arrays.
    *
    * @param mask - Packed interval bitmask
+
    * @returns New HarmonyBuilder with the updated mask
    */
   mask(mask: HarmonyMask): HarmonyBuilder {
@@ -81,6 +82,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
    * Set the root MIDI pitch. All chord intervals are computed relative to this.
    *
    * @param root - MIDI note number (e.g. 60 = C4, 67 = G4)
+
    * @returns New HarmonyBuilder with the updated root
    */
   root(root: number): HarmonyBuilder {
@@ -158,6 +160,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
    * notes emit at the same tick (with optional spread randomization).
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with chord notes emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {

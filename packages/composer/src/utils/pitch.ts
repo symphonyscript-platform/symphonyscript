@@ -15,6 +15,7 @@ import type { NotePitch } from '../types'
  * `@symphonyscript/theory`; invalid names or out-of-range results throw.
  *
  * @param input - Literal note name (e.g. `'C4'`, `'F#3'`, `'Bb5'`) or MIDI number (0–127)
+
  * @returns The MIDI number for the pitch
  * @throws `"Invalid note name: <input>"` when input is a string that cannot be parsed
  *   or yields a pitch outside MIDI range (0–127)
@@ -38,6 +39,7 @@ export function resolvePitch(input: NotePitch): number {
  * string; does not validate MIDI range for numeric inputs.
  *
  * @param inputs - Array of literal note names or MIDI numbers
+
  * @returns Array of MIDI numbers in the same order
  * @throws `"Invalid note name: <input>"` when any element is a string that
  *   cannot be parsed or yields a pitch outside MIDI range (0–127)

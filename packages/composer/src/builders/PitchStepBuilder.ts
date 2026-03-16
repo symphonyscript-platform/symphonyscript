@@ -95,6 +95,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
    * Set velocity for emitted notes.
    *
    * @param velocity - Velocity value (0–1000)
+
    * @returns New builder with the updated velocity
    */
   velocity(velocity: number): T {
@@ -107,6 +108,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
    * Set note duration in ticks.
    *
    * @param duration - Duration in ticks
+
    * @returns New builder with the updated duration
    */
   duration(duration: number): T {
@@ -146,6 +148,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
    * Set absolute octave shift.
    *
    * @param shift - Octave offset (e.g. 1 = +1 octave, -1 = -1 octave)
+
    * @returns New builder with the updated octave shift
    */
   octave(shift: number): T {
@@ -156,6 +159,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
    * Move pitch up by one or more octaves.
    *
    * @param octaves - Number of octaves to shift up. Default: 1.
+
    * @returns New builder with increased octave shift
    */
   up(octaves: number = 1): T {
@@ -166,6 +170,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
    * Move pitch down by one or more octaves.
    *
    * @param octaves - Number of octaves to shift down. Default: 1.
+
    * @returns New builder with decreased octave shift
    */
   down(octaves: number = 1): T {
@@ -194,6 +199,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
    * Emit the note a given number of times sequentially.
    *
    * @param count - Repeat count (≥ 1)
+
    * @returns New builder with the updated repeat count
    */
   repeat(count: number): T {
@@ -204,6 +210,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
    * Transpose pitch by a number of semitones.
    *
    * @param semitones - Transposition offset
+
    * @returns New builder with the updated transpose
    */
   transpose(semitones: number): T {
@@ -266,6 +273,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
    * Set pitch bend value sent before note onset.
    *
    * @param detune - Pitch bend value (passed to {@link CompositionBridge.withBend})
+
    * @returns New builder with the updated detune
    */
   detune(detune: number): T {
@@ -278,6 +286,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
    * Set CC74 (brightness) value sent before note onset.
    *
    * @param timbre - CC74 value (0–127)
+
    * @returns New builder with the updated timbre
    */
   timbre(timbre: number): T {
@@ -288,6 +297,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
    * Set CC13 (effect 2) value sent before note onset.
    *
    * @param pressure - CC13 value (0–127)
+
    * @returns New builder with the updated pressure
    */
   pressure(pressure: number): T {
@@ -298,6 +308,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
    * Set channel aftertouch value sent with the note.
    *
    * @param aftertouch - Aftertouch value (0–127)
+
    * @returns New builder with the updated aftertouch
    */
   aftertouch(aftertouch: number): T {
@@ -310,6 +321,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
    * Subclasses implement pitch resolution and emission logic.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with note(s) emitted
    */
   abstract apply(bridge: CompositionBridge): CompositionBridge
@@ -326,6 +338,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
    * Subclasses call this at the start of `apply()`; flags are reset via {@link resetFlags}.
    *
    * @param bridge - Current composition state
+
    * @returns Bridge with flags applied
    */
   protected applyFlags(bridge: CompositionBridge): CompositionBridge {
@@ -364,6 +377,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
    * Subclasses call this at the end of `apply()` to restore the bridge state.
    *
    * @param bridge - Bridge after note emission
+
    * @returns Bridge with flags reset
    */
   protected resetFlags(bridge: CompositionBridge): CompositionBridge {

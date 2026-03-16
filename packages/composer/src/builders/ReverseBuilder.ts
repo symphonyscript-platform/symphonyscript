@@ -43,6 +43,7 @@ export class ReverseBuilder extends TransformEffect<ReverseBuilder> {
    * @param notes - Notes captured from the scope composition pass
    * @param totalDuration - Total clip duration in ticks
    * @param bridge - Target bridge at the insertion point
+
    * @returns Bridge with reversed notes emitted
    */
   protected replay(

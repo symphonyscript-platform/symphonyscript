@@ -133,6 +133,7 @@ export abstract class SynapticClip extends SynapticNode {
      * Define a multi-keyframe tempo envelope.
      * Allows gradual tempo transitions over time with different curve types.
      * @param keyframes - Array of tempo keyframes (minimum 2 required)
+
      * @returns this for chaining
      * @throws Error if fewer than 2 keyframes provided
      */
@@ -841,6 +842,7 @@ export abstract class SynapticClip extends SynapticNode {
     /**
      * Print ASCII visualization of the clip to console.
      * @param bpm - Tempo for display (default: 120)
+
      * @returns this for chaining
      */
     preview(bpm: number = 120): this {
@@ -954,6 +956,7 @@ export abstract class SynapticClip extends SynapticNode {
     /**
      * Apply quantization to a tick value.
      * @param tick - Original tick value
+
      * @returns Quantized tick value
      */
     protected applyQuantize(tick: number): number {
@@ -971,6 +974,7 @@ export abstract class SynapticClip extends SynapticNode {
     /**
      * Apply quantization to a duration value.
      * @param duration - Original duration value
+
      * @returns Quantized duration value
      */
     protected applyQuantizeDuration(duration: number): number {
@@ -989,6 +993,7 @@ export abstract class SynapticClip extends SynapticNode {
      * Calculate velocity based on active dynamics at a given tick.
      * @param tick - Current tick position
      * @param baseVelocity - Base velocity to use if no dynamics active
+
      * @returns Calculated velocity (0-1)
      */
     protected calculateDynamicsVelocity(tick: number, baseVelocity: number): number {

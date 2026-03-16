@@ -51,6 +51,7 @@ export class TrillBuilder implements PipeStep {
    * Set the base pitch (start of alternation).
    *
    * @param basePitch - Literal note name or MIDI number
+
    * @returns New TrillBuilder with the updated base pitch
    */
   basePitch(basePitch: NotePitch): TrillBuilder {
@@ -61,6 +62,7 @@ export class TrillBuilder implements PipeStep {
    * Set the upper pitch (alternating note).
    *
    * @param pitch - Literal note name or MIDI number
+
    * @returns New TrillBuilder with the updated upper pitch
    */
   pitch(pitch: NotePitch): TrillBuilder {
@@ -71,6 +73,7 @@ export class TrillBuilder implements PipeStep {
    * Set the tick interval between alternating notes.
    *
    * @param rate - Ticks per note
+
    * @returns New TrillBuilder with the updated rate
    */
   rate(rate: number): TrillBuilder {
@@ -81,6 +84,7 @@ export class TrillBuilder implements PipeStep {
    * Set the total trill duration in ticks.
    *
    * @param duration - Total duration in ticks
+
    * @returns New TrillBuilder with the updated duration
    */
   duration(duration: number): TrillBuilder {
@@ -94,6 +98,7 @@ export class TrillBuilder implements PipeStep {
    * and pitch (odd indices). Returns bridge unchanged if pitch or basePitch is null.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with trill notes emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {

@@ -63,6 +63,7 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
    * @param pitch - MIDI pitch number
    * @param duration - Note duration in ticks. Default: defaultDuration
    * @param velocity - Optional velocity override
+
    * @returns New decorator wrapping the updated inner bridge
    */
   withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge {
@@ -74,6 +75,7 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
    *
    * @param controller - MIDI CC number (0–127)
    * @param value - CC value (0–127)
+
    * @returns New decorator wrapping the updated inner bridge
    */
   withCC(controller: number, value: number): CompositionBridge {
@@ -84,6 +86,7 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
    * Forward pitch bend to inner bridge, then rewrap.
    *
    * @param value - Pitch bend value
+
    * @returns New decorator wrapping the updated inner bridge
    */
   withBend(value: number): CompositionBridge {
@@ -95,6 +98,7 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
    *
    * @param value - Aftertouch value (0–127)
    * @param pitch - Optional MIDI pitch for poly aftertouch
+
    * @returns New decorator wrapping the updated inner bridge
    */
   withAftertouch(value: number, pitch?: number): CompositionBridge {
@@ -107,6 +111,7 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
    * @param srcId - Source node id
    * @param tgtId - Target node id
    * @param weight - Optional connection weight
+
    * @returns New decorator wrapping the updated inner bridge
    */
   withConnect(srcId: number, tgtId: number, weight?: number): CompositionBridge {
@@ -118,6 +123,7 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
    *
    * @param srcId - Source node id
    * @param tgtId - Target node id
+
    * @returns New decorator wrapping the updated inner bridge
    */
   withDisconnect(srcId: number, tgtId: number): CompositionBridge {
@@ -128,6 +134,7 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
    * Forward reclaim to inner bridge, then rewrap.
    *
    * @param nodePtr - Node pointer to reclaim
+
    * @returns New decorator wrapping the updated inner bridge
    */
   withReclaim(nodePtr: number): CompositionBridge {
@@ -231,6 +238,7 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
    * Subclasses must implement to maintain type when forwarding events.
    *
    * @param bridge - Inner bridge after a delegated call (withNote, withTick, etc.)
+
    * @returns New decorator instance wrapping the given bridge
    */
   protected abstract rewrap(bridge: CompositionBridge): CompositionBridgeDecorator

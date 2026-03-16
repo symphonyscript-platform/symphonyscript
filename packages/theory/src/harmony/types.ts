@@ -73,6 +73,7 @@ export const VOICE_LEADING_STYLES: readonly VoiceLeadingStyle[] = Object.freeze(
  * KERNEL-SAFE: Pure check.
  *
  * @param value - String to check
+
  * @returns True if valid Accidental
  */
 export function isAccidental(value: string): value is Accidental {
@@ -84,6 +85,7 @@ export function isAccidental(value: string): value is Accidental {
  * KERNEL-SAFE: Pure check.
  *
  * @param value - String to check
+
  * @returns True if valid VoiceLeadingStyle
  */
 export function isVoiceLeadingStyle(value: string): value is VoiceLeadingStyle {

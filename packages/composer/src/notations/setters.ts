@@ -9,6 +9,7 @@ import { assertPositive, assertRange } from '../utils/validate'
  * octave shifts.
  *
  * @param semitones - Transposition in semitones. Can be negative.
+
  * @returns {@link FieldSetter} — chain `.steps()` for scoped use or `.default()` to cascade.
  *
  * @example
@@ -30,6 +31,7 @@ export function transpose(semitones: number): FieldSetter {
  * Velocity (0–1000). 1000 = full.
  *
  * @param value - Velocity (0–1000).
+
  * @returns {@link FieldSetter}
  * @throws When `value` is outside 0–1000
  */
@@ -45,6 +47,7 @@ export function velocity(value: number): FieldSetter {
  * Set tempo in BPM (or scoped).
  *
  * @param bpm - Beats per minute. Must be positive.
+
  * @returns {@link FieldSetter}
  * @throws When `bpm` ≤ 0
  */
@@ -63,6 +66,7 @@ export function tempo(bpm: number): FieldSetter {
  *
  * @param root - Scale root as {@link PitchClass} (e.g. `'C'`, `'F#'`).
  * @param mode - Scale mode (e.g. `'major'`, `'dorian'`).
+
  * @returns {@link FieldSetter}
  *
  * @example
@@ -81,6 +85,7 @@ export function scale(root: PitchClass, mode: ScaleMode): FieldSetter {
  * Set channel volume (CC7). Emits CC and tracks state for restore in scoped mode.
  *
  * @param value - CC value (0–127).
+
  * @returns {@link FieldSetter}
  * @throws When `value` is outside 0–127
  */
@@ -98,6 +103,7 @@ export function volume(value: number): FieldSetter {
  * 0 = full left, 64 = center, 127 = full right.
  *
  * @param value - CC value (0–127).
+
  * @returns {@link FieldSetter}
  * @throws When `value` is outside 0–127
  */
@@ -117,6 +123,7 @@ export function pan(value: number): FieldSetter {
  *
  * @param root - Key root as {@link PitchClass}.
  * @param mode - Key mode (e.g. `'major'`, `'minor'`).
+
  * @returns {@link FieldSetter}
  */
 export function key(root: PitchClass, mode: ScaleMode): FieldSetter {
@@ -130,6 +137,7 @@ export function key(root: PitchClass, mode: ScaleMode): FieldSetter {
  * Set default duration in ticks for notes that don't specify one (or scoped).
  *
  * @param duration - Duration in ticks. Must be positive.
+
  * @returns {@link FieldSetter}
  * @throws When `duration` ≤ 0
  */
@@ -146,6 +154,7 @@ export function defaultDuration(duration: number): FieldSetter {
  *
  * @param numerator - Beats per bar (e.g. 4 for 4/4).
  * @param denominator - Beat unit (e.g. 4 for quarter note).
+
  * @returns {@link FieldSetter}
  * @throws When `numerator` or `denominator` ≤ 0
  */
@@ -162,6 +171,7 @@ export function timeSignature(numerator: number, denominator: number): FieldSett
  * Set octave via transpose. Octave 4 = neutral (no transpose).
  *
  * @param n - Octave number (e.g. 4 = C4, 5 = C5). Transpose = (n - 4) * 12.
+
  * @returns {@link FieldSetter}
  */
 export function octave(n: number): FieldSetter {
@@ -175,6 +185,7 @@ export function octave(n: number): FieldSetter {
  * Shift up by n octaves. In scoped mode, restores parent transpose after.
  *
  * @param n - Number of octaves to shift up. Default 1.
+
  * @returns {@link FieldSetter}
  *
  * @example
@@ -194,6 +205,7 @@ export function octaveUp(n: number = 1): FieldSetter {
  * Shift down by n octaves. In scoped mode, restores parent transpose after.
  *
  * @param n - Number of octaves to shift down. Default 1.
+
  * @returns {@link FieldSetter}
  */
 export function octaveDown(n: number = 1): FieldSetter {

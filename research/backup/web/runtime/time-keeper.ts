@@ -42,6 +42,7 @@ export class TimeKeeper {
      * 
      * @param eventTick The absolute tick of the event
      * @param startTick The absolute tick at the start of the audio block
+
      * @returns The sample offset (0-indexed) within the block. Can be fractional.
      */
     getSampleOffset(eventTick: number, startTick: number): number {

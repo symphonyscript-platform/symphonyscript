@@ -13,6 +13,7 @@ import { DegreeChordBuilder } from '../builders/DegreeChordBuilder'
  *
  * @param degrees - Scale degrees defining the chord (e.g. [1, 3, 5] triad, [4, 6, 8] for IV).
  * @param duration - Note duration in ticks. `undefined` = bridge default.
+
  * @returns Immutable {@link DegreeChordBuilder}
  *
  * @example

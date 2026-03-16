@@ -80,6 +80,7 @@ export const EASING_CURVES: readonly EasingCurve[] = Object.freeze([
  * KERNEL-SAFE: Pure check.
  *
  * @param value - String to check
+
  * @returns True if valid TempoCurve
  */
 export function isTempoCurve(value: string): value is TempoCurve {
@@ -91,6 +92,7 @@ export function isTempoCurve(value: string): value is TempoCurve {
  * KERNEL-SAFE: Pure check.
  *
  * @param value - String to check
+
  * @returns True if valid EasingCurve
  */
 export function isEasingCurve(value: string): value is EasingCurve {
@@ -102,6 +104,7 @@ export function isEasingCurve(value: string): value is EasingCurve {
  * KERNEL-SAFE: Pure check.
  *
  * @param keyframe - Keyframe to check
+
  * @returns True if valid TempoKeyframe
  */
 export function isValidTempoKeyframe(keyframe: unknown): keyframe is TempoKeyframe {
@@ -124,6 +127,7 @@ export function isValidTempoKeyframe(keyframe: unknown): keyframe is TempoKeyfra
  * @param beat - Beat position
  * @param bpm - Tempo in BPM
  * @param curve - Optional transition curve
+
  * @returns TempoKeyframe or null if invalid
  */
 export function createTempoKeyframe(
@@ -146,6 +150,7 @@ export function createTempoKeyframe(
  *
  * @param keyframes - Array of keyframes
  * @param defaultBpm - Default tempo
+
  * @returns TempoEnvelope or null if invalid
  */
 export function createTempoEnvelope(

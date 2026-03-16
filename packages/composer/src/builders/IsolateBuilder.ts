@@ -37,6 +37,7 @@ export class IsolateBuilder implements ScopeBuilder<IsolateBuilder> {
    * Empty steps array yields a no-op on apply.
    *
    * @param pipeSteps - One or more {@link PipeStep}s to run within the isolated scope
+
    * @returns New IsolateBuilder with the appended steps
    */
   steps(...pipeSteps: PipeStep[]): IsolateBuilder {
@@ -60,6 +61,7 @@ export class IsolateBuilder implements ScopeBuilder<IsolateBuilder> {
    * scale, volume, pan, swing, precise, quantize, muted, key (when parent had one).
    *
    * @param bridge - Current composition state
+
    * @returns Bridge with inner steps applied, parent state restored, tick and thunks preserved
    */
   apply(bridge: CompositionBridge): CompositionBridge {

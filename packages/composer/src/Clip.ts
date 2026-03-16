@@ -45,6 +45,7 @@ export class Clip implements IClip {
    * `new Clip(steps)` but preferred as the static entry point.
    *
    * @param steps - {@link PipeStep}s to apply in sequence during composition.
+
    * @returns New Clip with the given steps.
    */
   static pipe(...steps: PipeStep[]): Clip {
@@ -56,6 +57,7 @@ export class Clip implements IClip {
    * Delegates to {@link freeze}.
    *
    * @param clip - Clip to compose and capture.
+
    * @returns Immutable snapshot of notes, CC events, and bends.
    */
   static freeze(clip: IClip): IFrozenClip {
@@ -66,6 +68,7 @@ export class Clip implements IClip {
    * Append transformation steps. Returns a new Clip; this clip is unchanged.
    *
    * @param steps - {@link PipeStep}s to append (applied after existing steps).
+
    * @returns New Clip with the appended steps.
    */
   pipe(...steps: PipeStep[]): Clip {
@@ -78,6 +81,7 @@ export class Clip implements IClip {
    * bridge is returned.
    *
    * @param context - Initial composition bridge (e.g. from {@link use}).
+
    * @returns Bridge with all steps applied.
    */
   compose(context: CompositionBridge): CompositionBridge {

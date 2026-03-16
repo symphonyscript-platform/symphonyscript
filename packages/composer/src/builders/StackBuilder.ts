@@ -35,6 +35,7 @@ export class StackBuilder implements PipeStep {
    * Add a parallel branch. Each branch starts at the same tick as all others.
    *
    * @param pipeSteps - Steps to run in sequence within this branch (notes, chords, clips, etc.)
+
    * @returns New StackBuilder with the appended branch (immutable)
    */
   branch(...pipeSteps: PipeStep[]): StackBuilder {
@@ -50,6 +51,7 @@ export class StackBuilder implements PipeStep {
    * the accumulated bridge state from the previous branch (notes/CCs merge).
    *
    * @param bridge - Current composition state (tick, velocity, notes, etc.)
+
    * @returns Updated bridge with all branch output merged; tick at longest branch end
    */
   apply(bridge: CompositionBridge): CompositionBridge {

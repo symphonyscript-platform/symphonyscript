@@ -339,6 +339,7 @@ export class MockConsumer {
    * Run consumer for N quanta, collecting all events.
    *
    * @param quanta - Number of process() calls to run
+
    * @returns All events collected
    */
   runQuanta(quanta: number): ConsumerNoteEvent[] {
@@ -358,6 +359,7 @@ export class MockConsumer {
    * Run consumer until playhead reaches target tick.
    *
    * @param targetTick - Tick to run until
+
    * @returns All events collected
    */
   runUntilTick(targetTick: number): ConsumerNoteEvent[] {

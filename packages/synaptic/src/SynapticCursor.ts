@@ -189,6 +189,7 @@ export class SynapticCursor {
    *
    * @param sourcePtr - The source node pointer (end of current clip)
    * @param cb - Callback receiving resolution result as primitives
+
    * @returns true if synapse was resolved, false if cursor dies (quota/no synapse)
    */
   resolveSynapseWithCallback(
@@ -292,6 +293,7 @@ export class SynapticCursor {
    * SoA candidate arrays.
    *
    * @param headSlot - Starting slot for the chain
+
    * @returns Number of valid candidates collected, or CURSOR_ERR_CHAIN_LOOP on error
    */
   private collectCandidates(headSlot: number): number {
@@ -351,6 +353,7 @@ export class SynapticCursor {
    * RFC-045-04: Returns index into SoA arrays instead of object reference.
    *
    * @param candidateCount - Number of valid candidates in SoA arrays
+
    * @returns Index of the winning candidate
    */
   private selectWinner(candidateCount: number): number {

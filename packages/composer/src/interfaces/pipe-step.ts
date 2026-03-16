@@ -10,6 +10,7 @@ export interface PipeStep {
    * topology) or context (velocity, tempo, scale, etc.) as appropriate.
    *
    * @param bridge - Current composition state and accumulator
+
    * @returns New bridge with this step applied (typically immutable)
    */
   apply(bridge: CompositionBridge): CompositionBridge

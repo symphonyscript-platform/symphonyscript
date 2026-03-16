@@ -16,6 +16,7 @@ import type { HarmonyMask } from '@symphonyscript/theory'
  *
  * @param symbol - Chord symbol (e.g. `'Cmaj7'`, `'Am'`, `'F#dim'`, `'Bbsus2'`)
  * @param duration - Duration in ticks for all chord tones. `undefined` = bridge default.
+
  * @returns Immutable {@link HarmonyBuilder} — chain `.drop2()`, `.strum()`, `.velocity()`, etc.
  * @throws If `symbol` is empty or contains an unrecognized root note or quality
  *

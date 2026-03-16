@@ -14,6 +14,7 @@ import type { RomanNumeral } from '@symphonyscript/theory'
  *
  * @param numeral - Roman numeral (e.g. `'I'`, `'iv'`, `'V7'`, `'bVII'`). Must exist in {@link ROMAN_DEGREE_MAP}.
  * @param duration - Note duration in ticks for all chord tones. `undefined` = bridge default.
+
  * @returns Immutable {@link RomanBuilder} — chain `.inversion()`, `.velocity()`, etc.
  * @throws When numeral is not in ROMAN_DEGREE_MAP (during `apply()`)
  *

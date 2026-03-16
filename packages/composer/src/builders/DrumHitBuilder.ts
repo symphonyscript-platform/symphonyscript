@@ -67,6 +67,7 @@ export class DrumHitBuilder implements PipeStep {
    * Set the velocity for the main hit.
    *
    * @param velocity - Velocity (0–1000)
+
    * @returns New builder with the updated velocity
    */
   velocity(velocity: number): DrumHitBuilder {
@@ -77,6 +78,7 @@ export class DrumHitBuilder implements PipeStep {
    * Set the MIDI pitch for the drum hit.
    *
    * @param pitch - MIDI note number (0-127), e.g. GM drum map values
+
    * @returns New builder with the updated pitch
    */
   pitch(pitch: number): DrumHitBuilder {
@@ -87,6 +89,7 @@ export class DrumHitBuilder implements PipeStep {
    * Set the note duration in ticks.
    *
    * @param duration - Ticks per note
+
    * @returns New builder with the updated duration
    */
   duration(duration: number): DrumHitBuilder {
@@ -97,6 +100,7 @@ export class DrumHitBuilder implements PipeStep {
    * Configure a ghost note (low velocity, typically for soft hits).
    *
    * @param velocity - Velocity (0–1000). Defaults to 300.
+
    * @returns New builder with ghost articulation
    */
   ghost(velocity: number = 300): DrumHitBuilder {
@@ -107,6 +111,7 @@ export class DrumHitBuilder implements PipeStep {
    * Configure an accented hit (high velocity + precise timing).
    *
    * @param velocity - Velocity (0–1000). Defaults to 1000.
+
    * @returns New builder with accent articulation
    */
   accent(velocity: number = 1000): DrumHitBuilder {
@@ -117,6 +122,7 @@ export class DrumHitBuilder implements PipeStep {
    * Add a flam: one grace note immediately before the main hit.
    *
    * @param gap - Ticks between grace note and main hit. Defaults to 30.
+
    * @returns New builder with flam enabled
    */
   flam(gap: number = 30): DrumHitBuilder {
@@ -127,6 +133,7 @@ export class DrumHitBuilder implements PipeStep {
    * Set the velocity ratio for the flam grace note.
    *
    * @param ratio - Ratio (0–1) applied to main velocity
+
    * @returns New builder with the updated flam ratio
    */
   flamRatio(ratio: number): DrumHitBuilder {
@@ -137,6 +144,7 @@ export class DrumHitBuilder implements PipeStep {
    * Add drag: multiple grace notes before the main hit.
    *
    * @param count - Number of grace notes. Defaults to 2.
+
    * @returns New builder with drag enabled
    */
   drag(count: number = 2): DrumHitBuilder {
@@ -147,6 +155,7 @@ export class DrumHitBuilder implements PipeStep {
    * Set the spacing in ticks between drag grace notes.
    *
    * @param gap - Ticks between grace notes
+
    * @returns New builder with the updated drag spacing
    */
   dragSpacing(gap: number): DrumHitBuilder {
@@ -157,6 +166,7 @@ export class DrumHitBuilder implements PipeStep {
    * Set the velocity ratio for drag grace notes.
    *
    * @param ratio - Ratio (0–1) applied to main velocity
+
    * @returns New builder with the updated drag ratio
    */
   dragRatio(ratio: number): DrumHitBuilder {
@@ -188,6 +198,7 @@ export class DrumHitBuilder implements PipeStep {
    * flam grace note (if flamOffset set), then the main hit. Resets flags afterwards.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with the drum hit emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {

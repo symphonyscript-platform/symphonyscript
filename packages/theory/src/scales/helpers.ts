@@ -72,6 +72,7 @@ const MODE_TO_SCALE: Readonly<Record<ScaleMode, HarmonyMask | undefined>> = {
  * @param baseOctave - Base octave for degree 1 (default: 4)
  * @param alteration - Chromatic alteration in semitones (default: 0)
  * @param octaveOffset - Additional octave offset (default: 0)
+
  * @returns MIDI pitch number or null if invalid mode
  */
 export function degreeToPitch(
@@ -117,6 +118,7 @@ const FLAT_MINOR_ROOTS = new Set(['D', 'G', 'C', 'F', 'Bb', 'Eb']);
  * KERNEL-SAFE: Returns null instead of throw.
  *
  * @param root - Root note string (e.g., "C", "F#", "Bb")
+
  * @returns Semitone offset (0-11) or null if invalid
  */
 export function parseRoot(root: string): number | null {
@@ -153,6 +155,7 @@ export function parseRoot(root: string): number | null {
  * @param octave - Base octave
  * @param alteration - Chromatic alteration in semitones (optional)
  * @param octaveOffset - Additional octave offset (optional)
+
  * @returns Note name with octave (e.g., "E4") or null if invalid
  */
 export function degreeToNote(
@@ -220,6 +223,7 @@ export function degreeToNote(
  * COMPOSER-ONLY: Allocates array.
  *
  * @param context - Scale context (root, mode, octave)
+
  * @returns Array of note names or null if invalid
  */
 export function getScaleNotes(context: ScaleContext): NoteName[] | null {
@@ -256,6 +260,7 @@ export function getScaleNotes(context: ScaleContext): NoteName[] | null {
  * @param root - Root note string
  * @param mode - Scale mode
  * @param octave - Base octave
+
  * @returns ScaleContext or null if invalid
  */
 export function createScaleContext(
@@ -275,6 +280,7 @@ export function createScaleContext(
  * KERNEL-SAFE: Pure lookup.
  *
  * @param mode - Scale mode
+
  * @returns Number of notes or null if invalid mode
  */
 export function getScaleModeSize(mode: ScaleMode): number | null {

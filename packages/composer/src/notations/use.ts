@@ -13,6 +13,7 @@ import { LinkBuilder } from '../builders/LinkBuilder'
  * notes (transforms).
  *
  * @param clip - {@link Composable} (e.g. {@link IClip}, frozen clip) to insert
+
  * @returns {@link LinkBuilder} — chain `.weight()` and `.effects()` to configure
  *
  * @example

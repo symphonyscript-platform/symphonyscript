@@ -9,6 +9,7 @@ import { EuclideanBuilder } from '../builders/EuclideanBuilder'
  *
  * @param hits - Number of pulses (k) to distribute. Defaults to 1.
  * @param steps - Total steps (n) in the pattern. Defaults to 4.
+
  * @returns Immutable {@link EuclideanBuilder} — chain `.notes()`, `.rotation()`,
  *   `.stepDuration()`, etc.
  *

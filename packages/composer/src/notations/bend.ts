@@ -8,6 +8,7 @@ import { BendBuilder } from '../builders/BendBuilder'
  * `.steps()` for scoped application or `.default()` to cascade the bend.
  *
  * @param value - Pitch bend value (e.g. 0 = center, 64 = up, -64 = down). Default 0.
+
  * @returns Immutable {@link BendBuilder} — chain `.value()`, `.steps()`, `.default()`
  *
  * @example

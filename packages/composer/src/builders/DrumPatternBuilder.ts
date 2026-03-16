@@ -45,6 +45,7 @@ export class DrumPatternBuilder implements PipeStep {
    * Set the MIDI pitch for drum hits.
    *
    * @param pitch - MIDI note number (0-127)
+
    * @returns New builder with the updated pitch
    */
   pitch(pitch: number): DrumPatternBuilder {
@@ -57,6 +58,7 @@ export class DrumPatternBuilder implements PipeStep {
    * `x` and `X` emit a hit; any other character advances the tick only (rest).
    *
    * @param notation - Pattern string, e.g. `"x.x.x."` or `"xx..xx.."`
+
    * @returns New builder with the updated notation
    */
   notation(notation: string): DrumPatternBuilder {
@@ -67,6 +69,7 @@ export class DrumPatternBuilder implements PipeStep {
    * Set the duration in ticks for each pattern step.
    *
    * @param stepDuration - Ticks per step
+
    * @returns New builder with the updated step duration
    */
   stepDuration(stepDuration: number): DrumPatternBuilder {
@@ -79,6 +82,7 @@ export class DrumPatternBuilder implements PipeStep {
    * Returns the bridge unchanged if pitch is null or notation is empty.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with drum hits at pattern positions
    */
   apply(bridge: CompositionBridge): CompositionBridge {

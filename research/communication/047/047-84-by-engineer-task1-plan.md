@@ -102,6 +102,7 @@ swing(amount: number): GrooveBuilder {
  * Mutates this instance and returns this for chaining.
  * 
  * @param amount - Swing amount (0-1)
+
  * @returns this for fluent chaining
  */
 swing(amount: number): this {
@@ -134,6 +135,7 @@ steps(count: number): GrooveBuilder {
  * Mutates this instance and returns this for chaining.
  * 
  * @param count - Steps per beat
+
  * @returns this for fluent chaining
  */
 steps(count: number): this {

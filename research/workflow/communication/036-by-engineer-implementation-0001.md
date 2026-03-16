@@ -60,6 +60,7 @@ Added `voice()` method:
  * All notes created inside the builder will be tagged with the expressionId.
  * @param id - Voice ID (1-15, MPE channel range)
  * @param builderFn - Builder function that creates notes for this voice
+
  * @returns this for chaining
  * @throws Error if id is out of range (1-15)
  */

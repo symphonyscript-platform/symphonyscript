@@ -89,6 +89,7 @@ export class SynapticNoteCursor {
      * @param duration - Duration in ticks
      * @param baseTick - Start tick position
      * @param muted - Mute state (default: false)
+
      * @returns this for fluent chaining
      */
     set(

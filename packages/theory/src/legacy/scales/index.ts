@@ -52,6 +52,7 @@ export function parseRoot(root: string): number {
  * @param context - Scale context
  * @param alteration - Chromatic alteration in semitones
  * @param octaveOffset - Octave adjustment
+
  * @returns Note name with octave (e.g., 'E4')
  */
 export function degreeToNote(

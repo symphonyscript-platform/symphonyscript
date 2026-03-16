@@ -48,6 +48,7 @@ export class TremoloBuilder implements PipeStep {
    * Set the tick interval between repeated notes.
    *
    * @param rate - Ticks per note
+
    * @returns New TremoloBuilder with the updated rate
    */
   rate(rate: number): TremoloBuilder {
@@ -58,6 +59,7 @@ export class TremoloBuilder implements PipeStep {
    * Set the pitch to repeat.
    *
    * @param pitch - Literal note name or MIDI number
+
    * @returns New TremoloBuilder with the updated pitch
    */
   pitch(pitch: NotePitch): TremoloBuilder {
@@ -68,6 +70,7 @@ export class TremoloBuilder implements PipeStep {
    * Set the total tremolo duration in ticks.
    *
    * @param duration - Total duration in ticks
+
    * @returns New TremoloBuilder with the updated duration
    */
   duration(duration: number): TremoloBuilder {
@@ -80,6 +83,7 @@ export class TremoloBuilder implements PipeStep {
    * Repeat count = `floor(duration / rate)`. Returns bridge unchanged if pitch is null.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with tremolo notes emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {

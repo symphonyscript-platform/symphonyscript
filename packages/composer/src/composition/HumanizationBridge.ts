@@ -49,6 +49,7 @@ export class HumanizationBridge extends CompositionBridgeDecorator {
    * @param pitch - MIDI pitch number
    * @param duration - Note duration in ticks; defaults to `defaultDuration`
    * @param velocity - Optional velocity override (jitter applied on top)
+
    * @returns New bridge state wrapping the updated inner bridge
    */
   override withNote(pitch: number, duration?: number, velocity?: number): HumanizationBridge {
@@ -78,6 +79,7 @@ export class HumanizationBridge extends CompositionBridgeDecorator {
    * Uniform jitter in [-amount, +amount] via rng.next() * 2 - 1.
    *
    * @param amount - Half-width of the range
+
    * @returns Value in [-amount, +amount]
    */
   private jitter(amount: number): number {

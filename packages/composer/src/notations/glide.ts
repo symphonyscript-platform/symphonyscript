@@ -12,6 +12,7 @@ import { GlideBridge } from '../composition/GlideBridge'
  * Glide time is typically configured separately (e.g. CC 5 or synth-specific control).
  *
  * @param steps - One or more {@link PipeStep}s whose notes will glide into each other
+
  * @returns A {@link PipeStep} that applies the given steps with portamento active
  *
  * @example

@@ -86,6 +86,7 @@ export class SynapseView {
     /**
      * Find the Head slot for a source pointer using triangular probing.
      * @param sourcePtr - The Trigger Node
+
      * @returns Slot index or -1 if not found
      */
     public findHeadSlot(sourcePtr: number): number {

@@ -89,6 +89,7 @@ const KEY_SIGNATURES_MINOR: Record<string, Partial<Record<NoteLetter, 'sharp' | 
  * Parse a note name into out-parameter. Zero-allocation for hot paths.
  * @param note - Note string (e.g., 'F#4')
  * @param out - Reusable result object (default: module-level PARSED_NOTE)
+
  * @returns out on success, null if parse fails
  */
 function parseNoteName(note: string, out: ParsedNote = PARSED_NOTE): ParsedNote | null {
@@ -162,6 +163,7 @@ function letterToNoteLetter(idx: number): NoteLetter {
  * @param noteName - Original note (e.g., 'F4')
  * @param keyContext - Key signature context
  * @param overrideAccidental - Explicit accidental override
+
  * @returns Modified note name (e.g., 'F#4' in G major)
  */
 export function applyKeySignature(

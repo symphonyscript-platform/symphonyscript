@@ -14,6 +14,7 @@ import { noteToMidi, midiToNote } from '../util/midi'
  * 
  * @param chordSequence - Array of chords (each chord is an array of NoteName)
  * @param options - Voice leading options
+
  * @returns Voice-led chord sequence with minimized movement
  */
 export function voiceLeadChords(

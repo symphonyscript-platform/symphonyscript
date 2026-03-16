@@ -52,6 +52,7 @@ export class RomanBuilder implements PipeStep {
    * Set the roman numeral. Must exist in {@link ROMAN_DEGREE_MAP}.
    *
    * @param numeral - Roman numeral (e.g. I, iv, V7, ii, bVII)
+
    * @returns New RomanBuilder with the updated numeral
    * @throws When numeral is not in ROMAN_DEGREE_MAP (lookup yields undefined)
    */
@@ -63,6 +64,7 @@ export class RomanBuilder implements PipeStep {
    * Set note duration in ticks.
    *
    * @param duration - Duration in ticks
+
    * @returns New RomanBuilder with the updated duration
    */
   duration(duration: number): RomanBuilder {
@@ -73,6 +75,7 @@ export class RomanBuilder implements PipeStep {
    * Set the inversion index. Rotates bottom voices up by 7 diatonic degrees (one octave).
    *
    * @param inversion - Inversion count (0 = root position)
+
    * @returns New RomanBuilder with the updated inversion
    */
   inversion(inversion: number): RomanBuilder {
@@ -83,6 +86,7 @@ export class RomanBuilder implements PipeStep {
    * Set velocity for emitted chord tones.
    *
    * @param velocity - Velocity value (0–1000)
+
    * @returns New RomanBuilder with the updated velocity
    */
   velocity(velocity: number): RomanBuilder {
@@ -97,6 +101,7 @@ export class RomanBuilder implements PipeStep {
    * notes at the bridge tick. Advances tick by duration after emission.
    *
    * @param bridge - Current composition state (scaleRoot, scaleMode, tick)
+
    * @returns Updated bridge with chord notes emitted
    * @throws When numeral is not in ROMAN_DEGREE_MAP
    */

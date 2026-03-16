@@ -137,6 +137,7 @@ import { asHarmonyMask } from '../types';
  * 
  * @param hits - Number of pulses (k)
  * @param steps - Total steps (n)
+
  * @returns Boolean array where true = hit
  */
 export function euclidean(hits: number, steps: number): boolean[] {
@@ -149,6 +150,7 @@ export function euclidean(hits: number, steps: number): boolean[] {
  * 
  * @param hits - Number of pulses
  * @param steps - Total steps (max 24)
+
  * @returns Bitmask where set bits = hits
  */
 export function euclideanMask(hits: number, steps: number): HarmonyMask {
@@ -418,6 +420,7 @@ export function parseRomanNumeral(numeral: string, mode: 'major' | 'minor'): Par
  * 
  * @param degree - Scale degree (1-7)
  * @param key - Key context
+
  * @returns Transposed chord mask
  */
 export function degreeToMask(degree: number, key: KeyContext): HarmonyMask {
@@ -492,6 +495,7 @@ export interface VoiceLeadOptions {
  * @param fromMask - Starting chord
  * @param toMask - Target chord
  * @param options - Voice leading options
+
  * @returns Array of voice movements (pairs of from/to intervals)
  */
 export function voiceLead(

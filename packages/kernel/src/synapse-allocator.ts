@@ -62,6 +62,7 @@ export class SynapseAllocator extends SynapseView {
     * @param targetPtr - The Destination Node (Start of Next Clip)
     * @param weight - Probability/Intensity (0-1000)
     * @param jitter - Micro-timing deviation in ticks (0-65535)
+
     * @returns The SynapsePtr to the new entry on success, or negative error code
     */
   connect(sourcePtr: number, targetPtr: number, weight: number, jitter: number): SynapsePtr {
@@ -183,6 +184,7 @@ export class SynapseAllocator extends SynapseView {
    * 
    * @param acquireMutex - Function to acquire mutex (injected from SiliconSynapse)
    * @param releaseMutex - Function to release mutex
+
    * @returns Number of live synapses after compaction, or -1 if mutex acquisition failed
    */
   compactTableSafe(
@@ -206,6 +208,7 @@ export class SynapseAllocator extends SynapseView {
    * 
    * @param acquireMutex - Function to acquire mutex (injected from SiliconSynapse)
    * @param releaseMutex - Function to release mutex
+
    * @returns Number of live synapses after compaction, 0 if not needed, or -1 if mutex failed
    */
   maybeCompactSafe(

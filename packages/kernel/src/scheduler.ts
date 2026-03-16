@@ -17,6 +17,7 @@
  * 
  * @param tick - Absolute tick position
  * @param cycle - Cycle length in ticks (or Infinity)
+
  * @returns Phase-locked tick position (0 to cycle-1)
  */
 export function getModulatedTime(tick: number, cycle: number): number {

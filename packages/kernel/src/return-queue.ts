@@ -83,6 +83,7 @@ export class ReturnQueue {
    * 6. If CAS fails, retry (another producer won)
    *
    * @param ptr - Node pointer to enqueue
+
    * @returns true if enqueued, false if queue is full
    */
   enqueue(ptr: NodePtr): boolean {

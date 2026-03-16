@@ -49,6 +49,7 @@ let actualTick = this.currentTick + this.pendingShift + this.startDelay
  * `.wait()` applies to ALL notes in the clip persistently.
  * 
  * @param duration - Delay in ticks before clip starts
+
  * @returns this for fluent chaining
  * 
  * @example

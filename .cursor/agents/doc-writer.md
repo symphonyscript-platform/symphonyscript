@@ -31,6 +31,7 @@ Follow these rules strictly. Every documented element must match this standard.
 - First sentence: what the method does (imperative mood).
 - If behaviour is non-trivial, add a brief explanation after a blank line.
 - `@param` for every parameter — include units and valid ranges.
+
 - `@returns` describing the return value (e.g. "New builder with the updated mask").
 - `@throws` only when the method can throw (include the error message string).
 

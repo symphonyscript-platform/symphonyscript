@@ -14,6 +14,7 @@ import type { NotePitch } from '../types'
  *
  * @param pitches - Literal note names (e.g. `'C4'`, `'E4'`) or MIDI numbers. Resolved via {@link resolvePitches}.
  * @param rate - Tick duration per arpeggio step. `undefined` = bridge default at apply-time.
+
  * @returns Immutable {@link ArpeggioBuilder} — chain `.pattern()`, `.octaves()`, `.gate()`, etc.
  * @throws If any pitch string cannot be parsed (e.g. `'invalid'`) — thrown during `apply()`
  *

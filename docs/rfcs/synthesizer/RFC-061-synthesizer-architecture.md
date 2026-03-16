@@ -377,6 +377,7 @@ interface Instrument {
    * @param velocity    - 0.0–1.0
    * @param gateOffset  - Sample offset for sample-accurate timing
    * @param expressionId - Kernel expression channel (0–15), for MPE-style per-note control
+
    * @returns Voice index (0..maxVoices-1) or -1 if allocation failed (NONE policy, pool full)
    */
   noteOn(pitch: number, velocity: number, gateOffset: number, expressionId: number): number

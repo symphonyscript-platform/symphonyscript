@@ -9,6 +9,7 @@ import type { ChordOptions } from './types'
  * @param code - Chord code (e.g. 'Cmaj7')
  * @param octave - Base octave number
  * @param options - Options (inversions, etc.)
+
  * @returns Array of NoteNames
  */
 export function chordToNotes(

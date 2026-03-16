@@ -9,6 +9,7 @@ import { RollBuilder } from '../builders/RollBuilder'
  * Bass drum (GM_DRUM.BASS_DRUM_1).
  *
  * @param duration - Hit duration in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumHitBuilder}
  */
 export function kick(duration?: number): DrumHitBuilder {
@@ -19,6 +20,7 @@ export function kick(duration?: number): DrumHitBuilder {
  * Acoustic snare (GM_DRUM.ACOUSTIC_SNARE).
  *
  * @param duration - Hit duration in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumHitBuilder}
  */
 export function snare(duration?: number): DrumHitBuilder {
@@ -29,6 +31,7 @@ export function snare(duration?: number): DrumHitBuilder {
  * Closed hi-hat (GM_DRUM.CLOSED_HI_HAT).
  *
  * @param duration - Hit duration in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumHitBuilder}
  */
 export function hihat(duration?: number): DrumHitBuilder {
@@ -39,6 +42,7 @@ export function hihat(duration?: number): DrumHitBuilder {
  * Open hi-hat (GM_DRUM.OPEN_HI_HAT).
  *
  * @param duration - Hit duration in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumHitBuilder}
  */
 export function openHat(duration?: number): DrumHitBuilder {
@@ -49,6 +53,7 @@ export function openHat(duration?: number): DrumHitBuilder {
  * Hand clap (GM_DRUM.HAND_CLAP).
  *
  * @param duration - Hit duration in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumHitBuilder}
  */
 export function clap(duration?: number): DrumHitBuilder {
@@ -60,6 +65,7 @@ export function clap(duration?: number): DrumHitBuilder {
  *
  * @param index - Tom index (1–6). Values &gt; 6 clamp to low floor tom.
  * @param duration - Hit duration in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumHitBuilder}
  */
 export function tom(index: number, duration?: number): DrumHitBuilder {
@@ -80,6 +86,7 @@ export function tom(index: number, duration?: number): DrumHitBuilder {
  * Crash cymbal 1 (GM_DRUM.CRASH_CYMBAL_1).
  *
  * @param duration - Hit duration in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumHitBuilder}
  */
 export function crash(duration?: number): DrumHitBuilder {
@@ -90,6 +97,7 @@ export function crash(duration?: number): DrumHitBuilder {
  * Ride cymbal 1 (GM_DRUM.RIDE_CYMBAL_1).
  *
  * @param duration - Hit duration in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumHitBuilder}
  */
 export function ride(duration?: number): DrumHitBuilder {
@@ -100,6 +108,7 @@ export function ride(duration?: number): DrumHitBuilder {
  * Side stick / rim shot (GM_DRUM.SIDE_STICK).
  *
  * @param duration - Hit duration in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumHitBuilder}
  */
 export function rim(duration?: number): DrumHitBuilder {
@@ -110,6 +119,7 @@ export function rim(duration?: number): DrumHitBuilder {
  * Cowbell (GM_DRUM.COWBELL).
  *
  * @param duration - Hit duration in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumHitBuilder}
  */
 export function cowbell(duration?: number): DrumHitBuilder {
@@ -120,6 +130,7 @@ export function cowbell(duration?: number): DrumHitBuilder {
  * Cabasa / shaker (GM_DRUM.CABASA).
  *
  * @param duration - Hit duration in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumHitBuilder}
  */
 export function shaker(duration?: number): DrumHitBuilder {
@@ -131,6 +142,7 @@ export function shaker(duration?: number): DrumHitBuilder {
  *
  * @param pitch - GM drum MIDI number (0–127). Omit for bass drum (36).
  * @param duration - Hit duration in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumHitBuilder}
  */
 export function hit(pitch?: number, duration?: number): DrumHitBuilder {
@@ -146,6 +158,7 @@ export function hit(pitch?: number, duration?: number): DrumHitBuilder {
  * @param notation - Pattern string (e.g. `'x.x.x.x.'`).
  * @param pitch - GM drum MIDI number. Omit to use bridge/snare default.
  * @param stepDuration - Duration per step in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumPatternBuilder}
  *
  * @example
@@ -170,6 +183,7 @@ export function drumPattern(
  * @param pitch - GM drum MIDI number. Omit for snare default.
  * @param stepDuration - Duration per step in ticks. `undefined` = bridge default.
  * @param rotation - Rotation offset (positive = right, negative = left).
+
  * @returns {@link DrumEuclideanBuilder}
  *
  * @example
@@ -194,6 +208,7 @@ export function drumEuclidean(
  * @param pattern - Array of 1s and 0s. Missing or empty defaults to `[1]`.
  * @param pitch - GM drum MIDI number. Omit for snare default.
  * @param stepDuration - Duration per step in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumStepsBuilder}
  *
  * @example
@@ -216,6 +231,7 @@ export function drumSteps(
  * @param pitch - GM drum MIDI number. Omit for snare default.
  * @param duration - Total roll duration in ticks.
  * @param rate - Hits per duration (density). Higher = faster buzz.
+
  * @returns {@link RollBuilder}
  *
  * @example
@@ -237,6 +253,7 @@ export function roll(
  *
  * @param pitch - GM drum MIDI number. Omit for snare default.
  * @param duration - Main hit duration in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumHitBuilder} with flam articulation.
  */
 export function flam(pitch?: number, duration?: number): DrumHitBuilder {
@@ -248,6 +265,7 @@ export function flam(pitch?: number, duration?: number): DrumHitBuilder {
  *
  * @param pitch - GM drum MIDI number. Omit for snare default.
  * @param duration - Main hit duration in ticks. `undefined` = bridge default.
+
  * @returns {@link DrumHitBuilder} with drag articulation.
  */
 export function drag(pitch?: number, duration?: number): DrumHitBuilder {

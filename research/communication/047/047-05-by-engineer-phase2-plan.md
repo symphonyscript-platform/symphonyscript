@@ -127,6 +127,7 @@ export class GrooveBuilder {
  * Per RFC-047 Section 3.2 "Model B: The Stack Graph".
  * 
  * @param voiceBuilder - Callback that receives a new SynapticClip for the voice
+
  * @returns this for fluent chaining
  * 
  * @example
@@ -174,6 +175,7 @@ stack(voiceBuilder: (voice: SynapticClip) => void): this {
  * It offsets the next event's start tick for humanization/groove.
  * 
  * @param ticks - Offset in ticks (can be negative)
+
  * @returns this for fluent chaining
  * 
  * @example

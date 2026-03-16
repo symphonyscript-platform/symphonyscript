@@ -55,6 +55,7 @@ export class LinkBuilder implements PipeStep {
    * Set the amplitude or topology weight for this link.
    *
    * @param weight - Numeric weight (typically 0–1)
+
    * @returns New LinkBuilder with the updated weight
    */
   weight(weight: number): LinkBuilder {
@@ -69,6 +70,7 @@ export class LinkBuilder implements PipeStep {
    * transformation, and replay onto the bridge.
    *
    * @param effectList - One or more {@link PipeStep}s (interceptors or transforms)
+
    * @returns New LinkBuilder with the specified effects
    */
   effects(...effectList: ScopeBuilder<any>[]): LinkBuilder {
@@ -84,6 +86,7 @@ export class LinkBuilder implements PipeStep {
    * composed content (via {@link use} notation for scoping).
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with the linked clip's content emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {

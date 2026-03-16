@@ -11,6 +11,7 @@ import { HumanizationBuilder } from '../builders/HumanizationBuilder'
  * @param velocityJitter - Max velocity delta added per note (raw units). Default 0.
  * @param timingAmount - Max timing offset in ticks added per note. Default 0.
  * @param seed - Integer seed for reproducible jitter. Omitted = tick-derived seed.
+
  * @returns Immutable {@link HumanizationBuilder} — chain `.velocity()`, `.timing()`, `.seed()`, `.steps()`, `.default()`
  *
  * @example

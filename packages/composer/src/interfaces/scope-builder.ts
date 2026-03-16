@@ -15,6 +15,7 @@ export interface ScopeBuilder<T extends ScopeBuilder<T>> extends PipeStep {
    * (implementations typically return the concrete builder for chaining).
    *
    * @param pipeSteps - One or more {@link PipeStep}s to run within this scope
+
    * @returns Builder instance with the additional steps (typically `this` subtype)
    */
   steps(...pipeSteps: PipeStep[]): T

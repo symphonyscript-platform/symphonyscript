@@ -48,6 +48,7 @@ export class GlissandoBuilder implements PipeStep {
    * Set the end pitch of the glissando.
    *
    * @param to - Literal note name (e.g. `'G4'`) or MIDI number
+
    * @returns New GlissandoBuilder with the updated end pitch
    */
   to(to: NotePitch): GlissandoBuilder {
@@ -58,6 +59,7 @@ export class GlissandoBuilder implements PipeStep {
    * Set the start pitch of the glissando.
    *
    * @param from - Literal note name (e.g. `'C4'`) or MIDI number
+
    * @returns New GlissandoBuilder with the updated start pitch
    */
   from(from: NotePitch): GlissandoBuilder {
@@ -70,6 +72,7 @@ export class GlissandoBuilder implements PipeStep {
    * Duration is divided equally across semitone steps.
    *
    * @param duration - Ticks for the full glissando
+
    * @returns New GlissandoBuilder with the updated duration
    */
   duration(duration: number): GlissandoBuilder {
@@ -88,6 +91,7 @@ export class GlissandoBuilder implements PipeStep {
    * start and end are identical, emits a single note at that pitch.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with glissando notes emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {

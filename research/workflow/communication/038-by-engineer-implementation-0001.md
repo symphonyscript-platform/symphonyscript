@@ -46,6 +46,7 @@ Added `freeze()` method:
  * Freeze the clip for efficient reuse.
  * Creates a snapshot of current operations (not affected by future changes).
  * @param options - Freeze options (bpm, timeSignature)
+
  * @returns FrozenClip instance
  */
 freeze(options?: FreezeOptions): FrozenClip

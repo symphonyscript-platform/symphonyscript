@@ -20,6 +20,7 @@ import { asHarmonyMask } from '../types';
  *
  * @param hits - Number of pulses (k)
  * @param steps - Total steps (n)
+
  * @returns Boolean array where true = hit, or null if invalid input
  */
 export function euclidean(hits: number, steps: number): boolean[] | null {
@@ -69,6 +70,7 @@ export function euclidean(hits: number, steps: number): boolean[] | null {
  *
  * @param hits - Number of pulses
  * @param steps - Total steps (max 24)
+
  * @returns Bitmask where set bits = hits, or null if invalid
  */
 export function euclideanMask(hits: number, steps: number): HarmonyMask | null {
@@ -125,6 +127,7 @@ export function euclideanForEach(
  *
  * @param pattern - Boolean pattern array
  * @param offset - Steps to rotate
+
  * @returns Rotated pattern
  */
 export function rotatePattern(pattern: boolean[], offset: number): boolean[] {
@@ -143,6 +146,7 @@ export function rotatePattern(pattern: boolean[], offset: number): boolean[] {
  * @param mask - Rhythm bitmask
  * @param offset - Steps to rotate
  * @param steps - Total pattern length (for wrapping)
+
  * @returns Rotated bitmask
  */
 export function rotateMask(mask: HarmonyMask, offset: number, steps: number): HarmonyMask {
@@ -168,6 +172,7 @@ export function rotateMask(mask: HarmonyMask, offset: number, steps: number): Ha
  * @param pattern - Boolean pattern array
  * @param hitChar - Character for hits (default 'x')
  * @param restChar - Character for rests (default '-')
+
  * @returns String visualization
  */
 export function patternToString(

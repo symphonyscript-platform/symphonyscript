@@ -35,6 +35,7 @@ Extended `.voice()` method to accept both string and numeric expression IDs per 
  * Different voice names may map to the same MPE channel due to hash collisions.
  * 
  * @param name - Voice name string
+
  * @returns Numeric expression ID (0-15)
  */
 function hashVoiceName(name: string): number {

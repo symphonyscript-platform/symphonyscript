@@ -113,6 +113,7 @@ const ROMAN_TO_DEGREE: Readonly<Record<string, number>> = {
  *
  * @param numeral - Roman numeral string
  * @param mode - Key mode for default qualities
+
  * @returns ParsedNumeral or null if invalid
  */
 export function parseRomanNumeral(
@@ -197,6 +198,7 @@ export function parseRomanNumeral(
  *
  * @param degree - Scale degree (1-7)
  * @param key - Key context
+
  * @returns 24-EDO interval from key root
  */
 export function getDegreeInterval(degree: number, key: KeyContext): Interval24EDO {
@@ -212,6 +214,7 @@ export function getDegreeInterval(degree: number, key: KeyContext): Interval24ED
  * @param degree - Scale degree (1-7)
  * @param key - Key context
  * @param quality - Optional quality override
+
  * @returns Transposed chord mask
  */
 export function degreeToMask(
@@ -253,6 +256,7 @@ export function degreeToMask(
  *
  * @param numeral - Roman numeral string
  * @param key - Key context
+
  * @returns Chord mask or null if invalid
  */
 export function romanToMask(numeral: string, key: KeyContext): HarmonyMask | null {
@@ -294,6 +298,7 @@ export function romanToMask(numeral: string, key: KeyContext): HarmonyMask | nul
  *
  * @param numerals - Array of roman numerals
  * @param key - Key context
+
  * @returns Array of chord masks (null entries for invalid numerals)
  */
 export function progressionToMasks(
@@ -357,6 +362,7 @@ export const PROGRESSION = {
  *
  * @param root - Root pitch class (0-22, even numbers for standard notes)
  * @param mode - Major or minor
+
  * @returns KeyContext
  */
 export function createKey(root: PitchClass, mode: ScaleMode): KeyContext {
@@ -421,6 +427,7 @@ const FLAT_KEY_ROOTS = new Set([2, 6, 10, 16, 20]); // Db, Eb, F, Ab, Bb (as 24-
  * @param degree - Scale degree (1-7)
  * @param key - Key context
  * @param accidentalOffset - Semitone offset for modal interchange (-1 or +1)
+
  * @returns Root note string (e.g., "G", "F#", "Bb") or null if invalid
  */
 export function degreeToRoot(
@@ -455,6 +462,7 @@ export function degreeToRoot(
  *
  * @param numeral - Roman numeral (e.g., "V7", "bVII", "ii")
  * @param key - Key context
+
  * @returns Chord code string (e.g., "G7", "Bb", "Dm") or null if invalid
  */
 export function romanToChord(numeral: string, key: KeyContext): string | null {
@@ -530,6 +538,7 @@ function buildChordSuffix(quality: string, isLowercase: boolean): string {
  *
  * @param numerals - Array of roman numerals
  * @param key - Key context
+
  * @returns Array of chord code strings (null entries for invalid numerals)
  */
 export function progressionToChords(
@@ -577,6 +586,7 @@ const TRITONE_SUBSTITUTE_MAP: Readonly<Record<string, string>> = Object.freeze({
  * Jazz convention uses flat notation for substitutes.
  *
  * @param root - Root note name (e.g., 'G', 'C#', 'Bb')
+
  * @returns Tritone substitute root (e.g., 'Db', 'G', 'E')
  */
 export function tritoneSubstitute(root: string): string {
@@ -600,6 +610,7 @@ const DOMINANT_7TH_PATTERN = /^([A-G][#b]?)7$/;
  * Other chord types (maj7, m7, dim7, etc.) are left unchanged.
  *
  * @param chords - Array of chord symbols
+
  * @returns New array with dominant 7th chords substituted
  */
 export function applyTritoneSubstitutions(chords: string[]): string[] {

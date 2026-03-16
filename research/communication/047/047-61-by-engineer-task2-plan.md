@@ -59,6 +59,7 @@ private currentStepIndex: number = 0    // Track position within groove cycle
  * Per RFC-047 Phase 8 Task 2 requirements.
  * 
  * @param groove - Frozen groove template from GrooveBuilder
+
  * @returns this for fluent chaining
  * 
  * @example

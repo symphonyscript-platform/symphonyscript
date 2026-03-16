@@ -15,6 +15,7 @@ export type QuantizeMode = 'bar' | 'beat' | 'off'
  * Parse a time signature string into beats per measure.
  * 
  * @param timeSignature - Time signature string (e.g., '4/4', '3/4', '6/8')
+
  * @returns Beats per measure (top number)
  */
 export function parseTimeSignature(timeSignature: `${number}/${number}`): {
@@ -36,6 +37,7 @@ export function parseTimeSignature(timeSignature: `${number}/${number}`): {
  * Get the next beat boundary from the current position.
  * 
  * @param currentBeat - Current beat position (can be fractional)
+
  * @returns Next whole beat number
  */
 export function getNextBeat(currentBeat: number): number {
@@ -47,6 +49,7 @@ export function getNextBeat(currentBeat: number): number {
  * 
  * @param currentBeat - Current beat position (can be fractional)
  * @param beatsPerMeasure - Number of beats per measure (from time signature)
+
  * @returns Beat number at the start of the next bar
  */
 export function getNextBarBeat(currentBeat: number, beatsPerMeasure: number): number {
@@ -63,6 +66,7 @@ export function getNextBarBeat(currentBeat: number, beatsPerMeasure: number): nu
  * 
  * @param currentBeat - Current beat position
  * @param beatsPerMeasure - Number of beats per measure
+
  * @returns Current bar number (0-indexed)
  */
 export function getCurrentBar(currentBeat: number, beatsPerMeasure: number): number {
@@ -74,6 +78,7 @@ export function getCurrentBar(currentBeat: number, beatsPerMeasure: number): num
  * 
  * @param currentBeat - Current beat position
  * @param beatsPerMeasure - Number of beats per measure
+
  * @returns Beat within current bar (0 to beatsPerMeasure-1)
  */
 export function getBeatInBar(currentBeat: number, beatsPerMeasure: number): number {
@@ -90,6 +95,7 @@ export function getBeatInBar(currentBeat: number, beatsPerMeasure: number): numb
  * @param currentBeat - Current beat position
  * @param mode - Quantize mode ('bar', 'beat', or 'off')
  * @param beatsPerMeasure - Number of beats per measure
+
  * @returns Target beat for the update
  */
 export function getQuantizeTargetBeat(
@@ -116,6 +122,7 @@ export function getQuantizeTargetBeat(
  * 
  * @param beats - Number of beats
  * @param bpm - Tempo in beats per minute
+
  * @returns Duration in seconds
  */
 export function beatsToSeconds(beats: number, bpm: number): number {
@@ -127,6 +134,7 @@ export function beatsToSeconds(beats: number, bpm: number): number {
  * 
  * @param seconds - Duration in seconds
  * @param bpm - Tempo in beats per minute
+
  * @returns Number of beats
  */
 export function secondsToBeats(seconds: number, bpm: number): number {
@@ -137,6 +145,7 @@ export function secondsToBeats(seconds: number, bpm: number): number {
  * Get the duration of one beat in seconds.
  * 
  * @param bpm - Tempo in beats per minute
+
  * @returns Beat duration in seconds
  */
 export function getBeatDuration(bpm: number): number {
@@ -148,6 +157,7 @@ export function getBeatDuration(bpm: number): number {
  * 
  * @param bpm - Tempo in beats per minute
  * @param beatsPerMeasure - Number of beats per measure
+
  * @returns Bar duration in seconds
  */
 export function getBarDuration(bpm: number, beatsPerMeasure: number): number {
@@ -165,6 +175,7 @@ export function getBarDuration(bpm: number, beatsPerMeasure: number): number {
  * @param beat - Beat position to check
  * @param currentBeat - Current playback beat
  * @param lookaheadBeats - Lookahead window in beats
+
  * @returns True if beat is within lookahead window
  */
 export function isWithinLookahead(
@@ -181,6 +192,7 @@ export function isWithinLookahead(
  * @param requestedBeat - Beat at which user requested changes
  * @param currentBeat - Current playback beat
  * @param lookaheadBeats - Lookahead window in beats
+
  * @returns Effective beat from which to start cancellation
  */
 export function getEffectiveCancelBeat(
@@ -204,6 +216,7 @@ export function getEffectiveCancelBeat(
  * @param playbackStartTime - Audio time when playback started
  * @param playbackStartBeat - Beat position when playback started
  * @param bpm - Current tempo
+
  * @returns Current beat position
  */
 export function getCurrentBeatFromAudioTime(
@@ -224,6 +237,7 @@ export function getCurrentBeatFromAudioTime(
  * @param playbackStartTime - Audio time when playback started
  * @param playbackStartBeat - Beat position when playback started
  * @param bpm - Current tempo
+
  * @returns Audio time at target beat
  */
 export function getAudioTimeForBeat(
@@ -248,6 +262,7 @@ export function getAudioTimeForBeat(
  * @param mode - Quantize mode ('bar', 'beat', or 'off')
  * @param beatsPerMeasure - Number of beats per measure
  * @param tolerance - Tolerance for floating point comparison (default 0.001)
+
  * @returns True if on a quantize boundary
  */
 export function isAtQuantizeBoundary(
@@ -277,6 +292,7 @@ export function isAtQuantizeBoundary(
  * @param mode - Quantize mode
  * @param beatsPerMeasure - Number of beats per measure
  * @param bpm - Tempo in beats per minute
+
  * @returns Time in seconds until next boundary (0 if mode is 'off')
  */
 export function getTimeUntilNextQuantize(
@@ -301,6 +317,7 @@ export function getTimeUntilNextQuantize(
  * @param mode - Quantize mode
  * @param beatsPerMeasure - Number of beats per measure
  * @param lookaheadBeats - Lookahead window in beats
+
  * @returns Target beat for quantized update (after lookahead)
  */
 export function getQuantizeTargetWithLookahead(
@@ -333,6 +350,7 @@ export function getQuantizeTargetWithLookahead(
  * 
  * @param currentBeat - Current beat position
  * @param beatsPerMeasure - Number of beats per measure
+
  * @returns Object with beat grid information
  */
 export function getBeatGridInfo(

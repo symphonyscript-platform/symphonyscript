@@ -62,6 +62,7 @@ export interface CompositionBridge {
      * @param pitch - MIDI pitch (0–127).
      * @param duration - Note duration in ticks. Default: bridge.defaultDuration.
      * @param velocity - Note velocity (0–1000). Default: bridge.velocity.
+
      * @returns New bridge with the note thunk and tick advanced by duration.
      */
     withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge
@@ -71,6 +72,7 @@ export interface CompositionBridge {
      *
      * @param controller - MIDI CC number (0–127).
      * @param value - CC value (0–127).
+
      * @returns New bridge with the CC thunk appended.
      */
     withCC(controller: number, value: number): CompositionBridge
@@ -79,6 +81,7 @@ export interface CompositionBridge {
      * Defer a pitch bend at current tick.
      *
      * @param value - 14-bit pitch bend (typically -8192 to 8191).
+
      * @returns New bridge with the bend thunk appended.
      */
     withBend(value: number): CompositionBridge
@@ -89,6 +92,7 @@ export interface CompositionBridge {
      *
      * @param value - Aftertouch pressure (0–127).
      * @param pitch - MIDI pitch for poly aftertouch. Omit for channel aftertouch.
+
      * @returns New bridge with the aftertouch thunk appended.
      */
     withAftertouch(value: number, pitch?: number): CompositionBridge
@@ -101,6 +105,7 @@ export interface CompositionBridge {
      * @param srcId - Source node id.
      * @param tgtId - Target node id.
      * @param weight - Connection weight. Default: 1.
+
      * @returns New bridge with the connect thunk appended.
      */
     withConnect(srcId: number, tgtId: number, weight?: number): CompositionBridge
@@ -110,6 +115,7 @@ export interface CompositionBridge {
      *
      * @param srcId - Source node id.
      * @param tgtId - Target node id.
+
      * @returns New bridge with the disconnect thunk appended.
      */
     withDisconnect(srcId: number, tgtId: number): CompositionBridge
@@ -118,6 +124,7 @@ export interface CompositionBridge {
      * Defer a node reclamation.
      *
      * @param nodePtr - Node pointer to reclaim.
+
      * @returns New bridge with the reclaim thunk appended.
      */
     withReclaim(nodePtr: number): CompositionBridge
@@ -128,6 +135,7 @@ export interface CompositionBridge {
      * Return new bridge with specified velocity.
      *
      * @param v - Velocity (0–1000).
+
      * @returns New bridge with updated velocity.
      */
     withVelocity(v: number): CompositionBridge
@@ -136,6 +144,7 @@ export interface CompositionBridge {
      * Return new bridge with specified transpose offset.
      *
      * @param s - Transpose in semitones.
+
      * @returns New bridge with updated transpose.
      */
     withTranspose(s: number): CompositionBridge
@@ -144,6 +153,7 @@ export interface CompositionBridge {
      * Return new bridge with specified default duration.
      *
      * @param d - Duration in ticks.
+
      * @returns New bridge with updated defaultDuration.
      */
     withDefaultDuration(d: number): CompositionBridge
@@ -152,6 +162,7 @@ export interface CompositionBridge {
      * Return new bridge with specified tempo.
      *
      * @param bpm - Tempo in BPM.
+
      * @returns New bridge with updated tempo.
      */
     withTempo(bpm: number): CompositionBridge
@@ -161,6 +172,7 @@ export interface CompositionBridge {
      *
      * @param num - Numerator (e.g. 4).
      * @param den - Denominator (e.g. 4).
+
      * @returns New bridge with updated time signature.
      */
     withTimeSignature(num: number, den: number): CompositionBridge
@@ -170,6 +182,7 @@ export interface CompositionBridge {
      *
      * @param root - Scale root pitch class (0–11).
      * @param mode - Scale mode.
+
      * @returns New bridge with updated scale context.
      */
     withScale(root: PitchClass, mode: ScaleMode): CompositionBridge
@@ -179,6 +192,7 @@ export interface CompositionBridge {
      *
      * @param root - Key root pitch class (0–11).
      * @param mode - Key mode when root is set.
+
      * @returns New bridge with updated key context.
      */
     withKey(root: PitchClass, mode: ScaleMode): CompositionBridge
@@ -187,6 +201,7 @@ export interface CompositionBridge {
      * Return new bridge with specified volume. Emits CC7 and tracks state.
      *
      * @param v - Volume (0–127).
+
      * @returns New bridge with updated volume.
      */
     withVolume(v: number): CompositionBridge
@@ -195,6 +210,7 @@ export interface CompositionBridge {
      * Return new bridge with specified pan. Emits CC10 and tracks state.
      *
      * @param v - Pan (0–127, 64 = center).
+
      * @returns New bridge with updated pan.
      */
     withPan(v: number): CompositionBridge
@@ -203,6 +219,7 @@ export interface CompositionBridge {
      * Return new bridge with specified swing amount.
      *
      * @param amount - Swing (0.0–1.0).
+
      * @returns New bridge with updated swing.
      */
     withSwing(amount: number): CompositionBridge
@@ -212,6 +229,7 @@ export interface CompositionBridge {
      *
      * @param grid - Quantize grid in ticks. 0 = no quantize.
      * @param strength - Quantize strength (0–1). Default: 1.0.
+
      * @returns New bridge with updated quantize settings.
      */
     withQuantize(grid: number, strength?: number): CompositionBridge
@@ -220,6 +238,7 @@ export interface CompositionBridge {
      * Return new bridge with specified tick position.
      *
      * @param tick - Position in ticks.
+
      * @returns New bridge with updated tick.
      */
     withTick(tick: number): CompositionBridge
@@ -228,6 +247,7 @@ export interface CompositionBridge {
      * Return new bridge with muted flag.
      *
      * @param muted - Whether notes are muted.
+
      * @returns New bridge with updated muted.
      */
     withMuted(muted: boolean): CompositionBridge
@@ -236,6 +256,7 @@ export interface CompositionBridge {
      * Return new bridge with precise flag.
      *
      * @param precise - When true, skips humanization.
+
      * @returns New bridge with updated precise.
      */
     withPrecise(precise: boolean): CompositionBridge

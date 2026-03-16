@@ -10,6 +10,7 @@ import { SeededRandom } from '@symphonyscript/core'
  *
  * @param probability - Chance each note is emitted (0–1). 1 = always. Default 1.
  * @param seed - Integer seed for reproducible rolls. Omitted = tick-derived seed.
+
  * @returns Immutable {@link ChanceBuilder} — chain `.probability()`, `.seed()`, `.steps()`, `.default()`
  *
  * @example

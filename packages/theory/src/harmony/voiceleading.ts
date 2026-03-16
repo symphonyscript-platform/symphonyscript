@@ -51,6 +51,7 @@ export interface VoiceMovement {
  *
  * @param fromMask - Starting chord mask
  * @param toMask - Target chord mask
+
  * @returns Total movement in 24-EDO steps
  */
 export function voiceMovementCost(fromMask: HarmonyMask, toMask: HarmonyMask): number {
@@ -107,6 +108,7 @@ export function voiceMovementCost(fromMask: HarmonyMask, toMask: HarmonyMask): n
  * @param mask - Chord mask
  * @param voices - Number of voices
  * @param centerOctave - Center octave (default: 4)
+
  * @returns Array of absolute pitches (24-EDO interval + octave × OCTAVE_SIZE)
  */
 export function closeVoicing(
@@ -151,6 +153,7 @@ export function closeVoicing(
  * @param mask - Chord mask
  * @param voices - Number of voices
  * @param centerOctave - Center octave (default: 4)
+
  * @returns Array of absolute pitches
  */
 export function openVoicing(
@@ -179,6 +182,7 @@ export function openVoicing(
  * @param mask - Chord mask
  * @param voices - Number of voices
  * @param centerOctave - Center octave (default: 4)
+
  * @returns Array of absolute pitches
  */
 export function drop2Voicing(
@@ -213,6 +217,7 @@ export function drop2Voicing(
  * @param fromMask - Starting chord mask
  * @param toMask - Target chord mask
  * @param options - Voice leading options
+
  * @returns Array of voice movements
  */
 export function voiceLead(
@@ -273,6 +278,7 @@ export function voiceLead(
  *
  * @param progression - Array of chord masks
  * @param options - Voice leading options
+
  * @returns Array of voicings (one per chord)
  */
 export function voiceLeadProgression(
@@ -377,6 +383,7 @@ function leadToNextChord(
  * KERNEL-SAFE: Pure arithmetic.
  *
  * @param pitch - Absolute pitch (interval + octave × OCTAVE_SIZE)
+
  * @returns 24-EDO interval (0-23)
  */
 export function pitchToInterval(pitch: number): Interval24EDO {
@@ -388,6 +395,7 @@ export function pitchToInterval(pitch: number): Interval24EDO {
  * KERNEL-SAFE: Pure arithmetic.
  *
  * @param pitch - Absolute pitch
+
  * @returns Octave number
  */
 export function pitchToOctave(pitch: number): number {
@@ -400,6 +408,7 @@ export function pitchToOctave(pitch: number): number {
  *
  * @param interval - 24-EDO interval
  * @param octave - Octave number
+
  * @returns Absolute pitch
  */
 export function createPitch(interval: Interval24EDO, octave: number): number {

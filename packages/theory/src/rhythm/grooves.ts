@@ -40,6 +40,7 @@ export interface GrooveTemplate {
  *
  * @param amount - Swing amount: 0.5 (straight/50%) to 0.75 (dotted/75%)
  * @param stepsPerBeat - Grid resolution (default 4 = 16th notes)
+
  * @returns GrooveTemplate with swing applied
  */
 export function createSwing(amount: number, stepsPerBeat: number = 4): GrooveTemplate {
@@ -145,6 +146,7 @@ export const GROOVE = {
  * @param step - Step index in the pattern
  * @param template - Groove template to apply
  * @param baseVelocity - Base velocity multiplier (default 1.0)
+
  * @returns Object with timing offset and velocity
  */
 export function applyGroove(
@@ -171,6 +173,7 @@ export function applyGroove(
  *
  * @param step - Step index in the pattern
  * @param template - Groove template to apply
+
  * @returns Timing offset (-1.0 to 1.0)
  */
 export function getGrooveTiming(step: number, template: GrooveTemplate): number {
@@ -189,6 +192,7 @@ export function getGrooveTiming(step: number, template: GrooveTemplate): number 
  * @param step - Step index in the pattern
  * @param template - Groove template to apply
  * @param baseVelocity - Base velocity multiplier (default 1.0)
+
  * @returns Velocity multiplier
  */
 export function getGrooveVelocity(
@@ -211,6 +215,7 @@ export function getGrooveVelocity(
  * @param step - Step index in the pattern
  * @param template - Groove template to apply
  * @param baseDuration - Base duration multiplier (default 1.0)
+
  * @returns Duration multiplier
  */
 export function getGrooveDuration(

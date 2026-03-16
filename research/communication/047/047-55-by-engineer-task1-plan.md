@@ -30,6 +30,7 @@ Extend `.voice()` method to accept both string and numeric expression IDs. When 
  * Uses consistent hashing (same string → same ID).
  * 
  * @param name - Voice name string
+
  * @returns Numeric expression ID (positive 32-bit integer)
  */
 function hashVoiceName(name: string): number {
@@ -62,6 +63,7 @@ voice(expressionId: number, builderFn: (v: SynapticClip) => void): this {
  * 
  * @param expressionId - MPE expression ID (channel assignment) or string voice name
  * @param builderFn - Callback to build notes for this voice
+
  * @returns this for fluent chaining
  * 
  * @example

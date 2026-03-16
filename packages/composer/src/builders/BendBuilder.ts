@@ -41,6 +41,7 @@ export class BendBuilder extends ScopedStepBuilder<BendBuilder> {
    * Set the pitch bend value applied before note onset within the scope.
    *
    * @param value - Pitch bend value (e.g. 0 = center, 64 = up, -64 = down)
+
    * @returns New BendBuilder with the updated value
    */
   value(value: number): BendBuilder {
@@ -53,6 +54,7 @@ export class BendBuilder extends ScopedStepBuilder<BendBuilder> {
    * Delegates to {@link CompositionBridge.withBend} with the configured value.
    *
    * @param bridge - Current composition state before scoped content
+
    * @returns Bridge with pitch bend set
    */
   protected onEnter(bridge: CompositionBridge): CompositionBridge {
@@ -66,6 +68,7 @@ export class BendBuilder extends ScopedStepBuilder<BendBuilder> {
    *
    * @param result - Bridge state after inner steps were applied
    * @param _parent - Original bridge before this step (unused)
+
    * @returns Bridge with bend reset to 0
    */
   protected onExit(result: CompositionBridge, _parent: CompositionBridge): CompositionBridge {

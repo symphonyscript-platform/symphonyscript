@@ -212,6 +212,7 @@ import { asHarmonyMask, asInterval24EDO } from './types';
  * Packs an array of intervals into a 24-bit integer mask.
  * 
  * @param intervals - Array of interval indices (any integer, will be wrapped to 0-23)
+
  * @returns 32-bit integer with bits set at interval positions
  * 
  * @example
@@ -274,6 +275,7 @@ export function unpack(mask: HarmonyMask, callback: (interval: Interval24EDO) =>
  * WARNING: Allocates memory. Use ONLY in Composer layer, NEVER in Kernel.
  * 
  * @param mask - 24-bit integer bitmask
+
  * @returns Array of interval indices
  */
 export function unpackToArray(mask: HarmonyMask): Interval24EDO[] {
@@ -291,6 +293,7 @@ export function unpackToArray(mask: HarmonyMask): Interval24EDO[] {
  * Uses Brian Kernighan's algorithm for O(k) where k = number of set bits.
  * 
  * @param mask - 24-bit integer bitmask
+
  * @returns Number of intervals in the harmony
  */
 export function countBits(mask: HarmonyMask): number {
@@ -314,6 +317,7 @@ export function countBits(mask: HarmonyMask): number {
  * 
  * @param mask - 24-bit integer bitmask
  * @param semitones - Number of semitones to transpose (can be negative)
+
  * @returns Transposed bitmask
  */
 export function transpose(mask: HarmonyMask, semitones: number): HarmonyMask {

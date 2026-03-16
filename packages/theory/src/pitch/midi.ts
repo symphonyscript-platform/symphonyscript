@@ -52,6 +52,7 @@ export interface ParsedNote {
  * COMPOSER-ONLY: String parsing.
  *
  * @param note - Note string (e.g., "C4", "F#3", "Bb5")
+
  * @returns ParsedNote or null if invalid
  */
 export function parseNote(note: string): ParsedNote | null {
@@ -92,6 +93,7 @@ export function parseNote(note: string): ParsedNote | null {
  * Standard MIDI convention: C4 = 60 (middle C).
  *
  * @param note - Note string (e.g., "C4", "F#3", "Bb5")
+
  * @returns MIDI number (0-127) or null if invalid
  */
 export function noteToMidi(note: string): number | null {
@@ -115,6 +117,7 @@ export function noteToMidi(note: string): number | null {
  * COMPOSER-ONLY: String creation.
  *
  * @param midi - MIDI number (0-127)
+
  * @returns Note string (e.g., "C4") or null if invalid
  */
 export function midiToNote(midi: number): string | null {
@@ -132,6 +135,7 @@ export function midiToNote(midi: number): string | null {
  *
  * @param note - Note string (e.g., "C4")
  * @param semitones - Semitones to transpose (positive = up, negative = down)
+
  * @returns Transposed note string or null if invalid/out of range
  */
 export function transposeNote(note: string, semitones: number): string | null {
@@ -162,6 +166,7 @@ export function transposeNote(note: string, semitones: number): string | null {
  * COMPOSER-ONLY: String parsing.
  *
  * @param note - Note string (e.g., "C4", "F#3")
+
  * @returns 24-EDO pitch class (0-22, even only) or null if invalid
  */
 export function noteToPitchClass24(note: string): Interval24EDO | null {
@@ -180,6 +185,7 @@ export function noteToPitchClass24(note: string): Interval24EDO | null {
  * COMPOSER-ONLY: String parsing.
  *
  * @param note - Note string (e.g., "C4", "F#3")
+
  * @returns Absolute 24-EDO pitch or null if invalid
  */
 export function noteTo24EDO(note: string): number | null {
@@ -491,6 +497,7 @@ export const GM_DRUM = {
  * KERNEL-SAFE: Pure arithmetic.
  *
  * @param midi - MIDI velocity (0-127)
+
  * @returns Normalized velocity (0-1), clamped
  */
 export function midiVelocityToNormalized(midi: number): number {
@@ -505,6 +512,7 @@ export function midiVelocityToNormalized(midi: number): number {
  * KERNEL-SAFE: Pure arithmetic.
  *
  * @param normalized - Normalized velocity (0-1)
+
  * @returns MIDI velocity (0-127), clamped and rounded
  */
 export function normalizedToMidiVelocity(normalized: number): number {
@@ -547,6 +555,7 @@ export type InstrumentId = string & { readonly __brand: 'InstrumentId' };
  * COMPOSER-ONLY: Validation and branding.
  *
  * @param val - Channel number (0-15)
+
  * @returns MidiChannel or null if invalid
  */
 export function midiChannel(val: number): MidiChannel | null {
@@ -559,6 +568,7 @@ export function midiChannel(val: number): MidiChannel | null {
  * COMPOSER-ONLY: Validation and branding.
  *
  * @param val - MIDI value (0-127)
+
  * @returns MidiValue or null if invalid
  */
 export function midiValue(val: number): MidiValue | null {
@@ -571,6 +581,7 @@ export function midiValue(val: number): MidiValue | null {
  * COMPOSER-ONLY: Validation and branding.
  *
  * @param val - CC number (0-127)
+
  * @returns MidiControlID or null if invalid
  */
 export function midiControl(val: number): MidiControlID | null {
@@ -583,6 +594,7 @@ export function midiControl(val: number): MidiControlID | null {
  * COMPOSER-ONLY: Validation and branding.
  *
  * @param id - Instrument identifier string
+
  * @returns InstrumentId or null if invalid
  */
 export function instrumentId(id: string): InstrumentId | null {
@@ -595,6 +607,7 @@ export function instrumentId(id: string): InstrumentId | null {
  * KERNEL-SAFE: Pure type check.
  *
  * @param value - Value to check
+
  * @returns True if value is a valid InstrumentId
  */
 export function isInstrumentId(value: unknown): value is InstrumentId {
@@ -606,6 +619,7 @@ export function isInstrumentId(value: unknown): value is InstrumentId {
  * COMPOSER-ONLY: No validation performed.
  *
  * @param id - String to cast (must be pre-validated)
+
  * @returns InstrumentId (unchecked)
  */
 export function unsafeInstrumentId(id: string): InstrumentId {

@@ -66,6 +66,7 @@ export class EuclideanBuilder implements PipeStep {
    * Set the pitched notes to cycle through on hits.
    *
    * @param notes - Array of {@link NotePitch} values (strings or MIDI numbers). Resolved via resolvePitches.
+
    * @returns New builder with the updated notes
    */
   notes(notes: NotePitch[]): EuclideanBuilder {
@@ -76,6 +77,7 @@ export class EuclideanBuilder implements PipeStep {
    * Set the number of pulses (k) to distribute across steps.
    *
    * @param hits - Number of hits. Must be ≥ 0; `hits = 0` yields no hits.
+
    * @returns New builder with the updated hits
    */
   hits(hits: number): EuclideanBuilder {
@@ -86,6 +88,7 @@ export class EuclideanBuilder implements PipeStep {
    * Set the total number of steps (n) in the pattern.
    *
    * @param steps - Step count. Must be > 0; invalid values yield `null` from generateEuclideanPattern.
+
    * @returns New builder with the updated steps
    */
   steps(steps: number): EuclideanBuilder {
@@ -96,6 +99,7 @@ export class EuclideanBuilder implements PipeStep {
    * Set the duration in ticks for each step.
    *
    * @param stepDuration - Ticks per step
+
    * @returns New builder with the updated step duration
    */
   stepDuration(stepDuration: number): EuclideanBuilder {
@@ -106,6 +110,7 @@ export class EuclideanBuilder implements PipeStep {
    * Set a fixed velocity for all emitted notes.
    *
    * @param velocity - Velocity (0–1000)
+
    * @returns New builder with the updated velocity
    */
   velocity(velocity: number): EuclideanBuilder {
@@ -116,6 +121,7 @@ export class EuclideanBuilder implements PipeStep {
    * Set the rotation offset. Positive rotates the pattern right, negative left.
    *
    * @param rotation - Offset in steps. Wraps via modulo in generateEuclideanPattern.
+
    * @returns New builder with the updated rotation
    */
   rotation(rotation: number): EuclideanBuilder {
@@ -126,6 +132,7 @@ export class EuclideanBuilder implements PipeStep {
    * Set the number of times to repeat the pattern.
    *
    * @param count - Repeat count
+
    * @returns New builder with the updated repeat count
    */
   repeat(count: number): EuclideanBuilder {
@@ -136,6 +143,7 @@ export class EuclideanBuilder implements PipeStep {
    * Set an optional seed for deterministic rotation behaviour.
    *
    * @param seed - Numeric seed (currently stored only; resolution depends on generateEuclideanPattern).
+
    * @returns New builder with the updated seed
    */
   seed(seed: number): EuclideanBuilder {
@@ -151,6 +159,7 @@ export class EuclideanBuilder implements PipeStep {
    * or notes resolve to empty.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with notes emitted on pattern hits
    */
   apply(bridge: CompositionBridge): CompositionBridge {

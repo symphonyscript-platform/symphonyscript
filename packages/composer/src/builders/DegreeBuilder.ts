@@ -42,6 +42,7 @@ export class DegreeBuilder extends PitchStepBuilder<DegreeBuilder> {
    * Set the scale degree. 1 = tonic, 7 = leading tone; 8 = tonic octave above; 0 = 7th degree one octave below.
    *
    * @param degree - Scale degree (1–7 typical; 8 = tonic above; 0 = 7th below; negative/high values wrap via modulo)
+
    * @returns New DegreeBuilder with the updated degree
    */
   degree(degree: number): DegreeBuilder {
@@ -55,6 +56,7 @@ export class DegreeBuilder extends PitchStepBuilder<DegreeBuilder> {
    * Respects repeatCount; each repeat emits at the current tick and advances tick by duration.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with note(s) emitted, or unchanged if degreeToPitch returns null
    */
   apply(bridge: CompositionBridge): CompositionBridge {

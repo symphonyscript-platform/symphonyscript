@@ -36,6 +36,7 @@ const NOTE_TO_KEY_ROOT: Record<string, keyof typeof KEY_ROOT> = {
  * Convert a composer KeyContext (string root) to a theory KeyContext (Interval24EDO root).
  *
  * @param keyContext - Composer's string-based key context
+
  * @returns Theory's Interval24EDO-based key context, or null if invalid root
  */
 export function toTheoryKeyContext(keyContext: KeyContext): ReturnType<typeof createKey> | null {
@@ -51,6 +52,7 @@ export function toTheoryKeyContext(keyContext: KeyContext): ReturnType<typeof cr
  *
  * @param numeral - Roman numeral (e.g., 'V7', 'bVII', 'ii')
  * @param keyContext - Composer's string-based key context
+
  * @returns Chord symbol string (e.g., 'G7', 'Bb', 'Dm') or null if invalid
  */
 export function romanToChord(numeral: string, keyContext: KeyContext): string | null {

@@ -44,6 +44,7 @@ export class SeededRandom {
      *
      * @param min - Minimum value (inclusive)
      * @param max - Maximum value (exclusive)
+
      * @returns Random float in [min, max)
      */
     range(min: number, max: number): number {
@@ -56,6 +57,7 @@ export class SeededRandom {
      *
      * @param min - Minimum value (inclusive)
      * @param max - Maximum value (inclusive)
+
      * @returns Random integer in [min, max]
      */
     int(min: number, max: number): number {
@@ -67,6 +69,7 @@ export class SeededRandom {
      * KERNEL-SAFE: No allocation (but mutates internal state).
      *
      * @param array - Array to pick from
+
      * @returns Random element or undefined if empty
      */
     pick<T>(array: readonly T[]): T | undefined {
@@ -79,6 +82,7 @@ export class SeededRandom {
      * COMPOSER-ONLY: Mutates input array.
      *
      * @param array - Array to shuffle (mutated in place)
+
      * @returns The same array, shuffled
      */
     shuffle<T>(array: T[]): T[] {
@@ -94,6 +98,7 @@ export class SeededRandom {
      * COMPOSER-ONLY: Allocates new array.
      *
      * @param array - Array to shuffle
+
      * @returns New shuffled array
      */
     shuffled<T>(array: readonly T[]): T[] {
@@ -105,6 +110,7 @@ export class SeededRandom {
      * KERNEL-SAFE: Pure arithmetic (but mutates internal state).
      *
      * @param probability - Probability of true (0-1, default 0.5)
+
      * @returns Random boolean
      */
     bool(probability: number = 0.5): boolean {
@@ -116,6 +122,7 @@ export class SeededRandom {
      * COMPOSER-ONLY: Iterates array.
      *
      * @param options - Array of [value, weight] pairs
+
      * @returns Random value based on weights, or undefined if empty
      */
     weighted<T>(options: readonly [T, number][]): T | undefined {
@@ -169,6 +176,7 @@ export class SeededRandom {
  * COMPOSER-ONLY: Object creation.
  *
  * @param seed - Seed value (defaults to Date.now())
+
  * @returns New SeededRandom instance
  */
 export function createRandom(seed?: number): SeededRandom {
@@ -180,6 +188,7 @@ export function createRandom(seed?: number): SeededRandom {
  * KERNEL-SAFE: Pure computation.
  *
  * @param str - String to hash
+
  * @returns Unsigned 32-bit hash value
  */
 export function hashString(str: string): number {
@@ -197,6 +206,7 @@ export function hashString(str: string): number {
  * KERNEL-SAFE: Pure computation.
  *
  * @param values - Values to combine into seed
+
  * @returns Combined seed value
  */
 export function combineSeed(...values: (string | number)[]): number {

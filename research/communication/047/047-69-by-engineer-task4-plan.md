@@ -125,6 +125,7 @@ getPlaybackOffset(): number {
  * This affects playback timing in the AudioWorklet.
  * 
  * @param offsetMs - Hardware latency in milliseconds (typically 10-50ms)
+
  * @returns this for fluent chaining
  * 
  * @example

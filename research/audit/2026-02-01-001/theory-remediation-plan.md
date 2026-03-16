@@ -223,6 +223,7 @@ export const SCALE = {
  * Zero-allocation scale membership test.
  * @param scaleMask - Scale as HarmonyMask
  * @param interval - Interval to test (24-EDO)
+
  * @returns true if interval is in scale
  */
 export function isInScale(scaleMask: HarmonyMask, interval: number): boolean {
@@ -234,6 +235,7 @@ export function isInScale(scaleMask: HarmonyMask, interval: number): boolean {
  * Zero-allocation: quantize interval to nearest scale degree.
  * @param scaleMask - Scale as HarmonyMask  
  * @param interval - Interval to quantize (24-EDO)
+
  * @returns Nearest scale degree
  */
 export function quantizeToScale(scaleMask: HarmonyMask, interval: number): number {
@@ -742,6 +744,7 @@ export type IntervalQuality = 'P' | 'M' | 'm' | 'A' | 'd' | 'AA' | 'dd';
  * 
  * @param semitones - Number of semitones
  * @param generic - Generic interval (1=unison, 2=second, 3=third, etc.)
+
  * @returns Interval quality
  */
 export function getIntervalQuality(semitones: number, generic: number): IntervalQuality {
@@ -860,6 +863,7 @@ hungarian: [0, 2, 3, 6, 7, 8, 11],
  * Tritone sub replaces V7 with bII7 (6 semitones away).
  * 
  * @param root - Original root (e.g., 'G')
+
  * @returns Tritone substitute root (e.g., 'Db')
  */
 export function tritoneSubstitute(root: string): string {
@@ -875,6 +879,7 @@ export function tritoneSubstitute(root: string): string {
  * Apply tritone substitution to dominant chords in a progression.
  * 
  * @param chords - Chord symbols (e.g., ['Dm7', 'G7', 'Cmaj7'])
+
  * @returns Progression with tritone subs (e.g., ['Dm7', 'Db7', 'Cmaj7'])
  */
 export function applyTritoneSubstitutions(chords: string[]): string[] {

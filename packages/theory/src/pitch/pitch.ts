@@ -23,6 +23,7 @@ import { OCTAVE_SIZE } from '../constants';
  * Result is always an even number (0, 2, 4, ..., 22).
  *
  * @param midi - MIDI note number (0-127)
+
  * @returns 24-EDO pitch class (0-22, even only)
  */
 export function midiToPitchClass24(midi: number): Interval24EDO {
@@ -38,6 +39,7 @@ export function midiToPitchClass24(midi: number): Interval24EDO {
  * E.g., C+ (1) → C (0), E+ (9) → E (4)
  *
  * @param interval - 24-EDO interval (0-23)
+
  * @returns MIDI pitch class (0-11)
  */
 export function pitchClass24ToMidi(interval: Interval24EDO): number {
@@ -49,6 +51,7 @@ export function pitchClass24ToMidi(interval: Interval24EDO): number {
  * KERNEL-SAFE: No allocation, pure arithmetic.
  *
  * @param interval - 24-EDO interval (0-23)
+
  * @returns Frequency ratio (1.0 for unison, 2.0 for octave)
  */
 export function intervalToFrequencyRatio(interval: Interval24EDO): number {
@@ -61,6 +64,7 @@ export function intervalToFrequencyRatio(interval: Interval24EDO): number {
  * KERNEL-SAFE: No allocation, pure arithmetic.
  *
  * @param ratio - Frequency ratio (e.g., 1.5 for perfect fifth)
+
  * @returns Nearest 24-EDO interval (0-23)
  */
 export function frequencyRatioToInterval(ratio: number): Interval24EDO {
@@ -82,6 +86,7 @@ export function frequencyRatioToInterval(ratio: number): Interval24EDO {
  * Standard semitones are even-numbered (0, 2, 4, ..., 22).
  *
  * @param interval - 24-EDO interval
+
  * @returns true if interval is a quarter tone (odd)
  */
 export function isQuarterTone(interval: Interval24EDO): boolean {
@@ -95,6 +100,7 @@ export function isQuarterTone(interval: Interval24EDO): boolean {
  * Rounds down: C+ → C, E+ → E, etc.
  *
  * @param interval - 24-EDO interval
+
  * @returns Nearest semitone (even interval)
  */
 export function roundToSemitone(interval: Interval24EDO): Interval24EDO {
@@ -141,6 +147,7 @@ const INTERVAL_NAMES: readonly string[] = [
  * COMPOSER-ONLY: Returns string (allocation).
  *
  * @param interval - 24-EDO interval
+
  * @returns Interval name (e.g., 'P1', 'M3', 'P5', 'M3+')
  */
 export function getIntervalName(interval: Interval24EDO): string {
@@ -153,6 +160,7 @@ export function getIntervalName(interval: Interval24EDO): string {
  * COMPOSER-ONLY: String parsing (allocation).
  *
  * @param name - Interval name (e.g., 'M3', 'P5', 'm7+')
+
  * @returns 24-EDO interval or undefined if invalid
  */
 export function parseIntervalName(name: string): Interval24EDO | undefined {
@@ -201,6 +209,7 @@ const PITCH_CLASS_NAMES: readonly string[] = [
  * COMPOSER-ONLY: Returns string.
  *
  * @param interval - 24-EDO pitch class (0-23)
+
  * @returns Pitch class name (e.g., 'C', 'E', 'G', 'C+')
  */
 export function getPitchClassName(interval: Interval24EDO): string {

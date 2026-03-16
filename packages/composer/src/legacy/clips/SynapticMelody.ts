@@ -80,6 +80,7 @@ export class SynapticMelody extends SynapticClip {
      * Requires scale() to be called first.
      * @param degrees - Array of scale degrees (1-7 for first octave, 8+ wraps to higher octaves)
      * @param duration - Optional chord duration
+
      * @returns MelodyChordCursor for further configuration
      * @throws Error if scale context is not set
      */
@@ -132,6 +133,7 @@ export class SynapticMelody extends SynapticClip {
      * Requires key() to be set first.
      * @param numeral - Roman numeral (e.g., 'I', 'ii', 'V7', 'bVII')
      * @param duration - Optional chord duration
+
      * @returns MelodyChordCursor for further configuration
      * @throws Error if key context is not set
      */
@@ -159,6 +161,7 @@ export class SynapticMelody extends SynapticClip {
      * No options objects - use duration param directly.
      * @param numerals - Array of roman numerals (e.g., ['I', 'IV', 'V', 'I'])
      * @param duration - Duration per chord in beats (default 1)
+
      * @returns this for chaining
      * @throws Error if key context is not set
      */
@@ -187,6 +190,7 @@ export class SynapticMelody extends SynapticClip {
      * Requires key() to be set first.
      * @param numerals - Array of roman numerals (e.g., ['I', 'IV', 'V', 'I'])
      * @param options - Optional configuration (duration per chord)
+
      * @returns this for chaining
      * @throws Error if key context is not set
      */
@@ -312,6 +316,7 @@ export class SynapticMelody extends SynapticClip {
     /**
      * Generate a Euclidean rhythm pattern with melodic notes.
      * @param options - Euclidean rhythm options
+
      * @returns this for chaining
      */
     euclidean(options: EuclideanMelodyOptions): this {
@@ -358,6 +363,7 @@ export class SynapticMelody extends SynapticClip {
      * @param pitches - Array of pitches (note names or MIDI numbers)
      * @param rate - Duration for each arpeggiated note
      * @param options - Arpeggio options (pattern, velocity, gate, octaves, seed)
+
      * @returns this for chaining
      */
     arpeggiate(pitches: (string | number)[], rate: number, options?: ArpeggioOptions): this {
@@ -407,6 +413,7 @@ export class SynapticMelody extends SynapticClip {
      * All notes created inside the builder will be tagged with the expressionId.
      * @param id - Voice ID (1-15, MPE channel range)
      * @param builderFn - Builder function that creates notes for this voice
+
      * @returns this for chaining
      * @throws Error if id is out of range (1-15)
      */
@@ -465,6 +472,7 @@ export class SynapticMelody extends SynapticClip {
      * - `stack(builderFn)` - Execute builder in parallel
      *
      * @param builderFn - Builder function to execute in parallel
+
      * @returns this for chaining
      */
     override stack(builderFn?: (b: SynapticMelody) => SynapticMelody | MelodyNoteCursor | void): this {

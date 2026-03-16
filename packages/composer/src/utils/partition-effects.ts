@@ -27,6 +27,7 @@ export interface PartitionedEffects {
  * to separate pipeline-wrapping steps from capture-and-replay transforms.
  *
  * @param effects - Flat array of PipeSteps from `.pipe()` / `.steps()` calls
+
  * @returns Object with `interceptors` and `transforms` arrays, each in original order
  */
 export function partitionEffects(effects: PipeStep[]): PartitionedEffects {

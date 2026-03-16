@@ -48,6 +48,7 @@ Added `isolate()` method:
  * do not affect the parent clip state.
  * @param options - Which state to isolate
  * @param builderFn - Builder function to execute in isolated scope
+
  * @returns this for chaining
  */
 isolate(options: ScopeIsolation, builderFn: (b: this) => this | void): this

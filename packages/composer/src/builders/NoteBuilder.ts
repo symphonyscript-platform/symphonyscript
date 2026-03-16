@@ -54,6 +54,7 @@ export class NoteBuilder extends PitchStepBuilder<NoteBuilder> {
    * resolution no longer applies.
    *
    * @param pitch - MIDI note number (0-127)
+
    * @returns New NoteBuilder with the updated pitch
    */
   pitch(pitch: number): NoteBuilder {
@@ -74,6 +75,7 @@ export class NoteBuilder extends PitchStepBuilder<NoteBuilder> {
    * applied before emission and reset after.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with note(s) emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {

@@ -48,6 +48,7 @@ const MAJOR_SEMITONES = [2, 4, 9, 11] as const;
  *
  * @param semitones - Number of semitones in the interval (0-12)
  * @param generic - Generic interval number (1-8)
+
  * @returns Interval quality: 'P', 'M', 'm', 'A', or 'd'
  */
 export function getIntervalQuality(semitones: number, generic: number): IntervalQuality {
@@ -101,6 +102,7 @@ export function getIntervalQuality(semitones: number, generic: number): Interval
  * E.g., P5 (7 semitones) inverts to P4 (5 semitones): 12 - 7 = 5
  *
  * @param semitones - Number of semitones in the interval
+
  * @returns Inverted interval in semitones (0-11)
  */
 export function invertInterval(semitones: number): number {
@@ -117,6 +119,7 @@ export function invertInterval(semitones: number): number {
  *
  * @param a - First pitch (MIDI number or pitch class)
  * @param b - Second pitch (MIDI number or pitch class)
+
  * @returns true if pitches are enharmonically equivalent
  */
 export function isEnharmonic(a: number, b: number): boolean {

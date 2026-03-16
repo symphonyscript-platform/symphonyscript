@@ -4,6 +4,7 @@
  *
  * @param hits - Number of pulses (k)
  * @param steps - Total steps (n)
+
  * @returns Boolean array where true = hit
  */
 export function euclidean(hits: number, steps: number): boolean[] {

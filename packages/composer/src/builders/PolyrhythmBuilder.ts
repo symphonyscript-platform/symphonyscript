@@ -26,6 +26,7 @@ export class PolyrhythmBuilder extends ScaledDurationBuilder {
    * Set the number of beats over which notes are spread.
    *
    * @param overBeats - Beat count (e.g. 2 = half-note span at 480 PPQ)
+
    * @returns New PolyrhythmBuilder with updated overBeats
    */
   override overBeats(overBeats: number): PolyrhythmBuilder {
@@ -36,6 +37,7 @@ export class PolyrhythmBuilder extends ScaledDurationBuilder {
    * Set the number of notes to spread evenly over the beats.
    *
    * @param noteCount - Note count (e.g. 3 for triplet feel)
+
    * @returns New PolyrhythmBuilder with updated noteCount
    */
   override noteCount(noteCount: number): PolyrhythmBuilder {
@@ -47,6 +49,7 @@ export class PolyrhythmBuilder extends ScaledDurationBuilder {
    * scaledDuration = (overBeats × defaultDuration) / noteCount.
    *
    * @param pipeSteps - One or more {@link PipeStep}s to run with polyrhythmic timing
+
    * @returns New PolyrhythmBuilder with the given steps
    */
   override steps(...pipeSteps: PipeStep[]): PolyrhythmBuilder {

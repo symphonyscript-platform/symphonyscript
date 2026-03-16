@@ -796,6 +796,7 @@ export const REVERSE_INDEX = {
  *
  * @param nodeCapacity - Number of nodes in the SAB
  * @param synapseCapacity - Maximum number of synapses (K-002 dynamic, defaults to nodeCapacity * 8)
+
  * @returns Byte offset to the start of the Reverse Index table
  */
 export function getReverseIndexOffset(nodeCapacity: number, synapseCapacity?: number): number {
@@ -868,6 +869,7 @@ export const RETURN_QUEUE_CAPACITY = 256
  *
  * @param nodeCapacity - Maximum number of nodes
  * @param synapseCapacity - Maximum number of synapses (default: nodeCapacity * 8)
+
  * @returns Byte offset to Zone Config Table
  */
 export function getZoneConfigTableOffset(nodeCapacity: number, synapseCapacity?: number): number {
@@ -894,6 +896,7 @@ export function getZoneConfigTableOffset(nodeCapacity: number, synapseCapacity?:
  *
  * @param zoneConfigOffset - Byte offset to Zone Config Table (from HDR.ZONE_CONFIG_OFFSET)
  * @param workerZones - Number of worker zones
+
  * @returns Byte offset to Return Queue buffers
  */
 export function getReturnQueueBufferOffset(zoneConfigOffset: number, workerZones: number): number {
@@ -907,6 +910,7 @@ export function getReturnQueueBufferOffset(zoneConfigOffset: number, workerZones
  * @param zoneConfigOffset - Byte offset to Zone Config Table (from HDR.ZONE_CONFIG_OFFSET)
  * @param workerZones - Number of worker zones
  * @param zoneIndex - Index of the zone (0-based)
+
  * @returns Byte offset to the zone's Return Queue buffer
  */
 export function getReturnQueueForZone(zoneConfigOffset: number, workerZones: number, zoneIndex: number): number {
@@ -1041,6 +1045,7 @@ export const CMD = {
  * Main Thread uses bump allocator in Zone B.
  *
  * @param nodeCapacity - Maximum number of nodes
+
  * @returns Index where Zone B begins (typically nodeCapacity / 2)
  */
 export function getZoneSplitIndex(nodeCapacity: number): number {
@@ -1070,6 +1075,7 @@ export function getZoneSplitIndex(nodeCapacity: number): number {
  * @param nodeCapacity - Maximum number of nodes
  * @param synapseCapacity - Maximum number of synapses (default: nodeCapacity * 8)
  * @param workerZones - Number of worker zones (default: 1, legacy mode)
+
  * @returns Total bytes needed for SharedArrayBuffer
  */
 export function calculateSABSize(nodeCapacity: number, synapseCapacity?: number, workerZones?: number): number {
@@ -1125,6 +1131,7 @@ export const HEAP_START_I32 = HEAP_START_OFFSET / 4
 /**
  * Calculate byte offset where Identity Table begins.
  * @param nodeCapacity - Maximum number of nodes
+
  * @returns Byte offset to Identity Table
  */
 export function getIdentityTableOffset(nodeCapacity: number): number {
@@ -1134,6 +1141,7 @@ export function getIdentityTableOffset(nodeCapacity: number): number {
 /**
  * Calculate byte offset where Symbol Table begins.
  * @param nodeCapacity - Maximum number of nodes
+
  * @returns Byte offset to Symbol Table
  */
 export function getSymbolTableOffset(nodeCapacity: number): number {
@@ -1145,6 +1153,7 @@ export function getSymbolTableOffset(nodeCapacity: number): number {
 /**
  * Calculate byte offset where Groove Templates begin.
  * @param nodeCapacity - Maximum number of nodes
+
  * @returns Byte offset to Groove Templates
  */
 export function getGrooveTemplateOffset(nodeCapacity: number): number {
@@ -1155,6 +1164,7 @@ export function getGrooveTemplateOffset(nodeCapacity: number): number {
 /**
  * Calculate byte offset where Command Ring Buffer data begins (RFC-044).
  * @param nodeCapacity - Maximum number of nodes
+
  * @returns Byte offset to Command Ring Buffer data region
  */
 export function getRingBufferOffset(nodeCapacity: number): number {
@@ -1165,6 +1175,7 @@ export function getRingBufferOffset(nodeCapacity: number): number {
  * Calculate byte offset where Reclaim Ring Buffer data begins (K-005).
  * Immediately follows Command Ring.
  * @param nodeCapacity - Maximum number of nodes
+
  * @returns Byte offset to Reclaim Ring Buffer data region
  */
 export function getReclaimRingOffset(nodeCapacity: number): number {
@@ -1179,6 +1190,7 @@ export function getReclaimRingOffset(nodeCapacity: number): number {
  * Reclaim Ring Buffer in the SharedArrayBuffer.
  *
  * @param nodeCapacity - Maximum number of nodes
+
  * @returns Byte offset to Synapse Table
  */
 export function getSynapseTableOffset(nodeCapacity: number): number {

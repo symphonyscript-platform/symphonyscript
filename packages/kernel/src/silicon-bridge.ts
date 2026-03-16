@@ -394,6 +394,7 @@ export class SiliconBridge {
    *
    * @param sourceId - Source ID to lookup
    * @param cb - Callback receiving (line, column) primitives
+
    * @returns true if found and callback invoked, false if not found
    */
   getSourceLocation(sourceId: number, cb: (line: number, column: number) => void): boolean {
@@ -685,6 +686,7 @@ export class SiliconBridge {
    * @param sourceId - Source ID of the note to patch
    * @param type - Attribute type to patch (pitch, velocity, duration, baseTick, muted)
    * @param value - New value for the attribute
+
    * @returns BRIDGE_ERR.OK on success, BRIDGE_ERR.NOT_FOUND if not found
    */
   patchDirect(sourceId: number, type: PatchType, value: number | boolean): number {
@@ -968,6 +970,7 @@ export class SiliconBridge {
    * @param flags - Flag values (muted etc)
    * @param count - Number of notes
    * @param outSourceIds - Pre-allocated output array for assigned sourceIds
+
    * @returns Number of notes loaded
    */
   loadNotesFromArrays(
@@ -1021,12 +1024,14 @@ export class SiliconBridge {
    *
    * @param notes - Array of EditorNoteData objects
    * @param outSourceIds - Pre-allocated output array (REQUIRED for zero-allocation)
+
    * @returns Number of notes loaded (when outSourceIds provided), or array (kernel mode)
    *
    * ISSUE-024: outSourceIds is now REQUIRED (kernel allocating path deleted).
    *
    * @param notes - Array of notes to load
    * @param outSourceIds - Pre-allocated Int32Array to receive source IDs
+
    * @returns Number of notes loaded
    */
   loadClip(notes: EditorNoteData[], outSourceIds: Int32Array): number {
@@ -1144,6 +1149,7 @@ export class SiliconBridge {
    *
    * @param sourceId - Source ID to read
    * @param cb - Callback receiving note data as primitive arguments
+
    * @returns true if read succeeded, false if not found
    */
   readNote(
@@ -1304,6 +1310,7 @@ export class SiliconBridge {
    * @param targetId - SOURCE_ID of the destination node (start of next clip)
    * @param weight - Probability/Intensity (0-1000, default 500)
    * @param jitter - Micro-timing deviation in ticks (0-65535, default 0)
+
    * @returns The SynapsePtr on success, or negative error code
    */
   connect(sourceId: number, targetId: number, weight: number = 500, jitter: number = 0): SynapsePtr {
@@ -1328,6 +1335,7 @@ export class SiliconBridge {
    *
    * @param sourceId - SOURCE_ID of the trigger node
    * @param targetId - SOURCE_ID of the destination node
+
    * @returns BRIDGE_ERR.OK on success, BRIDGE_ERR.NOT_FOUND if not found
    */
   disconnect(sourceId: number, targetId?: number): number {
@@ -1383,6 +1391,7 @@ export class SiliconBridge {
    *
    * @internal COLD PATH - Zero allocations.
    * @param targetPtr - The target node pointer to disconnect from
+
    * @returns Number of synapses tombstoned
    */
   private disconnectAllToTarget(targetPtr: number): number {
@@ -1562,6 +1571,7 @@ export class SiliconBridge {
    * All arrays must be pre-allocated by caller.
    *
    * @param out - Pre-allocated BrainSnapshotArrays structure
+
    * @returns Number of synapses captured (also stored in out.count)
    */
   snapshotToArrays(out: BrainSnapshotArrays): number {

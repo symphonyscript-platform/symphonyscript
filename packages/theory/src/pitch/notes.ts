@@ -52,6 +52,7 @@ const NOTE_NAME_PATTERN = /^[A-Ga-g][#b]?-?\d+$/;
  * KERNEL-SAFE: Pure regex check, no allocation.
  *
  * @param value - String to check
+
  * @returns True if value is a valid NoteName
  */
 export function isNoteName(value: string): value is NoteName {
@@ -63,6 +64,7 @@ export function isNoteName(value: string): value is NoteName {
  * COMPOSER-ONLY: Returns null instead of throwing.
  *
  * @param value - String to validate
+
  * @returns NoteName if valid, null otherwise
  */
 export function noteName(value: string): NoteName | null {
@@ -77,6 +79,7 @@ export function noteName(value: string): NoteName | null {
  * COMPOSER-ONLY: Use when you've already validated the string.
  *
  * @param value - String to cast (must be pre-validated)
+
  * @returns NoteName (unchecked)
  */
 export function unsafeNoteName(value: string): NoteName {
@@ -159,6 +162,7 @@ export interface ParsedNoteName {
  * COMPOSER-ONLY: String parsing.
  *
  * @param note - Note name string
+
  * @returns ParsedNoteName or null if invalid
  */
 export function parseNoteName(note: string): ParsedNoteName | null {
@@ -181,6 +185,7 @@ export function parseNoteName(note: string): ParsedNoteName | null {
  *
  * @param pitch - Pitch class (e.g., "C", "F#")
  * @param octave - Octave number
+
  * @returns NoteName or null if invalid pitch
  */
 export function createNoteName(pitch: string, octave: number): NoteName | null {
@@ -214,6 +219,7 @@ export const PITCH_CLASSES: readonly string[] = Object.freeze([
  * KERNEL-SAFE: Pure check.
  *
  * @param value - String to check
+
  * @returns True if valid pitch class
  */
 export function isPitchClass(value: string): value is Pitch {

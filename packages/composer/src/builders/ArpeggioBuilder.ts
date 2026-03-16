@@ -62,6 +62,7 @@ export class ArpeggioBuilder implements PipeStep {
    * Set the ordering pattern for arpeggio notes.
    *
    * @param pattern - One of `'up'`, `'down'`, `'upDown'`, `'downUp'`, `'random'`, `'converge'`, `'diverge'`
+
    * @returns New ArpeggioBuilder with the updated pattern
    */
   pattern(pattern: ArpPattern): ArpeggioBuilder {
@@ -75,6 +76,7 @@ export class ArpeggioBuilder implements PipeStep {
    * across octaves before applying the pattern.
    *
    * @param pitches - Array of literal note names (e.g. `'C4'`) or MIDI numbers
+
    * @returns New ArpeggioBuilder with the updated pitches
    */
   pitches(pitches: NotePitch[]): ArpeggioBuilder {
@@ -85,6 +87,7 @@ export class ArpeggioBuilder implements PipeStep {
    * Set velocity for emitted notes.
    *
    * @param velocity - Velocity value for all arpeggiated notes
+
    * @returns New ArpeggioBuilder with the updated velocity
    */
   velocity(velocity: number): ArpeggioBuilder {
@@ -97,6 +100,7 @@ export class ArpeggioBuilder implements PipeStep {
    * Values less than 1 create gaps between notes (e.g. staccato feel).
    *
    * @param gate - Ratio 0–1 (1.0 = full step, 0.5 ≈ staccato)
+
    * @returns New ArpeggioBuilder with the updated gate
    */
   gate(gate: number): ArpeggioBuilder {
@@ -110,6 +114,7 @@ export class ArpeggioBuilder implements PipeStep {
    * applying the pattern.
    *
    * @param octaves - Number of octaves (≥ 1)
+
    * @returns New ArpeggioBuilder with the updated octave count
    */
   octaves(octaves: number): ArpeggioBuilder {
@@ -120,6 +125,7 @@ export class ArpeggioBuilder implements PipeStep {
    * Set seed for reproducible `'random'` pattern ordering.
    *
    * @param seed - Seed value for the Fisher-Yates shuffle
+
    * @returns New ArpeggioBuilder with the updated seed
    */
   seed(seed: number): ArpeggioBuilder {
@@ -130,6 +136,7 @@ export class ArpeggioBuilder implements PipeStep {
    * Set tick duration per arpeggio step.
    *
    * @param rate - Ticks between consecutive note onsets
+
    * @returns New ArpeggioBuilder with the updated rate
    */
   rate(rate: number): ArpeggioBuilder {
@@ -148,6 +155,7 @@ export class ArpeggioBuilder implements PipeStep {
    * Returns the bridge unchanged when `pitches` is empty.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with arpeggiated notes emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {

@@ -46,6 +46,7 @@ export class DrumStepsBuilder implements PipeStep {
    * Set the MIDI pitch for drum hits.
    *
    * @param pitch - MIDI note number (0-127)
+
    * @returns New builder with the updated pitch
    */
   pitch(pitch: number): DrumStepsBuilder {
@@ -59,6 +60,7 @@ export class DrumStepsBuilder implements PipeStep {
    * Pass a boolean[] from {@link generateEuclideanPattern} or a number[] directly.
    *
    * @param pattern - Array of 0/1 or truthy/falsy values
+
    * @returns New builder with the updated pattern
    */
   pattern(pattern: number[]): DrumStepsBuilder {
@@ -69,6 +71,7 @@ export class DrumStepsBuilder implements PipeStep {
    * Set the duration in ticks for each step.
    *
    * @param stepDuration - Ticks per step
+
    * @returns New builder with the updated step duration
    */
   stepDuration(stepDuration: number): DrumStepsBuilder {
@@ -81,6 +84,7 @@ export class DrumStepsBuilder implements PipeStep {
    * Returns the bridge unchanged if pitch is null or pattern is empty.
    *
    * @param bridge - Current composition state
+
    * @returns Updated bridge with drum hits at pattern positions
    */
   apply(bridge: CompositionBridge): CompositionBridge {
