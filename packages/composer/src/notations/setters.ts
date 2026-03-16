@@ -27,14 +27,14 @@ export function transpose(semitones: number): FieldSetter {
 /**
  * Set default velocity for all subsequent notes (or scoped).
  *
- * Velocity is in millivels (0–1270 maps to MIDI 0–127).
+ * Velocity (0–1000). 1000 = full.
  *
- * @param value - Millivels (0–1270). 1000 ≈ MIDI 127.
+ * @param value - Velocity (0–1000).
  * @returns {@link FieldSetter}
- * @throws When `value` is outside 0–1270
+ * @throws When `value` is outside 0–1000
  */
 export function velocity(value: number): FieldSetter {
-  assertRange('velocity', value, 0, 1270)
+  assertRange('velocity', value, 0, 1000)
   return new FieldSetter(
     b => b.withVelocity(value),
     (r, p) => r.withVelocity(p.velocity),

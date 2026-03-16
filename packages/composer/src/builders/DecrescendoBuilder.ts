@@ -10,7 +10,7 @@ import { CompositionBridgeDecorator } from '../composition/CompositionBridgeDeco
 export interface DecrescendoParams {
   /** Length of the diminuendo in ticks. Default 480. */
   duration: number
-  /** Initial velocity. Default 1200 (millivels). */
+  /** Initial velocity. Default 1000. */
   from: number
   /** Final velocity. Default 400. */
   to: number
@@ -43,7 +43,7 @@ export class DecrescendoBuilder extends ScopedStepBuilder<DecrescendoBuilder> {
     super(params.entries ?? [])
     this.params = {
       duration: params.duration ?? 480,
-      from: params.from ?? 1200,
+      from: params.from ?? 1000,
       to: params.to ?? 400,
       curve: params.curve ?? 'linear',
     }

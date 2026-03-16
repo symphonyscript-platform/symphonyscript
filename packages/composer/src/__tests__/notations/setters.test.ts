@@ -219,9 +219,9 @@ describe('FieldSetter', () => {
       expect(() => tempo(-1)).toThrow()
     })
 
-    it('velocity() should throw for values outside 0-1270', () => {
+    it('velocity() should throw for values outside 0-1000', () => {
       expect(() => velocity(-1)).toThrow()
-      expect(() => velocity(1271)).toThrow()
+      expect(() => velocity(1001)).toThrow()
     })
   })
 

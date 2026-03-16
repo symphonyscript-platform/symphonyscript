@@ -52,7 +52,7 @@ export class HumanizationBuilder extends ScopedStepBuilder<HumanizationBuilder> 
   /**
    * Set velocity jitter. Each note's velocity gets ±jitter added (symmetric range).
    *
-   * @param jitter - Max velocity delta in millivels (e.g. ±50 for 0–1270 range)
+   * @param jitter - Max velocity delta (e.g. ±50 for 0–1000 range)
    * @returns New builder with the updated velocity jitter
    */
   velocity(jitter: number): HumanizationBuilder {

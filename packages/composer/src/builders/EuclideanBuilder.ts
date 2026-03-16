@@ -105,7 +105,7 @@ export class EuclideanBuilder implements PipeStep {
   /**
    * Set a fixed velocity for all emitted notes.
    *
-   * @param velocity - MIDI velocity (0–16383)
+   * @param velocity - Velocity (0–1000)
    * @returns New builder with the updated velocity
    */
   velocity(velocity: number): EuclideanBuilder {

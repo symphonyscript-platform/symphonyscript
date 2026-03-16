@@ -66,7 +66,7 @@ export class DrumHitBuilder implements PipeStep {
   /**
    * Set the velocity for the main hit.
    *
-   * @param velocity - MIDI velocity (0–16383)
+   * @param velocity - Velocity (0–1000)
    * @returns New builder with the updated velocity
    */
   velocity(velocity: number): DrumHitBuilder {
@@ -96,7 +96,7 @@ export class DrumHitBuilder implements PipeStep {
   /**
    * Configure a ghost note (low velocity, typically for soft hits).
    *
-   * @param velocity - MIDI velocity. Defaults to 300.
+   * @param velocity - Velocity (0–1000). Defaults to 300.
    * @returns New builder with ghost articulation
    */
   ghost(velocity: number = 300): DrumHitBuilder {
@@ -106,10 +106,10 @@ export class DrumHitBuilder implements PipeStep {
   /**
    * Configure an accented hit (high velocity + precise timing).
    *
-   * @param velocity - MIDI velocity. Defaults to 1200.
+   * @param velocity - Velocity (0–1000). Defaults to 1000.
    * @returns New builder with accent articulation
    */
-  accent(velocity: number = 1200): DrumHitBuilder {
+  accent(velocity: number = 1000): DrumHitBuilder {
     return this.clone({ velocity, precise: true })
   }
 

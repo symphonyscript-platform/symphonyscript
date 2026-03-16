@@ -7,7 +7,7 @@
  *
  * Covers:
  *   - crescendo().steps(note(...)) — velocity increases
- *   - Default from (400) to (1200) over duration (480)
+ *   - Default from (400) to (1000) over duration (480)
  *   - .duration(), .from(), .to(), .curve() chaining
  *   - Precise bypass
  *   - Default (cascading) usage
@@ -53,7 +53,7 @@ describe('CrescendoBuilder', () => {
       expect(notes[0].pitch).toBe(60)
     })
 
-    it('should ramp velocity from 400 to 1200 over three notes (default duration 480)', () => {
+    it('should ramp velocity from 400 to 1000 over three notes (default duration 480)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = crescendo(960)
         .steps(note('C4'), note('C4'), note('C4'))
@@ -62,8 +62,8 @@ describe('CrescendoBuilder', () => {
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
       expect(notes[0].velocity).toBe(400)   // tick 0: progress 0
-      expect(notes[1].velocity).toBe(800)   // tick 480: progress 0.5
-      expect(notes[2].velocity).toBe(1200)  // tick 960: progress 1 (clamped)
+      expect(notes[1].velocity).toBe(700)   // tick 480: progress 0.5
+      expect(notes[2].velocity).toBe(1000)  // tick 960: progress 1 (clamped)
     })
 
     it('should use custom from/to when chained', () => {
@@ -140,7 +140,7 @@ describe('CrescendoBuilder', () => {
       // VelocityRampBridge does not check precise; ramp still applies.
       // Note 0 at tick 0: progress 0 → 400. Note 1 at tick 480: progress 0.5 → 800.
       expect(notes[0].velocity).toBe(400)
-      expect(notes[1].velocity).toBe(800)
+      expect(notes[1].velocity).toBe(700)
     })
   })
 
@@ -158,7 +158,7 @@ describe('CrescendoBuilder', () => {
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
       expect(notes[0].velocity).toBe(400)
-      expect(notes[1].velocity).toBe(800)   // progress 0.5 → 400 + (1200-400)*0.5
+      expect(notes[1].velocity).toBe(700)   // progress 0.5 → 400 + (1000-400)*0.5
     })
   })
 

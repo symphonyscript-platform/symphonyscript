@@ -7,8 +7,8 @@ import { DynamicsBuilder } from '../builders/DynamicsBuilder'
  * Called without arguments, ramps from 600 to 1000 over ticks 0..480. Chain
  * `.steps()` for scoped application or `.default()` to cascade downstream.
  *
- * @param startVelocity - MIDI velocity at the start of the ramp. Default 600.
- * @param endVelocity - MIDI velocity at the end of the ramp. Default 1000.
+ * @param startVelocity - Velocity (0–1000) at the start of the ramp. Default 600.
+ * @param endVelocity - Velocity (0–1000) at the end of the ramp. Default 1000.
  * @param startTick - Tick at which the ramp begins. Default 0.
  * @param endTick - Tick at which the ramp ends. Default 480.
  * @returns Immutable {@link DynamicsBuilder} — chain `.startVelocity()`, `.endVelocity()`, `.start()`, `.end()`, `.steps()`, `.default()`

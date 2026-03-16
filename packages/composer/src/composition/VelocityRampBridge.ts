@@ -12,9 +12,9 @@ export interface VelocityRampParams {
   startTick: number
   /** Tick at which the ramp ends. */
   endTick: number
-  /** Velocity at ramp start (millivels 0–1270). */
+  /** Velocity at ramp start (0–1000). */
   fromVelocity: number
-  /** Velocity at ramp end (millivels 0–1270). */
+  /** Velocity at ramp end (0–1000). */
   toVelocity: number
   /** Easing curve: `linear` (t), `exponential` (uses quadratic t², not true exponential), or `smooth` (3t² - 2t³). */
   curve: EasingCurve

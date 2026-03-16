@@ -94,7 +94,7 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
   /**
    * Set velocity for emitted notes.
    *
-   * @param velocity - Velocity value (millivels 0–1270)
+   * @param velocity - Velocity value (0–1000)
    * @returns New builder with the updated velocity
    */
   velocity(velocity: number): T {
@@ -211,12 +211,12 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
   }
 
   /**
-   * Apply accent: high velocity (1200) and precise timing.
+   * Apply accent: high velocity (1000) and precise timing.
    *
-   * @returns New builder with velocity 1200 and precise flag set
+   * @returns New builder with velocity 1000 and precise flag set
    */
   accent(): T {
-    return this.create({ ...this.shared, velocity: 1200, precise: true })
+    return this.create({ ...this.shared, velocity: 1000, precise: true })
   }
 
   // === Articulations ===

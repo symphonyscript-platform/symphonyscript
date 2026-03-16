@@ -7,7 +7,7 @@
  *
  * Covers:
  *   - decrescendo().steps(note(...)) — velocity decreases
- *   - Default from (1200) to (400) over duration (480)
+ *   - Default from (1000) to (400) over duration (480)
  *   - .duration(), .from(), .to(), .curve() chaining
  *   - Precise bypass
  *   - Default (cascading) usage
@@ -49,11 +49,11 @@ describe('DecrescendoBuilder', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0].velocity).toBe(1200)  // start of ramp (default from)
+      expect(notes[0].velocity).toBe(1000)  // start of ramp (default from)
       expect(notes[0].pitch).toBe(60)
     })
 
-    it('should ramp velocity from 1200 to 400 over three notes (default from/to)', () => {
+    it('should ramp velocity from 1000 to 400 over three notes (default from/to)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = decrescendo(960)
         .steps(note('C4'), note('C4'), note('C4'))
@@ -61,8 +61,8 @@ describe('DecrescendoBuilder', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].velocity).toBe(1200)  // tick 0: progress 0
-      expect(notes[1].velocity).toBe(800)    // tick 480: progress 0.5
+      expect(notes[0].velocity).toBe(1000)  // tick 0: progress 0
+      expect(notes[1].velocity).toBe(700)    // tick 480: progress 0.5
       expect(notes[2].velocity).toBe(400)    // tick 960: progress 1
     })
 
@@ -138,9 +138,9 @@ describe('DecrescendoBuilder', () => {
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(2)
       // VelocityRampBridge does not check precise; ramp still applies.
-      // Note 0 at tick 0: progress 0 → 1200 (from). Note 1 at tick 480: progress 0.5 → 800.
-      expect(notes[0].velocity).toBe(1200)
-      expect(notes[1].velocity).toBe(800)
+      // Note 0 at tick 0: progress 0 → 1000 (from). Note 1 at tick 480: progress 0.5 → 700.
+      expect(notes[0].velocity).toBe(1000)
+      expect(notes[1].velocity).toBe(700)
     })
   })
 
@@ -157,8 +157,8 @@ describe('DecrescendoBuilder', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
-      expect(notes[0].velocity).toBe(1200)
-      expect(notes[1].velocity).toBe(800)   // progress 0.5 → 1200 + (400-1200)*0.5
+      expect(notes[0].velocity).toBe(1000)
+      expect(notes[1].velocity).toBe(700)   // progress 0.5 → 1000 + (400-1000)*0.5
     })
   })
 

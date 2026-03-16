@@ -11,7 +11,7 @@ export interface CrescendoParams {
   duration: number
   /** Initial velocity. Default 400. */
   from: number
-  /** Final velocity. Default 1200 (millivels). */
+  /** Final velocity. Default 1000. */
   to: number
   /** Easing curve for the ramp. Default `'linear'`. */
   curve: EasingCurve
@@ -43,7 +43,7 @@ export class CrescendoBuilder extends ScopedStepBuilder<CrescendoBuilder> {
     this.params = {
       duration: params.duration ?? 480,
       from: params.from ?? 400,
-      to: params.to ?? 1200,
+      to: params.to ?? 1000,
       curve: params.curve ?? 'linear',
     }
   }

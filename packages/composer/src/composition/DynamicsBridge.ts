@@ -5,9 +5,9 @@ import { CompositionBridgeDecorator } from './CompositionBridgeDecorator'
  * Parameters for {@link DynamicsBridge}.
  */
 export interface DynamicsBridgeParams {
-  /** Velocity at the start of the ramp range (millivels 0–1270). */
+  /** Velocity at the start of the ramp range (0–1000). */
   startVelocity: number
-  /** Velocity at the end of the ramp range (millivels 0–1270). */
+  /** Velocity at the end of the ramp range (0–1000). */
   endVelocity: number
   /** Tick at which the ramp begins. */
   startTick: number

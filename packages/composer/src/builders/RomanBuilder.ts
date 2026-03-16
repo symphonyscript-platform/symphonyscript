@@ -82,7 +82,7 @@ export class RomanBuilder implements PipeStep {
   /**
    * Set velocity for emitted chord tones.
    *
-   * @param velocity - Velocity value (millivels 0–1270)
+   * @param velocity - Velocity value (0–1000)
    * @returns New RomanBuilder with the updated velocity
    */
   velocity(velocity: number): RomanBuilder {
