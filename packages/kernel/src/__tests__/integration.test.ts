@@ -19,6 +19,7 @@ import {
   unpackFlags,
   unpackSeq
 } from '../'
+import { atomicLoadF32 } from '../f32-atomics'
 import { getGrooveTemplateOffset } from '../constants'
 import { MockConsumer } from '../mock-consumer'
 
@@ -96,7 +97,7 @@ function collectNodes(linker: SiliconSynapse): Array<{
       nodes.push({
         ptr,
         opcode: unpackOpcode(_intBuf[NODE.PACKED_A]),
-        pitch: new Float32Array(linker.getSAB())[(ptr / 4) + NODE.PITCH_F32],
+        pitch: atomicLoadF32(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_F32),
         velocity: unpackVelocity(_intBuf[NODE.PACKED_A]),
         duration: _intBuf[NODE.DURATION],
         baseTick: _intBuf[NODE.BASE_TICK],

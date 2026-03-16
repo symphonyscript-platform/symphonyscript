@@ -931,7 +931,7 @@ export class SiliconSynapse implements ISiliconLinker {
    * Callers must read pitch separately via `atomicLoadF32(sab, offset + NODE.PITCH_F32)`.
    *
    * @param ptr - Node byte pointer
-   * @param buf - Caller-owned Int32Array of length >= 8
+   * @param buf - Caller-owned Int32Array of length >= 8 (covers slots 0-7 only; does not include PITCH_F32 or RESERVED_9)
 
    * @returns true if consistent snapshot obtained, false if NULL_PTR or contention
    */

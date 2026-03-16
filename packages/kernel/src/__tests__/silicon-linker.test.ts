@@ -36,6 +36,7 @@ import {
   unpackFlags,
   unpackSeq
 } from '../index'
+import { atomicLoadF32 } from '../f32-atomics'
 import { CONCURRENCY } from '../constants'
 
 // =============================================================================
@@ -90,7 +91,7 @@ function readNodeData(linker: SiliconSynapse, ptr: number): {
   if (!ok) return undefined
   return {
     opcode: unpackOpcode(_readBuf[NODE.PACKED_A]),
-    pitch: new Float32Array(linker.getSAB())[(ptr / 4) + NODE.PITCH_F32],
+    pitch: atomicLoadF32(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_F32),
     velocity: unpackVelocity(_readBuf[NODE.PACKED_A]),
     duration: _readBuf[NODE.DURATION],
     baseTick: _readBuf[NODE.BASE_TICK],
@@ -136,7 +137,7 @@ function collectNodes(linker: SiliconSynapse): Array<{
       nodes.push({
         ptr,
         opcode: unpackOpcode(_collectBuf[NODE.PACKED_A]),
-        pitch: new Float32Array(linker.getSAB())[(ptr / 4) + NODE.PITCH_F32],
+        pitch: atomicLoadF32(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_F32),
         velocity: unpackVelocity(_collectBuf[NODE.PACKED_A]),
         duration: _collectBuf[NODE.DURATION],
         baseTick: _collectBuf[NODE.BASE_TICK],
