@@ -55,6 +55,12 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
   get precise() { return this.bridge.precise }
   get quantizeGrid() { return this.bridge.quantizeGrid }
   get quantizeStrength() { return this.bridge.quantizeStrength }
+  get scaleRootCents() { return this.bridge.scaleRootCents }
+  get keyRootCents() { return this.bridge.keyRootCents }
+  get scaleIntervals() { return this.bridge.scaleIntervals }
+  get temperament() { return this.bridge.temperament }
+  get tuningHz() { return this.bridge.tuningHz }
+  get transposeCents() { return this.bridge.transposeCents }
 
   /**
    * Forward note to inner bridge, then rewrap to preserve decorator type.
@@ -211,6 +217,38 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
   /** @internal */
   withPrecise(precise: boolean): CompositionBridge {
     return this.rewrap(this.bridge.withPrecise(precise))
+  }
+
+  // === Continuous Pitch Delegates (RFC-060) ===
+
+  /** @internal */
+  withScaleRootCents(cents: number): CompositionBridge {
+    return this.rewrap(this.bridge.withScaleRootCents(cents))
+  }
+
+  /** @internal */
+  withKeyRootCents(cents: number | null): CompositionBridge {
+    return this.rewrap(this.bridge.withKeyRootCents(cents))
+  }
+
+  /** @internal */
+  withScaleIntervals(intervals: readonly number[]): CompositionBridge {
+    return this.rewrap(this.bridge.withScaleIntervals(intervals))
+  }
+
+  /** @internal */
+  withTemperament(t: readonly number[]): CompositionBridge {
+    return this.rewrap(this.bridge.withTemperament(t))
+  }
+
+  /** @internal */
+  withTuningHz(hz: number): CompositionBridge {
+    return this.rewrap(this.bridge.withTuningHz(hz))
+  }
+
+  /** @internal */
+  withTransposeCents(cents: number): CompositionBridge {
+    return this.rewrap(this.bridge.withTransposeCents(cents))
   }
 
   /**

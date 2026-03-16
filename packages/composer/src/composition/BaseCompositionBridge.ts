@@ -48,6 +48,21 @@ export interface BaseCompositionBridgeParams {
   tail: ThunkNode | null
   /** Count of deferred thunks. Default: 0 */
   length: number
+
+  // --- Continuous Pitch State (RFC-060) ---
+
+  /** Scale root as absolute cents from C0. Default: 0 */
+  scaleRootCents: number
+  /** Key root as absolute cents, or null. Default: null */
+  keyRootCents: number | null
+  /** Current scale interval array (cents). Default: null */
+  scaleIntervals: readonly number[] | null
+  /** Current temperament chromatic array (cents). Default: null */
+  temperament: readonly number[] | null
+  /** Reference pitch in Hz. Default: 440 */
+  tuningHz: number
+  /** Transpose offset in cents. Default: 0 */
+  transposeCents: number
 }
 
 /**
@@ -103,6 +118,12 @@ export class BaseCompositionBridge implements CompositionBridge {
       quantizeStrength: params.quantizeStrength ?? 1.0,
       tail: params.tail ?? null,
       length: params.length ?? 0,
+      scaleRootCents: params.scaleRootCents ?? 0,
+      keyRootCents: params.keyRootCents ?? null,
+      scaleIntervals: params.scaleIntervals ?? null,
+      temperament: params.temperament ?? null,
+      tuningHz: params.tuningHz ?? 440,
+      transposeCents: params.transposeCents ?? 0,
     }
   }
 
@@ -124,6 +145,12 @@ export class BaseCompositionBridge implements CompositionBridge {
   get precise() { return this.params.precise }
   get quantizeGrid() { return this.params.quantizeGrid }
   get quantizeStrength() { return this.params.quantizeStrength }
+  get scaleRootCents() { return this.params.scaleRootCents }
+  get keyRootCents() { return this.params.keyRootCents }
+  get scaleIntervals() { return this.params.scaleIntervals }
+  get temperament() { return this.params.temperament }
+  get tuningHz() { return this.params.tuningHz }
+  get transposeCents() { return this.params.transposeCents }
 
   /**
    * Defer a note at the current tick. Advances tick by duration.
@@ -389,6 +416,38 @@ export class BaseCompositionBridge implements CompositionBridge {
    */
   withPrecise(precise: boolean): BaseCompositionBridge {
     return this.derive({ precise })
+  }
+
+  // === Continuous Pitch Modifiers (RFC-060) ===
+
+  /** Return a new bridge with specified scale root in cents. */
+  withScaleRootCents(cents: number): BaseCompositionBridge {
+    return this.derive({ scaleRootCents: cents })
+  }
+
+  /** Return a new bridge with specified key root in cents (or null to clear). */
+  withKeyRootCents(cents: number | null): BaseCompositionBridge {
+    return this.derive({ keyRootCents: cents })
+  }
+
+  /** Return a new bridge with specified scale intervals. */
+  withScaleIntervals(intervals: readonly number[]): BaseCompositionBridge {
+    return this.derive({ scaleIntervals: intervals })
+  }
+
+  /** Return a new bridge with specified temperament. */
+  withTemperament(t: readonly number[]): BaseCompositionBridge {
+    return this.derive({ temperament: t })
+  }
+
+  /** Return a new bridge with specified tuning reference in Hz. */
+  withTuningHz(hz: number): BaseCompositionBridge {
+    return this.derive({ tuningHz: hz })
+  }
+
+  /** Return a new bridge with specified transpose offset in cents. */
+  withTransposeCents(cents: number): BaseCompositionBridge {
+    return this.derive({ transposeCents: cents })
   }
 
   /**

@@ -53,6 +53,21 @@ export interface CompositionBridge {
     /** Quantize strength (0–1). */
     readonly quantizeStrength: number
 
+    // === Continuous Pitch State (RFC-060) ===
+
+    /** Scale root as absolute cents from C0. */
+    readonly scaleRootCents: number
+    /** Key root as absolute cents from C0, or null. */
+    readonly keyRootCents: number | null
+    /** Current scale interval array (cents), or null. */
+    readonly scaleIntervals: readonly number[] | null
+    /** Current temperament chromatic array (cents), or null. */
+    readonly temperament: readonly number[] | null
+    /** Reference pitch frequency in Hz. */
+    readonly tuningHz: number
+    /** Transpose offset in cents. */
+    readonly transposeCents: number
+
     // === Deferred Event Methods (pure — accumulate thunks, no side effects) ===
 
     /**
@@ -260,6 +275,50 @@ export interface CompositionBridge {
      * @returns New bridge with updated precise.
      */
     withPrecise(precise: boolean): CompositionBridge
+
+    // === Continuous Pitch Modifiers (RFC-060) ===
+
+    /**
+     * Return new bridge with specified scale root in cents.
+     *
+     * @param cents - Absolute cents from C0.
+     */
+    withScaleRootCents(cents: number): CompositionBridge
+
+    /**
+     * Return new bridge with specified key root in cents.
+     *
+     * @param cents - Absolute cents from C0, or null to clear.
+     */
+    withKeyRootCents(cents: number | null): CompositionBridge
+
+    /**
+     * Return new bridge with specified scale intervals.
+     *
+     * @param intervals - Scale interval array (cents from root).
+     */
+    withScaleIntervals(intervals: readonly number[]): CompositionBridge
+
+    /**
+     * Return new bridge with specified temperament.
+     *
+     * @param t - Chromatic interval array (cents from root).
+     */
+    withTemperament(t: readonly number[]): CompositionBridge
+
+    /**
+     * Return new bridge with specified tuning reference.
+     *
+     * @param hz - Reference frequency in Hz.
+     */
+    withTuningHz(hz: number): CompositionBridge
+
+    /**
+     * Return new bridge with specified transpose offset in cents.
+     *
+     * @param cents - Transpose offset in cents.
+     */
+    withTransposeCents(cents: number): CompositionBridge
 
     // === Commit (side effects — execute all accumulated thunks) ===
 
