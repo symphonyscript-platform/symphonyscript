@@ -5,14 +5,14 @@ module.exports = {
       name: 'no-composer-to-package-src',
       comment: 'Composer must import via package name, not other packages src',
       from: { path: '^packages/composer/' },
-      to: { path: '^packages/(core|kernel|theory|synaptic)/src/' },
+      to: { path: '^packages/(core|kernel|theory|notations|synaptic)/src/' },
       severity: 'error',
     },
     {
       name: 'no-synaptic-to-package-src',
       comment: 'Synaptic must import via package name, not other packages src',
       from: { path: '^packages/synaptic/' },
-      to: { path: '^packages/(kernel|theory)/src/' },
+      to: { path: '^packages/(kernel|theory|notations)/src/' },
       severity: 'error',
     },
     {

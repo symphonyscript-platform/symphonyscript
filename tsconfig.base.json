@@ -51,6 +51,9 @@
       "@symphonyscript/theory": [
         "packages/theory/src/index.ts"
       ],
+      "@symphonyscript/notations": [
+        "packages/notations/src/index.ts"
+      ],
       "@symphonyscript/core": [
         "packages/core/src/index.ts"
       ],
