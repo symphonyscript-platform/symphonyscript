@@ -37,7 +37,7 @@ export class RecordingBridge implements ExecutionContext {
   /**
    * Append a note to the captured notes array.
    *
-   * @param pitch - MIDI pitch (0–127)
+   * @param pitch - Pitch in absolute cents from C0
    * @param velocity - Note velocity (0–1000; same units as bridge)
    * @param duration - Note duration in ticks
    * @param tick - Start tick (PPQ 480)
