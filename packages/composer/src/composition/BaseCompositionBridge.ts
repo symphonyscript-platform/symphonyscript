@@ -1,4 +1,4 @@
-import { ExecutionContext } from '@symphonyscript/core'
+import { ExecutionContext, Notation } from '@symphonyscript/core'
 import { MIDI_CC } from '@symphonyscript/theory'
 import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 import { CompositionBridge } from '@symphonyscript/composer'
@@ -9,6 +9,8 @@ import { ThunkNode } from '../interfaces/thunk-node'
  * All fields are optional; defaults are applied when omitted.
  */
 export interface BaseCompositionBridgeParams {
+  /** Default notation to use for user-ergonomics (parsing notes, conversion, etc) */
+  notation: Notation
   /** Current tick position in ticks (PPQ 480). Default: 0 */
   tick: number
   /** Default velocity (0–1000). Default: 800 */
@@ -97,8 +99,9 @@ export class BaseCompositionBridge implements CompositionBridge {
   /**
    * @param params - Partial params; missing fields use defaults from {@link BaseCompositionBridgeParams}
    */
-  constructor(params: Partial<BaseCompositionBridgeParams> = {}) {
+  constructor(params: { notation: Notation } & Partial<BaseCompositionBridgeParams>) {
     this.params = {
+      notation: params.notation,
       tick: params.tick ?? 0,
       velocity: params.velocity ?? 800,
       transpose: params.transpose ?? 0,
@@ -152,6 +155,13 @@ export class BaseCompositionBridge implements CompositionBridge {
   get temperament() { return this.params.temperament }
   get tuningHz() { return this.params.tuningHz }
   get transposeCents() { return this.params.transposeCents }
+
+  /**
+   * Returns a default notation.
+   */
+  notation(): Notation {
+    return this.params.notation;
+  }
 
   /**
    * Defer a note at the current tick. Advances tick by duration.
