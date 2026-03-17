@@ -11,7 +11,7 @@
 
 import { Interval } from './intervals'
 
-import { ScaleMode } from '@symphonyscript/core'
+import { ScaleIntervals, ScaleMode } from '@symphonyscript/core'
 
 // ============================================================================
 // Types
@@ -22,7 +22,6 @@ import { ScaleMode } from '@symphonyscript/core'
  * All values are within one octave (0 ≤ cents < 1200), sorted ascending.
  * First entry is always 0 (unison/root).
  */
-export type ScaleIntervals = readonly number[]
 
 // ============================================================================
 // Scale Definitions

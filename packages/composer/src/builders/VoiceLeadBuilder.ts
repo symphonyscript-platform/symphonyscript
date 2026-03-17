@@ -1,7 +1,7 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { RomanNumeral } from '@symphonyscript/notations'
 import { ROMAN_DEGREE_MAP } from '@symphonyscript/notations'
-import { degreeToPitch } from '@symphonyscript/theory'
+import { degreeToCents } from '@symphonyscript/theory'
 
 /**
  * Parameters for {@link VoiceLeadBuilder}.
@@ -18,9 +18,9 @@ export interface VoiceLeadParams {
 /**
  * Immutable builder that emits a voice-led chord progression from roman numerals.
  *
- * Unlike {@link ProgressionBuilder}, minimizes voice movement between consecutive chords
- * by choosing the closest octave placement for each voice (within ±2 octaves). Resolves
- * numerals via {@link ROMAN_DEGREE_MAP}, then applies `voiceLeadPitches` to each chord
+ * Minimizes voice movement between consecutive chords by choosing the closest
+ * octave placement for each voice (within ±2 octaves). Resolves numerals via
+ * {@link ROMAN_DEGREE_MAP}, then applies `voiceLeadPitches` to each chord
  * relative to the previous chord's pitches.
  *
  * All builder methods return new instances (clone-on-set immutability).
@@ -47,7 +47,7 @@ export class VoiceLeadBuilder implements PipeStep {
    * Set the chord progression (ordered roman numerals).
    *
    * @param numerals - Array of roman numerals (e.g. ['I', 'IV', 'V', 'I'])
-
+   *
    * @returns New VoiceLeadBuilder with the updated numerals
    */
   numerals(numerals: RomanNumeral[]): VoiceLeadBuilder {
@@ -58,7 +58,7 @@ export class VoiceLeadBuilder implements PipeStep {
    * Set per-chord duration in ticks.
    *
    * @param duration - Duration in ticks
-
+   *
    * @returns New VoiceLeadBuilder with the updated duration
    */
   duration(duration: number): VoiceLeadBuilder {
@@ -68,15 +68,17 @@ export class VoiceLeadBuilder implements PipeStep {
   /**
    * Emit each chord with voice-leading: minimizes total pitch movement from the previous chord.
    *
-   * For each numeral, resolves degrees to raw pitches, then rearranges octave placements
+   * For each numeral, resolves degrees to cents pitches, then rearranges octave placements
    * (via `voiceLeadPitches`) so each voice stays as close as possible to the previous chord.
-   * First chord uses default octave placement; subsequent chords optimize relative to prior.
    *
    * @param bridge - Current composition state
-
+   *
    * @returns Updated bridge with voice-led progression emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {
+    const intervals = bridge.scaleIntervals
+    if (intervals === null) return bridge
+
     let target = bridge
     let prevPitches: number[] | null = null
 
@@ -85,15 +87,9 @@ export class VoiceLeadBuilder implements PipeStep {
       const rawPitches: number[] = []
 
       for (let j = 0; j < degrees.length; ++j) {
-        const resolvedPitch = degreeToPitch(
-          degrees[j],
-          target.scaleRoot,
-          target.scaleMode,
-        )
-
-        if (resolvedPitch !== null) {
-          rawPitches.push(resolvedPitch)
-        }
+        const cents = target.scaleRootCents
+          + degreeToCents(intervals as number[], degrees[j])
+        rawPitches.push(cents)
       }
 
       const pitches: number[] = prevPitches
@@ -119,8 +115,8 @@ export class VoiceLeadBuilder implements PipeStep {
   /**
    * Rearrange pitches to minimize total movement from previous chord.
    *
-   * For each voice, tests ±2 octave offsets and picks the placement with smallest
-   * distance to the corresponding previous voice (or last voice if fewer voices).
+   * For each voice, tests ±2 octave offsets (±2400 cents) and picks the
+   * placement with smallest distance to the corresponding previous voice.
    */
   private voiceLeadPitches(rawPitches: number[], prev: number[]): number[] {
     const result: number[] = []
@@ -133,7 +129,7 @@ export class VoiceLeadBuilder implements PipeStep {
       let bestDist = Math.abs(targetPitch - anchor)
 
       for (let octave = -2; octave <= 2; ++octave) {
-        const candidate = targetPitch + octave * 12
+        const candidate = targetPitch + octave * 1200
         const dist = Math.abs(candidate - anchor)
 
         if (dist < bestDist) {

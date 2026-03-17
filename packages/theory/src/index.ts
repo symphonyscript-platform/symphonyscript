@@ -1,35 +1,24 @@
 /**
  * @symphonyscript/theory
- * RFC-047: Bitwise Music Theory System (24-EDO Native)
  *
- * NOTE: User-facing notation ergonomics (note names, chord parsing,
- * roman numerals, key signatures, branded MIDI types) have been
- * extracted to @symphonyscript/notations.
- *
- * TODO Phase 2: Refactor composer to use cent-based APIs
- * (WesternNotation.degreeToCents, CHORD_INTERVALS_MAP) instead of
- * bitmask APIs (degreeToPitch, CHORD, pack). Once done, delete:
- * - types.ts, constants.ts, packer.ts (bitmask core)
- * - chords/definitions.ts (bitmask CHORD)
- * - scales/ (bitmask SCALE, helpers)
- * - harmony/voiceleading.ts (refactor to cent arrays)
- * - pitch/pitch.ts (24-EDO pitch class utils)
- * Target index.ts: export continuous, pitch, rhythm, harmony, util, effects
+ * Music theory primitives: continuous pitch model, MIDI constants,
+ * rhythm utilities, voice leading, temperaments, and effects.
  */
 
-// Core Bitwise Architecture
-export * from './types';
-export * from './constants';
-export * from './packer';
-
-// 24-EDO Native Modules
-export * from './chords';
-export * from './scales';
+// MIDI constants, GM programs, drum map, velocity
 export * from './pitch';
+
+// Rhythm: euclidean patterns, time signature, etc.
 export * from './rhythm';
+
+// Voice leading: voicing algorithms (cent-based)
 export * from './harmony';
+
+// Utility: ratio conversion, misc helpers
 export * from './util';
+
+// Effects: DSP-related theory
 export * from './effects';
 
-// RFC-060: Continuous Pitch Model
+// Continuous pitch model: cent-based scales, temperaments, tuning
 export * from './continuous';

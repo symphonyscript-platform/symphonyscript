@@ -1,41 +1,40 @@
-import { HarmonyBuilder } from '../builders/HarmonyBuilder'
-import type { HarmonyMask } from '@symphonyscript/theory'
+import { HarmonyBuilder, type ChordIntervals } from '../builders/HarmonyBuilder'
 import type { NotePitch } from '../types'
 import { resolvePitch } from '../utils/pitch'
 import { resolveDuration, type NoteDuration } from '../utils/duration'
 
 /**
- * Create a {@link HarmonyBuilder} from a raw 24-EDO bitmask and root pitch.
+ * Create a {@link HarmonyBuilder} from chord intervals and root pitch.
  *
  * Unlike {@link chord} which parses a string symbol, `harmony()` accepts
- * a pre-computed {@link HarmonyMask} directly. Use this when working with
- * programmatic interval sets or theory-layer outputs.
+ * pre-computed intervals directly. Use this when working with programmatic
+ * interval sets or theory-layer outputs.
  *
- * @param mask - 24-EDO packed interval bitmask. `undefined` = empty (zero mask).
- * @param root - Root pitch as string cue or MIDI number. `undefined` = C4 (60).
+ * @param intervals - Chord intervals in cents from root (e.g. [0, 400, 700]).
+ *                    `undefined` = empty (no intervals).
+ * @param root - Root pitch as string cue or cents. `undefined` = C4 (4800).
  * @param duration - Duration in ticks for all chord tones. `undefined` = bridge default.
-
+ *
  * @returns Immutable {@link HarmonyBuilder}
  *
  * @example
  * ```ts
- * import { pack } from '@symphonyscript/theory'
- *
- * const maj = pack([0, 8, 14])         // C major in 24-EDO
- * harmony(maj, 'C4')                    // C major chord
- * harmony(maj, 'G3', 960)              // G major, whole note
- * harmony(maj, 60).drop2().strum(20)   // Drop-2, strummed
+ * harmony([0, 400, 700], 4800)            // C major chord
+ * harmony([0, 400, 700], 5500, 960)       // G major, whole note
+ * harmony([0, 400, 700], 4800).drop2().strum(20)
  * ```
  */
 export function harmony(
-  mask?: HarmonyMask,
+  intervals?: ChordIntervals,
   root?: NotePitch,
   duration?: NoteDuration,
 ): HarmonyBuilder {
-  const rootMidi = root !== undefined ? resolvePitch(root) : undefined
-  // Convert MIDI → cents (MIDI 12 = C0 = 0 cents)
-  const rootCents = rootMidi !== undefined ? (rootMidi - 12) * 100 : undefined
+  const rootCents = root !== undefined ? resolvePitch(root) : undefined
   const resolvedDuration = resolveDuration(duration)
 
-  return new HarmonyBuilder({ mask, root: rootCents, duration: resolvedDuration })
+  return new HarmonyBuilder({
+    intervals: intervals ?? [],
+    root: rootCents,
+    duration: resolvedDuration,
+  })
 }

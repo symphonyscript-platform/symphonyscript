@@ -8,10 +8,7 @@
 // Euclidean rhythm generation
 export {
     euclidean,
-    euclideanMask,
-    euclideanForEach,
     rotatePattern,
-    rotateMask,
     patternToString,
 } from './euclidean';
 

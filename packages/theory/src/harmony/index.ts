@@ -9,6 +9,7 @@
 
 // Voice leading
 export {
+    type VoiceLeadingStyle,
     type VoiceLeadOptions,
     type VoiceMovement,
     voiceMovementCost,

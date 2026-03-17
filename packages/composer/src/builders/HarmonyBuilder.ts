@@ -1,8 +1,11 @@
 import { CompositionBridge } from '@symphonyscript/composer'
-import type { HarmonyMask, VoiceLeadingStyle } from '@symphonyscript/theory'
-import { closeVoicing, drop2Voicing, getScaleIntervals, openVoicing } from '@symphonyscript/theory'
+import type { ChordIntervals } from '@symphonyscript/core'
+import type { VoiceLeadingStyle } from '@symphonyscript/theory'
+import { closeVoicing, drop2Voicing, openVoicing } from '@symphonyscript/theory'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
 import { KNUTH_MULTIPLIER } from '../constants'
+
+export type { ChordIntervals } from '@symphonyscript/core'
 
 /**
  * Parameters specific to {@link HarmonyBuilder}.
@@ -10,42 +13,43 @@ import { KNUTH_MULTIPLIER } from '../constants'
  * Extends {@link PitchStepParams} with chord voicing, strum, and spread fields.
  */
 export interface HarmonyParams extends PitchStepParams {
-  /** 24-EDO interval bitmask defining the chord structure. */
-  mask: HarmonyMask
+  /** Chord intervals in cents from root (e.g. [0, 400, 700]). */
+  intervals: ChordIntervals
+  /**
+   * Chord symbol for deferred resolution via notation (e.g. 'Cmaj7').
+   * When set, intervals are resolved at apply-time via bridge.notation().
+   */
+  symbol: string | null
   /** Root pitch in absolute cents from C0. Defaults to 4800 (C4). */
   root: number
-  /** Voicing algorithm: `'close'`, `'open'`, or `'drop2'`. `null` = raw intervals. */
+  /** Voicing algorithm. null = raw intervals. */
   voicing: VoiceLeadingStyle | null
-  /** Tick delay between each strummed note. `null` = simultaneous emission. */
+  /** Tick delay between each strummed note. null = simultaneous emission. */
   strumRate: number | null
-  /** Strum direction. Only applies when `strumRate` is set. */
+  /** Strum direction. Only applies when strumRate is set. */
   strumDirection: 'up' | 'down'
   /** Maximum random tick offset per note for humanized timing. 0 = no spread. */
   spread: number
-  /** Seed for deterministic spread randomization. `null` = tick-derived. */
+  /** Seed for deterministic spread randomization. null = tick-derived. */
   spreadSeed: number | null
 }
 
 /**
  * Immutable builder for chord/harmony emission.
  *
- * Emits multiple simultaneous notes from a 24-EDO {@link HarmonyMask}.
+ * Emits multiple simultaneous notes from chord intervals (cents).
  * Supports three voicing algorithms (close, open, drop2), strumming,
  * and randomized spread for humanized timing.
  *
- * All builder methods return new instances (clone-on-set immutability).
+ * Chord intervals can be:
+ * - Provided directly as a number[] (e.g. [0, 400, 700])
+ * - Resolved at apply-time from a chord symbol via bridge.notation()
  *
- * @example
- * ```ts
- * chord('Cmaj7')                          // Close-voiced Cmaj7
- * chord('Am').drop2()                     // Drop-2 voicing
- * chord('G7').strum(30, 'down')           // Downward strum, 30 ticks apart
- * harmony(mask, 'C4').spread(10)          // Humanized timing ±10 ticks
- * chord('Dm').velocity(600).duration(960) // Half-note, soft
- * ```
+ * All builder methods return new instances (clone-on-set immutability).
  */
 export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
-  private readonly _mask: HarmonyMask
+  private readonly _intervals: ChordIntervals
+  private readonly _symbol: string | null
   private readonly _root: number
   private readonly voicingStyle: VoiceLeadingStyle | null
   private readonly strumRate: number | null
@@ -55,7 +59,8 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
 
   constructor(params: Partial<HarmonyParams>) {
     super(params)
-    this._mask = params.mask ?? (0 as HarmonyMask)
+    this._intervals = params.intervals ?? []
+    this._symbol = params.symbol ?? null
     this._root = params.root ?? 4800
     this.voicingStyle = params.voicing ?? null
     this.strumRate = params.strumRate ?? null
@@ -65,71 +70,36 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
   }
 
   /**
-   * Replace the 24-EDO interval bitmask that defines the chord structure.
-   *
-   * The mask encodes which intervals (in 24-EDO half-sharps) are present.
-   * Use `pack()` from `@symphonyscript/theory` to create masks from interval arrays.
-   *
-   * @param mask - Packed interval bitmask
-
-   * @returns New HarmonyBuilder with the updated mask
+   * Set chord intervals directly (cents from root).
    */
-  mask(mask: HarmonyMask): HarmonyBuilder {
-    return this.cloneHarmony({ mask })
+  intervals(intervals: ChordIntervals): HarmonyBuilder {
+    return this.cloneHarmony({ intervals, symbol: null })
   }
 
   /**
    * Set the root pitch in absolute cents from C0.
-   *
-   * @param root - Absolute cents (e.g. 4800 = C4, 5500 = G4)
-   *
-   * @returns New HarmonyBuilder with the updated root
    */
   root(root: number): HarmonyBuilder {
     return this.cloneHarmony({ root })
   }
 
-  /**
-   * Apply drop-2 voicing.
-   *
-   * Moves the second-highest note down an octave, creating wider spacing
-   * between upper voices. Common in jazz guitar and big-band arranging.
-   *
-   * @returns New HarmonyBuilder with drop-2 voicing applied
-   */
+  /** Apply drop-2 voicing. */
   drop2(): HarmonyBuilder {
     return this.cloneHarmony({ voicing: 'drop2' })
   }
 
-  /**
-   * Apply open voicing.
-   *
-   * Distributes chord tones across a wider range by shifting alternate notes
-   * up an octave. Produces a spacious, orchestral sound compared to close voicing.
-   *
-   * @returns New HarmonyBuilder with open voicing applied
-   */
+  /** Apply open voicing. */
   open(): HarmonyBuilder {
     return this.cloneHarmony({ voicing: 'open' })
   }
 
-  /**
-   * Apply close voicing (default).
-   *
-   * All chord tones are placed in the tightest possible interval spacing
-   * within a single octave. This is the standard voicing when no style is set.
-   *
-   * @returns New HarmonyBuilder with close voicing applied
-   */
+  /** Apply close voicing (default). */
   close(): HarmonyBuilder {
     return this.cloneHarmony({ voicing: 'close' })
   }
 
   /**
-   * Enable strummed emission. Each note is offset by `rate` ticks.
-   *
-   * @param rate - Tick delay between consecutive notes
-   * @param direction - `'up'` (low→high) or `'down'` (high→low). Defaults to `'up'`.
+   * Enable strummed emission. Each note is offset by rate ticks.
    */
   strum(rate: number, direction: 'up' | 'down' = 'up'): HarmonyBuilder {
     return this.cloneHarmony({ strumRate: rate, strumDirection: direction })
@@ -137,41 +107,44 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
 
   /**
    * Add randomized tick offset per note for humanized timing.
-   *
-   * Each note receives a pseudo-random offset in `[0, amount]` ticks.
-   * Uses Knuth LCG seeded from `seed` or the current tick for determinism.
-   *
-   * @param amount - Maximum spread offset in ticks
-   * @param seed - Optional seed for reproducible results
    */
   spread(amount: number, seed?: number): HarmonyBuilder {
     return this.cloneHarmony({ spread: amount, spreadSeed: seed ?? null })
   }
 
   /**
-   * Resolve pitches from the harmony mask and emit all chord tones.
-   *
-   * **Pipeline:**
-   * 1. Compute `resolvedRoot` = root + accidental + octaveShift×1200 + transposeCents (all cents)
-   * 2. Resolve pitches via voicing function or raw 24-EDO intervals (converted to cents)
-   * 3. For each repeat: emit notes (strummed or simultaneous), advance tick by duration
-   *
-   * When `strumRate` is set, notes are offset sequentially. Otherwise, all
-   * notes emit at the same tick (with optional spread randomization).
-   *
-   * @param bridge - Current composition state
-
-   * @returns Updated bridge with chord notes emitted
+   * Resolve chord intervals and emit all chord tones.
    */
   apply(bridge: CompositionBridge): CompositionBridge {
     let target = this.applyFlags(bridge)
     const scaledDuration = this.resolvedDuration()
-    const resolvedRoot = this._root
+
+    // Resolve intervals: symbol-based or direct
+    let chordIntervals: ChordIntervals
+    let root: number
+
+    if (this._symbol !== null) {
+      const notation = bridge.notation()
+      chordIntervals = notation.chordToIntervals(this._symbol)
+
+      // Parse root from symbol if possible, fall back to stored root
+      try {
+        const rootNote = this._symbol.match(/^[A-G][#b]?/)?.[0]
+        root = rootNote ? notation.noteToCents(rootNote + '4') : this._root
+      } catch {
+        root = this._root
+      }
+    } else {
+      chordIntervals = this._intervals
+      root = this._root
+    }
+
+    const resolvedRoot = root
       + this.shared.accidental
       + (this.shared.octaveShift * 1200)
       + this.shared.transposeCents
 
-    const pitches = this.resolvePitches(resolvedRoot)
+    const pitches = this.resolvePitches(chordIntervals, resolvedRoot)
     if (pitches.length === 0) return this.resetFlags(target)
 
     for (let repeat = 0; repeat < this.shared.repeatCount; ++repeat) {
@@ -194,7 +167,8 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
   protected create(params: Partial<PitchStepParams>): HarmonyBuilder {
     return new HarmonyBuilder({
       ...params,
-      mask: this._mask,
+      intervals: this._intervals,
+      symbol: this._symbol,
       root: this._root,
       voicing: this.voicingStyle,
       strumRate: this.strumRate,
@@ -205,37 +179,31 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
   }
 
   /**
-   * Resolve pitches from mask using the voicing function or raw intervals.
-   *
-   * With a voicing style set, delegates to the corresponding `@symphonyscript/theory`
-   * voicing function. Voicing functions return MIDI-space offsets, which are
-   * converted to cent offsets (×100) before adding to resolvedRoot.
-   * Otherwise, extracts raw 24-EDO intervals and converts to cent offsets.
+   * Resolve pitches from intervals using the voicing function or raw addition.
    */
-  private resolvePitches(resolvedRoot: number): number[] {
+  private resolvePitches(intervals: ChordIntervals, resolvedRoot: number): number[] {
     if (this.voicingStyle !== null) {
       const voicingFn = this.voicingStyle === 'drop2' ? drop2Voicing
         : this.voicingStyle === 'open' ? openVoicing
         : closeVoicing
 
-      // Voicing functions return MIDI-space semitone offsets
-      const rawPitches = voicingFn(this._mask, 4, 4)
+      const rawPitches = voicingFn(intervals, 4, 4)
       const pitches = new Array<number>(rawPitches.length)
 
+      // Rebase: voicing functions place around centerOctave * 1200.
+      // We want them relative to resolvedRoot instead.
+      const voicingCenter = 4 * 1200
       for (let i = 0; i < rawPitches.length; ++i) {
-        // Convert semitone offset to cents and add to resolved root
-        pitches[i] = (rawPitches[i] * 100) + resolvedRoot
+        pitches[i] = rawPitches[i] - voicingCenter + resolvedRoot
       }
 
       return pitches
     }
 
-    // Raw 24-EDO intervals: each unit = 50 cents (1200/24)
-    const intervals = getScaleIntervals(this._mask)
+    // Raw intervals: each is already in cents
     const pitches = new Array<number>(intervals.length)
-
     for (let i = 0; i < intervals.length; ++i) {
-      pitches[i] = resolvedRoot + (Number(intervals[i]) * 50)
+      pitches[i] = resolvedRoot + intervals[i]
     }
 
     return pitches
@@ -243,9 +211,6 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
 
   /**
    * Emit chord notes with sequential strum offset.
-   *
-   * For `'down'` direction, pitches are reversed before emission.
-   * Each note is placed at `startTick + (index × strumRate)`.
    */
   private emitStrum(
     bridge: CompositionBridge,
@@ -271,9 +236,6 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
 
   /**
    * Emit chord notes simultaneously with optional Knuth-LCG spread.
-   *
-   * When `spreadAmount > 0`, each note receives a pseudo-random tick
-   * offset in `[0, spreadAmount]` for humanized feel.
    */
   private emitSimultaneous(
     bridge: CompositionBridge,
@@ -300,7 +262,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
     return target
   }
 
-  /** Imperative array reverse (avoids `Array.prototype.reverse` mutation). */
+  /** Imperative array reverse (avoids Array.prototype.reverse mutation). */
   private reverseArray(source: number[]): number[] {
     const result = new Array<number>(source.length)
     const last = source.length - 1
@@ -316,7 +278,8 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
   private cloneHarmony(overrides: Partial<HarmonyParams>): HarmonyBuilder {
     return new HarmonyBuilder({
       ...this.shared,
-      mask: overrides.mask ?? this._mask,
+      intervals: overrides.intervals ?? this._intervals,
+      symbol: overrides.symbol !== undefined ? overrides.symbol : this._symbol,
       root: overrides.root ?? this._root,
       voicing: overrides.voicing !== undefined ? overrides.voicing : this.voicingStyle,
       strumRate: overrides.strumRate !== undefined ? overrides.strumRate : this.strumRate,

@@ -1,7 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import { degreeToPitch } from '@symphonyscript/theory'
-
-import { ScaleMode } from '@symphonyscript/core'
+import { degreeToCents } from '@symphonyscript/theory'
 
 /**
  * Parameters for {@link DegreeChordBuilder}.
@@ -18,9 +16,9 @@ export interface DegreeChordParams {
 /**
  * Immutable builder that emits a chord from scale degrees.
  *
- * Resolves each degree to MIDI pitch via `degreeToPitch` using the bridge's scale context
- * (scaleRoot, scaleMode). Emits all chord tones simultaneously at the current tick.
- * Unlike {@link RomanBuilder}, degrees are explicit (e.g. [1, 3, 5] or [4, 6, 8] for IV).
+ * Resolves each degree to pitch in cents via `degreeToCents` using the bridge's
+ * `scaleIntervals` and `scaleRootCents`. Emits all chord tones simultaneously
+ * at the current tick.
  *
  * All builder methods return new instances (clone-on-set immutability).
  *
@@ -47,7 +45,7 @@ export class DegreeChordBuilder implements PipeStep {
    * Set the scale degrees that define the chord.
    *
    * @param degrees - Array of scale degrees (e.g. [1, 3, 5] for triad)
-
+   *
    * @returns New DegreeChordBuilder with the updated degrees
    */
   degrees(degrees: number[]): DegreeChordBuilder {
@@ -58,7 +56,7 @@ export class DegreeChordBuilder implements PipeStep {
    * Set note duration in ticks.
    *
    * @param duration - Duration in ticks
-
+   *
    * @returns New DegreeChordBuilder with the updated duration
    */
   duration(duration: number): DegreeChordBuilder {
@@ -66,36 +64,32 @@ export class DegreeChordBuilder implements PipeStep {
   }
 
   /**
-   * Resolve degrees to pitches and emit all chord tones simultaneously.
+   * Resolve degrees to pitches (cents) and emit all chord tones simultaneously.
    *
-   * Skips degrees that resolve to null. Advances tick by duration after emission.
-   * Returns bridge unchanged when degrees array is empty.
+   * Uses `degreeToCents` with `bridge.scaleIntervals` to resolve each degree.
+   * Returns bridge unchanged when degrees array is empty or scaleIntervals is null.
    *
    * @param bridge - Current composition state
-
+   *
    * @returns Updated bridge with chord notes emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {
     if (this.params.degrees.length === 0) return bridge
 
-    const scaleMode = bridge.scaleMode as ScaleMode
+    const intervals = bridge.scaleIntervals
+    if (intervals === null) return bridge
+
     const startTick = bridge.tick
     const resolvedDuration = this.params.duration ?? bridge.defaultDuration
     let target = bridge
 
     for (let i = 0; i < this.params.degrees.length; ++i) {
-      const pitch = degreeToPitch(
-        this.params.degrees[i],
-        bridge.scaleRoot,
-        scaleMode,
-        4,
-      )
-
-      if (pitch === null) continue
+      const cents = bridge.scaleRootCents
+        + degreeToCents(intervals as number[], this.params.degrees[i])
 
       target = target
         .withTick(startTick)
-        .withNote(pitch, resolvedDuration, undefined)
+        .withNote(cents, resolvedDuration, undefined)
     }
 
     target = target.withTick(startTick + resolvedDuration)

@@ -1,13 +1,6 @@
 import { CompositionBridge } from '@symphonyscript/composer'
-import { degreeToPitch } from '@symphonyscript/theory'
 import { degreeToCents } from '@symphonyscript/theory'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
-import { ScaleMode } from '@symphonyscript/core'
-
-/**
- * C0 in MIDI = 12 (MIDI 0 = C-1).
- */
-const MIDI_C0 = 12
 
 /**
  * Parameters for {@link DegreeBuilder}.
@@ -22,9 +15,8 @@ export interface DegreeParams extends PitchStepParams {
 /**
  * Immutable builder that emits a single pitch from a scale degree.
  *
- * If the bridge has `scaleIntervals` (continuous pitch), resolves via
- * `degreeToCents()` from Theory. Otherwise falls back to legacy
- * `degreeToPitch()` for backward compatibility.
+ * Resolves via `degreeToCents()` using the bridge's `scaleIntervals`
+ * and `scaleRootCents`.
  *
  * All builder methods return new instances (clone-on-set immutability).
  *
@@ -57,48 +49,27 @@ export class DegreeBuilder extends PitchStepBuilder<DegreeBuilder> {
   }
 
   /**
-   * Resolve the degree to pitch and emit note(s).
+   * Resolve the degree to pitch in cents and emit note(s).
    *
-   * If bridge has `scaleIntervals` → uses `degreeToCents()` → absolute cents.
-   * Otherwise falls back to legacy `degreeToPitch()` → MIDI → cents.
+   * Uses `degreeToCents()` with the bridge's `scaleIntervals` to compute
+   * the cent offset, then adds `scaleRootCents` and modifiers.
    *
    * @param bridge - Current composition state
    *
-   * @returns Updated bridge with note(s) emitted, or unchanged if resolution fails
+   * @returns Updated bridge with note(s) emitted, or unchanged if no scale intervals
    */
   apply(bridge: CompositionBridge): CompositionBridge {
-    let finalCents: number
+    const intervals = bridge.scaleIntervals
+    if (intervals === null) return bridge
 
-    if (bridge.scaleIntervals !== null) {
-      // --- Continuous pitch path ---
-      const degreeCents = degreeToCents(bridge.scaleIntervals, this._degree)
-      finalCents = bridge.scaleRootCents
-        + degreeCents
-        + this.shared.accidental
-        + (this.shared.octaveShift * 1200)
-        + this.shared.transposeCents
-    } else {
-      // --- Legacy fallback: degreeToPitch() → MIDI → cents ---
-      const pitch = degreeToPitch(
-        this._degree,
-        bridge.scaleRoot,
-        bridge.scaleMode as ScaleMode,
-        4,
-        0, // accidental + transpose applied in cents below
-        0, // octaveShift applied in cents below
-      )
-
-      if (pitch === null) return bridge
-
-      // Convert MIDI to cents, then apply cents-based modifiers
-      finalCents = (pitch - MIDI_C0) * 100
-        + this.shared.accidental
-        + (this.shared.octaveShift * 1200)
-        + this.shared.transposeCents
-    }
+    const degreeCents = degreeToCents(intervals, this._degree)
+    const finalCents = bridge.scaleRootCents
+      + degreeCents
+      + this.shared.accidental
+      + (this.shared.octaveShift * 1200)
+      + this.shared.transposeCents
 
     let target = this.applyFlags(bridge)
-
     const scaledDuration = this.resolvedDuration()
 
     for (let i = 0; i < this.shared.repeatCount; ++i) {

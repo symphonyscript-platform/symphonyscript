@@ -1,7 +1,7 @@
 import { CompositionBridge } from '@symphonyscript/composer'
-import { degreeToPitch } from '@symphonyscript/theory'
+import { degreeToCents } from '@symphonyscript/theory'
 import { CompositionBridgeDecorator } from './CompositionBridgeDecorator'
-import { ScaleMode } from '@symphonyscript/core'
+import { ScaleIntervals } from '@symphonyscript/core'
 
 /**
  * Configuration for {@link HarmonizeBridge}.
@@ -45,13 +45,13 @@ export class HarmonizeBridge extends CompositionBridgeDecorator {
    *
    * Skips harmonization when `precise` is active (returns rewrapped pass-through).
    * For each interval, finds the input note's scale degree via brute-force
-   * search, then computes the harmonized pitch using `degreeToPitch`.
+   * search in cents, then computes the harmonized pitch using `degreeToCents`.
    * Silently skips intervals that can't be resolved (note not in scale).
    *
-   * @param pitch - MIDI pitch of the original note
+   * @param pitch - Pitch in cents
    * @param duration - Note duration in ticks
    * @param velocity - Optional velocity override
-
+   *
    * @returns Updated bridge with original + harmony notes emitted
    */
   override withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge {
@@ -59,27 +59,21 @@ export class HarmonizeBridge extends CompositionBridgeDecorator {
 
     let target = this.bridge.withNote(pitch, duration, velocity)
 
-    const scaleMode = this.scaleMode as ScaleMode
-    const scaleRoot = this.scaleRoot
+    const intervals = this.scaleIntervals
+    if (intervals === null) return this.rewrap(target)
 
     for (let i = 0; i < this.params.intervals.length; ++i) {
       const interval = this.params.intervals[i]
 
-      const originalDegree = this.findScaleDegree(pitch, scaleRoot, scaleMode)
+      const originalDegree = this.findScaleDegree(pitch, intervals)
       if (originalDegree === null) continue
 
-      const harmonizedPitch = degreeToPitch(
-        originalDegree + interval - 1,
-        scaleRoot,
-        scaleMode,
-        Math.floor(pitch / 12) - 1,
-      )
-
-      if (harmonizedPitch === null) continue
+      const harmonizedCents = this.scaleRootCents
+        + degreeToCents(intervals, originalDegree + interval - 1)
 
       target = target
         .withTick(this.tick)
-        .withNote(harmonizedPitch, duration, velocity)
+        .withNote(harmonizedCents, duration, velocity)
     }
 
     return this.rewrap(target)
@@ -91,21 +85,15 @@ export class HarmonizeBridge extends CompositionBridgeDecorator {
   }
 
   /**
-   * Find which scale degree produces the given pitch.
+   * Find which scale degree produces the given pitch (in cents).
    *
-   * Brute-force searches degrees 1–14 (two octaves) in the given scale.
+   * Searches degrees 1–14 (two octaves) in the given scale intervals.
    * Returns `null` if the pitch is chromatic (not in the scale).
    */
-  private findScaleDegree(pitch: number, scaleRoot: number, scaleMode: ScaleMode): number | null {
+  private findScaleDegree(pitch: number, intervals: ScaleIntervals): number | null {
     for (let degree = 1; degree <= 14; ++degree) {
-      const degreePitch = degreeToPitch(
-        degree,
-        scaleRoot,
-        scaleMode,
-        Math.floor(pitch / 12) - 1,
-      )
-
-      if (degreePitch === pitch) return degree
+      const degreeCents = this.scaleRootCents + degreeToCents(intervals, degree)
+      if (degreeCents === pitch) return degree
     }
 
     return null
