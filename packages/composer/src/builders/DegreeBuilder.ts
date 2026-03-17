@@ -1,8 +1,8 @@
 import { CompositionBridge } from '@symphonyscript/composer'
 import { degreeToPitch } from '@symphonyscript/theory'
-import { ScaleMode } from '@symphonyscript/notations'
 import { degreeToCents } from '@symphonyscript/theory'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
+import { ScaleMode } from '@symphonyscript/core'
 
 /**
  * C0 in MIDI = 12 (MIDI 0 = C-1).

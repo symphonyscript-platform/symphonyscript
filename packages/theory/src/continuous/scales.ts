@@ -10,7 +10,8 @@
  */
 
 import { Interval } from './intervals'
-import { ScaleMode } from '@symphonyscript/notations'
+
+import { ScaleMode } from '@symphonyscript/core'
 
 // ============================================================================
 // Types

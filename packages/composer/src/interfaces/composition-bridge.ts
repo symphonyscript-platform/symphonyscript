@@ -1,5 +1,5 @@
-import { PitchClass, ScaleMode } from '@symphonyscript/notations'
-import { ExecutionContext, Notation } from '@symphonyscript/core'
+import { PitchClass } from '@symphonyscript/notations'
+import { ExecutionContext, Notation, ScaleMode } from '@symphonyscript/core'
 
 /**
  * Main interface for the composition API. Provides read-only composition state

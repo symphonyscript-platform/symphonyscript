@@ -9,7 +9,8 @@ import type { HarmonyMask } from '../types'
 import { getScaleIntervals, SCALE } from './scales'
 import type { NoteName } from '@symphonyscript/notations'
 import { unsafeNoteName } from '@symphonyscript/notations'
-import { ScaleMode } from '@symphonyscript/notations'
+
+import { ScaleMode } from '@symphonyscript/core'
 
 /**
  * Scale context for degree-based notation.

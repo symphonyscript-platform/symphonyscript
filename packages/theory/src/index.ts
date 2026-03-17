@@ -5,6 +5,16 @@
  * NOTE: User-facing notation ergonomics (note names, chord parsing,
  * roman numerals, key signatures, branded MIDI types) have been
  * extracted to @symphonyscript/notations.
+ *
+ * TODO Phase 2: Refactor composer to use cent-based APIs
+ * (WesternNotation.degreeToCents, CHORD_INTERVALS_MAP) instead of
+ * bitmask APIs (degreeToPitch, CHORD, pack). Once done, delete:
+ * - types.ts, constants.ts, packer.ts (bitmask core)
+ * - chords/definitions.ts (bitmask CHORD)
+ * - scales/ (bitmask SCALE, helpers)
+ * - harmony/voiceleading.ts (refactor to cent arrays)
+ * - pitch/pitch.ts (24-EDO pitch class utils)
+ * Target index.ts: export continuous, pitch, rhythm, harmony, util, effects
  */
 
 // Core Bitwise Architecture

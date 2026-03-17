@@ -1,6 +1,6 @@
-import { ExecutionContext, Notation } from '@symphonyscript/core'
+import { ExecutionContext, Notation, ScaleMode } from '@symphonyscript/core'
 import { MIDI_CC } from '@symphonyscript/theory'
-import { PitchClass, ScaleMode } from '@symphonyscript/notations'
+import { PitchClass } from '@symphonyscript/notations'
 import { CompositionBridge } from '@symphonyscript/composer'
 import { ThunkNode } from '../interfaces/thunk-node'
 
@@ -110,9 +110,9 @@ export class BaseCompositionBridge implements CompositionBridge {
       timeSignatureNum: params.timeSignatureNum ?? 4,
       timeSignatureDen: params.timeSignatureDen ?? 4,
       scaleRoot: params.scaleRoot ?? (0 as PitchClass),
-      scaleMode: params.scaleMode ?? ScaleMode.MAJOR,
+      scaleMode: params.scaleMode ?? 'major',
       keyRoot: params.keyRoot ?? null,
-      keyMode: params.keyMode ?? ScaleMode.MAJOR,
+      keyMode: params.keyMode ?? 'major',
       volume: params.volume ?? 100,
       pan: params.pan ?? 64,
       swing: params.swing ?? 0,

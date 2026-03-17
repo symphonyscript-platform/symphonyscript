@@ -10,7 +10,8 @@ import {
   drumPattern, drumEuclidean,
   progression,
 } from '../index'
-import { ScaleMode, PitchClass } from '@symphonyscript/notations'
+import { PitchClass } from '@symphonyscript/notations'
+import { ScaleMode } from '@symphonyscript/core'
 
 // ─── Config ───
 const Q = 480         // quarter

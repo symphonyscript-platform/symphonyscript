@@ -1,7 +1,7 @@
 import { CompositionBridge } from '@symphonyscript/composer'
 import { degreeToPitch } from '@symphonyscript/theory'
-import { ScaleMode } from '@symphonyscript/notations'
 import { CompositionBridgeDecorator } from './CompositionBridgeDecorator'
+import { ScaleMode } from '@symphonyscript/core'
 
 /**
  * Configuration for {@link HarmonizeBridge}.

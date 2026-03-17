@@ -3,18 +3,6 @@
  */
 
 import {
-    // Chord types (PORT-018)
-    type ChordRoot,
-    type ChordSuffix,
-    type ChordQuality,
-    type ChordCode,
-    CHORD_ROOTS,
-    CHORD_SUFFIXES,
-    isValidChordRoot,
-    isChordSuffix,
-} from '../chords/types';
-
-import {
     // Harmony types (PORT-019)
     type Accidental,
     type VoiceLeadingStyle,
@@ -63,69 +51,6 @@ import {
     createEffectBusConfig,
 } from '../effects/types';
 
-// ============================================================================
-// PORT-018: Chord Helper Types
-// ============================================================================
-
-describe('Chord Helper Types (PORT-018)', () => {
-    describe('CHORD_ROOTS', () => {
-        test('contains all 17 roots', () => {
-            expect(CHORD_ROOTS).toHaveLength(17);
-        });
-
-        test('includes naturals, sharps, and flats', () => {
-            expect(CHORD_ROOTS).toContain('C');
-            expect(CHORD_ROOTS).toContain('C#');
-            expect(CHORD_ROOTS).toContain('Db');
-            expect(CHORD_ROOTS).toContain('B');
-        });
-
-        test('is frozen', () => {
-            expect(Object.isFrozen(CHORD_ROOTS)).toBe(true);
-        });
-    });
-
-    describe('CHORD_SUFFIXES', () => {
-        test('contains all 20 suffixes', () => {
-            expect(CHORD_SUFFIXES).toHaveLength(20);
-        });
-
-        test('includes common suffixes', () => {
-            expect(CHORD_SUFFIXES).toContain('');
-            expect(CHORD_SUFFIXES).toContain('m');
-            expect(CHORD_SUFFIXES).toContain('7');
-            expect(CHORD_SUFFIXES).toContain('maj7');
-            expect(CHORD_SUFFIXES).toContain('dim');
-        });
-    });
-
-    describe('isValidChordRoot()', () => {
-        test('returns true for valid roots', () => {
-            expect(isValidChordRoot('C')).toBe(true);
-            expect(isValidChordRoot('F#')).toBe(true);
-            expect(isValidChordRoot('Bb')).toBe(true);
-        });
-
-        test('returns false for invalid roots', () => {
-            expect(isValidChordRoot('H')).toBe(false);
-            expect(isValidChordRoot('c')).toBe(false);
-            expect(isValidChordRoot('')).toBe(false);
-        });
-    });
-
-    describe('isChordSuffix()', () => {
-        test('returns true for valid suffixes', () => {
-            expect(isChordSuffix('')).toBe(true);
-            expect(isChordSuffix('m')).toBe(true);
-            expect(isChordSuffix('maj7')).toBe(true);
-        });
-
-        test('returns false for invalid suffixes', () => {
-            expect(isChordSuffix('xyz')).toBe(false);
-            expect(isChordSuffix('major')).toBe(false);
-        });
-    });
-});
 
 // ============================================================================
 // PORT-019: Harmony Helper Types

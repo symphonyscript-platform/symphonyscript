@@ -9,7 +9,8 @@ import type { HarmonyMask, Interval24EDO } from '@symphonyscript/theory';
 import { asHarmonyMask, asInterval24EDO } from '@symphonyscript/theory';
 import { OCTAVE_SIZE } from '@symphonyscript/theory';
 import { PitchClass } from './pitch-class';
-import { ScaleMode } from './scale-mode';
+
+import { ScaleMode } from '@symphonyscript/core'
 
 /**
  * Key context for chord and key signature resolution.

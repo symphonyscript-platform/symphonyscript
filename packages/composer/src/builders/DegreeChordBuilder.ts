@@ -1,6 +1,7 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { degreeToPitch } from '@symphonyscript/theory'
-import { ScaleMode } from '@symphonyscript/notations'
+
+import { ScaleMode } from '@symphonyscript/core'
 
 /**
  * Parameters for {@link DegreeChordBuilder}.

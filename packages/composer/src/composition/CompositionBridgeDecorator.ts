@@ -1,6 +1,6 @@
 import { CompositionBridge } from '@symphonyscript/composer'
-import { ExecutionContext } from '@symphonyscript/core'
-import { PitchClass, ScaleMode } from '@symphonyscript/notations'
+import { ExecutionContext, Notation, ScaleMode } from '@symphonyscript/core'
+import { PitchClass } from '@symphonyscript/notations'
 
 /**
  * Abstract base for decorator bridges that wrap an inner {@link CompositionBridge}.
@@ -61,6 +61,10 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
   get temperament() { return this.bridge.temperament }
   get tuningHz() { return this.bridge.tuningHz }
   get transposeCents() { return this.bridge.transposeCents }
+
+  notation(): Notation {
+    return this.bridge.notation()
+  }
 
   /**
    * Forward note to inner bridge, then rewrap to preserve decorator type.

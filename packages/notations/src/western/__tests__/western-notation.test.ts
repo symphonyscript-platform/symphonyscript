@@ -6,7 +6,7 @@
  */
 
 import { NotationInputError } from '@symphonyscript/core'
-import { WesternNotation } from '../western/western.notation'
+import { WesternNotation } from '../western.notation'
 
 describe('WesternNotation', () => {
   let n: WesternNotation

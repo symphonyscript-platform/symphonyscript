@@ -4,7 +4,8 @@
  * Maps human-readable mode names (full and shorthand) to {@link ScaleMode} enum values.
  */
 
-import { ScaleMode } from '@symphonyscript/notations'
+
+import { ScaleMode } from '@symphonyscript/core'
 
 /**
  * Scale mode as a human-readable string. Supports full names and shorthands.
