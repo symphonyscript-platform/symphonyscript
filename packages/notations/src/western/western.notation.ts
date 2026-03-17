@@ -19,7 +19,6 @@ import {
   CENTS_TO_INTERVAL,
   DURATION_MAP,
   TICKS_RATIO_TO_DURATION,
-  SCALE_MODE_MAP,
   SCALE_INTERVALS_MAP,
   KEY_SIGNATURE_TABLE,
   CHORD_INTERVALS_MAP,
@@ -120,22 +119,15 @@ export class WesternNotation extends BaseNotation {
   // ==========================================================================
 
   getScaleIntervals(mode: string): ScaleIntervals {
-    const modeLower = mode.toLowerCase()
-    const scaleMode = SCALE_MODE_MAP[modeLower]
-    if (scaleMode === undefined) {
+    const intervals = SCALE_INTERVALS_MAP[mode.toLowerCase()]
+    if (!intervals) {
       throw new NotationInputError(this.getId(), 'getScaleIntervals', mode)
     }
-
-    const intervals = SCALE_INTERVALS_MAP[scaleMode]
-    if (intervals === undefined) {
-      throw new NotationInputError(this.getId(), 'getScaleIntervals', mode)
-    }
-
     return intervals
   }
 
   getSupportedScales(): string[] {
-    return Object.keys(SCALE_MODE_MAP)
+    return Object.keys(SCALE_INTERVALS_MAP)
   }
 
   // ==========================================================================

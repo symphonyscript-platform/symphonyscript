@@ -4,24 +4,37 @@
  * All maps, tables, and constants needed by WesternNotation.
  * No regex. No imports from western-legacy/.
  *
- * All data (chord intervals, scale intervals, ScaleMode values) is inlined
- * to avoid circular dependency with @symphonyscript/theory.
+ * Scale interval arrays are imported from @symphonyscript/theory
+ * (single source of truth for the math). This file maps
+ * notation-specific scale names to those arrays.
  */
 
-import type { ChordIntervals } from '@symphonyscript/core'
+import type { ChordIntervals, ScaleIntervals } from '@symphonyscript/core'
 
-// ScaleMode enum values, inlined to avoid western-legacy import.
-// Values match western-legacy/scale-mode.ts exactly.
-const SM = {
-  NONE: 0,
-  MAJOR: 1, MINOR: 2, HARMONIC_MINOR: 3, MELODIC_MINOR: 4,
-  DORIAN: 5, PHRYGIAN: 6, LYDIAN: 7, MIXOLYDIAN: 8, LOCRIAN: 9,
-  PENTATONIC_MAJOR: 10, PENTATONIC_MINOR: 11,
-  BLUES: 12, CHROMATIC: 13, WHOLE_TONE: 14,
-  DIMINISHED_HW: 15, DIMINISHED_WH: 16,
-  BEBOP_DOMINANT: 17, BEBOP_MAJOR: 18,
-  HIRAJOSHI: 19, IN_SEN: 20, HUNGARIAN_MINOR: 21, PHRYGIAN_DOMINANT: 22,
-} as const
+import {
+  IONIAN_INTERVALS,
+  DORIAN_INTERVALS,
+  PHRYGIAN_INTERVALS,
+  LYDIAN_INTERVALS,
+  MIXOLYDIAN_INTERVALS,
+  AEOLIAN_INTERVALS,
+  LOCRIAN_INTERVALS,
+  HARMONIC_MINOR_INTERVALS,
+  MELODIC_MINOR_INTERVALS,
+  PENTATONIC_MAJOR_INTERVALS,
+  PENTATONIC_MINOR_INTERVALS,
+  BLUES_INTERVALS,
+  CHROMATIC_INTERVALS,
+  WHOLE_TONE_INTERVALS,
+  DIMINISHED_HW_INTERVALS,
+  DIMINISHED_WH_INTERVALS,
+  BEBOP_DOMINANT_INTERVALS,
+  BEBOP_MAJOR_INTERVALS,
+  HIRAJOSHI_INTERVALS,
+  IN_SEN_INTERVALS,
+  HUNGARIAN_MINOR_INTERVALS,
+  PHRYGIAN_DOMINANT_INTERVALS,
+} from '@symphonyscript/theory'
 
 // ============================================================================
 // Note ↔ Semitone
@@ -123,68 +136,38 @@ export const TICKS_RATIO_TO_DURATION: readonly [number, string][] = [
 ]
 
 // ============================================================================
-// Scale Mode Map
-// ============================================================================
-
-/** Lowercase mode name → ScaleMode integer. */
-export const SCALE_MODE_MAP: Readonly<Record<string, number>> = {
-  'major': SM.MAJOR,
-  'minor': SM.MINOR,
-  'harmonic_minor': SM.HARMONIC_MINOR,
-  'melodic_minor': SM.MELODIC_MINOR,
-  'dorian': SM.DORIAN,
-  'phrygian': SM.PHRYGIAN,
-  'lydian': SM.LYDIAN,
-  'mixolydian': SM.MIXOLYDIAN,
-  'aeolian': SM.MINOR,
-  'locrian': SM.LOCRIAN,
-  'pentatonic_major': SM.PENTATONIC_MAJOR,
-  'pentatonic_minor': SM.PENTATONIC_MINOR,
-  'blues': SM.BLUES,
-  'chromatic': SM.CHROMATIC,
-  'whole_tone': SM.WHOLE_TONE,
-  'diminished_hw': SM.DIMINISHED_HW,
-  'diminished_wh': SM.DIMINISHED_WH,
-  'bebop_dominant': SM.BEBOP_DOMINANT,
-  'bebop_major': SM.BEBOP_MAJOR,
-  'hirajoshi': SM.HIRAJOSHI,
-  'in_sen': SM.IN_SEN,
-  'hungarian_minor': SM.HUNGARIAN_MINOR,
-  'phrygian_dominant': SM.PHRYGIAN_DOMINANT,
-}
-
-// ============================================================================
-// Scale Intervals — inlined cent arrays
+// Scale Intervals — string-keyed, backed by theory constants
 // ============================================================================
 
 /**
- * Scale interval definitions as cent-offset arrays.
- * Inlined to avoid circular dependency with @symphonyscript/theory.
- * Values match theory/src/continuous/scales.ts exactly.
+ * Scale mode name → interval array (cents from root).
+ * Keys are canonical Western scale names matching ScaleModeRegistry.
+ * Values imported from @symphonyscript/theory (single source of truth).
  */
-export const SCALE_INTERVALS_MAP: Readonly<Record<number, readonly number[]>> = {
-  [SM.MAJOR]:             [0, 200, 400, 500, 700, 900, 1100],
-  [SM.MINOR]:             [0, 200, 300, 500, 700, 800, 1000],
-  [SM.HARMONIC_MINOR]:    [0, 200, 300, 500, 700, 800, 1100],
-  [SM.MELODIC_MINOR]:     [0, 200, 300, 500, 700, 900, 1100],
-  [SM.DORIAN]:            [0, 200, 300, 500, 700, 900, 1000],
-  [SM.PHRYGIAN]:          [0, 100, 300, 500, 700, 800, 1000],
-  [SM.LYDIAN]:            [0, 200, 400, 600, 700, 900, 1100],
-  [SM.MIXOLYDIAN]:        [0, 200, 400, 500, 700, 900, 1000],
-  [SM.LOCRIAN]:           [0, 100, 300, 500, 600, 800, 1000],
-  [SM.PENTATONIC_MAJOR]:  [0, 200, 400, 700, 900],
-  [SM.PENTATONIC_MINOR]:  [0, 300, 500, 700, 1000],
-  [SM.BLUES]:             [0, 300, 500, 600, 700, 1000],
-  [SM.CHROMATIC]:         [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100],
-  [SM.WHOLE_TONE]:        [0, 200, 400, 600, 800, 1000],
-  [SM.DIMINISHED_HW]:     [0, 100, 300, 400, 600, 700, 900, 1000],
-  [SM.DIMINISHED_WH]:     [0, 200, 300, 500, 600, 800, 900, 1100],
-  [SM.BEBOP_DOMINANT]:    [0, 200, 400, 500, 700, 900, 1000, 1100],
-  [SM.BEBOP_MAJOR]:       [0, 200, 400, 500, 700, 800, 900, 1100],
-  [SM.HIRAJOSHI]:         [0, 200, 300, 700, 800],
-  [SM.IN_SEN]:            [0, 100, 500, 700, 1000],
-  [SM.HUNGARIAN_MINOR]:   [0, 200, 300, 600, 700, 800, 1100],
-  [SM.PHRYGIAN_DOMINANT]: [0, 100, 400, 500, 700, 800, 1000],
+export const SCALE_INTERVALS_MAP: Readonly<Record<string, ScaleIntervals>> = {
+  'major':             IONIAN_INTERVALS,
+  'minor':             AEOLIAN_INTERVALS,
+  'dorian':            DORIAN_INTERVALS,
+  'phrygian':          PHRYGIAN_INTERVALS,
+  'lydian':            LYDIAN_INTERVALS,
+  'mixolydian':        MIXOLYDIAN_INTERVALS,
+  'aeolian':           AEOLIAN_INTERVALS,
+  'locrian':           LOCRIAN_INTERVALS,
+  'harmonic_minor':    HARMONIC_MINOR_INTERVALS,
+  'melodic_minor':     MELODIC_MINOR_INTERVALS,
+  'pentatonic_major':  PENTATONIC_MAJOR_INTERVALS,
+  'pentatonic_minor':  PENTATONIC_MINOR_INTERVALS,
+  'blues':             BLUES_INTERVALS,
+  'chromatic':         CHROMATIC_INTERVALS,
+  'whole_tone':        WHOLE_TONE_INTERVALS,
+  'diminished_hw':     DIMINISHED_HW_INTERVALS,
+  'diminished_wh':     DIMINISHED_WH_INTERVALS,
+  'bebop_dominant':    BEBOP_DOMINANT_INTERVALS,
+  'bebop_major':       BEBOP_MAJOR_INTERVALS,
+  'hirajoshi':         HIRAJOSHI_INTERVALS,
+  'in_sen':            IN_SEN_INTERVALS,
+  'hungarian_minor':   HUNGARIAN_MINOR_INTERVALS,
+  'phrygian_dominant': PHRYGIAN_DOMINANT_INTERVALS,
 }
 
 // ============================================================================
