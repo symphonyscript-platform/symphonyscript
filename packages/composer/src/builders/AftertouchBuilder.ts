@@ -1,5 +1,4 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import { resolvePitch } from '../utils/pitch'
 import type { NotePitch } from '../types'
 
 /**
@@ -74,7 +73,7 @@ export class AftertouchBuilder implements PipeStep {
     const midiValue = Math.round(Math.min(1, Math.max(0, this.params.value)) * 127)
 
     if (this.params.note !== null) {
-      const pitch = resolvePitch(this.params.note)
+      const pitch = bridge.notation().noteToCents(this.params.note)
       return bridge.withAftertouch(midiValue, pitch)
     }
 

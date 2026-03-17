@@ -59,7 +59,8 @@ export class WesternNotation extends BaseNotation {
   // Notes
   // ==========================================================================
 
-  noteToCents(input: string): number {
+  noteToCents(input: string | number): number {
+    if (typeof input === 'number') return input
     const parsed = parseNoteString(input)
 
     const pitchName = parsed.letter + parsed.accidental
@@ -97,7 +98,8 @@ export class WesternNotation extends BaseNotation {
   // Intervals
   // ==========================================================================
 
-  intervalToCents(input: string): number {
+  intervalToCents(input: string | number): number {
+    if (typeof input === 'number') return input
     const cents = INTERVAL_MAP[input]
     if (cents === undefined) {
       throw new NotationInputError(this.getId(), 'intervalToCents', input)
@@ -147,7 +149,8 @@ export class WesternNotation extends BaseNotation {
   // Degrees
   // ==========================================================================
 
-  degreeToCents(input: string, scale: number[]): number {
+  degreeToCents(input: string | number, scale: number[]): number {
+    if (typeof input === 'number') return input
     const parsed = parseRomanNumeral(input)
 
     // Normalize to uppercase for degree lookup
@@ -170,21 +173,24 @@ export class WesternNotation extends BaseNotation {
   // Chords
   // ==========================================================================
 
-  chordToIntervals(input: string): ChordIntervals {
+  chordToIntervals(input: string | ChordIntervals): ChordIntervals {
+    if (Array.isArray(input)) return input
+
+    const symbol = input as string
     // First try as a bare suffix (e.g. 'maj7', 'm', '7')
-    const directLookup = CHORD_INTERVALS_MAP.get(input)
+    const directLookup = CHORD_INTERVALS_MAP.get(symbol)
     if (directLookup !== undefined) return directLookup
 
     // Parse as full chord code (e.g. 'Cmaj7' → root 'C', suffix 'maj7')
     try {
-      const parsed = parseChordCode(input)
+      const parsed = parseChordCode(symbol)
       const intervals = CHORD_INTERVALS_MAP.get(parsed.suffix)
       if (intervals !== undefined) return intervals
     } catch {
       // parseChordCode threw — fall through to final error
     }
 
-    throw new NotationInputError(this.getId(), 'chordToIntervals', input)
+    throw new NotationInputError(this.getId(), 'chordToIntervals', symbol)
   }
 
   intervalsToChord(intervals: ChordIntervals): string {

@@ -1,6 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { NotePitch } from '../types'
-import { resolvePitches } from '../utils/pitch'
 import { applyBinaryPattern } from '../utils/binary-pattern'
 import { generateEuclideanPattern } from '../utils/euclidean-pattern'
 
@@ -14,7 +13,7 @@ export interface EuclideanParams {
   hits: number
   /** Total steps (n) in the pattern. Defaults to 4. */
   steps: number
-  /** Pitches to cycle through on hits. Resolved via {@link resolvePitches}. Defaults to []. */
+  /** Pitches to cycle through on hits. Resolved via notation.noteToCents() at apply-time. Defaults to []. */
   notes: NotePitch[]
   /** Duration per step in ticks. `null` uses bridge default. */
   stepDuration: number | null
@@ -171,7 +170,8 @@ export class EuclideanBuilder implements PipeStep {
 
     if (pattern === null) return bridge
 
-    const pitches = resolvePitches(this.params.notes)
+    const notation = bridge.notation()
+    const pitches = this.params.notes.map(p => notation.noteToCents(p))
     if (pitches.length === 0) return bridge
 
     const duration = this.params.stepDuration ?? bridge.defaultDuration

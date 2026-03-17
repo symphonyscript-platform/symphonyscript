@@ -6,7 +6,6 @@ import { TupletBuilder } from '../builders/TupletBuilder'
 import { PolyrhythmBuilder } from '../builders/PolyrhythmBuilder'
 import { NoteBuilder } from '../builders/NoteBuilder'
 import type { NotePitch } from '../types'
-import { resolvePitch } from '../utils/pitch'
 import { resolveDuration, type NoteDuration } from '../utils/duration'
 
 /**
@@ -107,9 +106,14 @@ export function grace(pitch?: NotePitch, graceDuration: NoteDuration = 30): Note
   if (pitch === undefined) {
     return new NoteBuilder({ duration: resolvedDuration })
   }
-  const midi = resolvePitch(pitch)
-  const pitchCents = (midi - 12) * 100  // MIDI 12 = C0 = 0 cents
-  return new NoteBuilder({ pitchCents, duration: resolvedDuration })
+
+  if (typeof pitch === 'string') {
+    // Defer string→cents resolution to apply-time via notation.noteToCents()
+    return new NoteBuilder({ rawPitch: pitch, duration: resolvedDuration })
+  }
+
+  // Numeric input = absolute cents from C0
+  return new NoteBuilder({ pitchCents: pitch, duration: resolvedDuration })
 }
 
 /**

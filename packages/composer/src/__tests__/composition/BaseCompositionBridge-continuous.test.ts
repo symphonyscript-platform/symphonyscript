@@ -2,11 +2,12 @@
  * Tests for RFC-060: Continuous Pitch State on BaseCompositionBridge.
  */
 
-import { BaseCompositionBridge } from '../../composition/BaseCompositionBridge'
+import { describe, it, expect } from 'vitest'
+import { createBridge } from '../test-utils'
 
 describe('RFC-060: BaseCompositionBridge Continuous Pitch', () => {
   describe('defaults', () => {
-    const b = new BaseCompositionBridge()
+    const b = createBridge()
 
     it('scaleRootCents defaults to 0', () => {
       expect(b.scaleRootCents).toBe(0)
@@ -38,7 +39,7 @@ describe('RFC-060: BaseCompositionBridge Continuous Pitch', () => {
       const intervals = [0, 200, 400, 500, 700, 900, 1100]
       const temperament = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100]
 
-      const b = new BaseCompositionBridge({
+      const b = createBridge({
         scaleRootCents: 4800,
         keyRootCents: 5700,
         scaleIntervals: intervals,
@@ -57,7 +58,7 @@ describe('RFC-060: BaseCompositionBridge Continuous Pitch', () => {
   })
 
   describe('with* setters', () => {
-    const base = new BaseCompositionBridge()
+    const base = createBridge()
 
     it('withScaleRootCents returns new bridge with updated value', () => {
       const b = base.withScaleRootCents(4800)
@@ -108,7 +109,7 @@ describe('RFC-060: BaseCompositionBridge Continuous Pitch', () => {
       const intervals = [0, 200, 400, 500, 700, 900, 1100]
       const t = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100]
 
-      const b = new BaseCompositionBridge()
+      const b = createBridge()
         .withScaleRootCents(4800)
         .withKeyRootCents(5700)
         .withScaleIntervals(intervals)
@@ -125,10 +126,10 @@ describe('RFC-060: BaseCompositionBridge Continuous Pitch', () => {
     })
 
     it('continuous fields survive withNote chaining', () => {
-      const b = new BaseCompositionBridge()
+      const b = createBridge()
         .withTuningHz(432)
         .withTransposeCents(700)
-        .withNote(60, 480)
+        .withNote(6000, 480)
 
       expect(b.tuningHz).toBe(432)
       expect(b.transposeCents).toBe(700)
@@ -136,16 +137,12 @@ describe('RFC-060: BaseCompositionBridge Continuous Pitch', () => {
   })
 
   describe('non-regression', () => {
-    it('existing MIDI fields are unaffected by continuous fields', () => {
-      const b = new BaseCompositionBridge({ velocity: 500, transpose: 5 })
+    it('existing fields are unaffected by continuous fields', () => {
+      const b = createBridge({ velocity: 500 })
         .withScaleRootCents(4800)
         .withTransposeCents(700)
 
-      // Legacy fields unchanged
       expect(b.velocity).toBe(500)
-      expect(b.transpose).toBe(5)
-
-      // Continuous fields set
       expect(b.scaleRootCents).toBe(4800)
       expect(b.transposeCents).toBe(700)
     })

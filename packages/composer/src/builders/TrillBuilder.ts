@@ -1,6 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { NotePitch } from '../types'
-import { resolvePitch } from '../utils/pitch'
 
 /**
  * Parameters for {@link TrillBuilder}.
@@ -9,9 +8,9 @@ import { resolvePitch } from '../utils/pitch'
  * resolved at apply-time from the bridge when unset.
  */
 export interface TrillParams {
-  /** Upper pitch in the alternation. Resolved via {@link resolvePitch}. */
+  /** Upper pitch in the alternation. Resolved via notation.noteToCents(). */
   pitch: NotePitch | null
-  /** Base (lower) pitch — alternation starts on this. Resolved via {@link resolvePitch}. */
+  /** Base (lower) pitch — alternation starts on this. Resolved via notation.noteToCents(). */
   basePitch: NotePitch | null
   /** Tick interval between alternating notes. `null` = bridge.defaultDuration. */
   rate: number | null
@@ -31,7 +30,7 @@ export interface TrillParams {
  * ```ts
  * trill('E4', 'C4')                         // C4, E4, C4, E4... (rate/duration from bridge)
  * trill('E4', 'C4').rate(120).duration(480) // 4 hits at 120 ticks each
- * trill(64, 60).basePitch(59).pitch(65)    // Override pitches after construction
+ * trill(6400, 6000).basePitch(5900)        // Override pitches in cents
  * trill('E4', 'C4').apply(bridge)           // Emit onto composition
  * ```
  */
@@ -50,8 +49,8 @@ export class TrillBuilder implements PipeStep {
   /**
    * Set the base pitch (start of alternation).
    *
-   * @param basePitch - Literal note name or MIDI number
-
+   * @param basePitch - Note name or absolute cents
+   *
    * @returns New TrillBuilder with the updated base pitch
    */
   basePitch(basePitch: NotePitch): TrillBuilder {
@@ -61,8 +60,8 @@ export class TrillBuilder implements PipeStep {
   /**
    * Set the upper pitch (alternating note).
    *
-   * @param pitch - Literal note name or MIDI number
-
+   * @param pitch - Note name or absolute cents
+   *
    * @returns New TrillBuilder with the updated upper pitch
    */
   pitch(pitch: NotePitch): TrillBuilder {
@@ -73,7 +72,7 @@ export class TrillBuilder implements PipeStep {
    * Set the tick interval between alternating notes.
    *
    * @param rate - Ticks per note
-
+   *
    * @returns New TrillBuilder with the updated rate
    */
   rate(rate: number): TrillBuilder {
@@ -84,7 +83,7 @@ export class TrillBuilder implements PipeStep {
    * Set the total trill duration in ticks.
    *
    * @param duration - Total duration in ticks
-
+   *
    * @returns New TrillBuilder with the updated duration
    */
   duration(duration: number): TrillBuilder {
@@ -98,14 +97,15 @@ export class TrillBuilder implements PipeStep {
    * and pitch (odd indices). Returns bridge unchanged if pitch or basePitch is null.
    *
    * @param bridge - Current composition state
-
+   *
    * @returns Updated bridge with trill notes emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {
     if (this.params.pitch === null || this.params.basePitch === null) return bridge
 
-    const trillMidi = resolvePitch(this.params.pitch)
-    const baseMidi = resolvePitch(this.params.basePitch)
+    const notation = bridge.notation()
+    const trillCents = notation.noteToCents(this.params.pitch)
+    const baseCents = notation.noteToCents(this.params.basePitch)
     const rate = this.params.rate ?? bridge.defaultDuration
     const duration = this.params.duration ?? bridge.defaultDuration
 
@@ -113,7 +113,7 @@ export class TrillBuilder implements PipeStep {
     let target = bridge
 
     for (let i = 0; i < hitCount; ++i) {
-      const currentPitch = i % 2 === 0 ? baseMidi : trillMidi
+      const currentPitch = i % 2 === 0 ? baseCents : trillCents
       target = target.withNote(currentPitch, rate)
     }
 

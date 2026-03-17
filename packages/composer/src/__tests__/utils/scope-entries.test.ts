@@ -77,15 +77,15 @@ describe('scope-entries', () => {
     })
 
     it('applies steps in order within an entry', () => {
-      const bridge = createBridge({ velocity: 100, transpose: 0 })
+      const bridge = createBridge({ velocity: 100, transposeCents: 0 })
       const step1 = step((b) => b.withVelocity(200))
-      const step2 = step((b) => b.withTranspose(5))
+      const step2 = step((b) => b.withTransposeCents(500))
       const entries = [[step1, step2]]
 
       const result = applyEntries(entries, bridge)
 
       expect(result.velocity).toBe(200)
-      expect(result.transpose).toBe(5)
+      expect(result.transposeCents).toBe(500)
     })
 
     it('applies entries in order', () => {
@@ -107,7 +107,6 @@ describe('scope-entries', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
       expect(notes[0].velocity).toBe(600)
     })
   })

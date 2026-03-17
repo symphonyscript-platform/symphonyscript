@@ -1,20 +1,13 @@
 import { NoteBuilder } from '../builders/NoteBuilder'
 import type { NotePitch } from '../types'
-import { resolvePitch } from '../utils/pitch'
 import { resolveDuration, type NoteDuration } from '../utils/duration'
-
-/**
- * C0 in MIDI = 12 (MIDI 0 = C-1).
- * Used to convert MIDI → absolute cents from C0.
- */
-const MIDI_C0 = 12
 
 /**
  * Create a {@link NoteBuilder} for single-note emission.
  *
  * Accepts either a string pitch name (`'C4'`, `'F#5'`) or absolute cents from C0.
- * String pitches are resolved immediately to cents via MIDI conversion but retain
- * the raw string for temperament-aware re-resolution at apply-time.
+ * String pitches are stored as `rawPitch` for deferred resolution at apply-time
+ * via `notation.noteToCents()`. Numeric pitches are stored directly as `pitchCents`.
  *
  * Called without arguments, creates a builder at C4 (4800 cents) with no explicit
  * duration (falls back to `bridge.defaultDuration` at apply-time).
@@ -41,10 +34,8 @@ export function note(input?: NotePitch, duration?: NoteDuration): NoteBuilder {
   }
 
   if (typeof input === 'string') {
-    // Resolve string → MIDI → cents for initial pre-resolution
-    const midi = resolvePitch(input)
-    const pitchCents = (midi - MIDI_C0) * 100
-    return new NoteBuilder({ pitchCents, rawPitch: input, duration: resolvedDuration })
+    // Defer string→cents resolution to apply-time via notation.noteToCents()
+    return new NoteBuilder({ rawPitch: input, duration: resolvedDuration })
   }
 
   // Numeric input = absolute cents from C0

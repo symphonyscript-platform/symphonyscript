@@ -4,6 +4,7 @@ import type { VoiceLeadingStyle } from '@symphonyscript/theory'
 import { closeVoicing, drop2Voicing, openVoicing } from '@symphonyscript/theory'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
 import { KNUTH_MULTIPLIER } from '../constants'
+import type { NotePitch } from '../types'
 
 export type { ChordIntervals } from '@symphonyscript/core'
 
@@ -20,8 +21,8 @@ export interface HarmonyParams extends PitchStepParams {
    * When set, intervals are resolved at apply-time via bridge.notation().
    */
   symbol: string | null
-  /** Root pitch in absolute cents from C0. Defaults to 4800 (C4). */
-  root: number
+  /** Root pitch as string note name or absolute cents from C0. Defaults to 4800 (C4). */
+  root: NotePitch
   /** Voicing algorithm. null = raw intervals. */
   voicing: VoiceLeadingStyle | null
   /** Tick delay between each strummed note. null = simultaneous emission. */
@@ -50,7 +51,7 @@ export interface HarmonyParams extends PitchStepParams {
 export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
   private readonly _intervals: ChordIntervals
   private readonly _symbol: string | null
-  private readonly _root: number
+  private readonly _root: NotePitch
   private readonly voicingStyle: VoiceLeadingStyle | null
   private readonly strumRate: number | null
   private readonly strumDirection: 'up' | 'down'
@@ -79,7 +80,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
   /**
    * Set the root pitch in absolute cents from C0.
    */
-  root(root: number): HarmonyBuilder {
+  root(root: NotePitch): HarmonyBuilder {
     return this.cloneHarmony({ root })
   }
 
@@ -123,20 +124,21 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
     let chordIntervals: ChordIntervals
     let root: number
 
+    const notation = bridge.notation()
+
     if (this._symbol !== null) {
-      const notation = bridge.notation()
       chordIntervals = notation.chordToIntervals(this._symbol)
 
       // Parse root from symbol if possible, fall back to stored root
       try {
         const rootNote = this._symbol.match(/^[A-G][#b]?/)?.[0]
-        root = rootNote ? notation.noteToCents(rootNote + '4') : this._root
+        root = rootNote ? notation.noteToCents(rootNote + '4') : notation.noteToCents(this._root)
       } catch {
-        root = this._root
+        root = notation.noteToCents(this._root)
       }
     } else {
       chordIntervals = this._intervals
-      root = this._root
+      root = notation.noteToCents(this._root)
     }
 
     const resolvedRoot = root

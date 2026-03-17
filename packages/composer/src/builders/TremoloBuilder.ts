@@ -1,6 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { NotePitch } from '../types'
-import { resolvePitch } from '../utils/pitch'
 
 /**
  * Parameters for {@link TremoloBuilder}.
@@ -9,7 +8,7 @@ import { resolvePitch } from '../utils/pitch'
  * resolved at apply-time from the bridge when unset.
  */
 export interface TremoloParams {
-  /** Single pitch repeated. Resolved via {@link resolvePitch}. */
+  /** Single pitch repeated. Resolved via notation.noteToCents(). */
   pitch: NotePitch | null
   /** Tick interval between repeated notes. `null` = bridge.defaultDuration. */
   rate: number | null
@@ -48,7 +47,7 @@ export class TremoloBuilder implements PipeStep {
    * Set the tick interval between repeated notes.
    *
    * @param rate - Ticks per note
-
+   *
    * @returns New TremoloBuilder with the updated rate
    */
   rate(rate: number): TremoloBuilder {
@@ -58,8 +57,8 @@ export class TremoloBuilder implements PipeStep {
   /**
    * Set the pitch to repeat.
    *
-   * @param pitch - Literal note name or MIDI number
-
+   * @param pitch - Note name or absolute cents
+   *
    * @returns New TremoloBuilder with the updated pitch
    */
   pitch(pitch: NotePitch): TremoloBuilder {
@@ -70,7 +69,7 @@ export class TremoloBuilder implements PipeStep {
    * Set the total tremolo duration in ticks.
    *
    * @param duration - Total duration in ticks
-
+   *
    * @returns New TremoloBuilder with the updated duration
    */
   duration(duration: number): TremoloBuilder {
@@ -83,13 +82,13 @@ export class TremoloBuilder implements PipeStep {
    * Repeat count = `floor(duration / rate)`. Returns bridge unchanged if pitch is null.
    *
    * @param bridge - Current composition state
-
+   *
    * @returns Updated bridge with tremolo notes emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {
     if (this.params.pitch === null) return bridge
 
-    const midi = resolvePitch(this.params.pitch)
+    const cents = bridge.notation().noteToCents(this.params.pitch)
     const rate = this.params.rate ?? bridge.defaultDuration
     const duration = this.params.duration ?? bridge.defaultDuration
 
@@ -97,7 +96,7 @@ export class TremoloBuilder implements PipeStep {
     let target = bridge
 
     for (let i = 0; i < hitCount; ++i) {
-      target = target.withNote(midi, rate)
+      target = target.withNote(cents, rate)
     }
 
     return target

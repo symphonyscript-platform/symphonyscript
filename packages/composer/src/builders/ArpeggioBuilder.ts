@@ -1,7 +1,6 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { ArpPattern } from '@symphonyscript/theory'
 import type { NotePitch } from '../types'
-import { resolvePitches } from '../utils/pitch'
 
 /**
  * Parameters for {@link ArpeggioBuilder}.
@@ -9,7 +8,7 @@ import { resolvePitches } from '../utils/pitch'
  * Controls note order, timing, and articulation of arpeggiated chord/notes.
  */
 export interface ArpeggioParams {
-  /** Input pitches (literal note names or MIDI numbers). Resolved via {@link resolvePitches}. */
+  /** Input pitches (note names or cents). Resolved via notation.noteToCents() at apply-time. */
   pitches: NotePitch[]
   /** Tick duration per arpeggio step. `null` = use bridge default at apply-time. */
   rate: number | null
@@ -161,7 +160,9 @@ export class ArpeggioBuilder implements PipeStep {
   apply(bridge: CompositionBridge): CompositionBridge {
     if (this.params.pitches.length === 0) return bridge
 
-    const pool = this.buildPool(resolvePitches(this.params.pitches))
+    const notation = bridge.notation()
+    const resolved = this.params.pitches.map(p => notation.noteToCents(p))
+    const pool = this.buildPool(resolved)
     const sequence = this.buildSequence(pool)
 
     return this.emitSequence(sequence, bridge)
@@ -177,12 +178,12 @@ export class ArpeggioBuilder implements PipeStep {
    *
    * Each pitch is copied at +0, +12, +24, … for `octaves` octaves.
    */
-  private buildPool(baseMidis: number[]): number[] {
+  private buildPool(baseCents: number[]): number[] {
     const pool: number[] = []
 
     for (let octave = 0; octave < this.params.octaves; ++octave) {
-      for (let i = 0; i < baseMidis.length; ++i) {
-        pool.push(baseMidis[i] + (octave * 12))
+      for (let i = 0; i < baseCents.length; ++i) {
+        pool.push(baseCents[i] + (octave * 1200))
       }
     }
 

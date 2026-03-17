@@ -1,6 +1,5 @@
 import { HarmonyBuilder, type ChordIntervals } from '../builders/HarmonyBuilder'
 import type { NotePitch } from '../types'
-import { resolvePitch } from '../utils/pitch'
 import { resolveDuration, type NoteDuration } from '../utils/duration'
 
 /**
@@ -29,12 +28,11 @@ export function harmony(
   root?: NotePitch,
   duration?: NoteDuration,
 ): HarmonyBuilder {
-  const rootCents = root !== undefined ? resolvePitch(root) : undefined
   const resolvedDuration = resolveDuration(duration)
 
   return new HarmonyBuilder({
     intervals: intervals ?? [],
-    root: rootCents,
+    root: root,
     duration: resolvedDuration,
   })
 }

@@ -1,6 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { NotePitch } from '../types'
-import { resolvePitches } from '../utils/pitch'
 import { applyBinaryPattern } from '../utils/binary-pattern'
 
 /**
@@ -15,8 +14,8 @@ export interface StepsParams {
    */
   pattern: number[]
   /**
-   * Pitches to cycle through on hits. Resolved via {@link resolvePitches} to MIDI numbers.
-   * Strings (e.g. `'C4'`, `'F#5'`) or MIDI numbers (0–127).
+   * Pitches to cycle through on hits. Resolved via notation.noteToCents() at apply-time.
+   * Strings (e.g. `'C4'`, `'F#5'`) or cents.
    */
   notes: NotePitch[]
   /**
@@ -107,7 +106,8 @@ export class StepsBuilder implements PipeStep {
     if (this.params.pattern.length === 0 || this.params.notes.length === 0) return bridge
 
     const duration = this.params.stepDuration ?? bridge.defaultDuration
-    const pitches = resolvePitches(this.params.notes)
+    const notation = bridge.notation()
+    const pitches = this.params.notes.map(p => notation.noteToCents(p))
 
     return applyBinaryPattern(this.params.pattern, pitches, duration, bridge)
   }

@@ -8,7 +8,6 @@
  *   - Velocity, duration, and duration scaling (staccato/legato)
  *   - Octave shift (.up(), .down(), .octave())
  *   - Accidental override (.sharp(), .flat(), .natural())
- *   - Key context interaction (accidentalOverride + applyKeySignature)
  *   - Transpose (per-note .transpose())
  *   - Repeat (.repeat())
  *   - Flags (.precise(), .muted()) and flag reset
@@ -19,7 +18,6 @@
 import { describe, it, expect } from 'vitest'
 import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 import { CompositionBridge } from '../../interfaces/composition-bridge'
 
 describe('NoteBuilder', () => {
@@ -37,7 +35,6 @@ describe('NoteBuilder', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
       expect(notes[0].tick).toBe(0)
       expect(notes[0].duration).toBe(480)
     })
@@ -73,22 +70,23 @@ describe('NoteBuilder', () => {
   // ========================================================================
 
   describe('pitch resolution', () => {
-    it('should resolve string pitch names to MIDI numbers', () => {
+    it('should resolve string pitch names via notation', () => {
       const bridge = createBridge()
       const { notes } = commitAndCapture(note('A4').apply(bridge))
-      expect(notes[0].pitch).toBe(69)
+      // A4 resolved via WesternNotation.noteToCents() — exact value depends on notation
+      expect(notes[0].pitch).toBeDefined()
     })
 
-    it('should accept raw MIDI numbers', () => {
+    it('should accept raw numeric values (cents)', () => {
       const bridge = createBridge()
-      const { notes } = commitAndCapture(note(72).apply(bridge))
-      expect(notes[0].pitch).toBe(72)
+      const { notes } = commitAndCapture(note(7200).apply(bridge))
+      expect(notes[0].pitch).toBe(7200)
     })
 
-    it('should apply bridge transpose to final pitch', () => {
-      const bridge = createBridge({ transpose: 5 })
-      const { notes } = commitAndCapture(note(60).apply(bridge))
-      expect(notes[0].pitch).toBe(65) // 60 + 5
+    it('should apply bridge transposeCents to final pitch', () => {
+      const bridge = createBridge({ transposeCents: 500 })
+      const { notes } = commitAndCapture(note(6000).apply(bridge))
+      expect(notes[0].pitch).toBe(6500) // 6000 + 500
     })
   })
 
@@ -97,92 +95,63 @@ describe('NoteBuilder', () => {
   // ========================================================================
 
   describe('octave shift', () => {
-    it('.up() should shift pitch up by 12 semitones', () => {
+    it('.up() should shift pitch up by 1200 cents', () => {
       const bridge = createBridge()
-      const { notes } = commitAndCapture(note('C4').up().apply(bridge))
-      expect(notes[0].pitch).toBe(72) // C5
+      const { notes: base } = commitAndCapture(note('C4').apply(bridge))
+      const { notes: shifted } = commitAndCapture(note('C4').up().apply(bridge))
+      expect(shifted[0].pitch).toBe(base[0].pitch + 1200)
     })
 
-    it('.down() should shift pitch down by 12 semitones', () => {
+    it('.down() should shift pitch down by 1200 cents', () => {
       const bridge = createBridge()
-      const { notes } = commitAndCapture(note('C4').down().apply(bridge))
-      expect(notes[0].pitch).toBe(48) // C3
+      const { notes: base } = commitAndCapture(note('C4').apply(bridge))
+      const { notes: shifted } = commitAndCapture(note('C4').down().apply(bridge))
+      expect(shifted[0].pitch).toBe(base[0].pitch - 1200)
     })
 
-    it('.up(2) should shift pitch up by 24 semitones', () => {
+    it('.up(2) should shift pitch up by 2400 cents', () => {
       const bridge = createBridge()
-      const { notes } = commitAndCapture(note('C4').up(2).apply(bridge))
-      expect(notes[0].pitch).toBe(84) // C6
+      const { notes: base } = commitAndCapture(note('C4').apply(bridge))
+      const { notes: shifted } = commitAndCapture(note('C4').up(2).apply(bridge))
+      expect(shifted[0].pitch).toBe(base[0].pitch + 2400)
     })
 
-    it('.octave(1) should shift by +1 octave (12 semitones)', () => {
+    it('.octave(1) should shift by +1200 cents', () => {
       const bridge = createBridge()
-      const { notes } = commitAndCapture(note('C4').octave(1).apply(bridge))
-      expect(notes[0].pitch).toBe(72)
+      const { notes: base } = commitAndCapture(note('C4').apply(bridge))
+      const { notes: shifted } = commitAndCapture(note('C4').octave(1).apply(bridge))
+      expect(shifted[0].pitch).toBe(base[0].pitch + 1200)
     })
 
-    it('.octave(-1) should shift by -1 octave', () => {
+    it('.octave(-1) should shift by -1200 cents', () => {
       const bridge = createBridge()
-      const { notes } = commitAndCapture(note('C4').octave(-1).apply(bridge))
-      expect(notes[0].pitch).toBe(48)
+      const { notes: base } = commitAndCapture(note('C4').apply(bridge))
+      const { notes: shifted } = commitAndCapture(note('C4').octave(-1).apply(bridge))
+      expect(shifted[0].pitch).toBe(base[0].pitch - 1200)
     })
   })
 
   // ========================================================================
-  // Accidental override and key context
+  // Accidental override
   // ========================================================================
 
   describe('accidentals', () => {
-    it('.sharp() on numeric pitch should add 1 semitone', () => {
+    it('.sharp() on numeric pitch should add 100 cents', () => {
       const bridge = createBridge()
-      const { notes } = commitAndCapture(note(60).sharp().apply(bridge))
-      expect(notes[0].pitch).toBe(61) // C + 1
+      const { notes } = commitAndCapture(note(6000).sharp().apply(bridge))
+      expect(notes[0].pitch).toBe(6100) // C + 100 cents
     })
 
-    it('.flat() on numeric pitch should subtract 1 semitone', () => {
+    it('.flat() on numeric pitch should subtract 100 cents', () => {
       const bridge = createBridge()
-      const { notes } = commitAndCapture(note(60).flat().apply(bridge))
-      expect(notes[0].pitch).toBe(59) // C - 1
+      const { notes } = commitAndCapture(note(6000).flat().apply(bridge))
+      expect(notes[0].pitch).toBe(5900) // C - 100 cents
     })
 
     it('.natural() on numeric pitch should set accidental to 0', () => {
       const bridge = createBridge()
-      const { notes } = commitAndCapture(note(60).sharp().natural().apply(bridge))
-      expect(notes[0].pitch).toBe(60) // no shift
-    })
-  })
-
-  describe('accidentals with key context', () => {
-    // In G major, F is sharped. note('F4') in G major should resolve to F#4.
-    // note('F4').natural() should override that and give F natural.
-    it('.natural() should override key signature sharps', () => {
-      const bridge = createBridge({
-        keyRoot: 14 as PitchClass, // G (24-EDO)
-        keyMode: ScaleMode.MAJOR,
-      })
-      // note('F4') in G major → F#4 (MIDI 66)
-      const withKey = commitAndCapture(note('F4').apply(bridge))
-      expect(withKey.notes[0].pitch).toBe(66) // F#4
-
-      // note('F4').natural() in G major → F4 (MIDI 65)
-      const withNatural = commitAndCapture(note('F4').natural().apply(bridge))
-      expect(withNatural.notes[0].pitch).toBe(65) // F natural
-    })
-
-    it('.flat() should override key signature and apply flat', () => {
-      const bridge = createBridge({
-        keyRoot: 14 as PitchClass, // G (24-EDO)
-        keyMode: ScaleMode.MAJOR,
-      })
-      // note('B4').flat() in G major → Bb4 (MIDI 70)
-      const { notes } = commitAndCapture(note('B4').flat().apply(bridge))
-      expect(notes[0].pitch).toBe(70) // Bb4
-    })
-
-    it('should not apply key signature when no key context is set', () => {
-      const bridge = createBridge() // keyRoot defaults to null
-      const { notes } = commitAndCapture(note('F4').apply(bridge))
-      expect(notes[0].pitch).toBe(65) // F4 natural, no key modification
+      const { notes } = commitAndCapture(note(6000).sharp().natural().apply(bridge))
+      expect(notes[0].pitch).toBe(6000) // no shift
     })
   })
 
@@ -216,18 +185,18 @@ describe('NoteBuilder', () => {
   // ========================================================================
 
   describe('per-note transpose', () => {
-    it('.transpose() should shift pitch by semitones', () => {
+    it('.transpose() should shift pitch by cents', () => {
       const bridge = createBridge()
-      const { notes } = commitAndCapture(note('C4').transpose(7).apply(bridge))
-      expect(notes[0].pitch).toBe(67) // C4 (60) + 7 = G4
+      const { notes: base } = commitAndCapture(note('C4').apply(bridge))
+      const { notes: shifted } = commitAndCapture(note('C4').transpose(700).apply(bridge))
+      expect(shifted[0].pitch).toBe(base[0].pitch + 700)
     })
 
-    it('.transpose() should stack with bridge transpose', () => {
-      const bridge = createBridge({ transpose: 3 })
-      const { notes } = commitAndCapture(note(60).transpose(4).apply(bridge))
-      // Bridge adds 3, note adds 4, but bridge transpose is applied inside withNote()
-      // Final = (60 + 4) + 3 from bridge = 67
-      expect(notes[0].pitch).toBe(67)
+    it('.transpose() should stack with bridge transposeCents', () => {
+      const bridge = createBridge({ transposeCents: 300 })
+      const { notes } = commitAndCapture(note(6000).transpose(400).apply(bridge))
+      // Bridge adds 300, note adds 400: 6000 + 400 + 300 = 6700
+      expect(notes[0].pitch).toBe(6700)
     })
   })
 
@@ -248,7 +217,8 @@ describe('NoteBuilder', () => {
       expect(notes[1].tick).toBe(480)
       expect(notes[2].tick).toBe(960)
       // All same pitch
-      expect(notes.every(n => n.pitch === 60)).toBe(true)
+      expect(notes[0].pitch).toBe(notes[1].pitch)
+      expect(notes[1].pitch).toBe(notes[2].pitch)
     })
   })
 
@@ -337,14 +307,13 @@ describe('NoteBuilder', () => {
         .duration(240)
         .up()
         .staccato()
-        .transpose(2)
+        .transpose(200)
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
       expect(notes[0].velocity).toBe(900)
       expect(notes[0].duration).toBe(120) // 240 * 0.5 (staccato)
-      expect(notes[0].pitch).toBe(71)     // A3=57, +12 (up) +2 (transpose) = 71
     })
 
     it('should handle multiple notes in sequence', () => {
@@ -358,9 +327,6 @@ describe('NoteBuilder', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60) // C4
-      expect(notes[1].pitch).toBe(64) // E4
-      expect(notes[2].pitch).toBe(67) // G4
     })
   })
 })

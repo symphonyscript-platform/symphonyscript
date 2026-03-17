@@ -80,10 +80,10 @@ export abstract class BaseNotation implements Notation {
   abstract prefersFlats(): boolean
   abstract getCapabilities(): NotationCapabilities
 
-  abstract noteToCents(input: string): number
+  abstract noteToCents(input: string | number): number
   abstract centsToNote(cents: number): string
 
-  abstract intervalToCents(input: string): number
+  abstract intervalToCents(input: string | number): number
   abstract centsToInterval(cents: number): string
 
   abstract getScaleIntervals(mode: ScaleMode): ScaleIntervals
@@ -91,9 +91,9 @@ export abstract class BaseNotation implements Notation {
 
   abstract getKeySignature(root: PitchClass, mode: ScaleMode): KeySignature
 
-  abstract degreeToCents(input: string, scale: number[]): number
+  abstract degreeToCents(input: string | number, scale: number[]): number
 
-  abstract chordToIntervals(input: string): ChordIntervals
+  abstract chordToIntervals(input: string | ChordIntervals): ChordIntervals
   abstract intervalsToChord(intervals: ChordIntervals): string
   abstract getSupportedChords(): string[]
 
