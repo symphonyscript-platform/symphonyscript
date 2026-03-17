@@ -62,9 +62,6 @@ export class WesternNotation extends BaseNotation {
 
   noteToCents(input: string): number {
     const parsed = parseNoteString(input)
-    if (parsed === null) {
-      throw new NotationInputError(this.getId(), 'noteToCents', input)
-    }
 
     const pitchName = parsed.letter + parsed.accidental
     const semitone = NOTE_TO_SEMITONE[pitchName]
@@ -160,9 +157,6 @@ export class WesternNotation extends BaseNotation {
 
   degreeToCents(input: string, scale: number[]): number {
     const parsed = parseRomanNumeral(input)
-    if (parsed === null) {
-      throw new NotationInputError(this.getId(), 'degreeToCents', input)
-    }
 
     // Normalize to uppercase for degree lookup
     const degreeKey = parsed.degree.toUpperCase()
@@ -190,10 +184,12 @@ export class WesternNotation extends BaseNotation {
     if (directLookup !== undefined) return directLookup
 
     // Parse as full chord code (e.g. 'Cmaj7' → root 'C', suffix 'maj7')
-    const parsed = parseChordCode(input)
-    if (parsed !== null) {
+    try {
+      const parsed = parseChordCode(input)
       const intervals = CHORD_INTERVALS_MAP.get(parsed.suffix)
       if (intervals !== undefined) return intervals
+    } catch {
+      // parseChordCode threw — fall through to final error
     }
 
     throw new NotationInputError(this.getId(), 'chordToIntervals', input)
@@ -221,9 +217,6 @@ export class WesternNotation extends BaseNotation {
 
     for (const numeral of numerals) {
       const parsed = parseRomanNumeral(numeral)
-      if (parsed === null) {
-        throw new NotationInputError(this.getId(), 'resolveProgression', numeral)
-      }
 
       // --- Degree → root cents ---
       const degreeKey = parsed.degree.toUpperCase()

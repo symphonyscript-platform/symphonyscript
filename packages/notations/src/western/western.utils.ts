@@ -2,24 +2,46 @@ import { ParsedChordCode } from './interfaces/parsed-chord-code'
 import { ParsedRoman } from './interfaces/parsed-roman'
 import { ParsedNote } from './interfaces/parsed-note'
 import { ROMAN_STEMS } from './western.constants'
+import { NotationInputError } from '@symphonyscript/core'
 
 /**
  * Parse a Western note string into letter, accidental, and octave.
  *
  * Accepts: `'C4'`, `'F#3'`, `'Bb5'`, `'D-1'`
  *
- * @returns Parsed components or `null` if invalid
+ * @throws {NotationInputError} with specific detail on failure
  */
-export function parseNoteString(input: string): ParsedNote | null {
-  if (!input || typeof input !== 'string') return null
+export function parseNoteString(input: string): ParsedNote {
+  if (!input || typeof input !== 'string') {
+    throw new NotationInputError(
+      'western',
+      'parseNoteString',
+      String(input),
+      `Expected note string, got '${input}'`,
+    )
+  }
 
   let i = 0
 
   // 1. Letter (A-G, case-insensitive)
   const ch = input[i]
-  if (ch === undefined) return null
+  if (ch === undefined) {
+    throw new NotationInputError(
+      'western',
+      'parseNoteString',
+      input,
+      `Expected note string, got '${input}'`,
+    )
+  }
   const letter = ch.toUpperCase()
-  if (letter < 'A' || letter > 'G') return null
+  if (letter < 'A' || letter > 'G') {
+    throw new NotationInputError(
+      'western',
+      'parseNoteString',
+      input,
+      `Invalid note letter '${ch}' in '${input}' — expected A-G`,
+    )
+  }
   i++
 
   // 2. Optional accidental (# or b)
@@ -36,7 +58,14 @@ export function parseNoteString(input: string): ParsedNote | null {
     i++
   }
 
-  if (i >= input.length || input[i] < '0' || input[i] > '9') return null
+  if (i >= input.length || input[i] < '0' || input[i] > '9') {
+    throw new NotationInputError(
+      'western',
+      'parseNoteString',
+      input,
+      `Missing octave in '${input}' — expected digit after '${letter}${accidental}'`,
+    )
+  }
 
   let octave = 0
   while (i < input.length && input[i] >= '0' && input[i] <= '9') {
@@ -45,7 +74,14 @@ export function parseNoteString(input: string): ParsedNote | null {
   }
 
   // 4. Nothing remaining
-  if (i !== input.length) return null
+  if (i !== input.length) {
+    throw new NotationInputError(
+      'western',
+      'parseNoteString',
+      input,
+      `Unexpected character '${input[i]}' at position ${i} in '${input}'`,
+    )
+  }
 
   return { letter, accidental, octave: sign * octave }
 }
@@ -55,10 +91,17 @@ export function parseNoteString(input: string): ParsedNote | null {
  *
  * Accepts: `'I'`, `'V7'`, `'ii'`, `'bVII'`, `'#iv7'`, `'viidim7'`
  *
- * @returns Parsed components or `null` if invalid
+ * @throws {NotationInputError} with specific detail on failure
  */
-export function parseRomanNumeral(input: string): ParsedRoman | null {
-  if (!input || typeof input !== 'string') return null
+export function parseRomanNumeral(input: string): ParsedRoman {
+  if (!input || typeof input !== 'string') {
+    throw new NotationInputError(
+      'western',
+      'parseRomanNumeral',
+      String(input),
+      `Expected roman numeral, got '${input}'`,
+    )
+  }
 
   let i = 0
 
@@ -82,7 +125,14 @@ export function parseRomanNumeral(input: string): ParsedRoman | null {
     }
   }
 
-  if (matchedStem === '') return null
+  if (matchedStem === '') {
+    throw new NotationInputError(
+      'western',
+      'parseRomanNumeral',
+      input,
+      `No roman numeral found in '${input}' — expected I-VII`,
+    )
+  }
 
   // 3. Determine case — is the original stem all lowercase?
   const isLowercase = matchedStem === matchedStem.toLowerCase()
@@ -98,18 +148,39 @@ export function parseRomanNumeral(input: string): ParsedRoman | null {
  *
  * Accepts: `'Cmaj7'`, `'F#m'`, `'Bb7'`, `'D'`
  *
- * @returns Parsed components or `null` if invalid
+ * @throws {NotationInputError} with specific detail on failure
  */
-export function parseChordCode(input: string): ParsedChordCode | null {
-  if (!input || typeof input !== 'string') return null
+export function parseChordCode(input: string): ParsedChordCode {
+  if (!input || typeof input !== 'string') {
+    throw new NotationInputError(
+      'western',
+      'parseChordCode',
+      String(input),
+      `Expected chord code, got '${input}'`,
+    )
+  }
 
   let i = 0
 
   // 1. Root letter (A-G, case-insensitive)
   const ch = input[i]
-  if (ch === undefined) return null
+  if (ch === undefined) {
+    throw new NotationInputError(
+      'western',
+      'parseChordCode',
+      input,
+      `Expected chord code, got '${input}'`,
+    )
+  }
   const letter = ch.toUpperCase()
-  if (letter < 'A' || letter > 'G') return null
+  if (letter < 'A' || letter > 'G') {
+    throw new NotationInputError(
+      'western',
+      'parseChordCode',
+      input,
+      `Invalid chord root '${ch}' in '${input}' — expected A-G`,
+    )
+  }
   i++
 
   // 2. Optional accidental (# or b)
