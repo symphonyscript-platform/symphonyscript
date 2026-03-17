@@ -1,5 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import type { RomanNumeral } from '@symphonyscript/theory'
+import type { RomanNumeral } from '@symphonyscript/notations'
 import { RomanBuilder } from './RomanBuilder'
 
 /**

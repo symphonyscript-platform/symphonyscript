@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest'
 import { degree } from '../../cues/degree'
 import { DegreeBuilder } from '../../builders/DegreeBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { PitchClass, ScaleMode } from '@symphonyscript/theory'
+import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 
 describe('degree', () => {
 

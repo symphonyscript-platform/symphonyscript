@@ -225,3 +225,185 @@ export const PITCH_CLASSES: readonly string[] = Object.freeze([
 export function isPitchClass(value: string): value is Pitch {
     return PITCH_CLASSES.includes(value);
 }
+
+// ============================================================================
+// SECTION 6: MIDI Note Conversion (from pitch/midi.ts §1-4)
+// ============================================================================
+
+import type { Interval24EDO } from '@symphonyscript/theory';
+import { asInterval24EDO } from '@symphonyscript/theory';
+
+/**
+ * Note names in chromatic order (sharps).
+ */
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+
+/**
+ * Flat to sharp conversion.
+ */
+const FLAT_TO_SHARP: Readonly<Record<string, string>> = {
+    'Db': 'C#', 'Eb': 'D#', 'Fb': 'E', 'Gb': 'F#',
+    'Ab': 'G#', 'Bb': 'A#', 'Cb': 'B'
+};
+
+/**
+ * Note name to semitone offset from C.
+ */
+export const NOTE_TO_SEMITONE: Readonly<Record<string, number>> = {
+    'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3,
+    'E': 4, 'Fb': 4, 'F': 5, 'E#': 5, 'F#': 6, 'Gb': 6,
+    'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10,
+    'B': 11, 'Cb': 11, 'B#': 0
+};
+
+/**
+ * Parsed note components.
+ */
+export interface ParsedNote {
+    readonly name: string;
+    readonly octave: number;
+}
+
+/**
+ * Parse a note name into its components.
+ * COMPOSER-ONLY: String parsing.
+ *
+ * @param note - Note string (e.g., "C4", "F#3", "Bb5")
+
+ * @returns ParsedNote or null if invalid
+ */
+export function parseNote(note: string): ParsedNote | null {
+    if (!note || typeof note !== 'string') return null;
+
+    // Match note letter, optional accidental (# or b), and octave
+    const match = note.match(/^([A-Ga-g])([#b]?)(-?\d+)$/);
+    if (!match) return null;
+
+    const letter = match[1].toUpperCase();
+    const accidental = match[2];
+    const octave = parseInt(match[3], 10);
+
+    if (!Number.isFinite(octave)) return null;
+
+    // Build note name
+    let name = letter + accidental;
+
+    // Convert flats to sharps for consistency
+    if (FLAT_TO_SHARP[name]) {
+        name = FLAT_TO_SHARP[name];
+    }
+
+    // Validate note name
+    if (NOTE_TO_SEMITONE[name] === undefined) return null;
+
+    return { name, octave };
+}
+
+/**
+ * Convert a note name to MIDI number.
+ * COMPOSER-ONLY: String parsing.
+ *
+ * Standard MIDI convention: C4 = 60 (middle C).
+ *
+ * @param note - Note string (e.g., "C4", "F#3", "Bb5")
+
+ * @returns MIDI number (0-127) or null if invalid
+ */
+export function noteToMidi(note: string): number | null {
+    const parsed = parseNote(note);
+    if (!parsed) return null;
+
+    const noteIndex = NOTE_TO_SEMITONE[parsed.name];
+    if (noteIndex === undefined) return null;
+
+    // MIDI: C4 = 60, C-1 = 0, C0 = 12
+    const midi = (parsed.octave + 1) * 12 + noteIndex;
+
+    // Clamp to valid MIDI range
+    if (midi < 0 || midi > 127) return null;
+
+    return midi;
+}
+
+/**
+ * Convert a MIDI number to note name.
+ * COMPOSER-ONLY: String creation.
+ *
+ * @param midi - MIDI number (0-127)
+
+ * @returns Note string (e.g., "C4") or null if invalid
+ */
+export function midiToNote(midi: number): string | null {
+    if (!Number.isFinite(midi) || midi < 0 || midi > 127) return null;
+
+    const octave = Math.floor(midi / 12) - 1;
+    const noteIndex = midi % 12;
+
+    return `${NOTE_NAMES[noteIndex]}${octave}`;
+}
+
+/**
+ * Apply transposition to a note name.
+ * COMPOSER-ONLY: String manipulation.
+ *
+ * @param note - Note string (e.g., "C4")
+ * @param semitones - Semitones to transpose (positive = up, negative = down)
+
+ * @returns Transposed note string or null if invalid/out of range
+ */
+export function transposeNote(note: string, semitones: number): string | null {
+    if (semitones === 0) {
+        // Validate the note even if no transposition
+        const parsed = parseNote(note);
+        if (!parsed) return null;
+        return note;
+    }
+
+    const midi = noteToMidi(note);
+    if (midi === null) return null;
+
+    const transposedMidi = midi + semitones;
+
+    // Check valid MIDI range
+    if (transposedMidi < 0 || transposedMidi > 127) return null;
+
+    return midiToNote(transposedMidi);
+}
+
+/**
+ * Convert note name to 24-EDO pitch class.
+ * COMPOSER-ONLY: String parsing.
+ *
+ * @param note - Note string (e.g., "C4", "F#3")
+
+ * @returns 24-EDO pitch class (0-22, even only) or null if invalid
+ */
+export function noteToPitchClass24(note: string): Interval24EDO | null {
+    const parsed = parseNote(note);
+    if (!parsed) return null;
+
+    const semitone = NOTE_TO_SEMITONE[parsed.name];
+    if (semitone === undefined) return null;
+
+    // Convert semitone to 24-EDO (multiply by 2)
+    return asInterval24EDO(semitone * 2);
+}
+
+/**
+ * Convert note name to absolute 24-EDO pitch (with octave).
+ * COMPOSER-ONLY: String parsing.
+ *
+ * @param note - Note string (e.g., "C4", "F#3")
+
+ * @returns Absolute 24-EDO pitch or null if invalid
+ */
+export function noteTo24EDO(note: string): number | null {
+    const parsed = parseNote(note);
+    if (!parsed) return null;
+
+    const semitone = NOTE_TO_SEMITONE[parsed.name];
+    if (semitone === undefined) return null;
+
+    // 24-EDO: each semitone = 2 steps, octave = 24 steps
+    return parsed.octave * 24 + semitone * 2;
+}

@@ -1,6 +1,6 @@
 import { CompositionBridge } from '@symphonyscript/composer'
 import { ExecutionContext } from '@symphonyscript/core'
-import { PitchClass, ScaleMode } from '@symphonyscript/theory'
+import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 
 /**
  * Abstract base for decorator bridges that wrap an inner {@link CompositionBridge}.

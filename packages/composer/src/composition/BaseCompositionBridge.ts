@@ -1,5 +1,6 @@
 import { ExecutionContext } from '@symphonyscript/core'
-import { MIDI_CC, PitchClass, ScaleMode } from '@symphonyscript/theory'
+import { MIDI_CC } from '@symphonyscript/theory'
+import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 import { CompositionBridge } from '@symphonyscript/composer'
 import { ThunkNode } from '../interfaces/thunk-node'
 

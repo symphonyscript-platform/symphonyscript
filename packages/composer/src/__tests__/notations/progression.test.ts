@@ -10,7 +10,7 @@ import { progression } from '../../cues/progression'
 import { ProgressionBuilder } from '../../builders/ProgressionBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
 import { note } from '../../cues/note'
-import { PitchClass, ScaleMode } from '@symphonyscript/theory'
+import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 
 describe('progression', () => {
   describe('return type', () => {

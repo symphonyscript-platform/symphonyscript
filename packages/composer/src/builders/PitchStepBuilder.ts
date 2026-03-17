@@ -1,6 +1,6 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { MIDI_CC } from '@symphonyscript/theory'
-import type { AccidentalOverride } from '@symphonyscript/theory'
+import type { AccidentalOverride } from '@symphonyscript/notations'
 
 /**
  * Shared parameters for pitched step builders ({@link NoteBuilder}, {@link HarmonyBuilder}, etc.).

@@ -5,7 +5,7 @@
  */
 
 import { Accidental, type KeyContext, ScaleMode } from '../types'
-import { NOTE_TO_SEMITONE } from '@symphonyscript/theory'
+import { NOTE_TO_SEMITONE } from '@symphonyscript/notations'
 
 /** Convert ScaleMode to key signature lookup string (major/minor only). */
 export function scaleModeToKeyString(mode: ScaleMode): 'major' | 'minor' {

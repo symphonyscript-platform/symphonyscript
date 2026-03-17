@@ -5,8 +5,9 @@ import { FrozenClip } from './FrozenClip'
 import { SiliconBridge } from '@symphonyscript/kernel'
 import { SeededRandom } from '@symphonyscript/core'
 import { ArpeggioOptions, ArpPattern, ClipNode, EuclideanMelodyOptions } from '../types'
-import { romanToChord } from '../utils/romanAdapter'
 import { euclidean, rotatePattern } from '@symphonyscript/theory'
+import { SCALE_INTERVALS as CENT_SCALE_INTERVALS } from '@symphonyscript/theory'
+import { romanToChordIntervals, ScaleMode as NotationScaleMode } from '@symphonyscript/notations'
 import { parsePitch } from '../utils/pitch'
 import { parseChord } from '../utils/chord'
 import { SCALE_INTERVALS } from '../utils/scales'
@@ -143,12 +144,8 @@ export class SynapticMelody extends SynapticClip {
             throw new Error('roman() requires key() to be called first');
         }
 
-        const chordSymbol = romanToChord(numeral, keyCtx);
-        if (!chordSymbol) {
-            throw new Error(`Invalid roman numeral: ${numeral}`);
-        }
-
-        const cursor = this.chord(chordSymbol);
+        const { mask, rootPitch } = this.resolveRomanToMask(numeral, keyCtx);
+        const cursor = this.chordCursor.harmony(mask, rootPitch);
         if (duration !== undefined) {
             cursor.duration(duration);
         }
@@ -172,12 +169,8 @@ export class SynapticMelody extends SynapticClip {
         }
 
         for (const numeral of numerals) {
-            const chordSymbol = romanToChord(numeral, keyCtx);
-            if (!chordSymbol) {
-                throw new Error(`Invalid roman numeral in progression: ${numeral}`);
-            }
-
-            this.chord(chordSymbol).duration(duration).commit();
+            const { mask, rootPitch } = this.resolveRomanToMask(numeral, keyCtx);
+            this.chordCursor.harmony(mask, rootPitch).duration(duration).commit();
             this.advanceTick(duration);
         }
 
@@ -205,15 +198,26 @@ export class SynapticMelody extends SynapticClip {
         }
         this._prevVoicingLen = 0;
 
+        const scaleInts = CENT_SCALE_INTERVALS[keyCtx.mode as unknown as NotationScaleMode];
+        if (!scaleInts) {
+            throw new Error(`No scale intervals for mode ${keyCtx.mode}`);
+        }
+        const keyRootMidi = parsePitch(keyCtx.root + '4');
+
         let chordIndex = 0;
         for (const numeral of numerals) {
-            console.log('[Composer] voiceLead chord', chordIndex, 'numeral', numeral, 'currentTick', this.getCurrentTick(), 'exitId', this.exitId);
-            const chordSymbol = romanToChord(numeral, keyCtx);
-            if (!chordSymbol) {
+            const result = romanToChordIntervals(numeral, scaleInts);
+            if (!result) {
                 throw new Error(`Invalid roman numeral in voiceLead: ${numeral}`);
             }
 
-            this._chordLen = this.chordSymbolToBuffer(chordSymbol);
+            // Fill _chordBuffer directly from cent intervals
+            const rootMidi = keyRootMidi + Math.round(result.rootCents / 100);
+            let len = 0;
+            for (let i = 0; i < result.intervals.length && len < 12; i++) {
+                this._chordBuffer[len++] = rootMidi + Math.round(result.intervals[i] / 100);
+            }
+            this._chordLen = len;
 
             if (this._prevVoicingLen === 0) {
                 this.copySortToVoicing(this._chordBuffer, this._chordLen);
@@ -512,6 +516,32 @@ export class SynapticMelody extends SynapticClip {
             interval++;
         }
         return len;
+    }
+
+    /**
+     * Resolve a roman numeral to mask + rootPitch using cent-based intervals.
+     * Shared by roman(), progression().
+     */
+    private resolveRomanToMask(numeral: string, keyCtx: { root: string; mode: number }): { mask: number; rootPitch: number } {
+        const scaleInts = CENT_SCALE_INTERVALS[keyCtx.mode as unknown as NotationScaleMode];
+        if (!scaleInts) {
+            throw new Error(`No scale intervals for mode ${keyCtx.mode}`);
+        }
+
+        const result = romanToChordIntervals(numeral, scaleInts);
+        if (!result) {
+            throw new Error(`Invalid roman numeral: ${numeral}`);
+        }
+
+        const keyRootMidi = parsePitch(keyCtx.root + '4');
+        const rootPitch = keyRootMidi + Math.round(result.rootCents / 100);
+
+        let mask = 0;
+        for (const interval of result.intervals) {
+            mask |= (1 << Math.round(interval / 100));
+        }
+
+        return { mask, rootPitch };
     }
 
     /** Task 064: Copy src to _voicingBuffer, sort in place, set _voicingLen. */

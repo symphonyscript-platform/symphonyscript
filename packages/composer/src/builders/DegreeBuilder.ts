@@ -1,5 +1,6 @@
 import { CompositionBridge } from '@symphonyscript/composer'
-import { degreeToPitch, ScaleMode } from '@symphonyscript/theory'
+import { degreeToPitch } from '@symphonyscript/theory'
+import { ScaleMode } from '@symphonyscript/notations'
 import { degreeToCents } from '@symphonyscript/theory'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
 

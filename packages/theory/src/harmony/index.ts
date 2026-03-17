@@ -1,27 +1,11 @@
 /**
  * RFC-047: Harmony Module (24-EDO Native)
  *
- * Chord progressions, voice leading, and key signatures.
+ * Voice leading algorithms (pure math, stays in theory).
+ *
+ * NOTE: Chord progressions, key signatures, and roman numerals
+ * have been extracted to @symphonyscript/notations.
  */
-
-// Chord progressions
-export {
-    type KeyContext,
-    type ParsedNumeral,
-    parseRomanNumeral,
-    getDegreeInterval,
-    degreeToMask,
-    romanToMask,
-    progressionToMasks,
-    PROGRESSION,
-    createKey,
-    KEY_ROOT,
-    romanToChord,
-    degreeToRoot,
-    progressionToChords,
-    tritoneSubstitute,
-    applyTritoneSubstitutions,
-} from './progressions';
 
 // Voice leading
 export {
@@ -38,30 +22,5 @@ export {
     createPitch,
 } from './voiceleading';
 
-// Key signatures
-export {
-    getKeySharps,
-    getKeyFlats,
-    getKeyAccidentals,
-    isValidKey,
-    countSharps,
-    countFlats,
-    isSharpedInKey,
-    isFlattedInKey,
-    applyKeyToPitchClass,
-    getRelativeMinor,
-    getRelativeMajor,
-    getParallelMinor,
-    getParallelMajor,
-    ALL_KEYS,
-    MAJOR_KEYS_CIRCLE,
-    MINOR_KEYS_CIRCLE,
-    applyKeySignature,
-    type AccidentalOverride,
-} from './keys';
-
 // Helper types
 export * from './types';
-
-// Roman numerals
-export * from './roman';

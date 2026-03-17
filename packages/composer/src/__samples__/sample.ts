@@ -10,7 +10,7 @@ import {
   drumPattern, drumEuclidean,
   progression,
 } from '../index'
-import { ScaleMode } from '@symphonyscript/theory'
+import { ScaleMode, PitchClass } from '@symphonyscript/notations'
 
 // ─── Config ───
 const Q = 480         // quarter
@@ -21,7 +21,7 @@ const E = Q / 2       // eighth
 // ─── Components ───
 
 const pianoChords = Clip.pipe(
-  scale('D', 'minor'),
+  scale(PitchClass.D, 'minor'),
   velocity(700).default(),
   progression(['i', 'VI', 'III', 'VII']).duration(W),
 )
@@ -80,7 +80,7 @@ const fill = Clip.pipe(
 
 const intro = Clip.pipe(
   tempo(92).default(),
-  scale('D', ScaleMode.MINOR).default(),
+  scale(PitchClass.D, ScaleMode.MINOR).default(),
   duration(Q).default(),
 
   // 4 bars — piano alone with arpeggiated intro

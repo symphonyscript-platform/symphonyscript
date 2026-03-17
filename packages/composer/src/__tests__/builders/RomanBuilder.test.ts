@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest'
 import { roman } from '../../cues/roman'
 import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { PitchClass, ScaleMode } from '@symphonyscript/theory'
+import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 
 describe('RomanBuilder', () => {
 

@@ -1,4 +1,4 @@
-import type { RomanNumeral } from '@symphonyscript/theory'
+import type { RomanNumeral } from '@symphonyscript/notations'
 import { ProgressionBuilder } from '../builders/ProgressionBuilder'
 
 /**

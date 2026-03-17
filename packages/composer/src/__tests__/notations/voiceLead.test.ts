@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest'
 import { voiceLead } from '../../cues/voiceLead'
 import { VoiceLeadBuilder } from '../../builders/VoiceLeadBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { PitchClass, ScaleMode } from '@symphonyscript/theory'
+import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 
 describe('voiceLead', () => {
 

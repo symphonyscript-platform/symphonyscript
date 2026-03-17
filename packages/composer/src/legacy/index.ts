@@ -35,7 +35,6 @@ export { GrooveStepCursor } from './groove/GrooveStepCursor';
 export { parsePitch } from './utils/pitch';
 export { parseChord, packIntervals } from './utils/chord';
 export { applyKeySignature, hasExplicitAccidental, scaleModeToKeyString } from './utils/key';
-export { romanToChord, toTheoryKeyContext } from './utils/romanAdapter';
 
 // Types
 export { ScaleMode, Accidental, CurveType, DynamicsType, AutomationTarget, ArpPattern, AftertouchType, DrumType } from './types';

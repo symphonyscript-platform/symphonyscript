@@ -1,4 +1,4 @@
-import { noteToMidi } from '@symphonyscript/theory'
+import { noteToMidi } from '@symphonyscript/notations'
 import type { NotePitch } from '../types'
 
 /**

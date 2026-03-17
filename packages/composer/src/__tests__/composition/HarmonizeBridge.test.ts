@@ -13,7 +13,7 @@
 import { describe, it, expect } from 'vitest'
 import { HarmonizeBridge } from '../../composition/HarmonizeBridge'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { ScaleMode } from '@symphonyscript/theory'
+import { ScaleMode } from '@symphonyscript/notations'
 
 describe('HarmonizeBridge', () => {
 

@@ -1,6 +1,7 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import type { RomanNumeral } from '@symphonyscript/theory'
-import { degreeToPitch, ROMAN_DEGREE_MAP } from '@symphonyscript/theory'
+import type { RomanNumeral } from '@symphonyscript/notations'
+import { ROMAN_DEGREE_MAP } from '@symphonyscript/notations'
+import { degreeToPitch } from '@symphonyscript/theory'
 
 /**
  * Parameters for {@link VoiceLeadBuilder}.

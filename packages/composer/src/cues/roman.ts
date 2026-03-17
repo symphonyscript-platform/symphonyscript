@@ -1,5 +1,5 @@
 import { RomanBuilder } from '../builders/RomanBuilder'
-import type { RomanNumeral } from '@symphonyscript/theory'
+import type { RomanNumeral } from '@symphonyscript/notations'
 
 /**
  * Create a {@link RomanBuilder} that emits chord tones from a roman numeral.

@@ -12,7 +12,7 @@ import { voiceLead } from '../../cues/voiceLead'
 import { VoiceLeadBuilder } from '../../builders/VoiceLeadBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
 import { note } from '../../cues/note'
-import { PitchClass, ScaleMode } from '@symphonyscript/theory'
+import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 import type { CompositionBridge } from '../../interfaces/composition-bridge'
 
 describe('VoiceLeadBuilder', () => {

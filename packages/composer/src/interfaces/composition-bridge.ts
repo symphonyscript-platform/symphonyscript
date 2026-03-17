@@ -1,4 +1,4 @@
-import { PitchClass, ScaleMode } from '@symphonyscript/theory'
+import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 import { ExecutionContext } from '@symphonyscript/core'
 
 /**

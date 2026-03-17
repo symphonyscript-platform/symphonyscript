@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { PitchClass, ScaleMode } from '@symphonyscript/theory'
+import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('BaseCompositionBridge', () => {

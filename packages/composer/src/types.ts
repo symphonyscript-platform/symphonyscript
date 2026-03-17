@@ -1,4 +1,4 @@
-import type { LiteralNoteName } from '@symphonyscript/theory'
+import type { LiteralNoteName } from '@symphonyscript/notations'
 
 /**
  * Pitch input for note and chord builders. Accepts either a literal note name

@@ -1,7 +1,7 @@
 import { CompositionBridge } from '@symphonyscript/composer'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
-import { applyKeySignature, noteToMidi } from '@symphonyscript/theory'
-import type { KeyContext } from '@symphonyscript/theory'
+import { applyKeySignature, noteToMidi } from '@symphonyscript/notations'
+import type { KeyContext } from '@symphonyscript/notations'
 
 /**
  * C0 in MIDI = 12 (MIDI 0 = C-1).

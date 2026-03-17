@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { ScaleMode } from '@symphonyscript/theory'
+import { ScaleMode } from '@symphonyscript/notations'
 import { arpeggio } from '../cues/arpeggio'
 import { roman } from '../cues/roman'
 import { stretch } from '../cues/stretch'

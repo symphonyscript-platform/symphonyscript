@@ -5,12 +5,21 @@
  * Accidentals are stored as HarmonyMask bitmasks.
  */
 
-import type { HarmonyMask, Interval24EDO } from '../types';
-import { asHarmonyMask, asInterval24EDO } from '../types';
-import { OCTAVE_SIZE } from '../constants';
-import type { KeyContext } from './progressions';
-import { PitchClass } from '../enums/pitch-class';
-import { ScaleMode } from '../enums/scale-mode';
+import type { HarmonyMask, Interval24EDO } from '@symphonyscript/theory';
+import { asHarmonyMask, asInterval24EDO } from '@symphonyscript/theory';
+import { OCTAVE_SIZE } from '@symphonyscript/theory';
+import { PitchClass } from './pitch-class';
+import { ScaleMode } from './scale-mode';
+
+/**
+ * Key context for chord and key signature resolution.
+ */
+export interface KeyContext {
+    /** Root pitch class in 24-EDO */
+    readonly root: PitchClass;
+    /** Mode */
+    readonly mode: ScaleMode;
+}
 
 // ============================================================================
 // SECTION 1: Key Signature Data
@@ -454,3 +463,36 @@ export function applyKeySignature(
     // No accidental needed
     return noteName;
 }
+
+// ============================================================================
+// SECTION 7: Key Root Constants
+// ============================================================================
+
+/**
+ * Common key roots as PitchClass values.
+ * KERNEL-SAFE: Frozen constants.
+ *
+ * Usage:
+ * ```typescript
+ * const key: KeyContext = { root: KEY_ROOT.C, mode: ScaleMode.MAJOR };
+ * ```
+ */
+export const KEY_ROOT = {
+    C: PitchClass.C,
+    Cs: PitchClass.Cs,
+    Db: PitchClass.Db,
+    D: PitchClass.D,
+    Ds: PitchClass.Ds,
+    Eb: PitchClass.Eb,
+    E: PitchClass.E,
+    F: PitchClass.F,
+    Fs: PitchClass.Fs,
+    Gb: PitchClass.Gb,
+    G: PitchClass.G,
+    Gs: PitchClass.Gs,
+    Ab: PitchClass.Ab,
+    A: PitchClass.A,
+    As: PitchClass.As,
+    Bb: PitchClass.Bb,
+    B: PitchClass.B,
+} as const;
