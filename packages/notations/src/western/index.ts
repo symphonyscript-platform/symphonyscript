@@ -1,5 +1,6 @@
 export * from './notes'
 export * from './chords'
+export * from './progressions'
 export * from './roman'
 export * from './keys'
 export * from './intervals'

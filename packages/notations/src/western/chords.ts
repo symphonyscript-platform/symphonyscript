@@ -9,6 +9,7 @@
 
 import { CHORD_INTERVALS, Interval } from '@symphonyscript/theory'
 import type { ChordIntervals, ScaleIntervals } from '@symphonyscript/theory'
+import { noteToMidi, midiToNote } from './notes'
 
 // ============================================================================
 // Symbol Lookup Map
@@ -127,6 +128,161 @@ export const CHORD_INTERVALS_MAP: ReadonlyMap<string, ChordIntervals> = new Map<
  */
 export function resolveChordIntervals(symbol: string): ChordIntervals | undefined {
   return CHORD_INTERVALS_MAP.get(symbol)
+}
+
+// ============================================================================
+// Chord Code Parsing (ported from resolver.ts, cent-based)
+// ============================================================================
+
+/** Valid chord root notes. */
+const VALID_ROOTS = new Set([
+  'C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F',
+  'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B',
+])
+
+/** Regex to parse chord code into root and suffix. */
+const CHORD_CODE_REGEX = /^([A-Ga-g][#b]?)(.*)$/
+
+/**
+ * Parsed chord components (cent-based, no bitmasks).
+ */
+export interface ParsedChordCode {
+  /** Root note (e.g., 'C', 'F#', 'Bb') */
+  readonly root: string
+  /** Chord quality/suffix (e.g., 'm7', 'maj7', '') */
+  readonly quality: string
+  /** Chord intervals in cents from root */
+  readonly intervals: ChordIntervals
+}
+
+/**
+ * Parse a chord code into its components.
+ *
+ * @param code - Chord code (e.g., 'Cmaj7', 'F#m', 'Bb7')
+ * @returns ParsedChordCode or null if invalid
+ */
+export function parseChordCode(code: string): ParsedChordCode | null {
+  if (!code || typeof code !== 'string') return null
+
+  const match = code.match(CHORD_CODE_REGEX)
+  if (!match) return null
+
+  const rootRaw = match[1]
+  const root = rootRaw.charAt(0).toUpperCase() + rootRaw.slice(1)
+  const suffix = match[2]
+
+  if (!VALID_ROOTS.has(root)) return null
+
+  const intervals = CHORD_INTERVALS_MAP.get(suffix)
+  if (intervals === undefined) return null
+
+  return { root, quality: suffix, intervals }
+}
+
+/**
+ * Resolve a chord code to MIDI note numbers.
+ *
+ * @param code - Chord code (e.g., 'Cmaj7')
+ * @param octave - Base octave for the root note
+ * @returns Array of MIDI numbers or null if invalid
+ */
+export function chordToMidi(code: string, octave: number): number[] | null {
+  const parsed = parseChordCode(code)
+  if (parsed === null) return null
+  if (!Number.isFinite(octave)) return null
+
+  const rootMidi = noteToMidi(`${parsed.root}${octave}`)
+  if (rootMidi === null) return null
+
+  const midiNumbers: number[] = []
+  for (const cents of parsed.intervals) {
+    const midi = rootMidi + Math.round(cents / 100)
+    if (midi < 0 || midi > 127) return null
+    midiNumbers.push(midi)
+  }
+
+  return midiNumbers
+}
+
+/**
+ * Resolve a chord code to note name strings.
+ *
+ * @param code - Chord code (e.g., 'Cmaj7', 'F#m')
+ * @param octave - Base octave for the root note
+ * @returns Array of note name strings or null if invalid
+ */
+export function chordToNotes(code: string, octave: number): string[] | null {
+  const midiNumbers = chordToMidi(code, octave)
+  if (midiNumbers === null) return null
+
+  const notes: string[] = []
+  for (const midi of midiNumbers) {
+    const name = midiToNote(midi)
+    if (name === null) return null
+    notes.push(name)
+  }
+
+  return notes
+}
+
+/**
+ * Check if a chord code is valid.
+ *
+ * @param code - Chord code to check
+ * @returns True if valid
+ */
+export function isValidChordCode(code: string): boolean {
+  return parseChordCode(code) !== null
+}
+
+/**
+ * Get the note count for a chord.
+ *
+ * @param code - Chord code
+ * @returns Number of notes in chord, or null if invalid
+ */
+export function getChordSize(code: string): number | null {
+  const parsed = parseChordCode(code)
+  return parsed?.intervals.length ?? null
+}
+
+/**
+ * Get the human-readable quality name for a chord suffix.
+ *
+ * @param suffix - Chord suffix (e.g., 'm7', 'dim', '')
+ * @returns Human-readable quality name or null
+ */
+export function getChordQualityName(suffix: string): string | null {
+  const names: Record<string, string> = {
+    '': 'Major',
+    'maj': 'Major',
+    'm': 'Minor',
+    'min': 'Minor',
+    '7': 'Dominant 7th',
+    'maj7': 'Major 7th',
+    'm7': 'Minor 7th',
+    'dim': 'Diminished',
+    'dim7': 'Diminished 7th',
+    'aug': 'Augmented',
+    'sus4': 'Suspended 4th',
+    'sus2': 'Suspended 2nd',
+    '5': 'Power Chord',
+    'm7b5': 'Half-Diminished',
+    '9': 'Dominant 9th',
+    'maj9': 'Major 9th',
+    'm9': 'Minor 9th',
+  }
+
+  return names[suffix] ?? null
+}
+
+/**
+ * Get all supported chord suffixes.
+ *
+ * @returns Array of supported chord suffixes
+ */
+export function getSupportedChordSuffixes(): string[] {
+  return Array.from(CHORD_INTERVALS_MAP.keys())
 }
 
 // ============================================================================
