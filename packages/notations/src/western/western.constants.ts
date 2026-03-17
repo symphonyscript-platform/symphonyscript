@@ -398,3 +398,6 @@ export const ROMAN_TO_DEGREE: Readonly<Record<string, number>> = {
   'VI': 5, 'vi': 5,
   'VII': 6, 'vii': 6,
 }
+
+/** Valid roman numeral stems in lowercase, ordered longest-first for greedy match. */
+export const ROMAN_STEMS: Readonly<string[]> = ['vii', 'iii', 'iv', 'vi', 'ii', 'v', 'i']

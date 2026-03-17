@@ -1,18 +1,7 @@
-/**
- * Hand-written parsers for Western notation strings.
- *
- * No regex. Each parser walks the string character by character.
- */
-
-// ============================================================================
-// Note String Parser
-// ============================================================================
-
-export interface ParsedNote {
-  readonly letter: string
-  readonly accidental: string
-  readonly octave: number
-}
+import { ParsedChordCode } from './interfaces/parsed-chord-code'
+import { ParsedRoman } from './interfaces/parsed-roman'
+import { ParsedNote } from './interfaces/parsed-note'
+import { ROMAN_STEMS } from './western.constants'
 
 /**
  * Parse a Western note string into letter, accidental, and octave.
@@ -61,24 +50,6 @@ export function parseNoteString(input: string): ParsedNote | null {
   return { letter, accidental, octave: sign * octave }
 }
 
-// ============================================================================
-// Roman Numeral Parser
-// ============================================================================
-
-export interface ParsedRoman {
-  /** Leading accidental: 'b', '#', or '' */
-  readonly accidental: string
-  /** Roman numeral stem, original case (e.g. 'IV', 'vi') */
-  readonly degree: string
-  /** Whether the stem is all-lowercase */
-  readonly isLowercase: boolean
-  /** Remaining suffix after the stem (e.g. '7', 'maj7', 'dim') */
-  readonly suffix: string
-}
-
-/** Valid roman numeral stems in lowercase, ordered longest-first for greedy match. */
-const ROMAN_STEMS = ['vii', 'iii', 'iv', 'vi', 'ii', 'v', 'i']
-
 /**
  * Parse a roman numeral string into accidental, degree, case, and suffix.
  *
@@ -120,17 +91,6 @@ export function parseRomanNumeral(input: string): ParsedRoman | null {
   const suffix = input.slice(i)
 
   return { accidental, degree: matchedStem, isLowercase, suffix }
-}
-
-// ============================================================================
-// Chord Code Parser
-// ============================================================================
-
-export interface ParsedChordCode {
-  /** Root note name (e.g. 'C', 'F#', 'Bb') */
-  readonly root: string
-  /** Chord quality suffix (e.g. 'maj7', 'm', '7', '') */
-  readonly suffix: string
 }
 
 /**
