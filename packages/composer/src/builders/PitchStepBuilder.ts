@@ -1,6 +1,8 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import { MIDI_CC } from '@symphonyscript/theory'
-import type { AccidentalOverride } from '@symphonyscript/notations'
+
+/** Accidental override for key-signature-aware pitch resolution. */
+export type AccidentalOverride = 'sharp' | 'flat' | 'natural'
 
 /**
  * Shared parameters for pitched step builders ({@link NoteBuilder}, {@link HarmonyBuilder}, etc.).

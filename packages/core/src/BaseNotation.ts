@@ -2,6 +2,7 @@ import { Notation } from './interfaces/notation'
 import { Range } from './interfaces/range'
 import { NotationCapabilities } from './interfaces/notation-capabilities'
 import { ChordIntervals, KeySignature, ScaleIntervals } from './types'
+import { ScaleMode, PitchClass } from './registries'
 import { ChordResolution } from './interfaces/chord-resolution'
 import { NotationInputError } from './errors'
 
@@ -85,10 +86,10 @@ export abstract class BaseNotation implements Notation {
   abstract intervalToCents(input: string): number
   abstract centsToInterval(cents: number): string
 
-  abstract getScaleIntervals(mode: string): ScaleIntervals
-  abstract getSupportedScales(): string[]
+  abstract getScaleIntervals(mode: ScaleMode): ScaleIntervals
+  abstract getSupportedScales(): ScaleMode[]
 
-  abstract getKeySignature(root: string, mode: string): KeySignature
+  abstract getKeySignature(root: PitchClass, mode: ScaleMode): KeySignature
 
   abstract degreeToCents(input: string, scale: number[]): number
 

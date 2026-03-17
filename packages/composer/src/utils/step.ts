@@ -17,7 +17,7 @@ import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
  *
  * @example
  * // Transform context
- * step((bridge) => bridge.withVelocity(200).withTranspose(5))
+ * step((bridge) => bridge.withVelocity(200).withTransposeCents(500))
  *
  * @example
  * // CC control

@@ -1,6 +1,5 @@
 import { CompositionBridge } from '@symphonyscript/composer'
-import { ExecutionContext, Notation, ScaleMode } from '@symphonyscript/core'
-import { PitchClass } from '@symphonyscript/notations'
+import { ExecutionContext, Notation } from '@symphonyscript/core'
 
 /**
  * Abstract base for decorator bridges that wrap an inner {@link CompositionBridge}.
@@ -39,15 +38,10 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
 
   get tick() { return this.bridge.tick }
   get velocity() { return this.bridge.velocity }
-  get transpose() { return this.bridge.transpose }
   get defaultDuration() { return this.bridge.defaultDuration }
   get tempo() { return this.bridge.tempo }
   get timeSignatureNum() { return this.bridge.timeSignatureNum }
   get timeSignatureDen() { return this.bridge.timeSignatureDen }
-  get scaleRoot() { return this.bridge.scaleRoot }
-  get scaleMode() { return this.bridge.scaleMode }
-  get keyRoot() { return this.bridge.keyRoot }
-  get keyMode() { return this.bridge.keyMode }
   get volume() { return this.bridge.volume }
   get pan() { return this.bridge.pan }
   get swing() { return this.bridge.swing }
@@ -151,16 +145,9 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
     return this.rewrap(this.bridge.withReclaim(nodePtr))
   }
 
-  // === Delegated state modifiers — rewrap ===
-
   /** @internal */
   withVelocity(v: number): CompositionBridge {
     return this.rewrap(this.bridge.withVelocity(v))
-  }
-
-  /** @internal */
-  withTranspose(s: number): CompositionBridge {
-    return this.rewrap(this.bridge.withTranspose(s))
   }
 
   /** @internal */
@@ -176,16 +163,6 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
   /** @internal */
   withTimeSignature(num: number, den: number): CompositionBridge {
     return this.rewrap(this.bridge.withTimeSignature(num, den))
-  }
-
-  /** @internal */
-  withScale(root: PitchClass, mode: ScaleMode): CompositionBridge {
-    return this.rewrap(this.bridge.withScale(root, mode))
-  }
-
-  /** @internal */
-  withKey(root: PitchClass, mode: ScaleMode): CompositionBridge {
-    return this.rewrap(this.bridge.withKey(root, mode))
   }
 
   /** @internal */

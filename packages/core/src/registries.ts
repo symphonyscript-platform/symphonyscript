@@ -1,6 +1,4 @@
-export interface ScaleModeRegistry {
-  western: 'major'
-}
+export interface ScaleModeRegistry {}
 export interface PitchClassRegistry {}
 export interface DegreeRegistry {}
 export interface KeyContextRegistry {}

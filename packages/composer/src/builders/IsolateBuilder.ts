@@ -33,11 +33,8 @@ export class IsolateBuilder implements ScopeBuilder<IsolateBuilder> {
   /**
    * Append steps to this isolation scope.
    *
-   * Each call accumulates; steps are run in order via {@link applyEntries}.
-   * Empty steps array yields a no-op on apply.
-   *
    * @param pipeSteps - One or more {@link PipeStep}s to run within the isolated scope
-
+   *
    * @returns New IsolateBuilder with the appended steps
    */
   steps(...pipeSteps: PipeStep[]): IsolateBuilder {
@@ -48,20 +45,12 @@ export class IsolateBuilder implements ScopeBuilder<IsolateBuilder> {
    * Run the contained steps, then restore all parent state fields.
    *
    * **Isolation semantics:**
-   * - Inner steps start with the parent's bridge context (tempo, velocity, transpose,
-   *   scale, key, volume, pan, swing, quantize, muted, etc.).
-   * - Changes made inside the scope (via setters like `tempo()`, `velocity()`,
-   *   `transpose()`) do **not** propagate out. After exit, those fields are copied
-   *   back from the pre-entry bridge.
-   * - Tick and thunks (emitted notes and CC events) **do** propagate; only state
-   *   fields are restored. The returned bridge has the final tick from the inner
-   *   run and all accumulated thunks.
-   *
-   * Restored fields: velocity, transpose, defaultDuration, tempo, timeSignature,
-   * scale, volume, pan, swing, precise, quantize, muted, key (when parent had one).
+   * - Inner steps start with the parent's bridge context.
+   * - Changes inside the scope do **not** propagate out.
+   * - Tick and thunks **do** propagate; only state fields are restored.
    *
    * @param bridge - Current composition state
-
+   *
    * @returns Bridge with inner steps applied, parent state restored, tick and thunks preserved
    */
   apply(bridge: CompositionBridge): CompositionBridge {
@@ -74,11 +63,11 @@ export class IsolateBuilder implements ScopeBuilder<IsolateBuilder> {
     // Restore ALL state fields from parent, keep tick (and thunks)
     let restored = result
       .withVelocity(bridge.velocity)
-      .withTranspose(bridge.transpose)
+      .withTransposeCents(bridge.transposeCents)
       .withDefaultDuration(bridge.defaultDuration)
       .withTempo(bridge.tempo)
       .withTimeSignature(bridge.timeSignatureNum, bridge.timeSignatureDen)
-      .withScale(bridge.scaleRoot, bridge.scaleMode)
+      .withScaleRootCents(bridge.scaleRootCents)
       .withVolume(bridge.volume)
       .withPan(bridge.pan)
       .withSwing(bridge.swing)
@@ -86,9 +75,14 @@ export class IsolateBuilder implements ScopeBuilder<IsolateBuilder> {
       .withQuantize(bridge.quantizeGrid, bridge.quantizeStrength)
       .withMuted(bridge.muted)
 
-    // Restore key context only if parent had one
-    if (bridge.keyRoot !== null) {
-      restored = restored.withKey(bridge.keyRoot, bridge.keyMode)
+    // Restore scale intervals
+    if (bridge.scaleIntervals !== null) {
+      restored = restored.withScaleIntervals(bridge.scaleIntervals)
+    }
+
+    // Restore key context
+    if (bridge.keyRootCents !== null) {
+      restored = restored.withKeyRootCents(bridge.keyRootCents)
     }
 
     return restored

@@ -2,6 +2,7 @@ import { IClip } from '../interfaces/IClip'
 import { IFrozenClip } from '../interfaces/frozen-clip'
 import { BaseCompositionBridge } from '../composition/BaseCompositionBridge'
 import { RecordingBridge } from '../composition/RecordingBridge'
+import type { Notation } from '@symphonyscript/core'
 
 /**
  * Compose an {@link IClip} and capture its output as an immutable snapshot.
@@ -17,24 +18,18 @@ import { RecordingBridge } from '../composition/RecordingBridge'
  * One-shot: the clip is composed and recorded in a single call. Use when you need
  * a read-only snapshot of the clip's output (e.g. for transforms, playback, or export).
  *
- * @param composer - Clip to compose and capture (e.g. from {@link note}, {@link chord}, or piped clips).
-
- * @returns Immutable snapshot of notes, CC events, and bends; use {@link IFrozenClip.visitNotes}
- *   and related visit methods to read data.
+ * @param composer - Clip to compose and capture.
+ * @param notation - Notation instance for pitch/interval resolution.
+ *
+ * @returns Immutable snapshot of notes, CC events, and bends.
  *
  * @example
  * const clip = note('C4').pipe(glide(0.5))
- * const frozen = freeze(clip)
+ * const frozen = freeze(clip, notation)
  * frozen.visitNotes((src, pitch, vel, dur, tick, muted) => { ... })
- *
- * @example
- * const frozen = freeze(chord('Am').pipe(reverse()))
- *
- * @example
- * const frozen = freeze(note('E4').duration(2).pipe(expression(80)))
  */
-export function freeze(composer: IClip): IFrozenClip {
-  const bridge = new BaseCompositionBridge()
+export function freeze(composer: IClip, notation: Notation): IFrozenClip {
+  const bridge = new BaseCompositionBridge({ notation })
   const composed = composer.compose(bridge)
   const recorder = new RecordingBridge()
 

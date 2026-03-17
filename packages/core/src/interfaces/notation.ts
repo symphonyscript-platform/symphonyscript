@@ -1,4 +1,5 @@
 import { ChordIntervals, KeySignature, ScaleIntervals } from '../types'
+import { ScaleMode, PitchClass } from '../registries'
 import { Range } from './range'
 import { NotationCapabilities } from './notation-capabilities'
 import { ChordResolution } from './chord-resolution'
@@ -185,14 +186,14 @@ export interface Notation {
    *          for major scale)
    * @throws {NotationInputError} If the mode is not recognized
    */
-  getScaleIntervals(mode: string): ScaleIntervals
+  getScaleIntervals(mode: ScaleMode): ScaleIntervals
 
   /**
    * List all scale/mode names supported by this notation.
    *
    * @returns Array of supported mode names
    */
-  getSupportedScales(): string[]
+  getSupportedScales(): ScaleMode[]
 
   /* ---------- Key Signatures ---------- */
 
@@ -205,7 +206,7 @@ export interface Notation {
    * @returns Array of accidental strings (e.g., `['F#', 'C#']` for D major)
    * @throws {NotationInputError} If the key is not recognized
    */
-  getKeySignature(root: string, mode: string): KeySignature
+  getKeySignature(root: PitchClass, mode: ScaleMode): KeySignature
 
   /* ---------- Degrees ---------- */
 

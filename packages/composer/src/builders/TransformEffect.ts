@@ -114,9 +114,10 @@ export abstract class TransformEffect<T extends TransformEffect<T>> implements S
 
     // Capture notes by running entries through a fresh bridge + recording
     const captureBridge = new BaseCompositionBridge({
+      notation: bridge.notation(),
       tick: 0,
       velocity: bridge.velocity,
-      transpose: bridge.transpose,
+      transposeCents: bridge.transposeCents,
       defaultDuration: bridge.defaultDuration,
     })
 

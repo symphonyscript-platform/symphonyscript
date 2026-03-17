@@ -5,4 +5,5 @@
  */
 
 export * from './western-legacy'
+export * from './western'
 export * from './midi'

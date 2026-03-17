@@ -8,7 +8,7 @@
  */
 
 import { BaseNotation, NotationInputError } from '@symphonyscript/core'
-import type { Range, NotationCapabilities, ChordIntervals, KeySignature, ScaleIntervals } from '@symphonyscript/core'
+import type { Range, NotationCapabilities, ChordIntervals, KeySignature, ScaleIntervals, ScaleMode, PitchClass } from '@symphonyscript/core'
 import type { ChordResolution } from '@symphonyscript/core'
 
 import {
@@ -118,24 +118,24 @@ export class WesternNotation extends BaseNotation {
   // Scales
   // ==========================================================================
 
-  getScaleIntervals(mode: string): ScaleIntervals {
-    const intervals = SCALE_INTERVALS_MAP[mode.toLowerCase()]
+  getScaleIntervals(mode: ScaleMode): ScaleIntervals {
+    const intervals = SCALE_INTERVALS_MAP[(mode as string).toLowerCase()]
     if (!intervals) {
-      throw new NotationInputError(this.getId(), 'getScaleIntervals', mode)
+      throw new NotationInputError(this.getId(), 'getScaleIntervals', mode as string)
     }
     return intervals
   }
 
-  getSupportedScales(): string[] {
-    return Object.keys(SCALE_INTERVALS_MAP)
+  getSupportedScales(): ScaleMode[] {
+    return Object.keys(SCALE_INTERVALS_MAP) as ScaleMode[]
   }
 
   // ==========================================================================
   // Key Signatures
   // ==========================================================================
 
-  getKeySignature(root: string, mode: string): KeySignature {
-    const key = root + ':' + mode
+  getKeySignature(root: PitchClass, mode: ScaleMode): KeySignature {
+    const key = (root as string) + ':' + (mode as string)
     const sig = KEY_SIGNATURE_TABLE[key]
     if (sig === undefined) {
       throw new NotationInputError(this.getId(), 'getKeySignature', key)

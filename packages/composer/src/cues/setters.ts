@@ -1,9 +1,8 @@
-import { PitchClass } from '@symphonyscript/notations'
 import { resolveTemperament, type TemperamentName } from '@symphonyscript/theory'
 import { FieldSetter } from '../builders/SetterBuilders'
 import { assertPositive, assertRange } from '../utils/validate'
 import { resolveDuration, type NoteDuration } from '../utils/duration'
-import { ScaleMode } from '@symphonyscript/core'
+import type { ScaleMode, PitchClass } from '@symphonyscript/core'
 
 /**
  * Set transposition in cents for all subsequent notes (or scoped).
@@ -80,8 +79,13 @@ export function tempo(bpm: number): FieldSetter {
  */
 export function scale(root: PitchClass, mode: ScaleMode): FieldSetter {
   return new FieldSetter(
-    b => b.withScale(root, mode),
-    (r, p) => r.withScale(p.scaleRoot, p.scaleMode),
+    b => {
+      const n = b.notation()
+      const rootCents = n.noteToCents(root + '4') % 1200
+      const intervals = n.getScaleIntervals(mode)
+      return b.withScaleRootCents(rootCents).withScaleIntervals(intervals)
+    },
+    (r, p) => r.withScaleRootCents(p.scaleRootCents).withScaleIntervals(p.scaleIntervals!),
   )
 }
 
@@ -132,8 +136,11 @@ export function pan(value: number): FieldSetter {
  */
 export function key(root: PitchClass, mode: ScaleMode): FieldSetter {
   return new FieldSetter(
-    b => b.withKey(root, mode),
-    (r, p) => p.keyRoot !== null ? r.withKey(p.keyRoot, p.keyMode) : r,
+    b => {
+      const rootCents = b.notation().noteToCents(root + '4') % 1200
+      return b.withKeyRootCents(rootCents)
+    },
+    (r, p) => r.withKeyRootCents(p.keyRootCents),
   )
 }
 

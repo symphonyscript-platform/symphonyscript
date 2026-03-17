@@ -3,6 +3,7 @@ import { PipeStep } from './interfaces/pipe-step'
 import { CompositionBridge } from './interfaces/composition-bridge'
 import { freeze } from './utils/freeze'
 import { IFrozenClip } from './interfaces/frozen-clip'
+import type { Notation } from '@symphonyscript/core'
 
 /**
  * Main clip class implementing {@link IClip}. Entry point for composition: holds a
@@ -23,29 +24,17 @@ import { IFrozenClip } from './interfaces/frozen-clip'
  *
  * @example
  * ```ts
- * Clip.freeze(chord('Am').pipe(reverse()))
- * ```
- *
- * @example
- * ```ts
- * const frozen = Clip.freeze(note('E4').duration(2))
- * frozen.visitNotes((src, pitch, vel, dur, tick, muted) => { ... })
- * ```
- *
- * @example
- * ```ts
- * clip.compose(bridge)  // internal use; prefer freeze() for one-shot snapshot
+ * Clip.freeze(chord('Am').pipe(reverse()), notation)
  * ```
  */
 export class Clip implements IClip {
   constructor(private readonly steps: PipeStep[]) {}
 
   /**
-   * Create a clip from a chain of transformation steps. Equivalent to
-   * `new Clip(steps)` but preferred as the static entry point.
+   * Create a clip from a chain of transformation steps.
    *
    * @param steps - {@link PipeStep}s to apply in sequence during composition.
-
+   *
    * @returns New Clip with the given steps.
    */
   static pipe(...steps: PipeStep[]): Clip {
@@ -54,21 +43,21 @@ export class Clip implements IClip {
 
   /**
    * Compose the clip and capture its output as an immutable {@link IFrozenClip}.
-   * Delegates to {@link freeze}.
    *
    * @param clip - Clip to compose and capture.
-
+   * @param notation - Notation instance for pitch/interval resolution.
+   *
    * @returns Immutable snapshot of notes, CC events, and bends.
    */
-  static freeze(clip: IClip): IFrozenClip {
-    return freeze(clip)
+  static freeze(clip: IClip, notation: Notation): IFrozenClip {
+    return freeze(clip, notation)
   }
 
   /**
    * Append transformation steps. Returns a new Clip; this clip is unchanged.
    *
    * @param steps - {@link PipeStep}s to append (applied after existing steps).
-
+   *
    * @returns New Clip with the appended steps.
    */
   pipe(...steps: PipeStep[]): Clip {
@@ -80,8 +69,8 @@ export class Clip implements IClip {
    * `apply()` receives the bridge and returns an updated bridge; the final
    * bridge is returned.
    *
-   * @param context - Initial composition bridge (e.g. from {@link use}).
-
+   * @param context - Initial composition bridge.
+   *
    * @returns Bridge with all steps applied.
    */
   compose(context: CompositionBridge): CompositionBridge {
