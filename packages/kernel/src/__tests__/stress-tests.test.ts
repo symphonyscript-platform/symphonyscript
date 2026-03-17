@@ -55,7 +55,7 @@ describe('Stress Tests: Heap Exhaustion', () => {
     expect(exhaustedPtr).toBe(NULL_PTR)
 
     // Verify error flag
-    const sab = new Int32Array(linker.getSAB())
+    const sab = new Int32Array(linker.getSAB()!)
     expect(sab[HDR.ERROR_FLAG] & ERROR.HEAP_EXHAUSTED).toBe(ERROR.HEAP_EXHAUSTED)
   })
 
@@ -120,7 +120,7 @@ const RING_FULL = -1
 
 describe('Stress Tests: Ring Buffer Wraparound', () => {
   it('should write and read maintaining FIFO order', () => {
-    const sab = createLinkerSAB({ nodeCapacity: 32 })
+    const sab = createLinkerSAB({ nodeCapacity: 32 })!
     const sabView = new Int32Array(sab)
     const ringBuffer = new RingBuffer(sabView)
 
@@ -152,7 +152,7 @@ describe('Stress Tests: Ring Buffer Wraparound', () => {
   })
 
   it('should stop accepting writes when buffer is full', () => {
-    const sab = createLinkerSAB({ nodeCapacity: 32 })
+    const sab = createLinkerSAB({ nodeCapacity: 32 })!
     const sabView = new Int32Array(sab)
     const ringBuffer = new RingBuffer(sabView)
 
@@ -183,7 +183,7 @@ describe('Stress Tests: Ring Buffer Wraparound', () => {
 describe('Stress Tests: Synapse Table Collision', () => {
   it('should handle many synapses with same source', () => {
     // Use larger capacity and safeZoneTicks: 0 to allow immediate insertion
-    const sab = createLinkerSAB({ nodeCapacity: 128, synapseCapacity: 1024, safeZoneTicks: 0 })
+    const sab = createLinkerSAB({ nodeCapacity: 128, synapseCapacity: 1024, safeZoneTicks: 0 })!
     const linker = new SiliconSynapse(sab)
     linker.setAudioContext(true) // Suppress SPSC warnings
 
@@ -431,7 +431,7 @@ describe('Stress Tests: idTableRebuild Symbol Table Preservation', () => {
 
 describe('Stress Tests: Zone Boundary', () => {
   it('should correctly route allocations at zone boundary', () => {
-    const sab = createLinkerSAB({ nodeCapacity: 16 })
+    const sab = createLinkerSAB({ nodeCapacity: 16 })!
     const sabView = new Int32Array(sab)
     const linker = new SiliconSynapse(sab)
     linker.setAudioContext(true) // Suppress SPSC warnings
@@ -481,7 +481,7 @@ describe('Stress Tests: 64-bit Tagged Pointer', () => {
   it('should increment SEQ counter by 2 on each free (stale reference detection)', () => {
     // RFC-055: SPSC FreeList no longer uses 64-bit version counter.
     // Instead, SEQ counter in NODE.SEQ_FLAGS is incremented for stale reference detection.
-    const sab = createLinkerSAB({ nodeCapacity: 8 })
+    const sab = createLinkerSAB({ nodeCapacity: 8 })!
     const sabView = new Int32Array(sab)
     const linker = new SiliconSynapse(sab)
     linker.setAudioContext(true) // Suppress SPSC warnings
@@ -514,7 +514,7 @@ describe('Stress Tests: 64-bit Tagged Pointer', () => {
 
 describe('Stress Tests: Error Paths', () => {
   it('should set UNKNOWN_OPCODE error for invalid command', () => {
-    const sab = createLinkerSAB({ nodeCapacity: 32 })
+    const sab = createLinkerSAB({ nodeCapacity: 32 })!
     const sabView = new Int32Array(sab)
     const linker = new SiliconSynapse(sab)
     linker.setAudioContext(true) // Suppress SPSC warnings
@@ -532,7 +532,7 @@ describe('Stress Tests: Error Paths', () => {
   })
 
   it('should set INVALID_PTR error for out-of-bounds pointer', () => {
-    const sab = createLinkerSAB({ nodeCapacity: 32 })
+    const sab = createLinkerSAB({ nodeCapacity: 32 })!
     const sabView = new Int32Array(sab)
     const linker = new SiliconSynapse(sab)
     linker.setAudioContext(true) // Suppress SPSC warnings
@@ -550,7 +550,7 @@ describe('Stress Tests: Error Paths', () => {
   })
 
   it('should detect corrupted free list head', () => {
-    const sab = createLinkerSAB({ nodeCapacity: 8 })
+    const sab = createLinkerSAB({ nodeCapacity: 8 })!
     const sab64 = new BigInt64Array(sab)
     const sabView = new Int32Array(sab)
     const linker = new SiliconSynapse(sab)
@@ -611,7 +611,7 @@ describe('Stress Tests: Error Paths', () => {
 describe('Stress Tests: State Machines', () => {
   it('should transition COMMIT_FLAG correctly: IDLE → PENDING → ACK → IDLE', () => {
     const linker = createTestLinker()
-    const sab = new Int32Array(linker.getSAB())
+    const sab = new Int32Array(linker.getSAB()!)
 
     // Initial state
     expect(sab[HDR.COMMIT_FLAG]).toBe(COMMIT.IDLE)
@@ -631,7 +631,7 @@ describe('Stress Tests: State Machines', () => {
 
   it('should handle rapid structural changes', () => {
     const linker = createTestLinker(64)
-    const sab = new Int32Array(linker.getSAB())
+    const sab = new Int32Array(linker.getSAB()!)
 
     // Rapidly insert and delete
     for (let i = 0; i < 50; i++) {
@@ -664,7 +664,7 @@ describe('Stress Tests: State Machines', () => {
 describe('Stress Tests: Data Integrity', () => {
   it('should clear FLAG.ACTIVE on deletion', () => {
     const linker = createTestLinker()
-    const sab = new Int32Array(linker.getSAB())
+    const sab = new Int32Array(linker.getSAB()!)
 
     const ptr = linker.insertHead(OPCODE.NOTE, 60, 100, 96, 0, 1000, FLAG.ACTIVE)
     expect(ptr).not.toBe(NULL_PTR)
@@ -683,7 +683,7 @@ describe('Stress Tests: Data Integrity', () => {
   })
 
   it('should zero memory on allocation', () => {
-    const sab = createLinkerSAB({ nodeCapacity: 8 })
+    const sab = createLinkerSAB({ nodeCapacity: 8 })!
     const sabView = new Int32Array(sab)
     const linker = new SiliconSynapse(sab)
     linker.setAudioContext(true) // Suppress SPSC warnings
@@ -712,7 +712,7 @@ describe('Stress Tests: Data Integrity', () => {
 
   it('should increment SEQ by 2 on every attribute patch', () => {
     const linker = createTestLinker()
-    const sab = new Int32Array(linker.getSAB())
+    const sab = new Int32Array(linker.getSAB()!)
 
     const ptr = linker.insertHead(OPCODE.NOTE, 60, 100, 96, 0, 1000, FLAG.ACTIVE)
     expect(ptr).not.toBe(NULL_PTR)
@@ -738,7 +738,7 @@ describe('Stress Tests: Data Integrity', () => {
 describe('Stress Tests: Telemetry Accuracy', () => {
   it('should maintain accurate NODE_COUNT through operations', () => {
     const linker = createTestLinker(32)
-    const sab = new Int32Array(linker.getSAB())
+    const sab = new Int32Array(linker.getSAB()!)
 
     // Initial count
     expect(sab[HDR.NODE_COUNT]).toBe(0)
@@ -769,7 +769,7 @@ describe('Stress Tests: Telemetry Accuracy', () => {
 
   it('should maintain accurate FREE_COUNT', () => {
     const linker = createTestLinker(8) // Zone A = 4
-    const sab = new Int32Array(linker.getSAB())
+    const sab = new Int32Array(linker.getSAB()!)
 
     // Initial: all 4 Zone A nodes free
     expect(sab[HDR.FREE_COUNT]).toBe(4)
@@ -884,7 +884,7 @@ describe('Stress Tests: Concurrent Operations', () => {
   it('should maintain SEQ counter consistency during rapid patches', async () => {
     const linker = SiliconSynapse.create({ nodeCapacity: 64, safeZoneTicks: 0 })
     linker.setAudioContext(true) // Suppress SPSC warnings
-    const sab = new Int32Array(linker.getSAB())
+    const sab = new Int32Array(linker.getSAB()!)
 
     // Insert a node to patch
     const ptr = linker.insertHead(OPCODE.NOTE, 60, 100, 480, 0, 1, 0)

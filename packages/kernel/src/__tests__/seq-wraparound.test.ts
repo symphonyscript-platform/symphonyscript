@@ -98,7 +98,7 @@ describe('readNodeRaw with seqChanged integration', () => {
     const success = linker.readNodeRaw(ptr, buf)
 
     expect(success).toBe(true)
-    expect(Atomics.load(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_CENTS)).toBe(60)
+    expect(Atomics.load(new Int32Array(linker.getSAB()!), (ptr / 4) + NODE.PITCH_CENTS)).toBe(60)
   })
 
   it('returns false for NULL_PTR', () => {
@@ -115,13 +115,13 @@ describe('readNodeRaw with seqChanged integration', () => {
 
     linker.readNodeRaw(ptr, buf)
 
-    expect(Atomics.load(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_CENTS)).toBe(72)
+    expect(Atomics.load(new Int32Array(linker.getSAB()!), (ptr / 4) + NODE.PITCH_CENTS)).toBe(72)
   })
 
   it('rejects odd sequence while write is in progress', () => {
     const linker = createTestLinker()
     const ptr = linker.insertHead(...noteData(60, 0))
-    const sab = new Int32Array(linker.getSAB())
+    const sab = new Int32Array(linker.getSAB()!)
     const offset = ptr / 4
 
     // Simulate writer phase-1 state (odd seq => in-progress write)
@@ -135,7 +135,7 @@ describe('readNodeRaw with seqChanged integration', () => {
   it('accepts only stable even snapshots', () => {
     const linker = createTestLinker()
     const ptr = linker.insertHead(...noteData(60, 0))
-    const sab = new Int32Array(linker.getSAB())
+    const sab = new Int32Array(linker.getSAB()!)
     const offset = ptr / 4
 
     Atomics.store(sab, offset + NODE.SEQ_FLAGS, (4 << 8))
@@ -162,7 +162,7 @@ describe('readNodeRaw traversal with seqChanged integration', () => {
     while (ptr !== NULL_PTR) {
       const ok = linker.readNodeRaw(ptr, buf)
       if (ok) {
-        pitches.push(Atomics.load(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_CENTS))
+        pitches.push(Atomics.load(new Int32Array(linker.getSAB()!), (ptr / 4) + NODE.PITCH_CENTS))
       }
       ptr = buf[NODE.NEXT_PTR]
     }

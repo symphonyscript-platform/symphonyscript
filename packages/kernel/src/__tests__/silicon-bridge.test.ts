@@ -814,7 +814,7 @@ describe('RFC-044: Async Path & Resilience', () => {
     it('should return pointer from Zone B', () => {
       const bridge = createTestBridge()
       const linker = bridge['linker'] as SiliconSynapse
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
       const nodeCapacity = sab[HDR.NODE_CAPACITY]
 
       // Calculate Zone B start boundary
@@ -839,7 +839,7 @@ describe('RFC-044: Async Path & Resilience', () => {
     it('should advance RB_TAIL in Ring Buffer', () => {
       const bridge = createTestBridge()
       const linker = bridge['linker'] as SiliconSynapse
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       const initialTail = sab[HDR.RB_TAIL]
       expect(initialTail).toBe(0)
@@ -853,7 +853,7 @@ describe('RFC-044: Async Path & Resilience', () => {
     it('should NOT link node until processCommands', () => {
       const bridge = createTestBridge()
       const linker = bridge['linker'] as SiliconSynapse
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       // Call insertAsync
       const ptr = bridge.insertAsync(OPCODE.NOTE, 60, 100, 480, 0, false, 1001)
@@ -874,7 +874,7 @@ describe('RFC-044: Async Path & Resilience', () => {
     it('should queue multiple async inserts correctly', () => {
       const bridge = createTestBridge()
       const linker = bridge['linker'] as SiliconSynapse
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       // Queue 3 async inserts
       const ptr1 = bridge.insertAsync(OPCODE.NOTE, 60, 100, 480, 0, false, 1001)
@@ -938,7 +938,7 @@ describe('RFC-044: Async Path & Resilience', () => {
 
       // Ring buffer should be empty
       const linker = bridge['linker'] as SiliconSynapse
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
       expect(sab[HDR.RB_HEAD]).toBe(0)
       expect(sab[HDR.RB_TAIL]).toBe(0)
 
@@ -965,14 +965,14 @@ describe('RFC-044: Async Path & Resilience', () => {
       advanceTicks(bridge, 11)
 
       // Node should not exist (was cleared by reset)
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
       expect(sab[HDR.NODE_COUNT]).toBe(0)
     })
 
     it('should coordinate reset between Linker (Zone A) and LocalAllocator (Zone B)', () => {
       const bridge = createTestBridge()
       const linker = bridge['linker'] as SiliconSynapse
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       // Allocate in Zone A (via immediate path - @internal method for tests)
       bridge._insertImmediateInternal(

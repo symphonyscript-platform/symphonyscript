@@ -23,7 +23,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
   // ===========================================================================
   describe('1. Legacy Mode (workerZones: 1)', () => {
     it('should behave identically to current system with workerZones: 1', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 64, workerZones: 1 })
+      const buffer = createLinkerSAB({ nodeCapacity: 64, workerZones: 1 })!
       const sab = new Int32Array(buffer)
 
       // Verify zone count is 1
@@ -37,7 +37,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     })
 
     it('should work without workerZones parameter (defaults to 1)', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 64 })
+      const buffer = createLinkerSAB({ nodeCapacity: 64 })!
       const sab = new Int32Array(buffer)
 
       expect(sab[HDR.ZONE_COUNT]).toBe(1)
@@ -50,7 +50,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     })
 
     it('should have FreeList in legacy mode', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 64, workerZones: 1 })
+      const buffer = createLinkerSAB({ nodeCapacity: 64, workerZones: 1 })!
       const sab = new Int32Array(buffer)
       const freeList = new FreeList(sab)
 
@@ -59,7 +59,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     })
 
     it('should have drainReturnQueue as no-op in legacy mode', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 64, workerZones: 1 })
+      const buffer = createLinkerSAB({ nodeCapacity: 64, workerZones: 1 })!
       const sab = new Int32Array(buffer)
       const freeList = new FreeList(sab)
 
@@ -74,7 +74,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
   // ===========================================================================
   describe('2. Multi-Zone Initialization', () => {
     it('should initialize SAB with multiple zones', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 4 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 4 })!
       const sab = new Int32Array(buffer)
 
       expect(sab[HDR.ZONE_COUNT]).toBe(4)
@@ -84,7 +84,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     it('should partition heap into equal-sized zones', () => {
       const nodeCapacity = 128
       const workerZones = 4
-      const buffer = createLinkerSAB({ nodeCapacity, workerZones })
+      const buffer = createLinkerSAB({ nodeCapacity, workerZones })!
       const sab = new Int32Array(buffer)
 
       const zoneConfigOffset = sab[HDR.ZONE_CONFIG_OFFSET]
@@ -103,7 +103,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     })
 
     it('should initialize zone config table correctly', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })!
       const sab = new Int32Array(buffer)
 
       const zoneConfigOffset = sab[HDR.ZONE_CONFIG_OFFSET]
@@ -133,7 +133,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
   // ===========================================================================
   describe('3. Zone Claiming', () => {
     it('should claim zone via createForZone', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 4 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 4 })!
 
       const linker = SiliconSynapse.createForZone(buffer, 1)
       expect(linker).not.toBeNull()
@@ -142,7 +142,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     })
 
     it('should claim different zones for different workers', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 4 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 4 })!
 
       const linker1 = SiliconSynapse.createForZone(buffer, 1)
       const linker2 = SiliconSynapse.createForZone(buffer, 2)
@@ -166,7 +166,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     })
 
     it('should return null when no zones available', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })!
 
       // Claim all zones
       const linker1 = SiliconSynapse.createForZone(buffer, 1)
@@ -181,7 +181,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     })
 
     it('should set OWNER_ID when zone is claimed', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })!
       const sab = new Int32Array(buffer)
 
       const linker = SiliconSynapse.createForZone(buffer, 42)
@@ -201,7 +201,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
   // ===========================================================================
   describe('4. Independent Zone Allocation', () => {
     it('should allocate from zone-specific free list', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })!
       const sab = new Int32Array(buffer)
 
       const zoneConfigOffset = sab[HDR.ZONE_CONFIG_OFFSET]
@@ -224,7 +224,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     })
 
     it('should allocate pointers within zone bounds', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })!
       const sab = new Int32Array(buffer)
 
       const zoneConfigOffset = sab[HDR.ZONE_CONFIG_OFFSET]
@@ -250,7 +250,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
   // ===========================================================================
   describe('5. Zone Exhaustion (Fail Fast)', () => {
     it('should return NULL_PTR when zone is exhausted', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 32, workerZones: 2 })
+      const buffer = createLinkerSAB({ nodeCapacity: 32, workerZones: 2 })!
       const sab = new Int32Array(buffer)
 
       const zoneConfigOffset = sab[HDR.ZONE_CONFIG_OFFSET]
@@ -269,7 +269,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     })
 
     it('should not steal from other zones (fail fast)', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 32, workerZones: 2 })
+      const buffer = createLinkerSAB({ nodeCapacity: 32, workerZones: 2 })!
       const sab = new Int32Array(buffer)
 
       const zoneConfigOffset = sab[HDR.ZONE_CONFIG_OFFSET]
@@ -295,7 +295,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
   // ===========================================================================
   describe('6. Cross-Zone Free Routing', () => {
     it('should route cross-zone free to Return Queue', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })!
       const sab = new Int32Array(buffer)
 
       const zoneConfigOffset = sab[HDR.ZONE_CONFIG_OFFSET]
@@ -321,7 +321,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     })
 
     it('should identify correct zone for pointer (O(1) lookup)', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 4 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 4 })!
       const sab = new Int32Array(buffer)
 
       const zoneConfigOffset = sab[HDR.ZONE_CONFIG_OFFSET]
@@ -337,7 +337,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     })
 
     it('should handle same-zone free locally', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })!
       const sab = new Int32Array(buffer)
 
       const zoneConfigOffset = sab[HDR.ZONE_CONFIG_OFFSET]
@@ -359,7 +359,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
   // ===========================================================================
   describe('7. Return Queue Operations', () => {
     it('should enqueue and dequeue pointers', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })!
       const sab = new Int32Array(buffer)
 
       const returnQueue = new ReturnQueue(sab, 0, 2)
@@ -382,7 +382,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     })
 
     it('should return NULL_PTR when dequeuing from empty queue', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })!
       const sab = new Int32Array(buffer)
 
       const returnQueue = new ReturnQueue(sab, 0, 2)
@@ -390,7 +390,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     })
 
     it('should handle multiple enqueue/dequeue operations', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })!
       const sab = new Int32Array(buffer)
 
       const returnQueue = new ReturnQueue(sab, 0, 2)
@@ -420,7 +420,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
   // ===========================================================================
   describe('8. Reset and Backward Compatibility', () => {
     it('should reset multi-zone SAB correctly', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 64, workerZones: 2 })
+      const buffer = createLinkerSAB({ nodeCapacity: 64, workerZones: 2 })!
       const sab = new Int32Array(buffer)
 
       // Claim zones and allocate some nodes
@@ -439,7 +439,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
     })
 
     it('should reset legacy SAB correctly', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 64, workerZones: 1 })
+      const buffer = createLinkerSAB({ nodeCapacity: 64, workerZones: 1 })!
       const sab = new Int32Array(buffer)
 
       const linker = new SiliconSynapse(buffer)
@@ -460,7 +460,7 @@ describe('RFC-056: Multi-Zone Heap Scaling', () => {
   // ===========================================================================
   describe('9. poll() Integration', () => {
     it('should drain Return Queue at start of poll()', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })
+      const buffer = createLinkerSAB({ nodeCapacity: 128, workerZones: 2 })!
       const sab = new Int32Array(buffer)
 
       // Create linker for zone 0

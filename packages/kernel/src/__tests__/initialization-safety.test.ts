@@ -13,7 +13,7 @@ describe('Initialization Safety (K-003)', () => {
         const capacity = 256
         // Calculate total size based on capacity (approx formula for test)
         // We can use createLinkerSAB to get a valid buffer structure first
-        const buffer = createLinkerSAB({ nodeCapacity: capacity })
+        const buffer = createLinkerSAB({ nodeCapacity: capacity })!
         const sab = new Int32Array(buffer)
 
         // 2. Pollute Zone B with garbage data

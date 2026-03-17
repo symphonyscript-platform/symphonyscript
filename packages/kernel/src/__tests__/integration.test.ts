@@ -37,7 +37,7 @@ function createTestPair(options?: {
   const buffer = createLinkerSAB({
     nodeCapacity: options?.nodeCapacity ?? 256,
     safeZoneTicks: options?.safeZoneTicks ?? 0
-  })
+  })!
   const linker = new SiliconSynapse(buffer)
   linker.setAudioContext(true)
   const consumer = new MockConsumer(buffer, options?.tickRate ?? 24)
@@ -96,7 +96,7 @@ function collectNodes(linker: SiliconSynapse): Array<{
       nodes.push({
         ptr,
         opcode: unpackOpcode(_intBuf[NODE.PACKED_A]),
-        pitch: Atomics.load(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_CENTS),
+        pitch: Atomics.load(new Int32Array(linker.getSAB()!), (ptr / 4) + NODE.PITCH_CENTS),
         velocity: unpackVelocity(_intBuf[NODE.PACKED_A]),
         duration: _intBuf[NODE.DURATION],
         baseTick: _intBuf[NODE.BASE_TICK],
@@ -511,7 +511,7 @@ describe('RFC-043 Phase 2: Structural Splicing Integration', () => {
 
       // Copy same seed
       const sab1 = new Int32Array(buffer)
-      const sab2 = new Int32Array(linker2.getSAB())
+      const sab2 = new Int32Array(linker2.getSAB()!)
       sab2[REG.PRNG_SEED] = sab1[REG.PRNG_SEED]
 
       // Same humanization

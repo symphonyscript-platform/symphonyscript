@@ -28,7 +28,7 @@ describe('RFC-054: Native Phase Guardrails', () => {
         buffer = createLinkerSAB({
             nodeCapacity: 256,
             safeZoneTicks: 0
-        })
+        })!
         linker = new SiliconSynapse(buffer)
         bridge = new SiliconBridge(linker)
         consumer = new MockConsumer(buffer, 24)

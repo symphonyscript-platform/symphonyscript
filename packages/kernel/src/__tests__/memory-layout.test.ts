@@ -21,7 +21,7 @@ describe('Memory Layout Validation', () => {
       // nodeCapacity must be power of 2 (Task 3.2)
       const nodeCapacity = 256
       const linker = SiliconSynapse.create({ nodeCapacity, safeZoneTicks: 0 })
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       const idTableCapacity = sab[HDR.ID_TABLE_CAPACITY]
       // Symbol Table capacity is implicit: nodeCapacity * 2 (same as ID Table)

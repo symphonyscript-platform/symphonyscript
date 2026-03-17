@@ -11,7 +11,7 @@ import {
 
 describe('K-002: Synapse Table Scalability', () => {
     it('should default synapse capacity to nodeCapacity * 8', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 1024 })
+        const sab = createLinkerSAB({ nodeCapacity: 1024 })!
         const sabView = new Int32Array(sab)
 
         const synapseCapacity = sabView[HDR.SYNAPSE_CAPACITY]
@@ -20,7 +20,7 @@ describe('K-002: Synapse Table Scalability', () => {
 
     it('should respect explicit synapseCapacity config', () => {
         // synapseCapacity must be power of 2 for hash mask
-        const sab = createLinkerSAB({ nodeCapacity: 1024, synapseCapacity: 16384 })
+        const sab = createLinkerSAB({ nodeCapacity: 1024, synapseCapacity: 16384 })!
         const sabView = new Int32Array(sab)
 
         const synapseCapacity = sabView[HDR.SYNAPSE_CAPACITY]
@@ -28,7 +28,7 @@ describe('K-002: Synapse Table Scalability', () => {
     })
 
     it('should return synapseCapacity from getLinkerConfig', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 512, synapseCapacity: 16384 })
+        const sab = createLinkerSAB({ nodeCapacity: 512, synapseCapacity: 16384 })!
         const config = getLinkerConfig(sab)
 
         expect(config.nodeCapacity).toBe(512)
@@ -36,7 +36,7 @@ describe('K-002: Synapse Table Scalability', () => {
     })
 
     it('should initialize SYNAPSE_COUNT to 0', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 1024 })
+        const sab = createLinkerSAB({ nodeCapacity: 1024 })!
         const sabView = new Int32Array(sab)
 
         expect(sabView[HDR.SYNAPSE_COUNT]).toBe(0)
@@ -45,7 +45,7 @@ describe('K-002: Synapse Table Scalability', () => {
     })
 
     it('R-007: should reset persisted synapse counters to 0 on resetLinkerSAB', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 1024 })
+        const sab = createLinkerSAB({ nodeCapacity: 1024 })!
         const sabView = new Int32Array(sab)
 
         Atomics.store(sabView, HDR.SYNAPSE_COUNT, 7)
@@ -61,8 +61,8 @@ describe('K-002: Synapse Table Scalability', () => {
 
     it('should create appropriately sized SAB for small synapse capacity', () => {
         // Small capacity = smaller SAB
-        const smallSab = createLinkerSAB({ nodeCapacity: 256, synapseCapacity: 512 })
-        const largeSab = createLinkerSAB({ nodeCapacity: 256, synapseCapacity: 65536 })
+        const smallSab = createLinkerSAB({ nodeCapacity: 256, synapseCapacity: 512 })!
+        const largeSab = createLinkerSAB({ nodeCapacity: 256, synapseCapacity: 65536 })!
 
         // Large synapse table should result in larger buffer
         expect(largeSab.byteLength).toBeGreaterThan(smallSab.byteLength)

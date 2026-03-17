@@ -82,7 +82,7 @@ function createLiveEnvironment() {
     structuralDebounceTicks: 1
   })
 
-  const consumer = new ConsumerWrapper(linker.getSAB())
+  const consumer = new ConsumerWrapper(linker.getSAB()!)
 
   return { linker, bridge, consumer }
 }
@@ -264,7 +264,7 @@ describe('E2E Live Coding - Real-Time Edits', () => {
 
   test('structural edits respect COMMIT_FLAG protocol', () => {
     const { bridge, consumer, linker } = createLiveEnvironment()
-    const sab = new Int32Array(linker.getSAB())
+    const sab = new Int32Array(linker.getSAB()!)
 
     // Queue debounced insert (no immediate insert first to start from clean state)
     bridge.insertNoteDebounced(60, 100, 480, 480, false)

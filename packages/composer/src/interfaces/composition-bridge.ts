@@ -1,5 +1,5 @@
 import { PitchClass, ScaleMode } from '@symphonyscript/notations'
-import { ExecutionContext } from '@symphonyscript/core'
+import { ExecutionContext, Notation } from '@symphonyscript/core'
 
 /**
  * Main interface for the composition API. Provides read-only composition state
@@ -68,7 +68,7 @@ export interface CompositionBridge {
     /** Transpose offset in cents. */
     readonly transposeCents: number
 
-    // === Deferred Event Methods (pure — accumulate thunks, no side effects) ===
+    notation(): Notation
 
     /**
      * Defer a note. Uses tick/velocity from state unless overridden. Returns new

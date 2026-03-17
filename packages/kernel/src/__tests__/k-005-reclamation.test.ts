@@ -20,7 +20,7 @@ describe('K-005: Zone B Reclamation', () => {
     it('should reuse deleted Zone B nodes', async () => {
         // Disable safe zone to allow immediate deletion at tick 0
         // This allows us to verify reclamation synchronously without advancing playhead
-        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })
+        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })!
         const linker = new SiliconSynapse(sab)
         const bridge = new SiliconBridge(linker)
 
@@ -64,7 +64,7 @@ describe('K-005: Zone B Reclamation', () => {
     })
 
     it('R-001: should not advance tail or overwrite slot when reclaim ring is full (modular)', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })
+        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })!
         const linker = new SiliconSynapse(sab)
         const bridge = new SiliconBridge(linker)
         const view = new Int32Array(sab)
@@ -100,7 +100,7 @@ describe('K-005: Zone B Reclamation', () => {
     })
 
     it('R-001: should enqueue reclaim pointer and wrap tail modulo capacity', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })
+        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })!
         const linker = new SiliconSynapse(sab)
         const bridge = new SiliconBridge(linker)
         const view = new Int32Array(sab)
@@ -129,7 +129,7 @@ describe('K-005: Zone B Reclamation', () => {
     })
 
     it('R-001: pollReclaim should drain wrapped ring and preserve empty semantics', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })
+        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })!
         const linker = new SiliconSynapse(sab)
         const bridge = new SiliconBridge(linker)
         const view = new Int32Array(sab)
@@ -169,7 +169,7 @@ describe('K-005: Zone B Reclamation', () => {
     })
 
     it('executeClear should not free Zone B nodes to Zone A free list', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })
+        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })!
         const linker = new SiliconSynapse(sab)
         const bridge = new SiliconBridge(linker)
 
@@ -198,7 +198,7 @@ describe('K-005: Zone B Reclamation', () => {
     })
 
     it('clear then re-insert should not cause pointer corruption', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })
+        const sab = createLinkerSAB({ nodeCapacity: 1024, safeZoneTicks: 0 })!
         const linker = new SiliconSynapse(sab)
         const bridge = new SiliconBridge(linker)
 

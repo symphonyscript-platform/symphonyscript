@@ -20,7 +20,7 @@ function getPrivate(obj: any, prop: string): any {
 
 describe('K-001: Synapse Compaction & Lazy Allocation', () => {
     it('R-007: should persist usedSlots and tombstoneCount across re-instantiation', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 1024 })
+        const sab = createLinkerSAB({ nodeCapacity: 1024 })!
         const allocatorA = new SynapseAllocator(sab)
         const sabView = new Int32Array(sab)
 
@@ -43,7 +43,7 @@ describe('K-001: Synapse Compaction & Lazy Allocation', () => {
     })
 
     it('R-007: should persist cleared counters as zero across re-instantiation', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 1024 })
+        const sab = createLinkerSAB({ nodeCapacity: 1024 })!
         const allocatorA = new SynapseAllocator(sab)
         const sabView = new Int32Array(sab)
 
@@ -72,7 +72,7 @@ describe('K-001: Synapse Compaction & Lazy Allocation', () => {
     })
 
     it('R-007: should persist compacted counters across re-instantiation', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 1024 })
+        const sab = createLinkerSAB({ nodeCapacity: 1024 })!
         const allocatorA = new SynapseAllocator(sab)
         const sabView = new Int32Array(sab)
         const capacity = sabView[HDR.SYNAPSE_CAPACITY]
@@ -107,7 +107,7 @@ describe('K-001: Synapse Compaction & Lazy Allocation', () => {
     })
 
     it('should lazy allocate staging buffers only on compaction', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 1024 })
+        const sab = createLinkerSAB({ nodeCapacity: 1024 })!
         const allocator = new SynapseAllocator(sab)
 
         // Verify initial state: Staging buffers should be null (Lazy)
@@ -170,7 +170,7 @@ describe('K-001: Synapse Compaction & Lazy Allocation', () => {
     })
 
     it('should handle large scale compaction (stress test)', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 4096 })
+        const sab = createLinkerSAB({ nodeCapacity: 4096 })!
         const allocator = new SynapseAllocator(sab)
 
         // Fill 2000 slots
@@ -189,7 +189,7 @@ describe('K-001: Synapse Compaction & Lazy Allocation', () => {
     })
 
     it('R-008: should find all colliding entries with triangular probing', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 256, synapseCapacity: 16 })
+        const sab = createLinkerSAB({ nodeCapacity: 256, synapseCapacity: 16 })!
         const allocator = new SynapseAllocator(sab)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const allocatorAny = allocator as any
@@ -217,7 +217,7 @@ describe('K-001: Synapse Compaction & Lazy Allocation', () => {
     })
 
     it('R-008: should preserve colliding entries across compaction reinsertion', () => {
-        const sab = createLinkerSAB({ nodeCapacity: 256, synapseCapacity: 32 })
+        const sab = createLinkerSAB({ nodeCapacity: 256, synapseCapacity: 32 })!
         const allocator = new SynapseAllocator(sab)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const allocatorAny = allocator as any

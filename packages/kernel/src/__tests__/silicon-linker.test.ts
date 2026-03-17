@@ -90,7 +90,7 @@ function readNodeData(linker: SiliconSynapse, ptr: number): {
   if (!ok) return undefined
   return {
     opcode: unpackOpcode(_readBuf[NODE.PACKED_A]),
-    pitch: Atomics.load(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_CENTS),
+    pitch: Atomics.load(new Int32Array(linker.getSAB()!), (ptr / 4) + NODE.PITCH_CENTS),
     velocity: unpackVelocity(_readBuf[NODE.PACKED_A]),
     duration: _readBuf[NODE.DURATION],
     baseTick: _readBuf[NODE.BASE_TICK],
@@ -136,7 +136,7 @@ function collectNodes(linker: SiliconSynapse): Array<{
       nodes.push({
         ptr,
         opcode: unpackOpcode(_collectBuf[NODE.PACKED_A]),
-        pitch: Atomics.load(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_CENTS),
+        pitch: Atomics.load(new Int32Array(linker.getSAB()!), (ptr / 4) + NODE.PITCH_CENTS),
         velocity: unpackVelocity(_collectBuf[NODE.PACKED_A]),
         duration: _collectBuf[NODE.DURATION],
         baseTick: _collectBuf[NODE.BASE_TICK],
@@ -161,15 +161,15 @@ describe('RFC-043: Silicon Linker', () => {
   // ===========================================================================
   describe('1. SAB Initialization', () => {
     it('should create SAB with correct magic number and version', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 32 })
+      const buffer = createLinkerSAB({ nodeCapacity: 32 })!
       const sab = new Int32Array(buffer)
 
       expect(sab[HDR.MAGIC]).toBe(SL_MAGIC)
       expect(sab[HDR.VERSION]).toBe(SL_VERSION)
-    })
+    })!
 
     it('should initialize with correct default values', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 32 })
+      const buffer = createLinkerSAB({ nodeCapacity: 32 })!
       const sab = new Int32Array(buffer)
 
       expect(sab[HDR.PPQ]).toBe(DEFAULT_PPQ)
@@ -177,10 +177,10 @@ describe('RFC-043: Silicon Linker', () => {
       expect(sab[HDR.COMMIT_FLAG]).toBe(COMMIT.IDLE)
       expect(sab[HDR.ERROR_FLAG]).toBe(ERROR.OK)
       expect(sab[HDR.NODE_CAPACITY]).toBe(32)
-    })
+    })!
 
     it('should initialize free list with all nodes', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 32 })
+      const buffer = createLinkerSAB({ nodeCapacity: 32 })!
       const sab = new Int32Array(buffer)
 
       // RFC-044: Zone A gets 50% of capacity (32 / 2 = 16)
@@ -189,46 +189,46 @@ describe('RFC-043: Silicon Linker', () => {
       expect(sab[HDR.HEAD_PTR]).toBe(NULL_PTR)
       // Verify 64-bit free list head is initialized (check low word)
       expect(sab[HDR.FREE_LIST_HEAD_LOW]).not.toBe(NULL_PTR)
-    })
+    })!
 
     it('should validate correct SAB format', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 32 })
+      const buffer = createLinkerSAB({ nodeCapacity: 32 })!
       expect(validateLinkerSAB(buffer)).toBe(0)
-    })
+    })!
 
     it('should validate SAB with custom synapse capacity', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 64, synapseCapacity: 1024 })
+      const buffer = createLinkerSAB({ nodeCapacity: 64, synapseCapacity: 1024 })!
       expect(validateLinkerSAB(buffer)).toBe(0)
-    })
+    })!
 
     it('should validate SAB with multiple worker zones', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 64, workerZones: 4 })
+      const buffer = createLinkerSAB({ nodeCapacity: 64, workerZones: 4 })!
       expect(validateLinkerSAB(buffer)).toBe(0)
-    })
+    })!
 
     it('should reject invalid SAB (wrong magic)', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 32 })
+      const buffer = createLinkerSAB({ nodeCapacity: 32 })!
       const sab = new Int32Array(buffer)
       sab[HDR.MAGIC] = 0x12345678
 
       expect(validateLinkerSAB(buffer)).toBeLessThan(0)
-    })
+    })!
 
     it('should reject SAB with corrupted node capacity', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 32 })
+      const buffer = createLinkerSAB({ nodeCapacity: 32 })!
       const sab = new Int32Array(buffer)
       sab[HDR.NODE_CAPACITY] = 0
 
       expect(validateLinkerSAB(buffer)).toBeLessThan(0)
-    })
+    })!
 
     it('should reject SAB with corrupted synapse capacity', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 32 })
+      const buffer = createLinkerSAB({ nodeCapacity: 32 })!
       const sab = new Int32Array(buffer)
       sab[HDR.SYNAPSE_CAPACITY] = 100 // not power of 2
 
       expect(validateLinkerSAB(buffer)).toBeLessThan(0)
-    })
+    })!
 
     it('should extract config from existing SAB', () => {
       const buffer = createLinkerSAB({
@@ -236,7 +236,7 @@ describe('RFC-043: Silicon Linker', () => {
         ppq: 960,
         bpm: 140,
         safeZoneTicks: 500
-      })
+      })!
 
       const config = getLinkerConfig(buffer)
       expect(config.nodeCapacity).toBe(128)
@@ -254,10 +254,10 @@ describe('RFC-043: Silicon Linker', () => {
       expect(linker.getNodeCount()).toBe(2)
 
       // Reset
-      resetLinkerSAB(linker.getSAB())
+      resetLinkerSAB(linker.getSAB()!)
 
       // Verify reset state
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
       expect(sab[HDR.NODE_COUNT]).toBe(0)
       // RFC-044: Zone A gets 50% of capacity (32 / 2 = 16)
       expect(sab[HDR.FREE_COUNT]).toBe(16)
@@ -382,7 +382,7 @@ describe('RFC-043: Silicon Linker', () => {
 
     it('should set COMMIT_FLAG after structural change', () => {
       const linker = createTestLinker()
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       expect(sab[HDR.COMMIT_FLAG]).toBe(COMMIT.IDLE)
 
@@ -517,7 +517,7 @@ describe('RFC-043: Silicon Linker', () => {
     it('R-005: should set CAS_EXHAUSTION when CAS retries are exhausted', () => {
       const linker = createTestLinker()
       const ptr = linker.insertHead(...noteData(60, 0))
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
       const patcher = new AttributePatcher(sab, sab[HDR.NODE_CAPACITY])
       const packedAIndex = ptr / 4 + NODE.PACKED_A
       const originalCompareExchange = Atomics.compareExchange
@@ -564,7 +564,7 @@ describe('RFC-043: Silicon Linker', () => {
       const ptr = linker.insertHead(...noteData(60, 0))
 
       // Clear the commit flag set by insertHead
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
       sab[HDR.COMMIT_FLAG] = COMMIT.IDLE
 
       linker.patchPitch(ptr, 72)
@@ -751,7 +751,7 @@ describe('RFC-043: Silicon Linker', () => {
       const buffer = createLinkerSAB({
         nodeCapacity: 64,
         safeZoneTicks: 960 // 2 beats
-      })
+      })!
       const linker = new SiliconSynapse(buffer)
       linker.setAudioContext(true)
 
@@ -777,7 +777,7 @@ describe('RFC-043: Silicon Linker', () => {
       const buffer = createLinkerSAB({
         nodeCapacity: 64,
         safeZoneTicks: 960
-      })
+      })!
       const linker = new SiliconSynapse(buffer)
       linker.setAudioContext(true)
 
@@ -796,7 +796,7 @@ describe('RFC-043: Silicon Linker', () => {
     it('should allow insertion when safe zone is 0', () => {
       const linker = createTestLinker(64) // safeZoneTicks = 0
 
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
       sab[HDR.PLAYHEAD_TICK] = 50
 
       // Should succeed even when close to playhead
@@ -819,7 +819,7 @@ describe('RFC-043: Silicon Linker', () => {
 
     it('should set humanization parameters', () => {
       const linker = createTestLinker()
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       linker.setHumanize(50, 30)
 
@@ -829,7 +829,7 @@ describe('RFC-043: Silicon Linker', () => {
 
     it('should set transpose', () => {
       const linker = createTestLinker()
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       linker.setTranspose(-5)
 
@@ -838,7 +838,7 @@ describe('RFC-043: Silicon Linker', () => {
 
     it('should set velocity multiplier', () => {
       const linker = createTestLinker()
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       linker.setVelocityMult(800) // 0.8x
 
@@ -847,7 +847,7 @@ describe('RFC-043: Silicon Linker', () => {
 
     it('should set PRNG seed', () => {
       const linker = createTestLinker()
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       linker.setPrngSeed(42)
 
@@ -882,7 +882,7 @@ describe('RFC-043: Silicon Linker', () => {
 
     it('should read 64-bit telemetry consistently across low-word wrap carry', () => {
       const linker = createTestLinker(64)
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       Atomics.store(sab, HDR.TELEMETRY_OPS_LOW, -1) // 0xFFFFFFFF
       Atomics.store(sab, HDR.TELEMETRY_OPS_HIGH, 7)
@@ -901,7 +901,7 @@ describe('RFC-043: Silicon Linker', () => {
   // ===========================================================================
   describe('8. Groove Templates', () => {
     it('should write and read groove template', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 32 })
+      const buffer = createLinkerSAB({ nodeCapacity: 32 })!
 
       // 16th note swing pattern: [0, 20, 0, 20, ...]
       const swingPattern = [0, 20, 0, 20, 0, 20, 0, 20]
@@ -909,10 +909,10 @@ describe('RFC-043: Silicon Linker', () => {
 
       const readPattern = readGrooveTemplate(buffer, 0)
       expect(readPattern).toEqual(swingPattern)
-    })
+    })!
 
     it('should handle multiple groove templates', () => {
-      const buffer = createLinkerSAB({ nodeCapacity: 32 })
+      const buffer = createLinkerSAB({ nodeCapacity: 32 })!
 
       const pattern0 = [0, 10, 0, 10]
       const pattern1 = [5, 0, 5, 0, 5, 0]
@@ -922,11 +922,11 @@ describe('RFC-043: Silicon Linker', () => {
 
       expect(readGrooveTemplate(buffer, 0)).toEqual(pattern0)
       expect(readGrooveTemplate(buffer, 1)).toEqual(pattern1)
-    })
+    })!
 
     it('should set active groove via linker', () => {
       const linker = createTestLinker()
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
       // Calculate groove start dynamically: after node heap
       const nodeCapacity = sab[HDR.NODE_CAPACITY]
       const grooveStart = HEAP_START_OFFSET + nodeCapacity * NODE_SIZE_BYTES
@@ -939,7 +939,7 @@ describe('RFC-043: Silicon Linker', () => {
 
     it('should clear groove', () => {
       const linker = createTestLinker()
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       linker.setGroove(100, 8)
       linker.clearGroove()
@@ -978,7 +978,7 @@ describe('RFC-043: Silicon Linker', () => {
 
     it('R-003: should retain both bits when multiple errors accumulate', () => {
       const linker = createTestLinker(8)
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       Atomics.or(sab, HDR.ERROR_FLAG, ERROR.RING_FULL)
       Atomics.or(sab, HDR.ERROR_FLAG, ERROR.SPSC_VIOLATION)
@@ -990,7 +990,7 @@ describe('RFC-043: Silicon Linker', () => {
 
     it('R-003: should clear only selected bit via clearErrorBit', () => {
       const linker = createTestLinker(8)
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       Atomics.or(sab, HDR.ERROR_FLAG, ERROR.RING_FULL)
       Atomics.or(sab, HDR.ERROR_FLAG, ERROR.SPSC_VIOLATION)
@@ -1004,7 +1004,7 @@ describe('RFC-043: Silicon Linker', () => {
 
     it('R-003: clearError should reset ERROR_FLAG to ERROR.OK', () => {
       const linker = createTestLinker(8)
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       Atomics.or(sab, HDR.ERROR_FLAG, ERROR.RECLAIM_OVERFLOW)
       Atomics.or(sab, HDR.ERROR_FLAG, ERROR.CAS_EXHAUSTION)
@@ -1045,7 +1045,7 @@ describe('RFC-043: Silicon Linker', () => {
     it('should set ERROR.UNKNOWN_OPCODE for invalid command', () => {
       // nodeCapacity must be power of 2 (Task 3.2)
       const linker = SiliconSynapse.create({ nodeCapacity: 256, safeZoneTicks: 0 })
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
 
       // Manually inject invalid command into ring buffer
       const ringOffset = Atomics.load(sab, HDR.COMMAND_RING_PTR) / 4
@@ -1122,7 +1122,7 @@ describe('RFC-043: Silicon Linker', () => {
   describe('12. RFC-044: Command Ring Architecture', () => {
     it('should process INSERT command from Ring Buffer', () => {
       const linker = createTestLinker(32)
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
       const localAllocator = new LocalAllocator(sab, 32)
       const ringBuffer = new RingBuffer(sab)
 
@@ -1174,7 +1174,7 @@ describe('RFC-043: Silicon Linker', () => {
 
     it('should process multiple INSERT commands in order', () => {
       const linker = createTestLinker(32)
-      const sab = new Int32Array(linker.getSAB())
+      const sab = new Int32Array(linker.getSAB()!)
       const localAllocator = new LocalAllocator(sab, 32)
       const ringBuffer = new RingBuffer(sab)
 
