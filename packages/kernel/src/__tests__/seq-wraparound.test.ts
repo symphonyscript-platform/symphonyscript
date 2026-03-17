@@ -10,7 +10,6 @@ import {
   OPCODE,
   FLAG,
 } from '../index'
-import { atomicLoadF32 } from '../f32-atomics'
 
 // =============================================================================
 // Helper Functions
@@ -99,7 +98,7 @@ describe('readNodeRaw with seqChanged integration', () => {
     const success = linker.readNodeRaw(ptr, buf)
 
     expect(success).toBe(true)
-    expect(atomicLoadF32(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_F32)).toBe(60)
+    expect(Atomics.load(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_CENTS)).toBe(60)
   })
 
   it('returns false for NULL_PTR', () => {
@@ -116,7 +115,7 @@ describe('readNodeRaw with seqChanged integration', () => {
 
     linker.readNodeRaw(ptr, buf)
 
-    expect(atomicLoadF32(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_F32)).toBe(72)
+    expect(Atomics.load(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_CENTS)).toBe(72)
   })
 
   it('rejects odd sequence while write is in progress', () => {
@@ -163,7 +162,7 @@ describe('readNodeRaw traversal with seqChanged integration', () => {
     while (ptr !== NULL_PTR) {
       const ok = linker.readNodeRaw(ptr, buf)
       if (ok) {
-        pitches.push(atomicLoadF32(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_F32))
+        pitches.push(Atomics.load(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_CENTS))
       }
       ptr = buf[NODE.NEXT_PTR]
     }

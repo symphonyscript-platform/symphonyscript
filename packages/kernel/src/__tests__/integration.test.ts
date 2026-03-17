@@ -19,7 +19,6 @@ import {
   unpackFlags,
   unpackSeq
 } from '../'
-import { atomicLoadF32 } from '../f32-atomics'
 import { getGrooveTemplateOffset } from '../constants'
 import { MockConsumer } from '../mock-consumer'
 
@@ -53,7 +52,7 @@ function createTestPair(options?: {
 function note(pitch: number, baseTick: number, duration = 96): [number, number, number, number, number, number, number] {
   return [
     OPCODE.NOTE, // opcode
-    pitch,
+    pitch, // pitch (stored as-is in PITCH_CENTS slot)
     100, // velocity
     duration,
     baseTick,
@@ -97,7 +96,7 @@ function collectNodes(linker: SiliconSynapse): Array<{
       nodes.push({
         ptr,
         opcode: unpackOpcode(_intBuf[NODE.PACKED_A]),
-        pitch: atomicLoadF32(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_F32),
+        pitch: Atomics.load(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_CENTS),
         velocity: unpackVelocity(_intBuf[NODE.PACKED_A]),
         duration: _intBuf[NODE.DURATION],
         baseTick: _intBuf[NODE.BASE_TICK],
@@ -385,15 +384,15 @@ describe('RFC-043 Phase 2: Structural Splicing Integration', () => {
       expect(consumer.getEvents()[0].velocity).toBe(50) // 100 * 0.5
     })
 
-    it('should clamp transposed pitch to MIDI range', () => {
+    it('should not clamp transposed pitch below zero', () => {
       const { linker, consumer } = createTestPair()
 
       linker.insertHead(...note(120, 0)) // High pitch
-      linker.setTranspose(20) // Would exceed 127
+      linker.setTranspose(20) // Add 20
 
       consumer.runUntilTick(50)
 
-      expect(consumer.getEvents()[0].pitch).toBe(127) // Clamped
+      expect(consumer.getEvents()[0].pitch).toBe(140) // No upper clamp in centicent mode
     })
 
     it('should update transforms live', () => {

@@ -12,7 +12,6 @@
 // - No inline arrow functions as arguments
 
 import { SiliconSynapse, unpackVelocity, unpackFlags } from './silicon-synapse'
-import { atomicStoreF32, atomicLoadF32 } from './f32-atomics'
 import {
   OPCODE,
   NULL_PTR,
@@ -577,8 +576,7 @@ export class SiliconBridge {
     Atomics.store(this.sab, offset + NODE.SOURCE_ID, sourceId)
     Atomics.store(this.sab, offset + NODE.SEQ_FLAGS, 0)
     Atomics.store(this.sab, offset + NODE.LAST_PASS_ID, 0)
-    // Write pitch as float32 to dedicated slot
-    atomicStoreF32(this.sab, offset + NODE.PITCH_F32, pitch)
+    Atomics.store(this.sab, offset + NODE.PITCH_CENTS, pitch | 0)
 
     const ringErr = this.writeOrSpin(CMD.INSERT, ptr, prevPtr)
     if (ringErr !== 0) return ringErr
@@ -1167,7 +1165,7 @@ export class SiliconBridge {
     const ok = this.linker.readNodeRaw(ptr, buf)
     if (!ok) return false
 
-    const pitch = atomicLoadF32(this.sab, (ptr / 4) + NODE.PITCH_F32)
+    const pitch = Atomics.load(this.sab, (ptr / 4) + NODE.PITCH_CENTS)
     const velocity = unpackVelocity(buf[NODE.PACKED_A])
     const flags = unpackFlags(buf[NODE.PACKED_A])
     cb(pitch, velocity, buf[NODE.DURATION], buf[NODE.BASE_TICK], (flags & FLAG.MUTED) !== 0)
@@ -1210,7 +1208,7 @@ export class SiliconBridge {
           const packed = buf[NODE.PACKED_A]
           cb(
             sourceId,
-            atomicLoadF32(this.sab, (ptr / 4) + NODE.PITCH_F32),
+            Atomics.load(this.sab, (ptr / 4) + NODE.PITCH_CENTS),
             unpackVelocity(packed),
             buf[NODE.DURATION],
             buf[NODE.BASE_TICK],

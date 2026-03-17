@@ -38,7 +38,6 @@ import { AttributePatcher } from './patch'
 import { RingBuffer } from './ring-buffer'
 import { SynapseAllocator } from './synapse-allocator'
 import { createLinkerSAB, resetLinkerSAB } from './init'
-import { atomicStoreF32, atomicLoadF32 } from './f32-atomics'
 import type {
   NodePtr,
   LinkerConfig,
@@ -68,7 +67,7 @@ export function unpackOpcode(packed: number): number {
 }
 
 export function unpackPitch(sab: Int32Array, offset: number): number {
-  return atomicLoadF32(sab, offset + NODE.PITCH_F32)
+  return Atomics.load(sab, offset + NODE.PITCH_CENTS)
 }
 
 export function unpackVelocity(packed: number): number {
@@ -771,8 +770,8 @@ export class SiliconSynapse implements ISiliconLinker {
     Atomics.store(this.sab, offset + NODE.DURATION, duration | 0)
     // NEXT_PTR set separately during linking
     Atomics.store(this.sab, offset + NODE.SOURCE_ID, sourceId | 0)
-    // Write pitch as float32 to dedicated slot (atomic)
-    atomicStoreF32(this.sab, offset + NODE.PITCH_F32, pitch)
+    // Write pitch as centicents to dedicated slot (atomic)
+    Atomics.store(this.sab, offset + NODE.PITCH_CENTS, pitch | 0)
     // SEQ_FLAGS preserved from allocation (SEQ already set)
   }
 
@@ -927,12 +926,12 @@ export class SiliconSynapse implements ISiliconLinker {
    * In all cases: only use buf[NODE.NEXT_PTR] for chain continuation, and only after
    * verifying the return value is false (not true). Other fields MUST be treated as torn.
    *
-   * NOTE: PITCH_F32 (slot 8) is a float32 and is NOT included in this i32 buffer.
-   * Callers must read pitch separately via `atomicLoadF32(sab, offset + NODE.PITCH_F32)`.
+   * NOTE: PITCH_CENTS (slot 8) is now a standard Int32 and CAN be included in reads.
+   * Callers can read pitch via `Atomics.load(sab, offset + NODE.PITCH_CENTS)` or
+   * include it in the buffer by using length >= 9.
    *
    * @param ptr - Node byte pointer
-   * @param buf - Caller-owned Int32Array of length >= 8 (covers slots 0-7 only; does not include PITCH_F32 or RESERVED_9)
-
+   * @param buf - Caller-owned Int32Array of length >= 8 (covers slots 0-7; pitch at slot 8 read separately)
    * @returns true if consistent snapshot obtained, false if NULL_PTR or contention
    */
   readNodeRaw(ptr: NodePtr, buf: Int32Array): boolean {
@@ -960,8 +959,7 @@ export class SiliconSynapse implements ISiliconLinker {
       buf[5] = Atomics.load(this.sab, offset + NODE.SOURCE_ID)
       buf[6] = Atomics.load(this.sab, offset + NODE.SEQ_FLAGS)
       buf[7] = Atomics.load(this.sab, offset + NODE.LAST_PASS_ID)
-      // PITCH_F32 (slot 8) is float32 — read via atomicLoadF32() by caller
-      // RESERVED_9 (slot 9) is unused
+      // PITCH_CENTS (slot 8) is Int32 — read by caller via Atomics.load()
 
       const seq2 = (buf[6] & SEQ.SEQ_MASK) >>> SEQ.SEQ_SHIFT
 

@@ -105,7 +105,7 @@ export const KNUTH_HASH_CONST = 2654435761
  * │   [+20] SOURCE_ID   : Editor hash / Temporal ID (TID)              │
  * │   [+24] SEQ_FLAGS   : (sequence<<8)|flags_ext (versioning)         │
  * │   [+28] LAST_PASS_ID: Generation ID for zero-alloc pruning [v1.5]  │
- * │   [+32] PITCH_F32   : Float32 pitch in cents from C0               │
+ * │   [+32] PITCH_CENTS : Int32 pitch in centicents (cents × 100)      │
  * │   [+36] RESERVED_9  : Reserved for future use                      │
  * ├─────────────────────────────────────────────────────────────────────┤
  * │ IDENTITY TABLE (dynamic offset)              capacity × 8 bytes    │
@@ -324,8 +324,8 @@ export const REG = {
 /**
  * Node structure offsets (10 × i32 = 40 bytes per node).
  *
- * 40-byte stride supports float32 pitch (continuous cents) alongside
- * doubly-linked list pointers enabling O(1) deletion.
+ * 40-byte stride stores pitch as Int32 centicents (cents × 100)
+ * alongside doubly-linked list pointers enabling O(1) deletion.
  *
  * Layout:
  * - [+0] PACKED_A: (opcode << 24) | (reserved << 16) | (velocity << 8) | flags
@@ -336,7 +336,7 @@ export const REG = {
  * - [+5] SOURCE_ID: Editor location hash / TID for bidirectional mapping
  * - [+6] SEQ_FLAGS: (sequence << 8) | flags_extended
  * - [+7] LAST_PASS_ID: [v1.5] Generation ID for zero-alloc pruning
- * - [+8] PITCH_F32: Float32 pitch in absolute cents from C0 (via Float32Array view)
+ * - [+8] PITCH_CENTS: Int32 pitch in centicents (cents × 100 from C0)
  * - [+9] RESERVED_9: Reserved for future use
  */
 export const NODE = {
@@ -356,10 +356,10 @@ export const NODE = {
   SEQ_FLAGS: 6,
   /** [v1.5] Last update pass ID (generation-based pruning) */
   LAST_PASS_ID: 7,
-  /** Float32 pitch in absolute cents from C0 (read/write via Float32Array view) */
-  PITCH_F32: 8,
+  /** Int32 pitch in centicents (cents × 100 from C0). A4 = 570000. */
+  PITCH_CENTS: 8,
   /** Reserved for future use */
-  RESERVED_9: 9
+  RESERVED_9: 9,
 } as const
 
 /**
@@ -381,14 +381,14 @@ export const NODE_SIZE_BYTES = NODE_SIZE_I32 * 4
  * Format: (opcode << 24) | (reserved << 16) | (velocity << 8) | flags
  *
  * NOTE: Bits 16-23 were formerly used for pitch (MIDI 0-127). Pitch is now
- * stored as float32 in the dedicated PITCH_F32 slot (NODE offset +8).
+ * stored as Int32 centicents in the dedicated PITCH_CENTS slot (NODE offset +8).
  * These bits are reserved for future use.
  */
 export const PACKED = {
   /** Opcode: bits 24-31 */
   OPCODE_SHIFT: 24,
   OPCODE_MASK: 0xff000000,
-  /** Reserved: bits 16-23 (formerly pitch, now in PITCH_F32 slot) */
+  /** Reserved: bits 16-23 (formerly pitch, now in PITCH_CENTS slot) */
   RESERVED_SHIFT: 16,
   RESERVED_MASK: 0x00ff0000,
   /** @deprecated Use RESERVED_SHIFT. Kept for backward compat during migration. */

@@ -15,7 +15,7 @@ import {
   NULL_PTR,
   HEAP_START_OFFSET
 } from './constants'
-import { atomicStoreF32 } from './f32-atomics'
+
 import type { NodePtr } from './types'
 // RFC-045-04: InvalidPointerError no longer thrown - using boolean returns
 
@@ -215,12 +215,12 @@ export class AttributePatcher {
   }
 
   /**
-   * Patch the pitch attribute (Float32 in PITCH_F32 slot).
-   * RFC-060: Pitch is now stored as float32 cents from C0.
+   * Patch the pitch attribute (Int32 centicents in PITCH_CENTS slot).
+   * RFC-060: Pitch is stored as Int32 centicents (cents × 100 from C0).
    * RFC-045-04: Returns boolean instead of throwing.
    *
    * @param ptr - Node byte pointer
-   * @param pitch - Pitch in absolute cents from C0 (float32)
+   * @param pitch - Pitch in centicents (Int32, e.g. A4 = 570000)
    *
    * @returns true on success, false on invalid pointer
    */
@@ -231,8 +231,8 @@ export class AttributePatcher {
     // Two-phase SeqLock writer protocol: even -> odd -> even
     this.bumpSeqStart(offset)
 
-    // Write pitch as float32 to dedicated slot (atomic)
-    atomicStoreF32(this.sab, offset + NODE.PITCH_F32, pitch)
+    // Write pitch as centicents to dedicated slot (atomic)
+    Atomics.store(this.sab, offset + NODE.PITCH_CENTS, pitch | 0)
     this.bumpSeqEnd(offset)
     return true
   }

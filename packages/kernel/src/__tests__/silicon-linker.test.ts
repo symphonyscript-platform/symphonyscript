@@ -36,7 +36,6 @@ import {
   unpackFlags,
   unpackSeq
 } from '../index'
-import { atomicLoadF32 } from '../f32-atomics'
 import { CONCURRENCY } from '../constants'
 
 // =============================================================================
@@ -91,7 +90,7 @@ function readNodeData(linker: SiliconSynapse, ptr: number): {
   if (!ok) return undefined
   return {
     opcode: unpackOpcode(_readBuf[NODE.PACKED_A]),
-    pitch: atomicLoadF32(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_F32),
+    pitch: Atomics.load(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_CENTS),
     velocity: unpackVelocity(_readBuf[NODE.PACKED_A]),
     duration: _readBuf[NODE.DURATION],
     baseTick: _readBuf[NODE.BASE_TICK],
@@ -137,7 +136,7 @@ function collectNodes(linker: SiliconSynapse): Array<{
       nodes.push({
         ptr,
         opcode: unpackOpcode(_collectBuf[NODE.PACKED_A]),
-        pitch: atomicLoadF32(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_F32),
+        pitch: Atomics.load(new Int32Array(linker.getSAB()), (ptr / 4) + NODE.PITCH_CENTS),
         velocity: unpackVelocity(_collectBuf[NODE.PACKED_A]),
         duration: _collectBuf[NODE.DURATION],
         baseTick: _collectBuf[NODE.BASE_TICK],
@@ -549,15 +548,15 @@ describe('RFC-043: Silicon Linker', () => {
       }
     })
 
-    it('should store float32 pitch without clamping', () => {
+    it('should store centicent pitch as integer', () => {
       const linker = createTestLinker()
       const ptr = linker.insertHead(...noteData(60, 0))
 
-      linker.patchPitch(ptr, 4800.5) // Microtonal cent value
-      expect(readNodeData(linker, ptr)!.pitch).toBeCloseTo(4800.5, 1)
+      linker.patchPitch(ptr, 480050) // Exact centicent value
+      expect(readNodeData(linker, ptr)!.pitch).toBe(480050)
 
-      linker.patchPitch(ptr, -100) // Negative cents (valid)
-      expect(readNodeData(linker, ptr)!.pitch).toBeCloseTo(-100, 1)
+      linker.patchPitch(ptr, -10000) // Negative centicents (valid)
+      expect(readNodeData(linker, ptr)!.pitch).toBe(-10000)
     })
 
     it('should NOT set COMMIT_FLAG for attribute patches', () => {

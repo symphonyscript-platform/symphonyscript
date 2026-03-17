@@ -23,7 +23,6 @@ import {
   HEAP_START_OFFSET,
   OPCODE
 } from './constants'
-import { atomicLoadF32 } from './f32-atomics'
 import type { SiliconSynapse } from './silicon-synapse'
 import { NODE_SIZE_I32 } from './constants'
 
@@ -176,7 +175,7 @@ export class MockConsumer {
       // Extract fields from packed
       const flags = packed & PACKED.FLAGS_MASK
       const opcode = (packed & PACKED.OPCODE_MASK) >>> PACKED.OPCODE_SHIFT
-      const pitch = atomicLoadF32(this.sab, offset + NODE.PITCH_F32)
+      const pitch = Atomics.load(this.sab, offset + NODE.PITCH_CENTS)
       const velocity = (packed & PACKED.VELOCITY_MASK) >>> PACKED.VELOCITY_SHIFT
 
       // [RFC-054] BARRIER State Machine Hold
@@ -326,7 +325,7 @@ export class MockConsumer {
    */
   private applyTranspose(pitch: number): number {
     const transpose = this.sab[REG.TRANSPOSE]
-    return Math.max(0, Math.min(127, pitch + transpose))
+    return Math.max(0, pitch + transpose)
   }
 
   /**
