@@ -1,3 +1,4 @@
+export * from './errors';
 export * from './interfaces';
 export * from './BaseNotation';
 export * from './random';

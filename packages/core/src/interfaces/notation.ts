@@ -15,13 +15,13 @@ import { ChordResolution } from './chord-resolution'
  * systems (Arabic maqam, Indian raga, Javanese gamelan, etc.) by
  * implementing this same interface.
  *
- * **Capability contract:**
- * Methods guarded by capabilities (`chords`, `degrees`, `progressions`)
- * must throw if the notation does not support that feature. Use
- * `getCapabilities()` to check support before calling.
+ * **Error contract:**
+ * - Invalid input → throws `NotationInputError`
+ * - Unsupported operation → throws `NotationUnsupportedError`
  *
- * - Returning `null` means: "I support this operation, but the input is invalid."
- * - Throwing means: "This notation does not support this operation."
+ * No method returns `null`. All methods either succeed or throw.
+ * Use `getCapabilities()` to check feature support before calling
+ * capability-gated methods.
  *
  * **Abstract base class:**
  * Extend `BaseNotation` for default implementations of derived methods
@@ -59,7 +59,7 @@ export interface Notation {
 
   /**
    * Valid pitch range for this notation system, in cents from C0.
-   * Notes outside this range may be rejected by `noteToCents()`.
+   * Notes outside this range are rejected by `noteToCents()`.
    *
    * @returns Min/max cents range (e.g., `{ min: 0, max: 12000 }` for full audible range)
    */
@@ -75,7 +75,8 @@ export interface Notation {
 
   /**
    * Declares which optional features this notation supports.
-   * Methods guarded by a capability must throw if that capability is `false`.
+   * Methods guarded by a capability throw `NotationUnsupportedError`
+   * if that capability is `false`.
    *
    * @returns Capability flags for chords, degrees, and progressions
    */
@@ -87,17 +88,19 @@ export interface Notation {
    * Parse a note string into cents from C0.
    *
    * @param input - Note string in this notation's format (e.g., `'C4'`, `'F#3'`, `'Bb5'`)
-   * 
-   * @returns Cents from C0 (e.g., `4800` for C4, `5700` for A4), or `null` if invalid
+   *
+   * @returns Cents from C0 (e.g., `4800` for C4, `5700` for A4)
+   * @throws {NotationInputError} If the input is not a valid note
    */
-  noteToCents(input: string): number | null
+  noteToCents(input: string): number
 
   /**
    * Format a cent value as a note string in this notation's format.
    *
    * @param cents - Pitch in cents from C0
-   * 
+   *
    * @returns Note string (e.g., `'A4'` for `5700` cents)
+   * @throws {NotationInputError} If cents is out of the notation's range
    */
   centsToNote(cents: number): string
 
@@ -106,19 +109,20 @@ export interface Notation {
    * Derivable from `noteToCents()` via `Math.round(cents / 100)`.
    *
    * @param input - Note string in this notation's format
-   * 
-   * @returns MIDI note number (0–127), or `null` if invalid or out of MIDI range
+   *
+   * @returns MIDI note number (0–127)
+   * @throws {NotationInputError} If the input is invalid or out of MIDI range
    */
-  noteToMidi(input: string): number | null
+  noteToMidi(input: string): number
 
   /**
    * Convert a note string to a frequency in Hz.
    * Derivable from `noteToCents()` and `getTuningHz()`.
    *
    * @param input - Note string in this notation's format
-   * 
+   *
    * @returns Frequency in Hz (e.g., `440` for A4 at standard tuning)
-   * @throws If the input is not a valid note in this notation
+   * @throws {NotationInputError} If the input is not a valid note
    */
   noteToFrequency(input: string): number
 
@@ -129,9 +133,9 @@ export interface Notation {
    *
    * @param note - Note string to transpose
    * @param cents - Interval in cents (positive = up, negative = down)
-   * 
+   *
    * @returns Transposed note string (e.g., `transposeNote('C4', 700)` → `'G4'`)
-   * @throws If the input note is not valid in this notation
+   * @throws {NotationInputError} If the input note is not valid
    */
   transposeNote(note: string, cents: number): string
 
@@ -141,8 +145,9 @@ export interface Notation {
    *
    * @param a - First note string
    * @param b - Second note string
-   * 
+   *
    * @returns `true` if both notes resolve to the same cent value (e.g., `'C#4'` and `'Db4'`)
+   * @throws {NotationInputError} If either input is not a valid note
    */
   isEnharmonic(a: string, b: string): boolean
 
@@ -152,17 +157,19 @@ export interface Notation {
    * Parse an interval name into cents.
    *
    * @param input - Interval name in this notation's format (e.g., `'P5'`, `'m3'`, `'tritone'`)
-   * 
-   * @returns Interval size in cents (e.g., `700` for a perfect fifth), or `null` if invalid
+   *
+   * @returns Interval size in cents (e.g., `700` for a perfect fifth)
+   * @throws {NotationInputError} If the interval name is not recognized
    */
-  intervalToCents(input: string): number | null
+  intervalToCents(input: string): number
 
   /**
    * Format a cent value as an interval name in this notation's format.
    *
    * @param cents - Interval size in cents
-   * 
+   *
    * @returns Interval name (e.g., `'P5'` for `700` cents)
+   * @throws {NotationInputError} If the cent value doesn't map to a named interval
    */
   centsToInterval(cents: number): string
 
@@ -173,11 +180,12 @@ export interface Notation {
    *
    * @param mode - Scale/mode name in this notation's vocabulary
    *               (e.g., `'major'`, `'minor'`, `'dorian'`, `'bayati'`, `'bhairav'`)
-   * 
+   *
    * @returns Array of cent intervals from the root (e.g., `[0, 200, 400, 500, 700, 900, 1100]`
-   *          for major scale), or `null` if the mode is not recognized
+   *          for major scale)
+   * @throws {NotationInputError} If the mode is not recognized
    */
-  getScaleIntervals(mode: string): ScaleIntervals | null
+  getScaleIntervals(mode: string): ScaleIntervals
 
   /**
    * List all scale/mode names supported by this notation.
@@ -193,58 +201,56 @@ export interface Notation {
    *
    * @param root - Root note name in this notation's format (e.g., `'D'`, `'Bb'`)
    * @param mode - Mode name (e.g., `'major'`, `'minor'`)
-   * 
-   * @returns Array of accidental strings (e.g., `['F#', 'C#']` for D major),
-   *          or `null` if the key is not recognized
+   *
+   * @returns Array of accidental strings (e.g., `['F#', 'C#']` for D major)
+   * @throws {NotationInputError} If the key is not recognized
    */
-  getKeySignature(root: string, mode: string): KeySignature | null
+  getKeySignature(root: string, mode: string): KeySignature
 
   /* ---------- Degrees ---------- */
 
   /**
    * Parse a degree notation string into cents from the scale root.
-   * Throws if `capabilities.degrees` is `false`.
    *
    * @param input - Degree string in this notation's format
    *                (e.g., `'V'`, `'bVII'`, `'ii7'` for Western; sargam syllables for Indian)
    * @param scale - Scale interval array in cents (from `getScaleIntervals()`)
-   * 
-   * @returns Cents from the scale root for the degree, or `null` if the input is invalid
-   * @throws If this notation does not support degree parsing
+   *
+   * @returns Cents from the scale root for the degree
+   * @throws {NotationInputError} If the degree string is invalid
+   * @throws {NotationUnsupportedError} If this notation does not support degrees
    */
-  degreeToCents(input: string, scale: number[]): number | null
+  degreeToCents(input: string, scale: number[]): number
 
   /* ---------- Chords ---------- */
 
   /**
    * Parse a chord symbol into its interval structure.
-   * Throws if `capabilities.chords` is `false`.
    *
    * @param input - Chord symbol (e.g., `'Cmaj7'`, `'F#m'`, `'Bb7'`)
-   * 
-   * @returns Chord intervals in cents from the root (e.g., `[0, 400, 700, 1100]`
-   *          for maj7), or `null` if the chord symbol is not recognized
-   * @throws If this notation does not support chord parsing
+   *
+   * @returns Chord intervals in cents from the root (e.g., `[0, 400, 700, 1100]` for maj7)
+   * @throws {NotationInputError} If the chord symbol is not recognized
+   * @throws {NotationUnsupportedError} If this notation does not support chords
    */
-  chordToIntervals(input: string): ChordIntervals | null
+  chordToIntervals(input: string): ChordIntervals
 
   /**
    * Format a chord interval structure as a chord symbol string.
-   * Throws if `capabilities.chords` is `false`.
    *
    * @param intervals - Chord intervals in cents from the root
-   * 
-   * @returns Chord symbol string (e.g., `'maj7'`), or `null` if no matching symbol exists
-   * @throws If this notation does not support chord formatting
+   *
+   * @returns Chord symbol string (e.g., `'maj7'`)
+   * @throws {NotationInputError} If no matching chord symbol exists for the intervals
+   * @throws {NotationUnsupportedError} If this notation does not support chords
    */
-  intervalsToChord(intervals: ChordIntervals): string | null
+  intervalsToChord(intervals: ChordIntervals): string
 
   /**
    * List all chord symbols supported by this notation.
-   * Throws if `capabilities.chords` is `false`.
    *
    * @returns Array of supported chord suffixes (e.g., `['', 'm', '7', 'maj7', 'dim', ...]`)
-   * @throws If this notation does not support chords
+   * @throws {NotationUnsupportedError} If this notation does not support chords
    */
   getSupportedChords(): string[]
 
@@ -252,13 +258,13 @@ export interface Notation {
 
   /**
    * Resolve an array of degree/numeral strings into chord resolutions.
-   * Throws if `capabilities.progressions` is `false`.
    *
    * @param numerals - Array of degree strings (e.g., `['I', 'V', 'vi', 'IV']`)
    * @param scale - Scale interval array in cents
-   * 
+   *
    * @returns Array of resolved chords with root cents and interval arrays
-   * @throws If this notation does not support progression resolution
+   * @throws {NotationInputError} If any numeral is invalid
+   * @throws {NotationUnsupportedError} If this notation does not support progressions
    */
   resolveProgression(numerals: string[], scale: number[]): ChordResolution[]
 
@@ -270,19 +276,20 @@ export interface Notation {
    * @param input - Duration name in this notation's format
    *                (e.g., `'quarter'`, `'half'`, `'eighth'`, `'whole'`)
    * @param ppq - Pulses per quarter note (tick resolution, e.g., `480`)
-   * 
-   * @returns Duration in ticks (e.g., `480` for a quarter note at PPQ 480),
-   *          or `null` if the duration name is not recognized
+   *
+   * @returns Duration in ticks (e.g., `480` for a quarter note at PPQ 480)
+   * @throws {NotationInputError} If the duration name is not recognized
    */
-  durationToTicks(input: string, ppq: number): number | null
+  durationToTicks(input: string, ppq: number): number
 
   /**
    * Format a tick count as a duration name in this notation's format.
    *
    * @param ticks - Duration in ticks
    * @param ppq - Pulses per quarter note
-   * 
+   *
    * @returns Duration name (e.g., `'quarter'` for `480` ticks at PPQ 480)
+   * @throws {NotationInputError} If the tick count doesn't map to a named duration
    */
   ticksToDuration(ticks: number, ppq: number): string
 }
