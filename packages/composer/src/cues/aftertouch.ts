@@ -1,5 +1,5 @@
-import type { NotePitch } from '../types'
 import { AftertouchBuilder } from '../builders/AftertouchBuilder'
+import { NotePitch } from '@symphonyscript/core'
 
 /**
  * Create an {@link AftertouchBuilder} for channel or polyphonic pressure.

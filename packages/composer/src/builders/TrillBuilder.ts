@@ -1,5 +1,6 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import type { NotePitch } from '../types'
+
+import { NotePitch } from '@symphonyscript/core'
 
 /**
  * Parameters for {@link TrillBuilder}.

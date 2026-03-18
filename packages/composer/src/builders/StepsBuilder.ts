@@ -1,6 +1,6 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import type { NotePitch } from '../types'
 import { applyBinaryPattern } from '../utils/binary-pattern'
+import { NotePitch } from '@symphonyscript/core'
 
 /**
  * Parameters for {@link StepsBuilder}.

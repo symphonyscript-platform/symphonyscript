@@ -30,6 +30,15 @@ export type NoteName = `${PitchClass}${Octave}`
 export type ChordCode = `${PitchClass}${ChordSymbol}`
 
 /**
+ * Pitch input for note and chord builders. Accepts either a typed note name
+ * (e.g. `'C4'`, `'F#3'`, `'Bb5'`) or absolute cents from C0.
+ *
+ * String pitches are resolved via `notation.noteToCents()` at apply-time.
+ * Numeric pitches are passed through as-is (already in cents).
+ */
+export type NotePitch = NoteName | number
+
+/**
  * Note duration as a notation duration name or raw tick count.
  *
  * String values (e.g. `'4n'`, `'quarter'`, `'8n.'`) are resolved

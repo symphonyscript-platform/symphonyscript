@@ -1,6 +1,7 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { ArpPattern } from '@symphonyscript/theory'
-import type { NotePitch } from '../types'
+
+import { NotePitch } from '@symphonyscript/core'
 
 /**
  * Parameters for {@link ArpeggioBuilder}.
