@@ -24,7 +24,7 @@ describe('error-paths', () => {
     it('arpeggio([\'invalid\']) — throws on apply (resolvePitches propagates)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       expect(() => arpeggio(['invalid' as any]).apply(bridge)).toThrow()
-      expect(() => arpeggio(['invalid' as any]).apply(bridge)).toThrow('Invalid note name: invalid')
+      expect(() => arpeggio(['invalid' as any]).apply(bridge)).toThrow('Invalid note: invalid')
     })
   })
 
@@ -67,13 +67,13 @@ describe('error-paths', () => {
 
   describe('degree', () => {
     it('degree(-1) — applies (degreeToPitch wraps negative via modulo, emits one note)', () => {
-      const bridge = createBridge({ scaleRootCents: 0, defaultDuration: 480 })
+      const bridge = createBridge({ scaleRootCents: 6000, defaultDuration: 480 })
       const result = degree(-1).apply(bridge)
       const { notes } = commitAndCapture(result)
-      // degreeToPitch(-1): idx=-2 -> baseIdx 5 in C major (A) -> valid pitch, one note
+      // degreeToCents(-1): idx=-2 -> baseIdx 5 (A=900) octave=-1 -> -1200+900=-300
+      // finalCents = 6000 + (-300) = 5700 (A3)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBeGreaterThanOrEqual(0)
-      expect(notes[0].pitch).toBeLessThanOrEqual(13200)
+      expect(notes[0].pitch).toBe(5700)
       expect(notes[0].duration).toBe(480)
     })
 

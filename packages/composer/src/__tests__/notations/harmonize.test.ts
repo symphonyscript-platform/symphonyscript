@@ -14,7 +14,7 @@ describe('harmonize', () => {
 
   describe('harmonize(...intervals) adds harmony voices', () => {
     it('should add third and fifth for C4 with intervals [3, 5]', () => {
-      const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
+      const bridge = createBridge({ scaleRootCents: 6000, defaultDuration: 480, velocity: 100 })
       let b = harmonize(3, 5).apply(bridge)
       b = note(6000).apply(b)
 
@@ -36,7 +36,7 @@ describe('harmonize', () => {
     })
 
     it('should add single third with intervals [3]', () => {
-      const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
+      const bridge = createBridge({ scaleRootCents: 6000, defaultDuration: 480, velocity: 100 })
       let b = harmonize(3).apply(bridge)
       b = note(6000).apply(b)
 
@@ -47,7 +47,7 @@ describe('harmonize', () => {
     })
 
     it('should add third, fifth, octave with intervals [3, 5, 8]', () => {
-      const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
+      const bridge = createBridge({ scaleRootCents: 6000, defaultDuration: 480, velocity: 100 })
       let b = harmonize(3, 5, 8).apply(bridge)
       b = note(6000).apply(b)
 
@@ -60,7 +60,7 @@ describe('harmonize', () => {
     })
 
     it('should emit all harmony notes at same tick as melody', () => {
-      const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
+      const bridge = createBridge({ scaleRootCents: 6000, defaultDuration: 480, velocity: 100 })
       let b = harmonize(3, 5).apply(bridge)
       b = note(6000).apply(b)
 
@@ -71,7 +71,7 @@ describe('harmonize', () => {
     })
 
     it('should affect only notes inside harmonize scope', () => {
-      const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
+      const bridge = createBridge({ scaleRootCents: 6000, defaultDuration: 480, velocity: 100 })
       let b = harmonize(3, 5).apply(bridge)
       b = note(6000).apply(b)
       b = note(6400).apply(b)
