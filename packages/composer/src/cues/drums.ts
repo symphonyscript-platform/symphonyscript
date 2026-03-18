@@ -1,4 +1,4 @@
-import { GM_DRUM } from '@symphonyscript/theory'
+import * as Drums from '@symphonyscript/theory'
 import { DrumHitBuilder } from '../builders/DrumHitBuilder'
 import { DrumPatternBuilder } from '../builders/DrumPatternBuilder'
 import { DrumEuclideanBuilder } from '../builders/DrumEuclideanBuilder'
@@ -15,7 +15,7 @@ import { NoteDuration } from '@symphonyscript/core'
  * @returns {@link DrumHitBuilder}
  */
 export function kick(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: GM_DRUM.BASS_DRUM_1, duration })
+  return new DrumHitBuilder({ pitch: Drums.BASS_DRUM_1, duration })
 }
 
 /**
@@ -26,7 +26,7 @@ export function kick(duration?: NoteDuration): DrumHitBuilder {
  * @returns {@link DrumHitBuilder}
  */
 export function snare(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: GM_DRUM.ACOUSTIC_SNARE, duration })
+  return new DrumHitBuilder({ pitch: Drums.ACOUSTIC_SNARE, duration })
 }
 
 /**
@@ -37,7 +37,7 @@ export function snare(duration?: NoteDuration): DrumHitBuilder {
  * @returns {@link DrumHitBuilder}
  */
 export function hihat(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: GM_DRUM.CLOSED_HI_HAT, duration })
+  return new DrumHitBuilder({ pitch: Drums.CLOSED_HI_HAT, duration })
 }
 
 /**
@@ -48,7 +48,7 @@ export function hihat(duration?: NoteDuration): DrumHitBuilder {
  * @returns {@link DrumHitBuilder}
  */
 export function openHat(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: GM_DRUM.OPEN_HI_HAT, duration })
+  return new DrumHitBuilder({ pitch: Drums.OPEN_HI_HAT, duration })
 }
 
 /**
@@ -59,7 +59,7 @@ export function openHat(duration?: NoteDuration): DrumHitBuilder {
  * @returns {@link DrumHitBuilder}
  */
 export function clap(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: GM_DRUM.HAND_CLAP, duration })
+  return new DrumHitBuilder({ pitch: Drums.HAND_CLAP, duration })
 }
 
 /**
@@ -72,14 +72,14 @@ export function clap(duration?: NoteDuration): DrumHitBuilder {
  */
 export function tom(index: number, duration?: NoteDuration): DrumHitBuilder {
   const toms = [
-    GM_DRUM.HIGH_TOM,
-    GM_DRUM.HI_MID_TOM,
-    GM_DRUM.LOW_MID_TOM,
-    GM_DRUM.LOW_TOM,
-    GM_DRUM.HIGH_FLOOR_TOM,
-    GM_DRUM.LOW_FLOOR_TOM,
+    Drums.HIGH_TOM,
+    Drums.HI_MID_TOM,
+    Drums.LOW_MID_TOM,
+    Drums.LOW_TOM,
+    Drums.HIGH_FLOOR_TOM,
+    Drums.LOW_FLOOR_TOM,
   ]
-  const pitch = toms[Math.min(index - 1, toms.length - 1)] ?? GM_DRUM.HIGH_TOM
+  const pitch = toms[Math.min(index - 1, toms.length - 1)] ?? Drums.HIGH_TOM
 
   return new DrumHitBuilder({ pitch, duration })
 }
@@ -92,7 +92,7 @@ export function tom(index: number, duration?: NoteDuration): DrumHitBuilder {
  * @returns {@link DrumHitBuilder}
  */
 export function crash(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: GM_DRUM.CRASH_CYMBAL_1, duration })
+  return new DrumHitBuilder({ pitch: Drums.CRASH_CYMBAL_1, duration })
 }
 
 /**
@@ -103,7 +103,7 @@ export function crash(duration?: NoteDuration): DrumHitBuilder {
  * @returns {@link DrumHitBuilder}
  */
 export function ride(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: GM_DRUM.RIDE_CYMBAL_1, duration })
+  return new DrumHitBuilder({ pitch: Drums.RIDE_CYMBAL_1, duration })
 }
 
 /**
@@ -114,7 +114,7 @@ export function ride(duration?: NoteDuration): DrumHitBuilder {
  * @returns {@link DrumHitBuilder}
  */
 export function rim(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: GM_DRUM.SIDE_STICK, duration })
+  return new DrumHitBuilder({ pitch: Drums.SIDE_STICK, duration })
 }
 
 /**
@@ -125,7 +125,7 @@ export function rim(duration?: NoteDuration): DrumHitBuilder {
  * @returns {@link DrumHitBuilder}
  */
 export function cowbell(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: GM_DRUM.COWBELL, duration })
+  return new DrumHitBuilder({ pitch: Drums.COWBELL, duration })
 }
 
 /**
@@ -136,13 +136,13 @@ export function cowbell(duration?: NoteDuration): DrumHitBuilder {
  * @returns {@link DrumHitBuilder}
  */
 export function shaker(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: GM_DRUM.CABASA, duration })
+  return new DrumHitBuilder({ pitch: Drums.CABASA, duration })
 }
 
 /**
- * Any percussion hit by MIDI pitch.
+ * Any percussion hit by pitch in cents.
  *
- * @param pitch - GM drum MIDI number (0–127). Omit for bass drum (36).
+ * @param pitch - Pitch in cents (e.g. 3600 for bass drum). Omit for bass drum default.
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
 
  * @returns {@link DrumHitBuilder}
@@ -158,7 +158,7 @@ export function hit(pitch?: number, duration?: NoteDuration): DrumHitBuilder {
  * Creates a {@link DrumPatternBuilder} that parses and applies the pattern.
  *
  * @param cue - Pattern string (e.g. `'x.x.x.x.'`).
- * @param pitch - GM drum MIDI number. Omit to use bridge/snare default.
+ * @param pitch - Pitch in cents. Omit to use bridge/snare default.
  * @param stepDuration - Duration per step in ticks or string. `undefined` = bridge default.
 
  * @returns {@link DrumPatternBuilder}
@@ -182,7 +182,7 @@ export function drumPattern(
  *
  * @param hits - Number of pulses to distribute.
  * @param steps - Total steps in the pattern.
- * @param pitch - GM drum MIDI number. Omit for snare default.
+ * @param pitch - Pitch in cents. Omit for snare default.
  * @param stepDuration - Duration per step in ticks or string. `undefined` = bridge default.
  * @param rotation - Rotation offset (positive = right, negative = left).
 
@@ -208,7 +208,7 @@ export function drumEuclidean(
  * Binary drum step pattern. 1 = hit, 0 = rest.
  *
  * @param pattern - Array of 1s and 0s. Missing or empty defaults to `[1]`.
- * @param pitch - GM drum MIDI number. Omit for snare default.
+ * @param pitch - Pitch in cents. Omit for snare default.
  * @param stepDuration - Duration per step in ticks or string. `undefined` = bridge default.
 
  * @returns {@link DrumStepsBuilder}
@@ -230,7 +230,7 @@ export function drumSteps(
 /**
  * Buzz roll — rapid repeated hits over a duration.
  *
- * @param pitch - GM drum MIDI number. Omit for snare default.
+ * @param pitch - Pitch in cents. Omit for snare default.
  * @param duration - Total roll duration in ticks or string.
  * @param rate - Hits per duration (density). Higher = faster buzz.
 
@@ -253,23 +253,23 @@ export function roll(
 /**
  * Flam — one grace note immediately before the main hit.
  *
- * @param pitch - GM drum MIDI number. Omit for snare default.
+ * @param pitch - Pitch in cents. Omit for snare default.
  * @param duration - Main hit duration in ticks or string. `undefined` = bridge default.
 
  * @returns {@link DrumHitBuilder} with flam articulation.
  */
 export function flam(pitch?: number, duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: pitch ?? GM_DRUM.ACOUSTIC_SNARE, duration }).flam()
+  return new DrumHitBuilder({ pitch: pitch ?? Drums.ACOUSTIC_SNARE, duration }).flam()
 }
 
 /**
  * Drag — multiple grace notes before the main hit.
  *
- * @param pitch - GM drum MIDI number. Omit for snare default.
+ * @param pitch - Pitch in cents. Omit for snare default.
  * @param duration - Main hit duration in ticks or string. `undefined` = bridge default.
 
  * @returns {@link DrumHitBuilder} with drag articulation.
  */
 export function drag(pitch?: number, duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: pitch ?? GM_DRUM.ACOUSTIC_SNARE, duration }).drag()
+  return new DrumHitBuilder({ pitch: pitch ?? Drums.ACOUSTIC_SNARE, duration }).drag()
 }

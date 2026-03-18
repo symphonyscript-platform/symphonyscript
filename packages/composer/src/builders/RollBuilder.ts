@@ -7,7 +7,7 @@ import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
  * MIDI key (e.g. {@link GM_DRUM.BASS_DRUM_1}).
  */
 export interface RollParams {
-  /** MIDI pitch (typically drum key, 0–127). */
+  /** Pitch in cents (typically drum key). */
   pitch: number | null
   /** Total roll duration in ticks. `null` = bridge.defaultDuration. */
   duration: number | null

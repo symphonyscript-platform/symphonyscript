@@ -5,3 +5,4 @@
  */
 
 export * from './midi';
+export * from './drums';

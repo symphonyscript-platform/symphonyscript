@@ -7,7 +7,7 @@ import { applyBinaryPattern } from '../utils/binary-pattern'
 export interface DrumStepsParams {
   /** Binary step pattern. Truthy (e.g. 1) = hit, falsy (e.g. 0) = rest. Defaults to []. */
   pattern: number[]
-  /** MIDI pitch for hits. `null` means no emission. */
+  /** Pitch in cents for hits. `null` means no emission. */
   pitch: number | null
   /** Duration per step in ticks. `null` uses bridge default. */
   stepDuration: number | null

@@ -4,8 +4,10 @@ import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
  * Parameters for {@link DrumHitBuilder}.
  */
 export interface DrumHitParams {
-  /** MIDI pitch for the drum hit. Defaults to 36 (bass drum). */
+  /** Pitch in cents. Defaults to 3600 (bass drum / MIDI 36). */
   pitch: number
+  /** Detune offset in cents applied to pitch at emit time. Defaults to 0. */
+  detune: number
   /** Note duration in ticks. `null` uses bridge default. */
   duration: number | null
   /** Velocity override. `null` uses bridge default. */
@@ -39,10 +41,10 @@ export interface DrumHitParams {
  * ```ts
  * kick()                                      // Bass drum, bridge default duration
  * snare(240).ghost(300)                       // Ghost snare
- * hit(36).accent().duration(120)              // Accented kick
- * flam(38).flamRatio(0.5)                     // Flam with custom grace ratio
- * hit(36).drag(3).dragSpacing(20)             // 3 grace notes before main hit
- * kick().apply(bridge)
+ * hit(3600).accent().duration(120)            // Accented kick
+ * flam(3800).flamRatio(0.5)                   // Flam with custom grace ratio
+ * hit(3600).drag(3).dragSpacing(20)           // 3 grace notes before main hit
+ * kick().detune(50).apply(bridge)             // Kick detuned 50 cents up
  * ```
  */
 export class DrumHitBuilder implements PipeStep {
@@ -50,7 +52,8 @@ export class DrumHitBuilder implements PipeStep {
 
   constructor(params: Partial<DrumHitParams>) {
     this.params = {
-      pitch: params.pitch ?? 36,
+      pitch: params.pitch ?? 3600,
+      detune: params.detune ?? 0,
       duration: params.duration ?? null,
       velocity: params.velocity ?? null,
       precise: params.precise ?? false,
@@ -75,14 +78,27 @@ export class DrumHitBuilder implements PipeStep {
   }
 
   /**
-   * Set the MIDI pitch for the drum hit.
+   * Set the pitch for the drum hit.
    *
-   * @param pitch - MIDI note number (0-127), e.g. GM drum map values
+   * @param pitch - Pitch in cents (e.g. 3600 for bass drum)
 
    * @returns New builder with the updated pitch
    */
   pitch(pitch: number): DrumHitBuilder {
     return this.clone({ pitch })
+  }
+
+  /**
+   * Apply a detune offset in cents to the pitch.
+   *
+   * Useful for tuning drums to the song key.
+   *
+   * @param cents - Detune offset in cents (positive = sharper, negative = flatter)
+
+   * @returns New builder with the updated detune
+   */
+  detune(cents: number): DrumHitBuilder {
+    return this.clone({ detune: cents })
   }
 
   /**
@@ -214,8 +230,9 @@ export class DrumHitBuilder implements PipeStep {
     target = this.emitFlamGraceNote(target, duration, resolvedVelocity)
 
     // Main hit
+    const finalPitch = this.params.pitch + this.params.detune
     target = target.withNote(
-      this.params.pitch,
+      finalPitch,
       duration,
       this.params.velocity ?? undefined,
     )
@@ -274,7 +291,7 @@ export class DrumHitBuilder implements PipeStep {
     let target = bridge
 
     for (let i = 0; i < this.params.dragCount; ++i) {
-      target = target.withNote(this.params.pitch, duration, graceVelocity)
+      target = target.withNote(this.params.pitch + this.params.detune, duration, graceVelocity)
       target = target.withTick(startTick + this.params.dragGap * (i + 1))
     }
 
@@ -292,7 +309,7 @@ export class DrumHitBuilder implements PipeStep {
     const graceVelocity = Math.round(resolvedVelocity * this.params.flamGraceRatio)
     let target = bridge
 
-    target = target.withNote(this.params.pitch, duration, graceVelocity)
+    target = target.withNote(this.params.pitch + this.params.detune, duration, graceVelocity)
     target = target.withTick(target.tick + this.params.flamOffset)
 
     return target

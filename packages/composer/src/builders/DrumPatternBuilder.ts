@@ -6,7 +6,7 @@ import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 export interface DrumPatternParams {
   /** Text pattern: 'x'/'X' = hit, any other char = rest (advance tick). Defaults to ''. */
   cue: string
-  /** MIDI pitch for hits. `null` means no emission. */
+  /** Pitch in cents for hits. `null` means no emission. */
   pitch: number | null
   /** Duration per step in ticks. `null` uses bridge default. */
   stepDuration: number | null

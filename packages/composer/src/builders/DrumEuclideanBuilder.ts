@@ -10,7 +10,7 @@ export interface DrumEuclideanParams {
   hits: number
   /** Total steps (n) in the pattern. Defaults to 4. */
   steps: number
-  /** MIDI pitch for drum hits. `null` means no emission (apply returns bridge unchanged). */
+  /** Pitch in cents for drum hits. `null` means no emission (apply returns bridge unchanged). */
   pitch: number | null
   /** Duration per step in ticks. `null` uses bridge default. */
   stepDuration: number | null
