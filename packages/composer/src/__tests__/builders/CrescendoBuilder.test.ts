@@ -50,7 +50,7 @@ describe('CrescendoBuilder', () => {
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
       expect(notes[0].velocity).toBe(400)   // start of ramp (default from)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
 
     it('should ramp velocity from 400 to 1000 over three notes (default duration 480)', () => {

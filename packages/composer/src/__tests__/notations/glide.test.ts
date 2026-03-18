@@ -22,7 +22,7 @@ describe('glide', () => {
 
       const { notes, cc } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
 
       expect(cc).toHaveLength(1)
       expect(cc[0].controller).toBe(MIDI_CC.PORTAMENTO)
@@ -35,9 +35,9 @@ describe('glide', () => {
 
       const { notes, cc } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
 
       expect(cc).toHaveLength(3)
       expect(cc[0]).toMatchObject({ controller: MIDI_CC.PORTAMENTO, value: 127 })
@@ -59,7 +59,7 @@ describe('glide', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[2].pitch).toBe(6700)
     })
   })
 })

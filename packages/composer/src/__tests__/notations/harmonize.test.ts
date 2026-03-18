@@ -20,9 +20,9 @@ describe('harmonize', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60) // C4 melody
-      expect(notes[1].pitch).toBe(64) // E4 (degree 3)
-      expect(notes[2].pitch).toBe(67) // G4 (degree 5)
+      expect(notes[0].pitch).toBe(6000) // C4 melody
+      expect(notes[1].pitch).toBe(6400) // E4 (degree 3)
+      expect(notes[2].pitch).toBe(6700) // G4 (degree 5)
     })
 
     it('should produce only melody when intervals is empty', () => {
@@ -32,7 +32,7 @@ describe('harmonize', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
 
     it('should add single third with intervals [3]', () => {
@@ -42,8 +42,8 @@ describe('harmonize', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
     })
 
     it('should add third, fifth, octave with intervals [3, 5, 8]', () => {
@@ -53,10 +53,10 @@ describe('harmonize', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(4)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
-      expect(notes[3].pitch).toBe(72)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
+      expect(notes[3].pitch).toBe(7200)
     })
 
     it('should emit all harmony notes at same tick as melody', () => {
@@ -78,8 +78,8 @@ describe('harmonize', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(6) // 3 for C4 + 3 for E4
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[3].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[3].pitch).toBe(6400)
     })
   })
 })

@@ -91,7 +91,7 @@ describe('GrooveBuilder', () => {
       expect(notes).toHaveLength(1)
       // tickOffset = round(0.5 * 480) = 240, note placed at 0 + 240
       expect(notes[0].tick).toBe(240)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
 
     it('should apply different timing offsets per step', () => {

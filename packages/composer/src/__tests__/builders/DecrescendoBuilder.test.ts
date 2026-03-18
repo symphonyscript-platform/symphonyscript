@@ -50,7 +50,7 @@ describe('DecrescendoBuilder', () => {
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
       expect(notes[0].velocity).toBe(1000)  // start of ramp (default from)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
 
     it('should ramp velocity from 1000 to 400 over three notes (default from/to)', () => {

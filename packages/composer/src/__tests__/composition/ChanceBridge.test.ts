@@ -34,25 +34,25 @@ describe('ChanceBridge', () => {
     it('should always emit when probability is 1.0', () => {
       const cb = createChanceBridge(1.0)
 
-      const result = cb.withNote(60, 480)
+      const result = cb.withNote(6000, 480)
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
       expect(notes[0].tick).toBe(0)
     })
 
     it('should emit all notes in sequence when probability is 1.0', () => {
       const cb = createChanceBridge(1.0)
 
-      let b = cb.withNote(60, 480)
-      b = b.withNote(62, 480)
-      b = b.withNote(64, 480)
+      let b = cb.withNote(6000, 480)
+      b = b.withNote(6200, 480)
+      b = b.withNote(6400, 480)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(62)
-      expect(notes[2].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6200)
+      expect(notes[2].pitch).toBe(6400)
     })
   })
 
@@ -64,7 +64,7 @@ describe('ChanceBridge', () => {
     it('should never emit when probability is 0.0', () => {
       const cb = createChanceBridge(0.0)
 
-      const result = cb.withNote(60, 480)
+      const result = cb.withNote(6000, 480)
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(0)
     })
@@ -72,14 +72,14 @@ describe('ChanceBridge', () => {
     it('should advance tick when note is skipped (probability 0.0)', () => {
       const cb = createChanceBridge(0.0)
 
-      const result = cb.withNote(60, 480)
+      const result = cb.withNote(6000, 480)
       expect(result.tick).toBe(480)
     })
 
     it('should advance tick by explicit duration when skipped', () => {
       const cb = createChanceBridge(0.0)
 
-      const result = cb.withNote(60, 960)
+      const result = cb.withNote(6000, 960)
       expect(result.tick).toBe(960)
     })
 
@@ -87,16 +87,16 @@ describe('ChanceBridge', () => {
       const bridge = createBridge({ defaultDuration: 240, velocity: 100 })
       const cb = new ChanceBridge(bridge, 0.0, new SeededRandom(42))
 
-      const result = cb.withNote(60)
+      const result = cb.withNote(6000)
       expect(result.tick).toBe(240)
     })
 
     it('should accumulate tick advances for multiple skipped notes', () => {
       const cb = createChanceBridge(0.0)
 
-      let b = cb.withNote(60, 480)
-      b = b.withNote(60, 480)
-      b = b.withNote(60, 480)
+      let b = cb.withNote(6000, 480)
+      b = b.withNote(6000, 480)
+      b = b.withNote(6000, 480)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(0)
@@ -116,8 +116,8 @@ describe('ChanceBridge', () => {
       let b1 = cb1
       let b2 = cb2
       for (let i = 0; i < 8; i++) {
-        b1 = b1.withNote(60, 480)
-        b2 = b2.withNote(60, 480)
+        b1 = b1.withNote(6000, 480)
+        b2 = b2.withNote(6000, 480)
       }
 
       const { notes: n1 } = commitAndCapture(b1)
@@ -137,8 +137,8 @@ describe('ChanceBridge', () => {
       let b1 = cb1
       let b2 = cb2
       for (let i = 0; i < 12; i++) {
-        b1 = b1.withNote(60, 480)
-        b2 = b2.withNote(60, 480)
+        b1 = b1.withNote(6000, 480)
+        b2 = b2.withNote(6000, 480)
       }
 
       const { notes: n1 } = commitAndCapture(b1)
@@ -159,7 +159,7 @@ describe('ChanceBridge', () => {
     it('should return ChanceBridge instance from withNote', () => {
       const cb = createChanceBridge(1.0)
 
-      const result = cb.withNote(60, 480)
+      const result = cb.withNote(6000, 480)
 
       expect(result).toBeInstanceOf(ChanceBridge)
     })

@@ -30,10 +30,10 @@ describe('StepsBuilder', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
       expect(notes[0].tick).toBe(0)
       expect(notes[0].duration).toBe(240)
-      expect(notes[1].pitch).toBe(64)
+      expect(notes[1].pitch).toBe(6400)
       expect(notes[1].tick).toBe(480)  // after step 0 (rest) and step 1
       expect(notes[1].duration).toBe(240)
     })
@@ -44,9 +44,9 @@ describe('StepsBuilder', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(3)
-      expect(notes[0]).toMatchObject({ pitch: 60, tick: 0 })
-      expect(notes[1]).toMatchObject({ pitch: 64, tick: 240 })
-      expect(notes[2]).toMatchObject({ pitch: 60, tick: 480 })
+      expect(notes[0]).toMatchObject({ pitch: 6000, tick: 0 })
+      expect(notes[1]).toMatchObject({ pitch: 6400, tick: 240 })
+      expect(notes[2]).toMatchObject({ pitch: 6000, tick: 480 })
     })
 
     it('pattern [1,1] with single note should repeat same pitch', () => {
@@ -55,8 +55,8 @@ describe('StepsBuilder', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(67)
-      expect(notes[1].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6700)
+      expect(notes[1].pitch).toBe(6700)
       expect(notes[0].tick).toBe(0)
       expect(notes[1].tick).toBe(120)
     })
@@ -127,8 +127,8 @@ describe('StepsBuilder', () => {
         .notes(['E4', 'G4'])
         .apply(bridge)
       const { notes } = commitAndCapture(result)
-      expect(notes[0].pitch).toBe(64)
-      expect(notes[1].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6400)
+      expect(notes[1].pitch).toBe(6700)
     })
 
     it('.stepDuration() should override step duration', () => {

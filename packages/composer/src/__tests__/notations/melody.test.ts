@@ -36,10 +36,10 @@ describe('melody', () => {
       const { notes } = commitAndCapture(result)
       // 480/120 = 4 hits. i=0 base(C4), i=1 pitch(E4), i=2 base(C4), i=3 pitch(E4)
       expect(notes).toHaveLength(4)
-      expect(notes[0].pitch).toBe(60) // C4
-      expect(notes[1].pitch).toBe(64) // E4
-      expect(notes[2].pitch).toBe(60)
-      expect(notes[3].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000) // C4
+      expect(notes[1].pitch).toBe(6400) // E4
+      expect(notes[2].pitch).toBe(6000)
+      expect(notes[3].pitch).toBe(6400)
       notes.forEach((n) => expect(n.duration).toBe(120))
     })
 
@@ -50,7 +50,7 @@ describe('melody', () => {
       const { notes } = commitAndCapture(result)
       // rate=240, duration=240 -> 1 hit (base only)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60) // base first
+      expect(notes[0].pitch).toBe(6000) // base first
     })
 
     it('should advance tick by total duration', () => {
@@ -88,8 +88,8 @@ describe('melody', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3) // 480/160
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6700)
     })
   })
 
@@ -111,9 +111,9 @@ describe('melody', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(64) // grace E4
+      expect(notes[0].pitch).toBe(6400) // grace E4
       expect(notes[0].duration).toBe(30)
-      expect(notes[1].pitch).toBe(60) // main C4
+      expect(notes[1].pitch).toBe(6000) // main C4
       expect(notes[1].duration).toBe(480)
     })
 
@@ -124,7 +124,7 @@ describe('melody', () => {
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
       expect(notes[0].duration).toBe(40)
-      expect(notes[0].pitch).toBe(60) // NoteBuilder defaults to C4
+      expect(notes[0].pitch).toBe(4800) // NoteBuilder defaults to C3 (4800 cents)
     })
 
     it('should use default graceDuration 30 when omitted', () => {
@@ -134,7 +134,7 @@ describe('melody', () => {
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
       expect(notes[0].duration).toBe(30)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
   })
 
@@ -151,10 +151,10 @@ describe('melody', () => {
       const { notes } = commitAndCapture(result)
       // C4=60, E4=64 -> 4 semitones, 5 notes (60,61,62,63,64)
       expect(notes).toHaveLength(5)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[notes.length - 1].pitch).toBe(64)
-      expect(notes[1].pitch).toBe(61)
-      expect(notes[2].pitch).toBe(62)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[notes.length - 1].pitch).toBe(6400)
+      expect(notes[1].pitch).toBe(6100)
+      expect(notes[2].pitch).toBe(6200)
     })
 
     it('glissando downward should emit descending chromatic notes', () => {
@@ -162,8 +162,8 @@ describe('melody', () => {
       const result = glissando('G4', 'C4', 200).apply(bridge)
 
       const { notes } = commitAndCapture(result)
-      expect(notes[0].pitch).toBe(67)
-      expect(notes[notes.length - 1].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6700)
+      expect(notes[notes.length - 1].pitch).toBe(6000)
     })
 
     it('glissando same pitch should emit single note', () => {
@@ -172,7 +172,7 @@ describe('melody', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
 
     it('should use bridge defaultDuration when duration omitted', () => {
@@ -208,9 +208,9 @@ describe('melody', () => {
       const { notes } = commitAndCapture(result)
       // totalDuration = 2 * 480 = 960, scaledDuration = 960/3 = 320 per note
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
       expect(notes[0].duration).toBe(320)
       expect(notes[1].duration).toBe(320)
       expect(notes[2].duration).toBe(320)
@@ -246,9 +246,9 @@ describe('melody', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
       expect(notes[0].duration).toBe(320) // 960/3
     })
 

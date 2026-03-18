@@ -31,10 +31,10 @@ describe('GlissandoBuilder', () => {
       const { notes } = commitAndCapture(result)
       // C4=60, E4=64 -> 4 semitones, 5 notes (60,61,62,63,64)
       expect(notes).toHaveLength(5)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[notes.length - 1].pitch).toBe(64)
-      expect(notes[1].pitch).toBe(61)
-      expect(notes[2].pitch).toBe(62)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[notes.length - 1].pitch).toBe(6400)
+      expect(notes[1].pitch).toBe(6100)
+      expect(notes[2].pitch).toBe(6200)
     })
 
     it('glissando downward should emit descending chromatic notes', () => {
@@ -42,8 +42,8 @@ describe('GlissandoBuilder', () => {
       const result = glissando('G4', 'C4', 200).apply(bridge)
 
       const { notes } = commitAndCapture(result)
-      expect(notes[0].pitch).toBe(67)
-      expect(notes[notes.length - 1].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6700)
+      expect(notes[notes.length - 1].pitch).toBe(6000)
     })
 
     it('glissando same pitch should emit single note', () => {
@@ -52,7 +52,7 @@ describe('GlissandoBuilder', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
   })
 
@@ -110,8 +110,8 @@ describe('GlissandoBuilder', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(8)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[notes.length - 1].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[notes.length - 1].pitch).toBe(6700)
     })
   })
 
@@ -167,8 +167,8 @@ describe('GlissandoBuilder', () => {
 
       expect(origResult.notes).toHaveLength(3)
       expect(toResult.notes).toHaveLength(5)
-      expect(origResult.notes[origResult.notes.length - 1].pitch).toBe(62)
-      expect(toResult.notes[toResult.notes.length - 1].pitch).toBe(64)
+      expect(origResult.notes[origResult.notes.length - 1].pitch).toBe(6200)
+      expect(toResult.notes[toResult.notes.length - 1].pitch).toBe(6400)
     })
   })
 })

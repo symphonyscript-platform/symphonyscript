@@ -32,9 +32,9 @@ describe('QuantizationBridge', () => {
       const qb = createQuantizationBridge(480, 0)
 
       // First note at tick 0, duration 240 -> tick advances to 240
-      let b = qb.withNote(60, 240)
+      let b = qb.withNote(6000, 240)
       // Second note at tick 240 (off-grid). With strength 0, quantized stays 240
-      b = b.withNote(60, 480)
+      b = b.withNote(6000, 480)
       const { notes } = commitAndCapture(b)
       expect(notes[0].tick).toBe(0)
       expect(notes[1].tick).toBe(240)
@@ -44,8 +44,8 @@ describe('QuantizationBridge', () => {
       const qb = createQuantizationBridge(480, 0)
 
       // First note duration 100 -> tick advances to 100
-      let b = qb.withNote(60, 100)
-      b = b.withNote(60, 480)
+      let b = qb.withNote(6000, 100)
+      b = b.withNote(6000, 480)
       const { notes } = commitAndCapture(b)
       expect(notes[0].tick).toBe(0)
       // Second note at tick 100. nearest=0, strength 0 -> quantized=100 (unchanged)
@@ -62,15 +62,15 @@ describe('QuantizationBridge', () => {
       const qb = createQuantizationBridge(480, 1)
 
       // Note at tick 240 (between 0 and 480). nearest=480, full snap -> 480
-      let b = qb.withNote(60, 480)   // first note at 0
-      b = b.withNote(60, 480)        // second note at tick 240... no
+      let b = qb.withNote(6000, 480)   // first note at 0
+      b = b.withNote(6000, 480)        // second note at tick 240... no
       // First note: tick 0, quantized 0, duration 480, tick advances to 480
       // Second note: tick 480, already on grid. Let me use different timing.
 
       // To get tick 240: first note duration 240
       b = createQuantizationBridge(480, 1)
-      b = b.withNote(60, 240)       // note at 0, tick -> 240
-      b = b.withNote(60, 480)       // note at tick 240, snap to 480
+      b = b.withNote(6000, 240)       // note at 0, tick -> 240
+      b = b.withNote(6000, 480)       // note at tick 240, snap to 480
       const { notes } = commitAndCapture(b)
       expect(notes[0].tick).toBe(0)
       expect(notes[1].tick).toBe(480)  // 240 snaps to 480 (nearest)
@@ -81,8 +81,8 @@ describe('QuantizationBridge', () => {
 
       // Tick 200: nearest = round(200/480)*480 = 0 (round(0.417)=0)
       // So nearest=0, quantized=0
-      let b = qb.withNote(60, 200)
-      b = b.withNote(60, 480)
+      let b = qb.withNote(6000, 200)
+      b = b.withNote(6000, 480)
       const { notes } = commitAndCapture(b)
       expect(notes[1].tick).toBe(0)  // 200 snaps to 0
     })
@@ -91,8 +91,8 @@ describe('QuantizationBridge', () => {
       const qb = createQuantizationBridge(480, 1)
 
       // Tick 300: nearest = round(300/480)*480 = round(0.625)*480 = 480
-      let b = qb.withNote(60, 300)
-      b = b.withNote(60, 480)
+      let b = qb.withNote(6000, 300)
+      b = b.withNote(6000, 480)
       const { notes } = commitAndCapture(b)
       expect(notes[1].tick).toBe(480)  // 300 snaps to 480
     })
@@ -107,8 +107,8 @@ describe('QuantizationBridge', () => {
       const qb = createQuantizationBridge(480, 0.5)
 
       // Tick 240, nearest 480: quantized = round(240 + (480-240)*0.5) = round(360) = 360
-      let b = qb.withNote(60, 240)
-      b = b.withNote(60, 480)
+      let b = qb.withNote(6000, 240)
+      b = b.withNote(6000, 480)
       const { notes } = commitAndCapture(b)
       expect(notes[1].tick).toBe(360)
     })
@@ -117,8 +117,8 @@ describe('QuantizationBridge', () => {
       const qb = createQuantizationBridge(480, 0.25)
 
       // Tick 240, nearest 480: quantized = round(240 + 240*0.25) = round(300) = 300
-      let b = qb.withNote(60, 240)
-      b = b.withNote(60, 480)
+      let b = qb.withNote(6000, 240)
+      b = b.withNote(6000, 480)
       const { notes } = commitAndCapture(b)
       expect(notes[1].tick).toBe(300)
     })
@@ -127,8 +127,8 @@ describe('QuantizationBridge', () => {
       const qb = createQuantizationBridge(480, 0.75)
 
       // Tick 240, nearest 480: quantized = round(240 + 240*0.75) = round(420) = 420
-      let b = qb.withNote(60, 240)
-      b = b.withNote(60, 480)
+      let b = qb.withNote(6000, 240)
+      b = b.withNote(6000, 480)
       const { notes } = commitAndCapture(b)
       expect(notes[1].tick).toBe(420)
     })
@@ -144,8 +144,8 @@ describe('QuantizationBridge', () => {
       const qb = new QuantizationBridge(bridge, { grid: 480, strength: 1 })
 
       // Even with strength 1, precise should bypass quantization
-      let b = qb.withNote(60, 240)
-      b = b.withNote(60, 480)
+      let b = qb.withNote(6000, 240)
+      b = b.withNote(6000, 480)
       const { notes } = commitAndCapture(b)
       // Without bypass, tick 240 would snap to 480. With bypass, stays 240
       expect(notes[1].tick).toBe(240)
@@ -155,9 +155,9 @@ describe('QuantizationBridge', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100, precise: true })
       const qb = new QuantizationBridge(bridge, { grid: 480, strength: 1 })
 
-      const result = qb.withNote(64, 320, 90)
+      const result = qb.withNote(6400, 320, 90)
       const { notes } = commitAndCapture(result)
-      expect(notes[0].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6400)
       expect(notes[0].velocity).toBe(90)
       expect(notes[0].tick).toBe(0)
     })
@@ -172,15 +172,15 @@ describe('QuantizationBridge', () => {
       const qb = createQuantizationBridge(240, 1)
 
       // Tick 100: nearest = round(100/240)*240 = 0
-      let b = qb.withNote(60, 100)
-      b = b.withNote(60, 480)
+      let b = qb.withNote(6000, 100)
+      b = b.withNote(6000, 480)
       const { notes } = commitAndCapture(b)
       expect(notes[1].tick).toBe(0)
 
       // Tick 150: nearest = round(150/240)*240 = 240
       const qb2 = createQuantizationBridge(240, 1)
-      let b2 = qb2.withNote(60, 150)
-      b2 = b2.withNote(60, 480)
+      let b2 = qb2.withNote(6000, 150)
+      b2 = b2.withNote(6000, 480)
       const { notes: n2 } = commitAndCapture(b2)
       expect(n2[1].tick).toBe(240)
     })

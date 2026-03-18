@@ -19,7 +19,7 @@ describe('FrozenClip', () => {
   describe('constructor', () => {
     it('should accept notes, ccEvents, and bendEvents arrays', () => {
       const notes: RecordedNote[] = [
-        { sourceId: 0, pitch: 60, velocity: 800, duration: 480, tick: 0, muted: false },
+        { sourceId: 0, pitch: 6000, velocity: 800, duration: 480, tick: 0, muted: false },
       ]
       const ccEvents: RecordedCC[] = []
       const bendEvents: RecordedBend[] = []
@@ -32,9 +32,9 @@ describe('FrozenClip', () => {
 
     it('should compute noteCount from notes length', () => {
       const notes: RecordedNote[] = [
-        { sourceId: 0, pitch: 60, velocity: 800, duration: 100, tick: 0, muted: false },
-        { sourceId: 1, pitch: 64, velocity: 800, duration: 100, tick: 100, muted: false },
-        { sourceId: 2, pitch: 67, velocity: 800, duration: 100, tick: 200, muted: false },
+        { sourceId: 0, pitch: 6000, velocity: 800, duration: 100, tick: 0, muted: false },
+        { sourceId: 1, pitch: 6400, velocity: 800, duration: 100, tick: 100, muted: false },
+        { sourceId: 2, pitch: 6700, velocity: 800, duration: 100, tick: 200, muted: false },
       ]
       const clip = new FrozenClip(notes, [], [])
 
@@ -43,8 +43,8 @@ describe('FrozenClip', () => {
 
     it('should compute duration from max tick across notes', () => {
       const notes: RecordedNote[] = [
-        { sourceId: 0, pitch: 60, velocity: 800, duration: 480, tick: 0, muted: false },
-        { sourceId: 1, pitch: 64, velocity: 800, duration: 240, tick: 480, muted: false },
+        { sourceId: 0, pitch: 6000, velocity: 800, duration: 480, tick: 0, muted: false },
+        { sourceId: 1, pitch: 6400, velocity: 800, duration: 240, tick: 480, muted: false },
       ]
       const clip = new FrozenClip(notes, [], [])
 
@@ -54,7 +54,7 @@ describe('FrozenClip', () => {
 
     it('should include CC tick in duration when CC is after last note', () => {
       const notes: RecordedNote[] = [
-        { sourceId: 0, pitch: 60, velocity: 800, duration: 100, tick: 0, muted: false },
+        { sourceId: 0, pitch: 6000, velocity: 800, duration: 100, tick: 0, muted: false },
       ]
       const ccEvents: RecordedCC[] = [
         { sourceId: 0, controller: 7, value: 100, tick: 500 },
@@ -66,7 +66,7 @@ describe('FrozenClip', () => {
 
     it('should include bend tick in duration when bend is after last note', () => {
       const notes: RecordedNote[] = [
-        { sourceId: 0, pitch: 60, velocity: 800, duration: 100, tick: 0, muted: false },
+        { sourceId: 0, pitch: 6000, velocity: 800, duration: 100, tick: 0, muted: false },
       ]
       const bendEvents: RecordedBend[] = [
         { sourceId: 0, value: 0.5, tick: 600 },
@@ -87,8 +87,8 @@ describe('FrozenClip', () => {
   describe('visitNotes', () => {
     it('should invoke callback for each note with correct args', () => {
       const notes: RecordedNote[] = [
-        { sourceId: 1, pitch: 60, velocity: 900, duration: 240, tick: 0, muted: false },
-        { sourceId: 2, pitch: 64, velocity: 800, duration: 480, tick: 240, muted: true },
+        { sourceId: 1, pitch: 6000, velocity: 900, duration: 240, tick: 0, muted: false },
+        { sourceId: 2, pitch: 6400, velocity: 800, duration: 480, tick: 240, muted: true },
       ]
       const clip = new FrozenClip(notes, [], [])
 
@@ -98,8 +98,8 @@ describe('FrozenClip', () => {
       })
 
       expect(visited).toHaveLength(2)
-      expect(visited[0]).toEqual({ sourceId: 1, pitch: 60, velocity: 900, duration: 240, tick: 0, muted: false })
-      expect(visited[1]).toEqual({ sourceId: 2, pitch: 64, velocity: 800, duration: 480, tick: 240, muted: true })
+      expect(visited[0]).toEqual({ sourceId: 1, pitch: 6000, velocity: 900, duration: 240, tick: 0, muted: false })
+      expect(visited[1]).toEqual({ sourceId: 2, pitch: 6400, velocity: 800, duration: 480, tick: 240, muted: true })
     })
 
     it('should not invoke callback when no notes', () => {

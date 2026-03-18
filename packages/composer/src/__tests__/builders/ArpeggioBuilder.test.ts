@@ -27,20 +27,20 @@ describe('ArpeggioBuilder', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
     })
 
     it('should accept MIDI numbers for pitches', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = arpeggio([60, 64, 67]).apply(bridge)
+      const result = arpeggio([6000, 6400, 6700]).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
     })
 
     it('should advance tick for each note', () => {
@@ -74,9 +74,9 @@ describe('ArpeggioBuilder', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(67)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6700)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6000)
     })
 
     it('up pattern should emit notes ascending', () => {
@@ -84,9 +84,9 @@ describe('ArpeggioBuilder', () => {
       const result = arpeggio(['C4', 'E4', 'G4']).pattern('up').apply(bridge)
 
       const { notes } = commitAndCapture(result)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
     })
   })
 
@@ -136,9 +136,9 @@ describe('ArpeggioBuilder', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
     })
   })
 
@@ -153,8 +153,8 @@ describe('ArpeggioBuilder', () => {
       const patternResult = commitAndCapture(withPattern.apply(bridge))
       const rateResult = commitAndCapture(withRate.apply(bridge))
 
-      expect(origResult.notes[0].pitch).toBe(60)
-      expect(patternResult.notes[0].pitch).toBe(67)
+      expect(origResult.notes[0].pitch).toBe(6000)
+      expect(patternResult.notes[0].pitch).toBe(6700)
       expect(rateResult.notes[0].duration).toBe(120)
     })
   })

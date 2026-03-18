@@ -41,7 +41,7 @@ describe('DynamicsBridge', () => {
         endTick: 960,
       })
 
-      const result = db.withNote(60, 480)
+      const result = db.withNote(6000, 480)
       const { notes } = commitAndCapture(result)
       expect(notes[0].velocity).toBe(64)
     })
@@ -54,8 +54,8 @@ describe('DynamicsBridge', () => {
         endTick: 960,
       })
 
-      let b = db.withNote(60, 480)
-      b = b.withNote(60, 480)
+      let b = db.withNote(6000, 480)
+      b = b.withNote(6000, 480)
 
       const { notes } = commitAndCapture(b)
       // tick 480: t = 480/960 = 0.5 → 64 + (127-64)*0.5 = 95.5 → 96
@@ -70,9 +70,9 @@ describe('DynamicsBridge', () => {
         endTick: 960,
       })
 
-      let b = db.withNote(60, 480)
-      b = b.withNote(60, 480)
-      b = b.withNote(60, 480)
+      let b = db.withNote(6000, 480)
+      b = b.withNote(6000, 480)
+      b = b.withNote(6000, 480)
 
       const { notes } = commitAndCapture(b)
       expect(notes[2].velocity).toBe(127)
@@ -89,10 +89,10 @@ describe('DynamicsBridge', () => {
         { defaultDuration: 480 },
       )
 
-      let b = db.withNote(60, 480)   // tick 0 → t clamped to 0 → 50
-      b = b.withNote(60, 480)       // tick 480 → t = 0 → 50
-      b = b.withNote(60, 480)       // tick 960 → t = 0.5 → 75
-      b = b.withNote(60, 480)       // tick 1440 → t = 1 → 100
+      let b = db.withNote(6000, 480)   // tick 0 → t clamped to 0 → 50
+      b = b.withNote(6000, 480)       // tick 480 → t = 0 → 50
+      b = b.withNote(6000, 480)       // tick 960 → t = 0.5 → 75
+      b = b.withNote(6000, 480)       // tick 1440 → t = 1 → 100
 
       const { notes } = commitAndCapture(b)
       expect(notes[0].velocity).toBe(50)   // tick 0 < startTick → clamped
@@ -116,9 +116,9 @@ describe('DynamicsBridge', () => {
         endTick: 960,
       })
 
-      let b = db.withNote(60, 480)
-      b = b.withNote(60, 480)
-      b = b.withNote(60, 480)
+      let b = db.withNote(6000, 480)
+      b = b.withNote(6000, 480)
+      b = b.withNote(6000, 480)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)

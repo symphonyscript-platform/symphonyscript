@@ -188,7 +188,7 @@ describe('SynapticNode - Adding Notes', () => {
         const entryPtr = bridge.getNodePtr(entryId)!
         const entryNode = readNodeFromSAB(bridge, entryPtr)!
 
-        expect(entryNode.pitch).toBe(60)
+        expect(entryNode.pitch).toBe(6000)
         expect(entryNode.velocity).toBe(100)
         expect(entryNode.duration).toBe(480)
         expect(entryNode.baseTick).toBe(0)
@@ -201,7 +201,7 @@ describe('SynapticNode - Adding Notes', () => {
 
         // Read the exit node
         const exitNode = readNodeFromSAB(bridge, exitPtr)!
-        expect(exitNode.pitch).toBe(64)
+        expect(exitNode.pitch).toBe(6400)
         expect(exitNode.velocity).toBe(110)
         expect(exitNode.sourceId).toBe(exitId)
     })
@@ -221,15 +221,15 @@ describe('SynapticNode - Adding Notes', () => {
         const entryPtr = bridge.getNodePtr(entryId)!
         const node1 = readNodeFromSAB(bridge, entryPtr)!
 
-        expect(node1.pitch).toBe(60)
+        expect(node1.pitch).toBe(6000)
         expect(node1.nextPtr).not.toBe(NULL_PTR)
 
         const node2 = readNodeFromSAB(bridge, node1.nextPtr)!
-        expect(node2.pitch).toBe(64)
+        expect(node2.pitch).toBe(6400)
         expect(node2.nextPtr).not.toBe(NULL_PTR)
 
         const node3 = readNodeFromSAB(bridge, node2.nextPtr)!
-        expect(node3.pitch).toBe(67)
+        expect(node3.pitch).toBe(6700)
         expect(node3.sourceId).toBe(exitId)
     })
 
@@ -332,24 +332,24 @@ describe('SynapticNode - Complete Scenario', () => {
         // Verify nodeA's chain
         const ptrA1 = bridge.getNodePtr(entryA)!
         const nodeA1 = readNodeFromSAB(bridge, ptrA1)!
-        expect(nodeA1.pitch).toBe(60)
+        expect(nodeA1.pitch).toBe(6000)
         expect(nodeA1.baseTick).toBe(0)
         expect(nodeA1.nextPtr).not.toBe(NULL_PTR)
 
         const nodeA2 = readNodeFromSAB(bridge, nodeA1.nextPtr)!
-        expect(nodeA2.pitch).toBe(64)
+        expect(nodeA2.pitch).toBe(6400)
         expect(nodeA2.baseTick).toBe(480)
         expect(nodeA2.sourceId).toBe(exitA)
 
         // Verify nodeB's chain
         const ptrB1 = bridge.getNodePtr(entryB)!
         const nodeB1 = readNodeFromSAB(bridge, ptrB1)!
-        expect(nodeB1.pitch).toBe(67)
+        expect(nodeB1.pitch).toBe(6700)
         expect(nodeB1.baseTick).toBe(960)
         expect(nodeB1.nextPtr).not.toBe(NULL_PTR)
 
         const nodeB2 = readNodeFromSAB(bridge, nodeB1.nextPtr)!
-        expect(nodeB2.pitch).toBe(72)
+        expect(nodeB2.pitch).toBe(7200)
         expect(nodeB2.baseTick).toBe(1440)
         expect(nodeB2.sourceId).toBe(exitB)
 

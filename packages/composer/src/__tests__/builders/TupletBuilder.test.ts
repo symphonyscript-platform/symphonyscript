@@ -27,9 +27,9 @@ describe('TupletBuilder', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
 
       // Each note has scaled duration = 960/3 = 320
       expect(notes[0].duration).toBe(320)
@@ -113,7 +113,7 @@ describe('TupletBuilder', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(4)
-      expect(notes[3].pitch).toBe(72)
+      expect(notes[3].pitch).toBe(7200)
       expect(notes[3].tick).toBe(960)
     })
   })

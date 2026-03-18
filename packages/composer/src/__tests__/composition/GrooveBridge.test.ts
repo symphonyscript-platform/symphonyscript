@@ -46,12 +46,12 @@ describe('GrooveBridge', () => {
       ])
 
       // Step 0: tick 0, grid 480 → stepIndex 0 → velocity 100 * 1.0 = 100
-      const r1 = gb.withNote(60, 480)
+      const r1 = gb.withNote(6000, 480)
       const { notes: n1 } = commitAndCapture(r1)
       expect(n1[0].velocity).toBe(100)
 
       // Step 1: tick 480, grid 480 → stepIndex 1 → velocity 100 * 0.5 = 50
-      const r2 = r1.withNote(60, 480)
+      const r2 = r1.withNote(6000, 480)
       const { notes: n2 } = commitAndCapture(r2)
       expect(n2[1].velocity).toBe(50)
     })
@@ -62,7 +62,7 @@ describe('GrooveBridge', () => {
       ])
 
       // Explicit velocity 80, scaled by 0.8 = 64
-      const result = gb.withNote(60, 480, 80)
+      const result = gb.withNote(6000, 480, 80)
       const { notes } = commitAndCapture(result)
       expect(notes[0].velocity).toBe(64)
     })
@@ -78,7 +78,7 @@ describe('GrooveBridge', () => {
         { velocity: 1.0, timing: 0.1, probability: 1.0 }, // 10% of grid = 48 ticks
       ])
 
-      const result = gb.withNote(60, 480)
+      const result = gb.withNote(6000, 480)
       const { notes } = commitAndCapture(result)
       // Note should be at tick 0 + 48 = 48 (timing offset rounded)
       expect(notes[0].tick).toBe(48)
@@ -89,7 +89,7 @@ describe('GrooveBridge', () => {
         { velocity: 1.0, timing: 0, probability: 1.0 },
       ])
 
-      const result = gb.withNote(60, 480)
+      const result = gb.withNote(6000, 480)
       const { notes } = commitAndCapture(result)
       expect(notes[0].tick).toBe(0)
     })
@@ -105,7 +105,7 @@ describe('GrooveBridge', () => {
         { velocity: 1.0, timing: 0, probability: 1.0 },
       ])
 
-      const result = gb.withNote(60, 480)
+      const result = gb.withNote(6000, 480)
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
     })
@@ -115,7 +115,7 @@ describe('GrooveBridge', () => {
         { velocity: 1.0, timing: 0, probability: 0.0 },
       ])
 
-      const result = gb.withNote(60, 480)
+      const result = gb.withNote(6000, 480)
       const { notes } = commitAndCapture(result)
       // Note should be dropped, tick still advances
       expect(notes).toHaveLength(0)
@@ -130,8 +130,8 @@ describe('GrooveBridge', () => {
       const gb1 = createGrooveBridge(steps, 480, 123)
       const gb2 = createGrooveBridge(steps, 480, 123)
 
-      const r1 = gb1.withNote(60, 480)
-      const r2 = gb2.withNote(60, 480)
+      const r1 = gb1.withNote(6000, 480)
+      const r2 = gb2.withNote(6000, 480)
 
       const { notes: n1 } = commitAndCapture(r1)
       const { notes: n2 } = commitAndCapture(r2)
@@ -151,9 +151,9 @@ describe('GrooveBridge', () => {
       ], 480)
 
       // 3 notes: step indices should be 0, 1, 0 (wraps)
-      let b = gb.withNote(60, 480)
-      b = b.withNote(60, 480)
-      b = b.withNote(60, 480)
+      let b = gb.withNote(6000, 480)
+      b = b.withNote(6000, 480)
+      b = b.withNote(6000, 480)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
@@ -177,7 +177,7 @@ describe('GrooveBridge', () => {
       })
 
       // With precise=true, groove should be bypassed entirely
-      const result = gb.withNote(60, 480)
+      const result = gb.withNote(6000, 480)
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
       // Velocity should NOT be scaled, timing should NOT be offset

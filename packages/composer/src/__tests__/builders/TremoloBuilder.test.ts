@@ -32,7 +32,7 @@ describe('TremoloBuilder', () => {
       // 480 / 120 = 4 hits
       expect(notes).toHaveLength(4)
       notes.forEach(n => {
-        expect(n.pitch).toBe(60)
+        expect(n.pitch).toBe(6000)
         expect(n.duration).toBe(120)
       })
     })
@@ -50,9 +50,9 @@ describe('TremoloBuilder', () => {
 
       expect(notes).toHaveLength(2)
       expect(notes[0].tick).toBe(0)
-      expect(notes[0].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6400)
       expect(notes[1].tick).toBe(240)
-      expect(notes[1].pitch).toBe(64)
+      expect(notes[1].pitch).toBe(6400)
     })
 
     it('should use bridge defaultDuration for rate and duration when omitted', () => {
@@ -62,7 +62,7 @@ describe('TremoloBuilder', () => {
 
       // rate=120, duration=120 -> 1 hit
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6700)
       expect(notes[0].duration).toBe(120)
     })
   })
@@ -85,7 +85,7 @@ describe('TremoloBuilder', () => {
         .apply(bridge)
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(4)
-      notes.forEach(n => expect(n.pitch).toBe(69))
+      notes.forEach(n => expect(n.pitch).toBe(6900))
     })
 
     it('.rate() should set hit rate', () => {
@@ -121,8 +121,8 @@ describe('TremoloBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const baseNotes = commitAndCapture(base.apply(bridge)).notes
       const pitchNotes = commitAndCapture(withPitch.apply(bridge)).notes
-      expect(pitchNotes[0].pitch).toBe(64) // E4
-      expect(baseNotes[0].pitch).toBe(60) // C4
+      expect(pitchNotes[0].pitch).toBe(6400) // E4
+      expect(baseNotes[0].pitch).toBe(6000) // C4
     })
   })
 })

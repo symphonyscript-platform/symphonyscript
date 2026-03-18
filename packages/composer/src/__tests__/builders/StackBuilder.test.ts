@@ -94,7 +94,7 @@ describe('StackBuilder', () => {
       expect(notes).toHaveLength(3)
       expect(notes[0].velocity).toBe(500)
       expect(notes[1].velocity).toBe(100)
-      expect(notes[2].pitch).toBe(79)  // G4 + 12 = G5
+      expect(notes[2].pitch).toBe(6712)  // G4 + transpose(12) in cents
     })
   })
 
@@ -127,9 +127,9 @@ describe('StackBuilder', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0]).toMatchObject({ pitch: 60, tick: 0, duration: 240 })
-      expect(notes[1]).toMatchObject({ pitch: 64, tick: 0, duration: 480 })
-      expect(notes[2]).toMatchObject({ pitch: 67, tick: 480, duration: 480 })
+      expect(notes[0]).toMatchObject({ pitch: 6000, tick: 0, duration: 240 })
+      expect(notes[1]).toMatchObject({ pitch: 6400, tick: 0, duration: 480 })
+      expect(notes[2]).toMatchObject({ pitch: 6700, tick: 480, duration: 480 })
       expect(result.tick).toBe(960)
     })
   })

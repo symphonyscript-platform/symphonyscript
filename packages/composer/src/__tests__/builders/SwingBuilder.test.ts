@@ -55,7 +55,7 @@ describe('SwingBuilder', () => {
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
       expect(notes[0].tick).toBe(0)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
 
     it('should apply swing — two notes produce onbeat (0) then offbeat (600) with default amount 0.5', () => {

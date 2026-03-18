@@ -22,7 +22,7 @@ describe('tie', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0]).toMatchObject({ pitch: 60, duration: 480, tick: 0 })
+      expect(notes[0]).toMatchObject({ pitch: 6000, duration: 480, tick: 0 })
     })
 
     it('multiple same-pitch notes: only first note', () => {
@@ -41,9 +41,9 @@ describe('tie', () => {
       const { notes } = commitAndCapture(result)
       // Per-step TieBridge: C4, flush C4, E4, flush E4, G4 (last not flushed) = 5 notes
       expect(notes).toHaveLength(5)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[2].pitch).toBe(64)
-      expect(notes[4].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[2].pitch).toBe(6400)
+      expect(notes[4].pitch).toBe(6700)
     })
 
     it('should advance tick through tied steps', () => {
@@ -69,7 +69,7 @@ describe('tie', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes.length).toBeGreaterThanOrEqual(2)
-      expect(notes[notes.length - 1].pitch).toBe(64)
+      expect(notes[notes.length - 1].pitch).toBe(6400)
     })
   })
 })

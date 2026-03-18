@@ -12,7 +12,6 @@ import { describe, it, expect } from 'vitest'
 import { degree } from '../../cues/degree'
 import { DegreeBuilder } from '../../builders/DegreeBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 
 describe('degree', () => {
 
@@ -30,35 +29,29 @@ describe('degree', () => {
 
   describe('scale degree resolution', () => {
     it('degree(1) in C major should resolve to C4 (pitch 60)', () => {
-      const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
-      })
+      const bridge = createBridge({ scaleRootCents: 6000 }) // C4
       const result = degree(1).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60) // C4
+      expect(notes[0].pitch).toBe(6000) // C4
     })
 
     it('degree(5) in C major should resolve to G4 (pitch 67)', () => {
-      const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
-      })
+      const bridge = createBridge({ scaleRootCents: 6000 }) // C4
       const result = degree(5).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(67) // G4
+      expect(notes[0].pitch).toBe(6700) // G4
     })
 
     it('degree(1) with default bridge (C major) should be C4', () => {
-      const bridge = createBridge()
+      const bridge = createBridge({ scaleRootCents: 6000 })
       const result = degree(1).apply(bridge)
       const { notes } = commitAndCapture(result)
 
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
   })
 

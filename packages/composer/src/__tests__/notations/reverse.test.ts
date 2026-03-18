@@ -30,7 +30,7 @@ describe('reverse', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0]).toMatchObject({ pitch: 60, tick: 0 })
+      expect(notes[0]).toMatchObject({ pitch: 6000, tick: 0 })
     })
 
     it('should reverse order of multiple notes', () => {
@@ -40,9 +40,9 @@ describe('reverse', () => {
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
       // Original: C4@0, E4@480, G4@960. Reversed: G4@0, E4@480, C4@960
-      expect(notes[0]).toMatchObject({ pitch: 67, tick: 0 })
-      expect(notes[1]).toMatchObject({ pitch: 64, tick: 480 })
-      expect(notes[2]).toMatchObject({ pitch: 60, tick: 960 })
+      expect(notes[0]).toMatchObject({ pitch: 6700, tick: 0 })
+      expect(notes[1]).toMatchObject({ pitch: 6400, tick: 480 })
+      expect(notes[2]).toMatchObject({ pitch: 6000, tick: 960 })
     })
 
     it('should preserve total duration after reverse', () => {
@@ -69,9 +69,9 @@ describe('reverse', () => {
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
       // Reversed: E4@0, C4@480; then G4@960
-      expect(notes[0].pitch).toBe(64)
-      expect(notes[1].pitch).toBe(60)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6400)
+      expect(notes[1].pitch).toBe(6000)
+      expect(notes[2].pitch).toBe(6700)
     })
 
     it('should chain .steps() fluently', () => {
@@ -82,9 +82,9 @@ describe('reverse', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(67)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6700)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6000)
     })
   })
 })

@@ -49,12 +49,12 @@ describe('EuclideanBuilder', () => {
 
       // Tresillo: x--x--x- (3 hits at steps 0, 3, 6)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60) // C4
+      expect(notes[0].pitch).toBe(6000) // C4
       expect(notes[0].tick).toBe(0)
       expect(notes[0].duration).toBe(480)
-      expect(notes[1].pitch).toBe(64) // E4
+      expect(notes[1].pitch).toBe(6400) // E4
       expect(notes[1].tick).toBe(1440) // 3 * 480
-      expect(notes[2].pitch).toBe(60) // C4
+      expect(notes[2].pitch).toBe(6000) // C4
       expect(notes[2].tick).toBe(2880) // 6 * 480
     })
 
@@ -80,21 +80,21 @@ describe('EuclideanBuilder', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(5)
-      expect(notes[0].pitch).toBe(60) // C4
-      expect(notes[1].pitch).toBe(64) // E4
-      expect(notes[2].pitch).toBe(67) // G4
-      expect(notes[3].pitch).toBe(60) // C4 (cycle)
-      expect(notes[4].pitch).toBe(64) // E4 (cycle)
+      expect(notes[0].pitch).toBe(6000) // C4
+      expect(notes[1].pitch).toBe(6400) // E4
+      expect(notes[2].pitch).toBe(6700) // G4
+      expect(notes[3].pitch).toBe(6000) // C4 (cycle)
+      expect(notes[4].pitch).toBe(6400) // E4 (cycle)
     })
 
     it('should accept numeric MIDI pitches', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = euclidean(3, 8).notes([60, 64]).apply(bridge)
+      const result = euclidean(3, 8).notes([6000, 6400]).apply(bridge)
 
       const { notes } = commitAndCapture(result)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6000)
     })
   })
 

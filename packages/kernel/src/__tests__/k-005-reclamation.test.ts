@@ -69,7 +69,7 @@ describe('K-005: Zone B Reclamation', () => {
         const bridge = new SiliconBridge(linker)
         const view = new Int32Array(sab)
 
-        const sourceId = bridge._insertNoteImmediate({ pitch: 60, velocity: 100, duration: 480, baseTick: 0 })
+        const sourceId = bridge._insertNoteImmediate({ pitch: 6000, velocity: 100, duration: 480, baseTick: 0 })
         const ptr = bridge.getNodePtr(sourceId)
         expect(ptr).toBeDefined()
 
@@ -105,7 +105,7 @@ describe('K-005: Zone B Reclamation', () => {
         const bridge = new SiliconBridge(linker)
         const view = new Int32Array(sab)
 
-        const sourceId = bridge._insertNoteImmediate({ pitch: 64, velocity: 100, duration: 480, baseTick: 0 })
+        const sourceId = bridge._insertNoteImmediate({ pitch: 6400, velocity: 100, duration: 480, baseTick: 0 })
         const ptr = bridge.getNodePtr(sourceId)
         expect(ptr).toBeDefined()
         const nodePtr = ptr as number
@@ -177,9 +177,9 @@ describe('K-005: Zone B Reclamation', () => {
         const freeCountBefore = linker.getFreeCount()
 
         // Insert 3 notes via Bridge (allocates Zone B nodes)
-        bridge._insertNoteImmediate({ pitch: 60, velocity: 100, duration: 480, baseTick: 0 })
-        bridge._insertNoteImmediate({ pitch: 64, velocity: 100, duration: 480, baseTick: 480 })
-        bridge._insertNoteImmediate({ pitch: 67, velocity: 100, duration: 480, baseTick: 960 })
+        bridge._insertNoteImmediate({ pitch: 6000, velocity: 100, duration: 480, baseTick: 0 })
+        bridge._insertNoteImmediate({ pitch: 6400, velocity: 100, duration: 480, baseTick: 480 })
+        bridge._insertNoteImmediate({ pitch: 6700, velocity: 100, duration: 480, baseTick: 960 })
 
         expect(linker.getNodeCount()).toBe(3)
 
@@ -203,8 +203,8 @@ describe('K-005: Zone B Reclamation', () => {
         const bridge = new SiliconBridge(linker)
 
         // Insert notes (Zone B)
-        const id1 = bridge._insertNoteImmediate({ pitch: 60, velocity: 100, duration: 480, baseTick: 0 })
-        const id2 = bridge._insertNoteImmediate({ pitch: 64, velocity: 100, duration: 480, baseTick: 480 })
+        const id1 = bridge._insertNoteImmediate({ pitch: 6000, velocity: 100, duration: 480, baseTick: 0 })
+        const id2 = bridge._insertNoteImmediate({ pitch: 6400, velocity: 100, duration: 480, baseTick: 480 })
         expect(id1).toBeGreaterThan(0)
         expect(id2).toBeGreaterThan(0)
         expect(linker.getNodeCount()).toBe(2)
@@ -215,8 +215,8 @@ describe('K-005: Zone B Reclamation', () => {
 
         // Re-insert after clear — Zone B allocator was reset, so new nodes
         // get fresh Zone B pointers without corrupting Zone A.
-        const id3 = bridge._insertNoteImmediate({ pitch: 72, velocity: 100, duration: 480, baseTick: 0 })
-        const id4 = bridge._insertNoteImmediate({ pitch: 76, velocity: 100, duration: 480, baseTick: 480 })
+        const id3 = bridge._insertNoteImmediate({ pitch: 7200, velocity: 100, duration: 480, baseTick: 0 })
+        const id4 = bridge._insertNoteImmediate({ pitch: 7600, velocity: 100, duration: 480, baseTick: 480 })
         expect(id3).toBeGreaterThan(0)
         expect(id4).toBeGreaterThan(0)
         expect(linker.getNodeCount()).toBe(2)

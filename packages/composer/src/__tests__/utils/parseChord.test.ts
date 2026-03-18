@@ -1,24 +1,13 @@
 /**
  * Exemplar: parseChord Utility Test
  *
- * Tests the `parseChord` utility which converts chord symbol strings
- * into root MIDI pitch and 24-EDO HarmonyMask.
- *
- * Covers:
- *   - Basic triad parsing (major, minor, dim, aug)
- *   - Seventh chord parsing (maj7, m7, 7, dim7, m7b5)
- *   - Suspension chords (sus2, sus4)
- *   - Accidentals (sharp, flat)
- *   - Root pitch calculation (C4 = MIDI 60 base)
- *   - HarmonyMask bitmask correctness
- *   - Error handling (empty string, invalid root, unknown quality)
+ * NOTE: utils/chord (parseChord) was removed; chord resolution is now
+ * deferred to apply-time via bridge.notation().
  */
 
 import { describe, it, expect } from 'vitest'
-import { parseChord } from '../../utils/chord'
-import { unpackToArray } from '@symphonyscript/theory'
 
-describe('parseChord', () => {
+describe.skip('parseChord (utils/chord removed — chord resolution deferred to notation)', () => {
 
   // ========================================================================
   // Triads

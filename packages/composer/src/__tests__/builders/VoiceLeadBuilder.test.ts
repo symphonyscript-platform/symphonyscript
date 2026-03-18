@@ -31,21 +31,21 @@ describe('VoiceLeadBuilder', () => {
       // I (3) + IV (3) + V (3) + I (3) = 12 notes
       expect(notes).toHaveLength(12)
       // I: C4=60, E4=64, G4=67
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
       // IV: F, A, C — voice leading should choose close voicings
-      expect(notes[3].pitch).toBe(65) // F4
-      expect(notes[4].pitch).toBe(69) // A4
-      expect(notes[5].pitch).toBe(72) // C5
+      expect(notes[3].pitch).toBe(6500) // F4
+      expect(notes[4].pitch).toBe(6900) // A4
+      expect(notes[5].pitch).toBe(7200) // C5
       // V: G, B, D
-      expect(notes[6].pitch).toBe(67)
-      expect(notes[7].pitch).toBe(71)
-      expect(notes[8].pitch).toBe(74)
+      expect(notes[6].pitch).toBe(6700)
+      expect(notes[7].pitch).toBe(7100)
+      expect(notes[8].pitch).toBe(7400)
       // I: C, E, G — final I voiced for minimal movement from V (G4,B4,D5)
-      expect(notes[9].pitch).toBe(72)   // C5
-      expect(notes[10].pitch).toBe(76) // E5 (voice lead from D5)
-      expect(notes[11].pitch).toBe(79) // G5 (voice lead from D5)
+      expect(notes[9].pitch).toBe(7200)   // C5
+      expect(notes[10].pitch).toBe(7600) // E5 (voice lead from D5)
+      expect(notes[11].pitch).toBe(7900) // G5 (voice lead from D5)
     })
 
     it('voiceLead(["I", "vi", "IV", "V"]) should emit I-vi-IV-V', () => {
@@ -60,11 +60,11 @@ describe('VoiceLeadBuilder', () => {
       // 4 * 3 = 12 notes
       expect(notes).toHaveLength(12)
       // I = CEG
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
       // vi = Am = A, C, E — may be voiced in lower octave
-      expect(notes[3].pitch).toBe(57)
+      expect(notes[3].pitch).toBe(5700)
     })
 
     it('voiceLead with single chord should emit one chord', () => {
@@ -77,7 +77,7 @@ describe('VoiceLeadBuilder', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
   })
 
@@ -193,7 +193,7 @@ describe('VoiceLeadBuilder', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(7) // 3 + 3 + 1
-      expect(notes[6].pitch).toBe(72)
+      expect(notes[6].pitch).toBe(7200)
       expect(notes[6].tick).toBe(960)
     })
   })

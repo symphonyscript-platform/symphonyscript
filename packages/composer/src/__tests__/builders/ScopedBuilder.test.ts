@@ -32,8 +32,8 @@ describe('ScopedBuilder', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
       expect(notes[1].tick).toBe(480)
     })
 
@@ -85,8 +85,8 @@ describe('ScopedBuilder', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
     })
   })
 
@@ -131,10 +131,10 @@ describe('ScopedBuilder', () => {
       const stepsResult = commitAndCapture(withMoreSteps.apply(bridge))
 
       expect(origResult.notes).toHaveLength(1)
-      expect(origResult.notes[0].pitch).toBe(60)
+      expect(origResult.notes[0].pitch).toBe(6000)
 
       expect(stepsResult.notes).toHaveLength(2)
-      expect(stepsResult.notes[1].pitch).toBe(64)
+      expect(stepsResult.notes[1].pitch).toBe(6400)
     })
   })
 })

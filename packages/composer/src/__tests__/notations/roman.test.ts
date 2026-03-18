@@ -43,9 +43,9 @@ describe('roman', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
     })
 
     it('roman("V") in C major should emit G4, B4, D5 (pitches 67, 71, 74)', () => {
@@ -59,9 +59,9 @@ describe('roman', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(67)
-      expect(notes[1].pitch).toBe(71)
-      expect(notes[2].pitch).toBe(74)
+      expect(notes[0].pitch).toBe(6700)
+      expect(notes[1].pitch).toBe(7100)
+      expect(notes[2].pitch).toBe(7400)
     })
 
     it('roman("V7") in C major should emit G, B, D, F (4 notes)', () => {
@@ -75,7 +75,7 @@ describe('roman', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(4)
-      expect(notes[0].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6700)
     })
 
     it('roman("vi") in C major should emit A4, C5, E5 (minor)', () => {
@@ -89,9 +89,9 @@ describe('roman', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(69)
-      expect(notes[1].pitch).toBe(72)
-      expect(notes[2].pitch).toBe(76)
+      expect(notes[0].pitch).toBe(6900)
+      expect(notes[1].pitch).toBe(7200)
+      expect(notes[2].pitch).toBe(7600)
     })
   })
 
@@ -153,7 +153,7 @@ describe('roman', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(4)
-      expect(notes[3].pitch).toBe(72)
+      expect(notes[3].pitch).toBe(7200)
     })
   })
 })

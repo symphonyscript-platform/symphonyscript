@@ -113,7 +113,7 @@ describe('AftertouchBuilder', () => {
       b = note('C4').apply(b)
       const { notes, cc } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
       expect(cc.filter(e => e.controller === CC_CHANNEL_AFTERTOUCH)).toHaveLength(1)
     })
   })

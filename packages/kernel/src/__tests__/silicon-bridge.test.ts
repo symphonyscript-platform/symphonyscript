@@ -29,7 +29,7 @@ function createTestBridge(): SiliconBridge {
 
 function createTestNote(overrides: Partial<EditorNoteData> = {}): EditorNoteData {
   return {
-    pitch: 60,
+    pitch: 6000,
     velocity: 100,
     duration: 480,
     baseTick: 0,
@@ -132,7 +132,7 @@ describe('SiliconBridge - Source ID Generation', () => {
     const source: SourceLocation = { file: 'test.ss', line: 10, column: 5 }
     // Insert a note with source location to trigger registerMapping
     const sourceId = bridge._insertNoteImmediate({
-      pitch: 60,
+      pitch: 6000,
       velocity: 100,
       duration: 480,
       baseTick: 0,
@@ -233,13 +233,13 @@ describe('SiliconBridge - Immediate Operations', () => {
   test('_insertNoteImmediate creates node in linker', () => {
     const bridge = createTestBridge()
 
-    const note = createTestNote({ pitch: 64, velocity: 80, duration: 240, baseTick: 100 })
+    const note = createTestNote({ pitch: 6400, velocity: 80, duration: 240, baseTick: 100 })
     const sourceId = bridge._insertNoteImmediate(note)
 
     const readNote = readNoteData(bridge, sourceId)
 
     expect(readNote).toBeDefined()
-    expect(readNote!.pitch).toBe(64)
+    expect(readNote!.pitch).toBe(6400)
     expect(readNote!.velocity).toBe(80)
     expect(readNote!.duration).toBe(240)
     expect(readNote!.baseTick).toBe(100)
@@ -294,7 +294,7 @@ describe('SiliconBridge - Immediate Operations', () => {
     const sourceId = bridge._insertNoteImmediate(createTestNote({ pitch: 60 }))
     bridge.patchDirect(sourceId, 'pitch', 72)
 
-    expect(readNoteData(bridge, sourceId)!.pitch).toBe(72)
+    expect(readNoteData(bridge, sourceId)!.pitch).toBe(7200)
   })
 
   test('patchDirect updates velocity', () => {
@@ -378,7 +378,7 @@ describe('SiliconBridge - Debounced Operations', () => {
     advanceTicks(bridge, 11)
 
     // Final value should be 64
-    expect(readNoteData(bridge, sourceId)!.pitch).toBe(64)
+    expect(readNoteData(bridge, sourceId)!.pitch).toBe(6400)
   })
 
   test('patchDebounced does not coalesce different fields', () => {
@@ -395,7 +395,7 @@ describe('SiliconBridge - Debounced Operations', () => {
     // RFC-045-06: Advance ticks past debounce threshold
     advanceTicks(bridge, 11)
 
-    expect(readNoteData(bridge, sourceId)!.pitch).toBe(72)
+    expect(readNoteData(bridge, sourceId)!.pitch).toBe(7200)
     expect(readNoteData(bridge, sourceId)!.velocity).toBe(80)
   })
 
@@ -411,7 +411,7 @@ describe('SiliconBridge - Debounced Operations', () => {
     bridge.flushPatches()
 
     expect(bridge.getPendingPatchCount()).toBe(0)
-    expect(readNoteData(bridge, sourceId)!.pitch).toBe(72)
+    expect(readNoteData(bridge, sourceId)!.pitch).toBe(7200)
     expect(readNoteData(bridge, sourceId)!.velocity).toBe(80)
   })
 
@@ -525,9 +525,9 @@ describe('SiliconBridge - Batch Operations', () => {
     const sourceIds = testLoadClip(bridge,notes)
 
     // Verify each sourceId maps to correct note
-    expect(readNoteData(bridge, sourceIds[0])!.pitch).toBe(60)
-    expect(readNoteData(bridge, sourceIds[1])!.pitch).toBe(64)
-    expect(readNoteData(bridge, sourceIds[2])!.pitch).toBe(67)
+    expect(readNoteData(bridge, sourceIds[0])!.pitch).toBe(6000)
+    expect(readNoteData(bridge, sourceIds[1])!.pitch).toBe(6400)
+    expect(readNoteData(bridge, sourceIds[2])!.pitch).toBe(6700)
   })
 
   test('loadClip creates sorted chain', () => {
@@ -598,7 +598,7 @@ describe('SiliconBridge - Read Operations', () => {
     const bridge = createTestBridge()
 
     const note = createTestNote({
-      pitch: 64,
+      pitch: 6400,
       velocity: 80,
       duration: 240,
       baseTick: 100,
@@ -609,7 +609,7 @@ describe('SiliconBridge - Read Operations', () => {
     const readNote = readNoteData(bridge, sourceId)
 
     expect(readNote).toBeDefined()
-    expect(readNote!.pitch).toBe(64)
+    expect(readNote!.pitch).toBe(6400)
     expect(readNote!.velocity).toBe(80)
     expect(readNote!.duration).toBe(240)
     expect(readNote!.baseTick).toBe(100)
@@ -628,9 +628,9 @@ describe('SiliconBridge - Read Operations', () => {
     const notes = collectNotes(bridge)
 
     expect(notes.length).toBe(3)
-    expect(notes[0].note.pitch).toBe(60)
-    expect(notes[1].note.pitch).toBe(64)
-    expect(notes[2].note.pitch).toBe(67)
+    expect(notes[0].note.pitch).toBe(6000)
+    expect(notes[1].note.pitch).toBe(6400)
+    expect(notes[2].note.pitch).toBe(6700)
   })
 
   test('traverseNotes includes sourceId with each note', () => {
@@ -702,7 +702,7 @@ describe('SiliconBridge - Factory Function', () => {
     // RFC-045-06: Advance ticks past custom debounce threshold (5 ticks)
     advanceTicks(bridge, 6)
 
-    expect(readNoteData(bridge, sourceId)!.pitch).toBe(72)
+    expect(readNoteData(bridge, sourceId)!.pitch).toBe(7200)
   })
 })
 
@@ -734,7 +734,7 @@ describe('SiliconBridge - Integration', () => {
     // RFC-045-06: Advance ticks past debounce threshold (5 ticks)
     advanceTicks(bridge, 6)
 
-    expect(readNoteData(bridge, sourceIds[1])!.pitch).toBe(65)
+    expect(readNoteData(bridge, sourceIds[1])!.pitch).toBe(6500)
 
     // Delete
     bridge.deleteNoteImmediate(sourceIds[0])
@@ -790,7 +790,7 @@ describe('SiliconBridge - Integration', () => {
 
     // Read back and verify note data is correct
     const readNote = readNoteData(bridge, sourceId)
-    expect(readNote?.pitch).toBe(72)
+    expect(readNote?.pitch).toBe(7200)
 
     // Source location is stored in Symbol Table (file string not preserved)
     // Use callback pattern (zero-alloc)

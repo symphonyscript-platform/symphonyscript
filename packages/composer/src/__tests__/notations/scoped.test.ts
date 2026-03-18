@@ -20,8 +20,8 @@ describe('scoped', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
       expect(notes[1].tick).toBe(480)
     })
 
@@ -54,8 +54,8 @@ describe('scoped', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
     })
 
     it('should return ScopedBuilder from scoped()', () => {

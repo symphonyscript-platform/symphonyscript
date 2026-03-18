@@ -31,8 +31,8 @@ describe('stretch', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(2)
-      expect(notes[0]).toMatchObject({ pitch: 60, tick: 0, duration: 480 })
-      expect(notes[1]).toMatchObject({ pitch: 64, tick: 480, duration: 480 })
+      expect(notes[0]).toMatchObject({ pitch: 6000, tick: 0, duration: 480 })
+      expect(notes[1]).toMatchObject({ pitch: 6400, tick: 480, duration: 480 })
     })
 
     it('factor 2: doubles tick and duration', () => {
@@ -41,8 +41,8 @@ describe('stretch', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(2)
-      expect(notes[0]).toMatchObject({ pitch: 60, tick: 0, duration: 960 })
-      expect(notes[1]).toMatchObject({ pitch: 64, tick: 960, duration: 960 })
+      expect(notes[0]).toMatchObject({ pitch: 6000, tick: 0, duration: 960 })
+      expect(notes[1]).toMatchObject({ pitch: 6400, tick: 960, duration: 960 })
     })
 
     it('should advance total tick by stretched duration', () => {
@@ -58,8 +58,8 @@ describe('stretch', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(2)
-      expect(notes[0]).toMatchObject({ pitch: 60, tick: 0, duration: 240 })
-      expect(notes[1]).toMatchObject({ pitch: 64, tick: 240, duration: 240 })
+      expect(notes[0]).toMatchObject({ pitch: 6000, tick: 0, duration: 240 })
+      expect(notes[1]).toMatchObject({ pitch: 6400, tick: 240, duration: 240 })
     })
 
     it('pass through when no steps', () => {
@@ -91,8 +91,8 @@ describe('stretch', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(2)
-      expect(notes[0]).toMatchObject({ pitch: 60, tick: 0, duration: 480 })
-      expect(notes[1]).toMatchObject({ pitch: 64, tick: 480, duration: 480 })
+      expect(notes[0]).toMatchObject({ pitch: 6000, tick: 0, duration: 480 })
+      expect(notes[1]).toMatchObject({ pitch: 6400, tick: 480, duration: 480 })
     })
 
     it('should allow subsequent steps after stretch', () => {
@@ -102,8 +102,8 @@ describe('stretch', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
-      expect(notes[0]).toMatchObject({ pitch: 60, duration: 960 })
-      expect(notes[1]).toMatchObject({ pitch: 64, tick: 960, duration: 480 })
+      expect(notes[0]).toMatchObject({ pitch: 6000, duration: 960 })
+      expect(notes[1]).toMatchObject({ pitch: 6400, tick: 960, duration: 480 })
     })
 
     it('chain .factor() to override', () => {

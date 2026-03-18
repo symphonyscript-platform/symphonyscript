@@ -28,7 +28,7 @@ describe('applyBinaryPattern', () => {
     it('should emit notes on hits and advance tick on rests', () => {
       const bridge = createBridge()
       const pattern = [1, 0, 1, 0]
-      const pitches = [60, 62]
+      const pitches = [6000, 6200]
       const duration = 4
 
       const result = applyBinaryPattern(pattern, pitches, duration, bridge)
@@ -36,11 +36,11 @@ describe('applyBinaryPattern', () => {
 
       expect(notes).toHaveLength(2)
       // First hit: pitch 60 at tick 0
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
       expect(notes[0].tick).toBe(0)
       expect(notes[0].duration).toBe(4)
       // Second hit: pitch 62 at tick 8 (rest advanced by 4, then hit at 8)
-      expect(notes[1].pitch).toBe(62)
+      expect(notes[1].pitch).toBe(6200)
       expect(notes[1].tick).toBe(8)
       expect(notes[1].duration).toBe(4)
     })
@@ -54,17 +54,17 @@ describe('applyBinaryPattern', () => {
     it('should cycle through pitches when hits exceed pitches count', () => {
       const bridge = createBridge()
       const pattern = [1, 1, 1, 1]
-      const pitches = [60, 62]
+      const pitches = [6000, 6200]
       const duration = 4
 
       const result = applyBinaryPattern(pattern, pitches, duration, bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(4)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(62)
-      expect(notes[2].pitch).toBe(60)
-      expect(notes[3].pitch).toBe(62)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6200)
+      expect(notes[2].pitch).toBe(6000)
+      expect(notes[3].pitch).toBe(6200)
     })
   })
 
@@ -75,7 +75,7 @@ describe('applyBinaryPattern', () => {
   describe('velocity', () => {
     it('should use bridge default velocity when not specified', () => {
       const bridge = createBridge({ velocity: 900 })
-      const result = applyBinaryPattern([1], [60], 4, bridge)
+      const result = applyBinaryPattern([1], [6000], 4, bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
@@ -84,7 +84,7 @@ describe('applyBinaryPattern', () => {
 
     it('should use optional velocity parameter when provided', () => {
       const bridge = createBridge({ velocity: 900 })
-      const result = applyBinaryPattern([1], [60], 4, bridge, 500)
+      const result = applyBinaryPattern([1], [6000], 4, bridge, 500)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
@@ -99,7 +99,7 @@ describe('applyBinaryPattern', () => {
   describe('edge cases', () => {
     it('should produce no notes for empty pattern', () => {
       const bridge = createBridge()
-      const result = applyBinaryPattern([], [60], 4, bridge)
+      const result = applyBinaryPattern([], [6000], 4, bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(0)
@@ -107,7 +107,7 @@ describe('applyBinaryPattern', () => {
 
     it('should produce notes for all hits (no rests)', () => {
       const bridge = createBridge()
-      const result = applyBinaryPattern([1, 1, 1], [60], 4, bridge)
+      const result = applyBinaryPattern([1, 1, 1], [6000], 4, bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(3)
@@ -118,7 +118,7 @@ describe('applyBinaryPattern', () => {
 
     it('should produce no notes for all rests', () => {
       const bridge = createBridge()
-      const result = applyBinaryPattern([0, 0, 0], [60], 4, bridge)
+      const result = applyBinaryPattern([0, 0, 0], [6000], 4, bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(0)
@@ -133,32 +133,32 @@ describe('applyBinaryPattern', () => {
   describe('truthy/falsy patterns', () => {
     it('should treat numbers 0/1 as falsy/truthy', () => {
       const bridge = createBridge()
-      const result = applyBinaryPattern([1, 0, 1], [60, 62], 4, bridge)
+      const result = applyBinaryPattern([1, 0, 1], [6000, 6200], 4, bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(62)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6200)
     })
 
     it('should treat booleans as truthy/falsy', () => {
       const bridge = createBridge()
-      const result = applyBinaryPattern([true, false, true], [60, 62], 4, bridge)
+      const result = applyBinaryPattern([true, false, true], [6000, 6200], 4, bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(62)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6200)
     })
 
     it('should allow mixed numbers and booleans', () => {
       const bridge = createBridge()
-      const result = applyBinaryPattern([1, false, true, 0], [60, 62], 4, bridge)
+      const result = applyBinaryPattern([1, false, true, 0], [6000, 6200], 4, bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(62)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6200)
     })
   })
 })

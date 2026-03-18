@@ -47,7 +47,7 @@ describe('QuantizationBuilder', () => {
       const result = quantize(480, 1).steps(note('C4')).apply(bridge)
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
   })
 

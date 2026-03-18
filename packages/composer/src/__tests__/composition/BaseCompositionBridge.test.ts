@@ -45,12 +45,13 @@ describe('BaseCompositionBridge', () => {
       expect(bridge.transposeCents).toBe(1200)
     })
 
-    it('should have default scaleRootCents=0, keyRootCents=null, scaleIntervals=null', () => {
+    it('should have default scaleRootCents=0, keyRootCents=null, scaleIntervals from notation', () => {
       const bridge = createBridge()
 
       expect(bridge.scaleRootCents).toBe(0)
       expect(bridge.keyRootCents).toBeNull()
-      expect(bridge.scaleIntervals).toBeNull()
+      expect(bridge.scaleIntervals).not.toBeNull()
+      expect(Array.isArray(bridge.scaleIntervals)).toBe(true)
     })
   })
 

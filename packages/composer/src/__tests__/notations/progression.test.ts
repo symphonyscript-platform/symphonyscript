@@ -39,21 +39,21 @@ describe('progression', () => {
       // I = CEG (3), IV = FAC (3), V = GBD (3), I = CEG (3) = 12 notes
       expect(notes).toHaveLength(12)
       // I: C4=60, E4=64, G4=67
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
       // IV: F4=65, A4=69, C5=72
-      expect(notes[3].pitch).toBe(65)
-      expect(notes[4].pitch).toBe(69)
-      expect(notes[5].pitch).toBe(72)
+      expect(notes[3].pitch).toBe(6500)
+      expect(notes[4].pitch).toBe(6900)
+      expect(notes[5].pitch).toBe(7200)
       // V: G4=67, B4=71, D5=74
-      expect(notes[6].pitch).toBe(67)
-      expect(notes[7].pitch).toBe(71)
-      expect(notes[8].pitch).toBe(74)
+      expect(notes[6].pitch).toBe(6700)
+      expect(notes[7].pitch).toBe(7100)
+      expect(notes[8].pitch).toBe(7400)
       // I again
-      expect(notes[9].pitch).toBe(60)
-      expect(notes[10].pitch).toBe(64)
-      expect(notes[11].pitch).toBe(67)
+      expect(notes[9].pitch).toBe(6000)
+      expect(notes[10].pitch).toBe(6400)
+      expect(notes[11].pitch).toBe(6700)
     })
 
     it('progression with explicit duration should use it for each chord', () => {
@@ -97,14 +97,14 @@ describe('progression', () => {
       // ii = Dm (3), V7 = G7 (4), I = C (3) = 10 notes
       expect(notes).toHaveLength(10)
       // ii: D4=62
-      expect(notes[0].pitch).toBe(62)
+      expect(notes[0].pitch).toBe(6200)
       // V7: G4=67, B4=71, D5=74, F5=77
-      expect(notes[3].pitch).toBe(67)
-      expect(notes[4].pitch).toBe(71)
-      expect(notes[5].pitch).toBe(74)
-      expect(notes[6].pitch).toBe(77)
+      expect(notes[3].pitch).toBe(6700)
+      expect(notes[4].pitch).toBe(7100)
+      expect(notes[5].pitch).toBe(7400)
+      expect(notes[6].pitch).toBe(7700)
       // I: C4=60
-      expect(notes[7].pitch).toBe(60)
+      expect(notes[7].pitch).toBe(6000)
     })
 
     it('progression empty numerals should return bridge unchanged', () => {
@@ -172,7 +172,7 @@ describe('progression', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(4) // 3 from I + 1 from note C5
-      expect(notes[3].pitch).toBe(72)
+      expect(notes[3].pitch).toBe(7200)
     })
   })
 })

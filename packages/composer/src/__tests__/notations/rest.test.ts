@@ -42,7 +42,7 @@ describe('rest', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
       expect(notes[0].tick).toBe(480)
       expect(b.tick).toBe(960)
     })

@@ -23,8 +23,8 @@ describe('use', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
       expect(notes[0].tick).toBe(0)
       expect(notes[1].tick).toBe(480)
     })
@@ -45,8 +45,8 @@ describe('use', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
       expect(notes[1].tick).toBe(480)
     })
 
@@ -82,7 +82,7 @@ describe('use', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
   })
 

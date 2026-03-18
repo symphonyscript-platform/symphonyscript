@@ -132,11 +132,11 @@ describe('RFC-043 Phase 2: Structural Splicing Integration', () => {
       const events = consumer.runUntilTick(300)
 
       expect(events).toHaveLength(3)
-      expect(events[0].pitch).toBe(60)
+      expect(events[0].pitch).toBe(6000)
       expect(events[0].tick).toBe(0)
-      expect(events[1].pitch).toBe(64)
+      expect(events[1].pitch).toBe(6400)
       expect(events[1].tick).toBe(96)
-      expect(events[2].pitch).toBe(67)
+      expect(events[2].pitch).toBe(6700)
       expect(events[2].tick).toBe(192)
     })
 
@@ -156,7 +156,7 @@ describe('RFC-043 Phase 2: Structural Splicing Integration', () => {
       const events = consumer.runUntilTick(100)
 
       expect(events).toHaveLength(1)
-      expect(events[0].pitch).toBe(60)
+      expect(events[0].pitch).toBe(6000)
       expect(events[0].tick).toBe(48)
     })
   })
@@ -176,7 +176,7 @@ describe('RFC-043 Phase 2: Structural Splicing Integration', () => {
       // Play first note
       consumer.runUntilTick(50)
       expect(consumer.getEvents()).toHaveLength(1)
-      expect(consumer.getEvents()[0].pitch).toBe(60)
+      expect(consumer.getEvents()[0].pitch).toBe(6000)
 
       // Insert new note at head with tick ahead of playhead
       // Using insertHead so it becomes the new first node
@@ -204,7 +204,7 @@ describe('RFC-043 Phase 2: Structural Splicing Integration', () => {
       // Play past first note
       consumer.runUntilTick(250)
       expect(consumer.getEvents()).toHaveLength(1)
-      expect(consumer.getEvents()[0].pitch).toBe(64)
+      expect(consumer.getEvents()[0].pitch).toBe(6400)
 
       // Insert new note at tick 300 (ahead of playhead)
       linker.insertHead(...note(60, 300))
@@ -311,7 +311,7 @@ describe('RFC-043 Phase 2: Structural Splicing Integration', () => {
 
       const events = consumer.getEvents()
       expect(events).toHaveLength(1)
-      expect(events[0].pitch).toBe(72) // Should see patched value
+      expect(events[0].pitch).toBe(7200) // Should see patched value
     })
 
     it('should reflect velocity changes', () => {
@@ -370,7 +370,7 @@ describe('RFC-043 Phase 2: Structural Splicing Integration', () => {
 
       consumer.runUntilTick(50)
 
-      expect(consumer.getEvents()[0].pitch).toBe(72) // C5
+      expect(consumer.getEvents()[0].pitch).toBe(7200) // C5
     })
 
     it('should apply velocity multiplier', () => {
@@ -403,13 +403,13 @@ describe('RFC-043 Phase 2: Structural Splicing Integration', () => {
 
       // First note with no transpose
       consumer.runUntilTick(50)
-      expect(consumer.getEvents()[0].pitch).toBe(60)
+      expect(consumer.getEvents()[0].pitch).toBe(6000)
 
       // Set transpose before second note
       linker.setTranspose(5)
 
       consumer.runUntilTick(150)
-      expect(consumer.getEvents()[1].pitch).toBe(65) // Transposed
+      expect(consumer.getEvents()[1].pitch).toBe(6500) // Transposed
     })
   })
 
@@ -502,7 +502,7 @@ describe('RFC-043 Phase 2: Structural Splicing Integration', () => {
       // The trigger tick should be offset from 200
       // (may be 200 if hash happens to give 0, but usually offset)
       // Just verify the event was emitted
-      expect(events[0].pitch).toBe(60)
+      expect(events[0].pitch).toBe(6000)
     })
 
     it('should produce consistent results with same seed', () => {
@@ -581,8 +581,8 @@ describe('RFC-043 Phase 2: Structural Splicing Integration', () => {
 
       const events = consumer.getEvents()
       expect(events).toHaveLength(2)
-      expect(events[0].pitch).toBe(64)
-      expect(events[1].pitch).toBe(67)
+      expect(events[0].pitch).toBe(6400)
+      expect(events[1].pitch).toBe(6700)
     })
   })
 

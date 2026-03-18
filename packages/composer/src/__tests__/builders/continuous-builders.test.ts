@@ -2,7 +2,9 @@
  * Tests for RFC-060 Task 6: NoteBuilder + DegreeBuilder cent-based migration.
  */
 
+import { describe, it, expect } from 'vitest'
 import { BaseCompositionBridge } from '../../composition/BaseCompositionBridge'
+import { testNotation } from '../test-utils'
 import { NoteBuilder } from '../../builders/NoteBuilder'
 import { DegreeBuilder } from '../../builders/DegreeBuilder'
 import { note } from '../../cues/note'
@@ -20,14 +22,14 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
   describe('NoteBuilder', () => {
     it('note("C4") resolves to 4800 cents', () => {
       const builder = note('C4')
-      const b = new BaseCompositionBridge()
+      const b = new BaseCompositionBridge({ notation: testNotation })
       const result = builder.apply(b) as BaseCompositionBridge
       expect(result.tick).toBeGreaterThan(0)
     })
 
     it('note(4800) with numeric cents creates correctly', () => {
       const builder = note(4800)
-      const b = new BaseCompositionBridge()
+      const b = new BaseCompositionBridge({ notation: testNotation })
       const result = builder.apply(b) as BaseCompositionBridge
       expect(result.tick).toBeGreaterThan(0)
     })
@@ -54,7 +56,7 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
     })
 
     it('repeat works with cents-based notes', () => {
-      const b = new BaseCompositionBridge({ defaultDuration: 480 })
+      const b = new BaseCompositionBridge({ notation: testNotation, defaultDuration: 480 })
       const result = note('C4').repeat(3).apply(b) as BaseCompositionBridge
       // 3 × 480 = 1440
       expect(result.tick).toBe(1440)
@@ -67,14 +69,14 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
 
     it('note() without args defaults to C4', () => {
       const builder = note()
-      const b = new BaseCompositionBridge({ defaultDuration: 480 })
+      const b = new BaseCompositionBridge({ notation: testNotation, defaultDuration: 480 })
       const result = builder.apply(b) as BaseCompositionBridge
       expect(result.tick).toBe(480)
     })
 
     it('note with explicit duration', () => {
       const builder = note('E4', 240)
-      const b = new BaseCompositionBridge()
+      const b = new BaseCompositionBridge({ notation: testNotation })
       const result = builder.apply(b) as BaseCompositionBridge
       expect(result.tick).toBe(240)
     })
@@ -86,7 +88,8 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
 
     it('degree(1) with scaleIntervals resolves to root', () => {
       const b = new BaseCompositionBridge({
-        scaleRootCents: 4800, // C4
+        notation: testNotation,
+        scaleRootCents: 4800,
         scaleIntervals: majorIntervals,
         defaultDuration: 480,
       })
@@ -96,7 +99,8 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
 
     it('degree(5) resolves to fifth (root + 700 cents)', () => {
       const b = new BaseCompositionBridge({
-        scaleRootCents: 4800, // C4
+        notation: testNotation,
+        scaleRootCents: 4800,
         scaleIntervals: majorIntervals,
         defaultDuration: 480,
       })
@@ -106,6 +110,7 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
 
     it('degree with sharp adds 100 cents', () => {
       const b = new BaseCompositionBridge({
+        notation: testNotation,
         scaleRootCents: 4800,
         scaleIntervals: majorIntervals,
         defaultDuration: 480,
@@ -115,13 +120,14 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
     })
 
     it('degree(1) falls back to legacy when no scaleIntervals', () => {
-      const b = new BaseCompositionBridge({ defaultDuration: 480 })
+      const b = new BaseCompositionBridge({ notation: testNotation, defaultDuration: 480 })
       const result = degree(1).apply(b) as BaseCompositionBridge
       expect(result.tick).toBe(480) // Should still emit via legacy path
     })
 
     it('repeat works with degree', () => {
       const b = new BaseCompositionBridge({
+        notation: testNotation,
         scaleRootCents: 4800,
         scaleIntervals: majorIntervals,
         defaultDuration: 480,
@@ -133,13 +139,13 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
 
   describe('OffsetBuilder (updated)', () => {
     it('offset(0) now passes cents directly to withNote', () => {
-      const b = new BaseCompositionBridge({ defaultDuration: 480 })
+      const b = new BaseCompositionBridge({ notation: testNotation, defaultDuration: 480 })
       const result = offset(0).apply(b) as BaseCompositionBridge
       expect(result.tick).toBe(480)
     })
 
     it('offset with sharp() uses ±100 cents', () => {
-      const b = new BaseCompositionBridge({ defaultDuration: 480 })
+      const b = new BaseCompositionBridge({ notation: testNotation, defaultDuration: 480 })
       const result = offset(0).sharp().apply(b) as BaseCompositionBridge
       expect(result.tick).toBe(480)
     })
@@ -147,25 +153,25 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
 
   describe('Setter cues (cents)', () => {
     it('transpose() sets transposeCents', () => {
-      const b = new BaseCompositionBridge()
+      const b = new BaseCompositionBridge({ notation: testNotation })
       const result = transpose(700).apply(b) as BaseCompositionBridge
       expect(result.transposeCents).toBe(700)
     })
 
     it('octaveUp() adds 1200 cents', () => {
-      const b = new BaseCompositionBridge()
+      const b = new BaseCompositionBridge({ notation: testNotation })
       const result = octaveUp(1).apply(b) as BaseCompositionBridge
       expect(result.transposeCents).toBe(1200)
     })
 
     it('octaveDown() subtracts 1200 cents', () => {
-      const b = new BaseCompositionBridge()
+      const b = new BaseCompositionBridge({ notation: testNotation })
       const result = octaveDown(1).apply(b) as BaseCompositionBridge
       expect(result.transposeCents).toBe(-1200)
     })
 
     it('octaveUp(2) adds 2400 cents', () => {
-      const b = new BaseCompositionBridge()
+      const b = new BaseCompositionBridge({ notation: testNotation })
       const result = octaveUp(2).apply(b) as BaseCompositionBridge
       expect(result.transposeCents).toBe(2400)
     })
@@ -173,7 +179,7 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
 
   describe('Non-regression', () => {
     it('velocity/duration/repeat are unaffected by cent migration', () => {
-      const b = new BaseCompositionBridge({ defaultDuration: 480 })
+      const b = new BaseCompositionBridge({ notation: testNotation, defaultDuration: 480 })
       const result = note('C4')
         .velocity(500)
         .repeat(2)
@@ -183,6 +189,7 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
 
     it('continuous bridge fields survive note emission', () => {
       const b = new BaseCompositionBridge({
+        notation: testNotation,
         tuningHz: 432,
         transposeCents: 700,
         defaultDuration: 480,

@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest'
 import { Clip } from '../Clip'
 import { note } from '../cues/note'
-import { createBridge, commitAndCapture } from './test-utils'
+import { createBridge, commitAndCapture, testNotation } from './test-utils'
 
 describe('Clip', () => {
 
@@ -23,7 +23,7 @@ describe('Clip', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
 
     it('should create a Clip with multiple steps', () => {
@@ -33,9 +33,9 @@ describe('Clip', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
     })
 
     it('should create an empty Clip when no steps provided', () => {
@@ -80,9 +80,9 @@ describe('Clip', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
     })
 
     it('should not mutate the original clip', () => {
@@ -101,7 +101,7 @@ describe('Clip', () => {
   describe('Clip.freeze', () => {
     it('should freeze a clip and return IFrozenClip', () => {
       const clip = Clip.pipe(note('C4'), note('E4'))
-      const frozen = Clip.freeze(clip)
+      const frozen = Clip.freeze(clip, testNotation)
 
       expect(frozen).toBeDefined()
       expect(frozen.noteCount).toBe(2)

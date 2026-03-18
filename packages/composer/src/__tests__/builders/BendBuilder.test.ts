@@ -26,7 +26,7 @@ describe('BendBuilder', () => {
 
       const { notes, bends } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
       expect(bends.some(b => b.value === 8192)).toBe(true)
     })
 
@@ -84,8 +84,8 @@ describe('BendBuilder', () => {
 
       const { notes, bends } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
       // Should have bend set, note, bend reset, note
       expect(bends.length).toBeGreaterThanOrEqual(2)
     })
@@ -99,8 +99,8 @@ describe('BendBuilder', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6700)
     })
   })
 

@@ -28,20 +28,20 @@ describe('TrillBuilder', () => {
       // hitCount = floor(480/120) = 4
       // i=0: base (C4=60), i=1: upper (E4=64), i=2: base, i=3: upper
       expect(notes).toHaveLength(4)
-      expect(notes[0].pitch).toBe(60) // base
-      expect(notes[1].pitch).toBe(64) // upper
-      expect(notes[2].pitch).toBe(60) // base
-      expect(notes[3].pitch).toBe(64) // upper
+      expect(notes[0].pitch).toBe(6000) // base
+      expect(notes[1].pitch).toBe(6400) // upper
+      expect(notes[2].pitch).toBe(6000) // base
+      expect(notes[3].pitch).toBe(6400) // upper
     })
 
     it('trill with numeric pitches should resolve correctly', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = trill(64, 60).rate(240).duration(480).apply(bridge)
+      const result = trill(6400, 6000).rate(240).duration(480).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(2) // floor(480/240)=2
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
     })
 
     it('trill with basePitch higher than pitch should still alternate', () => {
@@ -50,8 +50,8 @@ describe('TrillBuilder', () => {
       const result = trill('E4', 'C4').rate(240).duration(480).apply(bridge)
 
       const { notes } = commitAndCapture(result)
-      expect(notes[0].pitch).toBe(60) // base first (even i)
-      expect(notes[1].pitch).toBe(64) // upper second (odd i)
+      expect(notes[0].pitch).toBe(6000) // base first (even i)
+      expect(notes[1].pitch).toBe(6400) // upper second (odd i)
     })
   })
 
@@ -83,8 +83,8 @@ describe('TrillBuilder', () => {
       const result = trill('E4', 'C4').basePitch('D4').rate(240).duration(480).apply(bridge)
 
       const { notes } = commitAndCapture(result)
-      expect(notes[0].pitch).toBe(62) // D4
-      expect(notes[1].pitch).toBe(64) // E4
+      expect(notes[0].pitch).toBe(6200) // D4
+      expect(notes[1].pitch).toBe(6400) // E4
     })
 
     it('.pitch() should override upper', () => {
@@ -92,8 +92,8 @@ describe('TrillBuilder', () => {
       const result = trill('E4', 'C4').pitch('F4').rate(240).duration(480).apply(bridge)
 
       const { notes } = commitAndCapture(result)
-      expect(notes[0].pitch).toBe(60) // base C4
-      expect(notes[1].pitch).toBe(65) // upper F4
+      expect(notes[0].pitch).toBe(6000) // base C4
+      expect(notes[1].pitch).toBe(6500) // upper F4
     })
   })
 
@@ -127,7 +127,7 @@ describe('TrillBuilder', () => {
       const baseResult = commitAndCapture(withBase.rate(240).duration(480).apply(bridge))
 
       expect(rateResult.notes[0].duration).toBe(120)
-      expect(baseResult.notes[0].pitch).toBe(62)
+      expect(baseResult.notes[0].pitch).toBe(6200)
     })
   })
 

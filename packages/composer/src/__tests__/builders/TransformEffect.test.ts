@@ -62,8 +62,8 @@ describe('TransformEffect / isTransformEffect', () => {
       expect(notes).toHaveLength(2)
       // Original order: C4 first @ tick 0, E4 second @ tick 480
       // Reversed: E4 first @ tick 0, C4 last @ tick 480
-      expect(notes[0].pitch).toBe(64) // E4
-      expect(notes[1].pitch).toBe(60) // C4
+      expect(notes[0].pitch).toBe(6400) // E4
+      expect(notes[1].pitch).toBe(6000) // C4
       expect(notes[0].tick).toBe(0)
       expect(notes[1].tick).toBe(480)
     })
@@ -80,8 +80,8 @@ describe('TransformEffect / isTransformEffect', () => {
       expect(notes).toHaveLength(2)
       // C4: original tick 0, duration 480 → tick 0, duration 960
       // E4: original tick 480, duration 480 → tick 960, duration 960
-      expect(notes[0]).toMatchObject({ pitch: 60, tick: 0, duration: 960 })
-      expect(notes[1]).toMatchObject({ pitch: 64, tick: 960, duration: 960 })
+      expect(notes[0]).toMatchObject({ pitch: 6000, tick: 0, duration: 960 })
+      expect(notes[1]).toMatchObject({ pitch: 6400, tick: 960, duration: 960 })
     })
   })
 
@@ -118,8 +118,8 @@ describe('TransformEffect / isTransformEffect', () => {
       expect(notes).toHaveLength(2)
       // Inner reverse: E4 first, C4 last
       // Stretch(2): E4 @ 0 dur 960, C4 @ 960 dur 960
-      expect(notes[0]).toMatchObject({ pitch: 64, tick: 0, duration: 960 })
-      expect(notes[1]).toMatchObject({ pitch: 60, tick: 960, duration: 960 })
+      expect(notes[0]).toMatchObject({ pitch: 6400, tick: 0, duration: 960 })
+      expect(notes[1]).toMatchObject({ pitch: 6000, tick: 960, duration: 960 })
     })
   })
 })

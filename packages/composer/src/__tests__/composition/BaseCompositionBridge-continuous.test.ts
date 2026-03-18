@@ -17,8 +17,9 @@ describe('RFC-060: BaseCompositionBridge Continuous Pitch', () => {
       expect(b.keyRootCents).toBeNull()
     })
 
-    it('scaleIntervals defaults to null', () => {
-      expect(b.scaleIntervals).toBeNull()
+    it('scaleIntervals defaults to notation/ionian when not set', () => {
+      expect(b.scaleIntervals).not.toBeNull()
+      expect(Array.isArray(b.scaleIntervals)).toBe(true)
     })
 
     it('temperament defaults to null', () => {
@@ -81,7 +82,7 @@ describe('RFC-060: BaseCompositionBridge Continuous Pitch', () => {
       const intervals = [0, 200, 400, 500, 700, 900, 1100]
       const b = base.withScaleIntervals(intervals)
       expect(b.scaleIntervals).toBe(intervals)
-      expect(base.scaleIntervals).toBeNull()
+      expect(base.scaleIntervals).not.toBeNull()
     })
 
     it('withTemperament returns new bridge with updated value', () => {

@@ -33,11 +33,11 @@ describe('GlideBridge', () => {
     it('should send CC PORTAMENTO 127 before first note when not activated', () => {
       const gb = createGlideBridge(false)
 
-      const result = gb.withNote(60, 480)
+      const result = gb.withNote(6000, 480)
       const { notes, cc } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
 
       expect(cc).toHaveLength(1)
       expect(cc[0].controller).toBe(MIDI_CC.PORTAMENTO)
@@ -47,12 +47,12 @@ describe('GlideBridge', () => {
     it('should order CC before note (visitCC captures in emission order)', () => {
       const gb = createGlideBridge(false)
 
-      const result = gb.withNote(60, 480)
+      const result = gb.withNote(6000, 480)
       const { notes, cc } = commitAndCapture(result)
 
       expect(cc[0].controller).toBe(MIDI_CC.PORTAMENTO)
       expect(cc[0].value).toBe(127)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
       // CC should be at same or earlier tick than first note
       expect(cc[0].tick).toBeLessThanOrEqual(notes[0].tick)
     })
@@ -66,14 +66,14 @@ describe('GlideBridge', () => {
     it('should emit second note without adding another portamento CC', () => {
       const gb = createGlideBridge(false)
 
-      let result = gb.withNote(60, 480)
-      result = result.withNote(64, 480)
+      let result = gb.withNote(6000, 480)
+      result = result.withNote(6400, 480)
 
       const { notes, cc } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
 
       // Only one CC (portamento 127 from first note)
       expect(cc).toHaveLength(1)
@@ -84,16 +84,16 @@ describe('GlideBridge', () => {
     it('should emit multiple subsequent notes without additional CC', () => {
       const gb = createGlideBridge(false)
 
-      let result = gb.withNote(60, 480)
-      result = result.withNote(64, 480)
-      result = result.withNote(67, 480)
+      let result = gb.withNote(6000, 480)
+      result = result.withNote(6400, 480)
+      result = result.withNote(6700, 480)
 
       const { notes, cc } = commitAndCapture(result)
 
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
 
       expect(cc).toHaveLength(1)
       expect(cc[0].value).toBe(127)
@@ -108,8 +108,8 @@ describe('GlideBridge', () => {
     it('should send CC PORTAMENTO 0 when activated', () => {
       const gb = createGlideBridge(false)
 
-      let result = gb.withNote(60, 480)
-      result = result.withNote(64, 480)
+      let result = gb.withNote(6000, 480)
+      result = result.withNote(6400, 480)
       const flushed = (result as GlideBridge).flush()
 
       const { notes, cc } = commitAndCapture(flushed)
@@ -141,8 +141,8 @@ describe('GlideBridge', () => {
     it('should capture all CC events in emission order', () => {
       const gb = createGlideBridge(false)
 
-      let result = gb.withNote(60, 480)
-      result = result.withNote(64, 480)
+      let result = gb.withNote(6000, 480)
+      result = result.withNote(6400, 480)
       const flushed = (result as GlideBridge).flush()
 
       const { cc } = commitAndCapture(flushed)

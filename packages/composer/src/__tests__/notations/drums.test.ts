@@ -20,7 +20,6 @@ describe('drums', () => {
 
       expect(notes).toHaveLength(1)
       expect(notes[0].pitch).toBe(GM_DRUM.BASS_DRUM_1)
-      expect(notes[0].pitch).toBe(36)
     })
 
     it('should use custom duration when provided', () => {
@@ -61,7 +60,6 @@ describe('drums', () => {
 
       expect(notes).toHaveLength(1)
       expect(notes[0].pitch).toBe(GM_DRUM.ACOUSTIC_SNARE)
-      expect(notes[0].pitch).toBe(38)
     })
 
     it('should use custom duration when provided', () => {
@@ -209,7 +207,7 @@ describe('drums', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(36)
+      expect(notes[0].pitch).toBe(GM_DRUM.BASS_DRUM_1)
     })
   })
 })

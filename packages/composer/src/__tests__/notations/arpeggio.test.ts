@@ -37,20 +37,20 @@ describe('arpeggio', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
     })
 
-    it('arpeggio([60, 64, 67]) with MIDI numbers should emit same pitches', () => {
+    it('arpeggio([6000, 6400, 6700]) with MIDI numbers should emit same pitches', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = arpeggio([60, 64, 67]).apply(bridge)
+      const result = arpeggio([6000, 6400, 6700]).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
     })
 
     it('arpeggio with rate should use rate for step duration', () => {
@@ -91,9 +91,9 @@ describe('arpeggio', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
     })
   })
 

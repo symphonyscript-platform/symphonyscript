@@ -32,7 +32,7 @@ describe('bend', () => {
 
       const { notes, bends } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
       expect(bends.length).toBeGreaterThanOrEqual(1)
       expect(bends.some(b => b.value === 8192)).toBe(true)
     })
@@ -43,7 +43,7 @@ describe('bend', () => {
 
       const { notes, bends } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6400)
       expect(bends.some(b => b.value === 16383)).toBe(true)
     })
 
@@ -53,7 +53,7 @@ describe('bend', () => {
 
       const { notes, bends } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6700)
       expect(bends.some(b => b.value === 0)).toBe(true)
     })
 
@@ -75,8 +75,8 @@ describe('bend', () => {
 
       const { notes, bends } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
       expect(bends.length).toBeGreaterThanOrEqual(2)
     })
   })

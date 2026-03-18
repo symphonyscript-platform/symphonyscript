@@ -62,7 +62,7 @@ import { HDR, COMMIT, NULL_PTR } from '../constants'
 
 function createTestNote(overrides: Partial<EditorNoteData> = {}): EditorNoteData {
   return {
-    pitch: 60,
+    pitch: 6000,
     velocity: 100,
     duration: 480,
     baseTick: 0,
@@ -117,7 +117,7 @@ describe('E2E Live Coding - Full Flow', () => {
 
     // Editor inserts note via bridge
     const sourceId = bridge._insertNoteImmediate(
-      createTestNote({ pitch: 64, velocity: 80, baseTick: 0, duration: 480 })
+      createTestNote({ pitch: 6400, velocity: 80, baseTick: 0, duration: 480 })
     )
 
     // Consumer advances and collects events
@@ -125,7 +125,7 @@ describe('E2E Live Coding - Full Flow', () => {
     const events = consumer.getCollectedEvents()
 
     expect(events.length).toBe(1)
-    expect(events[0].pitch).toBe(64)
+    expect(events[0].pitch).toBe(6400)
     expect(events[0].velocity).toBe(80)
     expect(events[0].duration).toBe(480)
 
@@ -161,7 +161,7 @@ describe('E2E Live Coding - Full Flow', () => {
     const events = consumer.getCollectedEvents()
 
     expect(events.length).toBe(1)
-    expect(events[0].pitch).toBe(72)
+    expect(events[0].pitch).toBe(7200)
   })
 
   test('muted notes are not consumed', () => {
@@ -199,7 +199,7 @@ describe('E2E Live Coding - Real-Time Edits', () => {
     consumer.advance(480)
     let events = consumer.getCollectedEvents()
     expect(events.length).toBe(1)
-    expect(events[0].pitch).toBe(60)
+    expect(events[0].pitch).toBe(6000)
 
     // Insert new note at tick 720 AFTER the note at tick 0
     // This ensures proper chain ordering
@@ -211,9 +211,9 @@ describe('E2E Live Coding - Real-Time Edits', () => {
 
     // Should have seen all 3 notes: pitch 60 at tick 0, pitch 67 at tick 720, pitch 64 at tick 960
     expect(events.length).toBe(3)
-    expect(events[0].pitch).toBe(60)
-    expect(events[1].pitch).toBe(67)
-    expect(events[2].pitch).toBe(64)
+    expect(events[0].pitch).toBe(6000)
+    expect(events[1].pitch).toBe(6700)
+    expect(events[2].pitch).toBe(6400)
   })
 
   test('edit while playback advances - delete ahead of playhead', () => {
@@ -237,7 +237,7 @@ describe('E2E Live Coding - Real-Time Edits', () => {
 
     // Should only have seen the first note
     expect(events.length).toBe(1)
-    expect(events[0].pitch).toBe(60)
+    expect(events[0].pitch).toBe(6000)
   })
 
   test('rapid pitch edits are coalesced via debounce', () => {
@@ -325,7 +325,7 @@ describe('E2E Live Coding - Source Location Tracking', () => {
     consumer.advance(960)
     const events = consumer.getCollectedEvents()
     expect(events.length).toBe(1)
-    expect(events[0].pitch).toBe(72)
+    expect(events[0].pitch).toBe(7200)
 
     // Verify we can get back to source via nodePtr
     const nodePtr = bridge.getNodePtr(sourceId)
@@ -457,9 +457,9 @@ describe('E2E Live Coding - Clip Operations', () => {
 
     // First note from original clip, plus two from new clip
     expect(events.length).toBe(3)
-    expect(events[0].pitch).toBe(60)
-    expect(events[1].pitch).toBe(72)
-    expect(events[2].pitch).toBe(74)
+    expect(events[0].pitch).toBe(6000)
+    expect(events[1].pitch).toBe(7200)
+    expect(events[2].pitch).toBe(7400)
   })
 })
 

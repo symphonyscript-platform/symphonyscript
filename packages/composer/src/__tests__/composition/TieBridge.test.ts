@@ -32,18 +32,18 @@ describe('TieBridge', () => {
       const tb = createTieBridge(480)
 
       // Two same-pitch notes (60, 60): first emits, second accumulates; flush adds accumulated note
-      let result = tb.withNote(60, 480)
-      result = result.withNote(60, 480)
+      let result = tb.withNote(6000, 480)
+      result = result.withNote(6000, 480)
 
       const flushed = (result as TieBridge).flush()
       const { notes } = commitAndCapture(flushed)
 
       // Actual: 2 notes — initial emit (480) + flush with accumulated (960)
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
       expect(notes[0].duration).toBe(480)
       expect(notes[0].tick).toBe(0)
-      expect(notes[1].pitch).toBe(60)
+      expect(notes[1].pitch).toBe(6000)
       expect(notes[1].duration).toBe(960)
       expect(notes[1].tick).toBe(0)
     })
@@ -52,27 +52,27 @@ describe('TieBridge', () => {
       const tb = createTieBridge(480)
 
       // Four same-pitch notes — first emits 480, rest accumulate to 1920 total
-      let result = tb.withNote(60, 480)
-      result = result.withNote(60, 480)
-      result = result.withNote(60, 480)
-      result = result.withNote(60, 480)
+      let result = tb.withNote(6000, 480)
+      result = result.withNote(6000, 480)
+      result = result.withNote(6000, 480)
+      result = result.withNote(6000, 480)
 
       const flushed = (result as TieBridge).flush()
       const { notes } = commitAndCapture(flushed)
 
       // Actual: 2 notes — initial (480) + flush with full accumulated (1920)
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
       expect(notes[0].duration).toBe(480)
-      expect(notes[1].pitch).toBe(60)
+      expect(notes[1].pitch).toBe(6000)
       expect(notes[1].duration).toBe(1920)
     })
 
     it('should advance tick correctly when accumulating same-pitch notes', () => {
       const tb = createTieBridge(480)
 
-      let result = tb.withNote(60, 480)
-      result = result.withNote(60, 480)
+      let result = tb.withNote(6000, 480)
+      result = result.withNote(6000, 480)
 
       expect(result.tick).toBe(960)
     })
@@ -87,21 +87,21 @@ describe('TieBridge', () => {
       const tb = createTieBridge(480)
 
       // 60, 60 (same) then 62 (different): first 60 emits, second accumulates, flush adds tied note, then 62
-      let result = tb.withNote(60, 480)
-      result = result.withNote(60, 480)
-      result = result.withNote(62, 480)
+      let result = tb.withNote(6000, 480)
+      result = result.withNote(6000, 480)
+      result = result.withNote(6200, 480)
 
       const { notes } = commitAndCapture(result)
 
       // Actual: 3 notes — initial 60 (480), flush 60 (960), new 62 (480)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
       expect(notes[0].duration).toBe(480)
       expect(notes[0].tick).toBe(0)
-      expect(notes[1].pitch).toBe(60)
+      expect(notes[1].pitch).toBe(6000)
       expect(notes[1].duration).toBe(960)
       expect(notes[1].tick).toBe(0)
-      expect(notes[2].pitch).toBe(62)
+      expect(notes[2].pitch).toBe(6200)
       expect(notes[2].duration).toBe(480)
       expect(notes[2].tick).toBe(960)
     })
@@ -110,28 +110,28 @@ describe('TieBridge', () => {
       const tb = createTieBridge(480)
 
       // 60, 60, 62, 62, 64 — first of each emits, same-pitch accumulates; each change flushes and adds
-      let result = tb.withNote(60, 480)
-      result = result.withNote(60, 480)
-      result = result.withNote(62, 480)
-      result = result.withNote(62, 480)
-      result = result.withNote(64, 480)
+      let result = tb.withNote(6000, 480)
+      result = result.withNote(6000, 480)
+      result = result.withNote(6200, 480)
+      result = result.withNote(6200, 480)
+      result = result.withNote(6400, 480)
 
       const { notes } = commitAndCapture(result)
 
       // Actual: 5 notes — 60/480, 60/960, 62/480, 62/960 (flush at emitTick=960), 64/480
       expect(notes).toHaveLength(5)
-      expect(notes[0]).toMatchObject({ pitch: 60, duration: 480, tick: 0 })
-      expect(notes[1]).toMatchObject({ pitch: 60, duration: 960, tick: 0 })
-      expect(notes[2]).toMatchObject({ pitch: 62, duration: 480, tick: 960 })
-      expect(notes[3]).toMatchObject({ pitch: 62, duration: 960, tick: 960 })
-      expect(notes[4]).toMatchObject({ pitch: 64, duration: 480, tick: 1920 })
+      expect(notes[0]).toMatchObject({ pitch: 6000, duration: 480, tick: 0 })
+      expect(notes[1]).toMatchObject({ pitch: 6000, duration: 960, tick: 0 })
+      expect(notes[2]).toMatchObject({ pitch: 6200, duration: 480, tick: 960 })
+      expect(notes[3]).toMatchObject({ pitch: 6200, duration: 960, tick: 960 })
+      expect(notes[4]).toMatchObject({ pitch: 6400, duration: 480, tick: 1920 })
     })
 
     it('should use default duration when not provided', () => {
       const tb = createTieBridge(240)
 
-      let result = tb.withNote(60) // uses defaultDuration 240
-      result = result.withNote(62)
+      let result = tb.withNote(6000) // uses defaultDuration 240
+      result = result.withNote(6200)
 
       const { notes } = commitAndCapture(result)
       // Actual: 3 notes — initial 60, flush 60 (same duration), then 62
@@ -150,8 +150,8 @@ describe('TieBridge', () => {
     it('should add accumulated note when flushed (2 notes total: initial + flush)', () => {
       const tb = createTieBridge(480)
 
-      let result = tb.withNote(60, 480)
-      result = result.withNote(60, 480)
+      let result = tb.withNote(6000, 480)
+      result = result.withNote(6000, 480)
 
       const flushed = (result as TieBridge).flush()
       const { notes } = commitAndCapture(flushed)
@@ -187,16 +187,16 @@ describe('TieBridge', () => {
     it('should add second note when single note then flushed (2 notes: emit + flush)', () => {
       const tb = createTieBridge(480)
 
-      const result = tb.withNote(60, 480)
+      const result = tb.withNote(6000, 480)
       const flushed = (result as TieBridge).flush()
       const { notes } = commitAndCapture(flushed)
 
       // Actual: first note emits on entry, flush adds duplicate with same duration
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
       expect(notes[0].duration).toBe(480)
       expect(notes[0].tick).toBe(0)
-      expect(notes[1].pitch).toBe(60)
+      expect(notes[1].pitch).toBe(6000)
       expect(notes[1].duration).toBe(480)
       expect(notes[1].tick).toBe(0)
     })

@@ -43,7 +43,7 @@ describe('VelocityRampBridge', () => {
       })
 
       // First note at tick 0: progress 0 → velocity 64
-      const r1 = vr.withNote(60, 480)
+      const r1 = vr.withNote(6000, 480)
       const { notes: n1 } = commitAndCapture(r1)
       expect(n1[0].velocity).toBe(64)
     })
@@ -58,8 +58,8 @@ describe('VelocityRampBridge', () => {
       })
 
       // Note 1 at tick 0, Note 2 at tick 480 (mid)
-      let b = vr.withNote(60, 480)
-      b = b.withNote(60, 480)
+      let b = vr.withNote(6000, 480)
+      b = b.withNote(6000, 480)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
@@ -77,9 +77,9 @@ describe('VelocityRampBridge', () => {
       })
 
       // 3 notes: ticks 0, 480, 960
-      let b = vr.withNote(60, 480)
-      b = b.withNote(60, 480)
-      b = b.withNote(60, 480)
+      let b = vr.withNote(6000, 480)
+      b = b.withNote(6000, 480)
+      b = b.withNote(6000, 480)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
@@ -102,8 +102,8 @@ describe('VelocityRampBridge', () => {
       })
 
       // Mid: progress 0.5 → eased 0.25 → velocity 64 + 63*0.25 = 79.75 → 80
-      let b = vr.withNote(60, 480)
-      b = b.withNote(60, 480)
+      let b = vr.withNote(6000, 480)
+      b = b.withNote(6000, 480)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
@@ -137,8 +137,8 @@ describe('VelocityRampBridge', () => {
         curve: 'smooth',
       })
 
-      let b = vr240.withNote(60, 240)
-      b = b.withNote(60, 240)
+      let b = vr240.withNote(6000, 240)
+      b = b.withNote(6000, 240)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
@@ -161,7 +161,7 @@ describe('VelocityRampBridge', () => {
         curve: 'linear',
       })
 
-      const result = vr.withNote(60, 480)
+      const result = vr.withNote(6000, 480)
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
       // Bypass passes through default velocity (100), not ramped
@@ -178,7 +178,7 @@ describe('VelocityRampBridge', () => {
         curve: 'linear',
       })
 
-      const result = vr.withNote(60, 480)
+      const result = vr.withNote(6000, 480)
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
       expect(notes[0].velocity).toBe(100)

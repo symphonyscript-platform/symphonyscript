@@ -35,9 +35,9 @@ describe('voiceLead', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)  // C4
-      expect(notes[1].pitch).toBe(64)  // E4
-      expect(notes[2].pitch).toBe(67)  // G4
+      expect(notes[0].pitch).toBe(6000)  // C4
+      expect(notes[1].pitch).toBe(6400)  // E4
+      expect(notes[2].pitch).toBe(6700)  // G4
     })
 
     it('voiceLead(["I","IV"]) should emit I then IV chords', () => {
@@ -51,13 +51,13 @@ describe('voiceLead', () => {
 
       expect(notes).toHaveLength(6)
       // I chord: C, E, G
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
       // IV chord: F, A, C (voice-led, so likely closest octave to previous)
-      expect(notes[3].pitch).toBe(65)  // F4
-      expect(notes[4].pitch).toBe(69)   // A4
-      expect(notes[5].pitch).toBe(72)   // C5
+      expect(notes[3].pitch).toBe(6500)  // F4
+      expect(notes[4].pitch).toBe(6900)   // A4
+      expect(notes[5].pitch).toBe(7200)   // C5
     })
 
     it('voiceLead(["I","V","I"]) should emit I-V-I progression', () => {
@@ -74,14 +74,14 @@ describe('voiceLead', () => {
       const chord1 = notes.slice(0, 3).map(n => n.pitch)
       const chord2 = notes.slice(3, 6).map(n => n.pitch)
       const chord3 = notes.slice(6, 9).map(n => n.pitch)
-      expect(chord1).toContain(60)  // C
-      expect(chord1).toContain(64)  // E
-      expect(chord1).toContain(67)  // G
+      expect(chord1).toContain(6000)  // C
+      expect(chord1).toContain(6400)  // E
+      expect(chord1).toContain(6700)  // G
       // V chord (G, B, D) voice-led from I: G3, B3, D4 minimize movement from C4, E4, G4
-      expect(chord2).toContain(55)  // G (V root)
-      expect(chord2).toContain(59)  // B
-      expect(chord2).toContain(62)  // D
-      expect(chord3).toEqual(expect.arrayContaining([60, 64, 67]))
+      expect(chord2).toContain(5500)  // G (V root)
+      expect(chord2).toContain(5900)  // B
+      expect(chord2).toContain(6200)  // D
+      expect(chord3).toEqual(expect.arrayContaining([6000, 6400, 6700]))
     })
 
     it('should advance tick by total duration', () => {
@@ -136,9 +136,9 @@ describe('voiceLead', () => {
         .apply(bridge)
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(67)  // G
-      expect(notes[1].pitch).toBe(71)  // B
-      expect(notes[2].pitch).toBe(74)  // D
+      expect(notes[0].pitch).toBe(6700)  // G
+      expect(notes[1].pitch).toBe(7100)  // B
+      expect(notes[2].pitch).toBe(7400)  // D
     })
 
     it('.duration() should override duration', () => {

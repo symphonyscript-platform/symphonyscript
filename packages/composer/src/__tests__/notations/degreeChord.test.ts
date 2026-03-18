@@ -8,7 +8,6 @@ import { describe, it, expect } from 'vitest'
 import { degreeChord } from '../../cues/degreeChord'
 import { DegreeChordBuilder } from '../../builders/DegreeChordBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 
 describe('degreeChord', () => {
 
@@ -33,47 +32,44 @@ describe('degreeChord', () => {
     it('degreeChord([1,3,5]) in C major should emit C4, E4, G4 (60, 64, 67)', () => {
       const bridge = createBridge({
         defaultDuration: 480,
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
       })
       const result = degreeChord([1, 3, 5]).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)  // C4
-      expect(notes[1].pitch).toBe(64)  // E4
-      expect(notes[2].pitch).toBe(67)  // G4
+      expect(notes[0].pitch).toBe(6000)  // C4
+      expect(notes[1].pitch).toBe(6400)  // E4
+      expect(notes[2].pitch).toBe(6700)  // G4
     })
 
     it('degreeChord([1,3,5,7]) should emit four-note chord (1,3,5,7)', () => {
       const bridge = createBridge({
         defaultDuration: 480,
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
       })
       const result = degreeChord([1, 3, 5, 7]).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(4)
-      expect(notes[0].pitch).toBe(60)  // C4
-      expect(notes[1].pitch).toBe(64)  // E4
-      expect(notes[2].pitch).toBe(67)  // G4
-      expect(notes[3].pitch).toBe(71)  // B4
+      expect(notes[0].pitch).toBe(6000)  // C4
+      expect(notes[1].pitch).toBe(6400)  // E4
+      expect(notes[2].pitch).toBe(6700)  // G4
+      expect(notes[3].pitch).toBe(7100)  // B4
     })
 
     it('degreeChord([4,6,8]) in C major should emit IV chord (F, A, C)', () => {
       const bridge = createBridge({
         defaultDuration: 480,
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
       })
       const result = degreeChord([4, 6, 8]).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(65)  // F4
-      expect(notes[1].pitch).toBe(69)  // A4
-      expect(notes[2].pitch).toBe(72)  // C5
+      expect(notes[0].pitch).toBe(6500)  // F4
+      expect(notes[1].pitch).toBe(6900)  // A4
+      expect(notes[2].pitch).toBe(7200)  // C5
     })
 
     it('should advance tick by chord duration', () => {
@@ -87,8 +83,7 @@ describe('degreeChord', () => {
     it('should use explicit duration when provided', () => {
       const bridge = createBridge({
         defaultDuration: 480,
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
       })
       const result = degreeChord([1, 3, 5], 240).apply(bridge)
       const { notes } = commitAndCapture(result)
@@ -100,8 +95,7 @@ describe('degreeChord', () => {
     it('should use bridge defaultDuration when duration not provided', () => {
       const bridge = createBridge({
         defaultDuration: 480,
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
       })
       const result = degreeChord([1, 3, 5]).apply(bridge)
       const { notes } = commitAndCapture(result)
@@ -130,23 +124,21 @@ describe('degreeChord', () => {
     it('.degrees() should override degrees', () => {
       const bridge = createBridge({
         defaultDuration: 480,
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
       })
       const result = degreeChord([1])
         .degrees([1, 5])
         .apply(bridge)
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6700)
     })
 
     it('.duration() should override duration', () => {
       const bridge = createBridge({
         defaultDuration: 480,
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
       })
       const result = degreeChord([1, 3, 5])
         .duration(120)

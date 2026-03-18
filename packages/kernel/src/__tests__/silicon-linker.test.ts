@@ -451,7 +451,7 @@ describe('RFC-043: Silicon Linker', () => {
       linker.patchPitch(ptr, 72)
 
       const node = readNodeData(linker, ptr)
-      expect(node?.pitch).toBe(72)
+      expect(node?.pitch).toBe(7200)
     })
 
     it('should patch velocity immediately', () => {
@@ -1100,7 +1100,7 @@ describe('RFC-043: Silicon Linker', () => {
 
       const nodes = collectNodes(linker)
       expect(nodes[0].opcode).toBe(OPCODE.NOTE)
-      expect(nodes[0].pitch).toBe(60)
+      expect(nodes[0].pitch).toBe(6000)
       expect(nodes[0].velocity).toBe(80)
       expect(nodes[0].duration).toBe(96)
       expect(nodes[0].baseTick).toBe(0)

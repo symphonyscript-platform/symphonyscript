@@ -1,15 +1,13 @@
 /**
  * Tests for pitch utilities.
  *
- * Covers:
- *   - resolvePitch: number passthrough, valid note names, invalid note names throw
- *   - resolvePitches: array mapping over mixed inputs
+ * NOTE: resolvePitch/resolvePitches were removed; pitch resolution is now
+ * deferred to apply-time via bridge.notation().noteToCents().
  */
 
 import { describe, it, expect } from 'vitest'
-import { resolvePitch, resolvePitches } from '../../utils/pitch'
 
-describe('pitch', () => {
+describe.skip('pitch (utils removed — resolution deferred to notation)', () => {
 
   // ========================================================================
   // resolvePitch

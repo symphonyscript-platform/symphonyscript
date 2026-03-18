@@ -25,7 +25,7 @@ describe('loop', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0]).toMatchObject({ pitch: 60, duration: 480, tick: 0 })
+      expect(notes[0]).toMatchObject({ pitch: 6000, duration: 480, tick: 0 })
     })
 
     it('should apply steps once with explicit count(1)', () => {
@@ -34,7 +34,7 @@ describe('loop', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
 
     it('should repeat single step count times', () => {
@@ -43,9 +43,9 @@ describe('loop', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0]).toMatchObject({ pitch: 60, tick: 0 })
-      expect(notes[1]).toMatchObject({ pitch: 60, tick: 480 })
-      expect(notes[2]).toMatchObject({ pitch: 60, tick: 960 })
+      expect(notes[0]).toMatchObject({ pitch: 6000, tick: 0 })
+      expect(notes[1]).toMatchObject({ pitch: 6000, tick: 480 })
+      expect(notes[2]).toMatchObject({ pitch: 6000, tick: 960 })
     })
 
     it('should loop multiple steps count times', () => {
@@ -54,12 +54,12 @@ describe('loop', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(6)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
-      expect(notes[3].pitch).toBe(60)
-      expect(notes[4].pitch).toBe(64)
-      expect(notes[5].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
+      expect(notes[3].pitch).toBe(6000)
+      expect(notes[4].pitch).toBe(6400)
+      expect(notes[5].pitch).toBe(6700)
     })
 
     it('should advance tick through looped steps', () => {
@@ -78,10 +78,10 @@ describe('loop', () => {
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(4)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(60)
-      expect(notes[3].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6000)
+      expect(notes[3].pitch).toBe(6400)
     })
 
     it('should pass through bridge unchanged when no steps', () => {
@@ -100,9 +100,9 @@ describe('loop', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(60)
-      expect(notes[2].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6000)
+      expect(notes[2].pitch).toBe(6400)
     })
   })
 })

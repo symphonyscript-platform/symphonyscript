@@ -38,7 +38,7 @@ describe('HumanizationBridge', () => {
   describe('velocity jitter', () => {
     it('should apply velocity jitter so output differs from input', () => {
       const hb = createHumanizationBridge(20, 0, 123)
-      const result = hb.withNote(60, 480, 80)
+      const result = hb.withNote(6000, 480, 80)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
@@ -54,7 +54,7 @@ describe('HumanizationBridge', () => {
         timingAmount: 0,
         rng: new SeededRandom(7),
       })
-      const result = hb.withNote(60, 480)
+      const result = hb.withNote(6000, 480)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
@@ -64,7 +64,7 @@ describe('HumanizationBridge', () => {
 
     it('should not modify velocity when velocityJitter is 0', () => {
       const hb = createHumanizationBridge(0, 10, 42)
-      const result = hb.withNote(60, 480, 100)
+      const result = hb.withNote(6000, 480, 100)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
@@ -79,7 +79,7 @@ describe('HumanizationBridge', () => {
   describe('timing offset', () => {
     it('should apply tick offset so output tick differs from input', () => {
       const hb = createHumanizationBridge(0, 24, 456)
-      const result = hb.withNote(60, 480)
+      const result = hb.withNote(6000, 480)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
@@ -90,7 +90,7 @@ describe('HumanizationBridge', () => {
 
     it('should not modify tick when timingAmount is 0', () => {
       const hb = createHumanizationBridge(10, 0, 42)
-      const result = hb.withNote(60, 480)
+      const result = hb.withNote(6000, 480)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
@@ -99,8 +99,8 @@ describe('HumanizationBridge', () => {
 
     it('should offset tick for subsequent notes at non-zero tick', () => {
       const hb = createHumanizationBridge(0, 12, 99)
-      let b = hb.withNote(60, 480)
-      b = b.withNote(62, 480)
+      let b = hb.withNote(6000, 480)
+      b = b.withNote(6200, 480)
       const { notes } = commitAndCapture(b)
 
       expect(notes).toHaveLength(2)
@@ -119,7 +119,7 @@ describe('HumanizationBridge', () => {
   describe('combined velocity and timing jitter', () => {
     it('should apply both velocity and timing jitter', () => {
       const hb = createHumanizationBridge(15, 20, 777)
-      const result = hb.withNote(60, 480, 100)
+      const result = hb.withNote(6000, 480, 100)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
@@ -143,7 +143,7 @@ describe('HumanizationBridge', () => {
         rng: new SeededRandom(42),
       })
 
-      const result = hb.withNote(60, 480, 80)
+      const result = hb.withNote(6000, 480, 80)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
@@ -162,10 +162,10 @@ describe('HumanizationBridge', () => {
       const hb1 = createHumanizationBridge(20, 24, seed)
       const hb2 = createHumanizationBridge(20, 24, seed)
 
-      let b1 = hb1.withNote(60, 480, 90)
-      b1 = b1.withNote(62, 480, 70)
-      let b2 = hb2.withNote(60, 480, 90)
-      b2 = b2.withNote(62, 480, 70)
+      let b1 = hb1.withNote(6000, 480, 90)
+      b1 = b1.withNote(6200, 480, 70)
+      let b2 = hb2.withNote(6000, 480, 90)
+      b2 = b2.withNote(6200, 480, 70)
 
       const { notes: n1 } = commitAndCapture(b1)
       const { notes: n2 } = commitAndCapture(b2)
@@ -182,8 +182,8 @@ describe('HumanizationBridge', () => {
       const hb1 = createHumanizationBridge(30, 30, 1)
       const hb2 = createHumanizationBridge(30, 30, 2)
 
-      const r1 = hb1.withNote(60, 480, 100)
-      const r2 = hb2.withNote(60, 480, 100)
+      const r1 = hb1.withNote(6000, 480, 100)
+      const r2 = hb2.withNote(6000, 480, 100)
 
       const { notes: n1 } = commitAndCapture(r1)
       const { notes: n2 } = commitAndCapture(r2)

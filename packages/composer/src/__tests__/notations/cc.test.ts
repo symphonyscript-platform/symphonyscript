@@ -31,7 +31,7 @@ describe('cc', () => {
 
       const { notes, cc: capturedCC } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
       expect(capturedCC).toHaveLength(1)
       expect(capturedCC[0].controller).toBe(MIDI_CC.VOLUME)
       expect(capturedCC[0].value).toBe(64)
@@ -90,7 +90,7 @@ describe('cc', () => {
 
       const { notes, cc: capturedCC } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(64)
+      expect(notes[0].pitch).toBe(6400)
       expect(capturedCC[0].controller).toBe(MIDI_CC.BRIGHTNESS)
     })
   })
@@ -113,7 +113,7 @@ describe('cc', () => {
 
       const { notes, cc: capturedCC } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6700)
       expect(capturedCC[0].controller).toBe(MIDI_CC.EFFECT_2)
       expect(capturedCC[0].value).toBe(0)
     })

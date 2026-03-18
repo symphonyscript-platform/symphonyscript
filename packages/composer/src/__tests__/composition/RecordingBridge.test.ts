@@ -24,7 +24,7 @@ describe('RecordingBridge', () => {
   describe('notes capture', () => {
     it('should capture a single note and return it via visitNotes', () => {
       const bridge = new RecordingBridge()
-      bridge.insertNote(60, 100, 480, 0, false, 1)
+      bridge.insertNote(6000, 100, 480, 0, false, 1)
 
       const frozen = bridge.toFrozenClip()
       const notes: Array<{ sourceId: number; pitch: number; velocity: number; duration: number; tick: number; muted: boolean }> = []
@@ -35,7 +35,7 @@ describe('RecordingBridge', () => {
       expect(notes).toHaveLength(1)
       expect(notes[0]).toEqual({
         sourceId: 1,
-        pitch: 60,
+        pitch: 6000,
         velocity: 100,
         duration: 480,
         tick: 0,
@@ -45,9 +45,9 @@ describe('RecordingBridge', () => {
 
     it('should capture multiple notes in insertion order', () => {
       const bridge = new RecordingBridge()
-      bridge.insertNote(60, 100, 480, 0, false, 1)
-      bridge.insertNote(64, 80, 240, 480, false, 2)
-      bridge.insertNote(67, 120, 960, 720, true, 3)
+      bridge.insertNote(6000, 100, 480, 0, false, 1)
+      bridge.insertNote(6400, 80, 240, 480, false, 2)
+      bridge.insertNote(6700, 120, 960, 720, true, 3)
 
       const frozen = bridge.toFrozenClip()
       const notes: Array<{ sourceId: number; pitch: number; velocity: number; duration: number; tick: number; muted: boolean }> = []
@@ -56,15 +56,15 @@ describe('RecordingBridge', () => {
       })
 
       expect(notes).toHaveLength(3)
-      expect(notes[0]).toMatchObject({ pitch: 60, velocity: 100, duration: 480, tick: 0, muted: false, sourceId: 1 })
-      expect(notes[1]).toMatchObject({ pitch: 64, velocity: 80, duration: 240, tick: 480, muted: false, sourceId: 2 })
-      expect(notes[2]).toMatchObject({ pitch: 67, velocity: 120, duration: 960, tick: 720, muted: true, sourceId: 3 })
+      expect(notes[0]).toMatchObject({ pitch: 6000, velocity: 100, duration: 480, tick: 0, muted: false, sourceId: 1 })
+      expect(notes[1]).toMatchObject({ pitch: 6400, velocity: 80, duration: 240, tick: 480, muted: false, sourceId: 2 })
+      expect(notes[2]).toMatchObject({ pitch: 6700, velocity: 120, duration: 960, tick: 720, muted: true, sourceId: 3 })
     })
 
     it('should return note index from insertNote', () => {
       const bridge = new RecordingBridge()
-      const idx0 = bridge.insertNote(60, 100, 480, 0, false, 1)
-      const idx1 = bridge.insertNote(64, 80, 240, 480, false, 2)
+      const idx0 = bridge.insertNote(6000, 100, 480, 0, false, 1)
+      const idx1 = bridge.insertNote(6400, 80, 240, 480, false, 2)
 
       expect(idx0).toBe(0)
       expect(idx1).toBe(1)
@@ -192,7 +192,7 @@ describe('RecordingBridge', () => {
   describe('mixed capture', () => {
     it('should capture notes, CC, and bends together in toFrozenClip', () => {
       const bridge = new RecordingBridge()
-      bridge.insertNote(60, 100, 480, 0, false, 1)
+      bridge.insertNote(6000, 100, 480, 0, false, 1)
       bridge.insertCC(7, 80, 0, 2)
       bridge.insertBend(8192, 240, 3)
 
@@ -214,7 +214,7 @@ describe('RecordingBridge', () => {
       })
 
       expect(notes).toHaveLength(1)
-      expect(notes[0]).toMatchObject({ sourceId: 1, pitch: 60 })
+      expect(notes[0]).toMatchObject({ sourceId: 1, pitch: 6000 })
 
       expect(cc).toHaveLength(1)
       expect(cc[0]).toMatchObject({ sourceId: 2, controller: 7, value: 80 })

@@ -4,6 +4,5 @@
  * roman numerals, key signatures, branded MIDI types.
  */
 
-export * from './western-legacy'
 export * from './western'
 export * from './midi'

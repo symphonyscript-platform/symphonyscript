@@ -10,7 +10,10 @@ import { harmony } from '../../cues/harmony'
 import { note } from '../../cues/note'
 import { HarmonyBuilder } from '../../builders/HarmonyBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { CHORD } from '@symphonyscript/theory'
+/** C major triad in cents */
+const MAJ = [0, 400, 700] as const
+const MIN = [0, 300, 700] as const
+const MAJ7 = [0, 400, 700, 1100] as const
 
 describe('harmony', () => {
 
@@ -21,65 +24,65 @@ describe('harmony', () => {
     })
 
     it('harmony(mask) should return HarmonyBuilder', () => {
-      const result = harmony(CHORD.MAJ)
+      const result = harmony(MAJ)
       expect(result).toBeInstanceOf(HarmonyBuilder)
     })
 
     it('harmony(mask, root, duration) should return HarmonyBuilder', () => {
-      const result = harmony(CHORD.MAJ, 60, 240)
+      const result = harmony(MAJ, 6000, 240)
       expect(result).toBeInstanceOf(HarmonyBuilder)
     })
   })
 
   describe('harmony mask and root', () => {
-    it('harmony(CHORD.MAJ, 60) should emit C major triad (60, 64, 67)', () => {
+    it('harmony(MAJ, 6000) should emit C major triad', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = harmony(CHORD.MAJ, 60).apply(bridge)
+      const result = harmony(MAJ, 6000).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
     })
 
-    it('harmony(CHORD.MIN, 69) should emit A minor triad (69, 72, 76)', () => {
+    it('harmony(MIN, 6900) should emit A minor triad', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = harmony(CHORD.MIN, 69).apply(bridge)
+      const result = harmony(MIN, 6900).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(69)
-      expect(notes[1].pitch).toBe(72)
-      expect(notes[2].pitch).toBe(76)
+      expect(notes[0].pitch).toBe(6900)
+      expect(notes[1].pitch).toBe(7200)
+      expect(notes[2].pitch).toBe(7600)
     })
 
-    it('harmony(CHORD.MAJ7, 60) should emit Cmaj7 (60, 64, 67, 71)', () => {
+    it('harmony(MAJ7, 6000) should emit Cmaj7', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = harmony(CHORD.MAJ7, 60).apply(bridge)
+      const result = harmony(MAJ7, 6000).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(4)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[1].pitch).toBe(64)
-      expect(notes[2].pitch).toBe(67)
-      expect(notes[3].pitch).toBe(71)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[1].pitch).toBe(6400)
+      expect(notes[2].pitch).toBe(6700)
+      expect(notes[3].pitch).toBe(7100)
     })
 
-    it('harmony(CHORD.MAJ, "C4") should resolve root and emit C major', () => {
+    it('harmony(MAJ, "C4") should resolve root and emit C major', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = harmony(CHORD.MAJ, 'C4').apply(bridge)
+      const result = harmony(MAJ, 'C4').apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60)
+      expect(notes[0].pitch).toBe(6000)
     })
   })
 
   describe('duration', () => {
     it('should use explicit duration when provided', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = harmony(CHORD.MAJ, 60, 240).apply(bridge)
+      const result = harmony(MAJ, 6000, 240).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes[0].duration).toBe(240)
@@ -87,7 +90,7 @@ describe('harmony', () => {
 
     it('should use bridge defaultDuration when duration not provided', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = harmony(CHORD.MAJ, 60).apply(bridge)
+      const result = harmony(MAJ, 6000).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes[0].duration).toBe(480)
@@ -97,13 +100,13 @@ describe('harmony', () => {
   describe('chaining with note', () => {
     it('harmony then note should both emit', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = harmony(CHORD.MAJ, 60).apply(bridge)
+      let b = harmony(MAJ, 6000).apply(bridge)
       b = note('G4').apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(4)
-      expect(notes[0].pitch).toBe(60)
-      expect(notes[3].pitch).toBe(67)
+      expect(notes[0].pitch).toBe(6000)
+      expect(notes[3].pitch).toBe(6700)
     })
   })
 })
