@@ -7,19 +7,19 @@
 
 import { describe, it, expect } from 'vitest'
 import { kick, snare, drumPattern, hit, roll } from '../../cues/drums'
-import { BASS_DRUM_1, ACOUSTIC_SNARE, CLOSED_HI_HAT, COWBELL } from '@symphonyscript/theory-legacy'
+import { Drum } from '@symphonyscript/theory'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('drums', () => {
 
   describe('kick', () => {
-    it('should emit BASS_DRUM_1 (36) at current tick', () => {
+    it('should emit Drum.BassDrum1 (36) at current tick', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = kick().apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(BASS_DRUM_1)
+      expect(notes[0].pitch).toBe(Drum.BassDrum1)
     })
 
     it('should use custom duration when provided', () => {
@@ -45,21 +45,21 @@ describe('drums', () => {
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(BASS_DRUM_1)
-      expect(notes[1].pitch).toBe(ACOUSTIC_SNARE)
+      expect(notes[0].pitch).toBe(Drum.BassDrum1)
+      expect(notes[1].pitch).toBe(Drum.AcousticSnare)
       expect(notes[0].tick).toBe(0)
       expect(notes[1].tick).toBe(480)
     })
   })
 
   describe('snare', () => {
-    it('should emit ACOUSTIC_SNARE (38) at current tick', () => {
+    it('should emit Drum.AcousticSnare (38) at current tick', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = snare().apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(ACOUSTIC_SNARE)
+      expect(notes[0].pitch).toBe(Drum.AcousticSnare)
     })
 
     it('should use custom duration when provided', () => {
@@ -81,19 +81,19 @@ describe('drums', () => {
   describe('drumPattern', () => {
     it('should emit hits for x and X, advance tick for . and -', () => {
       const bridge = createBridge({ defaultDuration: 120 })
-      const result = drumPattern('x.x.', BASS_DRUM_1).apply(bridge)
+      const result = drumPattern('x.x.', Drum.BassDrum1).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(BASS_DRUM_1)
-      expect(notes[1].pitch).toBe(BASS_DRUM_1)
+      expect(notes[0].pitch).toBe(Drum.BassDrum1)
+      expect(notes[1].pitch).toBe(Drum.BassDrum1)
       expect(notes[0].tick).toBe(0)
       expect(notes[1].tick).toBe(240)
     })
 
     it('should use stepDuration when provided', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = drumPattern('xx', ACOUSTIC_SNARE, 240).apply(bridge)
+      const result = drumPattern('xx', Drum.AcousticSnare, 240).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
@@ -105,14 +105,14 @@ describe('drums', () => {
 
     it('should advance tick for each character in pattern', () => {
       const bridge = createBridge({ tick: 0, defaultDuration: 120 })
-      const result = drumPattern('x.x', BASS_DRUM_1).apply(bridge)
+      const result = drumPattern('x.x', Drum.BassDrum1).apply(bridge)
 
       expect(result.tick).toBe(360)
     })
 
     it('should return bridge unchanged when cue is empty', () => {
       const bridge = createBridge({ tick: 0 })
-      const result = drumPattern('', BASS_DRUM_1).apply(bridge)
+      const result = drumPattern('', Drum.BassDrum1).apply(bridge)
 
       expect(result.tick).toBe(0)
       const { notes } = commitAndCapture(result)
@@ -131,44 +131,44 @@ describe('drums', () => {
       const bridge = createBridge({ defaultDuration: 120 })
       const result = drumPattern()
         .cue('x.x')
-        .pitch(CLOSED_HI_HAT)
+        .pitch(Drum.ClosedHiHat)
         .apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
-      expect(notes[0].pitch).toBe(CLOSED_HI_HAT)
-      expect(notes[1].pitch).toBe(CLOSED_HI_HAT)
+      expect(notes[0].pitch).toBe(Drum.ClosedHiHat)
+      expect(notes[1].pitch).toBe(Drum.ClosedHiHat)
     })
   })
 
   describe('roll', () => {
     it('should emit rapid repeated hits over duration', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = roll(BASS_DRUM_1, 480, 120).apply(bridge)
+      const result = roll(Drum.BassDrum1, 480, 120).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       // 480 / 120 = 4 hits
       expect(notes).toHaveLength(4)
       notes.forEach(n => {
-        expect(n.pitch).toBe(BASS_DRUM_1)
+        expect(n.pitch).toBe(Drum.BassDrum1)
         expect(n.duration).toBe(120)
       })
     })
 
     it('should advance tick by duration', () => {
       const bridge = createBridge({ tick: 0, defaultDuration: 480 })
-      const result = roll(ACOUSTIC_SNARE, 480, 120).apply(bridge)
+      const result = roll(Drum.AcousticSnare, 480, 120).apply(bridge)
       expect(result.tick).toBe(480)
     })
 
     it('should use default duration and rate when omitted', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = roll(COWBELL).apply(bridge)
+      const result = roll(Drum.Cowbell).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       // duration=480, rate=defaultDuration/4=120 -> 4 hits
       expect(notes.length).toBeGreaterThanOrEqual(1)
-      expect(notes[0].pitch).toBe(COWBELL)
+      expect(notes[0].pitch).toBe(Drum.Cowbell)
     })
 
     it('should return bridge unchanged when pitch omitted', () => {
@@ -181,7 +181,7 @@ describe('drums', () => {
 
     it('should chain .duration() and .rate()', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = roll(BASS_DRUM_1)
+      const result = roll(Drum.BassDrum1)
         .duration(240)
         .rate(60)
         .apply(bridge)
@@ -194,11 +194,11 @@ describe('drums', () => {
   describe('hit', () => {
     it('should emit note at given pitch when provided', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = hit(COWBELL).apply(bridge)
+      const result = hit(Drum.Cowbell).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(COWBELL)
+      expect(notes[0].pitch).toBe(Drum.Cowbell)
     })
 
     it('should use default pitch when pitch omitted', () => {
@@ -207,7 +207,7 @@ describe('drums', () => {
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(BASS_DRUM_1)
+      expect(notes[0].pitch).toBe(Drum.BassDrum1)
     })
   })
 })

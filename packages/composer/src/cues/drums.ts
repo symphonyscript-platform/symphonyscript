@@ -1,4 +1,4 @@
-import * as Drums from '@symphonyscript/theory-legacy'
+import { Drum } from '@symphonyscript/theory'
 import { DrumHitBuilder } from '../builders/DrumHitBuilder'
 import { DrumPatternBuilder } from '../builders/DrumPatternBuilder'
 import { DrumEuclideanBuilder } from '../builders/DrumEuclideanBuilder'
@@ -8,58 +8,53 @@ import { RollBuilder } from '../builders/RollBuilder'
 import { NoteDuration, DrumPitch } from '@symphonyscript/core'
 
 /**
- * Bass drum (Drums.BASS_DRUM_1).
+ * Bass drum (`Drum.BassDrum1`).
  *
  * @param duration - Hit duration in ticks or string (e.g. `'8n'`). `undefined` = bridge default.
-
  * @returns {@link DrumHitBuilder}
  */
 export function kick(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: Drums.BASS_DRUM_1, duration })
+  return new DrumHitBuilder({ pitch: Drum.BassDrum1, duration })
 }
 
 /**
- * Acoustic snare (Drums.ACOUSTIC_SNARE).
+ * Acoustic snare (`Drum.AcousticSnare`).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
-
  * @returns {@link DrumHitBuilder}
  */
 export function snare(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: Drums.ACOUSTIC_SNARE, duration })
+  return new DrumHitBuilder({ pitch: Drum.AcousticSnare, duration })
 }
 
 /**
- * Closed hi-hat (Drums.CLOSED_HI_HAT).
+ * Closed hi-hat (`Drum.ClosedHiHat`).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
-
  * @returns {@link DrumHitBuilder}
  */
 export function hihat(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: Drums.CLOSED_HI_HAT, duration })
+  return new DrumHitBuilder({ pitch: Drum.ClosedHiHat, duration })
 }
 
 /**
- * Open hi-hat (Drums.OPEN_HI_HAT).
+ * Open hi-hat (`Drum.OpenHiHat`).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
-
  * @returns {@link DrumHitBuilder}
  */
 export function openHat(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: Drums.OPEN_HI_HAT, duration })
+  return new DrumHitBuilder({ pitch: Drum.OpenHiHat, duration })
 }
 
 /**
- * Hand clap (Drums.HAND_CLAP).
+ * Hand clap (`Drum.HandClap`).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
-
  * @returns {@link DrumHitBuilder}
  */
 export function clap(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: Drums.HAND_CLAP, duration })
+  return new DrumHitBuilder({ pitch: Drum.HandClap, duration })
 }
 
 /**
@@ -72,71 +67,66 @@ export function clap(duration?: NoteDuration): DrumHitBuilder {
  */
 export function tom(index: number, duration?: NoteDuration): DrumHitBuilder {
   const toms = [
-    Drums.HIGH_TOM,
-    Drums.HI_MID_TOM,
-    Drums.LOW_MID_TOM,
-    Drums.LOW_TOM,
-    Drums.HIGH_FLOOR_TOM,
-    Drums.LOW_FLOOR_TOM,
+    Drum.HighTom,
+    Drum.HiMidTom,
+    Drum.LowMidTom,
+    Drum.LowTom,
+    Drum.HighFloorTom,
+    Drum.LowFloorTom,
   ]
-  const pitch = toms[Math.min(index - 1, toms.length - 1)] ?? Drums.HIGH_TOM
+  const pitch = toms[Math.min(index - 1, toms.length - 1)] ?? Drum.HighTom
 
   return new DrumHitBuilder({ pitch, duration })
 }
 
 /**
- * Crash cymbal 1 (Drums.CRASH_CYMBAL_1).
+ * Crash cymbal 1 (`Drum.CrashCymbal1`).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
-
  * @returns {@link DrumHitBuilder}
  */
 export function crash(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: Drums.CRASH_CYMBAL_1, duration })
+  return new DrumHitBuilder({ pitch: Drum.CrashCymbal1, duration })
 }
 
 /**
- * Ride cymbal 1 (Drums.RIDE_CYMBAL_1).
+ * Ride cymbal 1 (`Drum.RideCymbal1`).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
-
  * @returns {@link DrumHitBuilder}
  */
 export function ride(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: Drums.RIDE_CYMBAL_1, duration })
+  return new DrumHitBuilder({ pitch: Drum.RideCymbal1, duration })
 }
 
 /**
- * Side stick / rim shot (Drums.SIDE_STICK).
+ * Side stick / rim shot (`Drum.SideStick`).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
-
  * @returns {@link DrumHitBuilder}
  */
 export function rim(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: Drums.SIDE_STICK, duration })
+  return new DrumHitBuilder({ pitch: Drum.SideStick, duration })
 }
 
 /**
- * Cowbell (Drums.COWBELL).
+ * Cowbell (`Drum.Cowbell`).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
-
  * @returns {@link DrumHitBuilder}
  */
 export function cowbell(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: Drums.COWBELL, duration })
+  return new DrumHitBuilder({ pitch: Drum.Cowbell, duration })
 }
 
 /**
- * Cabasa / shaker (Drums.CABASA).
+ * Cabasa / shaker (`Drum.Cabasa`).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
-
  * @returns {@link DrumHitBuilder}
  */
 export function shaker(duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: Drums.CABASA, duration })
+  return new DrumHitBuilder({ pitch: Drum.Cabasa, duration })
 }
 
 /**
@@ -259,7 +249,7 @@ export function roll(
  * @returns {@link DrumHitBuilder} with flam articulation.
  */
 export function flam(pitch?: DrumPitch, duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: pitch ?? Drums.ACOUSTIC_SNARE, duration }).flam()
+  return new DrumHitBuilder({ pitch: pitch ?? Drum.AcousticSnare, duration }).flam()
 }
 
 /**
@@ -271,5 +261,5 @@ export function flam(pitch?: DrumPitch, duration?: NoteDuration): DrumHitBuilder
  * @returns {@link DrumHitBuilder} with drag articulation.
  */
 export function drag(pitch?: DrumPitch, duration?: NoteDuration): DrumHitBuilder {
-  return new DrumHitBuilder({ pitch: pitch ?? Drums.ACOUSTIC_SNARE, duration }).drag()
+  return new DrumHitBuilder({ pitch: pitch ?? Drum.AcousticSnare, duration }).drag()
 }

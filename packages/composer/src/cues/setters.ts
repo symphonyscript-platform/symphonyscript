@@ -1,4 +1,4 @@
-import { resolveTemperament, type TemperamentName } from '@symphonyscript/theory-legacy'
+import { resolveTemperament, type TemperamentName } from '@symphonyscript/theory'
 import { FieldSetter } from '../builders/SetterBuilders'
 import { assertPositive, assertRange } from '../utils/validate'
 import type { ScaleMode, PitchClass, NoteName, NoteDuration } from '@symphonyscript/core'

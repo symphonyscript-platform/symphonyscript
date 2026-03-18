@@ -1,5 +1,6 @@
 import { ExecutionContext, Notation } from '@symphonyscript/core'
-import { MIDI_CC, IONIAN_INTERVALS } from '@symphonyscript/theory-legacy'
+import { Scale } from '@symphonyscript/theory'
+import { MIDI_CC } from '@symphonyscript/theory-legacy'
 import { CompositionBridge } from '@symphonyscript/composer'
 import { ThunkNode } from '../interfaces/thunk-node'
 
@@ -108,7 +109,7 @@ export class BaseCompositionBridge implements CompositionBridge {
       length: params.length ?? 0,
       scaleRootCents: params.scaleRootCents ?? 0,
       keyRootCents: params.keyRootCents ?? null,
-      scaleIntervals: params.scaleIntervals ?? IONIAN_INTERVALS,
+      scaleIntervals: params.scaleIntervals ?? Scale.Ionian,
       temperament: params.temperament ?? null,
       tuningHz: params.tuningHz ?? 440,
       transposeCents: params.transposeCents ?? 0,

@@ -1,5 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import { degreeToCents } from '@symphonyscript/theory-legacy'
+import { degreeToCents } from '@symphonyscript/theory'
 
 /**
  * Parameters for {@link DegreeChordBuilder}.

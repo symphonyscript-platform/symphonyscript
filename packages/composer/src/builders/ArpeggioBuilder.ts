@@ -1,5 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import type { ArpPattern } from '@symphonyscript/theory-legacy'
+import type { ArpPattern } from '@symphonyscript/theory'
 
 import { NotePitch } from '@symphonyscript/core'
 

@@ -1,4 +1,4 @@
-import { euclidean, rotatePattern } from '@symphonyscript/theory-legacy'
+import { euclidean, rotatePattern } from '@symphonyscript/theory'
 
 /**
  * Generate a euclidean rhythm pattern using Bjorklund's algorithm, optionally rotated.

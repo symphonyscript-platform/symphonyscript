@@ -1,5 +1,5 @@
 import { RatioHarmonyBuilder } from '../builders/RatioHarmonyBuilder'
-import { ratioToCents } from '@symphonyscript/theory-legacy'
+import { ratioToCents } from '@symphonyscript/theory'
 
 import { NoteDuration } from '@symphonyscript/core'
 

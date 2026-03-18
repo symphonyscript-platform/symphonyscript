@@ -4,6 +4,7 @@
  */
 
 import type { QuantizeMode } from './types'
+import { beatsToSeconds, secondsToBeats } from '../duration/functions'
 
 /**
  * Get the next beat boundary from the current position.
@@ -72,27 +73,7 @@ export function getQuantizeTargetBeat(
   }
 }
 
-/**
- * Convert beats to seconds.
- *
- * @param beats - Number of beats
- * @param bpm - Tempo in BPM
- * @returns Duration in seconds
- */
-export function beatsToSeconds(beats: number, bpm: number): number {
-  return (beats / bpm) * 60
-}
 
-/**
- * Convert seconds to beats.
- *
- * @param seconds - Duration in seconds
- * @param bpm - Tempo in BPM
- * @returns Number of beats
- */
-export function secondsToBeats(seconds: number, bpm: number): number {
-  return (seconds / 60) * bpm
-}
 
 /**
  * Get the duration of one beat in seconds.
