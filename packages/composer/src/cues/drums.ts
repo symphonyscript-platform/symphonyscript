@@ -8,7 +8,7 @@ import { RollBuilder } from '../builders/RollBuilder'
 import { NoteDuration, DrumPitch } from '@symphonyscript/core'
 
 /**
- * Bass drum (GM_DRUM.BASS_DRUM_1).
+ * Bass drum (Drums.BASS_DRUM_1).
  *
  * @param duration - Hit duration in ticks or string (e.g. `'8n'`). `undefined` = bridge default.
 
@@ -19,7 +19,7 @@ export function kick(duration?: NoteDuration): DrumHitBuilder {
 }
 
 /**
- * Acoustic snare (GM_DRUM.ACOUSTIC_SNARE).
+ * Acoustic snare (Drums.ACOUSTIC_SNARE).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
 
@@ -30,7 +30,7 @@ export function snare(duration?: NoteDuration): DrumHitBuilder {
 }
 
 /**
- * Closed hi-hat (GM_DRUM.CLOSED_HI_HAT).
+ * Closed hi-hat (Drums.CLOSED_HI_HAT).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
 
@@ -41,7 +41,7 @@ export function hihat(duration?: NoteDuration): DrumHitBuilder {
 }
 
 /**
- * Open hi-hat (GM_DRUM.OPEN_HI_HAT).
+ * Open hi-hat (Drums.OPEN_HI_HAT).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
 
@@ -52,7 +52,7 @@ export function openHat(duration?: NoteDuration): DrumHitBuilder {
 }
 
 /**
- * Hand clap (GM_DRUM.HAND_CLAP).
+ * Hand clap (Drums.HAND_CLAP).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
 
@@ -85,7 +85,7 @@ export function tom(index: number, duration?: NoteDuration): DrumHitBuilder {
 }
 
 /**
- * Crash cymbal 1 (GM_DRUM.CRASH_CYMBAL_1).
+ * Crash cymbal 1 (Drums.CRASH_CYMBAL_1).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
 
@@ -96,7 +96,7 @@ export function crash(duration?: NoteDuration): DrumHitBuilder {
 }
 
 /**
- * Ride cymbal 1 (GM_DRUM.RIDE_CYMBAL_1).
+ * Ride cymbal 1 (Drums.RIDE_CYMBAL_1).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
 
@@ -107,7 +107,7 @@ export function ride(duration?: NoteDuration): DrumHitBuilder {
 }
 
 /**
- * Side stick / rim shot (GM_DRUM.SIDE_STICK).
+ * Side stick / rim shot (Drums.SIDE_STICK).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
 
@@ -118,7 +118,7 @@ export function rim(duration?: NoteDuration): DrumHitBuilder {
 }
 
 /**
- * Cowbell (GM_DRUM.COWBELL).
+ * Cowbell (Drums.COWBELL).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
 
@@ -129,7 +129,7 @@ export function cowbell(duration?: NoteDuration): DrumHitBuilder {
 }
 
 /**
- * Cabasa / shaker (GM_DRUM.CABASA).
+ * Cabasa / shaker (Drums.CABASA).
  *
  * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
 

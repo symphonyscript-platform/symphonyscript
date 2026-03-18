@@ -4,8 +4,8 @@ import type { DrumPitch } from '@symphonyscript/core'
 /**
  * Parameters for {@link RollBuilder}.
  *
- * Used by {@link roll} cue for buzz rolls; pitch is typically a GM drum
- * MIDI key (e.g. {@link GM_DRUM.BASS_DRUM_1}).
+ * Used by {@link roll} cue for buzz rolls; pitch is typically a drum
+ * cent value (e.g. {@link Drums.BASS_DRUM_1}).
  */
 export interface RollParams {
   /** Pitch in cents or drum name. */
@@ -19,7 +19,7 @@ export interface RollParams {
 /**
  * Immutable builder for roll (fast repeated hits over a duration).
  *
- * Emits the same MIDI pitch repeatedly, typically used for drum buzz rolls.
+ * Emits the same pitch repeatedly, typically used for drum buzz rolls.
  * Hit count = `floor(duration / rate)`. Rate defaults to quarter of the bridge's
  * default duration when not set.
  *
@@ -27,10 +27,10 @@ export interface RollParams {
  *
  * @example
  * ```ts
- * roll(GM_DRUM.BASS_DRUM_1)                // Bass drum buzz (duration/rate from bridge)
- * roll(GM_DRUM.ACOUSTIC_SNARE, 480, 120)   // Snare roll, 480 ticks, 120 per hit
+ * roll(Drums.BASS_DRUM_1)                  // Bass drum buzz (duration/rate from bridge)
+ * roll(Drums.ACOUSTIC_SNARE, 480, 120)     // Snare roll, 480 ticks, 120 per hit
  * roll(36).duration(240).rate(60)          // Chain overrides
- * roll(GM_DRUM.COWBELL).apply(bridge)      // Emit onto composition
+ * roll(Drums.COWBELL).apply(bridge)        // Emit onto composition
  * ```
  */
 export class RollBuilder implements PipeStep {

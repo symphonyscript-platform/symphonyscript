@@ -31,8 +31,8 @@ export interface DrumEuclideanParams {
  *
  * @example
  * ```ts
- * drumEuclidean(3, 8, GM_DRUM.BASS_DRUM_1)              // Tresillo kick
- * drumEuclidean(5, 8, GM_DRUM.ACOUSTIC_SNARE, 240, 1)   // Cinquillo snare, rotated
+ * drumEuclidean(3, 8, Drums.BASS_DRUM_1)                // Tresillo kick
+ * drumEuclidean(5, 8, Drums.ACOUSTIC_SNARE, 240, 1)     // Cinquillo snare, rotated
  * drumEuclidean(2, 4, 36).steps(8).hits(3)              // Backbeat-style pattern
  * drumEuclidean(3, 8, 42).apply(bridge)
  * ```
@@ -51,9 +51,9 @@ export class DrumEuclideanBuilder implements PipeStep {
   }
 
   /**
-   * Set the MIDI pitch for drum hits.
+   * Set the pitch for drum hits.
    *
-   * @param pitch - MIDI note number (0-127), e.g. GM drum map values
+   * @param pitch - Pitch in cents or drum name (e.g. 'kick')
 
    * @returns New builder with the updated pitch
    */

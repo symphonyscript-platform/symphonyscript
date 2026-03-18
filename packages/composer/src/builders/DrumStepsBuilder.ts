@@ -26,7 +26,7 @@ export interface DrumStepsParams {
  *
  * @example
  * ```ts
- * drumSteps([1, 0, 1, 0], GM_DRUM.BASS_DRUM_1)           // Alternating kicks
+ * drumSteps([1, 0, 1, 0], Drums.BASS_DRUM_1)             // Alternating kicks
  * drumSteps([1, 1, 0, 1, 0, 1, 0, 1], 38, 240)           // Cinquillo-style
  * drumSteps([1, 0, 0, 1, 0, 0, 1, 0], 36)               // Tresillo (same as euclidean(3,8))
  * drumSteps([1, 0, 1]).apply(bridge)
@@ -44,9 +44,9 @@ export class DrumStepsBuilder implements PipeStep {
   }
 
   /**
-   * Set the MIDI pitch for drum hits.
+   * Set the pitch for drum hits.
    *
-   * @param pitch - MIDI note number (0-127)
+   * @param pitch - Pitch in cents or drum name (e.g. 'kick')
 
    * @returns New builder with the updated pitch
    */

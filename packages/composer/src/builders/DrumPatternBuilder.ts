@@ -25,8 +25,8 @@ export interface DrumPatternParams {
  *
  * @example
  * ```ts
- * drumPattern('x.x.').pitch(GM_DRUM.BASS_DRUM_1)           // Alternating kick
- * drumPattern('xx', GM_DRUM.ACOUSTIC_SNARE, 240)           // Two snares, 240 ticks/step
+ * drumPattern('x.x.').pitch(Drums.BASS_DRUM_1)             // Alternating kick
+ * drumPattern('xx', Drums.ACOUSTIC_SNARE, 240)             // Two snares, 240 ticks/step
  * drumPattern('x..x..x.').pitch(36).stepDuration(120)      // Tresillo-style via string
  * drumPattern('x.x.').apply(bridge)
  * ```
@@ -43,9 +43,9 @@ export class DrumPatternBuilder implements PipeStep {
   }
 
   /**
-   * Set the MIDI pitch for drum hits.
+   * Set the pitch for drum hits.
    *
-   * @param pitch - MIDI note number (0-127)
+   * @param pitch - Pitch in cents or drum name (e.g. 'kick')
 
    * @returns New builder with the updated pitch
    */

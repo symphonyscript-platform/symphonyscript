@@ -9,7 +9,7 @@ import type { CompositionBridge } from '@symphonyscript/composer'
  * only, producing a rest.
  *
  * @param pattern  - Array of 0/1 or truthy/falsy values (1 = hit, 0 = rest)
- * @param pitches  - Array of MIDI pitches to cycle through on hits
+ * @param pitches  - Array of pitches (in cents) to cycle through on hits
  * @param duration - Duration per step in ticks
  * @param bridge   - Starting bridge state
  * @param velocity - Fixed velocity for emitted notes. When omitted, uses the bridge's current
