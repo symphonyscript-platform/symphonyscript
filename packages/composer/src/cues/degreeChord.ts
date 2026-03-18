@@ -1,5 +1,6 @@
 import { DegreeChordBuilder } from '../builders/DegreeChordBuilder'
-import type { NoteDuration } from '../utils/duration'
+
+import { NoteDuration } from '@symphonyscript/core'
 
 /**
  * Create a {@link DegreeChordBuilder} that emits a chord from explicit scale degrees.

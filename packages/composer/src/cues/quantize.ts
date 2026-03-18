@@ -1,5 +1,6 @@
 import { QuantizationBuilder } from '../builders/QuantizationBuilder'
-import type { NoteDuration } from '../utils/duration'
+
+import { NoteDuration } from '@symphonyscript/core'
 
 /**
  * Create a {@link QuantizationBuilder} to snap note timing to a regular grid.

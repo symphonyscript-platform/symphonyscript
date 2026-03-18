@@ -4,7 +4,8 @@ import { DrumPatternBuilder } from '../builders/DrumPatternBuilder'
 import { DrumEuclideanBuilder } from '../builders/DrumEuclideanBuilder'
 import { DrumStepsBuilder } from '../builders/DrumStepsBuilder'
 import { RollBuilder } from '../builders/RollBuilder'
-import type { NoteDuration } from '../utils/duration'
+
+import { NoteDuration } from '@symphonyscript/core'
 
 /**
  * Bass drum (GM_DRUM.BASS_DRUM_1).

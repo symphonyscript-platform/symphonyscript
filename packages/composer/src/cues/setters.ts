@@ -1,8 +1,7 @@
 import { resolveTemperament, type TemperamentName } from '@symphonyscript/theory'
 import { FieldSetter } from '../builders/SetterBuilders'
 import { assertPositive, assertRange } from '../utils/validate'
-import type { NoteDuration } from '../utils/duration'
-import type { ScaleMode, PitchClass, NoteName } from '@symphonyscript/core'
+import type { ScaleMode, PitchClass, NoteName, NoteDuration } from '@symphonyscript/core'
 
 /**
  * Set transposition in cents for all subsequent notes (or scoped).

@@ -1,5 +1,6 @@
 import { OffsetBuilder } from '../builders/OffsetBuilder'
-import type { NoteDuration } from '../utils/duration'
+
+import { NoteDuration } from '@symphonyscript/core'
 
 /**
  * Create an {@link OffsetBuilder} that emits a pitch relative to the tuning reference.

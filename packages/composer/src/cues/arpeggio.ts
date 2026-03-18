@@ -1,6 +1,7 @@
 import { ArpeggioBuilder } from '../builders/ArpeggioBuilder'
 import type { NotePitch } from '../types'
-import type { NoteDuration } from '../utils/duration'
+
+import { NoteDuration } from '@symphonyscript/core'
 
 /**
  * Create an {@link ArpeggioBuilder} that emits chord or note sequences in sequence.

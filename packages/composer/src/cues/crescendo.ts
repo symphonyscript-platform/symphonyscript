@@ -1,6 +1,7 @@
 import { DecrescendoBuilder } from '../builders/DecrescendoBuilder'
 import { CrescendoBuilder } from '../builders/CrescendoBuilder'
-import type { NoteDuration } from '../utils/duration'
+
+import { NoteDuration } from '@symphonyscript/core'
 
 /**
  * Create a {@link CrescendoBuilder} for crescendo: ramps velocity from soft to

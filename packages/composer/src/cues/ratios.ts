@@ -1,6 +1,7 @@
 import { RatioHarmonyBuilder } from '../builders/RatioHarmonyBuilder'
 import { ratioToCents } from '@symphonyscript/theory'
-import type { NoteDuration } from '../utils/duration'
+
+import { NoteDuration } from '@symphonyscript/core'
 
 /**
  * Create a {@link RatioHarmonyBuilder} from frequency ratios.

@@ -1,6 +1,7 @@
 import { HarmonyBuilder, type ChordIntervals } from '../builders/HarmonyBuilder'
 import type { NotePitch } from '../types'
-import type { NoteDuration } from '../utils/duration'
+
+import { NoteDuration } from '@symphonyscript/core'
 
 /**
  * Create a {@link HarmonyBuilder} from chord intervals and root pitch.

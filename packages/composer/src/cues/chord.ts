@@ -1,6 +1,5 @@
-import type { ChordCode } from '@symphonyscript/core'
+import type { ChordCode, NoteDuration } from '@symphonyscript/core'
 import { HarmonyBuilder } from '../builders/HarmonyBuilder'
-import type { NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link HarmonyBuilder} from a chord symbol string.

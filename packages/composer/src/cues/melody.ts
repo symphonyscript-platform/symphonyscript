@@ -5,9 +5,8 @@ import { GlissandoBuilder } from '../builders/GlissandoBuilder'
 import { TupletBuilder } from '../builders/TupletBuilder'
 import { PolyrhythmBuilder } from '../builders/PolyrhythmBuilder'
 import { NoteBuilder } from '../builders/NoteBuilder'
-import type { NoteName } from '@symphonyscript/core'
+import type { NoteDuration, NoteName } from '@symphonyscript/core'
 import type { NotePitch } from '../types'
-import type { NoteDuration } from '../utils/duration'
 
 /**
  * Binary step pattern. 1 = play note (cycling through notes), 0 = rest.

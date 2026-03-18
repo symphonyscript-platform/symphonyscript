@@ -28,3 +28,12 @@ export type NoteName = `${PitchClass}${Octave}`
  * Template literal from `PitchClass × ChordSymbol`.
  */
 export type ChordCode = `${PitchClass}${ChordSymbol}`
+
+/**
+ * Note duration as a notation duration name or raw tick count.
+ *
+ * String values (e.g. `'4n'`, `'quarter'`, `'8n.'`) are resolved
+ * at apply-time via `bridge.notation().durationToTicks(name, ppq)`.
+ * Numbers pass through unchanged as raw tick values.
+ */
+export type NoteDuration = DurationName | number

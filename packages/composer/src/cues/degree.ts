@@ -1,5 +1,6 @@
 import { DegreeBuilder } from '../builders/DegreeBuilder'
-import type { NoteDuration } from '../utils/duration'
+
+import { NoteDuration } from '@symphonyscript/core'
 
 /**
  * Create a {@link DegreeBuilder} that emits a single pitch from a scale degree.

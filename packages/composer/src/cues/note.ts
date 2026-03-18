@@ -1,7 +1,6 @@
-import type { NoteName } from '@symphonyscript/core'
+import type { NoteDuration, NoteName } from '@symphonyscript/core'
 import { NoteBuilder } from '../builders/NoteBuilder'
 import type { NotePitch } from '../types'
-import type { NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link NoteBuilder} for single-note emission.

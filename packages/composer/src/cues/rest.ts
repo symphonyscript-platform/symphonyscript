@@ -1,5 +1,6 @@
 import { PipeStep, step } from '@symphonyscript/composer'
-import type { NoteDuration } from '../utils/duration'
+
+import { NoteDuration } from '@symphonyscript/core'
 
 /**
  * Advance the timeline by a duration without emitting any events.

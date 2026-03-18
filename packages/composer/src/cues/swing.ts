@@ -1,5 +1,6 @@
 import { SwingBuilder } from '../builders/SwingBuilder'
-import type { NoteDuration } from '../utils/duration'
+
+import { NoteDuration } from '@symphonyscript/core'
 
 /**
  * Create a {@link SwingBuilder} for swing feel: delays offbeat notes within a grid
