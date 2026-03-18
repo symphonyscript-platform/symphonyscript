@@ -8,7 +8,7 @@
  */
 
 import { BaseNotation, NotationInputError } from '@symphonyscript/core'
-import type { Range, NotationCapabilities, ChordIntervals, KeySignature, ScaleIntervals, ScaleMode, PitchClass } from '@symphonyscript/core'
+import type { Range, NotationCapabilities, ChordIntervals, KeySignature, ScaleIntervals, ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol } from '@symphonyscript/core'
 import type { ChordResolution } from '@symphonyscript/core'
 
 import {
@@ -49,7 +49,7 @@ export class WesternNotation extends BaseNotation {
    * Override: A4 reference is 6900 cents in MIDI-aligned convention.
    * BaseNotation hardcodes 5700 (C0=0 convention).
    */
-  override noteToFrequency(input: string): number {
+  override noteToFrequency(input: NoteName): number {
     const cents = this.noteToCents(input)
     // A4 = 6900 cents in (octave+1)*1200 convention
     return this.getTuningHz() * Math.pow(2, (cents - 6900) / 1200)
@@ -59,7 +59,7 @@ export class WesternNotation extends BaseNotation {
   // Notes
   // ==========================================================================
 
-  noteToCents(input: string | number): number {
+  noteToCents(input: NoteName | number): number {
     if (typeof input === 'number') return input
     const parsed = parseNoteString(input)
 
@@ -98,7 +98,7 @@ export class WesternNotation extends BaseNotation {
   // Intervals
   // ==========================================================================
 
-  intervalToCents(input: string | number): number {
+  intervalToCents(input: IntervalName | number): number {
     if (typeof input === 'number') return input
     const cents = INTERVAL_MAP[input]
     if (cents === undefined) {
@@ -149,7 +149,7 @@ export class WesternNotation extends BaseNotation {
   // Degrees
   // ==========================================================================
 
-  degreeToCents(input: string | number, scale: number[]): number {
+  degreeToCents(input: Degree | number, scale: number[]): number {
     if (typeof input === 'number') return input
     const parsed = parseRomanNumeral(input)
 
@@ -173,10 +173,10 @@ export class WesternNotation extends BaseNotation {
   // Chords
   // ==========================================================================
 
-  chordToIntervals(input: string | ChordIntervals): ChordIntervals {
+  chordToIntervals(input: ChordSymbol | ChordIntervals): ChordIntervals {
     if (Array.isArray(input)) return input
 
-    const symbol = input as string
+    const symbol = String(input)
     // First try as a bare suffix (e.g. 'maj7', 'm', '7')
     const directLookup = CHORD_INTERVALS_MAP.get(symbol)
     if (directLookup !== undefined) return directLookup
@@ -202,15 +202,15 @@ export class WesternNotation extends BaseNotation {
     return suffix
   }
 
-  getSupportedChords(): string[] {
-    return Array.from(CHORD_INTERVALS_MAP.keys())
+  getSupportedChords(): ChordSymbol[] {
+    return Array.from(CHORD_INTERVALS_MAP.keys()) as ChordSymbol[]
   }
 
   // ==========================================================================
   // Progressions
   // ==========================================================================
 
-  resolveProgression(numerals: string[], scale: number[]): ChordResolution[] {
+  resolveProgression(numerals: Degree[], scale: number[]): ChordResolution[] {
     const results: ChordResolution[] = []
 
     for (const numeral of numerals) {

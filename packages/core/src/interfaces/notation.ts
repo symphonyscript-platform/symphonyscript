@@ -1,5 +1,5 @@
 import { ChordIntervals, KeySignature, ScaleIntervals } from '../types'
-import { ScaleMode, PitchClass } from '../registries'
+import { ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol } from '../registries'
 import { Range } from './range'
 import { NotationCapabilities } from './notation-capabilities'
 import { ChordResolution } from './chord-resolution'
@@ -86,14 +86,18 @@ export interface Notation {
   /* ---------- Notes ---------- */
 
   /**
-   * Parse a note string into cents from C0.
+   * Resolve a note input to cents from C0.
    *
-   * @param input - Note string in this notation's format (e.g., `'C4'`, `'F#3'`, `'Bb5'`)
+   * Accepts a string note name (parsed by this notation) or a numeric cents
+   * value (returned as-is). This dual-input contract avoids the need for
+   * separate `ensure*` methods — callers can pass mixed `string | number`.
+   *
+   * @param input - Note string (e.g., `'C4'`, `'F#3'`) or absolute cents from C0
    *
    * @returns Cents from C0 (e.g., `4800` for C4, `5700` for A4)
-   * @throws {NotationInputError} If the input is not a valid note
+   * @throws {NotationInputError} If string input is not a valid note
    */
-  noteToCents(input: string): number
+  noteToCents(input: NoteName | number): number
 
   /**
    * Format a cent value as a note string in this notation's format.
@@ -114,7 +118,7 @@ export interface Notation {
    * @returns MIDI note number (0–127)
    * @throws {NotationInputError} If the input is invalid or out of MIDI range
    */
-  noteToMidi(input: string): number
+  noteToMidi(input: NoteName): number
 
   /**
    * Convert a note string to a frequency in Hz.
@@ -125,7 +129,7 @@ export interface Notation {
    * @returns Frequency in Hz (e.g., `440` for A4 at standard tuning)
    * @throws {NotationInputError} If the input is not a valid note
    */
-  noteToFrequency(input: string): number
+  noteToFrequency(input: NoteName): number
 
   /**
    * Transpose a note by a given interval and return the result
@@ -138,7 +142,7 @@ export interface Notation {
    * @returns Transposed note string (e.g., `transposeNote('C4', 700)` → `'G4'`)
    * @throws {NotationInputError} If the input note is not valid
    */
-  transposeNote(note: string, cents: number): string
+  transposeNote(note: NoteName, cents: number): string
 
   /**
    * Check whether two note strings represent the same pitch.
@@ -150,19 +154,22 @@ export interface Notation {
    * @returns `true` if both notes resolve to the same cent value (e.g., `'C#4'` and `'Db4'`)
    * @throws {NotationInputError} If either input is not a valid note
    */
-  isEnharmonic(a: string, b: string): boolean
+  isEnharmonic(a: NoteName, b: NoteName): boolean
 
   /* ---------- Intervals ---------- */
 
   /**
-   * Parse an interval name into cents.
+   * Resolve an interval input to cents.
    *
-   * @param input - Interval name in this notation's format (e.g., `'P5'`, `'m3'`, `'tritone'`)
+   * Accepts a string interval name (parsed by this notation) or a numeric cents
+   * value (returned as-is).
+   *
+   * @param input - Interval name (e.g., `'P5'`, `'m3'`) or interval size in cents
    *
    * @returns Interval size in cents (e.g., `700` for a perfect fifth)
-   * @throws {NotationInputError} If the interval name is not recognized
+   * @throws {NotationInputError} If string input is not recognized
    */
-  intervalToCents(input: string): number
+  intervalToCents(input: IntervalName | number): number
 
   /**
    * Format a cent value as an interval name in this notation's format.
@@ -211,30 +218,35 @@ export interface Notation {
   /* ---------- Degrees ---------- */
 
   /**
-   * Parse a degree notation string into cents from the scale root.
+   * Resolve a degree input to cents from the scale root.
    *
-   * @param input - Degree string in this notation's format
-   *                (e.g., `'V'`, `'bVII'`, `'ii7'` for Western; sargam syllables for Indian)
+   * Accepts a string degree name (parsed by this notation) or a numeric cents
+   * value (returned as-is).
+   *
+   * @param input - Degree string (e.g., `'V'`, `'bVII'`, `'ii7'`) or cents from root
    * @param scale - Scale interval array in cents (from `getScaleIntervals()`)
    *
    * @returns Cents from the scale root for the degree
-   * @throws {NotationInputError} If the degree string is invalid
+   * @throws {NotationInputError} If string input is invalid
    * @throws {NotationUnsupportedError} If this notation does not support degrees
    */
-  degreeToCents(input: string, scale: number[]): number
+  degreeToCents(input: Degree | number, scale: number[]): number
 
   /* ---------- Chords ---------- */
 
   /**
-   * Parse a chord symbol into its interval structure.
+   * Resolve a chord input to its interval structure.
    *
-   * @param input - Chord symbol (e.g., `'Cmaj7'`, `'F#m'`, `'Bb7'`)
+   * Accepts a string chord symbol (parsed by this notation) or a pre-computed
+   * `ChordIntervals` array (returned as-is).
+   *
+   * @param input - Chord symbol (e.g., `'Cmaj7'`, `'F#m'`) or pre-computed intervals
    *
    * @returns Chord intervals in cents from the root (e.g., `[0, 400, 700, 1100]` for maj7)
-   * @throws {NotationInputError} If the chord symbol is not recognized
+   * @throws {NotationInputError} If string input is not recognized
    * @throws {NotationUnsupportedError} If this notation does not support chords
    */
-  chordToIntervals(input: string): ChordIntervals
+  chordToIntervals(input: ChordSymbol | ChordIntervals): ChordIntervals
 
   /**
    * Format a chord interval structure as a chord symbol string.
@@ -253,7 +265,7 @@ export interface Notation {
    * @returns Array of supported chord suffixes (e.g., `['', 'm', '7', 'maj7', 'dim', ...]`)
    * @throws {NotationUnsupportedError} If this notation does not support chords
    */
-  getSupportedChords(): string[]
+  getSupportedChords(): ChordSymbol[]
 
   /* ---------- Progressions ---------- */
 
@@ -267,7 +279,7 @@ export interface Notation {
    * @throws {NotationInputError} If any numeral is invalid
    * @throws {NotationUnsupportedError} If this notation does not support progressions
    */
-  resolveProgression(numerals: string[], scale: number[]): ChordResolution[]
+  resolveProgression(numerals: Degree[], scale: number[]): ChordResolution[]
 
   /* ---------- Rhythm ---------- */
 

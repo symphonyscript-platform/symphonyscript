@@ -1,4 +1,5 @@
 import { CompositionBridge } from '@symphonyscript/composer'
+import type { NoteName } from '@symphonyscript/core'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
 
 /**
@@ -20,7 +21,7 @@ export interface NoteParams extends PitchStepParams {
    * Retained for notation-aware re-resolution at apply-time.
    * `null` when the pitch was provided as a number.
    */
-  rawPitch: string | null
+  rawPitch: NoteName | null
 }
 
 /**
@@ -44,7 +45,7 @@ export interface NoteParams extends PitchStepParams {
  */
 export class NoteBuilder extends PitchStepBuilder<NoteBuilder> {
   private readonly _pitchCents: number
-  private readonly _rawPitch: string | null
+  private readonly _rawPitch: NoteName | null
 
   constructor(params: Partial<NoteParams>) {
     super(params)

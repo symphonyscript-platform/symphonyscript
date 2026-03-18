@@ -5,6 +5,7 @@ import { GlissandoBuilder } from '../builders/GlissandoBuilder'
 import { TupletBuilder } from '../builders/TupletBuilder'
 import { PolyrhythmBuilder } from '../builders/PolyrhythmBuilder'
 import { NoteBuilder } from '../builders/NoteBuilder'
+import type { NoteName } from '@symphonyscript/core'
 import type { NotePitch } from '../types'
 import { resolveDuration, type NoteDuration } from '../utils/duration'
 
@@ -109,7 +110,7 @@ export function grace(pitch?: NotePitch, graceDuration: NoteDuration = 30): Note
 
   if (typeof pitch === 'string') {
     // Defer string→cents resolution to apply-time via notation.noteToCents()
-    return new NoteBuilder({ rawPitch: pitch, duration: resolvedDuration })
+    return new NoteBuilder({ rawPitch: pitch as NoteName, duration: resolvedDuration })
   }
 
   // Numeric input = absolute cents from C0

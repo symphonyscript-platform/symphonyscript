@@ -1,7 +1,7 @@
 /**
  * Tests for the `freeze` utility.
  *
- * freeze(composer: IClip): IFrozenClip creates a BaseCompositionBridge,
+ * freeze(composer: IClip, notation: Notation): IFrozenClip creates a BaseCompositionBridge,
  * runs composer.compose(bridge), commits to RecordingBridge, returns
  * recorder.toFrozenClip(). Integration-style: uses a real IClip (Clip.pipe
  * with note()) that produces notes.
@@ -11,13 +11,14 @@ import { describe, it, expect } from 'vitest'
 import { freeze } from '../../utils/freeze'
 import { Clip } from '../../Clip'
 import { note } from '../../cues/note'
+import { testNotation } from '../test-utils'
 
 describe('freeze', () => {
 
   describe('return type', () => {
     it('returns IFrozenClip with required shape', () => {
       const clip = Clip.pipe(note('C4'))
-      const frozen = freeze(clip)
+      const frozen = freeze(clip, testNotation)
 
       expect(frozen).toBeDefined()
       expect(typeof frozen.noteCount).toBe('number')
@@ -31,7 +32,7 @@ describe('freeze', () => {
   describe('note visitation', () => {
     it('can visit notes from frozen single-note clip', () => {
       const clip = Clip.pipe(note('C4'))
-      const frozen = freeze(clip)
+      const frozen = freeze(clip, testNotation)
 
       const notes: Array<{ sourceId: number; pitch: number; velocity: number; duration: number; tick: number; muted: boolean }> = []
       frozen.visitNotes((sourceId, pitch, velocity, duration, tick, muted) => {
@@ -39,14 +40,14 @@ describe('freeze', () => {
       })
 
       expect(notes).toHaveLength(1)
-      expect(notes[0].pitch).toBe(60) // C4
+      expect(notes[0].pitch).toBe(6000) // C4 = 6000 cents in (octave+1)*1200 convention
       expect(notes[0].tick).toBe(0)
       expect(frozen.noteCount).toBe(1)
     })
 
     it('can visit notes from frozen multi-note clip', () => {
       const clip = Clip.pipe(note('C4'), note('E4'), note('G4'))
-      const frozen = freeze(clip)
+      const frozen = freeze(clip, testNotation)
 
       const notes: Array<{ sourceId: number; pitch: number; velocity: number; duration: number; tick: number; muted: boolean }> = []
       frozen.visitNotes((sourceId, pitch, velocity, duration, tick, muted) => {
@@ -54,9 +55,9 @@ describe('freeze', () => {
       })
 
       expect(notes).toHaveLength(3)
-      expect(notes[0].pitch).toBe(60) // C4
-      expect(notes[1].pitch).toBe(64) // E4
-      expect(notes[2].pitch).toBe(67) // G4
+      expect(notes[0].pitch).toBe(6000) // C4
+      expect(notes[1].pitch).toBe(6400) // E4
+      expect(notes[2].pitch).toBe(6700) // G4
       expect(notes[0].tick).toBe(0)
       expect(notes[1].tick).toBe(1) // defaultDuration=1, each note advances tick
       expect(notes[2].tick).toBe(2)
@@ -65,14 +66,14 @@ describe('freeze', () => {
 
     it('frozen clip reflects duration from composed notes', () => {
       const clip = Clip.pipe(note('C4'), note('E4')) // 2 notes, defaultDuration=1 each
-      const frozen = freeze(clip)
+      const frozen = freeze(clip, testNotation)
 
       expect(frozen.duration).toBe(2) // 2 notes × defaultDuration 1 = end at tick 2
     })
 
     it('visitCC and visitBends can be called without error', () => {
       const clip = Clip.pipe(note('C4'))
-      const frozen = freeze(clip)
+      const frozen = freeze(clip, testNotation)
 
       const cc: Array<{ sourceId: number; controller: number; value: number; tick: number }> = []
       frozen.visitCC((sourceId, controller, value, tick) => {
@@ -93,7 +94,7 @@ describe('freeze', () => {
   describe('edge cases', () => {
     it('empty clip produces frozen clip with zero notes', () => {
       const clip = Clip.pipe()
-      const frozen = freeze(clip)
+      const frozen = freeze(clip, testNotation)
 
       const notes: Array<{ pitch: number }> = []
       frozen.visitNotes((_, pitch) => notes.push({ pitch }))

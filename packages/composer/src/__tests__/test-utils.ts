@@ -13,7 +13,7 @@ import type { BaseCompositionBridgeParams } from '../composition/BaseComposition
 import { RecordingBridge } from '../composition/RecordingBridge'
 import type { RecordedNote, RecordedCC, RecordedBend } from '../interfaces/recorded-events'
 import { CompositionBridge } from '../interfaces/composition-bridge'
-import type { Notation } from '@symphonyscript/core'
+import type { Notation, NoteName, IntervalName, Degree, ChordSymbol, ChordIntervals } from '@symphonyscript/core'
 
 // ============================================================================
 // Test Notation — minimal 12-EDO stub
@@ -49,7 +49,7 @@ const testNotationImpl: Notation = {
   prefersFlats: () => false,
   getCapabilities: () => ({ chords: false, degrees: true, progressions: false }),
 
-  noteToCents(input: string | number): number {
+  noteToCents(input: NoteName | number): number {
     if (typeof input === 'number') return input
     const m = input.match(/^([A-G][b#]?)(-?\d+)$/)
     if (!m) throw new Error(`Invalid note: ${input}`)
@@ -64,24 +64,24 @@ const testNotationImpl: Notation = {
     return PC_NAMES[((semi % 12) + 12) % 12] + oct
   },
 
-  noteToMidi(input: string): number {
+  noteToMidi(input: NoteName): number {
     return Math.round(testNotationImpl.noteToCents(input) / 100)
   },
 
-  noteToFrequency(input: string): number {
+  noteToFrequency(input: NoteName): number {
     const cents = testNotationImpl.noteToCents(input)
     return 440 * Math.pow(2, (cents - 5700) / 1200) // A4 = 5700 cents
   },
 
-  transposeNote(input: string, cents: number): string {
+  transposeNote(input: NoteName, cents: number): string {
     return testNotationImpl.centsToNote(testNotationImpl.noteToCents(input) + cents)
   },
 
-  isEnharmonic(a: string, b: string): boolean {
+  isEnharmonic(a: NoteName, b: NoteName): boolean {
     return testNotationImpl.noteToCents(a) === testNotationImpl.noteToCents(b)
   },
 
-  intervalToCents(input: string | number): number {
+  intervalToCents(input: IntervalName | number): number {
     if (typeof input === 'number') return input
     const map: Record<string, number> = {
       'P1': 0, 'm2': 100, 'M2': 200, 'm3': 300, 'M3': 400,
@@ -106,20 +106,20 @@ const testNotationImpl: Notation = {
 
   getKeySignature: (_r: any, _m: any): any => ({ sharps: 0, flats: 0 } as any),
 
-  degreeToCents(input: string | number, scale: number[]): number {
+  degreeToCents(input: Degree | number, scale: number[]): number {
     if (typeof input === 'number') return input
     const d = parseInt(input, 10) - 1
     if (d < 0 || d >= scale.length) throw new Error(`Invalid degree: ${input}`)
     return scale[d]
   },
 
-  chordToIntervals: (input: string | readonly number[]): any => {
+  chordToIntervals: (input: ChordSymbol | ChordIntervals): any => {
     if (Array.isArray(input)) return input
     throw new Error('Unsupported')
   },
   intervalsToChord: (_i: any): string => { throw new Error('Unsupported') },
-  getSupportedChords: (): string[] => [],
-  resolveProgression: (_n: string[], _s: number[]): any[] => [],
+  getSupportedChords: (): ChordSymbol[] => [],
+  resolveProgression: (_n: Degree[], _s: number[]): any[] => [],
 
   durationToTicks(input: string, ppq: number): number {
     const map: Record<string, number> = { '1n': 4, '2n': 2, '4n': 1, '8n': 0.5, '16n': 0.25 }

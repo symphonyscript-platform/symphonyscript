@@ -1,5 +1,5 @@
 import { CompositionBridge } from '@symphonyscript/composer'
-import type { ChordIntervals } from '@symphonyscript/core'
+import type { ChordIntervals, ChordSymbol, NoteName } from '@symphonyscript/core'
 import type { VoiceLeadingStyle } from '@symphonyscript/theory'
 import { closeVoicing, drop2Voicing, openVoicing } from '@symphonyscript/theory'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
@@ -127,12 +127,12 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
     const notation = bridge.notation()
 
     if (this._symbol !== null) {
-      chordIntervals = notation.chordToIntervals(this._symbol)
+      chordIntervals = notation.chordToIntervals(this._symbol as ChordSymbol)
 
       // Parse root from symbol if possible, fall back to stored root
       try {
         const rootNote = this._symbol.match(/^[A-G][#b]?/)?.[0]
-        root = rootNote ? notation.noteToCents(rootNote + '4') : notation.noteToCents(this._root)
+        root = rootNote ? notation.noteToCents((rootNote + '4') as NoteName) : notation.noteToCents(this._root)
       } catch {
         root = notation.noteToCents(this._root)
       }

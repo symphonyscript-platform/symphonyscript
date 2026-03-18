@@ -2,7 +2,7 @@ import { Notation } from './interfaces/notation'
 import { Range } from './interfaces/range'
 import { NotationCapabilities } from './interfaces/notation-capabilities'
 import { ChordIntervals, KeySignature, ScaleIntervals } from './types'
-import { ScaleMode, PitchClass } from './registries'
+import { ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol } from './registries'
 import { ChordResolution } from './interfaces/chord-resolution'
 import { NotationInputError } from './errors'
 
@@ -26,7 +26,7 @@ export abstract class BaseNotation implements Notation {
    *
    * @throws {NotationInputError} If the input is invalid or out of MIDI range
    */
-  noteToMidi(input: string): number {
+  noteToMidi(input: NoteName): number {
     const cents = this.noteToCents(input)
     const midi = Math.round(cents / 100)
 
@@ -43,7 +43,7 @@ export abstract class BaseNotation implements Notation {
    *
    * @throws {NotationInputError} If the input is not a valid note
    */
-  noteToFrequency(input: string): number {
+  noteToFrequency(input: NoteName): number {
     const cents = this.noteToCents(input)
     // A4 = 5700 cents from C0
     return this.getTuningHz() * Math.pow(2, (cents - 5700) / 1200)
@@ -55,7 +55,7 @@ export abstract class BaseNotation implements Notation {
    *
    * @throws {NotationInputError} If the input note is not valid
    */
-  transposeNote(note: string, cents: number): string {
+  transposeNote(note: NoteName, cents: number): string {
     const noteCents = this.noteToCents(note)
     return this.centsToNote(noteCents + cents)
   }
@@ -66,7 +66,7 @@ export abstract class BaseNotation implements Notation {
    *
    * @throws {NotationInputError} If either input is not a valid note
    */
-  isEnharmonic(a: string, b: string): boolean {
+  isEnharmonic(a: NoteName, b: NoteName): boolean {
     return this.noteToCents(a) === this.noteToCents(b)
   }
 
@@ -80,10 +80,10 @@ export abstract class BaseNotation implements Notation {
   abstract prefersFlats(): boolean
   abstract getCapabilities(): NotationCapabilities
 
-  abstract noteToCents(input: string | number): number
+  abstract noteToCents(input: NoteName | number): number
   abstract centsToNote(cents: number): string
 
-  abstract intervalToCents(input: string | number): number
+  abstract intervalToCents(input: IntervalName | number): number
   abstract centsToInterval(cents: number): string
 
   abstract getScaleIntervals(mode: ScaleMode): ScaleIntervals
@@ -91,13 +91,13 @@ export abstract class BaseNotation implements Notation {
 
   abstract getKeySignature(root: PitchClass, mode: ScaleMode): KeySignature
 
-  abstract degreeToCents(input: string | number, scale: number[]): number
+  abstract degreeToCents(input: Degree | number, scale: number[]): number
 
-  abstract chordToIntervals(input: string | ChordIntervals): ChordIntervals
+  abstract chordToIntervals(input: ChordSymbol | ChordIntervals): ChordIntervals
   abstract intervalsToChord(intervals: ChordIntervals): string
-  abstract getSupportedChords(): string[]
+  abstract getSupportedChords(): ChordSymbol[]
 
-  abstract resolveProgression(numerals: string[], scale: number[]): ChordResolution[]
+  abstract resolveProgression(numerals: Degree[], scale: number[]): ChordResolution[]
 
   abstract durationToTicks(input: string, ppq: number): number
   abstract ticksToDuration(ticks: number, ppq: number): string

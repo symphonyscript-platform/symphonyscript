@@ -1,3 +1,4 @@
+import type { NoteName } from '@symphonyscript/core'
 import { NoteBuilder } from '../builders/NoteBuilder'
 import type { NotePitch } from '../types'
 import { resolveDuration, type NoteDuration } from '../utils/duration'
@@ -35,7 +36,7 @@ export function note(input?: NotePitch, duration?: NoteDuration): NoteBuilder {
 
   if (typeof input === 'string') {
     // Defer string→cents resolution to apply-time via notation.noteToCents()
-    return new NoteBuilder({ rawPitch: input, duration: resolvedDuration })
+    return new NoteBuilder({ rawPitch: input as NoteName, duration: resolvedDuration })
   }
 
   // Numeric input = absolute cents from C0
