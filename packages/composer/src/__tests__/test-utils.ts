@@ -37,6 +37,54 @@ const SCALES: Record<string, readonly number[]> = {
   'minor': [0, 200, 300, 500, 700, 800, 1000],
 }
 
+/** Roman numeral → 0-based scale degree index */
+const ROMAN_TO_DEGREE: Record<string, number> = {
+  'I': 0, 'II': 1, 'III': 2, 'IV': 3, 'V': 4, 'VI': 5, 'VII': 6,
+}
+
+/** Chord quality suffix → intervals in cents from root */
+const TEST_CHORD_MAP: Record<string, number[]> = {
+  '':    [0, 400, 700],       // major triad
+  'm':   [0, 300, 700],       // minor triad
+  'dim': [0, 300, 600],       // diminished triad
+  'aug': [0, 400, 800],       // augmented triad
+  '7':   [0, 400, 700, 1000], // dominant 7th
+  'maj7':[0, 400, 700, 1100], // major 7th
+  'm7':  [0, 300, 700, 1000], // minor 7th
+}
+
+/**
+ * Parse a roman numeral like 'V7', 'bVII', 'ii', 'iv7' into components.
+ * Returns the 0-based degree index, accidental, and chord quality suffix.
+ */
+function parseTestRoman(input: string): { degreeIndex: number; accidental: string; quality: string; isLowercase: boolean } {
+  const m = input.match(/^([b#]?)([IViv]+)(.*)$/)
+  if (!m) throw new Error(`Invalid roman numeral: ${input}`)
+  const accidental = m[1]
+  const numeral = m[2]
+  const suffix = m[3]
+
+  const isLowercase = numeral === numeral.toLowerCase()
+  const upper = numeral.toUpperCase()
+  const degreeIndex = ROMAN_TO_DEGREE[upper]
+  if (degreeIndex === undefined) throw new Error(`Unknown roman numeral: ${numeral}`)
+
+  // Determine quality: lowercase implies minor, suffix overrides
+  let quality = suffix
+  if (isLowercase) {
+    if (!suffix.startsWith('m') && !suffix.startsWith('dim')) {
+      if (suffix === '') {
+        quality = 'm'
+      } else if (suffix.length > 0 && suffix[0] >= '0' && suffix[0] <= '9') {
+        // ii7 → m7, vi9 → m9
+        quality = 'm' + suffix
+      }
+    }
+  }
+
+  return { degreeIndex, accidental, quality, isLowercase }
+}
+
 /**
  * Minimal Notation for tests — 12-EDO Western names.
  * Implements Notation interface without @symphonyscript/notations.
@@ -47,7 +95,7 @@ const testNotationImpl: Notation = {
   getTuningHz: () => 440,
   getPitchRange: () => ({ min: 0, max: 13200 }),
   prefersFlats: () => false,
-  getCapabilities: () => ({ chords: false, degrees: true, progressions: false }),
+  getCapabilities: () => ({ chords: true, degrees: true, progressions: true }),
 
   noteToCents(input: NoteName | number): number {
     if (typeof input === 'number') return input
@@ -85,7 +133,7 @@ const testNotationImpl: Notation = {
     if (typeof input === 'number') return input
     const map: Record<string, number> = {
       'P1': 0, 'm2': 100, 'M2': 200, 'm3': 300, 'M3': 400,
-      'P4': 500, 6900: 600, 'P5': 700, 'm6': 800, 'M6': 900,
+      'P4': 500, 'A4': 600, 'P5': 700, 'm6': 800, 'M6': 900,
       'm7': 1000, 'M7': 1100, 'P8': 1200,
     }
     const v = map[input]
@@ -94,7 +142,7 @@ const testNotationImpl: Notation = {
   },
 
   centsToInterval(cents: number): string {
-    const names = ['P1', 'm2', 'M2', 'm3', 'M3', 'P4', 6900, 'P5', 'm6', 'M6', 'm7', 'M7']
+    const names = ['P1', 'm2', 'M2', 'm3', 'M3', 'P4', 'A4', 'P5', 'm6', 'M6', 'm7', 'M7']
     return names[((Math.round(cents / 100) % 12) + 12) % 12]
   },
 
@@ -108,18 +156,34 @@ const testNotationImpl: Notation = {
 
   degreeToCents(input: Degree | number, scale: number[]): number {
     if (typeof input === 'number') return input
-    const d = parseInt(input, 10) - 1
-    if (d < 0 || d >= scale.length) throw new Error(`Invalid degree: ${input}`)
-    return scale[d]
+    const parsed = parseTestRoman(String(input))
+    if (parsed.degreeIndex >= scale.length) throw new Error(`Invalid degree: ${input}`)
+    let cents = scale[parsed.degreeIndex]
+    if (parsed.accidental === 'b') cents -= 100
+    else if (parsed.accidental === '#') cents += 100
+    return cents
   },
 
   chordToIntervals: (input: ChordSymbol | ChordIntervals): any => {
     if (Array.isArray(input)) return input
-    throw new Error('Unsupported')
+    const suffix = String(input)
+    const intervals = TEST_CHORD_MAP[suffix]
+    if (intervals) return intervals
+    throw new Error(`Unknown chord: ${suffix}`)
   },
   intervalsToChord: (_i: any): string => { throw new Error('Unsupported') },
   getSupportedChords: (): ChordSymbol[] => [],
-  resolveProgression: (_n: Degree[], _s: number[]): any[] => [],
+  resolveProgression(numerals: Degree[], scale: number[]): any[] {
+    return numerals.map(numeral => {
+      const parsed = parseTestRoman(String(numeral))
+      let rootCents = scale[parsed.degreeIndex]
+      if (parsed.accidental === 'b') rootCents -= 100
+      else if (parsed.accidental === '#') rootCents += 100
+      const intervals = TEST_CHORD_MAP[parsed.quality]
+      if (!intervals) throw new Error(`Unknown chord quality '${parsed.quality}' from numeral '${numeral}'`)
+      return { rootCents, intervals }
+    })
+  },
 
   durationToTicks(input: string, ppq: number): number {
     const map: Record<string, number> = { '1n': 4, '2n': 2, '4n': 1, '8n': 0.5, '16n': 0.25 }
