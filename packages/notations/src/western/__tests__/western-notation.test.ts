@@ -9,7 +9,6 @@ import {
   ChordSymbol,
   Degree,
   IntervalName,
-  NotationInputError,
   NoteName,
   PitchClass,
   ScaleMode
@@ -78,19 +77,19 @@ describe('WesternNotation', () => {
     })
 
     it('throws on invalid input "xyz"', () => {
-      expect(() => n.noteToCents('xyz' as unknown as NoteName)).toThrow(NotationInputError)
+      expect(() => n.noteToCents('xyz' as unknown as NoteName)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
 
     it('throws on empty string', () => {
-      expect(() => n.noteToCents('' as unknown as NoteName)).toThrow(NotationInputError)
+      expect(() => n.noteToCents('' as unknown as NoteName)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
 
     it('throws on note without octave "C"', () => {
-      expect(() => n.noteToCents('C' as unknown as NoteName)).toThrow(NotationInputError)
+      expect(() => n.noteToCents('C' as unknown as NoteName)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
 
     it('throws on invalid letter "H4"', () => {
-      expect(() => n.noteToCents('H4' as unknown as NoteName)).toThrow(NotationInputError)
+      expect(() => n.noteToCents('H4' as unknown as NoteName)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
   })
 
@@ -106,11 +105,11 @@ describe('WesternNotation', () => {
     })
 
     it('throws on negative cents', () => {
-      expect(() => n.centsToNote(-100)).toThrow(NotationInputError)
+      expect(() => n.centsToNote(-100)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
 
     it('throws on cents > 13200', () => {
-      expect(() => n.centsToNote(14000)).toThrow(NotationInputError)
+      expect(() => n.centsToNote(14000)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
   })
 
@@ -165,11 +164,11 @@ describe('WesternNotation', () => {
     })
 
     it('throws on "xyz"', () => {
-      expect(() => n.intervalToCents('xyz' as unknown as IntervalName)).toThrow(NotationInputError)
+      expect(() => n.intervalToCents('xyz' as unknown as IntervalName)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
 
     it('throws on empty string', () => {
-      expect(() => n.intervalToCents('' as unknown as IntervalName)).toThrow(NotationInputError)
+      expect(() => n.intervalToCents('' as unknown as IntervalName)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
   })
 
@@ -187,7 +186,7 @@ describe('WesternNotation', () => {
     })
 
     it('throws on 150 (no match)', () => {
-      expect(() => n.centsToInterval(150)).toThrow(NotationInputError)
+      expect(() => n.centsToInterval(150)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
   })
 
@@ -209,7 +208,7 @@ describe('WesternNotation', () => {
     })
 
     it('throws on "xyz"', () => {
-      expect(() => n.getScaleIntervals('xyz' as unknown as ScaleMode)).toThrow(NotationInputError)
+      expect(() => n.getScaleIntervals('xyz' as unknown as ScaleMode)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
   })
 
@@ -244,11 +243,11 @@ describe('WesternNotation', () => {
     })
 
     it('throws on invalid root', () => {
-      expect(() => n.getKeySignature('xyz' as unknown as PitchClass, 'major')).toThrow(NotationInputError)
+      expect(() => n.getKeySignature('xyz' as unknown as PitchClass, 'major')).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
 
     it('throws on invalid mode', () => {
-      expect(() => n.getKeySignature('C', 'xyz' as unknown as ScaleMode)).toThrow(NotationInputError)
+      expect(() => n.getKeySignature('C', 'xyz' as unknown as ScaleMode)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
   })
 
@@ -276,7 +275,7 @@ describe('WesternNotation', () => {
     })
 
     it('throws on "xyz"', () => {
-      expect(() => n.degreeToCents('xyz' as unknown as Degree, majorScale)).toThrow(NotationInputError)
+      expect(() => n.degreeToCents('xyz' as unknown as Degree, majorScale)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
   })
 
@@ -302,11 +301,11 @@ describe('WesternNotation', () => {
     })
 
     it('throws on "Cxyz"', () => {
-      expect(() => n.chordToIntervals('Cxyz' as unknown as ChordSymbol)).toThrow(NotationInputError)
+      expect(() => n.chordToIntervals('Cxyz' as unknown as ChordSymbol)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
 
     it('throws on "xyz"', () => {
-      expect(() => n.chordToIntervals('xyz' as unknown as ChordSymbol)).toThrow(NotationInputError)
+      expect(() => n.chordToIntervals('xyz' as unknown as ChordSymbol)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
   })
 
@@ -319,7 +318,7 @@ describe('WesternNotation', () => {
     })
 
     it('throws on unknown intervals', () => {
-      expect(() => n.intervalsToChord([0, 123, 456])).toThrow(NotationInputError)
+      expect(() => n.intervalsToChord([0, 123, 456])).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
   })
 
@@ -377,7 +376,7 @@ describe('WesternNotation', () => {
     })
 
     it('throws on invalid numeral', () => {
-      expect(() => n.resolveProgression(['I', 'xyz'] as unknown as Degree[], majorScale)).toThrow(NotationInputError)
+      expect(() => n.resolveProgression(['I', 'xyz'] as unknown as Degree[], majorScale)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
   })
 
@@ -398,7 +397,7 @@ describe('WesternNotation', () => {
     })
 
     it('throws on "xyz"', () => {
-      expect(() => n.durationToTicks('xyz', 480)).toThrow(NotationInputError)
+      expect(() => n.durationToTicks('xyz', 480)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
   })
 
@@ -420,7 +419,7 @@ describe('WesternNotation', () => {
     })
 
     it('throws on unmatchable tick count', () => {
-      expect(() => n.ticksToDuration(7, 480)).toThrow(NotationInputError)
+      expect(() => n.ticksToDuration(7, 480)).toThrow(expect.objectContaining({ name: 'NotationInputError' }))
     })
   })
 })
