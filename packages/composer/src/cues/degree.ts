@@ -1,5 +1,5 @@
 import { DegreeBuilder } from '../builders/DegreeBuilder'
-import { resolveDuration, type NoteDuration } from '../utils/duration'
+import type { NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link DegreeBuilder} that emits a single pitch from a scale degree.
@@ -26,6 +26,5 @@ import { resolveDuration, type NoteDuration } from '../utils/duration'
  * ```
  */
 export function degree(degree?: number, duration?: NoteDuration): DegreeBuilder {
-  const resolvedDuration = resolveDuration(duration)
-  return new DegreeBuilder({ degree, duration: resolvedDuration })
+  return new DegreeBuilder({ degree, duration })
 }

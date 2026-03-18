@@ -1,5 +1,5 @@
 import { DegreeChordBuilder } from '../builders/DegreeChordBuilder'
-import { resolveDuration, type NoteDuration } from '../utils/duration'
+import type { NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link DegreeChordBuilder} that emits a chord from explicit scale degrees.
@@ -27,6 +27,5 @@ import { resolveDuration, type NoteDuration } from '../utils/duration'
  * ```
  */
 export function degreeChord(degrees?: number[], duration?: NoteDuration): DegreeChordBuilder {
-  const resolvedDuration = resolveDuration(duration)
-  return new DegreeChordBuilder({ degrees, duration: resolvedDuration })
+  return new DegreeChordBuilder({ degrees, duration })
 }

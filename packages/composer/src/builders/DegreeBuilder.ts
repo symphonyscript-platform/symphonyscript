@@ -70,7 +70,7 @@ export class DegreeBuilder extends PitchStepBuilder<DegreeBuilder> {
       + this.shared.transposeCents
 
     let target = this.applyFlags(bridge)
-    const scaledDuration = this.resolvedDuration()
+    const scaledDuration = this.resolvedDuration(bridge)
 
     for (let i = 0; i < this.shared.repeatCount; ++i) {
       target = target.withNote(

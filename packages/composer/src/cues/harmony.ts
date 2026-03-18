@@ -1,6 +1,6 @@
 import { HarmonyBuilder, type ChordIntervals } from '../builders/HarmonyBuilder'
 import type { NotePitch } from '../types'
-import { resolveDuration, type NoteDuration } from '../utils/duration'
+import type { NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link HarmonyBuilder} from chord intervals and root pitch.
@@ -28,11 +28,9 @@ export function harmony(
   root?: NotePitch,
   duration?: NoteDuration,
 ): HarmonyBuilder {
-  const resolvedDuration = resolveDuration(duration)
-
   return new HarmonyBuilder({
     intervals: intervals ?? [],
-    root: root,
-    duration: resolvedDuration,
+    root,
+    duration,
   })
 }

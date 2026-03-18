@@ -1,6 +1,6 @@
 import { DecrescendoBuilder } from '../builders/DecrescendoBuilder'
 import { CrescendoBuilder } from '../builders/CrescendoBuilder'
-import { resolveDuration, type NoteDuration } from '../utils/duration'
+import type { NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link CrescendoBuilder} for crescendo: ramps velocity from soft to
@@ -24,8 +24,7 @@ import { resolveDuration, type NoteDuration } from '../utils/duration'
  * ```
  */
 export function crescendo(duration?: NoteDuration): CrescendoBuilder {
-  const resolvedDuration = resolveDuration(duration)
-  return new CrescendoBuilder({ duration: resolvedDuration })
+  return new CrescendoBuilder({ duration })
 }
 
 /**
@@ -50,6 +49,5 @@ export function crescendo(duration?: NoteDuration): CrescendoBuilder {
  * ```
  */
 export function decrescendo(duration?: NoteDuration): DecrescendoBuilder {
-  const resolvedDuration = resolveDuration(duration)
-  return new DecrescendoBuilder({ duration: resolvedDuration })
+  return new DecrescendoBuilder({ duration })
 }

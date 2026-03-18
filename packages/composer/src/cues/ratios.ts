@@ -1,6 +1,6 @@
 import { RatioHarmonyBuilder } from '../builders/RatioHarmonyBuilder'
 import { ratioToCents } from '@symphonyscript/theory'
-import { resolveDuration, type NoteDuration } from '../utils/duration'
+import type { NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link RatioHarmonyBuilder} from frequency ratios.
@@ -30,14 +30,12 @@ export function ratios(
   rootCents: number = 4800,
   duration?: NoteDuration,
 ): RatioHarmonyBuilder {
-  const resolvedDuration = resolveDuration(duration)
-
   // Convert ratios to cent intervals from root
   const centIntervals = freqRatios.map(r => Math.round(ratioToCents(r)))
 
   return new RatioHarmonyBuilder({
     intervals: centIntervals,
     root: rootCents,
-    duration: resolvedDuration,
+    duration,
   })
 }

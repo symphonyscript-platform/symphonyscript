@@ -62,4 +62,19 @@ declare module '@symphonyscript/core' {
       // Altered
       | '7b9' | '7-9' | '7#9' | '7+9' | '7b5' | '7-5' | '7alt'
   }
+  interface DurationRegistry {
+    western:
+      // Standard (long)
+      | 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth' | 'thirtysecond'
+      // Standard (short)
+      | '1n' | '2n' | '4n' | '8n' | '16n' | '32n'
+      // Dotted (long)
+      | 'dotted.whole' | 'dotted.half' | 'dotted.quarter' | 'dotted.eighth'
+      // Dotted (short)
+      | '1n.' | '2n.' | '4n.' | '8n.' | '16n.'
+      // Triplet (long)
+      | 'triplet.quarter' | 'triplet.eighth'
+      // Triplet (short)
+      | '2t' | '4t' | '8t' | '16t'
+  }
 }

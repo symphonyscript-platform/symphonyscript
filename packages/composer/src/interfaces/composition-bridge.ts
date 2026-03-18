@@ -14,7 +14,9 @@ import { ExecutionContext, Notation } from '@symphonyscript/core'
  * transform events (e.g. {@link TieBridge}, {@link HarmonizeBridge}).
  */
 export interface CompositionBridge {
-    /** Current position in ticks (PPQ 480). */
+    /** Pulses per quarter note (tick resolution). */
+    readonly ppq: number
+    /** Current position in ticks. */
     readonly tick: number
     /** Default velocity (0–1000) for notes when omitted. */
     readonly velocity: number

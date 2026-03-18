@@ -118,7 +118,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
    */
   apply(bridge: CompositionBridge): CompositionBridge {
     let target = this.applyFlags(bridge)
-    const scaledDuration = this.resolvedDuration()
+    const scaledDuration = this.resolvedDuration(bridge)
 
     // Resolve intervals: symbol-based or direct
     let chordIntervals: ChordIntervals

@@ -1,7 +1,7 @@
 import type { NoteName } from '@symphonyscript/core'
 import { NoteBuilder } from '../builders/NoteBuilder'
 import type { NotePitch } from '../types'
-import { resolveDuration, type NoteDuration } from '../utils/duration'
+import type { NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link NoteBuilder} for single-note emission.
@@ -29,16 +29,15 @@ import { resolveDuration, type NoteDuration } from '../utils/duration'
  * ```
  */
 export function note(input?: NotePitch, duration?: NoteDuration): NoteBuilder {
-  const resolvedDuration = resolveDuration(duration)
   if (input === undefined) {
-    return new NoteBuilder({ duration: resolvedDuration })
+    return new NoteBuilder({ duration })
   }
 
   if (typeof input === 'string') {
     // Defer string→cents resolution to apply-time via notation.noteToCents()
-    return new NoteBuilder({ rawPitch: input as NoteName, duration: resolvedDuration })
+    return new NoteBuilder({ rawPitch: input as NoteName, duration })
   }
 
   // Numeric input = absolute cents from C0
-  return new NoteBuilder({ pitchCents: input, rawPitch: null, duration: resolvedDuration })
+  return new NoteBuilder({ pitchCents: input, rawPitch: null, duration })
 }

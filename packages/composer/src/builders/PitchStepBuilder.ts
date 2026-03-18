@@ -1,4 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import type { DurationName } from '@symphonyscript/core'
 import { MIDI_CC } from '@symphonyscript/theory'
 
 /** Accidental override for key-signature-aware pitch resolution. */
@@ -10,8 +11,8 @@ export type AccidentalOverride = 'sharp' | 'flat' | 'natural'
  * Subclasses extend this with pitch-specific fields (e.g. `mask`, `root`, `rawPitch`).
  */
 export interface PitchStepParams {
-  /** Note duration in ticks. `null` = use bridge default at apply-time. */
-  duration: number | null
+  /** Note duration as ticks or a notation duration name. `null` = use bridge default at apply-time. */
+  duration: DurationName | number | null
   /** Multiplier applied to duration (e.g. 0.5 for staccato). Default: 1.0. */
   durationScale: number
   /** Velocity override. `null` = use bridge default (typically 800). */
@@ -399,13 +400,20 @@ export abstract class PitchStepBuilder<T extends PitchStepBuilder<T>> implements
   /**
    * Compute effective duration by applying durationScale to base duration.
    *
+   * If duration is a string ({@link DurationName}), it is resolved via
+   * `bridge.notation().durationToTicks()` at apply-time.
    * Returns `undefined` when `duration` is null (subclasses use bridge default).
    *
+   * @param bridge - CompositionBridge for resolving string durations
    * @returns Scaled duration in ticks, or undefined if no base duration set
    */
-  protected resolvedDuration(): number | undefined {
-    const baseDuration = this.shared.duration ?? undefined
-    if (baseDuration === undefined) return undefined
+  protected resolvedDuration(bridge: CompositionBridge): number | undefined {
+    const raw = this.shared.duration
+    if (raw == null) return undefined
+
+    const baseDuration = typeof raw === 'string'
+      ? bridge.notation().durationToTicks(raw as DurationName, bridge.ppq)
+      : raw
 
     return Math.round(baseDuration * this.shared.durationScale)
   }

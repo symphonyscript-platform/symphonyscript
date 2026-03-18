@@ -1,5 +1,5 @@
 import { SwingBuilder } from '../builders/SwingBuilder'
-import { resolveDuration, type NoteDuration } from '../utils/duration'
+import type { NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link SwingBuilder} for swing feel: delays offbeat notes within a grid
@@ -24,9 +24,5 @@ import { resolveDuration, type NoteDuration } from '../utils/duration'
  * ```
  */
 export function swing(amount?: number, grid?: NoteDuration): SwingBuilder {
-  const resolvedGrid = grid !== undefined ? resolveDuration(grid) : undefined
-  return new SwingBuilder({
-    amount,
-    grid: resolvedGrid,
-  })
+  return new SwingBuilder({ amount, grid })
 }

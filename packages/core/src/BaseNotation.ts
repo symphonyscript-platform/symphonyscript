@@ -2,7 +2,7 @@ import { Notation } from './interfaces/notation'
 import { Range } from './interfaces/range'
 import { NotationCapabilities } from './interfaces/notation-capabilities'
 import { ChordIntervals, KeySignature, ScaleIntervals } from './types'
-import { ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol } from './registries'
+import { ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol, DurationName } from './registries'
 import { ChordResolution } from './interfaces/chord-resolution'
 import { NotationInputError } from './errors'
 
@@ -99,6 +99,6 @@ export abstract class BaseNotation implements Notation {
 
   abstract resolveProgression(numerals: Degree[], scale: number[]): ChordResolution[]
 
-  abstract durationToTicks(input: string, ppq: number): number
-  abstract ticksToDuration(ticks: number, ppq: number): string
+  abstract durationToTicks(input: DurationName, ppq: number): number
+  abstract ticksToDuration(ticks: number, ppq: number): DurationName
 }

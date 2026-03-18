@@ -66,7 +66,7 @@ export class RatioHarmonyBuilder extends PitchStepBuilder<RatioHarmonyBuilder> {
    */
   apply(bridge: CompositionBridge): CompositionBridge {
     let target = this.applyFlags(bridge)
-    const scaledDuration = this.resolvedDuration()
+    const scaledDuration = this.resolvedDuration(bridge)
 
     const resolvedRoot = this._root
       + this.shared.accidental

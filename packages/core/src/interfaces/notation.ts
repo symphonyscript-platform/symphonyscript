@@ -1,5 +1,5 @@
 import { ChordIntervals, KeySignature, ScaleIntervals } from '../types'
-import { ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol } from '../registries'
+import { ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol, DurationName } from '../registries'
 import { Range } from './range'
 import { NotationCapabilities } from './notation-capabilities'
 import { ChordResolution } from './chord-resolution'
@@ -287,13 +287,13 @@ export interface Notation {
    * Parse a duration name into ticks.
    *
    * @param input - Duration name in this notation's format
-   *                (e.g., `'quarter'`, `'half'`, `'eighth'`, `'whole'`)
+   *                (e.g., `'quarter'`, `'4n'`, `'half'`, `'eighth'`)
    * @param ppq - Pulses per quarter note (tick resolution, e.g., `480`)
    *
    * @returns Duration in ticks (e.g., `480` for a quarter note at PPQ 480)
    * @throws {NotationInputError} If the duration name is not recognized
    */
-  durationToTicks(input: string, ppq: number): number
+  durationToTicks(input: DurationName, ppq: number): number
 
   /**
    * Format a tick count as a duration name in this notation's format.
@@ -304,5 +304,5 @@ export interface Notation {
    * @returns Duration name (e.g., `'quarter'` for `480` ticks at PPQ 480)
    * @throws {NotationInputError} If the tick count doesn't map to a named duration
    */
-  ticksToDuration(ticks: number, ppq: number): string
+  ticksToDuration(ticks: number, ppq: number): DurationName
 }

@@ -105,18 +105,39 @@ export const CENTS_TO_INTERVAL: Readonly<Record<number, string>> = {
 
 /** Duration name → quarter-note multiplier. */
 export const DURATION_MAP: Readonly<Record<string, number>> = {
+  // Standard (long)
   'whole': 4,
   'half': 2,
   'quarter': 1,
   'eighth': 0.5,
   'sixteenth': 0.25,
   'thirtysecond': 0.125,
+  // Standard (short)
+  '1n': 4,
+  '2n': 2,
+  '4n': 1,
+  '8n': 0.5,
+  '16n': 0.25,
+  '32n': 0.125,
+  // Dotted (long)
   'dotted.whole': 6,
   'dotted.half': 3,
   'dotted.quarter': 1.5,
   'dotted.eighth': 0.75,
+  // Dotted (short)
+  '1n.': 6,
+  '2n.': 3,
+  '4n.': 1.5,
+  '8n.': 0.75,
+  '16n.': 0.375,
+  // Triplet (long)
   'triplet.quarter': 2 / 3,
   'triplet.eighth': 1 / 3,
+  // Triplet (short)
+  '2t': 4 / 3,
+  '4t': 2 / 3,
+  '8t': 1 / 3,
+  '16t': 1 / 6,
 }
 
 /** Sorted [multiplier, name] pairs for reverse lookup (descending by multiplier). */

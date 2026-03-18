@@ -8,7 +8,7 @@
  */
 
 import { BaseNotation, NotationInputError } from '@symphonyscript/core'
-import type { Range, NotationCapabilities, ChordIntervals, KeySignature, ScaleIntervals, ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol } from '@symphonyscript/core'
+import type { Range, NotationCapabilities, ChordIntervals, KeySignature, ScaleIntervals, ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol, DurationName } from '@symphonyscript/core'
 import type { ChordResolution } from '@symphonyscript/core'
 
 import {
@@ -248,15 +248,15 @@ export class WesternNotation extends BaseNotation {
   // Rhythm
   // ==========================================================================
 
-  durationToTicks(input: string, ppq: number): number {
-    const multiplier = DURATION_MAP[input]
+  durationToTicks(input: DurationName, ppq: number): number {
+    const multiplier = DURATION_MAP[input as string]
     if (multiplier === undefined) {
-      throw new NotationInputError(this.getId(), 'durationToTicks', input)
+      throw new NotationInputError(this.getId(), 'durationToTicks', input as string)
     }
     return Math.round(multiplier * ppq)
   }
 
-  ticksToDuration(ticks: number, ppq: number): string {
+  ticksToDuration(ticks: number, ppq: number): DurationName {
     const ratio = ticks / ppq
 
     let bestName = ''
@@ -276,6 +276,6 @@ export class WesternNotation extends BaseNotation {
       throw new NotationInputError(this.getId(), 'ticksToDuration', String(ticks))
     }
 
-    return bestName
+    return bestName as DurationName
   }
 }

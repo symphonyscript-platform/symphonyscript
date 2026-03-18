@@ -10,8 +10,10 @@ import { ThunkNode } from '../interfaces/thunk-node'
 export interface BaseCompositionBridgeParams {
   /** Default notation to use for user-ergonomics (parsing notes, conversion, etc) */
   notation: Notation
-  /** Current tick position in ticks (PPQ 480). Default: 0 */
+  /** Current tick position. Default: 0 */
   tick: number
+  /** Pulses per quarter note (tick resolution). Default: 480 */
+  ppq: number
   /** Default velocity (0–1000). Default: 800 */
   velocity: number
   /** Default note duration when omitted in withNote. Default: 1 */
@@ -89,6 +91,7 @@ export class BaseCompositionBridge implements CompositionBridge {
     this.params = {
       notation: params.notation,
       tick: params.tick ?? 0,
+      ppq: params.ppq ?? 480,
       velocity: params.velocity ?? 800,
       defaultDuration: params.defaultDuration ?? 1,
       tempo: params.tempo ?? 120,
@@ -113,6 +116,7 @@ export class BaseCompositionBridge implements CompositionBridge {
   }
 
   get tick() { return this.params.tick }
+  get ppq() { return this.params.ppq }
   get velocity() { return this.params.velocity }
   get defaultDuration() { return this.params.defaultDuration }
   get tempo() { return this.params.tempo }

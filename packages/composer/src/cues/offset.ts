@@ -1,5 +1,5 @@
 import { OffsetBuilder } from '../builders/OffsetBuilder'
-import { resolveDuration, type NoteDuration } from '../utils/duration'
+import type { NoteDuration } from '../utils/duration'
 
 /**
  * Create an {@link OffsetBuilder} that emits a pitch relative to the tuning reference.
@@ -24,6 +24,5 @@ import { resolveDuration, type NoteDuration } from '../utils/duration'
  * ```
  */
 export function offset(cents: number, duration?: NoteDuration): OffsetBuilder {
-  const resolvedDuration = resolveDuration(duration)
-  return new OffsetBuilder({ offsetCents: cents, duration: resolvedDuration })
+  return new OffsetBuilder({ offsetCents: cents, duration })
 }

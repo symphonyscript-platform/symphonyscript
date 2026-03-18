@@ -1,6 +1,6 @@
 import type { ChordCode } from '@symphonyscript/core'
 import { HarmonyBuilder } from '../builders/HarmonyBuilder'
-import { resolveDuration, type NoteDuration } from '../utils/duration'
+import type { NoteDuration } from '../utils/duration'
 
 /**
  * Create a {@link HarmonyBuilder} from a chord symbol string.
@@ -30,14 +30,5 @@ import { resolveDuration, type NoteDuration } from '../utils/duration'
  * ```
  */
 export function chord(symbol?: ChordCode, duration?: NoteDuration): HarmonyBuilder {
-  const resolvedDuration = resolveDuration(duration)
-
-  if (symbol === undefined) {
-    return new HarmonyBuilder({ duration: resolvedDuration })
-  }
-
-  return new HarmonyBuilder({
-    symbol,
-    duration: resolvedDuration,
-  })
+  return new HarmonyBuilder({ symbol, duration })
 }

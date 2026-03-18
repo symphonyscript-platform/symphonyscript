@@ -1,5 +1,5 @@
 import { PipeStep, step } from '@symphonyscript/composer'
-import { resolveDuration, type NoteDuration } from '../utils/duration'
+import type { NoteDuration } from '../utils/duration'
 
 /**
  * Advance the timeline by a duration without emitting any events.
@@ -18,6 +18,10 @@ import { resolveDuration, type NoteDuration } from '../utils/duration'
  * ```
  */
 export function rest(duration: NoteDuration): PipeStep {
-  const ticks = resolveDuration(duration)
-  return step((bridge) => bridge.withTick(bridge.tick + ticks))
+  return step((bridge) => {
+    const ticks = typeof duration === 'string'
+      ? bridge.notation().durationToTicks(duration, bridge.ppq)
+      : duration
+    return bridge.withTick(bridge.tick + ticks)
+  })
 }

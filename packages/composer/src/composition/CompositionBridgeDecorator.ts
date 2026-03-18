@@ -36,6 +36,7 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
    */
   constructor(protected readonly bridge: CompositionBridge) {}
 
+  get ppq() { return this.bridge.ppq }
   get tick() { return this.bridge.tick }
   get velocity() { return this.bridge.velocity }
   get defaultDuration() { return this.bridge.defaultDuration }

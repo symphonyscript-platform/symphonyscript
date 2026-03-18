@@ -7,7 +7,7 @@ import { PolyrhythmBuilder } from '../builders/PolyrhythmBuilder'
 import { NoteBuilder } from '../builders/NoteBuilder'
 import type { NoteName } from '@symphonyscript/core'
 import type { NotePitch } from '../types'
-import { resolveDuration, type NoteDuration } from '../utils/duration'
+import type { NoteDuration } from '../utils/duration'
 
 /**
  * Binary step pattern. 1 = play note (cycling through notes), 0 = rest.
@@ -31,8 +31,7 @@ export function steps(
   notes?: NotePitch[],
   stepDuration?: NoteDuration,
 ): StepsBuilder {
-  const resolvedDuration = stepDuration !== undefined ? resolveDuration(stepDuration) : undefined
-  return new StepsBuilder({ pattern, notes, stepDuration: resolvedDuration })
+  return new StepsBuilder({ pattern, notes, stepDuration })
 }
 
 /**
@@ -57,8 +56,7 @@ export function trill(
   rate?: number,
   duration?: NoteDuration,
 ): TrillBuilder {
-  const resolvedDuration = resolveDuration(duration)
-  return new TrillBuilder({ pitch, basePitch, rate, duration: resolvedDuration })
+  return new TrillBuilder({ pitch, basePitch, rate, duration })
 }
 
 /**
@@ -81,8 +79,7 @@ export function tremolo(
   rate?: number,
   duration?: NoteDuration,
 ): TremoloBuilder {
-  const resolvedDuration = resolveDuration(duration)
-  return new TremoloBuilder({ pitch, rate, duration: resolvedDuration })
+  return new TremoloBuilder({ pitch, rate, duration })
 }
 
 /**
@@ -103,18 +100,17 @@ export function tremolo(
  * ```
  */
 export function grace(pitch?: NotePitch, graceDuration: NoteDuration = 30): NoteBuilder {
-  const resolvedDuration = resolveDuration(graceDuration)
   if (pitch === undefined) {
-    return new NoteBuilder({ duration: resolvedDuration })
+    return new NoteBuilder({ duration: graceDuration })
   }
 
   if (typeof pitch === 'string') {
     // Defer string→cents resolution to apply-time via notation.noteToCents()
-    return new NoteBuilder({ rawPitch: pitch as NoteName, duration: resolvedDuration })
+    return new NoteBuilder({ rawPitch: pitch as NoteName, duration: graceDuration })
   }
 
   // Numeric input = absolute cents from C0
-  return new NoteBuilder({ pitchCents: pitch, duration: resolvedDuration })
+  return new NoteBuilder({ pitchCents: pitch, duration: graceDuration })
 }
 
 /**
@@ -137,8 +133,7 @@ export function glissando(
   to?: NotePitch,
   duration?: NoteDuration,
 ): GlissandoBuilder {
-  const resolvedDuration = resolveDuration(duration)
-  return new GlissandoBuilder({ from, to, duration: resolvedDuration })
+  return new GlissandoBuilder({ from, to, duration })
 }
 
 /**

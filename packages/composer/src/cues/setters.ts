@@ -1,7 +1,7 @@
 import { resolveTemperament, type TemperamentName } from '@symphonyscript/theory'
 import { FieldSetter } from '../builders/SetterBuilders'
 import { assertPositive, assertRange } from '../utils/validate'
-import { resolveDuration, type NoteDuration } from '../utils/duration'
+import type { NoteDuration } from '../utils/duration'
 import type { ScaleMode, PitchClass, NoteName } from '@symphonyscript/core'
 
 /**
@@ -155,10 +155,14 @@ export function key(root: PitchClass, mode: ScaleMode): FieldSetter {
  * @throws When resolved duration ≤ 0
  */
 export function duration(d: NoteDuration): FieldSetter {
-  const ticks = resolveDuration(d)
-  assertPositive('duration', ticks)
   return new FieldSetter(
-    b => b.withDefaultDuration(ticks),
+    b => {
+      const ticks = typeof d === 'string'
+        ? b.notation().durationToTicks(d, b.ppq)
+        : d
+      assertPositive('duration', ticks)
+      return b.withDefaultDuration(ticks)
+    },
     (r, p) => r.withDefaultDuration(p.defaultDuration),
   )
 }
