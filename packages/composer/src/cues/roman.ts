@@ -12,7 +12,7 @@ import type { Degree } from '@symphonyscript/core'
  * Called without arguments, uses default `'I'` (tonic triad).
  *
  * @param numeral - Roman numeral (e.g. `'I'`, `'iv'`, `'V7'`, `'bVII'`).
- * @param duration - Note duration in ticks for all chord tones. `undefined` = bridge default.
+ * @param duration - Note duration in beats for all chord tones. `undefined` = bridge default.
  *
  * @returns Immutable {@link RomanBuilder} — chain `.inversion()`, `.velocity()`, etc.
  * @throws At apply-time if numeral is not recognized by the notation

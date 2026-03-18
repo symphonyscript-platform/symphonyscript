@@ -15,7 +15,7 @@ import { NoteDuration } from '@symphonyscript/core'
  *
  * @param freqRatios - Frequency ratios relative to fundamental (e.g. `[1, 5/4, 3/2]`)
  * @param rootCents - Root pitch in absolute cents from C0. Default: 4800 (C4).
- * @param duration - Duration in ticks. `undefined` = bridge default.
+ * @param duration - Duration in beats. `undefined` = bridge default.
  *
  * @returns Immutable {@link RatioHarmonyBuilder} — chain `.velocity()`, `.repeat()`, etc.
  *

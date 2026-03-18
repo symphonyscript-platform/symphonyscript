@@ -5,10 +5,10 @@ import { NoteDuration } from '@symphonyscript/core'
 /**
  * Advance the timeline by a duration without emitting any events.
  *
- * Skips the given tick count; useful for spacing notes, creating gaps in
- * patterns, or aligning subsequent events to a later tick.
+ * Skips the given beat count; useful for spacing notes, creating gaps in
+ * patterns, or inserting measured silence.
  *
- * @param duration - Silence length in ticks.
+ * @param duration - Silence length in beats.
 
  * @returns {@link PipeStep} that advances `bridge.tick` by `duration`.
  *

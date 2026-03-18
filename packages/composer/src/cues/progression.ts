@@ -9,7 +9,7 @@ import { ProgressionBuilder } from '../builders/ProgressionBuilder'
  * that minimize voice movement between chords.
  *
  * @param numerals - Ordered degree numerals (e.g. `['I', 'IV', 'V', 'I']`).
- * @param duration - Per-chord duration in ticks. `undefined` = bridge default.
+ * @param duration - Per-chord duration in beats. `undefined` = bridge default.
  *
  * @returns Immutable {@link ProgressionBuilder} — chain `.velocity()` if needed
  *

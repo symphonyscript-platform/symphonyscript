@@ -11,7 +11,7 @@ import { VoiceLeadBuilder } from '../builders/VoiceLeadBuilder'
  * default placement; subsequent chords optimize relative to the prior.
  *
  * @param numerals - Ordered degree numerals (e.g. `['I', 'IV', 'V', 'I']`).
- * @param duration - Per-chord duration in ticks. `undefined` = bridge default.
+ * @param duration - Per-chord duration in beats. `undefined` = bridge default.
  *
  * @returns Immutable {@link VoiceLeadBuilder}
  *

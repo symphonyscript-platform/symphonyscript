@@ -10,7 +10,7 @@ import { NoteDuration, DrumPitch } from '@symphonyscript/core'
 /**
  * Bass drum (`Drum.BassDrum1`).
  *
- * @param duration - Hit duration in ticks or string (e.g. `'8n'`). `undefined` = bridge default.
+ * @param duration - Hit duration in beats or string (e.g. `'8n'`). `undefined` = bridge default.
  * @returns {@link DrumHitBuilder}
  */
 export function kick(duration?: NoteDuration): DrumHitBuilder {
@@ -20,7 +20,7 @@ export function kick(duration?: NoteDuration): DrumHitBuilder {
 /**
  * Acoustic snare (`Drum.AcousticSnare`).
  *
- * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
+ * @param duration - Hit duration in beats or string. `undefined` = bridge default.
  * @returns {@link DrumHitBuilder}
  */
 export function snare(duration?: NoteDuration): DrumHitBuilder {
@@ -30,7 +30,7 @@ export function snare(duration?: NoteDuration): DrumHitBuilder {
 /**
  * Closed hi-hat (`Drum.ClosedHiHat`).
  *
- * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
+ * @param duration - Hit duration in beats or string. `undefined` = bridge default.
  * @returns {@link DrumHitBuilder}
  */
 export function hihat(duration?: NoteDuration): DrumHitBuilder {
@@ -40,7 +40,7 @@ export function hihat(duration?: NoteDuration): DrumHitBuilder {
 /**
  * Open hi-hat (`Drum.OpenHiHat`).
  *
- * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
+ * @param duration - Hit duration in beats or string. `undefined` = bridge default.
  * @returns {@link DrumHitBuilder}
  */
 export function openHat(duration?: NoteDuration): DrumHitBuilder {
@@ -50,7 +50,7 @@ export function openHat(duration?: NoteDuration): DrumHitBuilder {
 /**
  * Hand clap (`Drum.HandClap`).
  *
- * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
+ * @param duration - Hit duration in beats or string. `undefined` = bridge default.
  * @returns {@link DrumHitBuilder}
  */
 export function clap(duration?: NoteDuration): DrumHitBuilder {
@@ -61,7 +61,7 @@ export function clap(duration?: NoteDuration): DrumHitBuilder {
  * Tom by index (1–6). Maps to high tom, hi-mid, low-mid, low, high floor, low floor.
  *
  * @param index - Tom index (1–6). Values > 6 clamp to low floor tom.
- * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
+ * @param duration - Hit duration in beats or string. `undefined` = bridge default.
 
  * @returns {@link DrumHitBuilder}
  */
@@ -82,7 +82,7 @@ export function tom(index: number, duration?: NoteDuration): DrumHitBuilder {
 /**
  * Crash cymbal 1 (`Drum.CrashCymbal1`).
  *
- * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
+ * @param duration - Hit duration in beats or string. `undefined` = bridge default.
  * @returns {@link DrumHitBuilder}
  */
 export function crash(duration?: NoteDuration): DrumHitBuilder {
@@ -92,7 +92,7 @@ export function crash(duration?: NoteDuration): DrumHitBuilder {
 /**
  * Ride cymbal 1 (`Drum.RideCymbal1`).
  *
- * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
+ * @param duration - Hit duration in beats or string. `undefined` = bridge default.
  * @returns {@link DrumHitBuilder}
  */
 export function ride(duration?: NoteDuration): DrumHitBuilder {
@@ -102,7 +102,7 @@ export function ride(duration?: NoteDuration): DrumHitBuilder {
 /**
  * Side stick / rim shot (`Drum.SideStick`).
  *
- * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
+ * @param duration - Hit duration in beats or string. `undefined` = bridge default.
  * @returns {@link DrumHitBuilder}
  */
 export function rim(duration?: NoteDuration): DrumHitBuilder {
@@ -112,7 +112,7 @@ export function rim(duration?: NoteDuration): DrumHitBuilder {
 /**
  * Cowbell (`Drum.Cowbell`).
  *
- * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
+ * @param duration - Hit duration in beats or string. `undefined` = bridge default.
  * @returns {@link DrumHitBuilder}
  */
 export function cowbell(duration?: NoteDuration): DrumHitBuilder {
@@ -122,7 +122,7 @@ export function cowbell(duration?: NoteDuration): DrumHitBuilder {
 /**
  * Cabasa / shaker (`Drum.Cabasa`).
  *
- * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
+ * @param duration - Hit duration in beats or string. `undefined` = bridge default.
  * @returns {@link DrumHitBuilder}
  */
 export function shaker(duration?: NoteDuration): DrumHitBuilder {
@@ -133,7 +133,7 @@ export function shaker(duration?: NoteDuration): DrumHitBuilder {
  * Any percussion hit by pitch in cents.
  *
  * @param pitch - Pitch in cents (e.g. 3600 for bass drum). Omit for bass drum default.
- * @param duration - Hit duration in ticks or string. `undefined` = bridge default.
+ * @param duration - Hit duration in beats or string. `undefined` = bridge default.
 
  * @returns {@link DrumHitBuilder}
  */
@@ -149,7 +149,7 @@ export function hit(pitch?: DrumPitch, duration?: NoteDuration): DrumHitBuilder 
  *
  * @param cue - Pattern string (e.g. `'x.x.x.x.'`).
  * @param pitch - Pitch in cents. Omit to use bridge/snare default.
- * @param stepDuration - Duration per step in ticks or string. `undefined` = bridge default.
+ * @param stepDuration - Duration per step in beats or string. `undefined` = bridge default.
 
  * @returns {@link DrumPatternBuilder}
  *
@@ -173,7 +173,7 @@ export function drumPattern(
  * @param hits - Number of pulses to distribute.
  * @param steps - Total steps in the pattern.
  * @param pitch - Pitch in cents. Omit for snare default.
- * @param stepDuration - Duration per step in ticks or string. `undefined` = bridge default.
+ * @param stepDuration - Duration per step in beats or string. `undefined` = bridge default.
  * @param rotation - Rotation offset (positive = right, negative = left).
 
  * @returns {@link DrumEuclideanBuilder}
@@ -199,7 +199,7 @@ export function drumEuclidean(
  *
  * @param pattern - Array of 1s and 0s. Missing or empty defaults to `[1]`.
  * @param pitch - Pitch in cents. Omit for snare default.
- * @param stepDuration - Duration per step in ticks or string. `undefined` = bridge default.
+ * @param stepDuration - Duration per step in beats or string. `undefined` = bridge default.
 
  * @returns {@link DrumStepsBuilder}
  *
@@ -221,7 +221,7 @@ export function drumSteps(
  * Buzz roll — rapid repeated hits over a duration.
  *
  * @param pitch - Pitch in cents. Omit for snare default.
- * @param duration - Total roll duration in ticks or string.
+ * @param duration - Total roll duration in beats or string.
  * @param rate - Hits per duration (density). Higher = faster buzz.
 
  * @returns {@link RollBuilder}
@@ -244,7 +244,7 @@ export function roll(
  * Flam — one grace note immediately before the main hit.
  *
  * @param pitch - Pitch in cents. Omit for snare default.
- * @param duration - Main hit duration in ticks or string. `undefined` = bridge default.
+ * @param duration - Main hit duration in beats or string. `undefined` = bridge default.
 
  * @returns {@link DrumHitBuilder} with flam articulation.
  */
@@ -256,7 +256,7 @@ export function flam(pitch?: DrumPitch, duration?: NoteDuration): DrumHitBuilder
  * Drag — multiple grace notes before the main hit.
  *
  * @param pitch - Pitch in cents. Omit for snare default.
- * @param duration - Main hit duration in ticks or string. `undefined` = bridge default.
+ * @param duration - Main hit duration in beats or string. `undefined` = bridge default.
 
  * @returns {@link DrumHitBuilder} with drag articulation.
  */

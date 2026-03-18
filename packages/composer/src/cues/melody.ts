@@ -14,7 +14,7 @@ import type { NoteDuration, NoteName, NotePitch } from '@symphonyscript/core'
  *
  * @param pattern - Array of 1s and 0s.
  * @param notes - Pitches to cycle on hits. String (e.g. `'C4'`) or MIDI; resolved via {@link Notation.noteToCents notation.noteToCents()}.
- * @param stepDuration - Duration per step in ticks. `undefined` = bridge default.
+ * @param stepDuration - Duration per step in beats. `undefined` = bridge default.
 
  * @returns {@link StepsBuilder}
  *
@@ -38,7 +38,7 @@ export function steps(
  * @param pitch - Upper pitch. String or MIDI; resolved via {@link Notation.noteToCents notation.noteToCents()}.
  * @param basePitch - Lower pitch. Omit for semitone below.
  * @param rate - Alternation rate (e.g. notes per beat).
- * @param duration - Total trill duration in ticks.
+ * @param duration - Total trill duration in beats.
 
  * @returns {@link TrillBuilder}
  *
@@ -62,7 +62,7 @@ export function trill(
  *
  * @param pitch - Note to repeat. String or MIDI; resolved via {@link Notation.noteToCents notation.noteToCents()}.
  * @param rate - Repetition rate.
- * @param duration - Total tremolo duration in ticks.
+ * @param duration - Total tremolo duration in beats.
 
  * @returns {@link TremoloBuilder}
  *
@@ -87,7 +87,7 @@ export function tremolo(
  * a sequence; the grace note is emitted just before the following note.
  *
  * @param pitch - Pitch for the grace note. Omit for C4.
- * @param graceDuration - Grace note duration in ticks. Default 30.
+ * @param graceDuration - Grace note duration in beats. Default 30.
 
  * @returns {@link NoteBuilder} with fixed short duration.
  *
@@ -116,7 +116,7 @@ export function grace(pitch?: NotePitch, graceDuration: NoteDuration = 30): Note
  *
  * @param from - Starting pitch. String or MIDI; resolved via {@link Notation.noteToCents notation.noteToCents()}.
  * @param to - Ending pitch. String or MIDI; resolved via {@link Notation.noteToCents notation.noteToCents()}.
- * @param duration - Slide duration in ticks.
+ * @param duration - Slide duration in beats.
 
  * @returns {@link GlissandoBuilder}
  *

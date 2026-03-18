@@ -14,7 +14,7 @@ import { HarmonyBuilder } from '../builders/HarmonyBuilder'
  * `m7`/`min7`, `7`, `dim7`, `m7b5`, `sus2`, `sus4`.
  *
  * @param symbol - Chord symbol (e.g. `'Cmaj7'`, `'Am'`, `'F#dim'`, `'Bbsus2'`)
- * @param duration - Duration in ticks for all chord tones. `undefined` = bridge default.
+ * @param duration - Duration in beats for all chord tones. `undefined` = bridge default.
  *
  * @returns Immutable {@link HarmonyBuilder} — chain `.drop2()`, `.strum()`, `.velocity()`, etc.
  * @throws At apply-time if `symbol` contains an unrecognized root note or quality

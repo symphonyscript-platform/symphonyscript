@@ -14,7 +14,7 @@ import { NoteDuration } from '@symphonyscript/core'
  * the bridge unchanged on apply.
  *
  * @param degrees - Scale degrees defining the chord (e.g. [1, 3, 5] triad, [4, 6, 8] for IV).
- * @param duration - Note duration in ticks. `undefined` = bridge default.
+ * @param duration - Note duration in beats. `undefined` = bridge default.
 
  * @returns Immutable {@link DegreeChordBuilder}
  *

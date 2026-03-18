@@ -8,7 +8,7 @@ import { GrooveBuilder } from '../builders/GrooveBuilder'
  * cycle per grid division. Step index = floor(tick / grid) % steps.length.
  * Chain `.steps()` for scoped application or `.default()` to cascade downstream.
  *
- * @param grid - Grid size in ticks (e.g. 480 for quarter notes). Default 480.
+ * @param grid - Grid size in beats (e.g. 1 for quarter notes). Default 1.
 
  * @returns Immutable {@link GrooveBuilder} — chain `.step()`, `.grid()`, `.seed()`, `.steps()`, `.default()`
  *

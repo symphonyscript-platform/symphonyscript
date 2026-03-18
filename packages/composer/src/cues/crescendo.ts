@@ -11,7 +11,7 @@ import { NoteDuration } from '@symphonyscript/core'
  * where the step is applied. Chain `.steps()` for scoped application or
  * `.default()` to cascade downstream.
  *
- * @param duration - Length of the ramp in ticks. Default 480.
+ * @param duration - Length of the ramp in beats. Default 480.
 
  * @returns Immutable {@link CrescendoBuilder} — chain `.duration()`, `.from()`, `.to()`, `.curve()`, `.steps()`, `.default()`
  *
@@ -36,7 +36,7 @@ export function crescendo(duration?: NoteDuration): CrescendoBuilder {
  * where the step is applied. Chain `.steps()` for scoped application or
  * `.default()` to cascade downstream.
  *
- * @param duration - Length of the diminuendo in ticks. Default 480.
+ * @param duration - Length of the diminuendo in beats. Default 480.
 
  * @returns Immutable {@link DecrescendoBuilder} — chain `.duration()`, `.from()`, `.to()`, `.curve()`, `.steps()`, `.default()`
  *

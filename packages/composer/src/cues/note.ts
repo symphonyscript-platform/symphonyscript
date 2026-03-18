@@ -12,7 +12,7 @@ import { NoteBuilder } from '../builders/NoteBuilder'
  * duration (falls back to `bridge.defaultDuration` at apply-time).
  *
  * @param input - Pitch as string cue or absolute cents from C0. Defaults to C4 (4800).
- * @param duration - Note duration in ticks. `undefined` = use bridge default.
+ * @param duration - Note duration in beats. `undefined` = use bridge default.
  *
  * @returns Immutable {@link NoteBuilder} — chain `.velocity()`, `.sharp()`, `.up()`, etc.
  * @throws If `input` is a string that cannot be parsed (e.g. `'invalid'`)

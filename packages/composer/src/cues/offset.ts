@@ -12,7 +12,7 @@ import { NoteDuration } from '@symphonyscript/core'
  * `.repeat()`, `.sharp()`, `.duration()`, etc.
  *
  * @param cents - Cent offset from the tuning reference. 0 = reference pitch.
- * @param duration - Note duration in ticks. `undefined` = bridge default.
+ * @param duration - Note duration in beats. `undefined` = bridge default.
  *
  * @returns Immutable {@link OffsetBuilder}
  *

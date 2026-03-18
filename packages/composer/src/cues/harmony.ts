@@ -12,7 +12,7 @@ import { NoteDuration, NotePitch } from '@symphonyscript/core'
  * @param intervals - Chord intervals in cents from root (e.g. [0, 400, 700]).
  *                    `undefined` = empty (no intervals).
  * @param root - Root pitch as string cue or cents. `undefined` = C4 (4800).
- * @param duration - Duration in ticks for all chord tones. `undefined` = bridge default.
+ * @param duration - Duration in beats for all chord tones. `undefined` = bridge default.
  *
  * @returns Immutable {@link HarmonyBuilder}
  *

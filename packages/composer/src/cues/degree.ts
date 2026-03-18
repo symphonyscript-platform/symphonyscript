@@ -13,7 +13,7 @@ import { NoteDuration } from '@symphonyscript/core'
  * Called without arguments, uses default degree 1 (tonic).
  *
  * @param degree - Scale degree (1–7 typical; 8 = tonic above; 0 = 7th below). `undefined` = 1.
- * @param duration - Note duration in ticks. `undefined` = bridge default.
+ * @param duration - Note duration in beats. `undefined` = bridge default.
 
  * @returns Immutable {@link DegreeBuilder} — chain `.velocity()`, `.up()`, `.repeat()`, `.sharp()`, etc.
  *

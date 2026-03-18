@@ -41,11 +41,11 @@ export type ChordCode = `${PitchClass}${ChordSymbol}`
 export type NotePitch = NoteName | number
 
 /**
- * Note duration as a notation duration name or raw tick count.
+ * Note duration as a notation duration name or beat count.
  *
  * String values (e.g. `'4n'`, `'quarter'`, `'8n.'`) are resolved
- * at apply-time via `bridge.notation().durationToTicks(name, ppq)`.
- * Numbers pass through unchanged as raw tick values.
+ * at apply-time via the active notation.
+ * Numbers are beat counts (e.g. `1` = quarter note, `0.5` = eighth note).
  */
 export type NoteDuration = DurationName | number
 

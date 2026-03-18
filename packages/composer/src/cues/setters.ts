@@ -146,21 +146,21 @@ export function key(root: PitchClass, mode: ScaleMode): FieldSetter {
 /**
  * Set default duration for notes that don't specify one (or scoped).
  *
- * Accepts string cue (`'4n'`, `'8n.'`, `'4t'`) or tick count.
+ * Accepts string cue (`'4n'`, `'8n.'`, `'4t'`) or beat count
+ * (e.g. `1` = quarter note, `0.5` = eighth note).
  *
- * @param d - Duration as string or ticks. Must resolve to positive.
-
+ * @param d - Duration as string or beats. Must resolve to positive.
  * @returns {@link FieldSetter}
  * @throws When resolved duration ≤ 0
  */
 export function duration(d: NoteDuration): FieldSetter {
   return new FieldSetter(
     b => {
-      const ticks = typeof d === 'string'
+      const beats = typeof d === 'string'
         ? b.notation().durationToTicks(d, b.ppq)
         : d
-      assertPositive('duration', ticks)
-      return b.withDefaultDuration(ticks)
+      assertPositive('duration', beats)
+      return b.withDefaultDuration(beats)
     },
     (r, p) => r.withDefaultDuration(p.defaultDuration),
   )
@@ -169,17 +169,42 @@ export function duration(d: NoteDuration): FieldSetter {
 /**
  * Set time signature (or scoped).
  *
- * @param numerator - Beats per bar (e.g. 4 for 4/4).
- * @param denominator - Beat unit (e.g. 4 for quarter note).
-
+ * Accepts either two numbers or a string like `'4/4'`, `'3/4'`, `'6/8'`.
+ *
+ * @param numeratorOrString - Beats per bar, or string notation (e.g. `'4/4'`).
+ * @param denominator - Beat unit (e.g. 4 for quarter note). Required when first arg is a number.
  * @returns {@link FieldSetter}
- * @throws When `numerator` or `denominator` ≤ 0
+ * @throws When numerator or denominator ≤ 0, or string format is invalid
+ *
+ * @example
+ * ```ts
+ * timeSignature(4, 4)    // 4/4
+ * timeSignature('6/8')   // 6/8
+ * ```
  */
-export function timeSignature(numerator: number, denominator: number): FieldSetter {
-  assertPositive('timeSignature numerator', numerator)
-  assertPositive('timeSignature denominator', denominator)
+export function timeSignature(numeratorOrString: number | string, denominator?: number): FieldSetter {
+  let num: number
+  let den: number
+
+  if (typeof numeratorOrString === 'string') {
+    const parts = numeratorOrString.split('/')
+    if (parts.length !== 2) {
+      throw new Error(`Invalid time signature format: '${numeratorOrString}'. Expected 'N/D' (e.g. '4/4').`)
+    }
+    num = Number(parts[0])
+    den = Number(parts[1])
+    if (!Number.isFinite(num) || !Number.isFinite(den)) {
+      throw new Error(`Invalid time signature values in '${numeratorOrString}'.`)
+    }
+  } else {
+    num = numeratorOrString
+    den = denominator!
+  }
+
+  assertPositive('timeSignature numerator', num)
+  assertPositive('timeSignature denominator', den)
   return new FieldSetter(
-    b => b.withTimeSignature(numerator, denominator),
+    b => b.withTimeSignature(num, den),
     (r, p) => r.withTimeSignature(p.timeSignatureNum, p.timeSignatureDen),
   )
 }

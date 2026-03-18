@@ -10,7 +10,7 @@ import { NoteDuration } from '@symphonyscript/core'
  * 1 = full snap). Chain `.steps()` for scoped application or `.default()` to
  * cascade downstream.
  *
- * @param grid - Grid size in ticks (e.g. 480 for quarter notes at PPQ 480). Default 480.
+ * @param grid - Grid size in beats (e.g. 1 for quarter notes, 0.5 for eighth notes). Default 1.
  * @param strength - Snap amount 0..1: 0 = no quantize, 1 = full snap. Default 1.
 
  * @returns Immutable {@link QuantizationBuilder} — chain `.grid()`, `.strength()`, `.steps()`, `.default()`
