@@ -15,7 +15,7 @@ import { resolveDuration, type NoteDuration } from '../utils/duration'
  * Cycles through the notes array on each `1`; advances tick on `0` without emitting.
  *
  * @param pattern - Array of 1s and 0s.
- * @param notes - Pitches to cycle on hits. String (e.g. `'C4'`) or MIDI; resolved via {@link resolvePitch}.
+ * @param notes - Pitches to cycle on hits. String (e.g. `'C4'`) or MIDI; resolved via {@link Notation.noteToCents notation.noteToCents()}.
  * @param stepDuration - Duration per step in ticks. `undefined` = bridge default.
 
  * @returns {@link StepsBuilder}
@@ -38,7 +38,7 @@ export function steps(
 /**
  * Trill — rapid alternation between two pitches.
  *
- * @param pitch - Upper pitch. String or MIDI; resolved via {@link resolvePitch}.
+ * @param pitch - Upper pitch. String or MIDI; resolved via {@link Notation.noteToCents notation.noteToCents()}.
  * @param basePitch - Lower pitch. Omit for semitone below.
  * @param rate - Alternation rate (e.g. notes per beat).
  * @param duration - Total trill duration in ticks.
@@ -64,7 +64,7 @@ export function trill(
 /**
  * Tremolo — rapid repeated single note.
  *
- * @param pitch - Note to repeat. String or MIDI; resolved via {@link resolvePitch}.
+ * @param pitch - Note to repeat. String or MIDI; resolved via {@link Notation.noteToCents notation.noteToCents()}.
  * @param rate - Repetition rate.
  * @param duration - Total tremolo duration in ticks.
 
@@ -120,8 +120,8 @@ export function grace(pitch?: NotePitch, graceDuration: NoteDuration = 30): Note
 /**
  * Glissando — chromatic pitch slide from one note to another.
  *
- * @param from - Starting pitch. String or MIDI; resolved via {@link resolvePitch}.
- * @param to - Ending pitch. String or MIDI; resolved via {@link resolvePitch}.
+ * @param from - Starting pitch. String or MIDI; resolved via {@link Notation.noteToCents notation.noteToCents()}.
+ * @param to - Ending pitch. String or MIDI; resolved via {@link Notation.noteToCents notation.noteToCents()}.
  * @param duration - Slide duration in ticks.
 
  * @returns {@link GlissandoBuilder}

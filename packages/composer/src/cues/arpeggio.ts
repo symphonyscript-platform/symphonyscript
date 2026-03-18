@@ -5,7 +5,7 @@ import { resolveDuration, type NoteDuration } from '../utils/duration'
 /**
  * Create an {@link ArpeggioBuilder} that emits chord or note sequences in sequence.
  *
- * Pitches are resolved via {@link resolvePitches} at apply-time, expanded across
+ * Pitches are resolved via {@link Notation.noteToCents notation.noteToCents()} at apply-time, expanded across
  * octaves, and ordered by pattern (`up`, `down`, `upDown`, etc.). Each note is
  * emitted sequentially with per-step timing. Chain `.pattern()`, `.octaves()`,
  * `.gate()`, `.velocity()`, and `.seed()` to configure behaviour.
@@ -13,7 +13,7 @@ import { resolveDuration, type NoteDuration } from '../utils/duration'
  * Called without arguments, creates an empty builder that returns the bridge
  * unchanged on apply. Pitches may be provided later via `.pitches()`.
  *
- * @param pitches - Literal note names (e.g. `'C4'`, `'E4'`) or MIDI numbers. Resolved via {@link resolvePitches}.
+ * @param pitches - Literal note names (e.g. `'C4'`, `'E4'`) or MIDI numbers. Resolved via {@link Notation.noteToCents notation.noteToCents()}.
  * @param rate - Tick duration per arpeggio step. `undefined` = bridge default at apply-time.
 
  * @returns Immutable {@link ArpeggioBuilder} — chain `.pattern()`, `.octaves()`, `.gate()`, etc.

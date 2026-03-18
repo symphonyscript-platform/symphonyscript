@@ -5,8 +5,17 @@
  * including error paths.
  */
 
-import { NotationInputError } from '@symphonyscript/core'
+import {
+  ChordSymbol,
+  Degree,
+  IntervalName,
+  NotationInputError,
+  NoteName,
+  PitchClass,
+  ScaleMode
+} from '@symphonyscript/core'
 import { WesternNotation } from '../western.notation'
+import '../types.d.ts'
 
 describe('WesternNotation', () => {
   let n: WesternNotation
@@ -65,23 +74,23 @@ describe('WesternNotation', () => {
       ['B3', 5900],
       ['G5', 7900],
     ])('%s → %d', (note, expected) => {
-      expect(n.noteToCents(note)).toBe(expected)
+      expect(n.noteToCents(note as unknown as NoteName)).toBe(expected)
     })
 
     it('throws on invalid input "xyz"', () => {
-      expect(() => n.noteToCents('xyz')).toThrow(NotationInputError)
+      expect(() => n.noteToCents('xyz' as unknown as NoteName)).toThrow(NotationInputError)
     })
 
     it('throws on empty string', () => {
-      expect(() => n.noteToCents('')).toThrow(NotationInputError)
+      expect(() => n.noteToCents('' as unknown as NoteName)).toThrow(NotationInputError)
     })
 
     it('throws on note without octave "C"', () => {
-      expect(() => n.noteToCents('C')).toThrow(NotationInputError)
+      expect(() => n.noteToCents('C' as unknown as NoteName)).toThrow(NotationInputError)
     })
 
     it('throws on invalid letter "H4"', () => {
-      expect(() => n.noteToCents('H4')).toThrow(NotationInputError)
+      expect(() => n.noteToCents('H4' as unknown as NoteName)).toThrow(NotationInputError)
     })
   })
 
@@ -152,15 +161,15 @@ describe('WesternNotation', () => {
       ['P8', 1200],
       ['tritone', 600],
     ])('%s → %d', (name, expected) => {
-      expect(n.intervalToCents(name)).toBe(expected)
+      expect(n.intervalToCents(name as unknown as IntervalName)).toBe(expected)
     })
 
     it('throws on "xyz"', () => {
-      expect(() => n.intervalToCents('xyz')).toThrow(NotationInputError)
+      expect(() => n.intervalToCents('xyz' as unknown as IntervalName)).toThrow(NotationInputError)
     })
 
     it('throws on empty string', () => {
-      expect(() => n.intervalToCents('')).toThrow(NotationInputError)
+      expect(() => n.intervalToCents('' as unknown as IntervalName)).toThrow(NotationInputError)
     })
   })
 
@@ -196,11 +205,11 @@ describe('WesternNotation', () => {
     })
 
     it('case-insensitive: "Major" works', () => {
-      expect(n.getScaleIntervals('Major')).toEqual([0, 200, 400, 500, 700, 900, 1100])
+      expect(n.getScaleIntervals('Major' as unknown as ScaleMode)).toEqual([0, 200, 400, 500, 700, 900, 1100])
     })
 
     it('throws on "xyz"', () => {
-      expect(() => n.getScaleIntervals('xyz')).toThrow(NotationInputError)
+      expect(() => n.getScaleIntervals('xyz' as unknown as ScaleMode)).toThrow(NotationInputError)
     })
   })
 
@@ -235,11 +244,11 @@ describe('WesternNotation', () => {
     })
 
     it('throws on invalid root', () => {
-      expect(() => n.getKeySignature('xyz', 'major')).toThrow(NotationInputError)
+      expect(() => n.getKeySignature('xyz' as unknown as PitchClass, 'major')).toThrow(NotationInputError)
     })
 
     it('throws on invalid mode', () => {
-      expect(() => n.getKeySignature('C', 'xyz')).toThrow(NotationInputError)
+      expect(() => n.getKeySignature('C', 'xyz' as unknown as ScaleMode)).toThrow(NotationInputError)
     })
   })
 
@@ -267,7 +276,7 @@ describe('WesternNotation', () => {
     })
 
     it('throws on "xyz"', () => {
-      expect(() => n.degreeToCents('xyz', majorScale)).toThrow(NotationInputError)
+      expect(() => n.degreeToCents('xyz' as unknown as Degree, majorScale)).toThrow(NotationInputError)
     })
   })
 
@@ -285,19 +294,19 @@ describe('WesternNotation', () => {
     })
 
     it('full chord code Cmaj7 → [0, 400, 700, 1100]', () => {
-      expect(n.chordToIntervals('Cmaj7')).toEqual([0, 400, 700, 1100])
+      expect(n.chordToIntervals('Cmaj7' as unknown as ChordSymbol)).toEqual([0, 400, 700, 1100])
     })
 
     it('full chord code F#m → [0, 300, 700]', () => {
-      expect(n.chordToIntervals('F#m')).toEqual([0, 300, 700])
+      expect(n.chordToIntervals('F#m' as unknown as ChordSymbol)).toEqual([0, 300, 700])
     })
 
     it('throws on "Cxyz"', () => {
-      expect(() => n.chordToIntervals('Cxyz')).toThrow(NotationInputError)
+      expect(() => n.chordToIntervals('Cxyz' as unknown as ChordSymbol)).toThrow(NotationInputError)
     })
 
     it('throws on "xyz"', () => {
-      expect(() => n.chordToIntervals('xyz')).toThrow(NotationInputError)
+      expect(() => n.chordToIntervals('xyz' as unknown as ChordSymbol)).toThrow(NotationInputError)
     })
   })
 
@@ -306,7 +315,7 @@ describe('WesternNotation', () => {
       const result = n.intervalsToChord([0, 400, 700, 1100])
       expect(typeof result).toBe('string')
       // Should be 'maj7' or equivalent
-      expect(n.chordToIntervals(result)).toEqual([0, 400, 700, 1100])
+      expect(n.chordToIntervals(result as unknown as ChordSymbol)).toEqual([0, 400, 700, 1100])
     })
 
     it('throws on unknown intervals', () => {
@@ -368,7 +377,7 @@ describe('WesternNotation', () => {
     })
 
     it('throws on invalid numeral', () => {
-      expect(() => n.resolveProgression(['I', 'xyz'], majorScale)).toThrow(NotationInputError)
+      expect(() => n.resolveProgression(['I', 'xyz'] as unknown as Degree[], majorScale)).toThrow(NotationInputError)
     })
   })
 

@@ -1,4 +1,5 @@
-import { HarmonyBuilder, type ChordIntervals } from '../builders/HarmonyBuilder'
+import type { ChordCode } from '@symphonyscript/core'
+import { HarmonyBuilder } from '../builders/HarmonyBuilder'
 import { resolveDuration, type NoteDuration } from '../utils/duration'
 
 /**
@@ -25,10 +26,10 @@ import { resolveDuration, type NoteDuration } from '../utils/duration'
  * chord('Am', 960)                      // A minor, whole note
  * chord('F#dim').drop2()                // F# diminished, drop-2 voicing
  * chord().intervals([0, 400, 700])      // From raw intervals
- *   .root(4800)
+ *   .root(6000)
  * ```
  */
-export function chord(symbol?: string, duration?: NoteDuration): HarmonyBuilder {
+export function chord(symbol?: ChordCode, duration?: NoteDuration): HarmonyBuilder {
   const resolvedDuration = resolveDuration(duration)
 
   if (symbol === undefined) {

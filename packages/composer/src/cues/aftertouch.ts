@@ -10,7 +10,7 @@ import { AftertouchBuilder } from '../builders/AftertouchBuilder'
  *
  * @param value - Normalized pressure (0–1). Clamped on apply.
  * @param note - Target note for poly aftertouch. Omit for channel aftertouch.
- *   String (e.g. `'C4'`) or MIDI number; resolved via {@link resolvePitch}.
+ *   String (e.g. `'C4'`) or MIDI number; resolved via {@link Notation.noteToCents notation.noteToCents()}.
  * @returns Immutable {@link AftertouchBuilder} — chain `.value()`, `.note()`, etc.
  *
  * @example

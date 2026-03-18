@@ -1,5 +1,5 @@
 import { CompositionBridge } from '@symphonyscript/composer'
-import type { ChordIntervals, ChordSymbol, NoteName } from '@symphonyscript/core'
+import type { ChordCode, ChordIntervals, ChordSymbol, NoteName } from '@symphonyscript/core'
 import type { VoiceLeadingStyle } from '@symphonyscript/theory'
 import { closeVoicing, drop2Voicing, openVoicing } from '@symphonyscript/theory'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
@@ -20,8 +20,8 @@ export interface HarmonyParams extends PitchStepParams {
    * Chord symbol for deferred resolution via notation (e.g. 'Cmaj7').
    * When set, intervals are resolved at apply-time via bridge.notation().
    */
-  symbol: string | null
-  /** Root pitch as string note name or absolute cents from C0. Defaults to 4800 (C4). */
+  symbol: ChordCode | null
+  /** Root pitch as string note name or absolute cents from C0. Defaults to 6000 (C4). */
   root: NotePitch
   /** Voicing algorithm. null = raw intervals. */
   voicing: VoiceLeadingStyle | null
@@ -50,7 +50,7 @@ export interface HarmonyParams extends PitchStepParams {
  */
 export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
   private readonly _intervals: ChordIntervals
-  private readonly _symbol: string | null
+  private readonly _symbol: ChordCode | null
   private readonly _root: NotePitch
   private readonly voicingStyle: VoiceLeadingStyle | null
   private readonly strumRate: number | null
@@ -62,7 +62,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
     super(params)
     this._intervals = params.intervals ?? []
     this._symbol = params.symbol ?? null
-    this._root = params.root ?? 4800
+    this._root = params.root ?? 6000
     this.voicingStyle = params.voicing ?? null
     this.strumRate = params.strumRate ?? null
     this.strumDirection = params.strumDirection ?? 'up'
@@ -131,7 +131,7 @@ export class HarmonyBuilder extends PitchStepBuilder<HarmonyBuilder> {
 
       // Parse root from symbol if possible, fall back to stored root
       try {
-        const rootNote = this._symbol.match(/^[A-G][#b]?/)?.[0]
+        const rootNote = (this._symbol as string).match(/^[A-G][#b]?/)?.[0]
         root = rootNote ? notation.noteToCents((rootNote + '4') as NoteName) : notation.noteToCents(this._root)
       } catch {
         root = notation.noteToCents(this._root)

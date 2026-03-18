@@ -27,7 +27,7 @@ export interface ArpeggioParams {
 /**
  * Immutable builder for arpeggiating chord or note sequences.
  *
- * Resolves pitches via {@link resolvePitches}, expands them across octaves, orders
+ * Resolves pitches via {@link Notation.noteToCents notation.noteToCents()}, expands them across octaves, orders
  * them by pattern, then emits each note sequentially with per-step timing and gate.
  * Does not extend {@link PitchStepBuilder}; uses its own param model.
  *
@@ -71,7 +71,7 @@ export class ArpeggioBuilder implements PipeStep {
   /**
    * Set the input pitches (chord or note list) to arpeggiate.
    *
-   * Pitches are resolved via {@link resolvePitches} at apply-time and expanded
+   * Pitches are resolved via {@link Notation.noteToCents notation.noteToCents()} at apply-time and expanded
    * across octaves before applying the pattern.
    *
    * @param pitches - Array of literal note names (e.g. `'C4'`) or MIDI numbers
@@ -146,7 +146,7 @@ export class ArpeggioBuilder implements PipeStep {
    * Resolve pitches, build the ordered sequence from the pattern, and emit notes.
    *
    * **Pipeline:**
-   * 1. Resolve pitches via {@link resolvePitches}
+   * 1. Resolve pitches via {@link Notation.noteToCents notation.noteToCents()}
    * 2. Expand across octaves and sort ascending (buildPool)
    * 3. Reorder by pattern (up, down, upDown, downUp, random, converge, diverge)
    * 4. Emit each note at `rate` ticks apart, with `gate` applied to note duration

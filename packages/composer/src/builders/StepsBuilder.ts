@@ -68,7 +68,7 @@ export class StepsBuilder implements PipeStep {
   /**
    * Replace the pitches cycled through on hits.
    *
-   * Resolved via {@link resolvePitches} at apply-time; invalid strings throw.
+   * Resolved via {@link Notation.noteToCents notation.noteToCents()} at apply-time; invalid strings throw.
    *
    * @param notes - Array of literal note names or MIDI numbers (0–127)
 

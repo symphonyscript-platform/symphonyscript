@@ -20,3 +20,9 @@ export type Octave = -1 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
  * when a notation augments `PitchClassRegistry`.
  */
 export type NoteName = `${PitchClass}${Octave}`
+
+/**
+ * Full chord code with root and quality (e.g., `'Cmaj7'`, `'Am'`, `'F#dim'`).
+ * Template literal from `PitchClass × ChordSymbol`.
+ */
+export type ChordCode = `${PitchClass}${ChordSymbol}`

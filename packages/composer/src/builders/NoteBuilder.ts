@@ -2,11 +2,6 @@ import { CompositionBridge } from '@symphonyscript/composer'
 import type { NoteName } from '@symphonyscript/core'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
 
-/**
- * C0 in MIDI = 12 (MIDI 0 = C-1).
- * To convert MIDI → cents from C0: (midi - 12) * 100
- */
-const MIDI_C0 = 12
 
 /**
  * Parameters specific to {@link NoteBuilder}.
@@ -14,7 +9,7 @@ const MIDI_C0 = 12
  * Extends {@link PitchStepParams} with pitch resolution fields.
  */
 export interface NoteParams extends PitchStepParams {
-  /** Pre-resolved pitch in absolute cents from C0. Defaults to 4800 (C4). */
+  /** Pre-resolved pitch in absolute cents from C0. Defaults to 6000 (C4). */
   pitchCents: number
   /**
    * Original string pitch cue (e.g. `'C4'`, `'F#5'`).
@@ -39,7 +34,7 @@ export interface NoteParams extends PitchStepParams {
  * note('C4')                          // C4 via notation
  * note('C4').sharp()                  // C#4
  * note('C4').up(2).velocity(900)      // C6, velocity 900
- * note(4800)                          // C4 via absolute cents
+ * note(6000)                          // C4 via absolute cents
  * note('F4').repeat(3)               // Emits F4 three times sequentially
  * ```
  */
@@ -49,7 +44,7 @@ export class NoteBuilder extends PitchStepBuilder<NoteBuilder> {
 
   constructor(params: Partial<NoteParams>) {
     super(params)
-    this._pitchCents = params.pitchCents ?? 4800 // C4
+    this._pitchCents = params.pitchCents ?? 6000 // C4
     this._rawPitch = params.rawPitch ?? null
   }
 
@@ -57,7 +52,7 @@ export class NoteBuilder extends PitchStepBuilder<NoteBuilder> {
    * Override the pitch directly in absolute cents. Clears `rawPitch`
    * since string resolution no longer applies.
    *
-   * @param cents - Absolute cents from C0 (e.g. 4800 = C4)
+   * @param cents - Absolute cents from C0 (e.g. 6000 = C4)
    *
    * @returns New NoteBuilder with the updated pitch
    */

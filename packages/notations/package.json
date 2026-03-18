@@ -21,7 +21,9 @@
     "test": "jest --config jest.config.cjs"
   },
   "dependencies": {
-    "@symphonyscript/theory": "workspace:*"
+    "@symphonyscript/core": "workspace:*",
+    "@symphonyscript/theory": "workspace:*",
+    "vitest": "^4.1.0"
   },
   "devDependencies": {
     "@swc/core": "^1.4.0",

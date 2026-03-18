@@ -45,15 +45,6 @@ export class WesternNotation extends BaseNotation {
     return { chords: true, degrees: true, progressions: true }
   }
 
-  /**
-   * Override: A4 reference is 6900 cents in MIDI-aligned convention.
-   * BaseNotation hardcodes 5700 (C0=0 convention).
-   */
-  override noteToFrequency(input: NoteName): number {
-    const cents = this.noteToCents(input)
-    // A4 = 6900 cents in (octave+1)*1200 convention
-    return this.getTuningHz() * Math.pow(2, (cents - 6900) / 1200)
-  }
 
   // ==========================================================================
   // Notes
@@ -79,7 +70,7 @@ export class WesternNotation extends BaseNotation {
     return cents
   }
 
-  centsToNote(cents: number): string {
+  centsToNote(cents: number): NoteName {
     const range = this.getPitchRange()
     if (cents < range.min || cents > range.max) {
       throw new NotationInputError(this.getId(), 'centsToNote', String(cents))
@@ -91,7 +82,7 @@ export class WesternNotation extends BaseNotation {
     const semitoneIndex = Math.round(remainder / 100) % 12
 
     const noteTable = this.prefersFlats() ? SEMITONE_TO_NOTE_FLAT : SEMITONE_TO_NOTE_SHARP
-    return noteTable[semitoneIndex] + octave
+    return (noteTable[semitoneIndex] + octave) as NoteName
   }
 
   // ==========================================================================

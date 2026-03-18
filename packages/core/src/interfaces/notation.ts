@@ -104,10 +104,10 @@ export interface Notation {
    *
    * @param cents - Pitch in cents from C0
    *
-   * @returns Note string (e.g., `'A4'` for `5700` cents)
+   * @returns Note string (e.g., `'A4'` for `6900` cents)
    * @throws {NotationInputError} If cents is out of the notation's range
    */
-  centsToNote(cents: number): string
+  centsToNote(cents: number): NoteName
 
   /**
    * Convert a note string to a MIDI note number (0–127).
@@ -142,7 +142,7 @@ export interface Notation {
    * @returns Transposed note string (e.g., `transposeNote('C4', 700)` → `'G4'`)
    * @throws {NotationInputError} If the input note is not valid
    */
-  transposeNote(note: NoteName, cents: number): string
+  transposeNote(note: NoteName, cents: number): NoteName
 
   /**
    * Check whether two note strings represent the same pitch.

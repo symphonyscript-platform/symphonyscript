@@ -39,14 +39,14 @@ export abstract class BaseNotation implements Notation {
 
   /**
    * Convert a note string to frequency in Hz.
-   * Default: `tuningHz × 2^((cents − 5700) / 1200)`.
+   * Default: `tuningHz × 2^((cents − 6900) / 1200)`.
    *
    * @throws {NotationInputError} If the input is not a valid note
    */
   noteToFrequency(input: NoteName): number {
     const cents = this.noteToCents(input)
-    // A4 = 5700 cents from C0
-    return this.getTuningHz() * Math.pow(2, (cents - 5700) / 1200)
+    // A4 = 6900 cents in (octave+1)*1200 convention
+    return this.getTuningHz() * Math.pow(2, (cents - 6900) / 1200)
   }
 
   /**
@@ -55,7 +55,7 @@ export abstract class BaseNotation implements Notation {
    *
    * @throws {NotationInputError} If the input note is not valid
    */
-  transposeNote(note: NoteName, cents: number): string {
+  transposeNote(note: NoteName, cents: number): NoteName {
     const noteCents = this.noteToCents(note)
     return this.centsToNote(noteCents + cents)
   }
@@ -81,7 +81,7 @@ export abstract class BaseNotation implements Notation {
   abstract getCapabilities(): NotationCapabilities
 
   abstract noteToCents(input: NoteName | number): number
-  abstract centsToNote(cents: number): string
+  abstract centsToNote(cents: number): NoteName
 
   abstract intervalToCents(input: IntervalName | number): number
   abstract centsToInterval(cents: number): string

@@ -42,7 +42,7 @@ export interface EuclideanParams {
  * euclidean(5, 8).notes(['C4']).rotation(1)              // Cinquillo rotated
  * euclidean(3, 8).notes(['C4']).stepDuration(240)        // Custom step length
  * euclidean(3, 8).notes(['C4']).repeat(2).velocity(800)  // Play twice, fixed velocity
- * euclidean(3, 8).notes([60, 64]).apply(bridge)         // MIDI pitches via resolvePitches
+ * euclidean(3, 8).notes([60, 64]).apply(bridge)         // pitches via notation.noteToCents()
  * ```
  */
 export class EuclideanBuilder implements PipeStep {
@@ -64,7 +64,7 @@ export class EuclideanBuilder implements PipeStep {
   /**
    * Set the pitched notes to cycle through on hits.
    *
-   * @param notes - Array of {@link NotePitch} values (strings or MIDI numbers). Resolved via resolvePitches.
+   * @param notes - Array of {@link NotePitch} values (strings or MIDI numbers). Resolved via notation.noteToCents().
 
    * @returns New builder with the updated notes
    */

@@ -124,7 +124,7 @@ describe('melody', () => {
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
       expect(notes[0].duration).toBe(40)
-      expect(notes[0].pitch).toBe(4800) // NoteBuilder defaults to C3 (4800 cents)
+      expect(notes[0].pitch).toBe(6000) // NoteBuilder defaults to C4 (6000 cents)
     })
 
     it('should use default graceDuration 30 when omitted', () => {

@@ -52,7 +52,7 @@ export class AftertouchBuilder implements PipeStep {
   /**
    * Set the target note for polyphonic aftertouch. Omit or clear for channel aftertouch.
    *
-   * @param note - String (e.g. 'C4') or MIDI number. Resolved via {@link resolvePitch}
+   * @param note - String (e.g. 'C4') or MIDI number. Resolved via {@link Notation.noteToCents notation.noteToCents()}
 
    * @returns New builder with the target note
    */
