@@ -1,6 +1,6 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 import type { DurationName } from '@symphonyscript/core'
-import { MIDI_CC } from '@symphonyscript/theory'
+import { MIDI_CC } from '@symphonyscript/theory-legacy'
 
 /** Accidental override for key-signature-aware pitch resolution. */
 export type AccidentalOverride = 'sharp' | 'flat' | 'natural'

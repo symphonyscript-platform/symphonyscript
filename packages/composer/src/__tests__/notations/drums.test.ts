@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { kick, snare, drumPattern, hit, roll } from '../../cues/drums'
-import { BASS_DRUM_1, ACOUSTIC_SNARE, CLOSED_HI_HAT, COWBELL } from '@symphonyscript/theory'
+import { BASS_DRUM_1, ACOUSTIC_SNARE, CLOSED_HI_HAT, COWBELL } from '@symphonyscript/theory-legacy'
 import { createBridge, commitAndCapture } from '../test-utils'
 
 describe('drums', () => {

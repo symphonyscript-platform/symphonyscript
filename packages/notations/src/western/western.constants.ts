@@ -34,7 +34,7 @@ import {
   IN_SEN_INTERVALS,
   HUNGARIAN_MINOR_INTERVALS,
   PHRYGIAN_DOMINANT_INTERVALS,
-} from '@symphonyscript/theory'
+} from '@symphonyscript/theory-legacy'
 
 import {
   ACOUSTIC_BASS_DRUM, BASS_DRUM_1, SIDE_STICK, ACOUSTIC_SNARE, HAND_CLAP,
@@ -46,7 +46,7 @@ import {
   HIGH_AGOGO, LOW_AGOGO, CABASA, MARACAS, SHORT_WHISTLE, LONG_WHISTLE,
   SHORT_GUIRO, LONG_GUIRO, CLAVES, HI_WOOD_BLOCK, LOW_WOOD_BLOCK,
   MUTE_CUICA, OPEN_CUICA, MUTE_TRIANGLE, OPEN_TRIANGLE,
-} from '@symphonyscript/theory'
+} from '@symphonyscript/theory-legacy'
 
 // ============================================================================
 // Note ↔ Semitone

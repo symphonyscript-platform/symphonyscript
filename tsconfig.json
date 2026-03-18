@@ -11,6 +11,7 @@
     "packages/kernel/src/**/*",
     "packages/synaptic/src/**/*",
     "packages/theory/src/**/*",
+    "packages/theory-legacy/src/**/*",
     "packages/notations/src/**/*",
     "packages/core/src/**/*"
   ],

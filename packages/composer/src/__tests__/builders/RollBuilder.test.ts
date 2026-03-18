@@ -14,7 +14,7 @@
 import { describe, it, expect } from 'vitest'
 import { roll } from '../../cues/drums'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { BASS_DRUM_1, ACOUSTIC_SNARE, COWBELL } from '@symphonyscript/theory'
+import { BASS_DRUM_1, ACOUSTIC_SNARE, COWBELL } from '@symphonyscript/theory-legacy'
 
 describe('RollBuilder', () => {
 

@@ -1,5 +1,5 @@
 import { ExecutionContext, Notation } from '@symphonyscript/core'
-import { MIDI_CC, IONIAN_INTERVALS } from '@symphonyscript/theory'
+import { MIDI_CC, IONIAN_INTERVALS } from '@symphonyscript/theory-legacy'
 import { CompositionBridge } from '@symphonyscript/composer'
 import { ThunkNode } from '../interfaces/thunk-node'
 

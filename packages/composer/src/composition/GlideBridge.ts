@@ -1,5 +1,5 @@
 import { CompositionBridge } from '@symphonyscript/composer'
-import { MIDI_CC } from '@symphonyscript/theory'
+import { MIDI_CC } from '@symphonyscript/theory-legacy'
 import { CompositionBridgeDecorator } from './CompositionBridgeDecorator'
 
 /**

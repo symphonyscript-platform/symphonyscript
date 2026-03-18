@@ -1,5 +1,5 @@
 import { CompositionBridge } from '@symphonyscript/composer'
-import { degreeToCents } from '@symphonyscript/theory'
+import { degreeToCents } from '@symphonyscript/theory-legacy'
 import { CompositionBridgeDecorator } from './CompositionBridgeDecorator'
 import { ScaleIntervals } from '@symphonyscript/core'
 

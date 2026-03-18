@@ -15,6 +15,7 @@ export default defineConfig({
             { find: '@symphonyscript/synthesis', replacement: resolve(packagesDir, 'synthesis/src/index.ts') },
             { find: '@symphonyscript/synaptic', replacement: resolve(packagesDir, 'synaptic/src/index.ts') },
             { find: '@symphonyscript/theory', replacement: resolve(packagesDir, 'theory/src/index.ts') },
+            { find: '@symphonyscript/theory-legacy', replacement: resolve(packagesDir, 'theory-legacy/src/index.ts') },
             { find: '@symphonyscript/web', replacement: resolve(packagesDir, 'web/src/index.ts') },
         ],
     },

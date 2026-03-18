@@ -1,5 +1,5 @@
 import { PipeStep, step } from '@symphonyscript/composer'
-import { MIDI_CC } from '@symphonyscript/theory'
+import { MIDI_CC } from '@symphonyscript/theory-legacy'
 
 /**
  * Sustain pedal on (CC64 = 127).

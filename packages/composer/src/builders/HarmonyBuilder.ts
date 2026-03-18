@@ -1,7 +1,7 @@
 import { CompositionBridge } from '@symphonyscript/composer'
 import type { ChordCode, ChordIntervals, ChordSymbol, NoteName, NotePitch } from '@symphonyscript/core'
-import type { VoiceLeadingStyle } from '@symphonyscript/theory'
-import { closeVoicing, drop2Voicing, openVoicing } from '@symphonyscript/theory'
+import type { VoiceLeadingStyle } from '@symphonyscript/theory-legacy'
+import { closeVoicing, drop2Voicing, openVoicing } from '@symphonyscript/theory-legacy'
 import { PitchStepBuilder, PitchStepParams } from './PitchStepBuilder'
 import { KNUTH_MULTIPLIER } from '../constants'
 

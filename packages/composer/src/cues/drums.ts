@@ -1,4 +1,4 @@
-import * as Drums from '@symphonyscript/theory'
+import * as Drums from '@symphonyscript/theory-legacy'
 import { DrumHitBuilder } from '../builders/DrumHitBuilder'
 import { DrumPatternBuilder } from '../builders/DrumPatternBuilder'
 import { DrumEuclideanBuilder } from '../builders/DrumEuclideanBuilder'

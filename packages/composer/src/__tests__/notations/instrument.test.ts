@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest'
 import { sustain, release, modWheel, breath, expression, bendReset } from '../../cues/instrument'
 import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { MIDI_CC } from '@symphonyscript/theory'
+import { MIDI_CC } from '@symphonyscript/theory-legacy'
 
 describe('instrument', () => {
 

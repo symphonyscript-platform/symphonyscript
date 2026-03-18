@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest'
 import { cc, detune, timbre, pressure } from '../../cues/cc'
 import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { MIDI_CC } from '@symphonyscript/theory'
+import { MIDI_CC } from '@symphonyscript/theory-legacy'
 
 describe('cc', () => {
 

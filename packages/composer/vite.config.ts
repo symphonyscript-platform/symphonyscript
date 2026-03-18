@@ -12,6 +12,7 @@ export default defineConfig({
         '@symphonyscript/core',
         '@symphonyscript/kernel',
         '@symphonyscript/theory',
+        '@symphonyscript/theory-legacy',
         '@symphonyscript/synaptic',
       ],
     },

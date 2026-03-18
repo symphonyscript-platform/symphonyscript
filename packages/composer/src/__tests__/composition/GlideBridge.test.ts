@@ -16,7 +16,7 @@
 import { describe, it, expect } from 'vitest'
 import { GlideBridge } from '../../composition/GlideBridge'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { MIDI_CC } from '@symphonyscript/theory'
+import { MIDI_CC } from '@symphonyscript/theory-legacy'
 
 describe('GlideBridge', () => {
 

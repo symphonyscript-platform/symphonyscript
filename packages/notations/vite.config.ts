@@ -11,6 +11,7 @@ export default defineConfig({
       external: [
         '@symphonyscript/core',
         '@symphonyscript/theory',
+        '@symphonyscript/theory-legacy',
       ],
     },
   },

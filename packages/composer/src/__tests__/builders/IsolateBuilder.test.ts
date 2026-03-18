@@ -18,7 +18,7 @@ import { note } from '../../cues/note'
 import { isolate } from '../../cues/isolate'
 import { velocity, transpose, tempo, volume } from '../../cues/setters'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { MIDI_CC } from '@symphonyscript/theory'
+import { MIDI_CC } from '@symphonyscript/theory-legacy'
 
 describe('IsolateBuilder', () => {
 
