@@ -6,19 +6,19 @@
  */
 
 // MIDI constants, GM programs, drum map, velocity
-export * from './pitch';
+export * from './legacy/pitch';
 
 // Rhythm: euclidean patterns, time signature, etc.
-export * from './rhythm';
+export * from './legacy/rhythm';
 
 // Voice leading: voicing algorithms (cent-based)
-export * from './harmony';
+export * from './legacy/harmony';
 
 // Utility: ratio conversion, misc helpers
-export * from './util';
+export * from './legacy/util';
 
 // Effects: DSP-related theory
-export * from './effects';
+export * from './legacy/effects';
 
 // Continuous pitch model: cent-based scales, temperaments, tuning
-export * from './continuous';
+export * from './legacy/continuous';
