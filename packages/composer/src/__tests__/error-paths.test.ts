@@ -2,12 +2,10 @@
  * Error / negative path tests
  *
  * Documents actual runtime behavior for invalid or edge-case inputs:
- *   - arpeggio(['invalid']) — throws (resolvePitches propagates)
+ *   - arpeggio(['invalid']) — throws (notation.noteToCents propagates)
  *   - roman('XXVII') / roman('invalid') — throws (ROMAN_DEGREE_MAP lookup yields undefined)
  *   - stretch(-1) / stretch(0) — observed behavior
  *   - degree(-1) / degree(999) — observed behavior
- *   - resolvePitch('invalid') — throws
- *   - parseChord('') — throws
  */
 
 import { describe, it, expect } from 'vitest'
@@ -21,7 +19,7 @@ import { createBridge, commitAndCapture } from './test-utils'
 describe('error-paths', () => {
 
   describe('arpeggio', () => {
-    it('arpeggio([\'invalid\']) — throws on apply (resolvePitches propagates)', () => {
+    it('arpeggio([\'invalid\']) — throws on apply (notation.noteToCents propagates)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       expect(() => arpeggio(['invalid' as any]).apply(bridge)).toThrow()
       expect(() => arpeggio(['invalid' as any]).apply(bridge)).toThrow('Invalid note: invalid')
@@ -83,18 +81,6 @@ describe('error-paths', () => {
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
       expect(notes[0].pitch).toBeGreaterThan(1000) // degree 999 → very high octave in cents
-    })
-  })
-
-  describe.skip('resolvePitch (removed — resolution deferred to notation)', () => {
-    it('resolvePitch(\'invalid\') — throws', () => {
-      // resolvePitch was removed; pitch resolution is now via bridge.notation().noteToCents
-    })
-  })
-
-  describe.skip('parseChord (removed — chord resolution deferred to notation)', () => {
-    it('parseChord(\'\') — throws', () => {
-      // parseChord was removed; chord resolution is now via bridge.notation()
     })
   })
 })

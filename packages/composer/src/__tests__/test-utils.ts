@@ -89,7 +89,7 @@ function parseTestRoman(input: string): { degreeIndex: number; accidental: strin
  * Minimal Notation for tests — 12-EDO Western names.
  * Implements Notation interface without @symphonyscript/notations.
  */
-const testNotationImpl: Notation = {
+const testNotationImpl = {
   getId: () => 'test',
   getName: () => 'Test Notation',
   getTuningHz: () => 440,
@@ -99,7 +99,7 @@ const testNotationImpl: Notation = {
 
   noteToCents(input: NoteName | number): number {
     if (typeof input === 'number') return input
-    const m = input.match(/^([A-G][b#]?)(-?\d+)$/)
+    const m = (input as string).match(/^([A-G][b#]?)(-?\d+)$/)
     if (!m) throw new Error(`Invalid note: ${input}`)
     const base = NOTE_BASE[m[1]]
     if (base === undefined) throw new Error(`Unknown note: ${m[1]}`)
@@ -166,10 +166,7 @@ const testNotationImpl: Notation = {
 
   chordToIntervals: (input: ChordSymbol | ChordIntervals): any => {
     if (Array.isArray(input)) return input
-    const suffix = String(input)
-    const intervals = TEST_CHORD_MAP[suffix]
-    if (intervals) return intervals
-    throw new Error(`Unknown chord: ${suffix}`)
+    throw new Error(`Unsupported chord symbol in test notation: ${input}`)
   },
   intervalsToChord: (_i: any): string => { throw new Error('Unsupported') },
   getSupportedChords: (): ChordSymbol[] => [],
@@ -191,7 +188,7 @@ const testNotationImpl: Notation = {
   },
 
   ticksToDuration: (): string => '4n',
-}
+} as unknown as Notation
 
 // ============================================================================
 // Shared test notation instance

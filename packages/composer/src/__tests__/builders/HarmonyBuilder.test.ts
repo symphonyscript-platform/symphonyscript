@@ -1,9 +1,9 @@
 /**
  * HarmonyBuilder Test
  *
- * Tests chord() and harmony() cues:
- *   - chord() chord symbol parsing
- *   - harmony() mask/root
+ * Tests harmony() and chord() cues using notation-agnostic intervals and cents:
+ *   - harmony(intervals, root) — interval-based emission
+ *   - chord() with .intervals()/.root() — interval-based construction
  *   - Immutability
  */
 
@@ -13,20 +13,25 @@ import { harmony } from '../../cues/harmony'
 import { note } from '../../cues/note'
 import { HarmonyBuilder } from '../../builders/HarmonyBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
+import type { CompositionBridge } from '../../interfaces/composition-bridge'
+
 /** C major triad: root, M3, P5 in cents */
 const MAJ = [0, 400, 700] as const
 /** A minor triad */
 const MIN = [0, 300, 700] as const
 /** C major 7th */
 const MAJ7 = [0, 400, 700, 1100] as const
-import type { CompositionBridge } from '../../interfaces/composition-bridge'
+/** Dominant 7th */
+const DOM7 = [0, 400, 700, 1000] as const
+/** Diminished triad */
+const DIM = [0, 300, 600] as const
 
 describe('HarmonyBuilder', () => {
 
-  describe.skip('chord() symbol parsing', () => {
-    it('chord("Cmaj7") should emit C, E, G, B (pitches 60, 64, 67, 71)', () => {
+  describe('harmony() interval-based emission', () => {
+    it('harmony(MAJ7, 6000) should emit C, E, G, B (Cmaj7)', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = chord('Cmaj7').apply(bridge)
+      const result = harmony(MAJ7, 6000).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(4)
@@ -36,9 +41,9 @@ describe('HarmonyBuilder', () => {
       expect(notes[3].pitch).toBe(7100)
     })
 
-    it('chord("Am") should emit A4, C5, E5 (pitches 69, 72, 76)', () => {
+    it('harmony(MIN, 6900) should emit A4, C5, E5 (Am)', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = chord('Am').apply(bridge)
+      const result = harmony(MIN, 6900).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -47,9 +52,9 @@ describe('HarmonyBuilder', () => {
       expect(notes[2].pitch).toBe(7600)
     })
 
-    it('chord(10300) should emit G4, B4, D5, F5 (pitches 67, 71, 74, 77)', () => {
+    it('harmony(DOM7, 6700) should emit G4, B4, D5, F5 (G7)', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = chord(10300).apply(bridge)
+      const result = harmony(DOM7, 6700).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(4)
@@ -59,9 +64,9 @@ describe('HarmonyBuilder', () => {
       expect(notes[3].pitch).toBe(7700)
     })
 
-    it('chord("F#dim") should emit F#, A, C (pitches 66, 69, 72)', () => {
+    it('harmony(DIM, 6600) should emit F#4, A4, C5 (F#dim)', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = chord('F#dim').apply(bridge)
+      const result = harmony(DIM, 6600).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -114,7 +119,7 @@ describe('HarmonyBuilder', () => {
     })
   })
 
-  describe('mask() and root() modifiers', () => {
+  describe('root() and intervals() modifiers', () => {
     it('.root() should change chord root', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = harmony(MAJ, 6000).root(6700).apply(bridge)
@@ -125,8 +130,7 @@ describe('HarmonyBuilder', () => {
       expect(notes[2].pitch).toBe(7400)
     })
 
-    it.skip('.mask() should change chord quality', () => {
-      // testNotation doesn't support chord symbol conversion
+    it('.intervals() should change chord quality', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = harmony(MAJ, 6000).intervals(MIN).apply(bridge)
 
@@ -137,13 +141,14 @@ describe('HarmonyBuilder', () => {
   })
 
   describe('duration', () => {
-    it.skip('should use explicit duration when provided', () => {
-      // chord('C') requires chord symbol - testNotation throws Unsupported
+    it('should use explicit duration when provided', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = chord('C', 240).apply(bridge)
+      const result = harmony(MAJ, 6000, 240).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes[0].duration).toBe(240)
+      expect(notes[1].duration).toBe(240)
+      expect(notes[2].duration).toBe(240)
     })
 
     it('should use bridge defaultDuration when duration not provided', () => {
@@ -156,12 +161,11 @@ describe('HarmonyBuilder', () => {
   })
 
   describe('tick advance and chaining', () => {
-    it.skip('harmony then note should both emit and advance tick', () => {
-      // chord('Cm') requires chord symbol - testNotation throws Unsupported
+    it('harmony then note should both emit and advance tick', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b: CompositionBridge = bridge
-      b = chord('Cm').apply(b)
-      b = note(6700).apply(b)
+      b = harmony(MIN, 6000).apply(b) // C minor
+      b = note(6700).apply(b) // G4
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(4) // 3 from Cm + 1 from G4
@@ -169,7 +173,7 @@ describe('HarmonyBuilder', () => {
       expect(notes[3].tick).toBe(480)
     })
 
-    it('chord(undefined) should emit no notes (mask 0)', () => {
+    it('chord(undefined) should emit no notes', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = chord(undefined).apply(bridge)
 
