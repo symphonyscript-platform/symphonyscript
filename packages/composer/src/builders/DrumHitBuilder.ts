@@ -1,11 +1,12 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import type { DrumPitch } from '@symphonyscript/core'
 
 /**
  * Parameters for {@link DrumHitBuilder}.
  */
 export interface DrumHitParams {
-  /** Pitch in cents. Defaults to 3600 (bass drum / MIDI 36). */
-  pitch: number
+  /** Pitch in cents or drum name (e.g. 'kick'). Defaults to 3600 (bass drum). */
+  pitch: DrumPitch
   /** Detune offset in cents applied to pitch at emit time. Defaults to 0. */
   detune: number
   /** Note duration in ticks. `null` uses bridge default. */
@@ -84,7 +85,7 @@ export class DrumHitBuilder implements PipeStep {
 
    * @returns New builder with the updated pitch
    */
-  pitch(pitch: number): DrumHitBuilder {
+  pitch(pitch: DrumPitch): DrumHitBuilder {
     return this.clone({ pitch })
   }
 
@@ -230,14 +231,20 @@ export class DrumHitBuilder implements PipeStep {
     target = this.emitFlamGraceNote(target, duration, resolvedVelocity)
 
     // Main hit
-    const finalPitch = this.params.pitch + this.params.detune
+    const resolvedPitch = this.resolvePitch(bridge)
     target = target.withNote(
-      finalPitch,
+      resolvedPitch + this.params.detune,
       duration,
       this.params.velocity ?? undefined,
     )
 
     return this.resetFlags(target, wasPrecise, wasMuted)
+  }
+
+  /** @internal Resolve DrumPitch to cents. Strings resolve via notation.drumToCents(). */
+  private resolvePitch(bridge: CompositionBridge): number {
+    const p = this.params.pitch
+    return typeof p === 'string' ? bridge.notation().drumToCents(p) : p
   }
 
   /** @internal Apply local flags only if this builder sets them and the bridge doesn't already have them. */
@@ -291,7 +298,7 @@ export class DrumHitBuilder implements PipeStep {
     let target = bridge
 
     for (let i = 0; i < this.params.dragCount; ++i) {
-      target = target.withNote(this.params.pitch + this.params.detune, duration, graceVelocity)
+      target = target.withNote(this.resolvePitch(bridge) + this.params.detune, duration, graceVelocity)
       target = target.withTick(startTick + this.params.dragGap * (i + 1))
     }
 
@@ -309,7 +316,7 @@ export class DrumHitBuilder implements PipeStep {
     const graceVelocity = Math.round(resolvedVelocity * this.params.flamGraceRatio)
     let target = bridge
 
-    target = target.withNote(this.params.pitch + this.params.detune, duration, graceVelocity)
+    target = target.withNote(this.resolvePitch(bridge) + this.params.detune, duration, graceVelocity)
     target = target.withTick(target.tick + this.params.flamOffset)
 
     return target

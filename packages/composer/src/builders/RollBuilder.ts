@@ -1,4 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import type { DrumPitch } from '@symphonyscript/core'
 
 /**
  * Parameters for {@link RollBuilder}.
@@ -7,8 +8,8 @@ import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
  * MIDI key (e.g. {@link GM_DRUM.BASS_DRUM_1}).
  */
 export interface RollParams {
-  /** Pitch in cents (typically drum key). */
-  pitch: number | null
+  /** Pitch in cents or drum name. */
+  pitch: DrumPitch | null
   /** Total roll duration in ticks. `null` = bridge.defaultDuration. */
   duration: number | null
   /** Tick interval per hit. `null` = bridge.defaultDuration / 4. */
@@ -82,8 +83,12 @@ export class RollBuilder implements PipeStep {
     const hitCount = Math.floor(duration / hitDuration)
     let target = bridge
 
+    const resolvedPitch = typeof this.params.pitch === 'string'
+      ? bridge.notation().drumToCents(this.params.pitch)
+      : this.params.pitch
+
     for (let i = 0; i < hitCount; ++i) {
-      target = target.withNote(this.params.pitch, hitDuration)
+      target = target.withNote(resolvedPitch, hitDuration)
     }
 
     return target

@@ -8,7 +8,7 @@
  */
 
 import { BaseNotation, NotationInputError } from '@symphonyscript/core'
-import type { Range, NotationCapabilities, ChordIntervals, KeySignature, ScaleIntervals, ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol, DurationName } from '@symphonyscript/core'
+import type { Range, NotationCapabilities, ChordIntervals, KeySignature, ScaleIntervals, ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol, DurationName, DrumName } from '@symphonyscript/core'
 import type { ChordResolution } from '@symphonyscript/core'
 
 import {
@@ -24,6 +24,8 @@ import {
   CHORD_INTERVALS_MAP,
   INTERVALS_TO_CHORD_MAP,
   ROMAN_TO_DEGREE,
+  DRUM_MAP,
+  CENTS_TO_DRUM,
 } from './western.constants'
 
 import { parseNoteString, parseRomanNumeral, parseChordCode } from './western.utils'
@@ -277,5 +279,21 @@ export class WesternNotation extends BaseNotation {
     }
 
     return bestName as DurationName
+  }
+
+  drumToCents(input: DrumName): number {
+    const cents = DRUM_MAP[input as string]
+    if (cents === undefined) {
+      throw new NotationInputError(this.getId(), 'drumToCents', String(input))
+    }
+    return cents
+  }
+
+  centsToDrum(cents: number): DrumName {
+    const name = CENTS_TO_DRUM[cents]
+    if (name === undefined) {
+      throw new NotationInputError(this.getId(), 'centsToDrum', String(cents))
+    }
+    return name as DrumName
   }
 }

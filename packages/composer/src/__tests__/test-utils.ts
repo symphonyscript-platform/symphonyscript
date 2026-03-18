@@ -188,6 +188,14 @@ const testNotationImpl = {
   },
 
   ticksToDuration: (): string => '4n',
+
+  drumToCents(input: string): number {
+    throw new Error(`Unknown drum name '${input}'`)
+  },
+
+  centsToDrum(cents: number): string {
+    throw new Error(`No drum for ${cents} cents`)
+  },
 } as unknown as Notation
 
 // ============================================================================

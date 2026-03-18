@@ -1,4 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import type { DrumPitch } from '@symphonyscript/core'
 import { applyBinaryPattern } from '../utils/binary-pattern'
 
 /**
@@ -7,8 +8,8 @@ import { applyBinaryPattern } from '../utils/binary-pattern'
 export interface DrumStepsParams {
   /** Binary step pattern. Truthy (e.g. 1) = hit, falsy (e.g. 0) = rest. Defaults to []. */
   pattern: number[]
-  /** Pitch in cents for hits. `null` means no emission. */
-  pitch: number | null
+  /** Pitch in cents or drum name. `null` means no emission. */
+  pitch: DrumPitch | null
   /** Duration per step in ticks. `null` uses bridge default. */
   stepDuration: number | null
 }
@@ -49,7 +50,7 @@ export class DrumStepsBuilder implements PipeStep {
 
    * @returns New builder with the updated pitch
    */
-  pitch(pitch: number): DrumStepsBuilder {
+  pitch(pitch: DrumPitch): DrumStepsBuilder {
     return this.clone({ pitch })
   }
 
@@ -90,9 +91,13 @@ export class DrumStepsBuilder implements PipeStep {
   apply(bridge: CompositionBridge): CompositionBridge {
     if (this.params.pitch === null || this.params.pattern.length === 0) return bridge
 
+    const resolvedPitch = typeof this.params.pitch === 'string'
+      ? bridge.notation().drumToCents(this.params.pitch)
+      : this.params.pitch
+
     const duration = this.params.stepDuration ?? bridge.defaultDuration
 
-    return applyBinaryPattern(this.params.pattern, [this.params.pitch], duration, bridge)
+    return applyBinaryPattern(this.params.pattern, [resolvedPitch], duration, bridge)
   }
 
   /** @internal Creates a new DrumStepsBuilder with merged params. */

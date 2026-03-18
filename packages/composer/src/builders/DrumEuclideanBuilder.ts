@@ -1,4 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import type { DrumPitch } from '@symphonyscript/core'
 import { applyBinaryPattern } from '../utils/binary-pattern'
 import { generateEuclideanPattern } from '../utils/euclidean-pattern'
 
@@ -10,8 +11,8 @@ export interface DrumEuclideanParams {
   hits: number
   /** Total steps (n) in the pattern. Defaults to 4. */
   steps: number
-  /** Pitch in cents for drum hits. `null` means no emission (apply returns bridge unchanged). */
-  pitch: number | null
+  /** Pitch in cents or drum name. `null` means no emission (apply returns bridge unchanged). */
+  pitch: DrumPitch | null
   /** Duration per step in ticks. `null` uses bridge default. */
   stepDuration: number | null
   /** Rotation offset. Positive = right, negative = left. Defaults to 0. */
@@ -56,7 +57,7 @@ export class DrumEuclideanBuilder implements PipeStep {
 
    * @returns New builder with the updated pitch
    */
-  pitch(pitch: number): DrumEuclideanBuilder {
+  pitch(pitch: DrumPitch): DrumEuclideanBuilder {
     return this.clone({ pitch })
   }
 
@@ -125,9 +126,13 @@ export class DrumEuclideanBuilder implements PipeStep {
 
     if (pattern === null) return bridge
 
+    const resolvedPitch = typeof this.params.pitch === 'string'
+      ? bridge.notation().drumToCents(this.params.pitch)
+      : this.params.pitch
+
     const duration = this.params.stepDuration ?? bridge.defaultDuration
 
-    return applyBinaryPattern(pattern, [this.params.pitch], duration, bridge)
+    return applyBinaryPattern(pattern, [resolvedPitch], duration, bridge)
   }
 
   /** @internal Creates a new DrumEuclideanBuilder with merged params. */

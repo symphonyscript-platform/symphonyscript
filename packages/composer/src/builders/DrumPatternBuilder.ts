@@ -1,4 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
+import type { DrumPitch } from '@symphonyscript/core'
 
 /**
  * Parameters for {@link DrumPatternBuilder}.
@@ -6,8 +7,8 @@ import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
 export interface DrumPatternParams {
   /** Text pattern: 'x'/'X' = hit, any other char = rest (advance tick). Defaults to ''. */
   cue: string
-  /** Pitch in cents for hits. `null` means no emission. */
-  pitch: number | null
+  /** Pitch in cents or drum name. `null` means no emission. */
+  pitch: DrumPitch | null
   /** Duration per step in ticks. `null` uses bridge default. */
   stepDuration: number | null
 }
@@ -48,7 +49,7 @@ export class DrumPatternBuilder implements PipeStep {
 
    * @returns New builder with the updated pitch
    */
-  pitch(pitch: number): DrumPatternBuilder {
+  pitch(pitch: DrumPitch): DrumPatternBuilder {
     return this.clone({ pitch })
   }
 
@@ -88,13 +89,17 @@ export class DrumPatternBuilder implements PipeStep {
   apply(bridge: CompositionBridge): CompositionBridge {
     if (this.params.pitch === null || this.params.cue.length === 0) return bridge
 
+    const resolvedPitch = typeof this.params.pitch === 'string'
+      ? bridge.notation().drumToCents(this.params.pitch)
+      : this.params.pitch
+
     const duration = this.params.stepDuration ?? bridge.defaultDuration
     let target = bridge
 
     for (let i = 0; i < this.params.cue.length; ++i) {
       const character = this.params.cue[i]
       if (character === 'x' || character === 'X') {
-        target = target.withNote(this.params.pitch, duration)
+        target = target.withNote(resolvedPitch, duration)
       } else {
         target = target.withTick(target.tick + duration)
       }

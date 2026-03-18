@@ -1,5 +1,5 @@
 import { ChordIntervals, KeySignature, ScaleIntervals } from '../types'
-import { ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol, DurationName } from '../registries'
+import { ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol, DurationName, DrumName } from '../registries'
 import { Range } from './range'
 import { NotationCapabilities } from './notation-capabilities'
 import { ChordResolution } from './chord-resolution'
@@ -305,4 +305,27 @@ export interface Notation {
    * @throws {NotationInputError} If the tick count doesn't map to a named duration
    */
   ticksToDuration(ticks: number, ppq: number): DurationName
+
+  /* ---------- Drums ---------- */
+
+  /**
+   * Resolve a drum name to cents.
+   *
+   * @param input - Drum name in this notation's format
+   *                (e.g., `'kick'`, `'snare'`, `'hihat'`)
+   *
+   * @returns Pitch in cents (e.g., `3600` for bass drum)
+   * @throws {NotationInputError} If the drum name is not recognized
+   */
+  drumToCents(input: DrumName): number
+
+  /**
+   * Format a cent value as a drum name in this notation's format.
+   *
+   * @param cents - Pitch in cents
+   *
+   * @returns Drum name (e.g., `'kick'` for `3600` cents)
+   * @throws {NotationInputError} If the cent value doesn't map to a named drum
+   */
+  centsToDrum(cents: number): DrumName
 }

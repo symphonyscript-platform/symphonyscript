@@ -2,7 +2,7 @@ import { Notation } from './interfaces/notation'
 import { Range } from './interfaces/range'
 import { NotationCapabilities } from './interfaces/notation-capabilities'
 import { ChordIntervals, KeySignature, ScaleIntervals } from './types'
-import { ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol, DurationName } from './registries'
+import { ScaleMode, PitchClass, NoteName, Degree, IntervalName, ChordSymbol, DurationName, DrumName } from './registries'
 import { ChordResolution } from './interfaces/chord-resolution'
 import { NotationInputError } from './errors'
 
@@ -101,4 +101,7 @@ export abstract class BaseNotation implements Notation {
 
   abstract durationToTicks(input: DurationName, ppq: number): number
   abstract ticksToDuration(ticks: number, ppq: number): DurationName
+
+  abstract drumToCents(input: DrumName): number
+  abstract centsToDrum(cents: number): DrumName
 }

@@ -5,7 +5,7 @@ import { DrumEuclideanBuilder } from '../builders/DrumEuclideanBuilder'
 import { DrumStepsBuilder } from '../builders/DrumStepsBuilder'
 import { RollBuilder } from '../builders/RollBuilder'
 
-import { NoteDuration } from '@symphonyscript/core'
+import { NoteDuration, DrumPitch } from '@symphonyscript/core'
 
 /**
  * Bass drum (GM_DRUM.BASS_DRUM_1).
@@ -147,7 +147,7 @@ export function shaker(duration?: NoteDuration): DrumHitBuilder {
 
  * @returns {@link DrumHitBuilder}
  */
-export function hit(pitch?: number, duration?: NoteDuration): DrumHitBuilder {
+export function hit(pitch?: DrumPitch, duration?: NoteDuration): DrumHitBuilder {
   return new DrumHitBuilder({ pitch, duration })
 }
 
@@ -171,7 +171,7 @@ export function hit(pitch?: number, duration?: NoteDuration): DrumHitBuilder {
  */
 export function drumPattern(
   cue?: string,
-  pitch?: number,
+  pitch?: DrumPitch,
   stepDuration?: NoteDuration,
 ): DrumPatternBuilder {
   return new DrumPatternBuilder({ cue, pitch, stepDuration })
@@ -197,7 +197,7 @@ export function drumPattern(
 export function drumEuclidean(
   hits?: number,
   steps?: number,
-  pitch?: number,
+  pitch?: DrumPitch,
   stepDuration?: NoteDuration,
   rotation?: number,
 ): DrumEuclideanBuilder {
@@ -221,7 +221,7 @@ export function drumEuclidean(
  */
 export function drumSteps(
   pattern?: number[],
-  pitch?: number,
+  pitch?: DrumPitch,
   stepDuration?: NoteDuration,
 ): DrumStepsBuilder {
   return new DrumStepsBuilder({ pattern, pitch, stepDuration })
@@ -243,7 +243,7 @@ export function drumSteps(
  * ```
  */
 export function roll(
-  pitch?: number,
+  pitch?: DrumPitch,
   duration?: NoteDuration,
   rate?: number,
 ): RollBuilder {
@@ -258,7 +258,7 @@ export function roll(
 
  * @returns {@link DrumHitBuilder} with flam articulation.
  */
-export function flam(pitch?: number, duration?: NoteDuration): DrumHitBuilder {
+export function flam(pitch?: DrumPitch, duration?: NoteDuration): DrumHitBuilder {
   return new DrumHitBuilder({ pitch: pitch ?? Drums.ACOUSTIC_SNARE, duration }).flam()
 }
 
@@ -270,6 +270,6 @@ export function flam(pitch?: number, duration?: NoteDuration): DrumHitBuilder {
 
  * @returns {@link DrumHitBuilder} with drag articulation.
  */
-export function drag(pitch?: number, duration?: NoteDuration): DrumHitBuilder {
+export function drag(pitch?: DrumPitch, duration?: NoteDuration): DrumHitBuilder {
   return new DrumHitBuilder({ pitch: pitch ?? Drums.ACOUSTIC_SNARE, duration }).drag()
 }

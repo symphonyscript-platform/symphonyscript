@@ -5,6 +5,7 @@ export interface KeyContextRegistry {}
 export interface IntervalNameRegistry {}
 export interface ChordSymbolRegistry {}
 export interface DurationRegistry {}
+export interface DrumRegistry {}
 
 export type ScaleMode = ScaleModeRegistry[keyof ScaleModeRegistry]
 export type PitchClass = PitchClassRegistry[keyof PitchClassRegistry]
@@ -12,6 +13,7 @@ export type Degree = DegreeRegistry[keyof DegreeRegistry]
 export type IntervalName = IntervalNameRegistry[keyof IntervalNameRegistry]
 export type ChordSymbol = ChordSymbolRegistry[keyof ChordSymbolRegistry]
 export type DurationName = DurationRegistry[keyof DurationRegistry]
+export type DrumName = DrumRegistry[keyof DrumRegistry]
 
 /** Valid octave numbers for note names (C(-1) = 0 cents through C10 = 13200 cents). */
 export type Octave = -1 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
@@ -46,3 +48,12 @@ export type NotePitch = NoteName | number
  * Numbers pass through unchanged as raw tick values.
  */
 export type NoteDuration = DurationName | number
+
+/**
+ * Drum input for drum builders that accept explicit pitches.
+ *
+ * String values (e.g. `'kick'`, `'snare'`, `'hihat'`) are resolved
+ * at apply-time via `bridge.notation().drumToCents(name)`.
+ * Numbers pass through unchanged as raw cent values.
+ */
+export type DrumPitch = DrumName | number

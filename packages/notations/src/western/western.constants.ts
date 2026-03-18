@@ -36,6 +36,18 @@ import {
   PHRYGIAN_DOMINANT_INTERVALS,
 } from '@symphonyscript/theory'
 
+import {
+  ACOUSTIC_BASS_DRUM, BASS_DRUM_1, SIDE_STICK, ACOUSTIC_SNARE, HAND_CLAP,
+  ELECTRIC_SNARE, LOW_FLOOR_TOM, CLOSED_HI_HAT, HIGH_FLOOR_TOM, PEDAL_HI_HAT,
+  LOW_TOM, OPEN_HI_HAT, LOW_MID_TOM, HI_MID_TOM, CRASH_CYMBAL_1, HIGH_TOM,
+  RIDE_CYMBAL_1, CHINESE_CYMBAL, RIDE_BELL, TAMBOURINE, SPLASH_CYMBAL, COWBELL,
+  CRASH_CYMBAL_2, VIBRASLAP, RIDE_CYMBAL_2, HI_BONGO, LOW_BONGO,
+  MUTE_HI_CONGA, OPEN_HI_CONGA, LOW_CONGA, HIGH_TIMBALE, LOW_TIMBALE,
+  HIGH_AGOGO, LOW_AGOGO, CABASA, MARACAS, SHORT_WHISTLE, LONG_WHISTLE,
+  SHORT_GUIRO, LONG_GUIRO, CLAVES, HI_WOOD_BLOCK, LOW_WOOD_BLOCK,
+  MUTE_CUICA, OPEN_CUICA, MUTE_TRIANGLE, OPEN_TRIANGLE,
+} from '@symphonyscript/theory'
+
 // ============================================================================
 // Note ↔ Semitone
 // ============================================================================
@@ -164,6 +176,122 @@ export const TICKS_RATIO_TO_DURATION: readonly [number, string][] = [
   [1 / 6, 'triplet.sixteenth'],
   [0.125, 'thirtysecond'],
 ]
+
+// ============================================================================
+// Drums — friendly name ↔ cents (values from @symphonyscript/theory)
+// ============================================================================
+
+/** Drum name → pitch in cents. */
+export const DRUM_MAP: Readonly<Record<string, number>> = {
+  // Core kit
+  'kick': BASS_DRUM_1,
+  'kick2': ACOUSTIC_BASS_DRUM,
+  'snare': ACOUSTIC_SNARE,
+  'snare2': ELECTRIC_SNARE,
+  'clap': HAND_CLAP,
+  'rimshot': SIDE_STICK,
+  // Hi-hats
+  'hihat': CLOSED_HI_HAT,
+  'hihat.open': OPEN_HI_HAT,
+  'hihat.pedal': PEDAL_HI_HAT,
+  // Toms (high → low)
+  'tom1': HIGH_TOM,
+  'tom2': HI_MID_TOM,
+  'tom3': LOW_MID_TOM,
+  'tom4': LOW_TOM,
+  'tom5': HIGH_FLOOR_TOM,
+  'tom6': LOW_FLOOR_TOM,
+  // Cymbals
+  'crash': CRASH_CYMBAL_1,
+  'crash2': CRASH_CYMBAL_2,
+  'ride': RIDE_CYMBAL_1,
+  'ride2': RIDE_CYMBAL_2,
+  'ride.bell': RIDE_BELL,
+  'splash': SPLASH_CYMBAL,
+  'china': CHINESE_CYMBAL,
+  // Auxiliary
+  'tambourine': TAMBOURINE,
+  'cowbell': COWBELL,
+  'vibraslap': VIBRASLAP,
+  'cabasa': CABASA,
+  'maracas': MARACAS,
+  // Bongos & congas
+  'bongo.hi': HI_BONGO,
+  'bongo.lo': LOW_BONGO,
+  'conga.mute': MUTE_HI_CONGA,
+  'conga.open': OPEN_HI_CONGA,
+  'conga.lo': LOW_CONGA,
+  // Timbales
+  'timbale.hi': HIGH_TIMBALE,
+  'timbale.lo': LOW_TIMBALE,
+  // Agogo
+  'agogo.hi': HIGH_AGOGO,
+  'agogo.lo': LOW_AGOGO,
+  // Whistles & guiros
+  'whistle.short': SHORT_WHISTLE,
+  'whistle.long': LONG_WHISTLE,
+  'guiro.short': SHORT_GUIRO,
+  'guiro.long': LONG_GUIRO,
+  // Misc
+  'claves': CLAVES,
+  'woodblock.hi': HI_WOOD_BLOCK,
+  'woodblock.lo': LOW_WOOD_BLOCK,
+  'cuica.mute': MUTE_CUICA,
+  'cuica.open': OPEN_CUICA,
+  'triangle.mute': MUTE_TRIANGLE,
+  'triangle.open': OPEN_TRIANGLE,
+}
+
+/** Cents → canonical drum name for reverse lookup. */
+export const CENTS_TO_DRUM: Readonly<Record<number, string>> = {
+  [ACOUSTIC_BASS_DRUM]: 'kick2',
+  [BASS_DRUM_1]: 'kick',
+  [SIDE_STICK]: 'rimshot',
+  [ACOUSTIC_SNARE]: 'snare',
+  [HAND_CLAP]: 'clap',
+  [ELECTRIC_SNARE]: 'snare2',
+  [LOW_FLOOR_TOM]: 'tom6',
+  [CLOSED_HI_HAT]: 'hihat',
+  [HIGH_FLOOR_TOM]: 'tom5',
+  [PEDAL_HI_HAT]: 'hihat.pedal',
+  [LOW_TOM]: 'tom4',
+  [OPEN_HI_HAT]: 'hihat.open',
+  [LOW_MID_TOM]: 'tom3',
+  [HI_MID_TOM]: 'tom2',
+  [CRASH_CYMBAL_1]: 'crash',
+  [HIGH_TOM]: 'tom1',
+  [RIDE_CYMBAL_1]: 'ride',
+  [CHINESE_CYMBAL]: 'china',
+  [RIDE_BELL]: 'ride.bell',
+  [TAMBOURINE]: 'tambourine',
+  [SPLASH_CYMBAL]: 'splash',
+  [COWBELL]: 'cowbell',
+  [CRASH_CYMBAL_2]: 'crash2',
+  [VIBRASLAP]: 'vibraslap',
+  [RIDE_CYMBAL_2]: 'ride2',
+  [HI_BONGO]: 'bongo.hi',
+  [LOW_BONGO]: 'bongo.lo',
+  [MUTE_HI_CONGA]: 'conga.mute',
+  [OPEN_HI_CONGA]: 'conga.open',
+  [LOW_CONGA]: 'conga.lo',
+  [HIGH_TIMBALE]: 'timbale.hi',
+  [LOW_TIMBALE]: 'timbale.lo',
+  [HIGH_AGOGO]: 'agogo.hi',
+  [LOW_AGOGO]: 'agogo.lo',
+  [CABASA]: 'cabasa',
+  [MARACAS]: 'maracas',
+  [SHORT_WHISTLE]: 'whistle.short',
+  [LONG_WHISTLE]: 'whistle.long',
+  [SHORT_GUIRO]: 'guiro.short',
+  [LONG_GUIRO]: 'guiro.long',
+  [CLAVES]: 'claves',
+  [HI_WOOD_BLOCK]: 'woodblock.hi',
+  [LOW_WOOD_BLOCK]: 'woodblock.lo',
+  [MUTE_CUICA]: 'cuica.mute',
+  [OPEN_CUICA]: 'cuica.open',
+  [MUTE_TRIANGLE]: 'triangle.mute',
+  [OPEN_TRIANGLE]: 'triangle.open',
+}
 
 // ============================================================================
 // Scale Intervals — string-keyed, backed by theory constants

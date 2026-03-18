@@ -78,4 +78,29 @@ declare module '@symphonyscript/core' {
       // Triplet (short)
       | '2t' | '4t' | '8t' | '16t'
   }
+  interface DrumRegistry {
+    western:
+      // Core kit
+      | 'kick' | 'kick2' | 'snare' | 'snare2' | 'clap' | 'rimshot'
+      // Hi-hats
+      | 'hihat' | 'hihat.open' | 'hihat.pedal'
+      // Toms
+      | 'tom1' | 'tom2' | 'tom3' | 'tom4' | 'tom5' | 'tom6'
+      // Cymbals
+      | 'crash' | 'crash2' | 'ride' | 'ride2' | 'ride.bell' | 'splash' | 'china'
+      // Auxiliary
+      | 'tambourine' | 'cowbell' | 'vibraslap' | 'cabasa' | 'maracas'
+      // Bongos & congas
+      | 'bongo.hi' | 'bongo.lo' | 'conga.mute' | 'conga.open' | 'conga.lo'
+      // Timbales
+      | 'timbale.hi' | 'timbale.lo'
+      // Agogo
+      | 'agogo.hi' | 'agogo.lo'
+      // Whistles & guiros
+      | 'whistle.short' | 'whistle.long' | 'guiro.short' | 'guiro.long'
+      // Misc
+      | 'claves' | 'woodblock.hi' | 'woodblock.lo'
+      | 'cuica.mute' | 'cuica.open'
+      | 'triangle.mute' | 'triangle.open'
+  }
 }
