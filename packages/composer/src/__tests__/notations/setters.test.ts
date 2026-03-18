@@ -60,7 +60,7 @@ describe('FieldSetter', () => {
     it('cascading setter should affect subsequent notes', () => {
       const bridge = createBridge({ velocity: 800, defaultDuration: 480 })
       let b = velocity(600).apply(bridge)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes[0].velocity).toBe(600) // velocity was set to 600 before the note
@@ -75,7 +75,7 @@ describe('FieldSetter', () => {
     it('volume().steps() should restore volume after scope', () => {
       const bridge = createBridge({ volume: 100, defaultDuration: 480 })
       const result = volume(30)
-        .steps(note('C4'))
+        .steps(note(6000))
         .apply(bridge)
 
       expect(result.volume).toBe(100) // restored
@@ -84,7 +84,7 @@ describe('FieldSetter', () => {
     it('volume().steps() should emit CC for set AND restore', () => {
       const bridge = createBridge({ volume: 100, defaultDuration: 480 })
       const result = volume(30)
-        .steps(note('C4'))
+        .steps(note(6000))
         .apply(bridge)
 
       const { cc } = commitAndCapture(result)
@@ -98,7 +98,7 @@ describe('FieldSetter', () => {
     it('tempo().steps() should restore tempo after scope', () => {
       const bridge = createBridge({ tempo: 120, defaultDuration: 480 })
       const result = tempo(180)
-        .steps(note('C4'))
+        .steps(note(6000))
         .apply(bridge)
 
       expect(result.tempo).toBe(120) // restored
@@ -108,10 +108,10 @@ describe('FieldSetter', () => {
       const bridge = createBridge({ transposeCents: 0, defaultDuration: 480 })
 
       let b = transpose(700)
-        .steps(note('C4'))  // C4 + 700 cents
+        .steps(note(6000))  // C4 + 700 cents
         .apply(bridge)
 
-      b = note('C4').apply(b) // should be C4 (transpose restored to 0)
+      b = note(6000).apply(b) // should be C4 (transpose restored to 0)
 
       const { notes } = commitAndCapture(b)
       // First note: transposed C4. Second note: C4 without transpose.
@@ -121,7 +121,7 @@ describe('FieldSetter', () => {
     it('should advance tick through scoped steps', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = tempo(140)
-        .steps(note('C4'), note('E4'))
+        .steps(note(6000), note(6400))
         .apply(bridge)
 
       expect(result.tick).toBe(960) // 2 × 480
@@ -137,10 +137,10 @@ describe('FieldSetter', () => {
       const bridge = createBridge({ transposeCents: 0, defaultDuration: 480 })
 
       let b = octaveUp()
-        .steps(note('C4'))
+        .steps(note(6000))
         .apply(bridge)
 
-      b = note('C4').apply(b) // should be unshifted after scope
+      b = note(6000).apply(b) // should be unshifted after scope
 
       const { notes } = commitAndCapture(b)
       // Inside octave: C4 + 1200 cents. Outside: C4 unshifted.
@@ -150,7 +150,7 @@ describe('FieldSetter', () => {
     it('octaveDown(2).steps() should shift notes down by 2 octaves', () => {
       const bridge = createBridge({ transposeCents: 0, defaultDuration: 480 })
       const result = octaveDown(2)
-        .steps(note('C4'))
+        .steps(note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -161,7 +161,7 @@ describe('FieldSetter', () => {
     it('octaveUp() cascading should persist the shift', () => {
       const bridge = createBridge({ transposeCents: 0, defaultDuration: 480 })
       let b = octaveUp().apply(bridge) // cascading — no .steps()
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
@@ -179,9 +179,9 @@ describe('FieldSetter', () => {
 
       const result = velocity(600).steps(
         transpose(500).steps(
-          note('C4'), // velocity=600, transposeCents=500
+          note(6000), // velocity=600, transposeCents=500
         ),
-        note('E4'),   // velocity=600, transposeCents=0 (restored)
+        note(6400),   // velocity=600, transposeCents=0 (restored)
       ).apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -243,7 +243,7 @@ describe('FieldSetter', () => {
     it('pan().steps() should restore pan after scope', () => {
       const bridge = createBridge({ pan: 64, defaultDuration: 480 })
       const result = pan(0)
-        .steps(note('C4'))
+        .steps(note(6000))
         .apply(bridge)
 
       expect(result.pan).toBe(64) // restored

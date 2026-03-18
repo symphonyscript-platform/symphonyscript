@@ -9,7 +9,6 @@ import { describe, it, expect } from 'vitest'
 import { roman } from '../../cues/roman'
 import { RomanBuilder } from '../../builders/RomanBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 import { note } from '../../cues/note'
 
 describe('roman', () => {
@@ -34,8 +33,7 @@ describe('roman', () => {
   describe('roman numeral resolution (C major)', () => {
     it('roman("I") in C major should emit C, E, G (pitches 60, 64, 67)', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -50,8 +48,7 @@ describe('roman', () => {
 
     it('roman("V") in C major should emit G4, B4, D5 (pitches 67, 71, 74)', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -66,8 +63,7 @@ describe('roman', () => {
 
     it('roman("V7") in C major should emit G, B, D, F (4 notes)', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -80,8 +76,7 @@ describe('roman', () => {
 
     it('roman("vi") in C major should emit A4, C5, E5 (minor)', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -98,8 +93,7 @@ describe('roman', () => {
   describe('duration', () => {
     it('should use explicit duration when provided', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -111,8 +105,7 @@ describe('roman', () => {
 
     it('should use bridge defaultDuration when duration not provided', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -126,8 +119,7 @@ describe('roman', () => {
   describe('all notes at same tick', () => {
     it('roman chord tones should emit at same tick (simultaneous)', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -143,13 +135,12 @@ describe('roman', () => {
   describe('chaining with note', () => {
     it('roman then note should both emit', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
       let b = roman('I').apply(bridge)
-      b = note('C5').apply(b)
+      b = note(7200).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(4)

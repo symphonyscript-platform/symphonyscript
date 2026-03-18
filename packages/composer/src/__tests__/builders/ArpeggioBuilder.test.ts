@@ -23,7 +23,7 @@ describe('ArpeggioBuilder', () => {
   describe('basic emission', () => {
     it('should emit C, E, G in up pattern by default', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = arpeggio(['C4', 'E4', 'G4']).apply(bridge)
+      const result = arpeggio([6000, 6400, 6700]).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -45,7 +45,7 @@ describe('ArpeggioBuilder', () => {
 
     it('should advance tick for each note', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = arpeggio(['C4', 'E4', 'G4'], 240).apply(bridge)
+      const result = arpeggio([6000, 6400, 6700], 240).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes[0].tick).toBe(0)
@@ -57,7 +57,7 @@ describe('ArpeggioBuilder', () => {
   describe('.rate()', () => {
     it('should use rate for step duration when set', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = arpeggio(['C4', 'E4', 'G4']).rate(240).apply(bridge)
+      const result = arpeggio([6000, 6400, 6700]).rate(240).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -70,7 +70,7 @@ describe('ArpeggioBuilder', () => {
   describe('.pattern()', () => {
     it('down pattern should emit notes in reverse order', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = arpeggio(['C4', 'E4', 'G4']).pattern('down').apply(bridge)
+      const result = arpeggio([6000, 6400, 6700]).pattern('down').apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -81,7 +81,7 @@ describe('ArpeggioBuilder', () => {
 
     it('up pattern should emit notes ascending', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = arpeggio(['C4', 'E4', 'G4']).pattern('up').apply(bridge)
+      const result = arpeggio([6000, 6400, 6700]).pattern('up').apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes[0].pitch).toBe(6000)
@@ -93,7 +93,7 @@ describe('ArpeggioBuilder', () => {
   describe('.velocity()', () => {
     it('should use builder velocity when set', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = arpeggio(['C4', 'E4', 'G4']).velocity(900).apply(bridge)
+      const result = arpeggio([6000, 6400, 6700]).velocity(900).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes[0].velocity).toBe(900)
@@ -103,7 +103,7 @@ describe('ArpeggioBuilder', () => {
   describe('.gate()', () => {
     it('should scale note duration by gate', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = arpeggio(['C4', 'E4', 'G4']).rate(480).gate(0.5).apply(bridge)
+      const result = arpeggio([6000, 6400, 6700]).rate(480).gate(0.5).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes[0].duration).toBe(240) // 480 * 0.5
@@ -131,8 +131,8 @@ describe('ArpeggioBuilder', () => {
   describe('chaining with note()', () => {
     it('arpeggio then note should both emit', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = arpeggio(['C4', 'E4']).rate(480).apply(bridge)
-      b = note('G4').apply(b)
+      let b = arpeggio([6000, 6400]).rate(480).apply(bridge)
+      b = note(6700).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
@@ -144,7 +144,7 @@ describe('ArpeggioBuilder', () => {
 
   describe('immutability', () => {
     it('builder methods should return new instances, not mutate', () => {
-      const original = arpeggio(['C4', 'E4', 'G4'])
+      const original = arpeggio([6000, 6400, 6700])
       const withPattern = original.pattern('down')
       const withRate = original.rate(120)
 

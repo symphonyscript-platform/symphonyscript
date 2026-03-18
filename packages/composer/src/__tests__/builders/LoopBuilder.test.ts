@@ -24,13 +24,13 @@ describe('LoopBuilder', () => {
 
   describe('loop() cue', () => {
     it('should return LoopBuilder instance', () => {
-      const result = loop(1, note('C4'))
+      const result = loop(1, note(6000))
       expect(result).toBeInstanceOf(LoopBuilder)
     })
 
     it('loop() without count should default to 1 via .steps()', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = loop().steps(note('C4')).apply(bridge)
+      const result = loop().steps(note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -39,7 +39,7 @@ describe('LoopBuilder', () => {
 
     it('loop(count, ...steps) should repeat steps count times', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = loop(3, note('C4')).apply(bridge)
+      const result = loop(3, note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -50,7 +50,7 @@ describe('LoopBuilder', () => {
 
     it('should loop multiple steps count times', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = loop(2, note('C4'), note('E4'), note('G4')).apply(bridge)
+      const result = loop(2, note(6000), note(6400), note(6700)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(6)
@@ -64,7 +64,7 @@ describe('LoopBuilder', () => {
 
     it('should advance tick through looped steps', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = loop(2, note('C4'), note('E4')).apply(bridge)
+      const result = loop(2, note(6000), note(6400)).apply(bridge)
 
       expect(result.tick).toBe(1920) // 4 notes * 480 ticks
     })
@@ -75,7 +75,7 @@ describe('LoopBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       const result = loop()
         .count(2)
-        .steps(note('C4'), note('E4'))
+        .steps(note(6000), note(6400))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -98,13 +98,13 @@ describe('LoopBuilder', () => {
 
   describe('repeat() cue', () => {
     it('repeat(count, source) should return LoopBuilder', () => {
-      const result = repeat(3, note('C4'))
+      const result = repeat(3, note(6000))
       expect(result).toBeInstanceOf(LoopBuilder)
     })
 
     it('should repeat single step count times', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = repeat(4, note('C4')).apply(bridge)
+      const result = repeat(4, note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(4)
@@ -116,7 +116,7 @@ describe('LoopBuilder', () => {
 
     it('.count() should override repeat count', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = repeat(1, note('C4'))
+      const result = repeat(1, note(6000))
         .count(3)
         .apply(bridge)
 
@@ -128,8 +128,8 @@ describe('LoopBuilder', () => {
   describe('chaining with note()', () => {
     it('should allow subsequent steps after loop', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = loop(2, note('C4')).apply(bridge)
-      b = note('E4').apply(b)
+      let b = loop(2, note(6000)).apply(bridge)
+      b = note(6400).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
@@ -140,8 +140,8 @@ describe('LoopBuilder', () => {
 
     it('should allow subsequent steps after repeat', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = repeat(2, note('C4')).apply(bridge)
-      b = note('E4').apply(b)
+      let b = repeat(2, note(6000)).apply(bridge)
+      b = note(6400).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
@@ -153,9 +153,9 @@ describe('LoopBuilder', () => {
 
   describe('immutability', () => {
     it('builder methods should return new instances', () => {
-      const base = loop(1, note('C4'))
+      const base = loop(1, note(6000))
       const withCount = base.count(2)
-      const withSteps = base.steps(note('E4'))
+      const withSteps = base.steps(note(6400))
 
       expect(base).not.toBe(withCount)
       expect(base).not.toBe(withSteps)
@@ -163,7 +163,7 @@ describe('LoopBuilder', () => {
 
     it('modified builder should produce different output', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const base = loop(2, note('C4'))
+      const base = loop(2, note(6000))
       const withCount = base.count(3)
 
       const baseResult = commitAndCapture(base.apply(bridge))

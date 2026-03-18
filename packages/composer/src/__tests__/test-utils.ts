@@ -3,7 +3,7 @@
  *
  * Pattern:
  *   1. Create a bridge:         const bridge = createBridge({ velocity: 600 })
- *   2. Apply steps:             const result = note('C4').apply(bridge)
+ *   2. Apply steps:             const result = note(6000).apply(bridge)
  *   3. Capture committed output: const { notes, cc, bends } = commitAndCapture(result)
  *   4. Assert on captured data:  expect(notes[0].tick).toBe(0)
  */
@@ -85,7 +85,7 @@ const testNotationImpl: Notation = {
     if (typeof input === 'number') return input
     const map: Record<string, number> = {
       'P1': 0, 'm2': 100, 'M2': 200, 'm3': 300, 'M3': 400,
-      'P4': 500, 'A4': 600, 'P5': 700, 'm6': 800, 'M6': 900,
+      'P4': 500, 6900: 600, 'P5': 700, 'm6': 800, 'M6': 900,
       'm7': 1000, 'M7': 1100, 'P8': 1200,
     }
     const v = map[input]
@@ -94,7 +94,7 @@ const testNotationImpl: Notation = {
   },
 
   centsToInterval(cents: number): string {
-    const names = ['P1', 'm2', 'M2', 'm3', 'M3', 'P4', 'A4', 'P5', 'm6', 'M6', 'm7', 'M7']
+    const names = ['P1', 'm2', 'M2', 'm3', 'M3', 'P4', 6900, 'P5', 'm6', 'M6', 'm7', 'M7']
     return names[((Math.round(cents / 100) % 12) + 12) % 12]
   },
 

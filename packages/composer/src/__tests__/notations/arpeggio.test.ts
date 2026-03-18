@@ -20,20 +20,20 @@ describe('arpeggio', () => {
     })
 
     it('arpeggio(pitches) should return ArpeggioBuilder', () => {
-      const result = arpeggio(['C4', 'E4', 'G4'])
+      const result = arpeggio([6000, 6400, 6700])
       expect(result).toBeInstanceOf(ArpeggioBuilder)
     })
 
     it('arpeggio(pitches, rate) should return ArpeggioBuilder', () => {
-      const result = arpeggio(['C4', 'E4', 'G4'], 240)
+      const result = arpeggio([6000, 6400, 6700], 240)
       expect(result).toBeInstanceOf(ArpeggioBuilder)
     })
   })
 
   describe('arpeggio emission', () => {
-    it('arpeggio(["C4","E4","G4"]) should emit C, E, G in up pattern', () => {
+    it('arpeggio([6000,6400,6700]) should emit C, E, G in up pattern', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = arpeggio(['C4', 'E4', 'G4']).apply(bridge)
+      const result = arpeggio([6000, 6400, 6700]).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -55,7 +55,7 @@ describe('arpeggio', () => {
 
     it('arpeggio with rate should use rate for step duration', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = arpeggio(['C4', 'E4', 'G4'], 240).apply(bridge)
+      const result = arpeggio([6000, 6400, 6700], 240).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -86,8 +86,8 @@ describe('arpeggio', () => {
   describe('chaining with note', () => {
     it('arpeggio then note should both emit', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = arpeggio(['C4', 'E4'], 480).apply(bridge)
-      b = note('G4').apply(b)
+      let b = arpeggio([6000, 6400], 480).apply(bridge)
+      b = note(6700).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
@@ -100,7 +100,7 @@ describe('arpeggio', () => {
   describe('sequential ticks', () => {
     it('arpeggio notes should advance tick', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = arpeggio(['C4', 'E4', 'G4'], 240).apply(bridge)
+      const result = arpeggio([6000, 6400, 6700], 240).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes[0].tick).toBe(0)

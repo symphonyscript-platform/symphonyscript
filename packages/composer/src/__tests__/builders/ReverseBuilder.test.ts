@@ -22,7 +22,7 @@ describe('ReverseBuilder', () => {
 
   describe('reverse(...steps)', () => {
     it('should return ReverseBuilder instance', () => {
-      const result = reverse(note('C4'), note('E4'))
+      const result = reverse(note(6000), note(6400))
       expect(result).toBeInstanceOf(ReverseBuilder)
     })
 
@@ -33,7 +33,7 @@ describe('ReverseBuilder', () => {
 
     it('single note: unchanged order', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = reverse(note('C4')).apply(bridge)
+      const result = reverse(note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -42,7 +42,7 @@ describe('ReverseBuilder', () => {
 
     it('should reverse order of multiple notes', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = reverse(note('C4'), note('E4'), note('G4')).apply(bridge)
+      const result = reverse(note(6000), note(6400), note(6700)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -54,7 +54,7 @@ describe('ReverseBuilder', () => {
 
     it('should preserve total duration after reverse', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = reverse(note('C4'), note('E4'), note('G4')).apply(bridge)
+      const result = reverse(note(6000), note(6400), note(6700)).apply(bridge)
 
       expect(result.tick).toBe(1440) // 3 * 480
     })
@@ -73,7 +73,7 @@ describe('ReverseBuilder', () => {
     it('should chain .steps() fluently', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       const result = reverse()
-        .steps(note('C4'), note('E4'), note('G4'))
+        .steps(note(6000), note(6400), note(6700))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -87,8 +87,8 @@ describe('ReverseBuilder', () => {
   describe('chaining with note()', () => {
     it('should allow subsequent steps after reverse', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = reverse(note('C4'), note('E4')).apply(bridge)
-      b = note('G4').apply(b)
+      let b = reverse(note(6000), note(6400)).apply(bridge)
+      b = note(6700).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
@@ -102,7 +102,7 @@ describe('ReverseBuilder', () => {
   describe('immutability', () => {
     it('builder methods should return new instances', () => {
       const base = reverse()
-      const withSteps = base.steps(note('C4'), note('E4'))
+      const withSteps = base.steps(note(6000), note(6400))
 
       expect(base).not.toBe(withSteps)
     })
@@ -110,7 +110,7 @@ describe('ReverseBuilder', () => {
     it('modified builder should produce different output', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       const empty = reverse()
-      const withSteps = reverse(note('C4'), note('E4'), note('G4'))
+      const withSteps = reverse(note(6000), note(6400), note(6700))
 
       const emptyResult = commitAndCapture(empty.apply(bridge))
       const stepsResult = commitAndCapture(withSteps.apply(bridge))

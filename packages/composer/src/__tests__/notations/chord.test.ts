@@ -53,9 +53,9 @@ describe('chord', () => {
       expect(notes[2].pitch).toBe(7600)
     })
 
-    it('chord("G7") should emit G4, B4, D5, F5 (pitches 67, 71, 74, 77)', () => {
+    it('chord(10300) should emit G4, B4, D5, F5 (pitches 67, 71, 74, 77)', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = chord('G7').apply(bridge)
+      const result = chord(10300).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(4)

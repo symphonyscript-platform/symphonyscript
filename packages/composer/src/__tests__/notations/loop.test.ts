@@ -15,13 +15,13 @@ describe('loop', () => {
 
   describe('loop(count?, ...steps) returns LoopBuilder', () => {
     it('should return LoopBuilder instance', () => {
-      const result = loop(1, note('C4'))
+      const result = loop(1, note(6000))
       expect(result).toBeInstanceOf(LoopBuilder)
     })
 
     it('should apply steps once when count omitted via .steps() (default 1)', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = loop().steps(note('C4')).apply(bridge)
+      const result = loop().steps(note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -30,7 +30,7 @@ describe('loop', () => {
 
     it('should apply steps once with explicit count(1)', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = loop(1, note('C4')).apply(bridge)
+      const result = loop(1, note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -39,7 +39,7 @@ describe('loop', () => {
 
     it('should repeat single step count times', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = loop(3, note('C4')).apply(bridge)
+      const result = loop(3, note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -50,7 +50,7 @@ describe('loop', () => {
 
     it('should loop multiple steps count times', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = loop(2, note('C4'), note('E4'), note('G4')).apply(bridge)
+      const result = loop(2, note(6000), note(6400), note(6700)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(6)
@@ -64,7 +64,7 @@ describe('loop', () => {
 
     it('should advance tick through looped steps', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = loop(2, note('C4'), note('E4')).apply(bridge)
+      const result = loop(2, note(6000), note(6400)).apply(bridge)
 
       expect(result.tick).toBe(1920) // 4 notes * 480 ticks
     })
@@ -73,7 +73,7 @@ describe('loop', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       const result = loop()
         .count(2)
-        .steps(note('C4'), note('E4'))
+        .steps(note(6000), note(6400))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -95,8 +95,8 @@ describe('loop', () => {
 
     it('should allow subsequent steps after loop', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = loop(2, note('C4')).apply(bridge)
-      b = note('E4').apply(b)
+      let b = loop(2, note(6000)).apply(bridge)
+      b = note(6400).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)

@@ -30,25 +30,25 @@ describe.skip('pitch (utils removed — resolution deferred to notation)', () =>
 
     describe('valid note names', () => {
       it('parses C4 to 60 (middle C)', () => {
-        expect(resolvePitch('C4')).toBe(60)
+        expect(resolvePitch(6000)).toBe(60)
       })
 
       it('parses A4 to 69', () => {
-        expect(resolvePitch('A4')).toBe(69)
+        expect(resolvePitch(6900)).toBe(69)
       })
 
       it('parses sharp accidentals (F#3, C#4)', () => {
-        expect(resolvePitch('F#3')).toBe(54)
-        expect(resolvePitch('C#4')).toBe(61)
+        expect(resolvePitch(5400)).toBe(54)
+        expect(resolvePitch(6100)).toBe(61)
       })
 
       it('parses flat accidentals (Db4, Bb3)', () => {
-        expect(resolvePitch('Db4')).toBe(61)
-        expect(resolvePitch('Bb3')).toBe(58)
+        expect(resolvePitch(6100)).toBe(61)
+        expect(resolvePitch(5800)).toBe(58)
       })
 
       it('parses negative octaves (C-1)', () => {
-        expect(resolvePitch('C-1')).toBe(0)
+        expect(resolvePitch(0)).toBe(0)
       })
     })
 
@@ -64,13 +64,13 @@ describe.skip('pitch (utils removed — resolution deferred to notation)', () =>
       })
 
       it('throws Error when note is out of range (C-2)', () => {
-        expect(() => resolvePitch('C-2')).toThrow(Error)
-        expect(() => resolvePitch('C-2')).toThrow('Invalid note name: C-2')
+        expect(() => resolvePitch(-1200)).toThrow(Error)
+        expect(() => resolvePitch(-1200)).toThrow('Invalid note name: C-2')
       })
 
       it('throws Error when note is out of range (G#9)', () => {
-        expect(() => resolvePitch('G#9')).toThrow(Error)
-        expect(() => resolvePitch('G#9')).toThrow('Invalid note name: G#9')
+        expect(() => resolvePitch(12800)).toThrow(Error)
+        expect(() => resolvePitch(12800)).toThrow('Invalid note name: G#9')
       })
     })
   })
@@ -85,11 +85,11 @@ describe.skip('pitch (utils removed — resolution deferred to notation)', () =>
     })
 
     it('maps resolvePitch over array of note names', () => {
-      expect(resolvePitches(['C4', 'E4', 'G4'])).toEqual([60, 64, 67])
+      expect(resolvePitches([6000, 6400, 6700])).toEqual([60, 64, 67])
     })
 
     it('handles mixed numbers and note names', () => {
-      expect(resolvePitches([60, 'E4', 67])).toEqual([60, 64, 67])
+      expect(resolvePitches([60, 6400, 67])).toEqual([60, 64, 67])
     })
 
     it('returns empty array for empty input', () => {
@@ -97,7 +97,7 @@ describe.skip('pitch (utils removed — resolution deferred to notation)', () =>
     })
 
     it('throws when any element is invalid', () => {
-      expect(() => resolvePitches(['C4', 'invalid', 'G4'])).toThrow('Invalid note name: invalid')
+      expect(() => resolvePitches([6000, 'invalid', 6700])).toThrow('Invalid note name: invalid')
     })
   })
 })

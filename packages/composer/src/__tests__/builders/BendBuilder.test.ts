@@ -22,7 +22,7 @@ describe('BendBuilder', () => {
   describe('.value()', () => {
     it('should apply bend value to notes within scope', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = bend(8192).steps(note('C4')).apply(bridge)
+      const result = bend(8192).steps(note(6000)).apply(bridge)
 
       const { notes, bends } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -32,7 +32,7 @@ describe('BendBuilder', () => {
 
     it('bend(value).value(newValue) should override value', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = bend(0).value(8192).steps(note('C4')).apply(bridge)
+      const result = bend(0).value(8192).steps(note(6000)).apply(bridge)
 
       const { bends } = commitAndCapture(result)
       expect(bends.some(b => b.value === 8192)).toBe(true)
@@ -40,7 +40,7 @@ describe('BendBuilder', () => {
 
     it('should emit full bend value 16383', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = bend(16383).steps(note('E4')).apply(bridge)
+      const result = bend(16383).steps(note(6400)).apply(bridge)
 
       const { notes, bends } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -49,7 +49,7 @@ describe('BendBuilder', () => {
 
     it('should emit zero bend when value 0', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = bend(0).steps(note('G4')).apply(bridge)
+      const result = bend(0).steps(note(6700)).apply(bridge)
 
       const { bends } = commitAndCapture(result)
       expect(bends.some(b => b.value === 0)).toBe(true)
@@ -59,7 +59,7 @@ describe('BendBuilder', () => {
   describe('.steps()', () => {
     it('should apply bend to notes inside steps', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = bend(8192).steps(note('C4'), note('E4')).apply(bridge)
+      const result = bend(8192).steps(note(6000), note(6400)).apply(bridge)
 
       const { notes, bends } = commitAndCapture(result)
       expect(notes).toHaveLength(2)
@@ -79,8 +79,8 @@ describe('BendBuilder', () => {
   describe('scoped bend', () => {
     it('bend should reset after scope — note outside scope should not have bend', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = bend(8192).steps(note('C4')).apply(bridge)
-      b = note('E4').apply(b)
+      let b = bend(8192).steps(note(6000)).apply(bridge)
+      b = note(6400).apply(b)
 
       const { notes, bends } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
@@ -94,8 +94,8 @@ describe('BendBuilder', () => {
   describe('chaining with note()', () => {
     it('should allow bend scope then note', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = bend(4096).steps(note('C4')).apply(bridge)
-      b = note('G4').apply(b)
+      let b = bend(4096).steps(note(6000)).apply(bridge)
+      b = note(6700).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
@@ -108,10 +108,10 @@ describe('BendBuilder', () => {
     it('builder methods should return new instances, not mutate', () => {
       const original = bend(4096)
       const withValue = original.value(8192)
-      const withSteps = original.steps(note('C4'))
+      const withSteps = original.steps(note(6000))
 
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const valResult = commitAndCapture(withValue.steps(note('C4')).apply(bridge))
+      const valResult = commitAndCapture(withValue.steps(note(6000)).apply(bridge))
       const stepsResult = commitAndCapture(withSteps.apply(bridge))
 
       expect(withValue).not.toBe(original)

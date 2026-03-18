@@ -27,7 +27,7 @@ describe('instrument', () => {
     it('should chain with notes', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = sustain().apply(bridge)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
 
       const { notes, cc: capturedCC } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
@@ -87,7 +87,7 @@ describe('instrument', () => {
     it('should chain with note', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = modWheel(100).apply(bridge)
-      b = note('E4').apply(b)
+      b = note(6400).apply(b)
 
       const { notes, cc: capturedCC } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
@@ -133,7 +133,7 @@ describe('instrument', () => {
     it('should chain with note', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = bendReset().apply(bridge)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
 
       const { notes, bends } = commitAndCapture(b)
       expect(notes).toHaveLength(1)

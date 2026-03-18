@@ -22,7 +22,7 @@ describe('TupletBuilder', () => {
       // 2 beats = 2 * 480 = 960 ticks total
       // Each note gets 960/3 = 320 ticks
       const result = tuplet(3, 2)
-        .steps(note('C4'), note('E4'), note('G4'))
+        .steps(note(6000), note(6400), note(6700))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -47,7 +47,7 @@ describe('TupletBuilder', () => {
     it('tuplet(3, 2) with defaultDuration 240 should scale correctly', () => {
       const bridge = createBridge({ defaultDuration: 240 })
       const result = tuplet(3, 2)
-        .steps(note('C4'), note('D4'), note('E4'))
+        .steps(note(6000), note(6200), note(6400))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -65,7 +65,7 @@ describe('TupletBuilder', () => {
       const result = tuplet(3, 2)
         .count(4)
         .inBeats(3)
-        .steps(note('C4'), note('D4'), note('E4'), note('F4'))
+        .steps(note(6000), note(6200), note(6400), note(6500))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -89,14 +89,14 @@ describe('TupletBuilder', () => {
 
   describe('immutability', () => {
     it('builder methods should return new instances, not mutate', () => {
-      const original = tuplet(3, 2).steps(note('C4'), note('E4'), note('G4'))
+      const original = tuplet(3, 2).steps(note(6000), note(6400), note(6700))
       const withCount = original.count(4)
       const withBeats = original.inBeats(3)
 
       const bridge = createBridge({ defaultDuration: 480 })
       const origResult = commitAndCapture(original.apply(bridge))
       const countResult = commitAndCapture(
-        withCount.steps(note('C4'), note('D4'), note('E4'), note('F4')).apply(bridge),
+        withCount.steps(note(6000), note(6200), note(6400), note(6500)).apply(bridge),
       )
 
       expect(origResult.notes).toHaveLength(3)
@@ -108,8 +108,8 @@ describe('TupletBuilder', () => {
     it('tuplet then note should advance tick and emit both', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b: CompositionBridge = bridge
-      b = tuplet(3, 2).steps(note('C4'), note('E4'), note('G4')).apply(b)
-      b = note('C5').apply(b)
+      b = tuplet(3, 2).steps(note(6000), note(6400), note(6700)).apply(b)
+      b = note(7200).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(4)

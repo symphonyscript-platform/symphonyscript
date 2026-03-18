@@ -15,13 +15,13 @@ describe('repeat', () => {
 
   describe('repeat(count, source) returns LoopBuilder', () => {
     it('should return LoopBuilder instance', () => {
-      const result = repeat(3, note('C4'))
+      const result = repeat(3, note(6000))
       expect(result).toBeInstanceOf(LoopBuilder)
     })
 
     it('should repeat single step once when count is 1', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = repeat(1, note('C4')).apply(bridge)
+      const result = repeat(1, note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -30,7 +30,7 @@ describe('repeat', () => {
 
     it('should repeat single step count times', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = repeat(4, note('C4')).apply(bridge)
+      const result = repeat(4, note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(4)
@@ -42,14 +42,14 @@ describe('repeat', () => {
 
     it('should advance tick through repeated steps', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = repeat(3, note('C4')).apply(bridge)
+      const result = repeat(3, note(6000)).apply(bridge)
 
       expect(result.tick).toBe(1440) // 3 notes * 480 ticks
     })
 
     it('should work with different pitches', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = repeat(2, note('E4')).apply(bridge)
+      const result = repeat(2, note(6400)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(2)
@@ -59,8 +59,8 @@ describe('repeat', () => {
 
     it('should allow subsequent steps after repeat', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = repeat(2, note('C4')).apply(bridge)
-      b = note('E4').apply(b)
+      let b = repeat(2, note(6000)).apply(bridge)
+      b = note(6400).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
@@ -71,7 +71,7 @@ describe('repeat', () => {
 
     it('should chain .count() to override repeat count', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = repeat(1, note('C4'))
+      const result = repeat(1, note(6000))
         .count(3)
         .apply(bridge)
 

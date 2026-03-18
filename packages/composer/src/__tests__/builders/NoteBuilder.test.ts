@@ -29,7 +29,7 @@ describe('NoteBuilder', () => {
   describe('basic emission', () => {
     it('should emit a note at the current tick and advance tick by defaultDuration', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = note('C4').apply(bridge)
+      const result = note(6000).apply(bridge)
 
       expect(result.tick).toBe(480)
 
@@ -41,7 +41,7 @@ describe('NoteBuilder', () => {
 
     it('should use bridge velocity when no explicit velocity is set', () => {
       const bridge = createBridge({ velocity: 600 })
-      const result = note('C4').apply(bridge)
+      const result = note(6000).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes[0].velocity).toBe(600)
@@ -49,7 +49,7 @@ describe('NoteBuilder', () => {
 
     it('should emit with explicit velocity when set', () => {
       const bridge = createBridge({ velocity: 600 })
-      const result = note('C4').velocity(1000).apply(bridge)
+      const result = note(6000).velocity(1000).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes[0].velocity).toBe(1000)
@@ -57,7 +57,7 @@ describe('NoteBuilder', () => {
 
     it('should use explicit duration over bridge defaultDuration', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = note('C4').duration(240).apply(bridge)
+      const result = note(6000).duration(240).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes[0].duration).toBe(240)
@@ -72,7 +72,7 @@ describe('NoteBuilder', () => {
   describe('pitch resolution', () => {
     it('should resolve string pitch names via notation', () => {
       const bridge = createBridge()
-      const { notes } = commitAndCapture(note('A4').apply(bridge))
+      const { notes } = commitAndCapture(note(6900).apply(bridge))
       // A4 resolved via WesternNotation.noteToCents() — exact value depends on notation
       expect(notes[0].pitch).toBeDefined()
     })
@@ -97,36 +97,36 @@ describe('NoteBuilder', () => {
   describe('octave shift', () => {
     it('.up() should shift pitch up by 1200 cents', () => {
       const bridge = createBridge()
-      const { notes: base } = commitAndCapture(note('C4').apply(bridge))
-      const { notes: shifted } = commitAndCapture(note('C4').up().apply(bridge))
+      const { notes: base } = commitAndCapture(note(6000).apply(bridge))
+      const { notes: shifted } = commitAndCapture(note(6000).up().apply(bridge))
       expect(shifted[0].pitch).toBe(base[0].pitch + 1200)
     })
 
     it('.down() should shift pitch down by 1200 cents', () => {
       const bridge = createBridge()
-      const { notes: base } = commitAndCapture(note('C4').apply(bridge))
-      const { notes: shifted } = commitAndCapture(note('C4').down().apply(bridge))
+      const { notes: base } = commitAndCapture(note(6000).apply(bridge))
+      const { notes: shifted } = commitAndCapture(note(6000).down().apply(bridge))
       expect(shifted[0].pitch).toBe(base[0].pitch - 1200)
     })
 
     it('.up(2) should shift pitch up by 2400 cents', () => {
       const bridge = createBridge()
-      const { notes: base } = commitAndCapture(note('C4').apply(bridge))
-      const { notes: shifted } = commitAndCapture(note('C4').up(2).apply(bridge))
+      const { notes: base } = commitAndCapture(note(6000).apply(bridge))
+      const { notes: shifted } = commitAndCapture(note(6000).up(2).apply(bridge))
       expect(shifted[0].pitch).toBe(base[0].pitch + 2400)
     })
 
     it('.octave(1) should shift by +1200 cents', () => {
       const bridge = createBridge()
-      const { notes: base } = commitAndCapture(note('C4').apply(bridge))
-      const { notes: shifted } = commitAndCapture(note('C4').octave(1).apply(bridge))
+      const { notes: base } = commitAndCapture(note(6000).apply(bridge))
+      const { notes: shifted } = commitAndCapture(note(6000).octave(1).apply(bridge))
       expect(shifted[0].pitch).toBe(base[0].pitch + 1200)
     })
 
     it('.octave(-1) should shift by -1200 cents', () => {
       const bridge = createBridge()
-      const { notes: base } = commitAndCapture(note('C4').apply(bridge))
-      const { notes: shifted } = commitAndCapture(note('C4').octave(-1).apply(bridge))
+      const { notes: base } = commitAndCapture(note(6000).apply(bridge))
+      const { notes: shifted } = commitAndCapture(note(6000).octave(-1).apply(bridge))
       expect(shifted[0].pitch).toBe(base[0].pitch - 1200)
     })
   })
@@ -162,19 +162,19 @@ describe('NoteBuilder', () => {
   describe('articulation / duration scaling', () => {
     it('.staccato() should halve the duration', () => {
       const bridge = createBridge()
-      const { notes } = commitAndCapture(note('C4').duration(480).staccato().apply(bridge))
+      const { notes } = commitAndCapture(note(6000).duration(480).staccato().apply(bridge))
       expect(notes[0].duration).toBe(240) // 480 * 0.5
     })
 
     it('.tenuto() should scale duration to 95%', () => {
       const bridge = createBridge()
-      const { notes } = commitAndCapture(note('C4').duration(480).tenuto().apply(bridge))
+      const { notes } = commitAndCapture(note(6000).duration(480).tenuto().apply(bridge))
       expect(notes[0].duration).toBe(456) // Math.round(480 * 0.95)
     })
 
     it('.marcato() should scale duration to 70% and boost velocity', () => {
       const bridge = createBridge()
-      const { notes } = commitAndCapture(note('C4').duration(480).marcato().apply(bridge))
+      const { notes } = commitAndCapture(note(6000).duration(480).marcato().apply(bridge))
       expect(notes[0].duration).toBe(336) // Math.round(480 * 0.7)
       expect(notes[0].velocity).toBe(1000) // default 800 + 200
     })
@@ -187,8 +187,8 @@ describe('NoteBuilder', () => {
   describe('per-note transpose', () => {
     it('.transpose() should shift pitch by cents', () => {
       const bridge = createBridge()
-      const { notes: base } = commitAndCapture(note('C4').apply(bridge))
-      const { notes: shifted } = commitAndCapture(note('C4').transpose(700).apply(bridge))
+      const { notes: base } = commitAndCapture(note(6000).apply(bridge))
+      const { notes: shifted } = commitAndCapture(note(6000).transpose(700).apply(bridge))
       expect(shifted[0].pitch).toBe(base[0].pitch + 700)
     })
 
@@ -207,7 +207,7 @@ describe('NoteBuilder', () => {
   describe('repeat', () => {
     it('.repeat(3) should emit the same note 3 times (advancing tick each)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = note('C4').repeat(3).apply(bridge)
+      const result = note(6000).repeat(3).apply(bridge)
 
       expect(result.tick).toBe(1440) // 3 * 480
 
@@ -231,14 +231,14 @@ describe('NoteBuilder', () => {
       const bridge = createBridge()
       expect(bridge.precise).toBe(false)
 
-      const result = note('C4').precise().apply(bridge)
+      const result = note(6000).precise().apply(bridge)
       // After apply, precise should be reset
       expect(result.precise).toBe(false)
     })
 
     it('.muted() should emit note with muted=true and reset after', () => {
       const bridge = createBridge()
-      const result = note('C4').muted().apply(bridge)
+      const result = note(6000).muted().apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes[0].muted).toBe(true)
@@ -253,7 +253,7 @@ describe('NoteBuilder', () => {
   describe('expression', () => {
     it('.detune() should emit a pitch bend event', () => {
       const bridge = createBridge()
-      const result = note('C4').detune(0.5).apply(bridge)
+      const result = note(6000).detune(0.5).apply(bridge)
       const { bends } = commitAndCapture(result)
 
       expect(bends.length).toBeGreaterThanOrEqual(1)
@@ -262,7 +262,7 @@ describe('NoteBuilder', () => {
 
     it('.aftertouch() should emit an aftertouch CC event', () => {
       const bridge = createBridge()
-      const result = note('C4').aftertouch(80).apply(bridge)
+      const result = note(6000).aftertouch(80).apply(bridge)
       const { cc } = commitAndCapture(result)
 
       // Channel aftertouch uses controller 0xD0
@@ -278,7 +278,7 @@ describe('NoteBuilder', () => {
 
   describe('immutability', () => {
     it('builder methods should return new instances, not mutate', () => {
-      const original = note('C4')
+      const original = note(6000)
       const withVel = original.velocity(1000)
       const withDur = original.duration(240)
 
@@ -302,7 +302,7 @@ describe('NoteBuilder', () => {
   describe('chaining', () => {
     it('should support fluent chaining of multiple modifiers', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = note('A3')
+      const result = note(5700)
         .velocity(900)
         .duration(240)
         .up()
@@ -319,9 +319,9 @@ describe('NoteBuilder', () => {
     it('should handle multiple notes in sequence', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b: CompositionBridge = bridge
-      b = note('C4').apply(b)
-      b = note('E4').apply(b)
-      b = note('G4').apply(b)
+      b = note(6000).apply(b)
+      b = note(6400).apply(b)
+      b = note(6700).apply(b)
 
       expect(b.tick).toBe(1440) // 3 * 480
 

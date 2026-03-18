@@ -45,7 +45,7 @@ describe('error-paths', () => {
   describe('stretch', () => {
     it('stretch(-1) — applies (negative factor produces negative ticks/durations)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = stretch(-1).steps(note('C4'), note('E4')).apply(bridge)
+      const result = stretch(-1).steps(note(6000), note(6400)).apply(bridge)
       const { notes } = commitAndCapture(result)
       // stretch(-1): tick and duration multiplied by -1
       expect(notes).toHaveLength(2)
@@ -56,7 +56,7 @@ describe('error-paths', () => {
 
     it('stretch(0) — applies (zero duration, notes overlap at tick 0)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = stretch(0).steps(note('C4'), note('E4')).apply(bridge)
+      const result = stretch(0).steps(note(6000), note(6400)).apply(bridge)
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(2)
       expect(notes[0].duration).toBe(0)

@@ -18,7 +18,7 @@ describe('tie', () => {
   describe('tie(...steps) wraps in TieBridge per step', () => {
     it('same-pitch notes: only first note (accumulation lost)', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = tie(note('C4'), note('C4')).apply(bridge)
+      const result = tie(note(6000), note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -27,7 +27,7 @@ describe('tie', () => {
 
     it('multiple same-pitch notes: only first note', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = tie(note('C4'), note('C4'), note('C4'), note('C4')).apply(bridge)
+      const result = tie(note(6000), note(6000), note(6000), note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -36,7 +36,7 @@ describe('tie', () => {
 
     it('different pitches: each pitch emits; flush adds previous duplicate', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = tie(note('C4'), note('E4'), note('G4')).apply(bridge)
+      const result = tie(note(6000), note(6400), note(6700)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       // Per-step TieBridge: C4, flush C4, E4, flush E4, G4 (last not flushed) = 5 notes
@@ -48,14 +48,14 @@ describe('tie', () => {
 
     it('should advance tick through tied steps', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = tie(note('C4'), note('C4')).apply(bridge)
+      const result = tie(note(6000), note(6000)).apply(bridge)
 
       expect(result.tick).toBe(960)
     })
 
     it('single step: one note', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = tie(note('C4')).apply(bridge)
+      const result = tie(note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -64,8 +64,8 @@ describe('tie', () => {
 
     it('should tie then allow subsequent steps outside tie', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = tie(note('C4'), note('C4')).apply(bridge)
-      b = note('E4').apply(b)
+      let b = tie(note(6000), note(6000)).apply(bridge)
+      b = note(6400).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes.length).toBeGreaterThanOrEqual(2)

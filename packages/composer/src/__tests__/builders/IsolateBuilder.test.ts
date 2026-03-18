@@ -31,7 +31,7 @@ describe('IsolateBuilder', () => {
       const bridge = createBridge({ velocity: 800, defaultDuration: 480 })
 
       const result = isolate()
-        .steps(velocity(400), note('C4'))
+        .steps(velocity(400), note(6000))
         .apply(bridge)
 
       expect(result.velocity).toBe(800) // restored
@@ -41,17 +41,17 @@ describe('IsolateBuilder', () => {
       const bridge = createBridge({ transposeCents: 0, defaultDuration: 480 })
 
       let b = isolate()
-        .steps(transpose(1200), note('C4'))
+        .steps(transpose(1200), note(6000))
         .apply(bridge)
 
       // TransposeCents should be restored to 0
       expect(b.transposeCents).toBe(0)
 
       // Next note should not be transposed
-      b = note('E4').apply(b)
+      b = note(6400).apply(b)
       const { notes } = commitAndCapture(b)
-      // note('C4') inside isolate with transpose(1200) → C4 + 1200 = C5
-      // note('E4') after isolate, no transpose → E4
+      // note(6000) inside isolate with transpose(1200) → C4 + 1200 = C5
+      // note(6400) after isolate, no transpose → E4
       expect(notes[1].pitch).toBe(6400) // E4 = 6400 cents (no transpose)
     })
 
@@ -59,7 +59,7 @@ describe('IsolateBuilder', () => {
       const bridge = createBridge({ tempo: 120, defaultDuration: 480 })
 
       const result = isolate()
-        .steps(tempo(200), note('C4'))
+        .steps(tempo(200), note(6000))
         .apply(bridge)
 
       expect(result.tempo).toBe(120) // restored
@@ -69,7 +69,7 @@ describe('IsolateBuilder', () => {
       const bridge = createBridge({ volume: 100, defaultDuration: 480 })
 
       const result = isolate()
-        .steps(volume(30), note('C4'))
+        .steps(volume(30), note(6000))
         .apply(bridge)
 
       expect(result.volume).toBe(100) // restored
@@ -95,7 +95,7 @@ describe('IsolateBuilder', () => {
           velocity(400),
           transpose(700),
           tempo(180),
-          note('C4'),
+          note(6000),
         )
         .apply(bridge)
 
@@ -114,7 +114,7 @@ describe('IsolateBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480 })
 
       const result = isolate()
-        .steps(note('C4'), note('E4'), note('G4'))
+        .steps(note(6000), note(6400), note(6700))
         .apply(bridge)
 
       expect(result.tick).toBe(1440) // 3 × 480
@@ -124,7 +124,7 @@ describe('IsolateBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480 })
 
       const result = isolate()
-        .steps(note('C4'), note('E4'))
+        .steps(note(6000), note(6400))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -142,7 +142,7 @@ describe('IsolateBuilder', () => {
       // keyRootCents defaults to null
 
       const result = isolate()
-        .steps(note('C4'))
+        .steps(note(6000))
         .apply(bridge)
 
       expect(result.keyRootCents).toBeNull()

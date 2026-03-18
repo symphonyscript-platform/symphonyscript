@@ -48,7 +48,7 @@ describe('GrooveBuilder', () => {
       const result = groove(480)
         .step(0.5)
         .step(1.0)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -63,7 +63,7 @@ describe('GrooveBuilder', () => {
         .step(0.5)
         .step(0.8)
         .step(1.2)
-        .steps(note('C4'), note('C4'), note('C4'), note('C4'))
+        .steps(note(6000), note(6000), note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -84,7 +84,7 @@ describe('GrooveBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = groove(480)
         .step(1.0, 0.5)
-        .steps(note('C4'))
+        .steps(note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -99,7 +99,7 @@ describe('GrooveBuilder', () => {
       const result = groove(480)
         .step(1.0, 0)
         .step(1.0, 0.25)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -112,7 +112,7 @@ describe('GrooveBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = groove(480)
         .step(1.0, 0.25)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       // Note 1: tick 0 + 120 = 120, advances to 120 + 480 = 600
@@ -133,7 +133,7 @@ describe('GrooveBuilder', () => {
       const result = groove(480)
         .grid(240)
         .step(1.0, 0.5)
-        .steps(note('C4'))
+        .steps(note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -151,7 +151,7 @@ describe('GrooveBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 800 })
       const result = groove(480)
         .step(0.5)
-        .steps(note('C4').precise(), note('C4').precise())
+        .steps(note(6000).precise(), note(6000).precise())
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -172,8 +172,8 @@ describe('GrooveBuilder', () => {
     it('groove().default().apply() should return bridge that cascades groove downstream', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 800 })
       let b = groove(480).step(0.5).default().apply(bridge)
-      b = note('C4').apply(b)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)

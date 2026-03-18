@@ -44,7 +44,7 @@ describe('CrescendoBuilder', () => {
     it('should start at from velocity and increase toward to', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = crescendo(960)
-        .steps(note('C4'))
+        .steps(note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -56,7 +56,7 @@ describe('CrescendoBuilder', () => {
     it('should ramp velocity from 400 to 1000 over three notes (default duration 480)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = crescendo(960)
-        .steps(note('C4'), note('C4'), note('C4'))
+        .steps(note(6000), note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -71,7 +71,7 @@ describe('CrescendoBuilder', () => {
       const result = crescendo(960)
         .from(64)
         .to(127)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -82,7 +82,7 @@ describe('CrescendoBuilder', () => {
     it('should advance tick correctly after scope exits', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = crescendo(960)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       expect(result.tick).toBe(960)
@@ -100,7 +100,7 @@ describe('CrescendoBuilder', () => {
         .duration(480)
         .from(100)
         .to(200)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -114,7 +114,7 @@ describe('CrescendoBuilder', () => {
         .from(100)
         .to(200)
         .curve('exponential')
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -132,7 +132,7 @@ describe('CrescendoBuilder', () => {
     it('note().precise() still receives ramp velocity (VelocityRampBridge has no precise bypass)', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 800 })
       const result = crescendo(960)
-        .steps(note('C4').precise(), note('C4').precise())
+        .steps(note(6000).precise(), note(6000).precise())
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -152,8 +152,8 @@ describe('CrescendoBuilder', () => {
     it('crescendo().default().apply() should return bridge that cascades crescendo downstream', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = crescendo(960).default().apply(bridge)
-      b = note('C4').apply(b)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)

@@ -26,7 +26,7 @@ describe('GlissandoBuilder', () => {
   describe('basic emission', () => {
     it('glissando(from, to, duration) should emit chromatic slide', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = glissando('C4', 'E4', 240).apply(bridge)
+      const result = glissando(6000, 6400, 240).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       // C4=60, E4=64 -> 4 semitones, 5 notes (60,61,62,63,64)
@@ -39,7 +39,7 @@ describe('GlissandoBuilder', () => {
 
     it('glissando downward should emit descending chromatic notes', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = glissando('G4', 'C4', 200).apply(bridge)
+      const result = glissando(6700, 6000, 200).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes[0].pitch).toBe(6700)
@@ -48,7 +48,7 @@ describe('GlissandoBuilder', () => {
 
     it('glissando same pitch should emit single note', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = glissando('C4', 'C4', 240).apply(bridge)
+      const result = glissando(6000, 6000, 240).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -63,7 +63,7 @@ describe('GlissandoBuilder', () => {
   describe('duration', () => {
     it('should use bridge defaultDuration when duration omitted', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = glissando('C4', 'D4').apply(bridge)
+      const result = glissando(6000, 6200).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -72,7 +72,7 @@ describe('GlissandoBuilder', () => {
 
     it('.duration() should override constructor duration', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = glissando('C4', 'E4', 480).duration(120).apply(bridge)
+      const result = glissando(6000, 6400, 480).duration(120).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(5)
@@ -103,8 +103,8 @@ describe('GlissandoBuilder', () => {
     it('.from() .to() .duration() should chain', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = glissando()
-        .from('C4')
-        .to('G4')
+        .from(6000)
+        .to(6700)
         .duration(360)
         .apply(bridge)
 
@@ -122,7 +122,7 @@ describe('GlissandoBuilder', () => {
   describe('tick advance', () => {
     it('notes should be spaced sequentially', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = glissando('C4', 'E4', 240).apply(bridge)
+      const result = glissando(6000, 6400, 240).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       const stepDuration = Math.round(240 / 4)
@@ -132,7 +132,7 @@ describe('GlissandoBuilder', () => {
 
     it('should advance bridge tick', () => {
       const bridge = createBridge({ tick: 0, defaultDuration: 480 })
-      const result = glissando('C4', 'E4', 240).apply(bridge)
+      const result = glissando(6000, 6400, 240).apply(bridge)
 
       expect(result.tick).toBeGreaterThan(0)
     })
@@ -155,8 +155,8 @@ describe('GlissandoBuilder', () => {
 
   describe('immutability', () => {
     it('builder methods should return new instances, not mutate', () => {
-      const original = glissando('C4', 'D4')
-      const withTo = original.to('E4')
+      const original = glissando(6000, 6200)
+      const withTo = original.to(6400)
       const withDuration = original.duration(100)
 
       const bridge = createBridge({ defaultDuration: 480 })

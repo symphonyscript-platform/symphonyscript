@@ -28,7 +28,7 @@ describe('ScopedBuilder', () => {
   describe('basic steps', () => {
     it('should apply steps through scoped block with no effects', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = scoped().steps(note('C4'), note('E4')).apply(bridge)
+      const result = scoped().steps(note(6000), note(6400)).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
@@ -39,7 +39,7 @@ describe('ScopedBuilder', () => {
 
     it('should advance tick through all steps', () => {
       const bridge = createBridge({ tick: 0, defaultDuration: 480 })
-      const result = scoped().steps(note('C4'), note('E4'), note('G4')).apply(bridge)
+      const result = scoped().steps(note(6000), note(6400), note(6700)).apply(bridge)
 
       expect(result.tick).toBe(1440)
     })
@@ -60,7 +60,7 @@ describe('ScopedBuilder', () => {
     it('should apply interceptor effects before steps (e.g. sustain)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = scoped(sustain())
-        .steps(note('C4'), note('E4'))
+        .steps(note(6000), note(6400))
         .apply(bridge)
       const { notes, cc: capturedCC } = commitAndCapture(result)
 
@@ -79,8 +79,8 @@ describe('ScopedBuilder', () => {
     it('should chain .steps() to accumulate entries', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = scoped()
-        .steps(note('C4'))
-        .steps(note('E4'))
+        .steps(note(6000))
+        .steps(note(6400))
         .apply(bridge)
       const { notes } = commitAndCapture(result)
 
@@ -122,8 +122,8 @@ describe('ScopedBuilder', () => {
 
   describe('immutability', () => {
     it('builder methods should return new instances, not mutate', () => {
-      const original = scoped().steps(note('C4'))
-      const withMoreSteps = original.steps(note('E4'))
+      const original = scoped().steps(note(6000))
+      const withMoreSteps = original.steps(note(6400))
 
       const bridge = createBridge({ defaultDuration: 480 })
 

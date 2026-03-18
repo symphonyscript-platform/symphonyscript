@@ -18,7 +18,7 @@ describe('glide', () => {
   describe('glide(...steps) wraps in GlideBridge per step', () => {
     it('single note: one CC PORTAMENTO 127', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = glide(note('C4')).apply(bridge)
+      const result = glide(note(6000)).apply(bridge)
 
       const { notes, cc } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -31,7 +31,7 @@ describe('glide', () => {
 
     it('multiple notes: one CC 127 per note', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = glide(note('C4'), note('E4'), note('G4')).apply(bridge)
+      const result = glide(note(6000), note(6400), note(6700)).apply(bridge)
 
       const { notes, cc } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -47,15 +47,15 @@ describe('glide', () => {
 
     it('should advance tick through glided steps', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = glide(note('C4'), note('E4')).apply(bridge)
+      const result = glide(note(6000), note(6400)).apply(bridge)
 
       expect(result.tick).toBe(960)
     })
 
     it('should allow subsequent steps outside glide', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = glide(note('C4'), note('E4')).apply(bridge)
-      b = note('G4').apply(b)
+      let b = glide(note(6000), note(6400)).apply(bridge)
+      b = note(6700).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)

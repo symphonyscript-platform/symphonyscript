@@ -68,7 +68,7 @@ describe.skip('parseChord (utils/chord removed — chord resolution deferred to 
     })
 
     it('should parse dominant seventh', () => {
-      const { root, mask } = parseChord('G7')
+      const { root, mask } = parseChord(10300)
       expect(root).toBe(67)  // G4 (60 + 7)
       const intervals = unpackToArray(mask)
       // 7 = [0, 4, 7, 10] → [0, 8, 14, 20] in 24-EDO

@@ -25,7 +25,7 @@ describe('StretchBuilder', () => {
   describe('basic stretch', () => {
     it('factor 1 (default): notes unchanged', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = stretch(1, note('C4'), note('E4')).apply(bridge)
+      const result = stretch(1, note(6000), note(6400)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(2)
@@ -35,7 +35,7 @@ describe('StretchBuilder', () => {
 
     it('factor 2: doubles tick and duration', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = stretch(2, note('C4'), note('E4')).apply(bridge)
+      const result = stretch(2, note(6000), note(6400)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(2)
@@ -45,7 +45,7 @@ describe('StretchBuilder', () => {
 
     it('factor 0.5: halves tick and duration', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = stretch(0.5, note('C4'), note('E4')).apply(bridge)
+      const result = stretch(0.5, note(6000), note(6400)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(2)
@@ -62,7 +62,7 @@ describe('StretchBuilder', () => {
     it('.steps() should add steps when using stretch(2) without initial steps', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       const result = stretch(2)
-        .steps(note('C4'), note('E4'))
+        .steps(note(6000), note(6400))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -75,7 +75,7 @@ describe('StretchBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       const result = stretch(1)
         .factor(0.5)
-        .steps(note('C4'), note('E4'))
+        .steps(note(6000), note(6400))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -107,15 +107,15 @@ describe('StretchBuilder', () => {
   describe('tick advance', () => {
     it('should advance total tick by stretched duration', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = stretch(2, note('C4'), note('E4')).apply(bridge)
+      const result = stretch(2, note(6000), note(6400)).apply(bridge)
 
       expect(result.tick).toBe(1920)
     })
 
     it('should allow subsequent steps after stretch', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = stretch(2, note('C4')).apply(bridge)
-      b = note('E4').apply(b)
+      let b = stretch(2, note(6000)).apply(bridge)
+      b = note(6400).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
@@ -130,9 +130,9 @@ describe('StretchBuilder', () => {
 
   describe('immutability', () => {
     it('builder methods should return new instances, not mutate', () => {
-      const original = stretch(2, note('C4'))
+      const original = stretch(2, note(6000))
       const withFactor = original.factor(0.5)
-      const withSteps = original.steps(note('E4'))
+      const withSteps = original.steps(note(6400))
 
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
 
@@ -152,7 +152,7 @@ describe('StretchBuilder', () => {
 
   describe('return type', () => {
     it('should return StretchBuilder instance', () => {
-      const result = stretch(2, note('C4'))
+      const result = stretch(2, note(6000))
       expect(result).toBeInstanceOf(StretchBuilder)
     })
 

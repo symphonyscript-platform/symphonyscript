@@ -60,7 +60,7 @@ describe('AftertouchBuilder', () => {
   describe('poly aftertouch', () => {
     it('should emit poly aftertouch CC (0xA0) when note provided in constructor', () => {
       const bridge = createBridge()
-      const result = aftertouch(0.8, 'C4').apply(bridge)
+      const result = aftertouch(0.8, 6000).apply(bridge)
       const { cc } = commitAndCapture(result)
 
       const atEvents = cc.filter(e => e.controller === CC_POLY_AFTERTOUCH)
@@ -70,7 +70,7 @@ describe('AftertouchBuilder', () => {
 
     it('.note() should switch to poly aftertouch on target note', () => {
       const bridge = createBridge()
-      const result = aftertouch(0.5).note('E4').apply(bridge)
+      const result = aftertouch(0.5).note(6400).apply(bridge)
       const { cc } = commitAndCapture(result)
 
       const polyEvents = cc.filter(e => e.controller === CC_POLY_AFTERTOUCH)
@@ -79,7 +79,7 @@ describe('AftertouchBuilder', () => {
 
     it('should emit poly aftertouch when note provided as second arg', () => {
       const bridge = createBridge()
-      const result = aftertouch(0.8, 'C4').apply(bridge)
+      const result = aftertouch(0.8, 6000).apply(bridge)
       const { cc } = commitAndCapture(result)
       const polyEvents = cc.filter(e => e.controller === CC_POLY_AFTERTOUCH)
       expect(polyEvents).toHaveLength(1)
@@ -99,7 +99,7 @@ describe('AftertouchBuilder', () => {
   describe('.note()', () => {
     it('should set target note for poly aftertouch', () => {
       const bridge = createBridge()
-      const result = aftertouch(0.5).note('G4').apply(bridge)
+      const result = aftertouch(0.5).note(6700).apply(bridge)
       const { cc } = commitAndCapture(result)
       const polyEvents = cc.filter(e => e.controller === CC_POLY_AFTERTOUCH)
       expect(polyEvents).toHaveLength(1)
@@ -110,7 +110,7 @@ describe('AftertouchBuilder', () => {
     it('should allow aftertouch then note', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = aftertouch(0.5).apply(bridge)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
       const { notes, cc } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
       expect(notes[0].pitch).toBe(6000)
@@ -122,7 +122,7 @@ describe('AftertouchBuilder', () => {
     it('builder methods should return new instances, not mutate', () => {
       const original = aftertouch(0.5)
       const withValue = original.value(0.9)
-      const withNote = original.note('C4')
+      const withNote = original.note(6000)
 
       const bridge = createBridge()
       const origResult = commitAndCapture(original.apply(bridge))

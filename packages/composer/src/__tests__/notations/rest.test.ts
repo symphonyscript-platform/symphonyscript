@@ -38,7 +38,7 @@ describe('rest', () => {
     it('should chain with notes — rest then note', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = rest(480).apply(bridge)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
@@ -49,7 +49,7 @@ describe('rest', () => {
 
     it('should chain note then rest — tick advances after rest', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      let b = note('C4').apply(bridge)
+      let b = note(6000).apply(bridge)
       b = rest(240).apply(b)
 
       expect(b.tick).toBe(720) // 480 + 240

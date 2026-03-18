@@ -14,7 +14,6 @@ import { describe, it, expect } from 'vitest'
 import { roman } from '../../cues/roman'
 import { note } from '../../cues/note'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 
 describe('RomanBuilder', () => {
 
@@ -25,8 +24,7 @@ describe('RomanBuilder', () => {
   describe('basic emission', () => {
     it('roman("I") in C major should emit C, E, G', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -41,8 +39,7 @@ describe('RomanBuilder', () => {
 
     it('roman("V") in C major should emit G, B, D', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -57,8 +54,7 @@ describe('RomanBuilder', () => {
 
     it('roman("V7") in C major should emit 4 notes', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -71,8 +67,7 @@ describe('RomanBuilder', () => {
 
     it('roman("vi") in C major should emit minor chord', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -93,8 +88,7 @@ describe('RomanBuilder', () => {
   describe('duration and velocity', () => {
     it('should use explicit duration when provided', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -106,8 +100,7 @@ describe('RomanBuilder', () => {
 
     it('should use bridge defaultDuration when duration not provided', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -119,8 +112,7 @@ describe('RomanBuilder', () => {
 
     it('.velocity() should override bridge velocity', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -132,8 +124,7 @@ describe('RomanBuilder', () => {
 
     it('.duration() should override constructor duration', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
       })
       const result = roman('I', 240).duration(120).apply(bridge)
@@ -150,8 +141,7 @@ describe('RomanBuilder', () => {
   describe('inversion', () => {
     it('.inversion(1) should rotate chord tones', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
       })
       const result = roman('I').inversion(1).apply(bridge)
@@ -172,8 +162,7 @@ describe('RomanBuilder', () => {
   describe('simultaneous notes', () => {
     it('all chord tones should emit at same tick', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -193,8 +182,7 @@ describe('RomanBuilder', () => {
   describe('tick advance', () => {
     it('should advance tick by chord duration', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         tick: 0,
         defaultDuration: 480,
       })
@@ -211,13 +199,12 @@ describe('RomanBuilder', () => {
   describe('chaining', () => {
     it('roman then note should both emit', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
       let b = roman('I').apply(bridge)
-      b = note('C5').apply(b)
+      b = note(7200).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(4)
@@ -237,8 +224,7 @@ describe('RomanBuilder', () => {
       const withVelocity = original.velocity(500)
 
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })

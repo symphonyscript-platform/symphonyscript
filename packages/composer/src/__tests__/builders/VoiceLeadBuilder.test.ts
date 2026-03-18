@@ -12,7 +12,6 @@ import { voiceLead } from '../../cues/voiceLead'
 import { VoiceLeadBuilder } from '../../builders/VoiceLeadBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
 import { note } from '../../cues/note'
-import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 import type { CompositionBridge } from '../../interfaces/composition-bridge'
 
 describe('VoiceLeadBuilder', () => {
@@ -20,8 +19,7 @@ describe('VoiceLeadBuilder', () => {
   describe('voiceLead chord progression', () => {
     it('voiceLead(["I", "IV", "V", "I"]) should emit chord progression', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -50,8 +48,7 @@ describe('VoiceLeadBuilder', () => {
 
     it('voiceLead(["I", "vi", "IV", "V"]) should emit I-vi-IV-V', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
       })
       const result = voiceLead(['I', 'vi', 'IV', 'V']).apply(bridge)
@@ -69,8 +66,7 @@ describe('VoiceLeadBuilder', () => {
 
     it('voiceLead with single chord should emit one chord', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
       })
       const result = voiceLead(['I']).apply(bridge)
@@ -84,8 +80,7 @@ describe('VoiceLeadBuilder', () => {
   describe('voice leading (minimal movement)', () => {
     it('second chord should use close voicing to first chord', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
       })
       const result = voiceLead(['I', 'IV']).apply(bridge)
@@ -107,8 +102,7 @@ describe('VoiceLeadBuilder', () => {
   describe('duration', () => {
     it('should use explicit duration when provided', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
       })
       const result = voiceLead(['I', 'V'], 240).apply(bridge)
@@ -120,8 +114,7 @@ describe('VoiceLeadBuilder', () => {
 
     it('should use bridge defaultDuration when duration not provided', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 360,
       })
       const result = voiceLead(['I']).apply(bridge)
@@ -134,8 +127,7 @@ describe('VoiceLeadBuilder', () => {
   describe('modifiers', () => {
     it('.numerals() should replace progression', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
       })
       const result = voiceLead(['I'])
@@ -148,8 +140,7 @@ describe('VoiceLeadBuilder', () => {
 
     it('.duration() should override initial duration', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
       })
       const result = voiceLead(['I', 'V'], 480).duration(120).apply(bridge)
@@ -166,8 +157,7 @@ describe('VoiceLeadBuilder', () => {
       const withNumerals = original.numerals(['I', 'V'])
 
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
       })
       const origResult = commitAndCapture(original.apply(bridge))
@@ -183,13 +173,12 @@ describe('VoiceLeadBuilder', () => {
   describe('chaining with note', () => {
     it('voiceLead then note should advance tick and emit both', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
       })
       let b: CompositionBridge = bridge
       b = voiceLead(['I', 'V']).apply(b)
-      b = note('C5').apply(b)
+      b = note(7200).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(7) // 3 + 3 + 1

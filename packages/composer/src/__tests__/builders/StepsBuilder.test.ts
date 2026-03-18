@@ -17,8 +17,8 @@ describe('StepsBuilder', () => {
       expect(result).toBeInstanceOf(StepsBuilder)
     })
 
-    it('steps([1,0,1], ["C4","E4"]) should return StepsBuilder', () => {
-      const result = steps([1, 0, 1], ['C4', 'E4'])
+    it('steps([1,0,1], [6000,6400]) should return StepsBuilder', () => {
+      const result = steps([1, 0, 1], [6000, 6400])
       expect(result).toBeInstanceOf(StepsBuilder)
     })
   })
@@ -26,7 +26,7 @@ describe('StepsBuilder', () => {
   describe('binary pattern emission', () => {
     it('pattern [1,0,1] with notes [C4,E4] should emit C4 then E4 on hits, rest on 0', () => {
       const bridge = createBridge({ defaultDuration: 240 })
-      const result = steps([1, 0, 1], ['C4', 'E4']).apply(bridge)
+      const result = steps([1, 0, 1], [6000, 6400]).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
@@ -40,7 +40,7 @@ describe('StepsBuilder', () => {
 
     it('pattern [1,1,1] with notes [C4,E4] should cycle C4, E4, C4', () => {
       const bridge = createBridge({ defaultDuration: 240 })
-      const result = steps([1, 1, 1], ['C4', 'E4']).apply(bridge)
+      const result = steps([1, 1, 1], [6000, 6400]).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(3)
@@ -51,7 +51,7 @@ describe('StepsBuilder', () => {
 
     it('pattern [1,1] with single note should repeat same pitch', () => {
       const bridge = createBridge({ defaultDuration: 120 })
-      const result = steps([1, 1], ['G4']).apply(bridge)
+      const result = steps([1, 1], [6700]).apply(bridge)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(2)
@@ -63,13 +63,13 @@ describe('StepsBuilder', () => {
 
     it('should advance tick for full pattern length', () => {
       const bridge = createBridge({ tick: 0, defaultDuration: 240 })
-      const result = steps([1, 0, 1, 0], ['C4', 'E4']).apply(bridge)
+      const result = steps([1, 0, 1, 0], [6000, 6400]).apply(bridge)
       expect(result.tick).toBe(960)  // 4 steps x 240
     })
 
     it('pattern [0,0] should emit no notes but advance tick', () => {
       const bridge = createBridge({ defaultDuration: 240 })
-      const result = steps([0, 0], ['C4']).apply(bridge)
+      const result = steps([0, 0], [6000]).apply(bridge)
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(0)
       expect(result.tick).toBe(480)
@@ -79,7 +79,7 @@ describe('StepsBuilder', () => {
   describe('stepDuration', () => {
     it('should use explicit stepDuration when provided', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = steps([1, 1], ['C4'], 120).apply(bridge)
+      const result = steps([1, 1], [6000], 120).apply(bridge)
       const { notes } = commitAndCapture(result)
       expect(notes[0].duration).toBe(120)
       expect(notes[1].duration).toBe(120)
@@ -87,7 +87,7 @@ describe('StepsBuilder', () => {
 
     it('should use bridge defaultDuration when stepDuration not provided', () => {
       const bridge = createBridge({ defaultDuration: 240 })
-      const result = steps([1, 1], ['C4']).apply(bridge)
+      const result = steps([1, 1], [6000]).apply(bridge)
       const { notes } = commitAndCapture(result)
       expect(notes[0].duration).toBe(240)
     })
@@ -96,7 +96,7 @@ describe('StepsBuilder', () => {
   describe('no-op when empty', () => {
     it('steps([], [...]) should return bridge unchanged', () => {
       const bridge = createBridge({ tick: 100, defaultDuration: 240 })
-      const result = steps([], ['C4']).apply(bridge)
+      const result = steps([], [6000]).apply(bridge)
       expect(result.tick).toBe(100)
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(0)
@@ -114,7 +114,7 @@ describe('StepsBuilder', () => {
   describe('builder chaining', () => {
     it('.pattern() should override pattern', () => {
       const bridge = createBridge({ defaultDuration: 240 })
-      const result = steps([1], ['C4'])
+      const result = steps([1], [6000])
         .pattern([1, 1])
         .apply(bridge)
       const { notes } = commitAndCapture(result)
@@ -123,8 +123,8 @@ describe('StepsBuilder', () => {
 
     it('.notes() should override notes', () => {
       const bridge = createBridge({ defaultDuration: 240 })
-      const result = steps([1, 1], ['C4'])
-        .notes(['E4', 'G4'])
+      const result = steps([1, 1], [6000])
+        .notes([6400, 6700])
         .apply(bridge)
       const { notes } = commitAndCapture(result)
       expect(notes[0].pitch).toBe(6400)
@@ -133,7 +133,7 @@ describe('StepsBuilder', () => {
 
     it('.stepDuration() should override step duration', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = steps([1, 1], ['C4'])
+      const result = steps([1, 1], [6000])
         .stepDuration(60)
         .apply(bridge)
       const { notes } = commitAndCapture(result)
@@ -143,9 +143,9 @@ describe('StepsBuilder', () => {
 
   describe('immutability', () => {
     it('.pattern(), .notes(), .stepDuration() should return new instances', () => {
-      const base = steps([1], ['C4'])
+      const base = steps([1], [6000])
       const withPattern = base.pattern([1, 1])
-      const withNotes = base.notes(['E4'])
+      const withNotes = base.notes([6400])
       const withStepDur = base.stepDuration(60)
 
       expect(withPattern).not.toBe(base)

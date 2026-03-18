@@ -53,7 +53,7 @@ describe('RFC-060 Task 7: Harmony + FrozenClip', () => {
   describe('FrozenClip captures cents', () => {
     it('captures note pitches in cents through recording pipeline', () => {
       const b = new BaseCompositionBridge({ notation: testNotation, defaultDuration: 480 })
-      const result = note('A4').apply(b) as BaseCompositionBridge
+      const result = note(6900).apply(b) as BaseCompositionBridge
 
       // Commit to recorder
       const recorder = new RecordingBridge()
@@ -74,8 +74,8 @@ describe('RFC-060 Task 7: Harmony + FrozenClip', () => {
     it('captures multiple cent pitches correctly', () => {
       const b = new BaseCompositionBridge({ notation: testNotation, defaultDuration: 480 })
       // C4 then E4
-      const result = note('C4').apply(
-        note('E4').apply(b) as BaseCompositionBridge,
+      const result = note(6000).apply(
+        note(6400).apply(b) as BaseCompositionBridge,
       ) as BaseCompositionBridge
 
       const recorder = new RecordingBridge()

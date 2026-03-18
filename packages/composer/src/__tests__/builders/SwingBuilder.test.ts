@@ -50,7 +50,7 @@ describe('SwingBuilder', () => {
   describe('swing().steps(note(...))', () => {
     it('should apply swing to inner content — single note at onbeat remains at tick 0', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = swing().steps(note('C4')).apply(bridge)
+      const result = swing().steps(note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -61,7 +61,7 @@ describe('SwingBuilder', () => {
     it('should apply swing — two notes produce onbeat (0) then offbeat (600) with default amount 0.5', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = swing()
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -73,7 +73,7 @@ describe('SwingBuilder', () => {
     it('should produce swung timing for four notes (alternating onbeat/offbeat)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = swing()
-        .steps(note('C4'), note('C4'), note('C4'), note('C4'))
+        .steps(note(6000), note(6000), note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -87,7 +87,7 @@ describe('SwingBuilder', () => {
     it('should advance tick correctly after scope exits', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = swing()
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       expect(result.tick).toBe(1080) // 2 swung notes: second at 600 + 480 duration
@@ -95,8 +95,8 @@ describe('SwingBuilder', () => {
 
     it('should apply swing only to steps inside .steps()', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      let b = swing().steps(note('C4'), note('C4')).apply(bridge)
-      b = note('C4').apply(b)
+      let b = swing().steps(note(6000), note(6000)).apply(bridge)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
@@ -114,7 +114,7 @@ describe('SwingBuilder', () => {
     it('amount 0 should apply no offset (straight timing)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = swing(0)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -125,7 +125,7 @@ describe('SwingBuilder', () => {
     it('amount 0.5 (triplet swing) should offset offbeat by 120 ticks at grid 480', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = swing(0.5)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -135,7 +135,7 @@ describe('SwingBuilder', () => {
     it('amount 1.0 (dotted swing) should offset offbeat by 240 ticks at grid 480', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = swing(1.0)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -146,7 +146,7 @@ describe('SwingBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = swing(1.0)
         .amount(0)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -162,7 +162,7 @@ describe('SwingBuilder', () => {
     it('grid 240 should use half grid — offset = round(0.5 * 240 * 0.5) = 60', () => {
       const bridge = createBridge({ defaultDuration: 240 })
       const result = swing(0.5, 240)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -174,7 +174,7 @@ describe('SwingBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = swing(0.5, 240)
         .grid(480)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -190,7 +190,7 @@ describe('SwingBuilder', () => {
     it('note().precise() should skip swing even inside swing scope', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = swing()
-        .steps(note('C4').precise(), note('C4').precise())
+        .steps(note(6000).precise(), note(6000).precise())
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -208,8 +208,8 @@ describe('SwingBuilder', () => {
     it('swing().default().apply() should return bridge that cascades swing downstream', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = swing(0.5).default().apply(bridge)
-      b = note('C4').apply(b)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)

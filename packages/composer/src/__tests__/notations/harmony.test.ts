@@ -69,9 +69,9 @@ describe('harmony', () => {
       expect(notes[3].pitch).toBe(7100)
     })
 
-    it('harmony(MAJ, "C4") should resolve root and emit C major', () => {
+    it('harmony(MAJ, 6000) should resolve root and emit C major', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = harmony(MAJ, 'C4').apply(bridge)
+      const result = harmony(MAJ, 6000).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -101,7 +101,7 @@ describe('harmony', () => {
     it('harmony then note should both emit', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       let b = harmony(MAJ, 6000).apply(bridge)
-      b = note('G4').apply(b)
+      b = note(6700).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(4)

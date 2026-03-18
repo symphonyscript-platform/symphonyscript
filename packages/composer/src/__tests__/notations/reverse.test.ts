@@ -15,7 +15,7 @@ describe('reverse', () => {
 
   describe('reverse(...steps) returns ReverseBuilder', () => {
     it('should return ReverseBuilder instance', () => {
-      const result = reverse(note('C4'), note('E4'))
+      const result = reverse(note(6000), note(6400))
       expect(result).toBeInstanceOf(ReverseBuilder)
     })
 
@@ -26,7 +26,7 @@ describe('reverse', () => {
 
     it('single note: unchanged order', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = reverse(note('C4')).apply(bridge)
+      const result = reverse(note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -35,7 +35,7 @@ describe('reverse', () => {
 
     it('should reverse order of multiple notes', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = reverse(note('C4'), note('E4'), note('G4')).apply(bridge)
+      const result = reverse(note(6000), note(6400), note(6700)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -47,7 +47,7 @@ describe('reverse', () => {
 
     it('should preserve total duration after reverse', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = reverse(note('C4'), note('E4'), note('G4')).apply(bridge)
+      const result = reverse(note(6000), note(6400), note(6700)).apply(bridge)
 
       expect(result.tick).toBe(1440) // 3 * 480
     })
@@ -63,8 +63,8 @@ describe('reverse', () => {
 
     it('should allow subsequent steps after reverse', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = reverse(note('C4'), note('E4')).apply(bridge)
-      b = note('G4').apply(b)
+      let b = reverse(note(6000), note(6400)).apply(bridge)
+      b = note(6700).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
@@ -77,7 +77,7 @@ describe('reverse', () => {
     it('should chain .steps() fluently', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       const result = reverse()
-        .steps(note('C4'), note('E4'), note('G4'))
+        .steps(note(6000), note(6400), note(6700))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)

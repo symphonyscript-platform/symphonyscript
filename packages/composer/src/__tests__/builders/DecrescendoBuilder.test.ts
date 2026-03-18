@@ -44,7 +44,7 @@ describe('DecrescendoBuilder', () => {
     it('should start at from velocity and decrease toward to', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = decrescendo(960)
-        .steps(note('C4'))
+        .steps(note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -56,7 +56,7 @@ describe('DecrescendoBuilder', () => {
     it('should ramp velocity from 1000 to 400 over three notes (default from/to)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = decrescendo(960)
-        .steps(note('C4'), note('C4'), note('C4'))
+        .steps(note(6000), note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -71,7 +71,7 @@ describe('DecrescendoBuilder', () => {
       const result = decrescendo(960)
         .from(127)
         .to(64)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -82,7 +82,7 @@ describe('DecrescendoBuilder', () => {
     it('should advance tick correctly after scope exits', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = decrescendo(960)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       expect(result.tick).toBe(960)
@@ -100,7 +100,7 @@ describe('DecrescendoBuilder', () => {
         .duration(480)
         .from(200)
         .to(100)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -114,7 +114,7 @@ describe('DecrescendoBuilder', () => {
         .from(200)
         .to(100)
         .curve('exponential')
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -132,7 +132,7 @@ describe('DecrescendoBuilder', () => {
     it('note().precise() still receives ramp velocity (VelocityRampBridge has no precise bypass)', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 800 })
       const result = decrescendo(960)
-        .steps(note('C4').precise(), note('C4').precise())
+        .steps(note(6000).precise(), note(6000).precise())
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -152,8 +152,8 @@ describe('DecrescendoBuilder', () => {
     it('decrescendo().default().apply() should return bridge that cascades decrescendo downstream', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = decrescendo(960).default().apply(bridge)
-      b = note('C4').apply(b)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)

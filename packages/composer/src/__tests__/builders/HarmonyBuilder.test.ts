@@ -47,9 +47,9 @@ describe('HarmonyBuilder', () => {
       expect(notes[2].pitch).toBe(7600)
     })
 
-    it('chord("G7") should emit G4, B4, D5, F5 (pitches 67, 71, 74, 77)', () => {
+    it('chord(10300) should emit G4, B4, D5, F5 (pitches 67, 71, 74, 77)', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = chord('G7').apply(bridge)
+      const result = chord(10300).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(4)
@@ -104,9 +104,9 @@ describe('HarmonyBuilder', () => {
       expect(notes[3].pitch).toBe(7100)
     })
 
-    it('harmony(MAJ, "C4") should resolve root and emit C major', () => {
+    it('harmony(MAJ, 6000) should resolve root and emit C major', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = harmony(MAJ, 'C4').apply(bridge)
+      const result = harmony(MAJ, 6000).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3)
@@ -161,7 +161,7 @@ describe('HarmonyBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b: CompositionBridge = bridge
       b = chord('Cm').apply(b)
-      b = note('G4').apply(b)
+      b = note(6700).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(4) // 3 from Cm + 1 from G4

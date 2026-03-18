@@ -45,7 +45,7 @@ describe('DynamicsBuilder', () => {
     it('should apply startVelocity at start of range', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = dynamics(400, 1000, 0, 960)
-        .steps(note('C4'))
+        .steps(note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -57,7 +57,7 @@ describe('DynamicsBuilder', () => {
     it('should interpolate velocity linearly at mid range', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = dynamics(400, 1000, 0, 960)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -69,7 +69,7 @@ describe('DynamicsBuilder', () => {
     it('should apply endVelocity at end of range', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = dynamics(400, 1000, 0, 960)
-        .steps(note('C4'), note('C4'), note('C4'))
+        .steps(note(6000), note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -82,7 +82,7 @@ describe('DynamicsBuilder', () => {
     it('should ramp with custom startTick and endTick', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = dynamics(50, 150, 480, 1440)
-        .steps(note('C4'), note('C4'), note('C4'))
+        .steps(note(6000), note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -105,7 +105,7 @@ describe('DynamicsBuilder', () => {
         .endVelocity(127)
         .start(0)
         .end(960)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -118,7 +118,7 @@ describe('DynamicsBuilder', () => {
       const result = dynamics(100, 200)
         .start(0)
         .end(480)
-        .steps(note('C4'), note('C4'))
+        .steps(note(6000), note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -135,7 +135,7 @@ describe('DynamicsBuilder', () => {
     it('note().precise() should skip dynamics ramp even inside dynamics scope', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 800 })
       const result = dynamics(64, 127, 0, 960)
-        .steps(note('C4').precise(), note('C4').precise())
+        .steps(note(6000).precise(), note(6000).precise())
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -153,8 +153,8 @@ describe('DynamicsBuilder', () => {
     it('dynamics().default().apply() should return bridge that cascades ramp downstream', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = dynamics(400, 1000, 0, 960).default().apply(bridge)
-      b = note('C4').apply(b)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)

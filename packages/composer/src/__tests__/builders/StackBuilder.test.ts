@@ -28,9 +28,9 @@ describe('StackBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480 })
 
       const result = stack(
-        [note('C4')],
-        [note('E4')],
-        [note('G4')],
+        [note(6000)],
+        [note(6400)],
+        [note(6700)],
       ).apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -45,9 +45,9 @@ describe('StackBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480 })
 
       const result = stack(
-        [note('C4')],                          // 1 note = 480 ticks
-        [note('E4'), note('F4'), note('G4')],  // 3 notes = 1440 ticks
-        [note('A4'), note('B4')],              // 2 notes = 960 ticks
+        [note(6000)],                          // 1 note = 480 ticks
+        [note(6400), note(6500), note(6700)],  // 3 notes = 1440 ticks
+        [note(6900), note(7100)],              // 2 notes = 960 ticks
       ).apply(bridge)
 
       expect(result.tick).toBe(1440) // longest branch
@@ -63,8 +63,8 @@ describe('StackBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480 })
 
       const result = stack()
-        .branch(note('C4'), note('E4'))
-        .branch(note('G4'))
+        .branch(note(6000), note(6400))
+        .branch(note(6700))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -85,9 +85,9 @@ describe('StackBuilder', () => {
       const bridge = createBridge({ velocity: 100 })
 
       const result = stack(
-        [note('C4').velocity(500)],
-        [note('E4')],  // no explicit velocity — use bridge default
-        [note('G4').transpose(12)],
+        [note(6000).velocity(500)],
+        [note(6400)],  // no explicit velocity — use bridge default
+        [note(6700).transpose(12)],
       ).apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -101,10 +101,10 @@ describe('StackBuilder', () => {
   describe('nested stacks', () => {
     it('stack within stack should work correctly', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const innerStack = stack([note('E4')], [note('G4')])
+      const innerStack = stack([note(6400)], [note(6700)])
 
       const result = stack(
-        [note('C4')],
+        [note(6000)],
         [innerStack],
       ).apply(bridge)
 
@@ -121,8 +121,8 @@ describe('StackBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480 })
 
       const result = stack(
-        [note('C4').duration(240)],
-        [note('E4').duration(480), note('G4').duration(480)],
+        [note(6000).duration(240)],
+        [note(6400).duration(480), note(6700).duration(480)],
       ).apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -150,7 +150,7 @@ describe('StackBuilder', () => {
 
     it('single branch stack should behave like sequential steps', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = stack([note('C4'), note('E4')]).apply(bridge)
+      const result = stack([note(6000), note(6400)]).apply(bridge)
 
       expect(result.tick).toBe(960)
       const { notes } = commitAndCapture(result)

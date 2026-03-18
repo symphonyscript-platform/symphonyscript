@@ -10,7 +10,6 @@ import { progression } from '../../cues/progression'
 import { ProgressionBuilder } from '../../builders/ProgressionBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
 import { note } from '../../cues/note'
-import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 
 describe('progression', () => {
   describe('return type', () => {
@@ -28,8 +27,7 @@ describe('progression', () => {
   describe('progression emission (C major)', () => {
     it('progression(["I", "IV", "V", "I"]) should emit I, IV, V, I chords', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -58,8 +56,7 @@ describe('progression', () => {
 
     it('progression with explicit duration should use it for each chord', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -73,8 +70,7 @@ describe('progression', () => {
 
     it('progression without duration should use bridge defaultDuration', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 360,
         velocity: 100,
       })
@@ -86,8 +82,7 @@ describe('progression', () => {
 
     it('progression(["ii", "V7", "I"]) ii-V-I should emit correct chords', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -117,8 +112,7 @@ describe('progression', () => {
 
     it('should advance tick through progression', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -130,8 +124,7 @@ describe('progression', () => {
   describe('builder chaining', () => {
     it('.duration() should override duration', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -145,8 +138,7 @@ describe('progression', () => {
 
     it('.velocity() should override velocity', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
@@ -162,13 +154,12 @@ describe('progression', () => {
   describe('chaining with note', () => {
     it('progression then note should both emit', () => {
       const bridge = createBridge({
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
         defaultDuration: 480,
         velocity: 100,
       })
       let b = progression(['I']).apply(bridge)
-      b = note('C5').apply(b)
+      b = note(7200).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(4) // 3 from I + 1 from note C5

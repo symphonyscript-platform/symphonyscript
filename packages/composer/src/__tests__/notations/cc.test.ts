@@ -27,7 +27,7 @@ describe('cc', () => {
     it('should chain with notes — CC then note', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = cc(MIDI_CC.VOLUME, 64).apply(bridge)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
 
       const { notes, cc: capturedCC } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
@@ -63,7 +63,7 @@ describe('cc', () => {
     it('should chain with note', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = detune(100).apply(bridge)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
 
       const { notes, cc: capturedCC } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
@@ -86,7 +86,7 @@ describe('cc', () => {
     it('should chain with note', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = timbre(50).apply(bridge)
-      b = note('E4').apply(b)
+      b = note(6400).apply(b)
 
       const { notes, cc: capturedCC } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
@@ -109,7 +109,7 @@ describe('cc', () => {
     it('should chain with note', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = pressure(0).apply(bridge)
-      b = note('G4').apply(b)
+      b = note(6700).apply(b)
 
       const { notes, cc: capturedCC } = commitAndCapture(b)
       expect(notes).toHaveLength(1)

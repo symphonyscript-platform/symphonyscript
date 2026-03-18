@@ -46,16 +46,16 @@ describe('TransformEffect / isTransformEffect', () => {
     })
 
     it('isTransformEffect(stretch(2, note(...))) should return true', () => {
-      const s = stretch(2, note('C4'))
+      const s = stretch(2, note(6000))
       expect(isTransformEffect(s)).toBe(true)
     })
   })
 
   describe('reverse().steps() temporal reversal', () => {
-    it('reverse().steps(note("C4"), note("E4")).apply(bridge) — first note becomes last', () => {
+    it('reverse().steps(note(6000), note(6400)).apply(bridge) — first note becomes last', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       const result = reverse()
-        .steps(note('C4'), note('E4'))
+        .steps(note(6000), note(6400))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -70,10 +70,10 @@ describe('TransformEffect / isTransformEffect', () => {
   })
 
   describe('stretch().steps() duration/tick scaling', () => {
-    it('stretch(2).steps(note("C4"), note("E4")).apply(bridge) — doubles duration and tick', () => {
+    it('stretch(2).steps(note(6000), note(6400)).apply(bridge) — doubles duration and tick', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       const result = stretch(2)
-        .steps(note('C4'), note('E4'))
+        .steps(note(6000), note(6400))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -111,7 +111,7 @@ describe('TransformEffect / isTransformEffect', () => {
     it('reverse then stretch — reverses temporal order and scales duration', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       const result = stretch(2)
-        .steps(reverse().steps(note('C4'), note('E4')))
+        .steps(reverse().steps(note(6000), note(6400)))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)

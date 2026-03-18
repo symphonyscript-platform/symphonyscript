@@ -8,7 +8,6 @@ import { describe, it, expect } from 'vitest'
 import { voiceLead } from '../../cues/voiceLead'
 import { VoiceLeadBuilder } from '../../builders/VoiceLeadBuilder'
 import { createBridge, commitAndCapture } from '../test-utils'
-import { PitchClass, ScaleMode } from '@symphonyscript/notations'
 
 describe('voiceLead', () => {
 
@@ -28,8 +27,7 @@ describe('voiceLead', () => {
     it('voiceLead(["I"]) should emit I chord (C, E, G in C major)', () => {
       const bridge = createBridge({
         defaultDuration: 480,
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
       })
       const result = voiceLead(['I']).apply(bridge)
       const { notes } = commitAndCapture(result)
@@ -43,8 +41,7 @@ describe('voiceLead', () => {
     it('voiceLead(["I","IV"]) should emit I then IV chords', () => {
       const bridge = createBridge({
         defaultDuration: 240,
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
       })
       const result = voiceLead(['I', 'IV']).apply(bridge)
       const { notes } = commitAndCapture(result)
@@ -63,8 +60,7 @@ describe('voiceLead', () => {
     it('voiceLead(["I","V","I"]) should emit I-V-I progression', () => {
       const bridge = createBridge({
         defaultDuration: 480,
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
       })
       const result = voiceLead(['I', 'V', 'I']).apply(bridge)
       const { notes } = commitAndCapture(result)
@@ -95,8 +91,7 @@ describe('voiceLead', () => {
     it('should use explicit duration when provided', () => {
       const bridge = createBridge({
         defaultDuration: 480,
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
       })
       const result = voiceLead(['I'], 120).apply(bridge)
       const { notes } = commitAndCapture(result)
@@ -106,8 +101,7 @@ describe('voiceLead', () => {
     it('should use bridge defaultDuration when duration not provided', () => {
       const bridge = createBridge({
         defaultDuration: 480,
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
       })
       const result = voiceLead(['I']).apply(bridge)
       const { notes } = commitAndCapture(result)
@@ -128,8 +122,7 @@ describe('voiceLead', () => {
     it('.numerals() should override numerals', () => {
       const bridge = createBridge({
         defaultDuration: 480,
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
       })
       const result = voiceLead(['I'])
         .numerals(['V'])
@@ -144,8 +137,7 @@ describe('voiceLead', () => {
     it('.duration() should override duration', () => {
       const bridge = createBridge({
         defaultDuration: 480,
-        scaleRoot: PitchClass.C,
-        scaleMode: ScaleMode.MAJOR,
+        scaleRootCents: 6000,
       })
       const result = voiceLead(['I'])
         .duration(240)

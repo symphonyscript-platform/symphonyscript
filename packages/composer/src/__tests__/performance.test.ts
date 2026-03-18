@@ -15,7 +15,7 @@ describe('performance', () => {
 
   describe('64-note clip composition', () => {
     it('createBridge → compose → commitAndCapture should complete within 100ms', () => {
-      const clip = Clip.pipe(loop(64, note('C4')))
+      const clip = Clip.pipe(loop(64, note(6000)))
 
       const start = performance.now()
       const bridge = createBridge({ defaultDuration: 480 })
@@ -27,7 +27,7 @@ describe('performance', () => {
     })
 
     it('produces exactly 64 notes', () => {
-      const clip = Clip.pipe(loop(64, note('C4')))
+      const clip = Clip.pipe(loop(64, note(6000)))
       const bridge = createBridge({ defaultDuration: 480 })
       const result = clip.compose(bridge)
       const { notes } = commitAndCapture(result)

@@ -25,7 +25,7 @@ describe('LinkBuilder', () => {
 
   describe('use(clip)', () => {
     it('should insert clip content at current tick', () => {
-      const clip = Clip.pipe(note('C4'), note('E4'))
+      const clip = Clip.pipe(note(6000), note(6400))
       const bridge = createBridge({ defaultDuration: 480 })
       const result = use(clip).apply(bridge)
       const { notes } = commitAndCapture(result)
@@ -38,7 +38,7 @@ describe('LinkBuilder', () => {
     })
 
     it('should advance bridge tick after clip composition', () => {
-      const clip = Clip.pipe(note('C4'), note('E4'), note('G4'))
+      const clip = Clip.pipe(note(6000), note(6400), note(6700))
       const bridge = createBridge({ tick: 0, defaultDuration: 480 })
       const result = use(clip).apply(bridge)
 
@@ -56,7 +56,7 @@ describe('LinkBuilder', () => {
     })
 
     it('should return LinkBuilder instance', () => {
-      const clip = Clip.pipe(note('C4'))
+      const clip = Clip.pipe(note(6000))
       const link = use(clip)
       expect(link).toBeInstanceOf(LinkBuilder)
       expect(typeof link.apply).toBe('function')
@@ -67,7 +67,7 @@ describe('LinkBuilder', () => {
 
   describe('use(clip).weight()', () => {
     it('should return LinkBuilder from weight() (chainable)', () => {
-      const clip = Clip.pipe(note('C4'))
+      const clip = Clip.pipe(note(6000))
       const link = use(clip).weight(0.8)
 
       expect(link).toBeInstanceOf(LinkBuilder)
@@ -80,7 +80,7 @@ describe('LinkBuilder', () => {
     })
 
     it('weight() should not mutate original builder', () => {
-      const clip = Clip.pipe(note('C4'))
+      const clip = Clip.pipe(note(6000))
       const original = use(clip)
       const withWeight = original.weight(0.5)
 
@@ -90,7 +90,7 @@ describe('LinkBuilder', () => {
 
   describe('use(clip).effects()', () => {
     it('should apply interceptor effects before clip composition', () => {
-      const clip = Clip.pipe(note('C4'), note('E4'))
+      const clip = Clip.pipe(note(6000), note(6400))
       const bridge = createBridge({ defaultDuration: 480 })
       const result = use(clip)
         .effects(scoped(sustain()))
@@ -104,7 +104,7 @@ describe('LinkBuilder', () => {
     })
 
     it('should compose clip without effects when effects() not called', () => {
-      const clip = Clip.pipe(note('C4'))
+      const clip = Clip.pipe(note(6000))
       const bridge = createBridge({ defaultDuration: 480 })
       const result = use(clip).apply(bridge)
       const { notes, cc } = commitAndCapture(result)
@@ -114,7 +114,7 @@ describe('LinkBuilder', () => {
     })
 
     it('effects() should return LinkBuilder (chainable)', () => {
-      const clip = Clip.pipe(note('C4'))
+      const clip = Clip.pipe(note(6000))
       const link = use(clip).effects(scoped(sustain()))
       expect(link).toBeInstanceOf(LinkBuilder)
     })
@@ -122,10 +122,10 @@ describe('LinkBuilder', () => {
 
   describe('chaining with note()', () => {
     it('should chain use with other steps', () => {
-      const clip = Clip.pipe(note('C4'))
+      const clip = Clip.pipe(note(6000))
       const bridge = createBridge({ defaultDuration: 480 })
       let b = use(clip).apply(bridge)
-      b = note('E4').apply(b)
+      b = note(6400).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
@@ -137,7 +137,7 @@ describe('LinkBuilder', () => {
 
   describe('immutability', () => {
     it('builder methods should return new instances', () => {
-      const clip = Clip.pipe(note('C4'))
+      const clip = Clip.pipe(note(6000))
       const original = use(clip)
       const withWeight = original.weight(0.8)
       const withEffects = original.effects(scoped(sustain()))

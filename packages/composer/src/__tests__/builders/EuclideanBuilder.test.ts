@@ -27,11 +27,11 @@ describe('EuclideanBuilder', () => {
 
     it('should accept optional hits and steps', () => {
       const withArgs = euclidean(3, 8)
-      const { notes } = commitAndCapture(withArgs.notes(['C4']).apply(createBridge({ defaultDuration: 480 })))
+      const { notes } = commitAndCapture(withArgs.notes([6000]).apply(createBridge({ defaultDuration: 480 })))
       expect(notes).toHaveLength(3)
 
       const noArgs = euclidean()
-      const { notes: notes2 } = commitAndCapture(noArgs.notes(['C4']).apply(createBridge({ defaultDuration: 480 })))
+      const { notes: notes2 } = commitAndCapture(noArgs.notes([6000]).apply(createBridge({ defaultDuration: 480 })))
       expect(notes2).toHaveLength(1) // defaults: hits=1, steps=4 → one hit
     })
   })
@@ -43,7 +43,7 @@ describe('EuclideanBuilder', () => {
   describe('tresillo (3,8) with 2 notes', () => {
     it('should apply euclidean(3,8).notes([C4,E4]).apply(bridge)', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = euclidean(3, 8).notes(['C4', 'E4']).apply(bridge)
+      const result = euclidean(3, 8).notes([6000, 6400]).apply(bridge)
 
       const { notes } = commitAndCapture(result)
 
@@ -60,7 +60,7 @@ describe('EuclideanBuilder', () => {
 
     it('should advance bridge tick after full pattern', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = euclidean(3, 8).notes(['C4']).apply(bridge)
+      const result = euclidean(3, 8).notes([6000]).apply(bridge)
 
       // 8 steps × 480 = 3840
       expect(result.tick).toBe(3840)
@@ -75,7 +75,7 @@ describe('EuclideanBuilder', () => {
     it('should cycle through pitches on successive hits', () => {
       const bridge = createBridge({ defaultDuration: 240 })
       // Cinquillo (5,8): x-xx-xx- → 5 hits
-      const result = euclidean(5, 8).notes(['C4', 'E4', 'G4']).apply(bridge)
+      const result = euclidean(5, 8).notes([6000, 6400, 6700]).apply(bridge)
 
       const { notes } = commitAndCapture(result)
 
@@ -105,7 +105,7 @@ describe('EuclideanBuilder', () => {
   describe('repeat', () => {
     it('.repeat(2) should apply pattern twice', () => {
       const bridge = createBridge({ defaultDuration: 240 })
-      const result = euclidean(3, 8).notes(['C4']).repeat(2).apply(bridge)
+      const result = euclidean(3, 8).notes([6000]).repeat(2).apply(bridge)
 
       const { notes } = commitAndCapture(result)
 
@@ -129,7 +129,7 @@ describe('EuclideanBuilder', () => {
   describe('stepDuration override', () => {
     it('.stepDuration() should override bridge defaultDuration', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = euclidean(3, 8).notes(['C4']).stepDuration(240).apply(bridge)
+      const result = euclidean(3, 8).notes([6000]).stepDuration(240).apply(bridge)
 
       const { notes } = commitAndCapture(result)
 
@@ -144,7 +144,7 @@ describe('EuclideanBuilder', () => {
   describe('velocity override', () => {
     it('.velocity() should override bridge velocity', () => {
       const bridge = createBridge({ velocity: 800 })
-      const result = euclidean(3, 8).notes(['C4']).velocity(500).apply(bridge)
+      const result = euclidean(3, 8).notes([6000]).velocity(500).apply(bridge)
 
       const { notes } = commitAndCapture(result)
 
@@ -154,7 +154,7 @@ describe('EuclideanBuilder', () => {
 
     it('should use bridge velocity when not overridden', () => {
       const bridge = createBridge({ velocity: 900 })
-      const result = euclidean(3, 8).notes(['C4']).apply(bridge)
+      const result = euclidean(3, 8).notes([6000]).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes.every(n => n.velocity === 900)).toBe(true)
@@ -177,7 +177,7 @@ describe('EuclideanBuilder', () => {
 
     it('should return bridge unchanged when pattern is invalid (steps=0)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = euclidean(3, 0).notes(['C4']).apply(bridge)
+      const result = euclidean(3, 0).notes([6000]).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(0)
@@ -187,7 +187,7 @@ describe('EuclideanBuilder', () => {
     it('should support fluent chaining of modifiers', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = euclidean(3, 8)
-        .notes(['C4', 'E4'])
+        .notes([6000, 6400])
         .stepDuration(240)
         .velocity(700)
         .repeat(1)
@@ -206,7 +206,7 @@ describe('EuclideanBuilder', () => {
 
   describe('immutability', () => {
     it('builder methods should return new instances', () => {
-      const base = euclidean(3, 8).notes(['C4'])
+      const base = euclidean(3, 8).notes([6000])
       const withStepDur = base.stepDuration(240)
       const withVel = base.velocity(500)
 

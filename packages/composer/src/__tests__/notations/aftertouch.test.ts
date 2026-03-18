@@ -24,8 +24,8 @@ describe('aftertouch', () => {
       expect(result).toBeInstanceOf(AftertouchBuilder)
     })
 
-    it('aftertouch(0.8, "C4") should return AftertouchBuilder', () => {
-      const result = aftertouch(0.8, 'C4')
+    it('aftertouch(0.8, 6000) should return AftertouchBuilder', () => {
+      const result = aftertouch(0.8, 6000)
       expect(result).toBeInstanceOf(AftertouchBuilder)
     })
   })
@@ -69,9 +69,9 @@ describe('aftertouch', () => {
   })
 
   describe('poly aftertouch', () => {
-    it('aftertouch(0.8, "C4") should emit poly aftertouch CC (0xA0)', () => {
+    it('aftertouch(0.8, 6000) should emit poly aftertouch CC (0xA0)', () => {
       const bridge = createBridge()
-      const result = aftertouch(0.8, 'C4').apply(bridge)
+      const result = aftertouch(0.8, 6000).apply(bridge)
       const { cc } = commitAndCapture(result)
 
       const atEvents = cc.filter(e => e.controller === CC_POLY_AFTERTOUCH)
@@ -79,9 +79,9 @@ describe('aftertouch', () => {
       expect(atEvents[0].value).toBe(Math.round(0.8 * 127))
     })
 
-    it('aftertouch(0.5).note("E4") should set target note', () => {
+    it('aftertouch(0.5).note(6400) should set target note', () => {
       const bridge = createBridge()
-      const result = aftertouch(0.5).note('E4').apply(bridge)
+      const result = aftertouch(0.5).note(6400).apply(bridge)
       const { cc } = commitAndCapture(result)
 
       const atEvents = cc.filter(e => e.controller === CC_POLY_AFTERTOUCH)
@@ -100,7 +100,7 @@ describe('aftertouch', () => {
 
     it('.note() should switch to poly aftertouch', () => {
       const bridge = createBridge()
-      const result = aftertouch(0.5).note('G4').apply(bridge)
+      const result = aftertouch(0.5).note(6700).apply(bridge)
       const { cc } = commitAndCapture(result)
       const polyEvents = cc.filter(e => e.controller === CC_POLY_AFTERTOUCH)
       expect(polyEvents).toHaveLength(1)
@@ -111,7 +111,7 @@ describe('aftertouch', () => {
     it('should allow aftertouch then note', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b = aftertouch(0.5).apply(bridge)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
       const { notes, cc } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
       expect(cc.filter(e => e.controller === CC_CHANNEL_AFTERTOUCH)).toHaveLength(1)

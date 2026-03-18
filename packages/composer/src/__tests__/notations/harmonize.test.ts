@@ -16,7 +16,7 @@ describe('harmonize', () => {
     it('should add third and fifth for C4 with intervals [3, 5]', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       let b = harmonize(3, 5).apply(bridge)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(3)
@@ -28,7 +28,7 @@ describe('harmonize', () => {
     it('should produce only melody when intervals is empty', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       let b = harmonize().apply(bridge)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(1)
@@ -38,7 +38,7 @@ describe('harmonize', () => {
     it('should add single third with intervals [3]', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       let b = harmonize(3).apply(bridge)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
@@ -49,7 +49,7 @@ describe('harmonize', () => {
     it('should add third, fifth, octave with intervals [3, 5, 8]', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       let b = harmonize(3, 5, 8).apply(bridge)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(4)
@@ -62,7 +62,7 @@ describe('harmonize', () => {
     it('should emit all harmony notes at same tick as melody', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       let b = harmonize(3, 5).apply(bridge)
-      b = note('C4').apply(b)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes[0].tick).toBe(0)
@@ -73,8 +73,8 @@ describe('harmonize', () => {
     it('should affect only notes inside harmonize scope', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       let b = harmonize(3, 5).apply(bridge)
-      b = note('C4').apply(b)
-      b = note('E4').apply(b)
+      b = note(6000).apply(b)
+      b = note(6400).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(6) // 3 for C4 + 3 for E4

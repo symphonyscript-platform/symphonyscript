@@ -101,7 +101,7 @@ describe('scope-entries', () => {
 
     it('produces committed notes when using note steps', () => {
       const bridge = createBridge({ velocity: 600 })
-      const entries = [[note('C4')]]
+      const entries = [[note(6000)]]
 
       const result = applyEntries(entries, bridge)
       const { notes } = commitAndCapture(result)

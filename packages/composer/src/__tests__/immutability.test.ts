@@ -19,7 +19,7 @@ describe('deep immutability', () => {
 
   describe('EuclideanBuilder', () => {
     it('original produces same result after applying modified variant', () => {
-      const base = euclidean(3, 8).notes(['C4'])
+      const base = euclidean(3, 8).notes([6000])
       const withStepDur = base.stepDuration(240)
 
       const bridge = createBridge({ defaultDuration: 480 })
@@ -34,7 +34,7 @@ describe('deep immutability', () => {
     })
 
     it('original unchanged after applying velocity-modified variant', () => {
-      const base = euclidean(3, 8).notes(['C4'])
+      const base = euclidean(3, 8).notes([6000])
       const withVel = base.velocity(500)
 
       const bridge = createBridge({ defaultDuration: 480 })
@@ -49,8 +49,8 @@ describe('deep immutability', () => {
 
   describe('TremoloBuilder', () => {
     it('original produces same result after applying modified variant', () => {
-      const base = tremolo('C4', 120, 480)
-      const withPitch = base.pitch('E4')
+      const base = tremolo(6000, 120, 480)
+      const withPitch = base.pitch(6400)
       const withRate = base.rate(240)
 
       const bridge = createBridge({ defaultDuration: 480 })
@@ -65,7 +65,7 @@ describe('deep immutability', () => {
     })
 
     it('original unchanged after applying duration-modified variant', () => {
-      const base = tremolo('C4', 120, 480)
+      const base = tremolo(6000, 120, 480)
       const withDuration = base.duration(240)
 
       const bridge = createBridge({ defaultDuration: 480 })
@@ -80,7 +80,7 @@ describe('deep immutability', () => {
 
   describe('SwingBuilder', () => {
     it('original produces same result after applying modified variant', () => {
-      const base = swing(0.5).steps(note('C4'), note('C4'))
+      const base = swing(0.5).steps(note(6000), note(6000))
       const withAmount = base.amount(0)
       const withGrid = base.grid(240)
 
@@ -98,8 +98,8 @@ describe('deep immutability', () => {
   describe('QuantizationBuilder', () => {
     it('original produces same result after applying modified variant', () => {
       const base = quantize(480, 1).steps(
-        note('C4').duration(240),
-        note('C4').duration(480),
+        note(6000).duration(240),
+        note(6000).duration(480),
       )
       const withGrid = base.grid(240)
       const withStrength = base.strength(0)

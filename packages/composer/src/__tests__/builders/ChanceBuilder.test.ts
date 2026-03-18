@@ -24,7 +24,7 @@ describe('ChanceBuilder', () => {
   describe('probability 1', () => {
     it('should always emit when probability is 1', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = chance(1).steps(note('C4')).apply(bridge)
+      const result = chance(1).steps(note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -36,7 +36,7 @@ describe('ChanceBuilder', () => {
     it('should emit all notes in sequence when probability is 1', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = chance(1)
-        .steps(note('C4'), note('E4'), note('G4'))
+        .steps(note(6000), note(6400), note(6700))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -49,7 +49,7 @@ describe('ChanceBuilder', () => {
 
     it('should default to probability 1 when omitted', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = chance().steps(note('C4')).apply(bridge)
+      const result = chance().steps(note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -64,7 +64,7 @@ describe('ChanceBuilder', () => {
   describe('probability 0', () => {
     it('should never emit when probability is 0', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = chance(0).steps(note('C4')).apply(bridge)
+      const result = chance(0).steps(note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(0)
@@ -72,7 +72,7 @@ describe('ChanceBuilder', () => {
 
     it('should advance tick when note is skipped (probability 0)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = chance(0).steps(note('C4')).apply(bridge)
+      const result = chance(0).steps(note(6000)).apply(bridge)
 
       expect(result.tick).toBe(480)
     })
@@ -80,7 +80,7 @@ describe('ChanceBuilder', () => {
     it('should accumulate tick advances for multiple skipped notes', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = chance(0)
-        .steps(note('C4'), note('E4'), note('G4'))
+        .steps(note(6000), note(6400), note(6700))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -90,7 +90,7 @@ describe('ChanceBuilder', () => {
 
     it('should use .probability(0) builder method', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = chance(1).probability(0).steps(note('C4')).apply(bridge)
+      const result = chance(1).probability(0).steps(note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(0)
@@ -107,12 +107,12 @@ describe('ChanceBuilder', () => {
       const seed = 42
 
       const result1 = chance(0.5, seed)
-        .steps(note('C4'), note('E4'), note('G4'), note('C4'), note('E4'), note('G4'))
+        .steps(note(6000), note(6400), note(6700), note(6000), note(6400), note(6700))
         .apply(bridge)
 
       const bridge2 = createBridge({ defaultDuration: 480 })
       const result2 = chance(0.5, seed)
-        .steps(note('C4'), note('E4'), note('G4'), note('C4'), note('E4'), note('G4'))
+        .steps(note(6000), note(6400), note(6700), note(6000), note(6400), note(6700))
         .apply(bridge2)
 
       const { notes: n1 } = commitAndCapture(result1)
@@ -130,16 +130,16 @@ describe('ChanceBuilder', () => {
 
       const result1 = chance(0.5, 111)
         .steps(
-          note('C4'), note('E4'), note('G4'), note('C4'), note('E4'), note('G4'),
-          note('C4'), note('E4'), note('G4'), note('C4'), note('E4'), note('G4'),
+          note(6000), note(6400), note(6700), note(6000), note(6400), note(6700),
+          note(6000), note(6400), note(6700), note(6000), note(6400), note(6700),
         )
         .apply(bridge)
 
       const bridge2 = createBridge({ defaultDuration: 480 })
       const result2 = chance(0.5, 222)
         .steps(
-          note('C4'), note('E4'), note('G4'), note('C4'), note('E4'), note('G4'),
-          note('C4'), note('E4'), note('G4'), note('C4'), note('E4'), note('G4'),
+          note(6000), note(6400), note(6700), note(6000), note(6400), note(6700),
+          note(6000), note(6400), note(6700), note(6000), note(6400), note(6700),
         )
         .apply(bridge2)
 
@@ -154,12 +154,12 @@ describe('ChanceBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480 })
 
       const result1 = chance(0.5).seed(999)
-        .steps(note('C4'), note('E4'), note('G4'), note('C4'), note('E4'), note('G4'))
+        .steps(note(6000), note(6400), note(6700), note(6000), note(6400), note(6700))
         .apply(bridge)
 
       const bridge2 = createBridge({ defaultDuration: 480 })
       const result2 = chance(0.5).seed(999)
-        .steps(note('C4'), note('E4'), note('G4'), note('C4'), note('E4'), note('G4'))
+        .steps(note(6000), note(6400), note(6700), note(6000), note(6400), note(6700))
         .apply(bridge2)
 
       const { notes: n1 } = commitAndCapture(result1)
@@ -189,7 +189,7 @@ describe('ChanceBuilder', () => {
 
     it('chance(1) with steps should apply ChanceBridge and always pass', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = chance(1).steps(note('C4')).apply(bridge)
+      const result = chance(1).steps(note(6000)).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -198,7 +198,7 @@ describe('ChanceBuilder', () => {
 
     it('chance(probability, seed) should accept both args', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = chance(0.3, 12345).steps(note('C4')).apply(bridge)
+      const result = chance(0.3, 12345).steps(note(6000)).apply(bridge)
 
       // With 0.3, may or may not emit; just verify no error
       const { notes } = commitAndCapture(result)
@@ -212,7 +212,7 @@ describe('ChanceBuilder', () => {
 
   describe('immutability', () => {
     it('builder methods should return new instances, not mutate', () => {
-      const base = chance(0.5).steps(note('C4'))
+      const base = chance(0.5).steps(note(6000))
       const withProb = base.probability(0)
       const withSeed = base.seed(42)
 

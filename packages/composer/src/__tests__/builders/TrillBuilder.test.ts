@@ -22,7 +22,7 @@ describe('TrillBuilder', () => {
       // hitCount = floor(480/480) = 1 → only one note
       // We need duration > rate to get multiple hits
       const bridgeLong = createBridge({ defaultDuration: 480 })
-      const result = trill('E4', 'C4').rate(120).duration(480).apply(bridgeLong)
+      const result = trill(6400, 6000).rate(120).duration(480).apply(bridgeLong)
 
       const { notes } = commitAndCapture(result)
       // hitCount = floor(480/120) = 4
@@ -47,7 +47,7 @@ describe('TrillBuilder', () => {
     it('trill with basePitch higher than pitch should still alternate', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       // base=C4 (60), upper=E4 (64) - base is lower
-      const result = trill('E4', 'C4').rate(240).duration(480).apply(bridge)
+      const result = trill(6400, 6000).rate(240).duration(480).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes[0].pitch).toBe(6000) // base first (even i)
@@ -58,7 +58,7 @@ describe('TrillBuilder', () => {
   describe('rate and duration', () => {
     it('should use explicit rate and duration', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = trill('F4', 'D4').rate(120).duration(360).apply(bridge)
+      const result = trill(6500, 6200).rate(120).duration(360).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       // hitCount = floor(360/120) = 3
@@ -68,7 +68,7 @@ describe('TrillBuilder', () => {
 
     it('should use bridge defaultDuration when rate/duration not provided', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = trill('E4', 'C4').apply(bridge)
+      const result = trill(6400, 6000).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       // hitCount = floor(480/480) = 1
@@ -80,7 +80,7 @@ describe('TrillBuilder', () => {
   describe('modifiers', () => {
     it('.basePitch() should override base', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = trill('E4', 'C4').basePitch('D4').rate(240).duration(480).apply(bridge)
+      const result = trill(6400, 6000).basePitch(6200).rate(240).duration(480).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes[0].pitch).toBe(6200) // D4
@@ -89,7 +89,7 @@ describe('TrillBuilder', () => {
 
     it('.pitch() should override upper', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = trill('E4', 'C4').pitch('F4').rate(240).duration(480).apply(bridge)
+      const result = trill(6400, 6000).pitch(6500).rate(240).duration(480).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes[0].pitch).toBe(6000) // base C4
@@ -100,7 +100,7 @@ describe('TrillBuilder', () => {
   describe('edge cases', () => {
     it('trill with null pitch should emit nothing', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = trill(undefined, 'C4').apply(bridge)
+      const result = trill(undefined, 6000).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(0)
@@ -108,7 +108,7 @@ describe('TrillBuilder', () => {
 
     it('trill with null basePitch should emit nothing', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = trill('E4', undefined).apply(bridge)
+      const result = trill(6400, undefined).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(0)
@@ -117,9 +117,9 @@ describe('TrillBuilder', () => {
 
   describe('immutability', () => {
     it('builder methods should return new instances, not mutate', () => {
-      const original = trill('E4', 'C4')
+      const original = trill(6400, 6000)
       const withRate = original.rate(120)
-      const withBase = original.basePitch('D4')
+      const withBase = original.basePitch(6200)
 
       const bridge = createBridge({ defaultDuration: 480 })
       const origResult = commitAndCapture(original.rate(240).duration(480).apply(bridge))
@@ -135,8 +135,8 @@ describe('TrillBuilder', () => {
     it('trill then note should advance tick', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       let b: CompositionBridge = bridge
-      b = trill('E4', 'C4').rate(240).duration(480).apply(b)
-      b = trill('G4', 'E4').rate(240).duration(240).apply(b)
+      b = trill(6400, 6000).rate(240).duration(480).apply(b)
+      b = trill(6700, 6400).rate(240).duration(240).apply(b)
 
       const { notes } = commitAndCapture(b)
       // First trill: rate 240, duration 480 → 2 notes; second: rate 240, duration 240 → 1 note

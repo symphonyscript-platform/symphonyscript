@@ -17,7 +17,7 @@ describe('Clip', () => {
 
   describe('Clip.pipe', () => {
     it('should create a Clip with the given steps', () => {
-      const clip = Clip.pipe(note('C4'))
+      const clip = Clip.pipe(note(6000))
       const bridge = createBridge()
       const result = clip.compose(bridge)
       const { notes } = commitAndCapture(result)
@@ -27,7 +27,7 @@ describe('Clip', () => {
     })
 
     it('should create a Clip with multiple steps', () => {
-      const clip = Clip.pipe(note('C4'), note('E4'), note('G4'))
+      const clip = Clip.pipe(note(6000), note(6400), note(6700))
       const bridge = createBridge()
       const result = clip.compose(bridge)
       const { notes } = commitAndCapture(result)
@@ -51,7 +51,7 @@ describe('Clip', () => {
   describe('compose', () => {
     it('should apply steps sequentially, advancing tick between each', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const clip = Clip.pipe(note('C4'), note('E4'), note('G4'))
+      const clip = Clip.pipe(note(6000), note(6400), note(6700))
       const result = clip.compose(bridge)
 
       expect(result.tick).toBe(1440) // 3 × 480
@@ -64,7 +64,7 @@ describe('Clip', () => {
 
     it('should pass bridge state (velocity, etc.) through the pipeline', () => {
       const bridge = createBridge({ velocity: 900 })
-      const clip = Clip.pipe(note('C4'))
+      const clip = Clip.pipe(note(6000))
       const result = clip.compose(bridge)
       const { notes } = commitAndCapture(result)
 
@@ -74,7 +74,7 @@ describe('Clip', () => {
 
   describe('pipe chaining', () => {
     it('should return a new Clip with concatenated steps', () => {
-      const clip = Clip.pipe(note('C4')).pipe(note('E4')).pipe(note('G4'))
+      const clip = Clip.pipe(note(6000)).pipe(note(6400)).pipe(note(6700))
       const bridge = createBridge()
       const result = clip.compose(bridge)
       const { notes } = commitAndCapture(result)
@@ -86,8 +86,8 @@ describe('Clip', () => {
     })
 
     it('should not mutate the original clip', () => {
-      const original = Clip.pipe(note('C4'))
-      const chained = original.pipe(note('E4'))
+      const original = Clip.pipe(note(6000))
+      const chained = original.pipe(note(6400))
 
       const bridge = createBridge()
       const origResult = commitAndCapture(original.compose(bridge))
@@ -100,7 +100,7 @@ describe('Clip', () => {
 
   describe('Clip.freeze', () => {
     it('should freeze a clip and return IFrozenClip', () => {
-      const clip = Clip.pipe(note('C4'), note('E4'))
+      const clip = Clip.pipe(note(6000), note(6400))
       const frozen = Clip.freeze(clip, testNotation)
 
       expect(frozen).toBeDefined()

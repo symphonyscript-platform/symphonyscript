@@ -31,7 +31,7 @@ describe('melody', () => {
     it('trill(upperPitch, basePitch, rate?, duration?) should alternate between pitches', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       // trill(pitch=upper, basePitch=base). Alternates: base, pitch, base, pitch...
-      const result = trill('E4', 'C4', 120, 480).apply(bridge)
+      const result = trill(6400, 6000, 120, 480).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       // 480/120 = 4 hits. i=0 base(C4), i=1 pitch(E4), i=2 base(C4), i=3 pitch(E4)
@@ -45,7 +45,7 @@ describe('melody', () => {
 
     it('should use bridge defaultDuration for rate and duration when omitted', () => {
       const bridge = createBridge({ defaultDuration: 240 })
-      const result = trill('D4', 'C4').apply(bridge)
+      const result = trill(6200, 6000).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       // rate=240, duration=240 -> 1 hit (base only)
@@ -55,13 +55,13 @@ describe('melody', () => {
 
     it('should advance tick by total duration', () => {
       const bridge = createBridge({ tick: 0, defaultDuration: 480 })
-      const result = trill('E4', 'C4', 120, 480).apply(bridge)
+      const result = trill(6400, 6000, 120, 480).apply(bridge)
       expect(result.tick).toBe(480)
     })
 
     it('should space trill hits sequentially', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = trill('E4', 'C4', 240, 480).apply(bridge)
+      const result = trill(6400, 6000, 240, 480).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(2)
@@ -80,8 +80,8 @@ describe('melody', () => {
     it('.pitch() .basePitch() .rate() .duration() builder chaining', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = trill()
-        .pitch('G4')
-        .basePitch('C4')
+        .pitch(6700)
+        .basePitch(6000)
         .rate(160)
         .duration(480)
         .apply(bridge)
@@ -95,7 +95,7 @@ describe('melody', () => {
 
   describe('grace', () => {
     it('grace(pitch?, graceDuration) should return NoteBuilder', () => {
-      const result = grace('C4', 30)
+      const result = grace(6000, 30)
       expect(result).toBeInstanceOf(NoteBuilder)
     })
 
@@ -106,8 +106,8 @@ describe('melody', () => {
 
     it('grace(pitch, graceDuration) should emit short note before main note', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      let b = grace('E4', 30).apply(bridge)
-      b = note('C4').apply(b)
+      let b = grace(6400, 30).apply(bridge)
+      b = note(6000).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
@@ -129,7 +129,7 @@ describe('melody', () => {
 
     it('should use default graceDuration 30 when omitted', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = grace('C4').apply(bridge)
+      const result = grace(6000).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -146,7 +146,7 @@ describe('melody', () => {
 
     it('glissando(from, to, duration?) should emit chromatic slide', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
-      const result = glissando('C4', 'E4', 240).apply(bridge)
+      const result = glissando(6000, 6400, 240).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       // C4=60, E4=64 -> 4 semitones, 5 notes (60,61,62,63,64)
@@ -159,7 +159,7 @@ describe('melody', () => {
 
     it('glissando downward should emit descending chromatic notes', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = glissando('G4', 'C4', 200).apply(bridge)
+      const result = glissando(6700, 6000, 200).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes[0].pitch).toBe(6700)
@@ -168,7 +168,7 @@ describe('melody', () => {
 
     it('glissando same pitch should emit single note', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = glissando('C4', 'C4', 240).apply(bridge)
+      const result = glissando(6000, 6000, 240).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(1)
@@ -177,7 +177,7 @@ describe('melody', () => {
 
     it('should use bridge defaultDuration when duration omitted', () => {
       const bridge = createBridge({ defaultDuration: 480 })
-      const result = glissando('C4', 'D4').apply(bridge)
+      const result = glissando(6000, 6200).apply(bridge)
 
       const { notes } = commitAndCapture(result)
       expect(notes).toHaveLength(3) // C4, C#4, D4
@@ -202,7 +202,7 @@ describe('melody', () => {
     it('tuplet(3, 2).steps(...) should fit 3 notes into 2 beats', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       const result = tuplet(3, 2)
-        .steps(note('C4'), note('E4'), note('G4'))
+        .steps(note(6000), note(6400), note(6700))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -226,7 +226,7 @@ describe('melody', () => {
     it('tuplet should advance tick by total duration (inBeats * defaultDuration)', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = tuplet(3, 2)
-        .steps(note('C4'), note('E4'), note('G4'))
+        .steps(note(6000), note(6400), note(6700))
         .apply(bridge)
       expect(result.tick).toBe(960) // 2 * 480
     })
@@ -241,7 +241,7 @@ describe('melody', () => {
     it('polyrhythm(3, 2).steps(...) should evenly space 3 notes over 2 beats', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 100 })
       const result = polyrhythm(3, 2)
-        .steps(note('C4'), note('E4'), note('G4'))
+        .steps(note(6000), note(6400), note(6700))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -262,7 +262,7 @@ describe('melody', () => {
     it('polyrhythm should advance tick by total duration', () => {
       const bridge = createBridge({ defaultDuration: 480 })
       const result = polyrhythm(3, 2)
-        .steps(note('C4'), note('E4'), note('G4'))
+        .steps(note(6000), note(6400), note(6700))
         .apply(bridge)
       expect(result.tick).toBe(960)
     })

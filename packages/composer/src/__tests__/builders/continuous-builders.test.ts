@@ -20,8 +20,8 @@ const e4Cents = (64 - MIDI_C0) * 100 // 5200
 
 describe('RFC-060 Task 6: Cent-Based Builders', () => {
   describe('NoteBuilder', () => {
-    it('note("C4") resolves to 4800 cents', () => {
-      const builder = note('C4')
+    it('note(6000) resolves to 4800 cents', () => {
+      const builder = note(6000)
       const b = new BaseCompositionBridge({ notation: testNotation })
       const result = builder.apply(b) as BaseCompositionBridge
       expect(result.tick).toBeGreaterThan(0)
@@ -35,35 +35,35 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
     })
 
     it('sharp() adds 100 cents', () => {
-      const builder = note('C4').sharp()
+      const builder = note(6000).sharp()
       // Verify builder was created (sharp adds 100 to accidental field)
       expect(builder).toBeDefined()
     })
 
     it('flat() subtracts 100 cents', () => {
-      const builder = note('C4').flat()
+      const builder = note(6000).flat()
       expect(builder).toBeDefined()
     })
 
     it('transpose(700) = up a fifth', () => {
-      const builder = note('C4').transpose(700)
+      const builder = note(6000).transpose(700)
       expect(builder).toBeDefined()
     })
 
     it('up(1) = ×1200 shift', () => {
-      const builder = note('C4').up(1)
+      const builder = note(6000).up(1)
       expect(builder).toBeDefined()
     })
 
     it('repeat works with cents-based notes', () => {
       const b = new BaseCompositionBridge({ notation: testNotation, defaultDuration: 480 })
-      const result = note('C4').repeat(3).apply(b) as BaseCompositionBridge
+      const result = note(6000).repeat(3).apply(b) as BaseCompositionBridge
       // 3 × 480 = 1440
       expect(result.tick).toBe(1440)
     })
 
     it('pitch() method sets absolute cents', () => {
-      const builder = note('C4').pitch(5700) // A4
+      const builder = note(6000).pitch(5700) // A4
       expect(builder).toBeDefined()
     })
 
@@ -75,7 +75,7 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
     })
 
     it('note with explicit duration', () => {
-      const builder = note('E4', 240)
+      const builder = note(6400, 240)
       const b = new BaseCompositionBridge({ notation: testNotation })
       const result = builder.apply(b) as BaseCompositionBridge
       expect(result.tick).toBe(240)
@@ -180,7 +180,7 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
   describe('Non-regression', () => {
     it('velocity/duration/repeat are unaffected by cent migration', () => {
       const b = new BaseCompositionBridge({ notation: testNotation, defaultDuration: 480 })
-      const result = note('C4')
+      const result = note(6000)
         .velocity(500)
         .repeat(2)
         .apply(b) as BaseCompositionBridge
@@ -194,7 +194,7 @@ describe('RFC-060 Task 6: Cent-Based Builders', () => {
         transposeCents: 700,
         defaultDuration: 480,
       })
-      const result = note('C4').apply(b) as BaseCompositionBridge
+      const result = note(6000).apply(b) as BaseCompositionBridge
       expect(result.tuningHz).toBe(432)
       expect(result.transposeCents).toBe(700)
     })

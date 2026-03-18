@@ -17,7 +17,7 @@ describe('freeze', () => {
 
   describe('return type', () => {
     it('returns IFrozenClip with required shape', () => {
-      const clip = Clip.pipe(note('C4'))
+      const clip = Clip.pipe(note(6000))
       const frozen = freeze(clip, testNotation)
 
       expect(frozen).toBeDefined()
@@ -31,7 +31,7 @@ describe('freeze', () => {
 
   describe('note visitation', () => {
     it('can visit notes from frozen single-note clip', () => {
-      const clip = Clip.pipe(note('C4'))
+      const clip = Clip.pipe(note(6000))
       const frozen = freeze(clip, testNotation)
 
       const notes: Array<{ sourceId: number; pitch: number; velocity: number; duration: number; tick: number; muted: boolean }> = []
@@ -46,7 +46,7 @@ describe('freeze', () => {
     })
 
     it('can visit notes from frozen multi-note clip', () => {
-      const clip = Clip.pipe(note('C4'), note('E4'), note('G4'))
+      const clip = Clip.pipe(note(6000), note(6400), note(6700))
       const frozen = freeze(clip, testNotation)
 
       const notes: Array<{ sourceId: number; pitch: number; velocity: number; duration: number; tick: number; muted: boolean }> = []
@@ -65,14 +65,14 @@ describe('freeze', () => {
     })
 
     it('frozen clip reflects duration from composed notes', () => {
-      const clip = Clip.pipe(note('C4'), note('E4')) // 2 notes, defaultDuration=1 each
+      const clip = Clip.pipe(note(6000), note(6400)) // 2 notes, defaultDuration=1 each
       const frozen = freeze(clip, testNotation)
 
       expect(frozen.duration).toBe(2) // 2 notes × defaultDuration 1 = end at tick 2
     })
 
     it('visitCC and visitBends can be called without error', () => {
-      const clip = Clip.pipe(note('C4'))
+      const clip = Clip.pipe(note(6000))
       const frozen = freeze(clip, testNotation)
 
       const cc: Array<{ sourceId: number; controller: number; value: number; tick: number }> = []

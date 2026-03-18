@@ -5,7 +5,7 @@
  * subclass that wraps the bridge in a HumanizationBridge decorator.
  *
  * Covers:
- *   - Scoped usage: humanize().steps(note('C4'), note('D4'))
+ *   - Scoped usage: humanize().steps(note(6000), note(6200))
  *   - Default (cascading) usage: humanize() without .steps()
  *   - Velocity jitter within expected range
  *   - Timing jitter within expected range
@@ -34,7 +34,7 @@ describe('HumanizationBuilder', () => {
       // Humanize with seed for determinism — only inner notes are affected
       const result = humanize(100, 0)
         .seed(42)
-        .steps(note('C4'), note('E4'))
+        .steps(note(6000), note(6400))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -53,7 +53,7 @@ describe('HumanizationBuilder', () => {
 
       const result = humanize(0, 0)
         .seed(42)
-        .steps(note('C4'), note('E4'))
+        .steps(note(6000), note(6400))
         .apply(bridge)
 
       // Two notes × 480 duration = 960 (timing jitter is 0)
@@ -64,8 +64,8 @@ describe('HumanizationBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480 })
 
       // Apply humanization scoped, then another note after
-      let b = humanize(50, 0).seed(1).steps(note('C4')).apply(bridge)
-      b = note('E4').apply(b)
+      let b = humanize(50, 0).seed(1).steps(note(6000)).apply(bridge)
+      b = note(6400).apply(b)
 
       const { notes } = commitAndCapture(b)
       expect(notes).toHaveLength(2)
@@ -87,7 +87,7 @@ describe('HumanizationBuilder', () => {
 
       // The bridge should now be a HumanizationBridge decorator
       // Notes applied to it should be jittered
-      const result = note('C4').apply(modified)
+      const result = note(6000).apply(modified)
       const { notes } = commitAndCapture(result)
 
       expect(notes).toHaveLength(1)
@@ -105,11 +105,11 @@ describe('HumanizationBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 800 })
 
       const run1 = commitAndCapture(
-        humanize(100, 20).seed(42).steps(note('C4'), note('E4')).apply(bridge),
+        humanize(100, 20).seed(42).steps(note(6000), note(6400)).apply(bridge),
       )
 
       const run2 = commitAndCapture(
-        humanize(100, 20).seed(42).steps(note('C4'), note('E4')).apply(bridge),
+        humanize(100, 20).seed(42).steps(note(6000), note(6400)).apply(bridge),
       )
 
       expect(run1.notes[0].velocity).toBe(run2.notes[0].velocity)
@@ -122,11 +122,11 @@ describe('HumanizationBuilder', () => {
       const bridge = createBridge({ defaultDuration: 480, velocity: 800 })
 
       const run1 = commitAndCapture(
-        humanize(100, 20).seed(42).steps(note('C4'), note('E4')).apply(bridge),
+        humanize(100, 20).seed(42).steps(note(6000), note(6400)).apply(bridge),
       )
 
       const run2 = commitAndCapture(
-        humanize(100, 20).seed(999).steps(note('C4'), note('E4')).apply(bridge),
+        humanize(100, 20).seed(999).steps(note(6000), note(6400)).apply(bridge),
       )
 
       // Very unlikely to be identical with different seeds
@@ -146,7 +146,7 @@ describe('HumanizationBuilder', () => {
 
       const result = humanize(100, 20)
         .seed(42)
-        .steps(note('C4').precise())
+        .steps(note(6000).precise())
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
@@ -169,7 +169,7 @@ describe('HumanizationBuilder', () => {
       const builder = humanize(50, 0).seed(123)
       let b: CompositionBridge = bridge
       for (let i = 0; i < 20; i++) {
-        b = builder.steps(note('C4')).apply(b)
+        b = builder.steps(note(6000)).apply(b)
       }
 
       const { notes } = commitAndCapture(b)
@@ -184,7 +184,7 @@ describe('HumanizationBuilder', () => {
 
       const result = humanize(0, 0)
         .seed(42)
-        .steps(note('C4'))
+        .steps(note(6000))
         .apply(bridge)
 
       const { notes } = commitAndCapture(result)
