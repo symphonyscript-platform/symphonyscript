@@ -1,4 +1,4 @@
-import type { RomanNumeral } from '@symphonyscript/notations'
+import type { Degree } from '@symphonyscript/core'
 import { ProgressionBuilder } from '../builders/ProgressionBuilder'
 
 /**
@@ -8,9 +8,9 @@ import { ProgressionBuilder } from '../builders/ProgressionBuilder'
  * sequentially; each advances the bridge tick. Use {@link voiceLead} for progressions
  * that minimize voice movement between chords.
  *
- * @param numerals - Ordered roman numerals (e.g. `['I', 'IV', 'V', 'I']`). Must all exist in {@link ROMAN_DEGREE_MAP}.
+ * @param numerals - Ordered degree numerals (e.g. `['I', 'IV', 'V', 'I']`).
  * @param duration - Per-chord duration in ticks. `undefined` = bridge default.
-
+ *
  * @returns Immutable {@link ProgressionBuilder} — chain `.velocity()` if needed
  *
  * @example
@@ -21,6 +21,6 @@ import { ProgressionBuilder } from '../builders/ProgressionBuilder'
  * progression(['I']).apply(bridge)                // Single chord
  * ```
  */
-export function progression(numerals: RomanNumeral[], duration?: number): ProgressionBuilder {
+export function progression(numerals: Degree[], duration?: number): ProgressionBuilder {
   return new ProgressionBuilder({ numerals, duration })
 }

@@ -1,5 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import type { RomanNumeral } from '@symphonyscript/notations'
+import type { Degree } from '@symphonyscript/core'
 import { RomanBuilder } from './RomanBuilder'
 
 /**
@@ -9,7 +9,7 @@ import { RomanBuilder } from './RomanBuilder'
  */
 export interface ProgressionParams {
   /** Ordered roman numerals (e.g. I–V–vi–IV). */
-  numerals: RomanNumeral[]
+  numerals: Degree[]
   /** Per-chord duration in ticks. `null` = use bridge default. */
   duration: number | null
   /** Velocity override for all chords. `null` = use bridge default. */
@@ -48,10 +48,10 @@ export class ProgressionBuilder implements PipeStep {
    * Set the chord progression (ordered roman numerals).
    *
    * @param numerals - Array of roman numerals (e.g. ['I', 'IV', 'V', 'I'])
-
+   *
    * @returns New ProgressionBuilder with the updated numerals
    */
-  numerals(numerals: RomanNumeral[]): ProgressionBuilder {
+  numerals(numerals: Degree[]): ProgressionBuilder {
     return this.clone({ numerals })
   }
 
@@ -59,7 +59,7 @@ export class ProgressionBuilder implements PipeStep {
    * Set per-chord duration in ticks.
    *
    * @param duration - Duration in ticks
-
+   *
    * @returns New ProgressionBuilder with the updated duration
    */
   duration(duration: number): ProgressionBuilder {
@@ -70,7 +70,7 @@ export class ProgressionBuilder implements PipeStep {
    * Set velocity for all chords in the progression.
    *
    * @param velocity - Velocity value (0–1000)
-
+   *
    * @returns New ProgressionBuilder with the updated velocity
    */
   velocity(velocity: number): ProgressionBuilder {
@@ -84,7 +84,7 @@ export class ProgressionBuilder implements PipeStep {
    * Each chord advances the tick by its duration. Empty numerals array yields unchanged bridge.
    *
    * @param bridge - Current composition state
-
+   *
    * @returns Updated bridge with progression chords emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {

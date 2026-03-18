@@ -1,16 +1,14 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import type { RomanNumeral } from '@symphonyscript/notations'
-import { ROMAN_DEGREE_MAP } from '@symphonyscript/notations'
-import { degreeToCents } from '@symphonyscript/theory'
+import type { Degree, ChordIntervals } from '@symphonyscript/core'
 
 /**
  * Parameters for {@link RomanBuilder}.
  *
- * Resolves roman numerals to diatonic scale degrees via {@link ROMAN_DEGREE_MAP}.
+ * Resolves roman numerals via the bridge's notation (degreeToCents / resolveProgression).
  */
 export interface RomanParams {
-  /** Roman numeral (e.g. I, iv, V7). Must exist in ROMAN_DEGREE_MAP. */
-  numeral: RomanNumeral
+  /** Roman numeral (e.g. I, iv, V7). Resolved via notation.resolveProgression(). */
+  numeral: Degree
   /** Note duration in ticks. `null` = use bridge default at apply-time. */
   duration: number | null
   /** Inversion index (0 = root, 1 = first inversion, etc.). Default: 0. */
@@ -22,10 +20,9 @@ export interface RomanParams {
 /**
  * Immutable builder that emits chord tones from a roman numeral.
  *
- * Maps numerals (I, iv, V7, etc.) to diatonic scale degrees via {@link ROMAN_DEGREE_MAP},
- * resolves degrees to pitches (cents) using `degreeToCents` with the bridge's
- * `scaleIntervals` and `scaleRootCents`. Supports inversions by rotating bottom
- * notes up one octave.
+ * Resolves the numeral via `bridge.notation().resolveProgression()` to obtain
+ * root cents and chord intervals, then emits all chord tones simultaneously.
+ * Supports inversions by rotating bottom intervals up one octave (+1200 cents).
  *
  * All builder methods return new instances (clone-on-set immutability).
  *
@@ -43,7 +40,7 @@ export class RomanBuilder implements PipeStep {
 
   constructor(params: Partial<RomanParams>) {
     this.params = {
-      numeral: params.numeral ?? 'I',
+      numeral: params.numeral ?? 'I' as Degree,
       duration: params.duration ?? null,
       inversion: params.inversion ?? 0,
       velocity: params.velocity ?? null,
@@ -51,13 +48,13 @@ export class RomanBuilder implements PipeStep {
   }
 
   /**
-   * Set the roman numeral. Must exist in {@link ROMAN_DEGREE_MAP}.
+   * Set the roman numeral. Resolved via `notation.resolveProgression()`.
    *
    * @param numeral - Roman numeral (e.g. I, iv, V7, ii, bVII)
    *
    * @returns New RomanBuilder with the updated numeral
    */
-  numeral(numeral: RomanNumeral): RomanBuilder {
+  numeral(numeral: Degree): RomanBuilder {
     return this.clone({ numeral })
   }
 
@@ -73,7 +70,7 @@ export class RomanBuilder implements PipeStep {
   }
 
   /**
-   * Set the inversion index. Rotates bottom voices up by 7 diatonic degrees (one octave).
+   * Set the inversion index. Rotates bottom intervals up by 1200 cents (one octave).
    *
    * @param inversion - Inversion count (0 = root position)
    *
@@ -95,45 +92,58 @@ export class RomanBuilder implements PipeStep {
   }
 
   /**
-   * Resolve the numeral to scale degrees, apply inversion, and emit all chord tones.
+   * Resolve the numeral to chord tones via the notation, apply inversion, and emit.
+   *
+   * Uses `notation.resolveProgression()` to get `{ rootCents, intervals }` for the
+   * numeral, then applies inversion by rotating bottom intervals up +1200 cents.
    *
    * @param bridge - Current composition state (scaleIntervals, scaleRootCents, tick)
    *
    * @returns Updated bridge with chord notes emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {
-    const intervals = bridge.scaleIntervals
-    if (intervals === null) return bridge
+    const scale = bridge.scaleIntervals
+    if (scale === null) return bridge
 
-    const baseDegrees = ROMAN_DEGREE_MAP[this.params.numeral]
+    const [resolution] = bridge.notation().resolveProgression(
+      [this.params.numeral],
+      scale as number[],
+    )
 
-    // Apply inversion: rotate bottom notes up by 7 degrees (one octave in diatonic)
-    const degrees: number[] = new Array(baseDegrees.length)
-    const inversionCount = Math.min(this.params.inversion, baseDegrees.length)
+    // Apply inversion: rotate bottom intervals up by +1200 cents
+    const intervals = this.invertIntervals(resolution.intervals, this.params.inversion)
 
-    for (let i = 0; i < baseDegrees.length; ++i) {
-      const rotatedIndex = (i + inversionCount) % baseDegrees.length
-      const octaveBoost = (i + inversionCount) >= baseDegrees.length ? 7 : 0
-      degrees[i] = baseDegrees[rotatedIndex] + octaveBoost
-    }
-
-    // Resolve degrees to cents
+    const rootCents = bridge.scaleRootCents + resolution.rootCents
     const startTick = bridge.tick
     const duration = this.params.duration ?? bridge.defaultDuration
     let target = bridge
 
-    for (let i = 0; i < degrees.length; ++i) {
-      const cents = bridge.scaleRootCents
-        + degreeToCents(intervals as number[], degrees[i])
-
+    for (let i = 0; i < intervals.length; ++i) {
       target = target
         .withTick(startTick)
-        .withNote(cents, duration, this.params.velocity ?? undefined)
+        .withNote(rootCents + intervals[i], duration, this.params.velocity ?? undefined)
     }
 
     target = target.withTick(startTick + duration)
 
     return target
+  }
+
+  /**
+   * Rotate bottom intervals up by 1200 cents for inversion.
+   *
+   * E.g. [0, 400, 700] with inversion=1 → [400, 700, 1200]
+   *      (root moves up an octave, third becomes bass)
+   */
+  private invertIntervals(intervals: ChordIntervals, inversion: number): number[] {
+    const result = [...intervals]
+    const count = Math.min(inversion, result.length)
+
+    for (let i = 0; i < count; ++i) {
+      result.push(result.shift()! + 1200)
+    }
+
+    return result
   }
 
   /** @internal Clone with param overrides. */

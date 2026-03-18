@@ -1,22 +1,21 @@
 import { RomanBuilder } from '../builders/RomanBuilder'
-import type { RomanNumeral } from '@symphonyscript/notations'
+import type { Degree } from '@symphonyscript/core'
 
 /**
  * Create a {@link RomanBuilder} that emits chord tones from a roman numeral.
  *
- * Maps numerals (I, iv, V7, etc.) to diatonic scale degrees via
- * {@link ROMAN_DEGREE_MAP}, resolves degrees to MIDI pitches using the bridge's
- * scale context (scaleRoot, scaleMode), and emits simultaneous notes. Supports
+ * Resolves the numeral via `bridge.notation().resolveProgression()` to obtain
+ * root cents and chord intervals, then emits simultaneous chord tones. Supports
  * inversions via `.inversion()`. Unlike {@link chord}, uses scale-relative
  * resolution rather than absolute chord symbols.
  *
  * Called without arguments, uses default `'I'` (tonic triad).
  *
- * @param numeral - Roman numeral (e.g. `'I'`, `'iv'`, `'V7'`, `'bVII'`). Must exist in {@link ROMAN_DEGREE_MAP}.
+ * @param numeral - Roman numeral (e.g. `'I'`, `'iv'`, `'V7'`, `'bVII'`).
  * @param duration - Note duration in ticks for all chord tones. `undefined` = bridge default.
-
+ *
  * @returns Immutable {@link RomanBuilder} — chain `.inversion()`, `.velocity()`, etc.
- * @throws When numeral is not in ROMAN_DEGREE_MAP (during `apply()`)
+ * @throws At apply-time if numeral is not recognized by the notation
  *
  * @example
  * ```ts
@@ -27,6 +26,6 @@ import type { RomanNumeral } from '@symphonyscript/notations'
  * roman()                             // Default I
  * ```
  */
-export function roman(numeral?: RomanNumeral, duration?: number): RomanBuilder {
+export function roman(numeral?: Degree, duration?: number): RomanBuilder {
   return new RomanBuilder({ numeral, duration })
 }

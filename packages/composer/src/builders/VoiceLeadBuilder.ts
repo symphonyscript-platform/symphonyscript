@@ -1,7 +1,5 @@
 import { CompositionBridge, PipeStep } from '@symphonyscript/composer'
-import type { RomanNumeral } from '@symphonyscript/notations'
-import { ROMAN_DEGREE_MAP } from '@symphonyscript/notations'
-import { degreeToCents } from '@symphonyscript/theory'
+import type { Degree } from '@symphonyscript/core'
 
 /**
  * Parameters for {@link VoiceLeadBuilder}.
@@ -10,7 +8,7 @@ import { degreeToCents } from '@symphonyscript/theory'
  */
 export interface VoiceLeadParams {
   /** Ordered roman numerals (e.g. I–IV–V–I). */
-  numerals: RomanNumeral[]
+  numerals: Degree[]
   /** Per-chord duration in ticks. `null` = use bridge default. */
   duration: number | null
 }
@@ -20,8 +18,8 @@ export interface VoiceLeadParams {
  *
  * Minimizes voice movement between consecutive chords by choosing the closest
  * octave placement for each voice (within ±2 octaves). Resolves numerals via
- * {@link ROMAN_DEGREE_MAP}, then applies `voiceLeadPitches` to each chord
- * relative to the previous chord's pitches.
+ * `bridge.notation().resolveProgression()`, then applies `voiceLeadPitches` to
+ * each chord relative to the previous chord's pitches.
  *
  * All builder methods return new instances (clone-on-set immutability).
  *
@@ -50,7 +48,7 @@ export class VoiceLeadBuilder implements PipeStep {
    *
    * @returns New VoiceLeadBuilder with the updated numerals
    */
-  numerals(numerals: RomanNumeral[]): VoiceLeadBuilder {
+  numerals(numerals: Degree[]): VoiceLeadBuilder {
     return this.clone({ numerals })
   }
 
@@ -68,28 +66,36 @@ export class VoiceLeadBuilder implements PipeStep {
   /**
    * Emit each chord with voice-leading: minimizes total pitch movement from the previous chord.
    *
-   * For each numeral, resolves degrees to cents pitches, then rearranges octave placements
-   * (via `voiceLeadPitches`) so each voice stays as close as possible to the previous chord.
+   * Resolves all numerals via `bridge.notation().resolveProgression()` to get
+   * `{ rootCents, intervals }` per chord. For each chord, computes absolute pitches
+   * then rearranges octave placements so each voice stays as close as possible to
+   * the previous chord. The first chord uses default placement.
    *
    * @param bridge - Current composition state
    *
    * @returns Updated bridge with voice-led progression emitted
    */
   apply(bridge: CompositionBridge): CompositionBridge {
-    const intervals = bridge.scaleIntervals
-    if (intervals === null) return bridge
+    const scale = bridge.scaleIntervals
+    if (scale === null) return bridge
+    if (this.params.numerals.length === 0) return bridge
+
+    const resolutions = bridge.notation().resolveProgression(
+      this.params.numerals,
+      scale as number[],
+    )
 
     let target = bridge
     let prevPitches: number[] | null = null
 
-    for (let i = 0; i < this.params.numerals.length; ++i) {
-      const degrees = ROMAN_DEGREE_MAP[this.params.numerals[i]]
-      const rawPitches: number[] = []
+    for (let i = 0; i < resolutions.length; ++i) {
+      const { rootCents, intervals } = resolutions[i]
+      const chordRoot = target.scaleRootCents + rootCents
 
-      for (let j = 0; j < degrees.length; ++j) {
-        const cents = target.scaleRootCents
-          + degreeToCents(intervals as number[], degrees[j])
-        rawPitches.push(cents)
+      // Build absolute pitches from root + intervals
+      const rawPitches: number[] = []
+      for (let j = 0; j < intervals.length; ++j) {
+        rawPitches.push(chordRoot + intervals[j])
       }
 
       const pitches: number[] = prevPitches

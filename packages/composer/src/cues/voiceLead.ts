@@ -1,4 +1,4 @@
-import type { RomanNumeral } from '@symphonyscript/notations'
+import type { Degree } from '@symphonyscript/core'
 import { VoiceLeadBuilder } from '../builders/VoiceLeadBuilder'
 
 /**
@@ -6,13 +6,13 @@ import { VoiceLeadBuilder } from '../builders/VoiceLeadBuilder'
  *
  * Unlike {@link progression}, minimizes voice movement between consecutive chords by
  * choosing the closest octave placement for each voice (within ±2 octaves). Resolves
- * numerals via {@link ROMAN_DEGREE_MAP}, then rearranges octave placements so each
- * voice stays as close as possible to the previous chord. The first chord uses
+ * numerals via `bridge.notation().resolveProgression()`, then rearranges octave placements
+ * so each voice stays as close as possible to the previous chord. The first chord uses
  * default placement; subsequent chords optimize relative to the prior.
  *
- * @param numerals - Ordered roman numerals (e.g. `['I', 'IV', 'V', 'I']`). Must all exist in {@link ROMAN_DEGREE_MAP}.
+ * @param numerals - Ordered degree numerals (e.g. `['I', 'IV', 'V', 'I']`).
  * @param duration - Per-chord duration in ticks. `undefined` = bridge default.
-
+ *
  * @returns Immutable {@link VoiceLeadBuilder}
  *
  * @example
@@ -23,6 +23,6 @@ import { VoiceLeadBuilder } from '../builders/VoiceLeadBuilder'
  * voiceLead([]).apply(bridge)                  // No-op (unchanged bridge)
  * ```
  */
-export function voiceLead(numerals: RomanNumeral[], duration?: number): VoiceLeadBuilder {
+export function voiceLead(numerals: Degree[], duration?: number): VoiceLeadBuilder {
   return new VoiceLeadBuilder({ numerals, duration })
 }
