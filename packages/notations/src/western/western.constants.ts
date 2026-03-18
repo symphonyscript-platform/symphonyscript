@@ -124,15 +124,20 @@ export const DURATION_MAP: Readonly<Record<string, number>> = {
   'dotted.half': 3,
   'dotted.quarter': 1.5,
   'dotted.eighth': 0.75,
+  'dotted.sixteenth': 0.375,
+  'dotted.thirtysecond': 0.1875,
   // Dotted (short)
   '1n.': 6,
   '2n.': 3,
   '4n.': 1.5,
   '8n.': 0.75,
   '16n.': 0.375,
+  '32n.': 0.1875,
   // Triplet (long)
+  'triplet.half': 4 / 3,
   'triplet.quarter': 2 / 3,
   'triplet.eighth': 1 / 3,
+  'triplet.sixteenth': 1 / 6,
   // Triplet (short)
   '2t': 4 / 3,
   '4t': 2 / 3,
@@ -147,12 +152,16 @@ export const TICKS_RATIO_TO_DURATION: readonly [number, string][] = [
   [3, 'dotted.half'],
   [2, 'half'],
   [1.5, 'dotted.quarter'],
+  [4 / 3, 'triplet.half'],
   [1, 'quarter'],
   [0.75, 'dotted.eighth'],
   [2 / 3, 'triplet.quarter'],
   [0.5, 'eighth'],
+  [0.375, 'dotted.sixteenth'],
   [1 / 3, 'triplet.eighth'],
   [0.25, 'sixteenth'],
+  [0.1875, 'dotted.thirtysecond'],
+  [1 / 6, 'triplet.sixteenth'],
   [0.125, 'thirtysecond'],
 ]
 

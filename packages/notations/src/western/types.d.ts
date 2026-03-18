@@ -70,10 +70,11 @@ declare module '@symphonyscript/core' {
       | '1n' | '2n' | '4n' | '8n' | '16n' | '32n'
       // Dotted (long)
       | 'dotted.whole' | 'dotted.half' | 'dotted.quarter' | 'dotted.eighth'
+      | 'dotted.sixteenth' | 'dotted.thirtysecond'
       // Dotted (short)
-      | '1n.' | '2n.' | '4n.' | '8n.' | '16n.'
+      | '1n.' | '2n.' | '4n.' | '8n.' | '16n.' | '32n.'
       // Triplet (long)
-      | 'triplet.quarter' | 'triplet.eighth'
+      | 'triplet.half' | 'triplet.quarter' | 'triplet.eighth' | 'triplet.sixteenth'
       // Triplet (short)
       | '2t' | '4t' | '8t' | '16t'
   }
