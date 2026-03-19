@@ -8,9 +8,15 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+    "./western": {
+      "import": "./dist/western/index.js",
+      "require": "./dist/western/index.cjs",
+      "types": "./dist/western/index.d.ts"
+    },
+    "./midi": {
+      "import": "./dist/midi/index.js",
+      "require": "./dist/midi/index.cjs",
+      "types": "./dist/midi/index.d.ts"
     }
   },
   "scripts": {

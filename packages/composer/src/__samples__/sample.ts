@@ -10,7 +10,7 @@ import {
   drumPattern, drumEuclidean,
   progression,
 } from '../index'
-import { PitchClass } from '@symphonyscript/notations'
+import '@symphonyscript/notations/western'
 import { ScaleMode } from '@symphonyscript/core'
 
 // ─── Config ───
