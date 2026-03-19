@@ -27,8 +27,8 @@ export interface HumanizationBridgeParams {
  *
  * @example
  * ```ts
- * humanize({ velocityJitter: 10, timingAmount: 24, rng }).steps(note('C4'))
- * // Velocity ±10, tick ±24 ticks
+ * humanize({ velocityJitter: 10, timingAmount: 0.05, rng }).steps(note('C4'))
+ * // Velocity ±10, timing ±0.05 beats
  * ```
  */
 export class HumanizationBridge extends CompositionBridgeDecorator {

@@ -30,7 +30,7 @@ export interface TrillParams {
  * @example
  * ```ts
  * trill('E4', 'C4')                         // C4, E4, C4, E4... (rate/duration from bridge)
- * trill('E4', 'C4').rate(120).duration(480) // 4 hits at 120 ticks each
+ * trill('E4', 'C4').rate(0.25).duration(1) // 4 hits at 0.25 beats each
  * trill(6400, 6000).basePitch(5900)        // Override pitches in cents
  * trill('E4', 'C4').apply(bridge)           // Emit onto composition
  * ```

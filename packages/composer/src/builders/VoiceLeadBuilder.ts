@@ -26,7 +26,7 @@ export interface VoiceLeadParams {
  * @example
  * ```ts
  * voiceLead(['I', 'IV', 'V', 'I'])             // I–IV–V–I with minimal voice movement
- * voiceLead(['I', 'vi', 'IV', 'V']).duration(480)
+ * voiceLead(['I', 'vi', 'IV', 'V']).duration(1)
  * voiceLead(['ii', 'V7', 'I'])                 // ii–V7–I with smooth voice leading
  * voiceLead([]).apply(bridge)                  // No-op (unchanged bridge)
  * ```

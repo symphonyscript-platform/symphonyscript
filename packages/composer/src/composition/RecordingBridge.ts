@@ -16,7 +16,7 @@ import { FrozenClip } from '../FrozenClip'
  *
  * @example
  * ```ts
- * const bridge = new BaseCompositionBridge().withNote(60, 480).withCC(7, 80)
+ * const bridge = new BaseCompositionBridge().withNote(60, 1).withCC(7, 80)
  * const recorder = new RecordingBridge()
  * bridge.commit(recorder)
  * const frozen = recorder.toFrozenClip()
@@ -39,7 +39,7 @@ export class RecordingBridge implements ExecutionContext {
    *
    * @param pitch - Pitch in absolute cents from C0
    * @param velocity - Note velocity (0–1000; same units as bridge)
-   * @param duration - Note duration in beats
+   * @param duration - Note duration in ticks (converted at output boundary)
    * @param tick - Start tick (PPQ 480)
    * @param muted - Whether the note is muted
    * @param sourceId - Opaque id for correlation during visit callbacks

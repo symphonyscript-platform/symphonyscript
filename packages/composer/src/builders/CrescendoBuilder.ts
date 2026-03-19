@@ -7,7 +7,7 @@ import { CompositionBridgeDecorator } from '../composition/CompositionBridgeDeco
  * Parameters for {@link CrescendoBuilder}.
  */
 export interface CrescendoParams {
-  /** Length of the crescendo in ticks. Default 480. */
+  /** Length of the crescendo in beats. Default 1. */
   duration: number
   /** Initial velocity. Default 400. */
   from: number
@@ -24,15 +24,15 @@ export interface CrescendoParams {
  *
  * Implements {@link ScopeBuilder}. In scoped mode, the ramp applies only to steps passed to
  * `steps()`. In default mode (after `default()`), the modification cascades downstream.
- * Uses {@link VelocityRampBridge}; ramp starts at bridge.tick and spans `duration` ticks.
+ * Uses {@link VelocityRampBridge}; ramp starts at bridge.tick and spans `duration` beats.
  *
  * @example
  * ```ts
- * crescendo(960).steps(note('C4'), note('D4'))   // Increase volume over 960 ticks
+ * crescendo(2).steps(note('C4'), note('D4'))   // Increase volume over 2 beats
  * crescendo().from(200).to(1000).steps(...)      // Custom from/to velocities
- * crescendo(480).curve('exponential')            // Exponential rise
+ * crescendo(1).curve('exponential')            // Exponential rise
  * crescendo().default()                          // Crescendo cascades downstream
- * crescendo(240)                                 // Short 240-tick crescendo
+ * crescendo(0.5)                                 // Short half-beat crescendo
  * ```
  */
 export class CrescendoBuilder extends ScopedStepBuilder<CrescendoBuilder> {
@@ -41,7 +41,7 @@ export class CrescendoBuilder extends ScopedStepBuilder<CrescendoBuilder> {
   constructor(params: Partial<CrescendoParams>) {
     super(params.entries ?? [])
     this.params = {
-      duration: params.duration ?? 480,
+      duration: params.duration ?? 1,
       from: params.from ?? 400,
       to: params.to ?? 1000,
       curve: params.curve ?? 'linear',
@@ -49,9 +49,9 @@ export class CrescendoBuilder extends ScopedStepBuilder<CrescendoBuilder> {
   }
 
   /**
-   * Set the duration of the crescendo in ticks.
+   * Set the duration of the crescendo in beats.
    *
-   * @param duration - Length of the ramp in ticks
+   * @param duration - Length of the ramp in beats
 
    * @returns New builder with the updated duration
    */
@@ -95,8 +95,8 @@ export class CrescendoBuilder extends ScopedStepBuilder<CrescendoBuilder> {
   /** @internal */
   protected onEnter(bridge: CompositionBridge): CompositionBridge {
     return new VelocityRampBridge(bridge, {
-      startTick: bridge.tick,
-      endTick: bridge.tick + this.params.duration,
+      startBeat: bridge.tick,
+      endBeat: bridge.tick + this.params.duration,
       fromVelocity: this.params.from,
       toVelocity: this.params.to,
       curve: this.params.curve,

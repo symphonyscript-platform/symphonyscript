@@ -9,7 +9,7 @@ import { degreeToCents } from '@symphonyscript/theory'
 export interface DegreeChordParams {
   /** Scale degrees (1–7) defining the chord (e.g. [1, 3, 5] = triad). */
   degrees: number[]
-  /** Note duration in ticks. `null` = use bridge default at apply-time. */
+  /** Note duration in beats. `null` = use bridge default at apply-time. */
   duration: number | null
 }
 
@@ -53,9 +53,9 @@ export class DegreeChordBuilder implements PipeStep {
   }
 
   /**
-   * Set note duration in ticks.
+   * Set note duration in beats.
    *
-   * @param duration - Duration in ticks
+   * @param duration - Duration in beats
    *
    * @returns New DegreeChordBuilder with the updated duration
    */

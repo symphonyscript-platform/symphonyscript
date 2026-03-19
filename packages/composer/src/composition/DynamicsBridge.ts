@@ -9,17 +9,17 @@ export interface DynamicsBridgeParams {
   startVelocity: number
   /** Velocity at the end of the ramp range (0–1000). */
   endVelocity: number
-  /** Tick at which the ramp begins. */
-  startTick: number
-  /** Tick at which the ramp ends. */
-  endTick: number
+  /** Beat position at which the ramp begins. */
+  startBeat: number
+  /** Beat position at which the ramp ends. */
+  endBeat: number
 }
 
 /**
  * Bridge decorator that ramps velocity linearly from startVelocity to endVelocity
- * over the tick range [startTick, endTick].
+ * over the beat range [startBeat, endBeat].
  *
- * For each note, computes `t = (tick - startTick) / (endTick - startTick)` clamped
+ * For each note, computes `t = (tick - startBeat) / (endBeat - startBeat)` clamped
  * to [0, 1], then applies `velocity = round(startVelocity + (endVelocity - startVelocity) × t)`.
  * When `precise` is active, the ramp is bypassed and notes use the bridge default
  * or explicitly passed velocity. An explicit velocity argument always overrides
@@ -31,14 +31,14 @@ export interface DynamicsBridgeParams {
  *
  * @example
  * ```ts
- * // Crescendo from 64 to 127 over ticks 0–960
- * new DynamicsBridge(bridge, { startVelocity: 64, endVelocity: 127, startTick: 0, endTick: 960 })
+ * // Crescendo from 64 to 127 over beats 0–2
+ * new DynamicsBridge(bridge, { startVelocity: 64, endVelocity: 127, startBeat: 0, endBeat: 2 })
  * ```
  *
  * @example
  * ```ts
  * // Decrescendo over a later phrase
- * new DynamicsBridge(bridge, { startVelocity: 127, endVelocity: 40, startTick: 1920, endTick: 2880 })
+ * new DynamicsBridge(bridge, { startVelocity: 127, endVelocity: 40, startBeat: 4, endBeat: 6 })
  * ```
  */
 export class DynamicsBridge extends CompositionBridgeDecorator {
@@ -52,7 +52,7 @@ export class DynamicsBridge extends CompositionBridgeDecorator {
   /**
    * Emit a note with velocity interpolated from the ramp.
    *
-   * Progress is computed as (tick - startTick) / (endTick - startTick) and clamped.
+   * Progress is computed as (tick - startBeat) / (endBeat - startBeat) and clamped.
    * If an explicit velocity is passed, it overrides the ramp.
    *
    * @param pitch - MIDI pitch number
@@ -64,9 +64,9 @@ export class DynamicsBridge extends CompositionBridgeDecorator {
   override withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge {
     if (this.precise) return this.rewrap(this.bridge.withNote(pitch, duration, velocity))
 
-    const { startVelocity, endVelocity, startTick, endTick } = this.params
-    const range = endTick - startTick
-    const t = range > 0 ? Math.max(0, Math.min(1, (this.tick - startTick) / range)) : 0
+    const { startVelocity, endVelocity, startBeat, endBeat } = this.params
+    const range = endBeat - startBeat
+    const t = range > 0 ? Math.max(0, Math.min(1, (this.tick - startBeat) / range)) : 0
     const rampedVelocity = Math.round(startVelocity + (endVelocity - startVelocity) * t)
 
     return this.rewrap(this.bridge.withNote(pitch, duration, velocity ?? rampedVelocity))

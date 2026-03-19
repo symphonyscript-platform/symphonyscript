@@ -37,7 +37,7 @@ export interface ArpeggioParams {
  * @example
  * ```ts
  * arpeggio(['C4', 'E4', 'G4'])                    // Up pattern, bridge default rate
- * arpeggio(['Am'], 120).pattern('down')           // A minor, down, 120 ticks/step
+ * arpeggio(['Am'], 0.25).pattern('down')           // A minor, down, 0.25 beats/step
  * arpeggio(['C4', 'E4'], 60).pattern('upDown')    // Up-down cycle
  * arpeggio(['Cmaj7']).octaves(2).gate(0.8)       // Two octaves, 80% gate
  * arpeggio(['G4', 'B4', 'D5']).pattern('random').seed(42)

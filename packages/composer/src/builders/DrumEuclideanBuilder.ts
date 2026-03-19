@@ -13,7 +13,7 @@ export interface DrumEuclideanParams {
   steps: number
   /** Pitch in cents or drum name. `null` means no emission (apply returns bridge unchanged). */
   pitch: DrumPitch | null
-  /** Duration per step in ticks. `null` uses bridge default. */
+  /** Duration per step in beats. `null` uses bridge default. */
   stepDuration: number | null
   /** Rotation offset. Positive = right, negative = left. Defaults to 0. */
   rotation: number
@@ -84,9 +84,9 @@ export class DrumEuclideanBuilder implements PipeStep {
   }
 
   /**
-   * Set the duration in ticks for each step.
+   * Set the duration in beats for each step.
    *
-   * @param stepDuration - Ticks per step
+   * @param stepDuration - Beats per step
 
    * @returns New builder with the updated step duration
    */

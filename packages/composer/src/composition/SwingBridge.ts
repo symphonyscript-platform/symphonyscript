@@ -7,36 +7,36 @@ import { CompositionBridgeDecorator } from './CompositionBridgeDecorator'
 export interface SwingBridgeParams {
   /** Swing intensity: 0 = straight, 0.5 = triplet swing, 1.0 = dotted swing. */
   amount: number
-  /** Grid division in ticks (e.g., 480 for 8th notes at 960 PPQ). Defines the two-beat cycle. */
+  /** Grid division in beats (e.g., 0.5 for 8th notes). Defines the two-beat cycle. */
   grid: number
 }
 
 /**
  * Bridge decorator that delays offbeat notes to create swing feel.
  *
- * Notes are classified by position within a two-beat cycle (2 × grid ticks).
+ * Notes are classified by position within a two-beat cycle (2 × grid beats).
  * Onbeat notes (first half of cycle) pass through unchanged. Offbeat notes
- * (second half) receive a timing offset of `round(amount × grid × 0.5)` ticks.
+ * (second half) receive a timing offset of `round(amount × grid × 0.5)` beats.
  * When `precise` is active, swing is bypassed and notes pass through unmodified.
  *
  * Immutable — each state transition returns a new `SwingBridge` instance.
  *
  * @example
  * ```ts
- * // swing(0.5, 480): triplet feel — offbeat at tick 480 gets +120 ticks → emitted at 600
- * new SwingBridge(bridge, { amount: 0.5, grid: 480 })
+ * // swing(0.5, 1): triplet feel — offbeat at beat 1 gets +0.25 beats
+ * new SwingBridge(bridge, { amount: 0.5, grid: 1 })
  * ```
  *
  * @example
  * ```ts
- * // swing(1.0, 480): dotted feel — offbeat gets +240 ticks (half the grid)
- * new SwingBridge(bridge, { amount: 1.0, grid: 480 })
+ * // swing(1.0, 1): dotted feel — offbeat gets +0.5 beats (half the grid)
+ * new SwingBridge(bridge, { amount: 1.0, grid: 1 })
  * ```
  *
  * @example
  * ```ts
- * // swing(0, 480): straight — no offset regardless of position
- * new SwingBridge(bridge, { amount: 0, grid: 480 })
+ * // swing(0, 1): straight — no offset regardless of position
+ * new SwingBridge(bridge, { amount: 0, grid: 1 })
  * ```
  */
 export class SwingBridge extends CompositionBridgeDecorator {

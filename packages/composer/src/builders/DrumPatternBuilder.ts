@@ -9,7 +9,7 @@ export interface DrumPatternParams {
   cue: string
   /** Pitch in cents or drum name. `null` means no emission. */
   pitch: DrumPitch | null
-  /** Duration per step in ticks. `null` uses bridge default. */
+  /** Duration per step in beats. `null` uses bridge default. */
   stepDuration: number | null
 }
 
@@ -26,8 +26,8 @@ export interface DrumPatternParams {
  * @example
  * ```ts
  * drumPattern('x.x.').pitch(Drums.BASS_DRUM_1)             // Alternating kick
- * drumPattern('xx', Drums.ACOUSTIC_SNARE, 240)             // Two snares, 240 ticks/step
- * drumPattern('x..x..x.').pitch(36).stepDuration(120)      // Tresillo-style via string
+ * drumPattern('xx', Drums.ACOUSTIC_SNARE, 0.5)             // Two snares, 0.5 beats/step
+ * drumPattern('x..x..x.').pitch(36).stepDuration(0.25)      // Tresillo-style via string
  * drumPattern('x.x.').apply(bridge)
  * ```
  */
@@ -67,9 +67,9 @@ export class DrumPatternBuilder implements PipeStep {
   }
 
   /**
-   * Set the duration in ticks for each pattern step.
+   * Set the duration in beats for each pattern step.
    *
-   * @param stepDuration - Ticks per step
+   * @param stepDuration - Beats per step
 
    * @returns New builder with the updated step duration
    */

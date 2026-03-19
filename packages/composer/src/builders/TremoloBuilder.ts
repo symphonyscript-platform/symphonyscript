@@ -28,8 +28,8 @@ export interface TremoloParams {
  * @example
  * ```ts
  * tremolo('C4')                            // C4 repeated (rate/duration from bridge)
- * tremolo('C4', 120, 480)                  // 4 hits at 120 ticks each
- * tremolo('G4').rate(240).duration(960)    // Chain overrides
+ * tremolo('C4', 0.25, 1)                  // 4 hits at 0.25 beats each
+ * tremolo('G4').rate(0.5).duration(2)    // Chain overrides
  * tremolo('E4').apply(bridge)              // Emit onto composition
  * ```
  */

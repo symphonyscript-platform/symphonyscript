@@ -4,49 +4,87 @@
  * All maps, tables, and constants needed by WesternNotation.
  * No regex. No imports from western-legacy/.
  *
- * Scale interval arrays are imported from @symphonyscript/theory
+ * Scale interval arrays and drum constants are imported from @symphonyscript/theory
  * (single source of truth for the math). This file maps
  * notation-specific scale names to those arrays.
  */
 
 import type { ChordIntervals, ScaleIntervals } from '@symphonyscript/core'
 
-import {
-  IONIAN_INTERVALS,
-  DORIAN_INTERVALS,
-  PHRYGIAN_INTERVALS,
-  LYDIAN_INTERVALS,
-  MIXOLYDIAN_INTERVALS,
-  AEOLIAN_INTERVALS,
-  LOCRIAN_INTERVALS,
-  HARMONIC_MINOR_INTERVALS,
-  MELODIC_MINOR_INTERVALS,
-  PENTATONIC_MAJOR_INTERVALS,
-  PENTATONIC_MINOR_INTERVALS,
-  BLUES_INTERVALS,
-  CHROMATIC_INTERVALS,
-  WHOLE_TONE_INTERVALS,
-  DIMINISHED_HW_INTERVALS,
-  DIMINISHED_WH_INTERVALS,
-  BEBOP_DOMINANT_INTERVALS,
-  BEBOP_MAJOR_INTERVALS,
-  HIRAJOSHI_INTERVALS,
-  IN_SEN_INTERVALS,
-  HUNGARIAN_MINOR_INTERVALS,
-  PHRYGIAN_DOMINANT_INTERVALS,
-} from '@symphonyscript/theory-legacy'
+import { Scale, Drum } from '@symphonyscript/theory'
 
-import {
-  ACOUSTIC_BASS_DRUM, BASS_DRUM_1, SIDE_STICK, ACOUSTIC_SNARE, HAND_CLAP,
-  ELECTRIC_SNARE, LOW_FLOOR_TOM, CLOSED_HI_HAT, HIGH_FLOOR_TOM, PEDAL_HI_HAT,
-  LOW_TOM, OPEN_HI_HAT, LOW_MID_TOM, HI_MID_TOM, CRASH_CYMBAL_1, HIGH_TOM,
-  RIDE_CYMBAL_1, CHINESE_CYMBAL, RIDE_BELL, TAMBOURINE, SPLASH_CYMBAL, COWBELL,
-  CRASH_CYMBAL_2, VIBRASLAP, RIDE_CYMBAL_2, HI_BONGO, LOW_BONGO,
-  MUTE_HI_CONGA, OPEN_HI_CONGA, LOW_CONGA, HIGH_TIMBALE, LOW_TIMBALE,
-  HIGH_AGOGO, LOW_AGOGO, CABASA, MARACAS, SHORT_WHISTLE, LONG_WHISTLE,
-  SHORT_GUIRO, LONG_GUIRO, CLAVES, HI_WOOD_BLOCK, LOW_WOOD_BLOCK,
-  MUTE_CUICA, OPEN_CUICA, MUTE_TRIANGLE, OPEN_TRIANGLE,
-} from '@symphonyscript/theory-legacy'
+// Alias Scale intervals from theory (PascalCase → SCREAMING_SNAKE_CASE)
+const IONIAN_INTERVALS = Scale.Ionian
+const DORIAN_INTERVALS = Scale.Dorian
+const PHRYGIAN_INTERVALS = Scale.Phrygian
+const LYDIAN_INTERVALS = Scale.Lydian
+const MIXOLYDIAN_INTERVALS = Scale.Mixolydian
+const AEOLIAN_INTERVALS = Scale.Aeolian
+const LOCRIAN_INTERVALS = Scale.Locrian
+const HARMONIC_MINOR_INTERVALS = Scale.HarmonicMinor
+const MELODIC_MINOR_INTERVALS = Scale.MelodicMinor
+const PENTATONIC_MAJOR_INTERVALS = Scale.PentatonicMajor
+const PENTATONIC_MINOR_INTERVALS = Scale.PentatonicMinor
+const BLUES_INTERVALS = Scale.Blues
+const CHROMATIC_INTERVALS = Scale.Chromatic
+const WHOLE_TONE_INTERVALS = Scale.WholeTone
+const DIMINISHED_HW_INTERVALS = Scale.DiminishedHW
+const DIMINISHED_WH_INTERVALS = Scale.DiminishedWH
+const BEBOP_DOMINANT_INTERVALS = Scale.BebopDominant
+const BEBOP_MAJOR_INTERVALS = Scale.BebopMajor
+const HIRAJOSHI_INTERVALS = Scale.Hirajoshi
+const IN_SEN_INTERVALS = Scale.InSen
+const HUNGARIAN_MINOR_INTERVALS = Scale.HungarianMinor
+const PHRYGIAN_DOMINANT_INTERVALS = Scale.PhrygianDominant
+
+// Alias Drum constants from theory (PascalCase → SCREAMING_SNAKE_CASE)
+const ACOUSTIC_BASS_DRUM = Drum.AcousticBassDrum
+const BASS_DRUM_1 = Drum.BassDrum1
+const SIDE_STICK = Drum.SideStick
+const ACOUSTIC_SNARE = Drum.AcousticSnare
+const HAND_CLAP = Drum.HandClap
+const ELECTRIC_SNARE = Drum.ElectricSnare
+const LOW_FLOOR_TOM = Drum.LowFloorTom
+const CLOSED_HI_HAT = Drum.ClosedHiHat
+const HIGH_FLOOR_TOM = Drum.HighFloorTom
+const PEDAL_HI_HAT = Drum.PedalHiHat
+const LOW_TOM = Drum.LowTom
+const OPEN_HI_HAT = Drum.OpenHiHat
+const LOW_MID_TOM = Drum.LowMidTom
+const HI_MID_TOM = Drum.HiMidTom
+const CRASH_CYMBAL_1 = Drum.CrashCymbal1
+const HIGH_TOM = Drum.HighTom
+const RIDE_CYMBAL_1 = Drum.RideCymbal1
+const CHINESE_CYMBAL = Drum.ChineseCymbal
+const RIDE_BELL = Drum.RideBell
+const TAMBOURINE = Drum.Tambourine
+const SPLASH_CYMBAL = Drum.SplashCymbal
+const COWBELL = Drum.Cowbell
+const CRASH_CYMBAL_2 = Drum.CrashCymbal2
+const VIBRASLAP = Drum.Vibraslap
+const RIDE_CYMBAL_2 = Drum.RideCymbal2
+const HI_BONGO = Drum.HiBongo
+const LOW_BONGO = Drum.LowBongo
+const MUTE_HI_CONGA = Drum.MuteHiConga
+const OPEN_HI_CONGA = Drum.OpenHiConga
+const LOW_CONGA = Drum.LowConga
+const HIGH_TIMBALE = Drum.HighTimbale
+const LOW_TIMBALE = Drum.LowTimbale
+const HIGH_AGOGO = Drum.HighAgogo
+const LOW_AGOGO = Drum.LowAgogo
+const CABASA = Drum.Cabasa
+const MARACAS = Drum.Maracas
+const SHORT_WHISTLE = Drum.ShortWhistle
+const LONG_WHISTLE = Drum.LongWhistle
+const SHORT_GUIRO = Drum.ShortGuiro
+const LONG_GUIRO = Drum.LongGuiro
+const CLAVES = Drum.Claves
+const HI_WOOD_BLOCK = Drum.HiWoodBlock
+const LOW_WOOD_BLOCK = Drum.LowWoodBlock
+const MUTE_CUICA = Drum.MuteCuica
+const OPEN_CUICA = Drum.OpenCuica
+const MUTE_TRIANGLE = Drum.MuteTriangle
+const OPEN_TRIANGLE = Drum.OpenTriangle
 
 // ============================================================================
 // Note ↔ Semitone

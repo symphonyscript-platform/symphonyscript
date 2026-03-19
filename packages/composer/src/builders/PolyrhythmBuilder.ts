@@ -25,7 +25,7 @@ export class PolyrhythmBuilder extends ScaledDurationBuilder {
   /**
    * Set the number of beats over which notes are spread.
    *
-   * @param overBeats - Beat count (e.g. 2 = half-note span at 480 PPQ)
+   * @param overBeats - Beat count (e.g. 2 = half-note span)
 
    * @returns New PolyrhythmBuilder with updated overBeats
    */

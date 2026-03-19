@@ -5,14 +5,14 @@ import { CompositionBridgeDecorator } from './CompositionBridgeDecorator'
  * Parameters for {@link QuantizationBridge}.
  */
 export interface QuantizationBridgeParams {
-  /** Grid size in ticks (e.g., 480 for 8th notes at 960 PPQ). Notes snap to multiples of this. */
+  /** Grid size in beats (e.g., 0.5 for 8th notes). Notes snap to multiples of this. */
   grid: number
   /** Quantization intensity: 0 = no change, 1 = full snap to grid, 0.5 = halfway between. */
   strength: number
 }
 
 /**
- * Bridge decorator that snaps note onset ticks toward the nearest grid points.
+ * Bridge decorator that snaps note onset positions toward the nearest grid points.
  *
  * For each note, computes `nearest = round(tick / grid) × grid` and
  * `quantized = round(tick + (nearest - tick) × strength)`. The note is emitted
@@ -24,20 +24,20 @@ export interface QuantizationBridgeParams {
  *
  * @example
  * ```ts
- * // Full snap to 8th-note grid (960 PPQ)
- * new QuantizationBridge(bridge, { grid: 480, strength: 1 })
+ * // Full snap to 8th-note grid
+ * new QuantizationBridge(bridge, { grid: 0.5, strength: 1 })
  * ```
  *
  * @example
  * ```ts
  * // Partial quantization for humanized feel
- * new QuantizationBridge(bridge, { grid: 480, strength: 0.5 })
+ * new QuantizationBridge(bridge, { grid: 0.5, strength: 0.5 })
  * ```
  *
  * @example
  * ```ts
  * // 16th-note grid, no quantization (strength 0)
- * new QuantizationBridge(bridge, { grid: 240, strength: 0 })
+ * new QuantizationBridge(bridge, { grid: 0.25, strength: 0 })
  * ```
  */
 export class QuantizationBridge extends CompositionBridgeDecorator {

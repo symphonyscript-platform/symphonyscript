@@ -77,7 +77,7 @@ export interface BaseCompositionBridgeParams {
  * ```ts
  * const bridge = new BaseCompositionBridge({ notation })
  *   .withVelocity(100)
- *   .withNote(6000, 480)
+ *   .withNote(6000, 1)
  *   .withCC(7, 80)
  * bridge.commit(recorder)
  * ```

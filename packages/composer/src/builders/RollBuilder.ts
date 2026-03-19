@@ -28,8 +28,8 @@ export interface RollParams {
  * @example
  * ```ts
  * roll(Drums.BASS_DRUM_1)                  // Bass drum buzz (duration/rate from bridge)
- * roll(Drums.ACOUSTIC_SNARE, 480, 120)     // Snare roll, 480 ticks, 120 per hit
- * roll(36).duration(240).rate(60)          // Chain overrides
+ * roll(Drums.ACOUSTIC_SNARE, 1, 0.25)     // Snare roll, 1 beat, 0.25 per hit
+ * roll(36).duration(0.5).rate(0.125)          // Chain overrides
  * roll(Drums.COWBELL).apply(bridge)        // Emit onto composition
  * ```
  */

@@ -41,8 +41,8 @@ export interface DrumHitParams {
  * @example
  * ```ts
  * kick()                                      // Bass drum, bridge default duration
- * snare(240).ghost(300)                       // Ghost snare
- * hit(3600).accent().duration(120)            // Accented kick
+ * snare(0.5).ghost(300)                       // Ghost snare
+ * hit(3600).accent().duration(0.25)            // Accented kick
  * flam(3800).flamRatio(0.5)                   // Flam with custom grace ratio
  * hit(3600).drag(3).dragSpacing(20)           // 3 grace notes before main hit
  * kick().detune(50).apply(bridge)             // Kick detuned 50 cents up
@@ -62,7 +62,7 @@ export class DrumHitBuilder implements PipeStep {
       flamOffset: params.flamOffset ?? null,
       flamGraceRatio: params.flamGraceRatio ?? 0.6,
       dragCount: params.dragCount ?? 0,
-      dragGap: params.dragGap ?? 30,
+      dragGap: params.dragGap ?? 0.0625,
       dragGraceRatio: params.dragGraceRatio ?? 0.5,
     }
   }

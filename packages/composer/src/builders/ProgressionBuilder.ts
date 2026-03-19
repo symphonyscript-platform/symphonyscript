@@ -28,7 +28,7 @@ export interface ProgressionParams {
  * @example
  * ```ts
  * progression(['I', 'IV', 'V', 'I'])             // I–IV–V–I (e.g. C–F–G–C)
- * progression(['I', 'vi', 'IV', 'V']).duration(480)
+ * progression(['I', 'vi', 'IV', 'V']).duration(1)
  * progression(['ii', 'V7', 'I']).velocity(900)     // ii–V7–I jazz cadence
  * progression(['I']).apply(bridge)                // Single chord
  * ```

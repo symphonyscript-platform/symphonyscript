@@ -8,7 +8,7 @@ import { CompositionBridgeDecorator } from '../composition/CompositionBridgeDeco
  * Parameters for {@link DecrescendoBuilder}.
  */
 export interface DecrescendoParams {
-  /** Length of the diminuendo in ticks. Default 480. */
+  /** Length of the diminuendo in beats. Default 1. */
   duration: number
   /** Initial velocity. Default 1000. */
   from: number
@@ -25,15 +25,15 @@ export interface DecrescendoParams {
  *
  * Implements {@link ScopeBuilder}. In scoped mode, the ramp applies only to steps passed to
  * `steps()`. In default mode (after `default()`), the modification cascades downstream.
- * Uses {@link VelocityRampBridge}; ramp starts at bridge.tick and spans `duration` ticks.
+ * Uses {@link VelocityRampBridge}; ramp starts at bridge.tick and spans `duration` beats.
  *
  * @example
  * ```ts
- * decrescendo(960).steps(note('C4'), note('D4'))   // Decrease volume over 960 ticks
+ * decrescendo(2).steps(note('C4'), note('D4'))   // Decrease volume over 2 beats
  * decrescendo().from(1000).to(200).steps(...)     // Custom from/to velocities
- * decrescendo(480).curve('exponential')            // Exponential fall
+ * decrescendo(1).curve('exponential')            // Exponential fall
  * decrescendo().default()                          // Diminuendo cascades downstream
- * decrescendo(240)                                 // Short 240-tick diminuendo
+ * decrescendo(0.5)                                 // Short half-beat diminuendo
  * ```
  */
 export class DecrescendoBuilder extends ScopedStepBuilder<DecrescendoBuilder> {
@@ -42,7 +42,7 @@ export class DecrescendoBuilder extends ScopedStepBuilder<DecrescendoBuilder> {
   constructor(params: Partial<DecrescendoParams>) {
     super(params.entries ?? [])
     this.params = {
-      duration: params.duration ?? 480,
+      duration: params.duration ?? 1,
       from: params.from ?? 1000,
       to: params.to ?? 400,
       curve: params.curve ?? 'linear',
@@ -50,9 +50,9 @@ export class DecrescendoBuilder extends ScopedStepBuilder<DecrescendoBuilder> {
   }
 
   /**
-   * Set the duration of the diminuendo in ticks.
+   * Set the duration of the diminuendo in beats.
    *
-   * @param duration - Length of the ramp in ticks
+   * @param duration - Length of the ramp in beats
 
    * @returns New builder with the updated duration
    */
@@ -96,8 +96,8 @@ export class DecrescendoBuilder extends ScopedStepBuilder<DecrescendoBuilder> {
   /** @internal */
   protected onEnter(bridge: CompositionBridge): CompositionBridge {
     return new VelocityRampBridge(bridge, {
-      startTick: bridge.tick,
-      endTick: bridge.tick + this.params.duration,
+      startBeat: bridge.tick,
+      endBeat: bridge.tick + this.params.duration,
       fromVelocity: this.params.from,
       toVelocity: this.params.to,
       curve: this.params.curve,

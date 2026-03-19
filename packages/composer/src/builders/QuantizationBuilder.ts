@@ -25,9 +25,9 @@ export interface QuantizationParams extends QuantizationBridgeParams {
  *
  * @example
  * ```ts
- * quantize(480).steps(note('C4'), note('E4'))   // Scoped: quantize only these
- * quantize(240, 0.5).default()                 // Cascade: 50% snap downstream
- * quantize(480).grid(960).strength(1).steps(note('C4'))
+ * quantize(1).steps(note('C4'), note('E4'))   // Scoped: quantize only these
+ * quantize(0.5, 0.5).default()                 // Cascade: 50% snap downstream
+ * quantize(1).grid(2).strength(1).steps(note('C4'))
  * ```
  */
 export class QuantizationBuilder extends ScopedStepBuilder<QuantizationBuilder> {
@@ -36,18 +36,17 @@ export class QuantizationBuilder extends ScopedStepBuilder<QuantizationBuilder> 
   constructor(params: Partial<QuantizationParams>) {
     super(params.entries ?? [])
     this.params = {
-      grid: params.grid ?? 480,
+      grid: params.grid ?? 1,
       strength: params.strength ?? 1.0,
     }
   }
 
   /**
-   * Set the quantization grid size in ticks.
+   * Set the quantization grid size in beats.
    *
-   * Notes snap toward multiples of this value (e.g. 480 = quarter-note grid at PPQ 480).
+   * Notes snap toward multiples of this value (e.g. 1 = quarter-note grid).
    *
-   * @param grid - Grid size in ticks (positive)
-
+   * @param grid - Grid size in beats (positive)
    * @returns New builder with the updated grid
    */
   grid(grid: number): QuantizationBuilder {

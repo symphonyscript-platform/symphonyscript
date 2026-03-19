@@ -23,8 +23,8 @@ export interface SwingParams extends SwingBridgeParams {
  * swing(0.5).steps(note('C4'), note('D4'))   // Triplet swing on inner notes only
  * swing(0).steps(note('C4'))                 // Straight timing (no swing)
  * swing(1.0).default()                       // Dotted swing cascades downstream
- * swing().amount(0.6).grid(240).steps(...)   // Custom amount and 16th-note grid
- * swing(0.5, 480)                            // Triplet swing, 8th-note grid (480 ticks)
+ * swing().amount(0.6).grid(0.5).steps(...)   // Custom amount and 16th-note grid
+ * swing(0.5, 1)                            // Triplet swing, 8th-note grid (1 beat)
  * ```
  */
 export class SwingBuilder extends ScopedStepBuilder<SwingBuilder> {
@@ -34,7 +34,7 @@ export class SwingBuilder extends ScopedStepBuilder<SwingBuilder> {
     super(params.entries ?? [])
     this.params = {
       amount: params.amount ?? 0.5,
-      grid: params.grid ?? 480,
+      grid: params.grid ?? 1,
     }
   }
 
@@ -50,9 +50,9 @@ export class SwingBuilder extends ScopedStepBuilder<SwingBuilder> {
   }
 
   /**
-   * Set the grid division in ticks. Offbeat detection uses `position % (grid * 2)`.
+   * Set the grid division in beats. Offbeat detection uses `position % (grid * 2)`.
    *
-   * @param grid - Grid size in ticks (e.g. 480 for 8th notes at 960 PPQ)
+   * @param grid - Grid size in beats (e.g. 1 = quarter note, 0.5 = 8th note)
 
    * @returns New builder with the updated grid
    */

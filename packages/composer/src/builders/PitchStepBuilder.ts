@@ -76,7 +76,7 @@ export const DEFAULT_PITCH_STEP_PARAMS: PitchStepParams = {
  * @example
  * ```ts
  * note('C4').velocity(900).sharp().up(1)     // C#5, velocity 900
- * chord('Cmaj7').duration(480).staccato()    // Half-note chord, staccato
+ * chord('Cmaj7').duration(1).staccato()    // Quarter-note chord, staccato
  * note('E4').repeat(3).transpose(2)          // Emit F#4 three times
  * note('G4').muted().detune(64)              // Muted G4 with pitch bend
  * harmony(mask, 60).octave(-1).legato()      // Chord an octave down, full duration

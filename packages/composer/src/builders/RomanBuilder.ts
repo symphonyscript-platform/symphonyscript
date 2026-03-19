@@ -29,10 +29,10 @@ export interface RomanParams {
  * @example
  * ```ts
  * roman('I')                          // Tonic triad
- * roman('V7').duration(480)           // Dominant 7th, half-note
+ * roman('V7').duration(1)           // Dominant 7th, quarter-note
  * roman('vi').velocity(900)           // Submediant minor, louder
  * roman('ii').inversion(1)            // First inversion (third in bass)
- * roman('IV', 240).apply(bridge)      // Subdominant, quarter-note
+ * roman('IV', 0.5).apply(bridge)      // Subdominant, eighth-note
  * ```
  */
 export class RomanBuilder implements PipeStep {

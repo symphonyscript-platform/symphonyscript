@@ -8,10 +8,10 @@ export type EasingCurve = 'linear' | 'exponential' | 'smooth'
  * Parameters for {@link VelocityRampBridge}.
  */
 export interface VelocityRampParams {
-  /** Tick at which the ramp begins. */
-  startTick: number
-  /** Tick at which the ramp ends. */
-  endTick: number
+  /** Beat position at which the ramp begins. */
+  startBeat: number
+  /** Beat position at which the ramp ends. */
+  endBeat: number
   /** Velocity at ramp start (0–1000). */
   fromVelocity: number
   /** Velocity at ramp end (0–1000). */
@@ -22,11 +22,11 @@ export interface VelocityRampParams {
 
 /**
  * Bridge decorator that ramps velocity from `fromVelocity` to `toVelocity`
- * over the tick range [startTick, endTick], with configurable easing.
+ * over the beat range [startBeat, endBeat], with configurable easing.
  *
  * Unlike {@link DynamicsBridge}, supports non-linear curves and always overrides
  * velocity when not explicitly passed (no `precise` bypass). When `range ≤ 0`
- * (startTick ≥ endTick), ramping is bypassed and notes pass through to the
+ * (startBeat ≥ endBeat), ramping is bypassed and notes pass through to the
  * inner bridge with default or explicitly passed velocity.
  *
  * Easing: `linear` = progress; `exponential` = progress² (slow start, fast end);
@@ -38,7 +38,7 @@ export interface VelocityRampParams {
  * ```ts
  * // Linear crescendo (equivalent to DynamicsBridge)
  * new VelocityRampBridge(bridge, {
- *   startTick: 0, endTick: 960,
+ *   startBeat: 0, endBeat: 2,
  *   fromVelocity: 64, toVelocity: 127,
  *   curve: 'linear',
  * })
@@ -48,7 +48,7 @@ export interface VelocityRampParams {
  * ```ts
  * // Exponential ramp for faster swell toward the end
  * new VelocityRampBridge(bridge, {
- *   startTick: 0, endTick: 1920,
+ *   startBeat: 0, endBeat: 4,
  *   fromVelocity: 40, toVelocity: 127,
  *   curve: 'exponential',
  * })
@@ -58,7 +58,7 @@ export interface VelocityRampParams {
  * ```ts
  * // Smooth curve for natural crescendo/decrescendo
  * new VelocityRampBridge(bridge, {
- *   startTick: 480, endTick: 1440,
+ *   startBeat: 1, endBeat: 3,
  *   fromVelocity: 80, toVelocity: 100,
  *   curve: 'smooth',
  * })
@@ -75,7 +75,7 @@ export class VelocityRampBridge extends CompositionBridgeDecorator {
   /**
    * Emit a note with velocity interpolated along the ramp.
    *
-   * Progress is (tick - startTick) / (endTick - startTick) clamped to [0, 1],
+   * Progress is (tick - startBeat) / (endBeat - startBeat) clamped to [0, 1],
    * then eased. Ramped velocity overrides bridge default when velocity is not
    * passed. When range ≤ 0, passes through to inner bridge unchanged.
    *
@@ -87,14 +87,14 @@ export class VelocityRampBridge extends CompositionBridgeDecorator {
    */
   override withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge {
     const currentTick = this.tick
-    const range = this.ramp.endTick - this.ramp.startTick
+    const range = this.ramp.endBeat - this.ramp.startBeat
 
     if (range <= 0) {
       return this.rewrap(this.bridge.withNote(pitch, duration, velocity))
     }
 
     // Calculate progress (0..1) clamped
-    let progress = (currentTick - this.ramp.startTick) / range
+    let progress = (currentTick - this.ramp.startBeat) / range
     if (progress < 0) progress = 0
     if (progress > 1) progress = 1
 

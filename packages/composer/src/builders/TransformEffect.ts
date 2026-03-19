@@ -128,13 +128,16 @@ export abstract class TransformEffect<T extends TransformEffect<T>> implements S
     composed.commit(recorder)
     const frozen = recorder.toFrozenClip()
 
+    // FrozenClip stores ticks (output boundary). Convert back to beats
+    // so replay() can pass beats to bridge.withNote()/withTick().
+    const ppq = bridge.ppq
     const notes: CapturedNote[] = []
 
     frozen.visitNotes((_sourceId, pitch, velocity, duration, tick, muted) => {
-      notes.push({ pitch, velocity, duration, tick, muted })
+      notes.push({ pitch, velocity, duration: duration / ppq, tick: tick / ppq, muted })
     })
 
-    return this.replay(notes, frozen.duration, bridge)
+    return this.replay(notes, frozen.duration / ppq, bridge)
   }
 }
 

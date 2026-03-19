@@ -12,19 +12,19 @@ export interface DynamicsParams extends DynamicsBridgeParams {
 }
 
 /**
- * Immutable builder for dynamic markings: linearly ramps velocity over a tick range (e.g. pp → mf → ff).
+ * Immutable builder for dynamic markings: linearly ramps velocity over a beat range (e.g. pp → mf → ff).
  *
  * Implements {@link ScopeBuilder}. In scoped mode, the ramp applies only to steps passed to
  * `steps()`. In default mode (after `default()`), the modification cascades downstream.
  * Uses {@link DynamicsBridge} to interpolate velocity from startVelocity to endVelocity between
- * startTick and endTick.
+ * startBeat and endBeat.
  *
  * @example
  * ```ts
  * dynamics(400, 1000).steps(note('C4'), note('D4'))   // pp to ff on inner notes
- * dynamics(600, 800, 0, 480)                         // mf to f, ticks 0..480
+ * dynamics(600, 800, 0, 1)                         // mf to f, beats 0..1
  * dynamics().default()                               // Ramp cascades downstream
- * dynamics(200, 900).start(0).end(960)              // Explicit tick range
+ * dynamics(200, 900).start(0).end(2)              // Explicit beat range
  * dynamics(600, 600).steps(note('C4'))              // Flat mf
  * ```
  */
@@ -36,15 +36,15 @@ export class DynamicsBuilder extends ScopedStepBuilder<DynamicsBuilder> {
     this.params = {
       startVelocity: params.startVelocity ?? 600,
       endVelocity: params.endVelocity ?? 1000,
-      startTick: params.startTick ?? 0,
-      endTick: params.endTick ?? 480,
+      startBeat: params.startBeat ?? 0,
+      endBeat: params.endBeat ?? 1,
     }
   }
 
   /**
    * Set the velocity at the start of the ramp.
    *
-   * @param velocity - Velocity (0–1000) at startTick
+   * @param velocity - Velocity (0–1000) at startBeat
 
    * @returns New builder with the updated start velocity
    */
@@ -55,7 +55,7 @@ export class DynamicsBuilder extends ScopedStepBuilder<DynamicsBuilder> {
   /**
    * Set the velocity at the end of the ramp.
    *
-   * @param velocity - Velocity (0–1000) at endTick
+   * @param velocity - Velocity (0–1000) at endBeat
 
    * @returns New builder with the updated end velocity
    */
@@ -64,25 +64,25 @@ export class DynamicsBuilder extends ScopedStepBuilder<DynamicsBuilder> {
   }
 
   /**
-   * Set the tick at which the ramp begins.
+   * Set the beat position at which the ramp begins.
    *
-   * @param tick - Start tick of the velocity range
+   * @param beat - Start beat of the velocity range
 
-   * @returns New builder with the updated start tick
+   * @returns New builder with the updated start beat
    */
-  start(tick: number): DynamicsBuilder {
-    return this.clone({ startTick: tick })
+  start(beat: number): DynamicsBuilder {
+    return this.clone({ startBeat: beat })
   }
 
   /**
-   * Set the tick at which the ramp ends.
+   * Set the beat position at which the ramp ends.
    *
-   * @param tick - End tick of the velocity range
+   * @param beat - End beat of the velocity range
 
-   * @returns New builder with the updated end tick
+   * @returns New builder with the updated end beat
    */
-  end(tick: number): DynamicsBuilder {
-    return this.clone({ endTick: tick })
+  end(beat: number): DynamicsBuilder {
+    return this.clone({ endBeat: beat })
   }
 
   /** @internal */

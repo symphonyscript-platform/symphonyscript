@@ -40,7 +40,7 @@ export interface EuclideanParams {
  * ```ts
  * euclidean(3, 8).notes(['C4', 'E4'])                    // Tresillo, alternating C4/E4
  * euclidean(5, 8).notes(['C4']).rotation(1)              // Cinquillo rotated
- * euclidean(3, 8).notes(['C4']).stepDuration(240)        // Custom step length
+ * euclidean(3, 8).notes(['C4']).stepDuration(0.5)        // Custom step length
  * euclidean(3, 8).notes(['C4']).repeat(2).velocity(800)  // Play twice, fixed velocity
  * euclidean(3, 8).notes([60, 64]).apply(bridge)         // pitches via notation.noteToCents()
  * ```

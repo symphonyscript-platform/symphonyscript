@@ -38,7 +38,7 @@ export interface StepsParams {
  * ```ts
  * steps([1, 0, 1], ['C4', 'E4'])              // C4, rest, E4; cycles pitches on hits
  * steps([1, 1, 1], ['C4', 'E4'])              // C4, E4, C4
- * steps([1, 0, 1, 0], ['C4', 'E4'], 120)     // Explicit 120-tick step duration
+ * steps([1, 0, 1, 0], ['C4', 'E4'], 0.25)     // Explicit 0.25-beat step duration
  * steps().pattern([1, 1]).notes(['G4'])       // Builder-style configuration
  * steps([0, 0], ['C4'])                       // No notes; advances tick only
  * ```

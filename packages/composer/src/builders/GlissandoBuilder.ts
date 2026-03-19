@@ -28,8 +28,8 @@ export interface GlissandoParams {
  * @example
  * ```ts
  * glissando('C4', 'G4')                        // Chromatic slide C4→G4
- * glissando(6000, 7200).duration(480)          // One octave over 480 ticks
- * glissando('A3', 'A4').duration(960)           // Octave slide, half-note total
+ * glissando(6000, 7200).duration(1)          // One octave over 1 beat
+ * glissando('A3', 'A4').duration(2)           // Octave slide, half-note total
  * glissando().from('E4').to('E5')              // Set via builders
  * ```
  */

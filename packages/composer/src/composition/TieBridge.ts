@@ -15,7 +15,7 @@ import { CompositionBridgeDecorator } from './CompositionBridgeDecorator'
  * @example
  * ```ts
  * // tie(note('C4'), note('C4'), note('E4'))
- * // → emits C4 at duration 960 (480+480), then E4 at duration 480
+ * // → emits C4 at duration 2 (1+1), then E4 at duration 1
  * ```
  */
 export class TieBridge extends CompositionBridgeDecorator {

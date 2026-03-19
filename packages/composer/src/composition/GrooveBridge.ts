@@ -8,7 +8,7 @@ import { CompositionBridgeDecorator } from './CompositionBridgeDecorator'
 export interface GrooveStep {
   /** Velocity multiplier. 1.0 = unchanged; 0.5 = half velocity. */
   velocity: number
-  /** Timing offset as fraction of grid (e.g. 0.1 = 10% of grid in ticks). */
+  /** Timing offset as fraction of grid (e.g. 0.1 = 10% of grid). */
   timing: number
   /** Probability of sounding (0–1). 1.0 = always; 0.5 = 50% chance per step. */
   probability: number
@@ -33,7 +33,7 @@ export interface GrooveBridgeParams {
  * Each step can scale velocity, add timing offset, and gate emission by probability.
  * When `precise` mode is active, groove is bypassed and notes pass through unmodified.
  *
- * Step index: `floor(tick / grid) % steps.length`. Timing offset in ticks:
+ * Step index: `floor(tick / grid) % steps.length`. Timing offset in beats:
  * `round(step.timing * grid)`.
  *
  * Extends {@link CompositionBridgeDecorator}. Immutable.
@@ -44,7 +44,7 @@ export interface GrooveBridgeParams {
  * groove([
  *   { velocity: 1, timing: 0, probability: 1 },
  *   { velocity: 1, timing: 0.1, probability: 1 },
- * ], 480).steps(note('C4'), note('C4'))
+ * ], 1).steps(note('C4'), note('C4'))
  * ```
  *
  * @example
@@ -53,7 +53,7 @@ export interface GrooveBridgeParams {
  * groove([
  *   { velocity: 1.2, timing: 0, probability: 1 },
  *   { velocity: 0.8, timing: 0, probability: 0.7 },
- * ], 240)
+ * ], 0.5)
  * ```
  */
 export class GrooveBridge extends CompositionBridgeDecorator {

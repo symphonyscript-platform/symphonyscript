@@ -34,11 +34,11 @@ export interface GrooveParams extends Omit<GrooveBridgeParams, 'rng'> {
  *
  * @example
  * ```ts
- * groove(480).step(0.8).step(1.0).step(0.6).steps(note('C4'), note('D4'))
- * groove(480).step(1, 0.1).step(0.5, -0.05).steps(note('E4'))
- * groove(240).grid(240).step(1, 0, 0.8).steps(chord('Am7'))
- * groove(480).step(0.9).default()  // Cascade downstream
- * groove(480).seed(42)
+ * groove(1).step(0.8).step(1.0).step(0.6).steps(note('C4'), note('D4'))
+ * groove(1).step(1, 0.1).step(0.5, -0.05).steps(note('E4'))
+ * groove(0.5).grid(0.5).step(1, 0, 0.8).steps(chord('Am7'))
+ * groove(1).step(0.9).default()  // Cascade downstream
+ * groove(1).seed(42)
  * ```
  */
 export class GrooveBuilder extends ScopedStepBuilder<GrooveBuilder> {
@@ -48,7 +48,7 @@ export class GrooveBuilder extends ScopedStepBuilder<GrooveBuilder> {
     super(params.entries ?? [])
     this.params = {
       steps: params.steps ?? [],
-      grid: params.grid ?? 480,
+      grid: params.grid ?? 1,
       rng: params.rng ?? null,
     }
   }
