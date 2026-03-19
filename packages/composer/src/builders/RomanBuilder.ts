@@ -9,7 +9,7 @@ import type { Degree, ChordIntervals } from '@symphonyscript/core'
 export interface RomanParams {
   /** Roman numeral (e.g. I, iv, V7). Resolved via notation.resolveProgression(). */
   numeral: Degree
-  /** Note duration in ticks. `null` = use bridge default at apply-time. */
+  /** Note duration in beats. `null` = use bridge default at apply-time. */
   duration: number | null
   /** Inversion index (0 = root, 1 = first inversion, etc.). Default: 0. */
   inversion: number
@@ -59,9 +59,9 @@ export class RomanBuilder implements PipeStep {
   }
 
   /**
-   * Set note duration in ticks.
+   * Set note duration in beats.
    *
-   * @param duration - Duration in ticks
+   * @param duration - Duration in beats
    *
    * @returns New RomanBuilder with the updated duration
    */

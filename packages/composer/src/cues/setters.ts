@@ -157,7 +157,7 @@ export function duration(d: NoteDuration): FieldSetter {
   return new FieldSetter(
     b => {
       const beats = typeof d === 'string'
-        ? b.notation().durationToTicks(d, b.ppq)
+        ? b.notation().durationToBeats(d)
         : d
       assertPositive('duration', beats)
       return b.withDefaultDuration(beats)

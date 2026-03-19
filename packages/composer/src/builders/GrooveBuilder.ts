@@ -106,9 +106,9 @@ export class GrooveBuilder extends ScopedStepBuilder<GrooveBuilder> {
   }
 
   /**
-   * Set the grid division in ticks. Step index = floor(tick / grid) % steps.length.
+   * Set the grid division in beats. Step index = floor(tick / grid) % steps.length.
    *
-   * @param grid - Grid size in ticks (e.g. 480 = quarter note at 480 PPQ)
+   * @param grid - Grid size in beats (e.g. 1 = quarter note)
 
    * @returns New builder with the updated grid
    */

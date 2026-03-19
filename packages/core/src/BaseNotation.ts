@@ -100,7 +100,9 @@ export abstract class BaseNotation implements Notation {
   abstract resolveProgression(numerals: Degree[], scale: number[]): ChordResolution[]
 
   abstract durationToTicks(input: DurationName, ppq: number): number
+  abstract durationToBeats(input: DurationName): number
   abstract ticksToDuration(ticks: number, ppq: number): DurationName
+  abstract beatsToDuration(beats: number): DurationName
 
   abstract drumToCents(input: DrumName): number
   abstract centsToDrum(cents: number): DrumName

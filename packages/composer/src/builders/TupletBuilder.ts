@@ -18,7 +18,7 @@ export interface TupletParams extends ScaledDurationParams {
  * Immutable builder for tuplets (e.g. triplets: fit N notes into M beats).
  *
  * Applies a scaled duration so that `count` notes fit into `inBeats` beats.
- * Each contained step receives `(inBeats * defaultDuration) / count` ticks per note.
+ * Each contained step receives `(inBeats * defaultDuration) / count` beats per note.
  *
  * All builder methods return new instances (clone-on-set immutability).
  *

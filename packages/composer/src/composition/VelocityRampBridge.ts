@@ -80,7 +80,7 @@ export class VelocityRampBridge extends CompositionBridgeDecorator {
    * passed. When range ≤ 0, passes through to inner bridge unchanged.
    *
    * @param pitch - MIDI pitch number
-   * @param duration - Note duration in ticks. Falls back to `defaultDuration`.
+   * @param duration - Note duration in beats. Falls back to `defaultDuration`.
    * @param velocity - Optional velocity override; when provided, ramp is ignored for this note
 
    * @returns New bridge state with note emitted at ramped velocity

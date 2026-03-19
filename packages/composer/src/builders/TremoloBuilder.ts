@@ -11,9 +11,9 @@ import { NotePitch } from '@symphonyscript/core'
 export interface TremoloParams {
   /** Single pitch repeated. Resolved via notation.noteToCents(). */
   pitch: NotePitch | null
-  /** Tick interval between repeated notes. `null` = bridge.defaultDuration. */
+  /** Beat interval between repeated notes. `null` = bridge.defaultDuration. */
   rate: number | null
-  /** Total tremolo duration in ticks. `null` = bridge.defaultDuration. */
+  /** Total tremolo duration in beats. `null` = bridge.defaultDuration. */
   duration: number | null
 }
 
@@ -45,9 +45,9 @@ export class TremoloBuilder implements PipeStep {
   }
 
   /**
-   * Set the tick interval between repeated notes.
+   * Set the beat interval between repeated notes.
    *
-   * @param rate - Ticks per note
+   * @param rate - Beats per note
    *
    * @returns New TremoloBuilder with the updated rate
    */
@@ -67,9 +67,9 @@ export class TremoloBuilder implements PipeStep {
   }
 
   /**
-   * Set the total tremolo duration in ticks.
+   * Set the total tremolo duration in beats.
    *
-   * @param duration - Total duration in ticks
+   * @param duration - Total duration in beats
    *
    * @returns New TremoloBuilder with the updated duration
    */

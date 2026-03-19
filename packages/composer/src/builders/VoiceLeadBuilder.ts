@@ -9,7 +9,7 @@ import type { Degree } from '@symphonyscript/core'
 export interface VoiceLeadParams {
   /** Ordered roman numerals (e.g. I–IV–V–I). */
   numerals: Degree[]
-  /** Per-chord duration in ticks. `null` = use bridge default. */
+  /** Per-chord duration in beats. `null` = use bridge default. */
   duration: number | null
 }
 
@@ -53,9 +53,9 @@ export class VoiceLeadBuilder implements PipeStep {
   }
 
   /**
-   * Set per-chord duration in ticks.
+   * Set per-chord duration in beats.
    *
-   * @param duration - Duration in ticks
+   * @param duration - Duration in beats
    *
    * @returns New VoiceLeadBuilder with the updated duration
    */

@@ -49,7 +49,7 @@ export class HarmonizeBridge extends CompositionBridgeDecorator {
    * Silently skips intervals that can't be resolved (note not in scale).
    *
    * @param pitch - Pitch in cents
-   * @param duration - Note duration in ticks
+   * @param duration - Note duration in beats
    * @param velocity - Optional velocity override
    *
    * @returns Updated bridge with original + harmony notes emitted

@@ -41,7 +41,7 @@ export class ReverseBuilder extends TransformEffect<ReverseBuilder> {
    * emitted in order; the bridge tick is advanced to bridge.tick + totalDuration.
    *
    * @param notes - Notes captured from the scope composition pass
-   * @param totalDuration - Total clip duration in ticks
+   * @param totalDuration - Total clip duration in beats
    * @param bridge - Target bridge at the insertion point
 
    * @returns Bridge with reversed notes emitted

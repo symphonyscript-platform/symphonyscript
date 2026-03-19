@@ -42,7 +42,7 @@ export class TieBridge extends CompositionBridgeDecorator {
    * Otherwise, flush the pending tie and start a new one.
    *
    * @param pitch - MIDI pitch number
-   * @param duration - Note duration in ticks. Falls back to `defaultDuration`.
+   * @param duration - Note duration in beats. Falls back to `defaultDuration`.
    * @param velocity - Optional velocity override
 
    * @returns New bridge state (TieBridge wrapping the updated inner bridge)

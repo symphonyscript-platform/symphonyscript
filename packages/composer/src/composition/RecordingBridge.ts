@@ -39,7 +39,7 @@ export class RecordingBridge implements ExecutionContext {
    *
    * @param pitch - Pitch in absolute cents from C0
    * @param velocity - Note velocity (0–1000; same units as bridge)
-   * @param duration - Note duration in ticks
+   * @param duration - Note duration in beats
    * @param tick - Start tick (PPQ 480)
    * @param muted - Whether the note is muted
    * @param sourceId - Opaque id for correlation during visit callbacks

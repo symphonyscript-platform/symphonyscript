@@ -40,7 +40,7 @@ export class GlideBridge extends CompositionBridgeDecorator {
    * emit only (portamento already on). All notes glide to the next.
    *
    * @param pitch - MIDI pitch number
-   * @param duration - Note duration in ticks; defaults to `defaultDuration`
+   * @param duration - Note duration in beats; defaults to `defaultDuration`
    * @param velocity - Optional velocity override
 
    * @returns New bridge state with `activated` true

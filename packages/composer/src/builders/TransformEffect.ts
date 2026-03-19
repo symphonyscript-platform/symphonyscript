@@ -57,7 +57,7 @@ export abstract class TransformEffect<T extends TransformEffect<T>> implements S
    * stretch durations) and emit transformed notes via `bridge.withNote()`.
    *
    * @param notes - Notes captured from the scope composition pass
-   * @param totalDuration - Total duration of the captured clip in ticks
+   * @param totalDuration - Total duration of the captured clip in beats
    * @param bridge - Target bridge to receive transformed notes
 
    * @returns Bridge with transformed notes emitted

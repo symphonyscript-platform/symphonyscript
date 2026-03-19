@@ -55,7 +55,7 @@ export class QuantizationBridge extends CompositionBridgeDecorator {
    * The bridge tick is updated to the quantized value before emission.
    *
    * @param pitch - MIDI pitch number
-   * @param duration - Note duration in ticks. Falls back to `defaultDuration`.
+   * @param duration - Note duration in beats. Falls back to `defaultDuration`.
    * @param velocity - Optional velocity override
 
    * @returns New bridge state with note emitted at quantized tick

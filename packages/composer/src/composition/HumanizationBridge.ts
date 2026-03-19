@@ -8,7 +8,7 @@ import { CompositionBridgeDecorator } from './CompositionBridgeDecorator'
 export interface HumanizationBridgeParams {
   /** Max velocity deviation in either direction. Uniform in [-velocityJitter, +velocityJitter]. */
   velocityJitter: number
-  /** Max timing offset in ticks. Uniform in [-timingAmount, +timingAmount]. */
+  /** Max timing offset in beats. Uniform in [-timingAmount, +timingAmount]. */
   timingAmount: number
   /** Seeded RNG for jitter values. Same seed yields same humanization per run. */
   rng: SeededRandom
@@ -47,7 +47,7 @@ export class HumanizationBridge extends CompositionBridgeDecorator {
    * Add jitter to velocity and tick, then emit the note.
    *
    * @param pitch - MIDI pitch number
-   * @param duration - Note duration in ticks; defaults to `defaultDuration`
+   * @param duration - Note duration in beats; defaults to `defaultDuration`
    * @param velocity - Optional velocity override (jitter applied on top)
 
    * @returns New bridge state wrapping the updated inner bridge

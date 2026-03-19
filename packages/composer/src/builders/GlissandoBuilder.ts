@@ -12,7 +12,7 @@ export interface GlissandoParams {
   from: NotePitch | null
   /** End pitch (note name or cents). Resolved via notation.noteToCents() at apply-time. */
   to: NotePitch | null
-  /** Total tick duration for the slide. `null` = use bridge default at apply-time. */
+  /** Total beat duration for the slide. `null` = use bridge default at apply-time. */
   duration: number | null
 }
 
@@ -67,11 +67,11 @@ export class GlissandoBuilder implements PipeStep {
   }
 
   /**
-   * Set the total tick duration for the slide.
+   * Set the total duration in beats for the slide.
    *
    * Duration is divided equally across chromatic steps.
    *
-   * @param duration - Ticks for the full glissando
+   * @param duration - Beats for the full glissando
    *
    * @returns New GlissandoBuilder with the updated duration
    */
@@ -85,7 +85,7 @@ export class GlissandoBuilder implements PipeStep {
    * **Pipeline:**
    * 1. Resolve `from` and `to` via `notation.noteToCents()`
    * 2. Compute step count and direction (100 cents per step)
-   * 3. Emit each pitch at `duration / stepCount` ticks per step
+   * 3. Emit each pitch at `duration / stepCount` beats per step
    *
    * Returns the bridge unchanged when `from` or `to` is null. When
    * start and end are identical, emits a single note at that pitch.

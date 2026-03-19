@@ -292,8 +292,20 @@ export interface Notation {
    *
    * @returns Duration in ticks (e.g., `480` for a quarter note at PPQ 480)
    * @throws {NotationInputError} If the duration name is not recognized
+   * @deprecated Use {@link durationToBeats} instead
    */
   durationToTicks(input: DurationName, ppq: number): number
+
+  /**
+   * Parse a duration name into beats (quarter-note = 1 beat).
+   *
+   * @param input - Duration name in this notation's format
+   *                (e.g., `'quarter'`, `'4n'`, `'half'`, `'eighth'`)
+   *
+   * @returns Duration in beats (e.g., `1` for a quarter note, `0.5` for eighth)
+   * @throws {NotationInputError} If the duration name is not recognized
+   */
+  durationToBeats(input: DurationName): number
 
   /**
    * Format a tick count as a duration name in this notation's format.
@@ -303,8 +315,19 @@ export interface Notation {
    *
    * @returns Duration name (e.g., `'quarter'` for `480` ticks at PPQ 480)
    * @throws {NotationInputError} If the tick count doesn't map to a named duration
+   * @deprecated Use {@link beatsToDuration} instead
    */
   ticksToDuration(ticks: number, ppq: number): DurationName
+
+  /**
+   * Format a beat count as a duration name in this notation's format.
+   *
+   * @param beats - Duration in beats (quarter-note = 1)
+   *
+   * @returns Duration name (e.g., `'quarter'` for `1`, `'eighth'` for `0.5`)
+   * @throws {NotationInputError} If the beat count doesn't map to a named duration
+   */
+  beatsToDuration(beats: number): DurationName
 
   /* ---------- Drums ---------- */
 

@@ -10,9 +10,9 @@ import type { DrumPitch } from '@symphonyscript/core'
 export interface RollParams {
   /** Pitch in cents or drum name. */
   pitch: DrumPitch | null
-  /** Total roll duration in ticks. `null` = bridge.defaultDuration. */
+  /** Total roll duration in beats. `null` = bridge.defaultDuration. */
   duration: number | null
-  /** Tick interval per hit. `null` = bridge.defaultDuration / 4. */
+  /** Beat interval per hit. `null` = bridge.defaultDuration / 4. */
   rate: number | null
 }
 
@@ -45,9 +45,9 @@ export class RollBuilder implements PipeStep {
   }
 
   /**
-   * Set the total roll duration in ticks.
+   * Set the total roll duration in beats.
    *
-   * @param duration - Total duration in ticks
+   * @param duration - Total duration in beats
 
    * @returns New RollBuilder with the updated duration
    */
@@ -56,9 +56,9 @@ export class RollBuilder implements PipeStep {
   }
 
   /**
-   * Set the tick interval per hit.
+   * Set the beat interval per hit.
    *
-   * @param rate - Ticks per hit
+   * @param rate - Beats per hit
 
    * @returns New RollBuilder with the updated rate
    */

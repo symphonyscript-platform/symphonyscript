@@ -14,13 +14,13 @@ import { ExecutionContext, Notation } from '@symphonyscript/core'
  * transform events (e.g. {@link TieBridge}, {@link HarmonizeBridge}).
  */
 export interface CompositionBridge {
-    /** Pulses per quarter note (tick resolution). */
+    /** Pulses per quarter note (tick resolution); used at output boundary. */
     readonly ppq: number
-    /** Current position in ticks. */
+    /** Current position in beats (quarter-note = 1). */
     readonly tick: number
     /** Default velocity (0–1000) for notes when omitted. */
     readonly velocity: number
-    /** Default note duration in ticks when omitted in withNote. */
+    /** Default note duration in beats when omitted in withNote. */
     readonly defaultDuration: number
     /** Tempo in BPM. */
     readonly tempo: number
@@ -38,7 +38,7 @@ export interface CompositionBridge {
     readonly muted: boolean
     /** When true, skips humanization. */
     readonly precise: boolean
-    /** Quantize grid in ticks. 0 = no quantize. */
+    /** Quantize grid in beats. 0 = no quantize. */
     readonly quantizeGrid: number
     /** Quantize strength (0–1). */
     readonly quantizeStrength: number
@@ -63,16 +63,16 @@ export interface CompositionBridge {
     // === Deferred Events (pure — accumulate thunks) ===
 
     /**
-     * Defer a note at current tick.
+     * Defer a note at current position.
      *
      * @param pitch - Pitch in absolute cents from C0.
-     * @param duration - Note duration in ticks. Default: bridge.defaultDuration.
+     * @param duration - Note duration in beats. Default: bridge.defaultDuration.
      * @param velocity - Note velocity (0–1000). Default: bridge.velocity.
      */
     withNote(pitch: number, duration?: number, velocity?: number): CompositionBridge
 
     /**
-     * Defer a MIDI CC at current tick.
+     * Defer a MIDI CC at current position.
      *
      * @param controller - MIDI CC number (0–127).
      * @param value - CC value (0–127).
@@ -80,7 +80,7 @@ export interface CompositionBridge {
     withCC(controller: number, value: number): CompositionBridge
 
     /**
-     * Defer a pitch bend at current tick.
+     * Defer a pitch bend at current position.
      *
      * @param value - 14-bit pitch bend.
      */

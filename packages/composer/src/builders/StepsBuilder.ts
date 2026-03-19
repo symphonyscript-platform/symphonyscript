@@ -19,7 +19,7 @@ export interface StepsParams {
    */
   notes: NotePitch[]
   /**
-   * Duration in ticks per step (for both hits and rests).
+   * Duration in beats per step (for both hits and rests).
    * `null` = use bridge default duration at apply-time.
    */
   stepDuration: number | null
@@ -79,11 +79,11 @@ export class StepsBuilder implements PipeStep {
   }
 
   /**
-   * Set the duration in ticks per step (for both hits and rests).
+   * Set the duration in beats per step (for both hits and rests).
    *
    * When unset (`null`), the bridge default duration is used at apply-time.
    *
-   * @param stepDuration - Duration in ticks
+   * @param stepDuration - Duration in beats
 
    * @returns New StepsBuilder with the updated step duration
    */

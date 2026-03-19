@@ -51,7 +51,7 @@ export class SwingBridge extends CompositionBridgeDecorator {
    * and its tick is advanced by `round(amount × grid × 0.5)` before emission.
    *
    * @param pitch - MIDI pitch number
-   * @param duration - Note duration in ticks. Falls back to `defaultDuration`.
+   * @param duration - Note duration in beats. Falls back to `defaultDuration`.
    * @param velocity - Optional velocity override
 
    * @returns New bridge state with note emitted (possibly with adjusted tick)

@@ -187,7 +187,13 @@ const testNotationImpl = {
     return (map[input] ?? 1) * ppq
   },
 
+  durationToBeats(input: string): number {
+    const map: Record<string, number> = { '1n': 4, '2n': 2, '4n': 1, '8n': 0.5, '16n': 0.25 }
+    return map[input] ?? 1
+  },
+
   ticksToDuration: (): string => '4n',
+  beatsToDuration: (): string => '4n',
 
   drumToCents(input: string): number {
     throw new Error(`Unknown drum name '${input}'`)

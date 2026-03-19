@@ -10,7 +10,7 @@ import { RomanBuilder } from './RomanBuilder'
 export interface ProgressionParams {
   /** Ordered roman numerals (e.g. I–V–vi–IV). */
   numerals: Degree[]
-  /** Per-chord duration in ticks. `null` = use bridge default. */
+  /** Per-chord duration in beats. `null` = use bridge default. */
   duration: number | null
   /** Velocity override for all chords. `null` = use bridge default. */
   velocity: number | null
@@ -56,9 +56,9 @@ export class ProgressionBuilder implements PipeStep {
   }
 
   /**
-   * Set per-chord duration in ticks.
+   * Set per-chord duration in beats.
    *
-   * @param duration - Duration in ticks
+   * @param duration - Duration in beats
    *
    * @returns New ProgressionBuilder with the updated duration
    */

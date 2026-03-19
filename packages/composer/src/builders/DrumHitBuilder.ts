@@ -9,7 +9,7 @@ export interface DrumHitParams {
   pitch: DrumPitch
   /** Detune offset in cents applied to pitch at emit time. Defaults to 0. */
   detune: number
-  /** Note duration in ticks. `null` uses bridge default. */
+  /** Note duration in beats. `null` uses bridge default. */
   duration: number | null
   /** Velocity override. `null` uses bridge default. */
   velocity: number | null
@@ -17,13 +17,13 @@ export interface DrumHitParams {
   precise: boolean
   /** When true, hit is muted. Defaults to false. */
   muted: boolean
-  /** Flam grace note offset in ticks before main hit. `null` = no flam. Defaults to null. */
+  /** Flam grace note offset in beats before main hit. `null` = no flam. Defaults to null. */
   flamOffset: number | null
   /** Velocity ratio for flam grace note (0–1). Defaults to 0.6. */
   flamGraceRatio: number
   /** Number of drag grace notes before main hit. 0 = no drag. Defaults to 0. */
   dragCount: number
-  /** Spacing in ticks between drag grace notes. Defaults to 30. */
+  /** Spacing in beats between drag grace notes. Defaults to 30. */
   dragGap: number
   /** Velocity ratio for drag grace notes (0–1). Defaults to 0.5. */
   dragGraceRatio: number
@@ -103,9 +103,9 @@ export class DrumHitBuilder implements PipeStep {
   }
 
   /**
-   * Set the note duration in ticks.
+   * Set the note duration in beats.
    *
-   * @param duration - Ticks per note
+   * @param duration - Beats per note
 
    * @returns New builder with the updated duration
    */
@@ -138,7 +138,7 @@ export class DrumHitBuilder implements PipeStep {
   /**
    * Add a flam: one grace note immediately before the main hit.
    *
-   * @param gap - Ticks between grace note and main hit. Defaults to 30.
+   * @param gap - Beats between grace note and main hit. Defaults to 30.
 
    * @returns New builder with flam enabled
    */
@@ -169,9 +169,9 @@ export class DrumHitBuilder implements PipeStep {
   }
 
   /**
-   * Set the spacing in ticks between drag grace notes.
+   * Set the spacing in beats between drag grace notes.
    *
-   * @param gap - Ticks between grace notes
+   * @param gap - Beats between grace notes
 
    * @returns New builder with the updated drag spacing
    */

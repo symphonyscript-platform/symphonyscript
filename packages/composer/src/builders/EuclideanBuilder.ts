@@ -15,7 +15,7 @@ export interface EuclideanParams {
   steps: number
   /** Pitches to cycle through on hits. Resolved via notation.noteToCents() at apply-time. Defaults to []. */
   notes: NotePitch[]
-  /** Duration per step in ticks. `null` uses bridge default. */
+  /** Duration per step in beats. `null` uses bridge default. */
   stepDuration: number | null
   /** Fixed velocity for emitted notes. `null` uses bridge default. */
   velocity: number | null
@@ -95,9 +95,9 @@ export class EuclideanBuilder implements PipeStep {
   }
 
   /**
-   * Set the duration in ticks for each step.
+   * Set the duration in beats for each step.
    *
-   * @param stepDuration - Ticks per step
+   * @param stepDuration - Beats per step
 
    * @returns New builder with the updated step duration
    */

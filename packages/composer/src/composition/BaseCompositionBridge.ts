@@ -11,13 +11,13 @@ import { ThunkNode } from '../interfaces/thunk-node'
 export interface BaseCompositionBridgeParams {
   /** Default notation to use for user-ergonomics (parsing notes, conversion, etc) */
   notation: Notation
-  /** Current tick position. Default: 0 */
+  /** Current position in beats (quarter-note = 1). Default: 0 */
   tick: number
-  /** Pulses per quarter note (tick resolution). Default: 480 */
+  /** Pulses per quarter note (tick resolution); used at output boundary. Default: 480 */
   ppq: number
   /** Default velocity (0–1000). Default: 800 */
   velocity: number
-  /** Default note duration when omitted in withNote. Default: 1 */
+  /** Default note duration in beats when omitted in withNote. Default: 1 */
   defaultDuration: number
   /** Tempo in BPM. Default: 120 */
   tempo: number
@@ -35,7 +35,7 @@ export interface BaseCompositionBridgeParams {
   muted: boolean
   /** When true, skips humanization. Default: false */
   precise: boolean
-  /** Quantize grid in ticks. 0 = no quantize. Default: 0 */
+  /** Quantize grid in beats. 0 = no quantize. Default: 0 */
   quantizeGrid: number
   /** Quantize strength (0–1). Default: 1.0 */
   quantizeStrength: number
@@ -145,30 +145,31 @@ export class BaseCompositionBridge implements CompositionBridge {
   }
 
   /**
-   * Defer a note at the current tick. Advances tick by duration.
+   * Defer a note at the current position. Advances position by duration.
    * Applies transposeCents; uses default velocity when omitted. Emits a thunk that
-   * calls `insertNote` on commit.
+   * calls `insertNote` on commit, converting beats→ticks at the output boundary.
    *
    * @param pitch - Pitch in absolute cents from C0
-   * @param duration - Note duration in ticks. Default: defaultDuration
+   * @param duration - Note duration in beats. Default: defaultDuration
    * @param velocity - Override velocity (0–1000). Default: this.velocity
    *
-   * @returns New bridge with tick advanced and note thunk appended
+   * @returns New bridge with position advanced and note thunk appended
    */
   withNote(pitch: number, duration?: number, velocity?: number): BaseCompositionBridge {
     const dur = duration ?? this.params.defaultDuration
     const vel = velocity ?? this.params.velocity
     const finalPitch = pitch + this.params.transposeCents
-    const tick = this.params.tick
+    const beatPos = this.params.tick
     const muted = this.params.muted
+    const ppq = this.params.ppq
 
-    return this.derive({ tick: this.params.tick + dur }, ctx => {
-      return ctx.insertNote(finalPitch, vel, dur, tick, muted, 0)
+    return this.derive({ tick: beatPos + dur }, ctx => {
+      return ctx.insertNote(finalPitch, vel, Math.round(dur * ppq), Math.round(beatPos * ppq), muted, 0)
     })
   }
 
   /**
-   * Defer a MIDI CC event at the current tick.
+   * Defer a MIDI CC event at the current position.
    *
    * @param controller - MIDI CC number (0–127)
    * @param value - CC value (0–127)
@@ -176,26 +177,28 @@ export class BaseCompositionBridge implements CompositionBridge {
    * @returns New bridge with CC thunk appended
    */
   withCC(controller: number, value: number): BaseCompositionBridge {
-    const tick = this.params.tick
+    const beatPos = this.params.tick
+    const ppq = this.params.ppq
 
-    return this.derive({}, ctx => ctx.insertCC(controller, value, tick, 0))
+    return this.derive({}, ctx => ctx.insertCC(controller, value, Math.round(beatPos * ppq), 0))
   }
 
   /**
-   * Defer a pitch bend event at the current tick.
+   * Defer a pitch bend event at the current position.
    *
    * @param value - Pitch bend value (14-bit: 0 = full down, 8192 = center, 16383 = full up)
    *
    * @returns New bridge with bend thunk appended
    */
   withBend(value: number): BaseCompositionBridge {
-    const tick = this.params.tick
+    const beatPos = this.params.tick
+    const ppq = this.params.ppq
 
-    return this.derive({}, ctx => ctx.insertBend(value, tick, 0))
+    return this.derive({}, ctx => ctx.insertBend(value, Math.round(beatPos * ppq), 0))
   }
 
   /**
-   * Defer aftertouch at the current tick. Channel aftertouch when pitch omitted;
+   * Defer aftertouch at the current position. Channel aftertouch when pitch omitted;
    * poly aftertouch when pitch provided.
    *
    * @param value - Aftertouch value (0–127)
@@ -204,12 +207,13 @@ export class BaseCompositionBridge implements CompositionBridge {
    * @returns New bridge with aftertouch thunk appended
    */
   withAftertouch(value: number, pitch?: number): BaseCompositionBridge {
-    const tick = this.params.tick
+    const beatPos = this.params.tick
+    const ppq = this.params.ppq
 
     if (pitch !== undefined) {
-      return this.derive({}, ctx => ctx.insertCC(0xA0, value, tick, pitch))
+      return this.derive({}, ctx => ctx.insertCC(0xA0, value, Math.round(beatPos * ppq), pitch))
     }
-    return this.derive({}, ctx => ctx.insertCC(0xD0, value, tick, 0))
+    return this.derive({}, ctx => ctx.insertCC(0xD0, value, Math.round(beatPos * ppq), 0))
   }
 
   /**
@@ -260,9 +264,9 @@ export class BaseCompositionBridge implements CompositionBridge {
   }
 
   /**
-   * Return a new bridge with the given default duration in ticks.
+   * Return a new bridge with the given default duration in beats.
    *
-   * @param d - Default duration in ticks
+   * @param d - Default duration in beats (quarter-note = 1)
    *
    * @returns New bridge with updated defaultDuration
    */
@@ -294,27 +298,29 @@ export class BaseCompositionBridge implements CompositionBridge {
   }
 
   /**
-   * Return a new bridge with the given volume. Emits CC7 at current tick and tracks state.
+   * Return a new bridge with the given volume. Emits CC7 at current position and tracks state.
    *
    * @param v - Volume (0–127)
    *
    * @returns New bridge with volume CC thunk appended
    */
   withVolume(v: number): BaseCompositionBridge {
-    const tick = this.params.tick
-    return this.derive({ volume: v }, ctx => ctx.insertCC(MIDI_CC.VOLUME, v, tick, 0))
+    const beatPos = this.params.tick
+    const ppq = this.params.ppq
+    return this.derive({ volume: v }, ctx => ctx.insertCC(MIDI_CC.VOLUME, v, Math.round(beatPos * ppq), 0))
   }
 
   /**
-   * Return a new bridge with the given pan. Emits CC10 at current tick and tracks state.
+   * Return a new bridge with the given pan. Emits CC10 at current position and tracks state.
    *
    * @param v - Pan (0–127, 64 = center)
    *
    * @returns New bridge with pan CC thunk appended
    */
   withPan(v: number): BaseCompositionBridge {
-    const tick = this.params.tick
-    return this.derive({ pan: v }, ctx => ctx.insertCC(MIDI_CC.PAN, v, tick, 0))
+    const beatPos = this.params.tick
+    const ppq = this.params.ppq
+    return this.derive({ pan: v }, ctx => ctx.insertCC(MIDI_CC.PAN, v, Math.round(beatPos * ppq), 0))
   }
 
   /**
@@ -331,7 +337,7 @@ export class BaseCompositionBridge implements CompositionBridge {
   /**
    * Return a new bridge with quantize settings.
    *
-   * @param grid - Quantize grid in ticks; 0 disables quantize
+   * @param grid - Quantize grid in beats; 0 disables quantize
    * @param strength - Quantize strength (0–1). Default: 1.0
    *
    * @returns New bridge with updated quantize settings
@@ -341,11 +347,11 @@ export class BaseCompositionBridge implements CompositionBridge {
   }
 
   /**
-   * Return a new bridge with the given tick position.
+   * Return a new bridge with the given position.
    *
-   * @param tick - Tick position in ticks (PPQ 480)
+   * @param tick - Position in beats (quarter-note = 1)
    *
-   * @returns New bridge with updated tick
+   * @returns New bridge with updated position
    */
   withTick(tick: number): BaseCompositionBridge {
     return this.derive({ tick })

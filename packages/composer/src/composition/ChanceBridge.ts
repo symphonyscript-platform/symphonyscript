@@ -44,7 +44,7 @@ export class ChanceBridge extends CompositionBridgeDecorator {
    * tick by duration and skip emission.
    *
    * @param pitch - MIDI pitch number
-   * @param duration - Note duration in ticks; defaults to `defaultDuration`
+   * @param duration - Note duration in beats; defaults to `defaultDuration`
    * @param velocity - Optional velocity override
 
    * @returns New bridge state wrapping the updated inner bridge

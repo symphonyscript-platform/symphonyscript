@@ -258,6 +258,14 @@ export class WesternNotation extends BaseNotation {
     return Math.round(multiplier * ppq)
   }
 
+  durationToBeats(input: DurationName): number {
+    const multiplier = DURATION_MAP[input as string]
+    if (multiplier === undefined) {
+      throw new NotationInputError(this.getId(), 'durationToBeats', input as string)
+    }
+    return multiplier
+  }
+
   ticksToDuration(ticks: number, ppq: number): DurationName {
     const ratio = ticks / ppq
 
@@ -276,6 +284,25 @@ export class WesternNotation extends BaseNotation {
     const tolerance = 1 / ppq
     if (bestDiff > tolerance) {
       throw new NotationInputError(this.getId(), 'ticksToDuration', String(ticks))
+    }
+
+    return bestName as DurationName
+  }
+
+  beatsToDuration(beats: number): DurationName {
+    let bestName = ''
+    let bestDiff = Infinity
+
+    for (const [multiplier, name] of TICKS_RATIO_TO_DURATION) {
+      const diff = Math.abs(beats - multiplier)
+      if (diff < bestDiff) {
+        bestDiff = diff
+        bestName = name
+      }
+    }
+
+    if (bestDiff > 0.001) {
+      throw new NotationInputError(this.getId(), 'beatsToDuration', String(beats))
     }
 
     return bestName as DurationName

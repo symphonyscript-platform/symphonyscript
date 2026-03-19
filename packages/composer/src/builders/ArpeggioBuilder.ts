@@ -194,7 +194,7 @@ export class ArpeggioBuilder implements PipeStep {
   }
 
   /**
-   * Emit each pitch in the sequence onto the bridge at `rate`-tick intervals.
+   * Emit each pitch in the sequence onto the bridge at `rate`-beat intervals.
    *
    * Note duration = `rate * gate`. When gate is less than 1, advances tick by `rate` after each note.
    */

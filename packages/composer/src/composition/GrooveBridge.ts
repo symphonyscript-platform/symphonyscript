@@ -20,7 +20,7 @@ export interface GrooveStep {
 export interface GrooveBridgeParams {
   /** Repeating step pattern; index = floor(tick / grid) % steps.length. */
   steps: readonly GrooveStep[]
-  /** Grid division in ticks. Step index and timing offsets are derived from this. */
+  /** Grid division in beats. Step index and timing offsets are derived from this. */
   grid: number
   /** Seeded RNG for probability rolls (step.probability < 1). */
   rng: SeededRandom
@@ -70,7 +70,7 @@ export class GrooveBridge extends CompositionBridgeDecorator {
    * velocity, then offset tick before emitting.
    *
    * @param pitch - MIDI pitch number
-   * @param duration - Note duration in ticks; defaults to `defaultDuration`
+   * @param duration - Note duration in beats; defaults to `defaultDuration`
    * @param velocity - Optional velocity override (still scaled by step.velocity)
 
    * @returns New bridge state wrapping the updated inner bridge

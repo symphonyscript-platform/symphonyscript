@@ -13,9 +13,9 @@ export interface TrillParams {
   pitch: NotePitch | null
   /** Base (lower) pitch — alternation starts on this. Resolved via notation.noteToCents(). */
   basePitch: NotePitch | null
-  /** Tick interval between alternating notes. `null` = bridge.defaultDuration. */
+  /** Beat interval between alternating notes. `null` = bridge.defaultDuration. */
   rate: number | null
-  /** Total trill duration in ticks. `null` = bridge.defaultDuration. */
+  /** Total trill duration in beats. `null` = bridge.defaultDuration. */
   duration: number | null
 }
 
@@ -70,9 +70,9 @@ export class TrillBuilder implements PipeStep {
   }
 
   /**
-   * Set the tick interval between alternating notes.
+   * Set the beat interval between alternating notes.
    *
-   * @param rate - Ticks per note
+   * @param rate - Beats per note
    *
    * @returns New TrillBuilder with the updated rate
    */
@@ -81,9 +81,9 @@ export class TrillBuilder implements PipeStep {
   }
 
   /**
-   * Set the total trill duration in ticks.
+   * Set the total trill duration in beats.
    *
-   * @param duration - Total duration in ticks
+   * @param duration - Total duration in beats
    *
    * @returns New TrillBuilder with the updated duration
    */

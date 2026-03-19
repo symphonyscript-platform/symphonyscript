@@ -11,7 +11,7 @@ import { KNUTH_MULTIPLIER } from '../constants'
 export interface HumanizationParams {
   /** Velocity jitter range. Each note gets ±jitter added to velocity. Units: raw velocity delta. Default 0. */
   velocityJitter: number
-  /** Timing jitter range in ticks. Each note gets ±amount added to tick. Default 0. */
+  /** Timing jitter range in beats. Each note gets ±amount added to tick. Default 0. */
   timingAmount: number
   /** Seeded RNG for jitter. `null` uses tick-derived seed. */
   rng: SeededRandom | null
@@ -61,9 +61,9 @@ export class HumanizationBuilder extends ScopedStepBuilder<HumanizationBuilder> 
   }
 
   /**
-   * Set timing jitter. Each note's tick gets ±amount added in ticks.
+   * Set timing jitter. Each note's tick gets ±amount added in beats.
    *
-   * @param amount - Max timing offset in ticks
+   * @param amount - Max timing offset in beats
 
    * @returns New builder with the updated timing jitter
    */

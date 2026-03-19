@@ -66,7 +66,7 @@ export abstract class CompositionBridgeDecorator implements CompositionBridge {
    * Subclasses override to intercept and transform before forwarding.
    *
    * @param pitch - MIDI pitch number
-   * @param duration - Note duration in ticks. Default: defaultDuration
+   * @param duration - Note duration in beats. Default: defaultDuration
    * @param velocity - Optional velocity override
 
    * @returns New decorator wrapping the updated inner bridge
