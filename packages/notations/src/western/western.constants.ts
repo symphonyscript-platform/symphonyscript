@@ -2,217 +2,94 @@
  * Western notation lookup data.
  *
  * All maps, tables, and constants needed by WesternNotation.
- * No regex. No imports from western-legacy/.
- *
- * Scale interval arrays and drum constants are imported from @symphonyscript/theory
- * (single source of truth for the math). This file maps
- * notation-specific scale names to those arrays.
+ * No regex. Theory math imported from @symphonyscript/theory.
  */
 
-import type { ChordIntervals, ScaleIntervals } from '@symphonyscript/core'
+import type { ScaleIntervals } from '@symphonyscript/core'
 
-import { Scale, Drum } from '@symphonyscript/theory'
-
-// Alias Scale intervals from theory (PascalCase → SCREAMING_SNAKE_CASE)
-const IONIAN_INTERVALS = Scale.Ionian
-const DORIAN_INTERVALS = Scale.Dorian
-const PHRYGIAN_INTERVALS = Scale.Phrygian
-const LYDIAN_INTERVALS = Scale.Lydian
-const MIXOLYDIAN_INTERVALS = Scale.Mixolydian
-const AEOLIAN_INTERVALS = Scale.Aeolian
-const LOCRIAN_INTERVALS = Scale.Locrian
-const HARMONIC_MINOR_INTERVALS = Scale.HarmonicMinor
-const MELODIC_MINOR_INTERVALS = Scale.MelodicMinor
-const PENTATONIC_MAJOR_INTERVALS = Scale.PentatonicMajor
-const PENTATONIC_MINOR_INTERVALS = Scale.PentatonicMinor
-const BLUES_INTERVALS = Scale.Blues
-const CHROMATIC_INTERVALS = Scale.Chromatic
-const WHOLE_TONE_INTERVALS = Scale.WholeTone
-const DIMINISHED_HW_INTERVALS = Scale.DiminishedHW
-const DIMINISHED_WH_INTERVALS = Scale.DiminishedWH
-const BEBOP_DOMINANT_INTERVALS = Scale.BebopDominant
-const BEBOP_MAJOR_INTERVALS = Scale.BebopMajor
-const HIRAJOSHI_INTERVALS = Scale.Hirajoshi
-const IN_SEN_INTERVALS = Scale.InSen
-const HUNGARIAN_MINOR_INTERVALS = Scale.HungarianMinor
-const PHRYGIAN_DOMINANT_INTERVALS = Scale.PhrygianDominant
-
-// Alias Drum constants from theory (PascalCase → SCREAMING_SNAKE_CASE)
-const ACOUSTIC_BASS_DRUM = Drum.AcousticBassDrum
-const BASS_DRUM_1 = Drum.BassDrum1
-const SIDE_STICK = Drum.SideStick
-const ACOUSTIC_SNARE = Drum.AcousticSnare
-const HAND_CLAP = Drum.HandClap
-const ELECTRIC_SNARE = Drum.ElectricSnare
-const LOW_FLOOR_TOM = Drum.LowFloorTom
-const CLOSED_HI_HAT = Drum.ClosedHiHat
-const HIGH_FLOOR_TOM = Drum.HighFloorTom
-const PEDAL_HI_HAT = Drum.PedalHiHat
-const LOW_TOM = Drum.LowTom
-const OPEN_HI_HAT = Drum.OpenHiHat
-const LOW_MID_TOM = Drum.LowMidTom
-const HI_MID_TOM = Drum.HiMidTom
-const CRASH_CYMBAL_1 = Drum.CrashCymbal1
-const HIGH_TOM = Drum.HighTom
-const RIDE_CYMBAL_1 = Drum.RideCymbal1
-const CHINESE_CYMBAL = Drum.ChineseCymbal
-const RIDE_BELL = Drum.RideBell
-const TAMBOURINE = Drum.Tambourine
-const SPLASH_CYMBAL = Drum.SplashCymbal
-const COWBELL = Drum.Cowbell
-const CRASH_CYMBAL_2 = Drum.CrashCymbal2
-const VIBRASLAP = Drum.Vibraslap
-const RIDE_CYMBAL_2 = Drum.RideCymbal2
-const HI_BONGO = Drum.HiBongo
-const LOW_BONGO = Drum.LowBongo
-const MUTE_HI_CONGA = Drum.MuteHiConga
-const OPEN_HI_CONGA = Drum.OpenHiConga
-const LOW_CONGA = Drum.LowConga
-const HIGH_TIMBALE = Drum.HighTimbale
-const LOW_TIMBALE = Drum.LowTimbale
-const HIGH_AGOGO = Drum.HighAgogo
-const LOW_AGOGO = Drum.LowAgogo
-const CABASA = Drum.Cabasa
-const MARACAS = Drum.Maracas
-const SHORT_WHISTLE = Drum.ShortWhistle
-const LONG_WHISTLE = Drum.LongWhistle
-const SHORT_GUIRO = Drum.ShortGuiro
-const LONG_GUIRO = Drum.LongGuiro
-const CLAVES = Drum.Claves
-const HI_WOOD_BLOCK = Drum.HiWoodBlock
-const LOW_WOOD_BLOCK = Drum.LowWoodBlock
-const MUTE_CUICA = Drum.MuteCuica
-const OPEN_CUICA = Drum.OpenCuica
-const MUTE_TRIANGLE = Drum.MuteTriangle
-const OPEN_TRIANGLE = Drum.OpenTriangle
+import { Scale, Drum, Chord, Duration } from '@symphonyscript/theory'
 
 // ============================================================================
-// Note ↔ Semitone
+// Note ↔ Semitone (re-exported from theory)
 // ============================================================================
 
-/** Letter (with optional accidental) → semitone offset from C. */
-export const NOTE_TO_SEMITONE: Readonly<Record<string, number>> = {
-  'C': 0, 'C#': 1, 'Db': 1,
-  'D': 2, 'D#': 3, 'Eb': 3,
-  'E': 4, 'Fb': 4, 'E#': 5,
-  'F': 5, 'F#': 6, 'Gb': 6,
-  'G': 7, 'G#': 8, 'Ab': 8,
-  'A': 9, 'A#': 10, 'Bb': 10,
-  'B': 11, 'Cb': 11, 'B#': 0,
-}
-
-/** Semitone index → sharp note name. */
-export const SEMITONE_TO_NOTE_SHARP: readonly string[] = [
-  'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
-]
-
-/** Semitone index → flat note name. */
-export const SEMITONE_TO_NOTE_FLAT: readonly string[] = [
-  'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B',
-]
+export { NoteToSemitone as NOTE_TO_SEMITONE } from '@symphonyscript/theory'
+export { SemitoneToNoteSharp as SEMITONE_TO_NOTE_SHARP } from '@symphonyscript/theory'
+export { SemitoneToNoteFlat as SEMITONE_TO_NOTE_FLAT } from '@symphonyscript/theory'
 
 // ============================================================================
-// Intervals
+// Intervals (re-exported from theory)
 // ============================================================================
 
-/** Interval name → cents. */
-export const INTERVAL_MAP: Readonly<Record<string, number>> = {
-  'P1': 0,
-  'm2': 100,
-  'M2': 200,
-  'm3': 300,
-  'M3': 400,
-  'P4': 500,
-  'tritone': 600, 'A4': 600, 'd5': 600,
-  'P5': 700,
-  'm6': 800,
-  'M6': 900,
-  'm7': 1000,
-  'M7': 1100,
-  'P8': 1200,
-}
-
-/** Cents → canonical interval name. */
-export const CENTS_TO_INTERVAL: Readonly<Record<number, string>> = {
-  0: 'P1',
-  100: 'm2',
-  200: 'M2',
-  300: 'm3',
-  400: 'M3',
-  500: 'P4',
-  600: 'tritone',
-  700: 'P5',
-  800: 'm6',
-  900: 'M6',
-  1000: 'm7',
-  1100: 'M7',
-  1200: 'P8',
-}
+export { IntervalNameToCents as INTERVAL_MAP } from '@symphonyscript/theory'
+export { CentsToIntervalName as CENTS_TO_INTERVAL } from '@symphonyscript/theory'
 
 // ============================================================================
 // Durations (quarter-note multipliers)
 // ============================================================================
 
+const D = Duration
+
 /** Duration name → quarter-note multiplier. */
 export const DURATION_MAP: Readonly<Record<string, number>> = {
   // Standard (long)
-  'whole': 4,
-  'half': 2,
-  'quarter': 1,
-  'eighth': 0.5,
-  'sixteenth': 0.25,
-  'thirtysecond': 0.125,
+  'whole': D.Whole,
+  'half': D.Half,
+  'quarter': D.Quarter,
+  'eighth': D.Eighth,
+  'sixteenth': D.Sixteenth,
+  'thirtysecond': D.ThirtySecond,
   // Standard (short)
-  '1n': 4,
-  '2n': 2,
-  '4n': 1,
-  '8n': 0.5,
-  '16n': 0.25,
-  '32n': 0.125,
+  '1n': D.Whole,
+  '2n': D.Half,
+  '4n': D.Quarter,
+  '8n': D.Eighth,
+  '16n': D.Sixteenth,
+  '32n': D.ThirtySecond,
   // Dotted (long)
-  'dotted.whole': 6,
-  'dotted.half': 3,
-  'dotted.quarter': 1.5,
-  'dotted.eighth': 0.75,
-  'dotted.sixteenth': 0.375,
-  'dotted.thirtysecond': 0.1875,
+  'dotted.whole': D.DottedWhole,
+  'dotted.half': D.DottedHalf,
+  'dotted.quarter': D.DottedQuarter,
+  'dotted.eighth': D.DottedEighth,
+  'dotted.sixteenth': D.DottedSixteenth,
+  'dotted.thirtysecond': D.ThirtySecond * 1.5,
   // Dotted (short)
-  '1n.': 6,
-  '2n.': 3,
-  '4n.': 1.5,
-  '8n.': 0.75,
-  '16n.': 0.375,
-  '32n.': 0.1875,
+  '1n.': D.DottedWhole,
+  '2n.': D.DottedHalf,
+  '4n.': D.DottedQuarter,
+  '8n.': D.DottedEighth,
+  '16n.': D.DottedSixteenth,
+  '32n.': D.ThirtySecond * 1.5,
   // Triplet (long)
-  'triplet.half': 4 / 3,
-  'triplet.quarter': 2 / 3,
-  'triplet.eighth': 1 / 3,
-  'triplet.sixteenth': 1 / 6,
+  'triplet.half': D.HalfTriplet,
+  'triplet.quarter': D.QuarterTriplet,
+  'triplet.eighth': D.EighthTriplet,
+  'triplet.sixteenth': D.SixteenthTriplet,
   // Triplet (short)
-  '2t': 4 / 3,
-  '4t': 2 / 3,
-  '8t': 1 / 3,
-  '16t': 1 / 6,
+  '2t': D.HalfTriplet,
+  '4t': D.QuarterTriplet,
+  '8t': D.EighthTriplet,
+  '16t': D.SixteenthTriplet,
 }
 
 /** Sorted [multiplier, name] pairs for reverse lookup (descending by multiplier). */
 export const TICKS_RATIO_TO_DURATION: readonly [number, string][] = [
-  [6, 'dotted.whole'],
-  [4, 'whole'],
-  [3, 'dotted.half'],
-  [2, 'half'],
-  [1.5, 'dotted.quarter'],
-  [4 / 3, 'triplet.half'],
-  [1, 'quarter'],
-  [0.75, 'dotted.eighth'],
-  [2 / 3, 'triplet.quarter'],
-  [0.5, 'eighth'],
-  [0.375, 'dotted.sixteenth'],
-  [1 / 3, 'triplet.eighth'],
-  [0.25, 'sixteenth'],
-  [0.1875, 'dotted.thirtysecond'],
-  [1 / 6, 'triplet.sixteenth'],
-  [0.125, 'thirtysecond'],
+  [D.DottedWhole, 'dotted.whole'],
+  [D.Whole, 'whole'],
+  [D.DottedHalf, 'dotted.half'],
+  [D.Half, 'half'],
+  [D.DottedQuarter, 'dotted.quarter'],
+  [D.HalfTriplet, 'triplet.half'],
+  [D.Quarter, 'quarter'],
+  [D.DottedEighth, 'dotted.eighth'],
+  [D.QuarterTriplet, 'triplet.quarter'],
+  [D.Eighth, 'eighth'],
+  [D.DottedSixteenth, 'dotted.sixteenth'],
+  [D.EighthTriplet, 'triplet.eighth'],
+  [D.Sixteenth, 'sixteenth'],
+  [D.ThirtySecond * 1.5, 'dotted.thirtysecond'],
+  [D.SixteenthTriplet, 'triplet.sixteenth'],
+  [D.ThirtySecond, 'thirtysecond'],
 ]
 
 // ============================================================================
@@ -222,113 +99,113 @@ export const TICKS_RATIO_TO_DURATION: readonly [number, string][] = [
 /** Drum name → pitch in cents. */
 export const DRUM_MAP: Readonly<Record<string, number>> = {
   // Core kit
-  'kick': BASS_DRUM_1,
-  'kick2': ACOUSTIC_BASS_DRUM,
-  'snare': ACOUSTIC_SNARE,
-  'snare2': ELECTRIC_SNARE,
-  'clap': HAND_CLAP,
-  'rimshot': SIDE_STICK,
+  'kick': Drum.BassDrum1,
+  'kick2': Drum.AcousticBassDrum,
+  'snare': Drum.AcousticSnare,
+  'snare2': Drum.ElectricSnare,
+  'clap': Drum.HandClap,
+  'rimshot': Drum.SideStick,
   // Hi-hats
-  'hihat': CLOSED_HI_HAT,
-  'hihat.open': OPEN_HI_HAT,
-  'hihat.pedal': PEDAL_HI_HAT,
+  'hihat': Drum.ClosedHiHat,
+  'hihat.open': Drum.OpenHiHat,
+  'hihat.pedal': Drum.PedalHiHat,
   // Toms (high → low)
-  'tom1': HIGH_TOM,
-  'tom2': HI_MID_TOM,
-  'tom3': LOW_MID_TOM,
-  'tom4': LOW_TOM,
-  'tom5': HIGH_FLOOR_TOM,
-  'tom6': LOW_FLOOR_TOM,
+  'tom1': Drum.HighTom,
+  'tom2': Drum.HiMidTom,
+  'tom3': Drum.LowMidTom,
+  'tom4': Drum.LowTom,
+  'tom5': Drum.HighFloorTom,
+  'tom6': Drum.LowFloorTom,
   // Cymbals
-  'crash': CRASH_CYMBAL_1,
-  'crash2': CRASH_CYMBAL_2,
-  'ride': RIDE_CYMBAL_1,
-  'ride2': RIDE_CYMBAL_2,
-  'ride.bell': RIDE_BELL,
-  'splash': SPLASH_CYMBAL,
-  'china': CHINESE_CYMBAL,
+  'crash': Drum.CrashCymbal1,
+  'crash2': Drum.CrashCymbal2,
+  'ride': Drum.RideCymbal1,
+  'ride2': Drum.RideCymbal2,
+  'ride.bell': Drum.RideBell,
+  'splash': Drum.SplashCymbal,
+  'china': Drum.ChineseCymbal,
   // Auxiliary
-  'tambourine': TAMBOURINE,
-  'cowbell': COWBELL,
-  'vibraslap': VIBRASLAP,
-  'cabasa': CABASA,
-  'maracas': MARACAS,
+  'tambourine': Drum.Tambourine,
+  'cowbell': Drum.Cowbell,
+  'vibraslap': Drum.Vibraslap,
+  'cabasa': Drum.Cabasa,
+  'maracas': Drum.Maracas,
   // Bongos & congas
-  'bongo.hi': HI_BONGO,
-  'bongo.lo': LOW_BONGO,
-  'conga.mute': MUTE_HI_CONGA,
-  'conga.open': OPEN_HI_CONGA,
-  'conga.lo': LOW_CONGA,
+  'bongo.hi': Drum.HiBongo,
+  'bongo.lo': Drum.LowBongo,
+  'conga.mute': Drum.MuteHiConga,
+  'conga.open': Drum.OpenHiConga,
+  'conga.lo': Drum.LowConga,
   // Timbales
-  'timbale.hi': HIGH_TIMBALE,
-  'timbale.lo': LOW_TIMBALE,
+  'timbale.hi': Drum.HighTimbale,
+  'timbale.lo': Drum.LowTimbale,
   // Agogo
-  'agogo.hi': HIGH_AGOGO,
-  'agogo.lo': LOW_AGOGO,
+  'agogo.hi': Drum.HighAgogo,
+  'agogo.lo': Drum.LowAgogo,
   // Whistles & guiros
-  'whistle.short': SHORT_WHISTLE,
-  'whistle.long': LONG_WHISTLE,
-  'guiro.short': SHORT_GUIRO,
-  'guiro.long': LONG_GUIRO,
+  'whistle.short': Drum.ShortWhistle,
+  'whistle.long': Drum.LongWhistle,
+  'guiro.short': Drum.ShortGuiro,
+  'guiro.long': Drum.LongGuiro,
   // Misc
-  'claves': CLAVES,
-  'woodblock.hi': HI_WOOD_BLOCK,
-  'woodblock.lo': LOW_WOOD_BLOCK,
-  'cuica.mute': MUTE_CUICA,
-  'cuica.open': OPEN_CUICA,
-  'triangle.mute': MUTE_TRIANGLE,
-  'triangle.open': OPEN_TRIANGLE,
+  'claves': Drum.Claves,
+  'woodblock.hi': Drum.HiWoodBlock,
+  'woodblock.lo': Drum.LowWoodBlock,
+  'cuica.mute': Drum.MuteCuica,
+  'cuica.open': Drum.OpenCuica,
+  'triangle.mute': Drum.MuteTriangle,
+  'triangle.open': Drum.OpenTriangle,
 }
 
 /** Cents → canonical drum name for reverse lookup. */
 export const CENTS_TO_DRUM: Readonly<Record<number, string>> = {
-  [ACOUSTIC_BASS_DRUM]: 'kick2',
-  [BASS_DRUM_1]: 'kick',
-  [SIDE_STICK]: 'rimshot',
-  [ACOUSTIC_SNARE]: 'snare',
-  [HAND_CLAP]: 'clap',
-  [ELECTRIC_SNARE]: 'snare2',
-  [LOW_FLOOR_TOM]: 'tom6',
-  [CLOSED_HI_HAT]: 'hihat',
-  [HIGH_FLOOR_TOM]: 'tom5',
-  [PEDAL_HI_HAT]: 'hihat.pedal',
-  [LOW_TOM]: 'tom4',
-  [OPEN_HI_HAT]: 'hihat.open',
-  [LOW_MID_TOM]: 'tom3',
-  [HI_MID_TOM]: 'tom2',
-  [CRASH_CYMBAL_1]: 'crash',
-  [HIGH_TOM]: 'tom1',
-  [RIDE_CYMBAL_1]: 'ride',
-  [CHINESE_CYMBAL]: 'china',
-  [RIDE_BELL]: 'ride.bell',
-  [TAMBOURINE]: 'tambourine',
-  [SPLASH_CYMBAL]: 'splash',
-  [COWBELL]: 'cowbell',
-  [CRASH_CYMBAL_2]: 'crash2',
-  [VIBRASLAP]: 'vibraslap',
-  [RIDE_CYMBAL_2]: 'ride2',
-  [HI_BONGO]: 'bongo.hi',
-  [LOW_BONGO]: 'bongo.lo',
-  [MUTE_HI_CONGA]: 'conga.mute',
-  [OPEN_HI_CONGA]: 'conga.open',
-  [LOW_CONGA]: 'conga.lo',
-  [HIGH_TIMBALE]: 'timbale.hi',
-  [LOW_TIMBALE]: 'timbale.lo',
-  [HIGH_AGOGO]: 'agogo.hi',
-  [LOW_AGOGO]: 'agogo.lo',
-  [CABASA]: 'cabasa',
-  [MARACAS]: 'maracas',
-  [SHORT_WHISTLE]: 'whistle.short',
-  [LONG_WHISTLE]: 'whistle.long',
-  [SHORT_GUIRO]: 'guiro.short',
-  [LONG_GUIRO]: 'guiro.long',
-  [CLAVES]: 'claves',
-  [HI_WOOD_BLOCK]: 'woodblock.hi',
-  [LOW_WOOD_BLOCK]: 'woodblock.lo',
-  [MUTE_CUICA]: 'cuica.mute',
-  [OPEN_CUICA]: 'cuica.open',
-  [MUTE_TRIANGLE]: 'triangle.mute',
-  [OPEN_TRIANGLE]: 'triangle.open',
+  [Drum.AcousticBassDrum]: 'kick2',
+  [Drum.BassDrum1]: 'kick',
+  [Drum.SideStick]: 'rimshot',
+  [Drum.AcousticSnare]: 'snare',
+  [Drum.HandClap]: 'clap',
+  [Drum.ElectricSnare]: 'snare2',
+  [Drum.LowFloorTom]: 'tom6',
+  [Drum.ClosedHiHat]: 'hihat',
+  [Drum.HighFloorTom]: 'tom5',
+  [Drum.PedalHiHat]: 'hihat.pedal',
+  [Drum.LowTom]: 'tom4',
+  [Drum.OpenHiHat]: 'hihat.open',
+  [Drum.LowMidTom]: 'tom3',
+  [Drum.HiMidTom]: 'tom2',
+  [Drum.CrashCymbal1]: 'crash',
+  [Drum.HighTom]: 'tom1',
+  [Drum.RideCymbal1]: 'ride',
+  [Drum.ChineseCymbal]: 'china',
+  [Drum.RideBell]: 'ride.bell',
+  [Drum.Tambourine]: 'tambourine',
+  [Drum.SplashCymbal]: 'splash',
+  [Drum.Cowbell]: 'cowbell',
+  [Drum.CrashCymbal2]: 'crash2',
+  [Drum.Vibraslap]: 'vibraslap',
+  [Drum.RideCymbal2]: 'ride2',
+  [Drum.HiBongo]: 'bongo.hi',
+  [Drum.LowBongo]: 'bongo.lo',
+  [Drum.MuteHiConga]: 'conga.mute',
+  [Drum.OpenHiConga]: 'conga.open',
+  [Drum.LowConga]: 'conga.lo',
+  [Drum.HighTimbale]: 'timbale.hi',
+  [Drum.LowTimbale]: 'timbale.lo',
+  [Drum.HighAgogo]: 'agogo.hi',
+  [Drum.LowAgogo]: 'agogo.lo',
+  [Drum.Cabasa]: 'cabasa',
+  [Drum.Maracas]: 'maracas',
+  [Drum.ShortWhistle]: 'whistle.short',
+  [Drum.LongWhistle]: 'whistle.long',
+  [Drum.ShortGuiro]: 'guiro.short',
+  [Drum.LongGuiro]: 'guiro.long',
+  [Drum.Claves]: 'claves',
+  [Drum.HiWoodBlock]: 'woodblock.hi',
+  [Drum.LowWoodBlock]: 'woodblock.lo',
+  [Drum.MuteCuica]: 'cuica.mute',
+  [Drum.OpenCuica]: 'cuica.open',
+  [Drum.MuteTriangle]: 'triangle.mute',
+  [Drum.OpenTriangle]: 'triangle.open',
 }
 
 // ============================================================================
@@ -341,29 +218,29 @@ export const CENTS_TO_DRUM: Readonly<Record<number, string>> = {
  * Values imported from @symphonyscript/theory (single source of truth).
  */
 export const SCALE_INTERVALS_MAP: Readonly<Record<string, ScaleIntervals>> = {
-  'major':             IONIAN_INTERVALS,
-  'minor':             AEOLIAN_INTERVALS,
-  'dorian':            DORIAN_INTERVALS,
-  'phrygian':          PHRYGIAN_INTERVALS,
-  'lydian':            LYDIAN_INTERVALS,
-  'mixolydian':        MIXOLYDIAN_INTERVALS,
-  'aeolian':           AEOLIAN_INTERVALS,
-  'locrian':           LOCRIAN_INTERVALS,
-  'harmonic_minor':    HARMONIC_MINOR_INTERVALS,
-  'melodic_minor':     MELODIC_MINOR_INTERVALS,
-  'pentatonic_major':  PENTATONIC_MAJOR_INTERVALS,
-  'pentatonic_minor':  PENTATONIC_MINOR_INTERVALS,
-  'blues':             BLUES_INTERVALS,
-  'chromatic':         CHROMATIC_INTERVALS,
-  'whole_tone':        WHOLE_TONE_INTERVALS,
-  'diminished_hw':     DIMINISHED_HW_INTERVALS,
-  'diminished_wh':     DIMINISHED_WH_INTERVALS,
-  'bebop_dominant':    BEBOP_DOMINANT_INTERVALS,
-  'bebop_major':       BEBOP_MAJOR_INTERVALS,
-  'hirajoshi':         HIRAJOSHI_INTERVALS,
-  'in_sen':            IN_SEN_INTERVALS,
-  'hungarian_minor':   HUNGARIAN_MINOR_INTERVALS,
-  'phrygian_dominant': PHRYGIAN_DOMINANT_INTERVALS,
+  'major':             Scale.Ionian,
+  'minor':             Scale.Aeolian,
+  'dorian':            Scale.Dorian,
+  'phrygian':          Scale.Phrygian,
+  'lydian':            Scale.Lydian,
+  'mixolydian':        Scale.Mixolydian,
+  'aeolian':           Scale.Aeolian,
+  'locrian':           Scale.Locrian,
+  'harmonic_minor':    Scale.HarmonicMinor,
+  'melodic_minor':     Scale.MelodicMinor,
+  'pentatonic_major':  Scale.PentatonicMajor,
+  'pentatonic_minor':  Scale.PentatonicMinor,
+  'blues':             Scale.Blues,
+  'chromatic':         Scale.Chromatic,
+  'whole_tone':        Scale.WholeTone,
+  'diminished_hw':     Scale.DiminishedHW,
+  'diminished_wh':     Scale.DiminishedWH,
+  'bebop_dominant':    Scale.BebopDominant,
+  'bebop_major':       Scale.BebopMajor,
+  'hirajoshi':         Scale.Hirajoshi,
+  'in_sen':            Scale.InSen,
+  'hungarian_minor':   Scale.HungarianMinor,
+  'phrygian_dominant': Scale.PhrygianDominant,
 }
 
 // ============================================================================
@@ -412,143 +289,96 @@ export const KEY_SIGNATURE_TABLE: Readonly<Record<string, readonly string[]>> = 
 }
 
 // ============================================================================
-// Chord Intervals — inlined cent arrays
+// Chord Intervals — backed by @symphonyscript/theory
 // ============================================================================
 
-/**
- * Chord interval definitions as cent-offset arrays.
- * Inlined to avoid circular dependency with @symphonyscript/theory.
- * Values match theory/src/continuous/chords.ts exactly.
- */
-const CI = {
-  MAJ:       [0, 400, 700] as ChordIntervals,
-  MAJ7:      [0, 400, 700, 1100] as ChordIntervals,
-  MAJ6:      [0, 400, 700, 900] as ChordIntervals,
-  SIX_NINE:  [0, 200, 400, 700, 900] as ChordIntervals,
-  MAJ9:      [0, 200, 400, 700, 1100] as ChordIntervals,
-  MAJ11:     [0, 200, 400, 500, 700, 1100] as ChordIntervals,
-  MAJ13:     [0, 200, 400, 500, 700, 900, 1100] as ChordIntervals,
-  ADD9:      [0, 200, 400, 700] as ChordIntervals,
-
-  MIN:       [0, 300, 700] as ChordIntervals,
-  MIN7:      [0, 300, 700, 1000] as ChordIntervals,
-  MIN6:      [0, 300, 700, 900] as ChordIntervals,
-  MIN9:      [0, 200, 300, 700, 1000] as ChordIntervals,
-  MIN11:     [0, 200, 300, 500, 700, 1000] as ChordIntervals,
-  MIN13:     [0, 200, 300, 500, 700, 900, 1000] as ChordIntervals,
-  MIN_MAJ7:  [0, 300, 700, 1100] as ChordIntervals,
-
-  DOM7:      [0, 400, 700, 1000] as ChordIntervals,
-  DOM9:      [0, 200, 400, 700, 1000] as ChordIntervals,
-  DOM11:     [0, 200, 400, 500, 700, 1000] as ChordIntervals,
-  DOM13:     [0, 200, 400, 700, 900, 1000] as ChordIntervals,
-  DOM7_SUS4: [0, 500, 700, 1000] as ChordIntervals,
-  DOM9_SUS4: [0, 200, 500, 700, 1000] as ChordIntervals,
-
-  SUS4:      [0, 500, 700] as ChordIntervals,
-  SUS2:      [0, 200, 700] as ChordIntervals,
-
-  POWER:     [0, 700] as ChordIntervals,
-
-  DIM:       [0, 300, 600] as ChordIntervals,
-  DIM7:      [0, 300, 600, 900] as ChordIntervals,
-  HALF_DIM:  [0, 300, 600, 1000] as ChordIntervals,
-
-  AUG:       [0, 400, 800] as ChordIntervals,
-  AUG7:      [0, 400, 800, 1000] as ChordIntervals,
-  AUG_MAJ7:  [0, 400, 800, 1100] as ChordIntervals,
-
-  DOM7_B9:      [0, 100, 400, 700, 1000] as ChordIntervals,
-  DOM7_SHARP9:  [0, 300, 400, 700, 1000] as ChordIntervals,
-  DOM7_B5:      [0, 400, 600, 1000] as ChordIntervals,
-  DOM7_ALT:     [0, 100, 300, 400, 600, 800, 1000] as ChordIntervals,
-} as const
+const C = Chord
 
 /** Chord symbol suffix → intervals in cents from root. */
-export const CHORD_INTERVALS_MAP: ReadonlyMap<string, ChordIntervals> = new Map<string, ChordIntervals>([
+export const CHORD_INTERVALS_MAP: ReadonlyMap<string, readonly number[]> = new Map<string, readonly number[]>([
   // Major
-  ['maj', CI.MAJ],
-  ['', CI.MAJ],
-  ['M', CI.MAJ],
-  ['maj7', CI.MAJ7],
-  ['M7', CI.MAJ7],
-  ['6', CI.MAJ6],
-  ['M6', CI.MAJ6],
-  ['6/9', CI.SIX_NINE],
-  ['69', CI.SIX_NINE],
-  ['6add9', CI.SIX_NINE],
-  ['maj9', CI.MAJ9],
-  ['M9', CI.MAJ9],
-  ['maj11', CI.MAJ11],
-  ['M11', CI.MAJ11],
-  ['maj13', CI.MAJ13],
-  ['M13', CI.MAJ13],
-  ['add9', CI.ADD9],
+  ['maj', C.Maj],
+  ['', C.Maj],
+  ['M', C.Maj],
+  ['maj7', C.Maj7],
+  ['M7', C.Maj7],
+  ['6', C.Maj6],
+  ['M6', C.Maj6],
+  ['6/9', C.SixNine],
+  ['69', C.SixNine],
+  ['6add9', C.SixNine],
+  ['maj9', C.Maj9],
+  ['M9', C.Maj9],
+  ['maj11', C.Maj11],
+  ['M11', C.Maj11],
+  ['maj13', C.Maj13],
+  ['M13', C.Maj13],
+  ['add9', C.Add9],
 
   // Minor
-  ['m', CI.MIN],
-  ['min', CI.MIN],
-  ['-', CI.MIN],
-  ['m7', CI.MIN7],
-  ['min7', CI.MIN7],
-  ['-7', CI.MIN7],
-  ['m6', CI.MIN6],
-  ['min6', CI.MIN6],
-  ['mM7', CI.MIN_MAJ7],
-  ['m(M7)', CI.MIN_MAJ7],
-  ['minMaj7', CI.MIN_MAJ7],
-  ['m9', CI.MIN9],
-  ['min9', CI.MIN9],
-  ['m11', CI.MIN11],
-  ['min11', CI.MIN11],
-  ['m13', CI.MIN13],
-  ['min13', CI.MIN13],
+  ['m', C.Min],
+  ['min', C.Min],
+  ['-', C.Min],
+  ['m7', C.Min7],
+  ['min7', C.Min7],
+  ['-7', C.Min7],
+  ['m6', C.Min6],
+  ['min6', C.Min6],
+  ['mM7', C.MinMaj7],
+  ['m(M7)', C.MinMaj7],
+  ['minMaj7', C.MinMaj7],
+  ['m9', C.Min9],
+  ['min9', C.Min9],
+  ['m11', C.Min11],
+  ['min11', C.Min11],
+  ['m13', C.Min13],
+  ['min13', C.Min13],
 
   // Dominant
-  ['7', CI.DOM7],
-  ['dom7', CI.DOM7],
-  ['9', CI.DOM9],
-  ['dom9', CI.DOM9],
-  ['11', CI.DOM11],
-  ['dom11', CI.DOM11],
-  ['13', CI.DOM13],
-  ['dom13', CI.DOM13],
-  ['7sus4', CI.DOM7_SUS4],
-  ['7sus', CI.DOM7_SUS4],
-  ['9sus4', CI.DOM9_SUS4],
-  ['9sus', CI.DOM9_SUS4],
+  ['7', C.Dom7],
+  ['dom7', C.Dom7],
+  ['9', C.Dom9],
+  ['dom9', C.Dom9],
+  ['11', C.Dom11],
+  ['dom11', C.Dom11],
+  ['13', C.Dom13],
+  ['dom13', C.Dom13],
+  ['7sus4', C.Dom7Sus4],
+  ['7sus', C.Dom7Sus4],
+  ['9sus4', C.Dom9Sus4],
+  ['9sus', C.Dom9Sus4],
 
   // Suspended
-  ['sus4', CI.SUS4],
-  ['sus', CI.SUS4],
-  ['sus2', CI.SUS2],
-  ['2', CI.SUS2],
+  ['sus4', C.Sus4],
+  ['sus', C.Sus4],
+  ['sus2', C.Sus2],
+  ['2', C.Sus2],
 
   // Power
-  ['5', CI.POWER],
-  ['(no3)', CI.POWER],
+  ['5', C.Power],
+  ['(no3)', C.Power],
 
   // Diminished
-  ['dim', CI.DIM],
-  ['dim7', CI.DIM7],
-  ['m7b5', CI.HALF_DIM],
+  ['dim', C.Dim],
+  ['dim7', C.Dim7],
+  ['m7b5', C.HalfDim],
 
   // Augmented
-  ['aug', CI.AUG],
-  ['+', CI.AUG],
-  ['aug7', CI.AUG7],
-  ['+7', CI.AUG7],
-  ['7#5', CI.AUG7],
-  ['maj7#5', CI.AUG_MAJ7],
+  ['aug', C.Aug],
+  ['+', C.Aug],
+  ['aug7', C.Aug7],
+  ['+7', C.Aug7],
+  ['7#5', C.Aug7],
+  ['maj7#5', C.AugMaj7],
 
   // Altered
-  ['7b9', CI.DOM7_B9],
-  ['7-9', CI.DOM7_B9],
-  ['7#9', CI.DOM7_SHARP9],
-  ['7+9', CI.DOM7_SHARP9],
-  ['7b5', CI.DOM7_B5],
-  ['7-5', CI.DOM7_B5],
-  ['7alt', CI.DOM7_ALT],
+  ['7b9', C.Dom7b9],
+  ['7-9', C.Dom7b9],
+  ['7#9', C.Dom7Sharp9],
+  ['7+9', C.Dom7Sharp9],
+  ['7b5', C.Dom7b5],
+  ['7-5', C.Dom7b5],
+  ['7alt', C.Dom7Alt],
 ])
 
 /** Reverse lookup: JSON.stringify(intervals) → first matching chord suffix. */
