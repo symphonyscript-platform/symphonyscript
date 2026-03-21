@@ -1,37 +1,27 @@
 export class SharedFreeList {
   public readonly totalSizeInBytes: number
 
-  private readonly tailByteOffset: number
-  private readonly totalSlotsCount: number
-  private readonly i32CountPerSlot: number
+  private readonly listSizeInBytes: number
+  private readonly endByteOffset: number
   private readonly bitmaskStartByteOffset: number
 
   constructor(
     private readonly sab: Int32Array<ArrayBufferLike>,
     private readonly startByteOffset: number,
     private readonly headByteOffset: number,
-    private readonly listSizeInBytes: number,
     private readonly slotSizeInBytes: number,
+    private readonly slotsCount: number,
     private readonly maxRetryCounts: number,
   ) {
-    if (startByteOffset % 4 !== 0)
-      throw new Error(`startByteOffset must be evenly divisible by 4, got: ${startByteOffset}`)
+    if (startByteOffset % 4 !== 0) throw new Error(`startByteOffset must be evenly divisible by 4, got: ${startByteOffset}`)
+    if (headByteOffset % 4 !== 0) throw new Error(`headByteOffset must be evenly divisible by 4, got: ${headByteOffset}`)
+    if (slotSizeInBytes % 64 !== 0) throw new Error(`slotSizeInBytes must be evenly divisible by 64, got: ${slotSizeInBytes}`)
 
-    if (headByteOffset % 4 !== 0)
-      throw new Error(`headByteOffset must be evenly divisible by 4, got: ${headByteOffset}`)
-
-    if (slotSizeInBytes % 4 !== 0)
-      throw new Error(`slotSizeInBytes must be evenly divisible by 4, got: ${slotSizeInBytes}`)
-
-    if (listSizeInBytes % slotSizeInBytes !== 0)
-      throw new Error(`listSizeInBytes must be evenly divisible by slotSizeInBytes, got: ${listSizeInBytes} / ${slotSizeInBytes}`)
-
-    this.tailByteOffset = startByteOffset + listSizeInBytes
-    this.totalSlotsCount = listSizeInBytes / slotSizeInBytes
-    this.i32CountPerSlot = slotSizeInBytes >> 2
-    const bitmapSizeInBytes = Math.ceil(this.totalSlotsCount / 32) * 4
-    this.totalSizeInBytes = listSizeInBytes + bitmapSizeInBytes
-    this.bitmaskStartByteOffset = this.tailByteOffset
+    this.listSizeInBytes = this.slotSizeInBytes * this.slotsCount
+    this.endByteOffset = startByteOffset + this.listSizeInBytes
+    const bitmapSizeInBytes = Math.ceil(this.slotsCount / 32) * 4
+    this.totalSizeInBytes = this.listSizeInBytes + bitmapSizeInBytes
+    this.bitmaskStartByteOffset = this.endByteOffset
 
     this.initializeSlots()
   }
@@ -59,11 +49,12 @@ export class SharedFreeList {
         continue
       }
 
-      for (let i = 0; i < this.i32CountPerSlot; ++i) {
-        const byteOffset = headByteOffset + i * 4
+      const slotEndByteOffset = headByteOffset + this.slotSizeInBytes
+
+      for (let i = headByteOffset; i < slotEndByteOffset; i += 4) {
         // no Atomics.store needed: the slot is floating,
         // no other thread can read it at this point
-        this.sab[byteOffset >> 2] = 0
+        this.sab[i >> 2] = 0
       }
 
       const N = (headByteOffset - this.startByteOffset) / this.slotSizeInBytes
@@ -80,7 +71,7 @@ export class SharedFreeList {
   }
 
   free(byteOffset: number): void {
-    if (byteOffset < this.startByteOffset || byteOffset >= this.tailByteOffset) {
+    if (byteOffset < this.startByteOffset || byteOffset >= this.endByteOffset) {
       console.warn(`Out-of-bounds byte offset ${byteOffset} passed to free(), returning early.`)
       return
     }
@@ -123,16 +114,19 @@ export class SharedFreeList {
   }
 
   private initializeSlots() {
+    const start = this.startByteOffset
+    const end = this.endByteOffset
+    const slotSize = this.slotSizeInBytes
+
     Atomics.store(this.sab, this.headByteOffset >> 2, this.startByteOffset)
 
-    for (let i = 0; i < this.totalSlotsCount; ++i) {
-      const byteOffset = this.startByteOffset + i * this.slotSizeInBytes
-      const nextByteOffset = byteOffset + this.slotSizeInBytes
+    for (let b = start; b < end; b += slotSize) {
+      const next = b + slotSize
 
-      if (nextByteOffset < this.tailByteOffset) {
-        Atomics.store(this.sab, byteOffset >> 2, nextByteOffset)
+      if (next < end) {
+        Atomics.store(this.sab, b >> 2, next)
       } else {
-        Atomics.store(this.sab, byteOffset >> 2, 0)
+        Atomics.store(this.sab, b >> 2, 0)
       }
     }
   }

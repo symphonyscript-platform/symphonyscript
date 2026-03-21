@@ -4,20 +4,20 @@ export class LocalFreeList implements FreeList {
   public readonly totalSizeInBytes: number
 
   private headByteOffset: number
+  private readonly listSizeInBytes: number
   private readonly endByteOffset: number
   private readonly bitmaskSizeInBytes: number
 
   constructor(
     private readonly sab: Int32Array,
     private readonly startByteOffset: number,
-    private readonly listSizeInBytes: number,
     private readonly slotSizeInBytes: number,
+    private readonly slotsCount: number,
   ) {
-    if (this.startByteOffset % 4 !== 0) throw new Error(`startByteOffset must be evenly divisible by 4: ${startByteOffset}`)
-    if (this.listSizeInBytes % 4 !== 0) throw new Error(`listSizeInBytes must be evenly divisible by 4: ${listSizeInBytes}`)
-    if (this.slotSizeInBytes % 64 !== 0) throw new Error(`slotSizeInBytes must be evenly divisible by 64: ${slotSizeInBytes}`)
-    if (this.listSizeInBytes % this.slotSizeInBytes !== 0) throw new Error(`listSizeInBytes must be evenly divisible by slotSizeInBytes: ${listSizeInBytes} / ${slotSizeInBytes}`)
+    if (startByteOffset % 4 !== 0) throw new Error(`startByteOffset must be evenly divisible by 4: ${startByteOffset}`)
+    if (slotSizeInBytes % 64 !== 0) throw new Error(`slotSizeInBytes must be evenly divisible by 64: ${slotSizeInBytes}`)
 
+    this.listSizeInBytes = this.slotSizeInBytes * this.slotsCount
     this.headByteOffset = this.startByteOffset
     this.endByteOffset = this.startByteOffset + this.listSizeInBytes
     this.bitmaskSizeInBytes = Math.ceil((this.listSizeInBytes / this.slotSizeInBytes) / 32) * 4
