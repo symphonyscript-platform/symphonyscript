@@ -1,4 +1,4 @@
-export class FreeList {
+export class SharedFreeList {
   public readonly totalSizeInBytes: number
 
   private readonly tailByteOffset: number
