@@ -2316,30 +2316,79 @@ class SymphonyScriptProcessor extends AudioWorkletProcessor {
 
 ### E.1 Overview
 
-Two data streams provide full external observability of the deterministic kernel:
+Two data sources provide full external observability of the deterministic kernel:
 
 1. **Graph Snapshot (Structure)** — node connections, synapse weights, modulator bindings. Changes infrequently (clip creation, linking, live-coding edits). Readable from SAB at any time via node chain and synapse table traversal. Consumer polls at ~1–10Hz for visualization.
 
-2. **Fire Trace (Activity)** — which synapses fired, with what effective weights and effective parameter values at the exact moment of fire. Changes every audio block (~2.7ms). Transmitted via a dedicated SPSC ring buffer from audio thread → main thread.
+2. **Fire Trace Snapshot (Activity)** — which synapses fired most recently, with what effective weights and parameter values. State-based: the audio thread overwrites per-synapse state fields on each fire. The consumer reads these fields on demand at whatever frequency it chooses.
 
-### E.2 Fire Trace Ring Buffer
+### E.2 Snapshot Model (Primary)
 
-A dedicated `RingBuffer` instance carrying per-noteOn trace entries. Written by the audio thread during synapse resolution. Read by the main thread at UI frame rate (~60Hz), consuming batches of events per frame.
+The fire trace is represented as **state** in the SAB, not as a stream of events. The audio thread overwrites per-synapse state fields during synapse resolution. The consumer pulls snapshots on demand via `getFireTraceSnapshot()`.
 
-- Same `RingBuffer` primitive used for command communication.
-- SPSC: audio thread writes, main thread reads. No contention, no allocation.
-- Power-of-2 slot count (e.g., 256 entries). Overflow returns `ERROR_RING_BUFFER_OVERFLOW` — trace entries are dropped, not blocking audio.
+**Why state over stream:**
+- Simpler kernel — no ring buffer management, no overflow handling, no drain obligation on the consumer
+- Consumer controls frequency — visualization at 60Hz, training loop after full playback, debugging on-demand
+- Fully additive — a ring buffer stream can be added later alongside the snapshot without refactoring
 
-### E.3 Trace Entry Format (Rich Trace — Option B)
+#### E.2.1 Per-Synapse Fire State Fields
 
-Each noteOn fire event produces one entry containing the effective parameter values at the exact moment of fire. This avoids the need to reconstruct values from continuously-changing `SMOOTHED_VALUE` fields after the fact.
+The audio thread writes these fields during synapse resolution, alongside existing synapse data:
 
 ```typescript
-export const FIRE_TRACE = {
-  STRIDE_I32: 8,
-  STRIDE_BYTES: 32,
+export const SYNAPSE_FIRE = {
+  LAST_FIRE_TICK:        0,  // Tick when this synapse last fired (0 = never)
+  LAST_EFFECTIVE_WEIGHT: 1,  // Effective weight at last fire (0–1000)
+  LAST_EFFECTIVE_PITCH:  2,  // Effective pitch at last fire (Q16.16)
+  LAST_EFFECTIVE_VEL:    3,  // Effective velocity at last fire (Q16.16)
+  FIRE_COUNT:            4,  // Total fire count since last reset (for analytics/training)
 } as const;
+```
 
+- `FIRE_COUNT` is reset to 0 by the consumer before a training run. Incremented atomically by the audio thread on each fire.
+- `LAST_FIRE_TICK` of 0 means "never fired" — distinguishable from real tick 0 because playback starts at tick ≥ 1.
+
+#### E.2.2 Consumer API
+
+```typescript
+// Read graph structure (infrequent changes)
+getSynapticSnapshot(outputBuffer: Int32Array): void
+
+// Read fire trace state (frequent changes)
+getFireTraceSnapshot(outputBuffer: Int32Array): void
+
+// Reset fire counters before a training run
+resetFireCounters(): void
+```
+
+Both methods read from SAB using `Atomics.load`. The consumer provides pre-allocated buffers — zero allocation.
+
+#### E.2.3 SPSC Ownership
+
+| Field | Writer | Reader |
+|:---|:---|:---|
+| `LAST_FIRE_TICK` | Audio engine | Main thread (consumer) |
+| `LAST_EFFECTIVE_WEIGHT` | Audio engine | Main thread (consumer) |
+| `LAST_EFFECTIVE_PITCH` | Audio engine | Main thread (consumer) |
+| `LAST_EFFECTIVE_VEL` | Audio engine | Main thread (consumer) |
+| `FIRE_COUNT` | Audio engine (increment) | Main thread (read + reset) |
+
+### E.3 Ring Buffer Stream (Future Extension)
+
+For use cases requiring complete event history (analytics, event replay, detailed logging), a dedicated SPSC `RingBuffer` can be added alongside the snapshot model. The audio thread writes **both** state fields and stream entries:
+
+```typescript
+// Snapshot (always):
+sab[synapseOffset + LAST_FIRE_TICK] = currentTick
+sab[synapseOffset + LAST_EFFECTIVE_WEIGHT] = weight
+
+// Stream (optional, when ring buffer is active):
+traceRb.write(traceBuffer)
+```
+
+#### E.3.1 Stream Entry Format
+
+```typescript
 export const TRACE = {
   TICK:                0,  // Tick at which the event fired
   NODE_PTR:            1,  // Byte offset of the target node
@@ -2352,33 +2401,30 @@ export const TRACE = {
 } as const;
 ```
 
-**Stride:** 8 × i32 = 32 bytes per entry. Fits in one cache-line-aligned slot (paired).
+- Stride: 8 × i32 = 32 bytes per entry.
+- Same `RingBuffer` primitive used for command communication.
+- SPSC: audio thread writes, main thread reads.
+- Power-of-2 slot count (e.g., 256 entries). Overflow drops entries, never blocks audio.
 
-**Why rich trace over lightweight trace:** Parameters change continuously — the `SMOOTHED_VALUE` read at UI frame N is not the same value that was active when the note fired between frames N-2 and N-1. Capturing effective values at fire time preserves the exact truth.
+The stream extension is purely additive — zero changes to the snapshot model when added.
 
-**Why noteOn only:** NoteOn events are infrequent (10–100 per block). The overhead of 32 bytes × ~100 entries = ~3.2KB per block is negligible. NoteOff events carry no modulated values — they are identity-based (pitch + expression ID).
+### E.4 Use Cases
 
-### E.4 SPSC Ownership
-
-| Field | Writer | Reader |
-|:---|:---|:---|
-| All trace entry fields | Audio engine (during synapse resolution) | Main thread (consumer) |
-
-### E.5 Use Cases
-
-| Consumer | Reads | Update Frequency | Purpose |
+| Consumer | Model Used | Frequency | Purpose |
 |:---|:---|:---|:---|
-| Neural graph visualization | Graph snapshot + fire trace | ~60Hz | Live diagram: glowing connections, weight heatmaps |
-| Debugging | Fire trace entries | On-demand | "Why did this note play at pitch 62.3?" — exact values at fire time |
-| Dead path detection | Fire trace analytics | Periodic | "This synapse never fires — dead path" |
-| Automated parameter tuning | Fire trace + fitness function | Per-playback | Consumer-side optimization driving parameter space |
+| Neural graph visualization | Graph snapshot + fire snapshot | ~60Hz | Live diagram: glowing connections, weight heatmaps |
+| Debugging | Fire snapshot | On-demand | "Why did this note play at pitch 62.3?" |
+| Dead path detection | Fire snapshot (`FIRE_COUNT`) | Periodic | "This synapse never fires — dead path" |
+| Training loop | Fire snapshot (after playback) | Per-run | Fitness function evaluates fire counts + effective values |
+| Complete event replay | Stream (future extension) | Continuous | Full event history for detailed analytics |
 
-### E.6 Design Decisions
+### E.5 Design Decisions
 
 | # | Decision | Rationale |
 |:---|:---|:---|
-| 31 | Rich fire trace (Option B) — effective values at fire time | Parameters change continuously; post-hoc reconstruction is inaccurate |
-| 32 | Dedicated SPSC ring buffer | Same primitive as command ring. Non-blocking, zero allocation |
-| 33 | NoteOn events only | Infrequent (10–100/block), 32B/entry overhead is negligible |
-| 34 | Consumer-side interpretation | Kernel writes trace entries. Visualization, debugging, analytics are consumer responsibilities |
-| 35 | Graph snapshot via SAB traversal | Structure changes infrequently. No dedicated mechanism needed — consumer reads SAB directly |
+| 31 | Snapshot model as primary | Simpler kernel, consumer controls frequency, no overflow handling |
+| 32 | Rich state — effective values at fire time | Parameters change continuously; post-hoc reconstruction is inaccurate |
+| 33 | `FIRE_COUNT` per synapse | Enables training loop and dead path detection without event stream |
+| 34 | Consumer-side interpretation | Kernel writes state. Visualization, debugging, analytics are consumer responsibilities |
+| 35 | Graph snapshot via SAB traversal | Structure changes infrequently. No dedicated mechanism needed |
+| 36 | Ring buffer stream as future extension | Purely additive alongside snapshot. Deferred until analytics use case demands it |
