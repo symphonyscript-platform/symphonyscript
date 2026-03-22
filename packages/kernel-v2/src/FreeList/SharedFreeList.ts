@@ -13,6 +13,7 @@ export class SharedFreeList implements FreeList {
   public readonly totalSizeInBytes: number
 
   private readonly headSlotByteOffset: number
+  private readonly freeCountByteOffset: number
   private readonly listSizeInBytes: number
   private readonly endByteOffset: number
   private readonly bitmapSizeInBytes: number
@@ -32,10 +33,11 @@ export class SharedFreeList implements FreeList {
     this.listSizeInBytes = this.slotSizeInBytes * this.slotsCount
     this.endByteOffset = startByteOffset + this.listSizeInBytes
     this.headSlotByteOffset = this.endByteOffset
-    this.bitmaskStartByteOffset = this.endByteOffset + 4
+    this.freeCountByteOffset = this.endByteOffset + 4
+    this.bitmaskStartByteOffset = this.endByteOffset + 4 + 4
 
     this.bitmapSizeInBytes = Math.ceil(this.slotsCount / 32) * 4
-    this.totalSizeInBytes = this.listSizeInBytes + this.bitmapSizeInBytes + 4 // +4 is for the head slot
+    this.totalSizeInBytes = this.listSizeInBytes + this.bitmapSizeInBytes + 4 + 4 // +4 is for the head slot and +4 for the freeCount
     if (!bind) this.initializeSlots()
   }
 
@@ -94,49 +96,53 @@ export class SharedFreeList implements FreeList {
     )
   }
 
+  getFreeCount() {
+    return Atomics.load(this.sab, this.freeCountByteOffset >> 2)
+  }
+
   alloc(): number {
     let retryCount = 0
     while (retryCount < this.maxRetryCounts) {
-      const headByteOffset = Atomics.load(this.sab, this.headSlotByteOffset >> 2)
+      const slotByteOffset = Atomics.load(this.sab, this.headSlotByteOffset >> 2)
 
-      if (headByteOffset === 0) {
+      if (slotByteOffset === 0) {
         return 0
       }
 
-      if (headByteOffset < this.startByteOffset || headByteOffset >= this.endByteOffset) {
+      if (slotByteOffset < this.startByteOffset || slotByteOffset >= this.endByteOffset) {
         return -ERROR_FREE_LIST_CORRUPT
       }
 
-      const nextHeadOffset = Atomics.load(this.sab, headByteOffset >> 2)
+      const nextHeadOffset = Atomics.load(this.sab, slotByteOffset >> 2)
 
       const actualHeadByteOffset = Atomics.compareExchange(
         this.sab,
         this.headSlotByteOffset >> 2,
-        headByteOffset,
+        slotByteOffset,
         nextHeadOffset,
       )
 
-      if (actualHeadByteOffset !== headByteOffset) {
+      if (actualHeadByteOffset !== slotByteOffset) {
         ++retryCount
         continue
       }
 
-      const slotEndByteOffset = headByteOffset + this.slotSizeInBytes
+      const slotEndByteOffset = slotByteOffset + this.slotSizeInBytes
 
-      for (let i = headByteOffset; i < slotEndByteOffset; i += 4) {
+      for (let i = slotByteOffset; i < slotEndByteOffset; i += 4) {
         // no Atomics.store needed: the slot is floating,
         // no other thread can read it at this point
         this.sab[i >> 2] = 0
       }
 
-      const N = (headByteOffset - this.startByteOffset) / this.slotSizeInBytes
-      Atomics.or(
-        this.sab,
-        (this.bitmaskStartByteOffset >> 2) + (N >> 5),
-        (1 << (N & 31)),
-      )
+      const slotBitmaskIndex = (slotByteOffset - this.startByteOffset) / this.slotSizeInBytes
+      const slotBitmask = 1 << (slotBitmaskIndex & 31)
+      const slotBitmaskOffset = (this.bitmaskStartByteOffset >> 2) + (slotBitmaskIndex >> 5)
 
-      return headByteOffset
+      Atomics.or(this.sab, slotBitmaskOffset, slotBitmask)
+      Atomics.sub(this.sab, this.freeCountByteOffset >> 2, 1)
+
+      return slotByteOffset
     }
 
     return -ERROR_CONTENTION_EXCEEDED
@@ -153,8 +159,8 @@ export class SharedFreeList implements FreeList {
 
     const slotBitmaskIndex = (slotByteOffset - this.startByteOffset) / this.slotSizeInBytes
     const slotBitmaskOffset = (this.bitmaskStartByteOffset >> 2) + (slotBitmaskIndex >> 5)
-    const mask = 1 << (slotBitmaskIndex & 31)
-    const isFreed = (Atomics.load(this.sab, slotBitmaskOffset) & mask) === 0
+    const slotBitmask = 1 << (slotBitmaskIndex & 31)
+    const isFreed = (Atomics.load(this.sab, slotBitmaskOffset) & slotBitmask) === 0
 
     if (isFreed) {
       return -ERROR_DOUBLE_FREE
@@ -173,7 +179,8 @@ export class SharedFreeList implements FreeList {
       )
 
       if (actualByteOffset === headByteOffset) {
-        Atomics.and(this.sab, slotBitmaskOffset, ~mask)
+        Atomics.and(this.sab, slotBitmaskOffset, ~slotBitmask)
+        Atomics.add(this.sab, this.freeCountByteOffset >> 2, 1)
 
         return OK
       }
@@ -190,6 +197,7 @@ export class SharedFreeList implements FreeList {
     const slotSize = this.slotSizeInBytes
 
     Atomics.store(this.sab, this.headSlotByteOffset >> 2, this.startByteOffset)
+    Atomics.store(this.sab, this.freeCountByteOffset >> 2, this.slotsCount)
 
     for (let b = start; b < end; b += slotSize) {
       const next = b + slotSize

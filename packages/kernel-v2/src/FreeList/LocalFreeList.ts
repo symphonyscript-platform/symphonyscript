@@ -6,6 +6,7 @@ export class LocalFreeList implements FreeList {
   public readonly totalSizeInBytes: number
 
   private readonly headSlotByteOffset: number
+  private readonly freeCountByteOffset: number
   private readonly listSizeInBytes: number
   private readonly endByteOffset: number
   private readonly bitmapSizeInBytes: number
@@ -24,10 +25,11 @@ export class LocalFreeList implements FreeList {
     this.listSizeInBytes = this.slotSizeInBytes * this.slotsCount
     this.endByteOffset = this.startByteOffset + this.listSizeInBytes
     this.headSlotByteOffset = this.endByteOffset
-    this.bitmaskStartByteOffset = this.endByteOffset + 4
+    this.freeCountByteOffset = this.endByteOffset + 4
+    this.bitmaskStartByteOffset = this.endByteOffset + 4 + 4
 
     this.bitmapSizeInBytes = Math.ceil(this.slotsCount / 32) * 4
-    this.totalSizeInBytes = this.listSizeInBytes + this.bitmapSizeInBytes + 4 // +4 is for the head slot
+    this.totalSizeInBytes = this.listSizeInBytes + this.bitmapSizeInBytes + 4 + 4 // +4 is for the head slot and +4 for the freeCount
     if (!bind) this.initializeSlots()
   }
 
@@ -75,6 +77,10 @@ export class LocalFreeList implements FreeList {
     )
   }
 
+  getFreeCount(): number {
+    return this.sab[this.freeCountByteOffset >> 2]
+  }
+
   alloc(): number {
     const slotByteOffset = this.sab[this.headSlotByteOffset >> 2]
 
@@ -93,6 +99,8 @@ export class LocalFreeList implements FreeList {
     for (let i = slotByteOffset; i < slotEndByteOffset; i += 4) {
       this.sab[i >> 2] = 0
     }
+
+    this.sab[this.freeCountByteOffset >> 2] -= 1
 
     return slotByteOffset
   }
@@ -118,6 +126,7 @@ export class LocalFreeList implements FreeList {
     this.sab[slotByteOffset >> 2] = this.sab[this.headSlotByteOffset >> 2]
     this.sab[this.headSlotByteOffset >> 2] = slotByteOffset
     this.sab[slotBitmaskOffset] &= ~slotBitmask
+    this.sab[this.freeCountByteOffset >> 2] += 1
 
     return OK
   }
@@ -128,6 +137,7 @@ export class LocalFreeList implements FreeList {
     const slotSize = this.slotSizeInBytes
 
     this.sab[this.headSlotByteOffset >> 2] = start
+    this.sab[this.freeCountByteOffset >> 2] = this.slotsCount
 
     for (let b = start; b < end; b += slotSize) {
       const next = b + slotSize
