@@ -10,11 +10,12 @@ export class RingBuffer {
   private readonly writeByteOffsetRel: number
   private readonly pendingByteOffset: number
 
-  constructor(
+  private constructor(
     private readonly sab: Int32Array,
     startByteOffset: number,
     private readonly slotSizeInBytes: number,
     private readonly slotsCount: number,
+    bind: boolean,
   ) {
     if (startByteOffset % 4 !== 0) throw new Error(`startByteOffset must be evenly divisible by 4, got: ${startByteOffset}`)
     if (slotSizeInBytes % 64 !== 0) throw new Error(`slotSizeInBytes must be evenly divisible by 64, got: ${slotSizeInBytes}`)
@@ -28,9 +29,49 @@ export class RingBuffer {
     this.listSizeInBytesMod = this.listSizeInBytes - 1
     this.totalSizeInBytes = this.listSizeInBytes + 12
 
-    this.sab[this.readByteOffsetRel >> 2] = 0
-    this.sab[this.writeByteOffsetRel >> 2] = 0
-    this.sab[this.pendingByteOffset >> 2] = 0
+    if (!bind) {
+      this.sab[this.readByteOffsetRel >> 2] = 0
+      this.sab[this.writeByteOffsetRel >> 2] = 0
+      this.sab[this.pendingByteOffset >> 2] = 0
+    }
+  }
+
+  static create(
+    sab: Int32Array,
+    startByteOffset: number,
+    slotSizeInBytes: number,
+    slotsCount: number,
+  ) {
+    return new RingBuffer(
+      sab,
+      startByteOffset,
+      slotSizeInBytes,
+      slotsCount,
+      false,
+    )
+  }
+
+  static bind(
+    sab: Int32Array,
+    startByteOffset: number,
+    slotSizeInBytes: number,
+    slotsCount: number,
+  ) {
+    return new RingBuffer(
+      sab,
+      startByteOffset,
+      slotSizeInBytes,
+      slotsCount,
+      true,
+    )
+  }
+
+  isEmpty() {
+    return this.getPendingCount() === 0
+  }
+
+  isFull() {
+    return this.getPendingCount() === this.slotsCount
   }
 
   getPendingCount() {
