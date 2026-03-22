@@ -33,7 +33,6 @@ export class ChainHashTable implements HashTable {
     this.totalSizeInBytes = this.bucketsRegionSizeInBytes + this.entriesRegionSizeInBytes + 8 // +4 for freeHead and +4 for size
 
     this.entriesByteOffset = this.bucketsByteOffset + this.bucketsRegionSizeInBytes
-    this.sab[this.freeHeadByteOffset >> 2] = this.entriesByteOffset
     this.initializeEntrySlots()
   }
 
@@ -49,7 +48,7 @@ export class ChainHashTable implements HashTable {
       currentI32 = this.sab[currentI32 + 2] >> 2
     }
 
-    return 0
+    return -1
   }
 
   set(key: number, value: number): number {
@@ -124,6 +123,8 @@ export class ChainHashTable implements HashTable {
     const entrySize = this.entrySizeInBytes
     const start = this.entriesByteOffset
     const end = start + this.entriesRegionSizeInBytes
+
+    this.sab[this.freeHeadByteOffset >> 2] = this.entriesByteOffset
 
     for (let byteOffset = start; byteOffset < end; byteOffset += entrySize) {
       if (byteOffset < (end - entrySize)) {
