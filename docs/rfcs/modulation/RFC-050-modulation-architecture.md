@@ -2309,3 +2309,76 @@ class SymphonyScriptProcessor extends AudioWorkletProcessor {
 | `.when(Expr.and(a, b))` compound condition | Both must be true for modulator to be active |
 | `Expr.toJSON()` is valid JSON | Parse back, reconstruct, verify identical compilation |
 | Serializable clip with Expr compiles | `SerializationBridge.materialize(clip.when(Expr.gt(S, 500)))` succeeds |
+
+---
+
+## Appendix E: Fire Trace (Observability)
+
+### E.1 Overview
+
+Two data streams provide full external observability of the deterministic kernel:
+
+1. **Graph Snapshot (Structure)** — node connections, synapse weights, modulator bindings. Changes infrequently (clip creation, linking, live-coding edits). Readable from SAB at any time via node chain and synapse table traversal. Consumer polls at ~1–10Hz for visualization.
+
+2. **Fire Trace (Activity)** — which synapses fired, with what effective weights and effective parameter values at the exact moment of fire. Changes every audio block (~2.7ms). Transmitted via a dedicated SPSC ring buffer from audio thread → main thread.
+
+### E.2 Fire Trace Ring Buffer
+
+A dedicated `RingBuffer` instance carrying per-noteOn trace entries. Written by the audio thread during synapse resolution. Read by the main thread at UI frame rate (~60Hz), consuming batches of events per frame.
+
+- Same `RingBuffer` primitive used for command communication.
+- SPSC: audio thread writes, main thread reads. No contention, no allocation.
+- Power-of-2 slot count (e.g., 256 entries). Overflow returns `ERROR_RING_BUFFER_OVERFLOW` — trace entries are dropped, not blocking audio.
+
+### E.3 Trace Entry Format (Rich Trace — Option B)
+
+Each noteOn fire event produces one entry containing the effective parameter values at the exact moment of fire. This avoids the need to reconstruct values from continuously-changing `SMOOTHED_VALUE` fields after the fact.
+
+```typescript
+export const FIRE_TRACE = {
+  STRIDE_I32: 8,
+  STRIDE_BYTES: 32,
+} as const;
+
+export const TRACE = {
+  TICK:                0,  // Tick at which the event fired
+  NODE_PTR:            1,  // Byte offset of the target node
+  SYNAPSE_PTR:         2,  // Byte offset of the synapse that fired
+  EFFECTIVE_WEIGHT:    3,  // Effective synapse weight after modulation (0–1000)
+  EFFECTIVE_PITCH:     4,  // Effective pitch after modulation deltas (Q16.16)
+  EFFECTIVE_VELOCITY:  5,  // Effective velocity after modulation deltas (Q16.16)
+  EFFECTIVE_DURATION:  6,  // Effective duration after modulation deltas
+  RESERVED_7:          7,  // Reserved for future use
+} as const;
+```
+
+**Stride:** 8 × i32 = 32 bytes per entry. Fits in one cache-line-aligned slot (paired).
+
+**Why rich trace over lightweight trace:** Parameters change continuously — the `SMOOTHED_VALUE` read at UI frame N is not the same value that was active when the note fired between frames N-2 and N-1. Capturing effective values at fire time preserves the exact truth.
+
+**Why noteOn only:** NoteOn events are infrequent (10–100 per block). The overhead of 32 bytes × ~100 entries = ~3.2KB per block is negligible. NoteOff events carry no modulated values — they are identity-based (pitch + expression ID).
+
+### E.4 SPSC Ownership
+
+| Field | Writer | Reader |
+|:---|:---|:---|
+| All trace entry fields | Audio engine (during synapse resolution) | Main thread (consumer) |
+
+### E.5 Use Cases
+
+| Consumer | Reads | Update Frequency | Purpose |
+|:---|:---|:---|:---|
+| Neural graph visualization | Graph snapshot + fire trace | ~60Hz | Live diagram: glowing connections, weight heatmaps |
+| Debugging | Fire trace entries | On-demand | "Why did this note play at pitch 62.3?" — exact values at fire time |
+| Dead path detection | Fire trace analytics | Periodic | "This synapse never fires — dead path" |
+| Automated parameter tuning | Fire trace + fitness function | Per-playback | Consumer-side optimization driving parameter space |
+
+### E.6 Design Decisions
+
+| # | Decision | Rationale |
+|:---|:---|:---|
+| 31 | Rich fire trace (Option B) — effective values at fire time | Parameters change continuously; post-hoc reconstruction is inaccurate |
+| 32 | Dedicated SPSC ring buffer | Same primitive as command ring. Non-blocking, zero allocation |
+| 33 | NoteOn events only | Infrequent (10–100/block), 32B/entry overhead is negligible |
+| 34 | Consumer-side interpretation | Kernel writes trace entries. Visualization, debugging, analytics are consumer responsibilities |
+| 35 | Graph snapshot via SAB traversal | Structure changes infrequently. No dedicated mechanism needed — consumer reads SAB directly |
