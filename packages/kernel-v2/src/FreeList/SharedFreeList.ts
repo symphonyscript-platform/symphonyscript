@@ -1,5 +1,13 @@
 import { FreeList } from './FreeList'
 import { LocalFreeList } from './LocalFreeList'
+import {
+  ERROR_ALIGNMENT_VIOLATION,
+  ERROR_CONTENTION_EXCEEDED,
+  ERROR_DOUBLE_FREE,
+  ERROR_FREE_LIST_CORRUPT,
+  ERROR_OUT_OF_BOUNDS,
+  OK
+} from '../constants'
 
 export class SharedFreeList implements FreeList {
   public readonly totalSizeInBytes: number
@@ -95,6 +103,10 @@ export class SharedFreeList implements FreeList {
         return 0
       }
 
+      if (headByteOffset < this.startByteOffset || headByteOffset >= this.endByteOffset) {
+        return -ERROR_FREE_LIST_CORRUPT
+      }
+
       const nextHeadOffset = Atomics.load(this.sab, headByteOffset >> 2)
 
       const actualHeadByteOffset = Atomics.compareExchange(
@@ -127,50 +139,49 @@ export class SharedFreeList implements FreeList {
       return headByteOffset
     }
 
-    return 0
+    return -ERROR_CONTENTION_EXCEEDED
   }
 
-  free(byteOffset: number): void {
-    if (byteOffset < this.startByteOffset || byteOffset >= this.endByteOffset) {
-      console.warn(`Out-of-bounds byte offset ${byteOffset} passed to free(), returning early.`)
-      return
+  free(slotByteOffset: number): number {
+    if (slotByteOffset < this.startByteOffset || slotByteOffset >= this.endByteOffset) {
+      return -ERROR_OUT_OF_BOUNDS
     }
 
-    const N = (byteOffset - this.startByteOffset) / this.slotSizeInBytes
-    const mask = 1 << (N & 31)
-    const isAllocated = Atomics.load(
-      this.sab,
-      (this.bitmaskStartByteOffset >> 2) + (N >> 5),
-    ) & mask
+    if ((slotByteOffset - this.startByteOffset) % this.slotSizeInBytes !== 0) {
+      return -ERROR_ALIGNMENT_VIOLATION
+    }
 
-    if (!isAllocated) {
-      return
+    const slotBitmaskIndex = (slotByteOffset - this.startByteOffset) / this.slotSizeInBytes
+    const slotBitmaskOffset = (this.bitmaskStartByteOffset >> 2) + (slotBitmaskIndex >> 5)
+    const mask = 1 << (slotBitmaskIndex & 31)
+    const isFreed = (Atomics.load(this.sab, slotBitmaskOffset) & mask) === 0
+
+    if (isFreed) {
+      return -ERROR_DOUBLE_FREE
     }
 
     let retryCount = 0
     while (retryCount < this.maxRetryCounts) {
       const headByteOffset = Atomics.load(this.sab, this.headSlotByteOffset >> 2)
-      Atomics.store(this.sab, byteOffset >> 2, headByteOffset)
+      Atomics.store(this.sab, slotByteOffset >> 2, headByteOffset)
 
       const actualByteOffset = Atomics.compareExchange(
         this.sab,
         this.headSlotByteOffset >> 2,
         headByteOffset,
-        byteOffset,
+        slotByteOffset,
       )
 
       if (actualByteOffset === headByteOffset) {
-        Atomics.and(
-          this.sab,
-          (this.bitmaskStartByteOffset >> 2) + (N >> 5),
-          ~mask,
-        )
+        Atomics.and(this.sab, slotBitmaskOffset, ~mask)
 
-        return
+        return OK
       }
 
       ++retryCount
     }
+
+    return -ERROR_CONTENTION_EXCEEDED
   }
 
   private initializeSlots() {

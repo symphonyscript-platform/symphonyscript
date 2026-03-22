@@ -1,5 +1,6 @@
 import { FreeList } from './FreeList'
 import { SharedFreeList } from './SharedFreeList'
+import { ERROR_ALIGNMENT_VIOLATION, ERROR_DOUBLE_FREE, ERROR_OUT_OF_BOUNDS, OK } from '../constants'
 
 export class LocalFreeList implements FreeList {
   public readonly totalSizeInBytes: number
@@ -77,14 +78,17 @@ export class LocalFreeList implements FreeList {
   alloc(): number {
     const slotByteOffset = this.sab[this.headSlotByteOffset >> 2]
 
-    if (slotByteOffset === 0) return 0
+    if (slotByteOffset === 0) {
+      return 0
+    }
 
     const slotEndByteOffset = slotByteOffset + this.slotSizeInBytes
     const slotBitmaskIndex = (slotByteOffset - this.startByteOffset) / this.slotSizeInBytes
+    const slotBitmask = 1 << (slotBitmaskIndex & 31)
     const slotBitmaskOffset = (this.bitmaskStartByteOffset >> 2) + (slotBitmaskIndex >> 5)
 
     this.sab[this.headSlotByteOffset >> 2] = this.sab[slotByteOffset >> 2]
-    this.sab[slotBitmaskOffset] |= 1 << (slotBitmaskIndex & 31)
+    this.sab[slotBitmaskOffset] |= slotBitmask
 
     for (let i = slotByteOffset; i < slotEndByteOffset; i += 4) {
       this.sab[i >> 2] = 0
@@ -93,18 +97,29 @@ export class LocalFreeList implements FreeList {
     return slotByteOffset
   }
 
-  free(slotByteOffset: number) {
-    if (slotByteOffset < this.startByteOffset || slotByteOffset >= this.endByteOffset) return
+  free(slotByteOffset: number): number {
+    if (slotByteOffset < this.startByteOffset || slotByteOffset >= this.endByteOffset) {
+      return -ERROR_OUT_OF_BOUNDS
+    }
+
+    if ((slotByteOffset - this.startByteOffset) % this.slotSizeInBytes !== 0) {
+      return -ERROR_ALIGNMENT_VIOLATION
+    }
 
     const slotBitmaskIndex = (slotByteOffset - this.startByteOffset) / this.slotSizeInBytes
     const slotBitmaskOffset = (this.bitmaskStartByteOffset >> 2) + (slotBitmaskIndex >> 5)
-    const isFreed = (this.sab[slotBitmaskOffset] & (1 << (slotBitmaskIndex & 31))) === 0
+    const slotBitmask = 1 << (slotBitmaskIndex & 31)
+    const isFreed = (this.sab[slotBitmaskOffset] & slotBitmask) === 0
 
-    if (isFreed) return
+    if (isFreed) {
+      return -ERROR_DOUBLE_FREE
+    }
 
     this.sab[slotByteOffset >> 2] = this.sab[this.headSlotByteOffset >> 2]
     this.sab[this.headSlotByteOffset >> 2] = slotByteOffset
-    this.sab[slotBitmaskOffset] &= ~(1 << (slotBitmaskIndex & 31))
+    this.sab[slotBitmaskOffset] &= ~slotBitmask
+
+    return OK
   }
 
   private initializeSlots() {
