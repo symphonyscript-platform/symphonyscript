@@ -48,23 +48,23 @@ export class ProbeHashTable implements HashTable {
     let displacement = 0
 
     for (let k = 0; k < capacity; ++k) {
-      const index = (hash + k) & mod
-      const offset = (start >> 2) + index * 3
-      const slotKey = this.sab[offset + 1]
+      const slotNumber = (hash + k) & mod
+      const slotIndex = (start >> 2) + slotNumber * 3
+      const slotKey = this.sab[slotIndex + 1]
 
       if (slotKey === -1) {
         return -1
       }
 
-      const slotHome = this.sab[offset] & mod
-      const slotDisplacement = (index - slotHome) & mod
+      const slotHome = this.sab[slotIndex] & mod
+      const slotDisplacement = (slotNumber - slotHome) & mod
 
       if (displacement > slotDisplacement) {
         return -1
       }
 
       if (key === slotKey) {
-        return this.sab[offset + 2]
+        return this.sab[slotIndex + 2]
       }
 
       ++displacement
@@ -85,31 +85,31 @@ export class ProbeHashTable implements HashTable {
     let displacement = 0
 
     for (let k = 0; k < capacity; ++k) {
-      const index = (hash + k) & mod
-      const offset = (start >> 2) + index * 3
-      const slotKey = this.sab[offset + 1]
+      const slotNumber = (hash + k) & mod
+      const slotIndex = (start >> 2) + slotNumber * 3
+      const slotKey = this.sab[slotIndex + 1]
 
       if (slotKey === -1) {
-        this.sab[offset] = hash
-        this.sab[offset + 1] = key
-        this.sab[offset + 2] = value
+        this.sab[slotIndex] = hash
+        this.sab[slotIndex + 1] = key
+        this.sab[slotIndex + 2] = value
         this.sab[this.sizeByteOffset >> 2] += 1
 
         return OK
       } else if (slotKey === key) {
-        this.sab[offset + 2] = value
+        this.sab[slotIndex + 2] = value
         return OK
       }
 
-      const slotHash = this.sab[offset]
+      const slotHash = this.sab[slotIndex]
       const slotHome = slotHash & mod
-      const slotDisplacement = (index - slotHome) & mod
+      const slotDisplacement = (slotNumber - slotHome) & mod
 
       if (displacement > slotDisplacement) {
-        const slotValue = this.sab[offset + 2]
-        this.sab[offset] = hash
-        this.sab[offset + 1] = key
-        this.sab[offset + 2] = value
+        const slotValue = this.sab[slotIndex + 2]
+        this.sab[slotIndex] = hash
+        this.sab[slotIndex + 1] = key
+        this.sab[slotIndex + 2] = value
         key = slotKey
         value = slotValue
         hash = slotHash
@@ -125,29 +125,38 @@ export class ProbeHashTable implements HashTable {
   delete(key: number): number {
     const hash = this.hash(key, this.shift)
     const capacity = this.capacity
+    const mod = capacity - 1
     const start = this.listStartByteOffset
+    let displacement = 0
 
     for (let k = 0; k < capacity; ++k) {
-      const probe = k * (k + 1) / 2
-      const index = (hash + probe) & (capacity - 1)
-      const offset = (start >> 2) + index * 3
-      const resolvedKey = this.sab[offset + 1]
+      const slotNumber = (hash + k) & mod
+      const slotIndex = (start >> 2) + slotNumber * 3
+      const slotKey = this.sab[slotIndex + 1]
 
-      if (key === -1) {
+      if (slotKey === -1) {
         return -1
       }
 
-      if (key === resolvedKey) {
-        const value = this.sab[offset + 1]
-        this.sab[offset] = -2
-        this.sab[offset + 1] = -2
-        this.sab[offset + 2] = -2
+      const slotHome = this.sab[slotIndex] & mod
+      const slotDisplacement = (slotNumber - slotHome) & mod
+
+      if (displacement > slotDisplacement) {
+        return -1
+      }
+
+      if (key === slotKey) {
+        const value = this.sab[slotIndex + 2]
+        this.sab[slotIndex] = -1
+        this.sab[slotIndex + 1] = -1
+        this.sab[slotIndex + 2] = -1
         this.sab[this.sizeByteOffset >> 2] -= 1
+        this.backwardsShift(slotNumber)
 
         return value
       }
 
-      ++k
+      ++displacement
     }
 
     return -1
@@ -157,14 +166,37 @@ export class ProbeHashTable implements HashTable {
 
   }
 
-  private backwardsShift(
-    deletedKey: number,
-    deletedIndex: number,
-  ) {
+  private backwardsShift(slotNumber: number) {
     const capacity = this.capacity
+    const mod = capacity - 1
+    const start = this.listStartByteOffset
+    const startSlotNumber = slotNumber + 1
+    let lastEmptiedSlotIndex = (start >> 2) + slotNumber * 3
 
-    for (let i = deletedIndex; i < capacity; ++i) {
+    for (let i = 0; i < capacity; ++i) {
+      const slotNumber = (startSlotNumber + i) & mod
+      const slotIndex = (start >> 2) + slotNumber * 3
+      const slotHash = this.sab[slotIndex]
+      const slotKey = this.sab[slotIndex + 1]
 
+      if (slotKey === -1) {
+        break
+      }
+
+      const slotHome = slotHash & mod
+      const slotDisplacement = (slotNumber - slotHome) & mod;
+
+      if (slotDisplacement > 0) {
+        this.sab[lastEmptiedSlotIndex] = slotHash
+        this.sab[lastEmptiedSlotIndex + 1] = slotKey
+        this.sab[lastEmptiedSlotIndex + 2] = this.sab[slotIndex + 2]
+        this.sab[slotIndex] = -1
+        this.sab[slotIndex + 1] = -1
+        this.sab[slotIndex + 2] = -1
+        lastEmptiedSlotIndex = slotIndex
+      } else {
+        break
+      }
     }
   }
 

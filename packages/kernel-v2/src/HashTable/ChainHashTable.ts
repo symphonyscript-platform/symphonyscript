@@ -5,6 +5,7 @@ import { ERROR_TABLE_FULL, OK } from '../constants'
 
 export class ChainHashTable implements HashTable {
   public readonly totalSizeInBytes: number
+  public readonly endByteOffset: number
 
   private readonly capacity: number
   private readonly shift: number
@@ -31,9 +32,20 @@ export class ChainHashTable implements HashTable {
     this.bucketsRegionSizeInBytes = this.capacity * 4
     this.entriesRegionSizeInBytes = this.maxEntries * 3 * 4
     this.totalSizeInBytes = this.bucketsRegionSizeInBytes + this.entriesRegionSizeInBytes + 8 // +4 for freeHead and +4 for size
+    this.endByteOffset = this.startByteOffset + this.totalSizeInBytes
 
     this.entriesByteOffset = this.bucketsByteOffset + this.bucketsRegionSizeInBytes
     this.initializeEntrySlots()
+  }
+
+  static calculateCapacity(maxEntries: number, maxLoadFactor: number) {
+    return nextPowerOf2(Math.ceil(maxEntries / maxLoadFactor))
+  }
+
+  static bytesRequired(maxEntries: number, maxLoadFactor: number) {
+    const capacity = ChainHashTable.calculateCapacity(maxEntries, maxLoadFactor)
+
+    return capacity * 4 + maxEntries * 12 + 8
   }
 
   get(key: number): number {
