@@ -119,7 +119,6 @@ export class ChainHashTable implements HashTable {
         this.sab[freeHeadIndex] = entryOffset
         this.sab[entryIndex] = 0
         this.sab[entryIndex + 1] = 0
-        this.sab[entryIndex + 2] = 0
         this.sab[this.sizeIndex] -= 1
 
         return value
