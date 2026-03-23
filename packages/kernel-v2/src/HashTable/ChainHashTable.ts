@@ -8,11 +8,13 @@ export class ChainHashTable implements HashTable {
   public readonly endByteOffset: number
 
   private readonly capacity: number
+  private readonly mod: number
   private readonly shift: number
-  private readonly freeHeadByteOffset: number
-  private readonly sizeByteOffset: number
-  private readonly bucketsByteOffset: number
-  private readonly entriesByteOffset: number
+  private readonly startIndex: number
+  private readonly freeHeadIndex: number
+  private readonly sizeIndex: number
+  private readonly bucketsStartIndex: number
+  private readonly entriesStartIndex: number
   private readonly bucketsRegionSizeInBytes: number
   private readonly entriesRegionSizeInBytes: number
   private readonly entrySizeInBytes = 12
@@ -25,16 +27,18 @@ export class ChainHashTable implements HashTable {
     private readonly hash: HashingFunction = fibonacciHash,
   ) {
     this.capacity = nextPowerOf2(Math.ceil(maxEntries / maxLoadFactor))
+    this.mod = this.capacity - 1
     this.shift = 32 - Math.log2(this.capacity)
-    this.freeHeadByteOffset = this.startByteOffset
-    this.sizeByteOffset = this.startByteOffset + 4
-    this.bucketsByteOffset = this.startByteOffset + 8
+    this.startIndex = this.startByteOffset >> 2
+    this.freeHeadIndex = this.startIndex
+    this.sizeIndex = this.startIndex + 1
+    this.bucketsStartIndex = this.startIndex + 2
     this.bucketsRegionSizeInBytes = this.capacity * 4
     this.entriesRegionSizeInBytes = this.maxEntries * 3 * 4
     this.totalSizeInBytes = this.bucketsRegionSizeInBytes + this.entriesRegionSizeInBytes + 8 // +4 for freeHead and +4 for size
     this.endByteOffset = this.startByteOffset + this.totalSizeInBytes
 
-    this.entriesByteOffset = this.bucketsByteOffset + this.bucketsRegionSizeInBytes
+    this.entriesStartIndex = this.bucketsStartIndex + (this.bucketsRegionSizeInBytes >> 2)
     this.initializeSlots()
   }
 
@@ -49,77 +53,80 @@ export class ChainHashTable implements HashTable {
   }
 
   get(key: number): number {
-    const offset = this.toOffset(key)
-    let currentI32 = this.sab[offset >> 2] >> 2
+    const hashMod = this.hash(key, this.shift) & this.mod
+    const bucketIndex = this.bucketsStartIndex + hashMod
+    let entryIndex = this.sab[bucketIndex] >> 2
 
-    while (currentI32 !== 0) {
-      if (key === this.sab[currentI32]) {
-        return this.sab[currentI32 + 1]
+    while (entryIndex !== 0) {
+      if (key === this.sab[entryIndex]) {
+        return this.sab[entryIndex + 1]
       }
 
-      currentI32 = this.sab[currentI32 + 2] >> 2
+      entryIndex = this.sab[entryIndex + 2] >> 2
     }
 
     return -1
   }
 
   set(key: number, value: number): number {
-    const offset = this.toOffset(key)
-    let currentI32 = this.sab[offset >> 2] >> 2
+    const hashMod = this.hash(key, this.shift) & this.mod
+    const bucketIndex = this.bucketsStartIndex + hashMod
+    let entryIndex = this.sab[bucketIndex] >> 2
 
-    while (currentI32 !== 0) {
-      if (key === this.sab[currentI32]) {
-        this.sab[currentI32 + 1] = value
+    while (entryIndex !== 0) {
+      if (key === this.sab[entryIndex]) {
+        this.sab[entryIndex + 1] = value
         return OK
       }
 
-      currentI32 = this.sab[currentI32 + 2] >> 2
+      entryIndex = this.sab[entryIndex + 2] >> 2
     }
 
-    const freeHead = this.sab[this.freeHeadByteOffset >> 2]
+    const freeHeadOffset = this.sab[this.freeHeadIndex]
 
-    if (freeHead === 0) {
+    if (freeHeadOffset === 0) {
       return -ERROR_TABLE_FULL
     }
 
-    const freeHeadI32 = freeHead >> 2
-    const oldHead = this.sab[offset >> 2]
-    const nextFreeHead = this.sab[freeHeadI32 + 2]
-    this.sab[offset >> 2] = freeHead
-    this.sab[freeHeadI32] = key
-    this.sab[freeHeadI32 + 1] = value
-    this.sab[freeHeadI32 + 2] = oldHead
-    this.sab[this.freeHeadByteOffset >> 2] = nextFreeHead
-    this.sab[this.sizeByteOffset >> 2] += 1
+    const freeHeadIndex = freeHeadOffset >> 2
+    const oldHead = this.sab[bucketIndex]
+    const nextFreeHead = this.sab[freeHeadIndex + 2]
+    this.sab[bucketIndex] = freeHeadOffset
+    this.sab[freeHeadIndex] = key
+    this.sab[freeHeadIndex + 1] = value
+    this.sab[freeHeadIndex + 2] = oldHead
+    this.sab[this.freeHeadIndex] = nextFreeHead
+    this.sab[this.sizeIndex] += 1
 
     return OK
   }
 
   delete(key: number): number {
-    const offset = this.toOffset(key)
-    const freeHeadI32 = this.freeHeadByteOffset >> 2
-    let current = this.sab[offset >> 2]
-    let previousI32 = offset >> 2
+    const hashMod = this.hash(key, this.shift) & this.mod
+    const bucketIndex = this.bucketsStartIndex + hashMod
+    const freeHeadIndex = this.freeHeadIndex
+    let entryOffset = this.sab[bucketIndex]
+    let previousEntryIndex = bucketIndex
 
-    while (current !== 0) {
-      const currentI32 = current >> 2
-      const nextByteOffset = currentI32 + 2
+    while (entryOffset !== 0) {
+      const entryIndex = entryOffset >> 2
+      const nextPointerIndex = entryIndex + 2
 
-      if (key === this.sab[currentI32]) {
-        const value = this.sab[currentI32 + 1]
-        this.sab[previousI32] = this.sab[nextByteOffset]
-        this.sab[nextByteOffset] = this.sab[freeHeadI32]
-        this.sab[freeHeadI32] = current
-        this.sab[currentI32] = 0
-        this.sab[currentI32 + 1] = 0
-        this.sab[currentI32 + 2] = 0
-        this.sab[this.sizeByteOffset >> 2] -= 1
+      if (key === this.sab[entryIndex]) {
+        const value = this.sab[entryIndex + 1]
+        this.sab[previousEntryIndex] = this.sab[nextPointerIndex]
+        this.sab[nextPointerIndex] = this.sab[freeHeadIndex]
+        this.sab[freeHeadIndex] = entryOffset
+        this.sab[entryIndex] = 0
+        this.sab[entryIndex + 1] = 0
+        this.sab[entryIndex + 2] = 0
+        this.sab[this.sizeIndex] -= 1
 
         return value
       }
 
-      previousI32 = currentI32 + 2
-      current = this.sab[nextByteOffset]
+      previousEntryIndex = entryIndex + 2
+      entryOffset = this.sab[nextPointerIndex]
     }
 
     return -1
@@ -128,18 +135,12 @@ export class ChainHashTable implements HashTable {
   compact(): void {
   }
 
-  private toOffset(key: number) {
-    const index = this.hash(key, this.shift) & (this.capacity - 1)
-
-    return this.bucketsByteOffset + (index * 4)
-  }
-
   private initializeSlots() {
     const entrySize = this.entrySizeInBytes
-    const start = this.entriesByteOffset
+    const start = this.entriesStartIndex << 2
     const end = start + this.entriesRegionSizeInBytes
 
-    this.sab[this.freeHeadByteOffset >> 2] = this.entriesByteOffset
+    this.sab[this.freeHeadIndex] = start
 
     for (let byteOffset = start; byteOffset < end; byteOffset += entrySize) {
       if (byteOffset < (end - entrySize)) {
@@ -151,8 +152,8 @@ export class ChainHashTable implements HashTable {
 
     this.sab.fill(
       0,
-      this.bucketsByteOffset >> 2,
-      (this.bucketsByteOffset + this.bucketsRegionSizeInBytes) >> 2,
+      this.bucketsStartIndex,
+      this.bucketsStartIndex + (this.bucketsRegionSizeInBytes >> 2),
     )
   }
 }

@@ -8,6 +8,7 @@ export class ProbeHashTable implements HashTable {
   public readonly endByteOffset: number
 
   private readonly capacity: number
+  private readonly mod: number
   private readonly shift: number
   private readonly startIndex: number
   private readonly sizeIndex: number
@@ -24,6 +25,7 @@ export class ProbeHashTable implements HashTable {
     this.totalSizeInBytes = ProbeHashTable.bytesRequired(maxEntries, maxLoadFactor)
     this.endByteOffset = this.startByteOffset + this.totalSizeInBytes
 
+    this.mod = this.capacity - 1
     this.shift = 32 - Math.log2(this.capacity)
     this.startIndex = this.startByteOffset >> 2
     this.sizeIndex = this.startIndex
@@ -45,7 +47,7 @@ export class ProbeHashTable implements HashTable {
   get(key: number): number {
     const hash = this.hash(key, this.shift)
     const capacity = this.capacity
-    const mod = capacity - 1
+    const mod = this.mod
     const start = this.listStartIndex
     let displacement = 0
 
@@ -81,7 +83,7 @@ export class ProbeHashTable implements HashTable {
     }
 
     const capacity = this.capacity
-    const mod = capacity - 1
+    const mod = this.mod
     const start = this.listStartIndex
     let hash = this.hash(key, this.shift)
     let displacement = 0
@@ -130,7 +132,7 @@ export class ProbeHashTable implements HashTable {
   delete(key: number): number {
     const hash = this.hash(key, this.shift)
     const capacity = this.capacity
-    const mod = capacity - 1
+    const mod = this.mod
     const start = this.listStartIndex
     let displacement = 0
 
@@ -173,7 +175,7 @@ export class ProbeHashTable implements HashTable {
 
   private backwardsShift(emptiedSlotNumber: number) {
     const capacity = this.capacity
-    const mod = capacity - 1
+    const mod = this.mod
     const start = this.listStartIndex
     const startSlotNumber = emptiedSlotNumber + 1
     let lastEmptiedSlotIndex = start + emptiedSlotNumber * 3
