@@ -106,6 +106,11 @@ export class ChainHashTable implements HashTable {
     const bucketIndex = this.bucketsStartIndex + hashMod
     const freeHeadIndex = this.freeHeadIndex
     let entryOffset = this.sab[bucketIndex]
+
+    // previousEntryIndex tracks the i32 index of the pointer TO the current entry.
+    // For the head of the chain, this is the bucket slot itself.
+    // For mid-chain entries, this is the previous entry's nextPtr field (i32 + 2).
+    // Unlinking writes the next entry's offset into this slot, handling both cases uniformly.
     let previousEntryIndex = bucketIndex
 
     while (entryOffset !== 0) {
