@@ -35,7 +35,7 @@ export class ChainHashTable implements HashTable {
     this.endByteOffset = this.startByteOffset + this.totalSizeInBytes
 
     this.entriesByteOffset = this.bucketsByteOffset + this.bucketsRegionSizeInBytes
-    this.initializeEntrySlots()
+    this.initializeSlots()
   }
 
   static calculateCapacity(maxEntries: number, maxLoadFactor: number) {
@@ -110,6 +110,9 @@ export class ChainHashTable implements HashTable {
         this.sab[previousI32] = this.sab[nextByteOffset]
         this.sab[nextByteOffset] = this.sab[freeHeadI32]
         this.sab[freeHeadI32] = current
+        this.sab[currentI32] = 0
+        this.sab[currentI32 + 1] = 0
+        this.sab[currentI32 + 2] = 0
         this.sab[this.sizeByteOffset >> 2] -= 1
 
         return value
@@ -119,7 +122,7 @@ export class ChainHashTable implements HashTable {
       current = this.sab[nextByteOffset]
     }
 
-    return 0
+    return -1
   }
 
   compact(): void {
@@ -131,7 +134,7 @@ export class ChainHashTable implements HashTable {
     return this.bucketsByteOffset + (index * 4)
   }
 
-  private initializeEntrySlots() {
+  private initializeSlots() {
     const entrySize = this.entrySizeInBytes
     const start = this.entriesByteOffset
     const end = start + this.entriesRegionSizeInBytes
@@ -141,7 +144,15 @@ export class ChainHashTable implements HashTable {
     for (let byteOffset = start; byteOffset < end; byteOffset += entrySize) {
       if (byteOffset < (end - entrySize)) {
         this.sab[(byteOffset >> 2) + 2] = byteOffset + entrySize
+      } else {
+        this.sab[(byteOffset >> 2) + 2] = 0
       }
     }
+
+    this.sab.fill(
+      0,
+      this.bucketsByteOffset >> 2,
+      (this.bucketsByteOffset + this.bucketsRegionSizeInBytes) >> 2,
+    )
   }
 }

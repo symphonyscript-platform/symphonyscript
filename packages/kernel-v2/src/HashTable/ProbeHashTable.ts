@@ -75,7 +75,7 @@ export class ProbeHashTable implements HashTable {
 
   set(key: number, value: number): number {
     if (this.sab[this.sizeByteOffset >> 2] >= this.maxEntries) {
-      return ERROR_TABLE_FULL
+      return -ERROR_TABLE_FULL
     }
 
     const capacity = this.capacity
@@ -119,7 +119,7 @@ export class ProbeHashTable implements HashTable {
       ++displacement
     }
 
-    return ERROR_TABLE_FULL
+    return -ERROR_TABLE_FULL
   }
 
   delete(key: number): number {
