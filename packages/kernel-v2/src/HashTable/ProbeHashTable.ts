@@ -9,8 +9,9 @@ export class ProbeHashTable implements HashTable {
 
   private readonly capacity: number
   private readonly shift: number
-  private readonly sizeByteOffset: number
-  private readonly listStartByteOffset: number
+  private readonly startIndex: number
+  private readonly sizeIndex: number
+  private readonly listStartIndex: number
 
   constructor(
     private readonly sab: Int32Array,
@@ -24,8 +25,9 @@ export class ProbeHashTable implements HashTable {
     this.endByteOffset = this.startByteOffset + this.totalSizeInBytes
 
     this.shift = 32 - Math.log2(this.capacity)
-    this.sizeByteOffset = this.startByteOffset
-    this.listStartByteOffset = this.startByteOffset + 4
+    this.startIndex = this.startByteOffset >> 2
+    this.sizeIndex = this.startIndex
+    this.listStartIndex = this.startIndex + 1
     this.initializeSlots()
   }
 
@@ -44,12 +46,12 @@ export class ProbeHashTable implements HashTable {
     const hash = this.hash(key, this.shift)
     const capacity = this.capacity
     const mod = capacity - 1
-    const start = this.listStartByteOffset
+    const start = this.listStartIndex
     let displacement = 0
 
     for (let k = 0; k < capacity; ++k) {
       const slotNumber = (hash + k) & mod
-      const slotIndex = (start >> 2) + slotNumber * 3
+      const slotIndex = start + slotNumber * 3
       const slotKey = this.sab[slotIndex + 1]
 
       if (slotKey === -1) {
@@ -74,26 +76,26 @@ export class ProbeHashTable implements HashTable {
   }
 
   set(key: number, value: number): number {
-    if (this.sab[this.sizeByteOffset >> 2] >= this.maxEntries) {
+    if (this.sab[this.sizeIndex] >= this.maxEntries) {
       return -ERROR_TABLE_FULL
     }
 
     const capacity = this.capacity
     const mod = capacity - 1
-    const start = this.listStartByteOffset
+    const start = this.listStartIndex
     let hash = this.hash(key, this.shift)
     let displacement = 0
 
     for (let k = 0; k < capacity; ++k) {
       const slotNumber = (hash + k) & mod
-      const slotIndex = (start >> 2) + slotNumber * 3
+      const slotIndex = start + slotNumber * 3
       const slotKey = this.sab[slotIndex + 1]
 
       if (slotKey === -1) {
         this.sab[slotIndex] = hash
         this.sab[slotIndex + 1] = key
         this.sab[slotIndex + 2] = value
-        this.sab[this.sizeByteOffset >> 2] += 1
+        this.sab[this.sizeIndex] += 1
 
         return OK
       } else if (slotKey === key) {
@@ -129,12 +131,12 @@ export class ProbeHashTable implements HashTable {
     const hash = this.hash(key, this.shift)
     const capacity = this.capacity
     const mod = capacity - 1
-    const start = this.listStartByteOffset
+    const start = this.listStartIndex
     let displacement = 0
 
     for (let k = 0; k < capacity; ++k) {
       const slotNumber = (hash + k) & mod
-      const slotIndex = (start >> 2) + slotNumber * 3
+      const slotIndex = start + slotNumber * 3
       const slotKey = this.sab[slotIndex + 1]
 
       if (slotKey === -1) {
@@ -153,7 +155,7 @@ export class ProbeHashTable implements HashTable {
         this.sab[slotIndex] = -1
         this.sab[slotIndex + 1] = -1
         this.sab[slotIndex + 2] = -1
-        this.sab[this.sizeByteOffset >> 2] -= 1
+        this.sab[this.sizeIndex] -= 1
         this.backwardsShift(slotNumber)
 
         return value
@@ -172,13 +174,13 @@ export class ProbeHashTable implements HashTable {
   private backwardsShift(emptiedSlotNumber: number) {
     const capacity = this.capacity
     const mod = capacity - 1
-    const start = this.listStartByteOffset
+    const start = this.listStartIndex
     const startSlotNumber = emptiedSlotNumber + 1
-    let lastEmptiedSlotIndex = (start >> 2) + emptiedSlotNumber * 3
+    let lastEmptiedSlotIndex = start + emptiedSlotNumber * 3
 
     for (let i = 0; i < capacity; ++i) {
       const slotNumber = (startSlotNumber + i) & mod
-      const slotIndex = (start >> 2) + slotNumber * 3
+      const slotIndex = start + slotNumber * 3
       const slotHash = this.sab[slotIndex]
       const slotKey = this.sab[slotIndex + 1]
 
@@ -205,7 +207,7 @@ export class ProbeHashTable implements HashTable {
 
   private initializeSlots() {
     const end = this.endByteOffset
-    this.sab.fill(-1, this.listStartByteOffset >> 2, end >> 2)
-    this.sab[this.sizeByteOffset >> 2] = 0
+    this.sab.fill(-1, this.listStartIndex, end >> 2)
+    this.sab[this.sizeIndex] = 0
   }
 }
