@@ -105,6 +105,9 @@ export class ProbeHashTable implements HashTable {
       const slotHome = slotHash & mod
       const slotDisplacement = (slotNumber - slotHome) & mod
 
+      // Robin Hood eviction: the incoming element is more displaced than the occupant,
+      // so it claims this slot. The evicted occupant inherits the current loop position
+      // and continues probing forward from here with its own hash and displacement.
       if (displacement > slotDisplacement) {
         const slotValue = this.sab[slotIndex + 2]
         this.sab[slotIndex] = hash
@@ -166,12 +169,12 @@ export class ProbeHashTable implements HashTable {
 
   }
 
-  private backwardsShift(slotNumber: number) {
+  private backwardsShift(emptiedSlotNumber: number) {
     const capacity = this.capacity
     const mod = capacity - 1
     const start = this.listStartByteOffset
-    const startSlotNumber = slotNumber + 1
-    let lastEmptiedSlotIndex = (start >> 2) + slotNumber * 3
+    const startSlotNumber = emptiedSlotNumber + 1
+    let lastEmptiedSlotIndex = (start >> 2) + emptiedSlotNumber * 3
 
     for (let i = 0; i < capacity; ++i) {
       const slotNumber = (startSlotNumber + i) & mod
