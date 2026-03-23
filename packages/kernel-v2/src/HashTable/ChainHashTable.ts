@@ -132,9 +132,6 @@ export class ChainHashTable implements HashTable {
     return -1
   }
 
-  compact(): void {
-  }
-
   private initializeSlots() {
     const entrySize = this.entrySizeInBytes
     const start = this.entriesStartIndex << 2

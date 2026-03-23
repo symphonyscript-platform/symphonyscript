@@ -169,10 +169,6 @@ export class ProbeHashTable implements HashTable {
     return -1
   }
 
-  compact() {
-
-  }
-
   private backwardsShift(emptiedSlotNumber: number) {
     const capacity = this.capacity
     const mod = this.mod
