@@ -1,15 +1,20 @@
 use crate::errors::table_error::TableError;
+use crate::primitives::constants::SLOT_SIZE;
 use crate::primitives::hash_table::HashTable;
 use crate::primitives::slot::Slot;
 use crate::primitives::slot_view::SlotView;
 use crate::primitives::types::SAB;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 pub struct ProbeHashTable {
+    sab: SAB,
     slots: SlotView,
     capacity: usize,
     mod_mask: usize,
     shift: u32,
-    size: u32,
+    len_index: usize,
+    end_index: usize,
     hash: fn(key: i32, shift: u32) -> usize,
 }
 
@@ -21,14 +26,18 @@ impl ProbeHashTable {
         max_load_factor: f32,
         hash: fn(key: i32, shift: u32) -> usize,
     ) -> Self {
-        let capacity =
-            ((max_entries as f32 / max_load_factor).ceil() as u32).next_power_of_two() as usize;
+        let capacity = Self::compute_capacity(max_entries, max_load_factor);
         let mod_mask = capacity - 1;
         let shift = 32 - capacity.trailing_zeros();
+        let end_index =
+            Self::compute_end_index(start_index, max_entries, max_load_factor);
+        let slots = SlotView::new(Arc::clone(&sab), start_index + 1, capacity as u32);
 
         ProbeHashTable {
-            slots: SlotView::new(sab, start_index, capacity as u32),
-            size: 0,
+            sab,
+            slots,
+            len_index: start_index,
+            end_index,
             capacity,
             mod_mask,
             shift,
@@ -69,8 +78,21 @@ impl ProbeHashTable {
 }
 
 impl HashTable for ProbeHashTable {
-    fn len(&self) -> u32 {
-        self.size
+    fn compute_capacity(max_entries: u32, max_load_factor: f32) -> usize {
+        ((max_entries as f32 / max_load_factor).ceil() as u32).next_power_of_two() as usize
+    }
+
+    fn compute_end_index(start_index: usize, max_entries: u32, max_load_factor: f32) -> usize {
+        let capacity = Self::compute_capacity(max_entries, max_load_factor);
+        start_index + (capacity as i32 * SLOT_SIZE) as usize + 1
+    }
+
+    fn len(&self) -> i32 {
+        self.sab[self.len_index].load(Ordering::Relaxed)
+    }
+
+    fn end_index(&self) -> usize {
+        self.end_index
     }
 
     fn get(&self, key: i32) -> Option<i32> {
@@ -99,7 +121,7 @@ impl HashTable for ProbeHashTable {
         None
     }
 
-    fn set(&mut self, key: i32, value: i32) -> Result<(), TableError> {
+    fn set(&self, key: i32, value: i32) -> Result<(), TableError> {
         let hash = self.compute_hash(key) as i32;
         let mod_hash = hash as usize & self.mod_mask;
         let mut slot_context = Slot { hash, key, value };
@@ -111,7 +133,7 @@ impl HashTable for ProbeHashTable {
 
             if slot.is_empty() {
                 self.slots.set(slot_index, slot_context);
-                self.size += 1;
+                self.sab[self.len_index].fetch_add(1, Ordering::Relaxed);
                 return Ok(());
             } else if slot.key == key {
                 self.slots.set(slot_index, slot_context);
@@ -132,7 +154,7 @@ impl HashTable for ProbeHashTable {
         Err(TableError::Full)
     }
 
-    fn delete(&mut self, key: i32) -> Option<i32> {
+    fn delete(&self, key: i32) -> Option<i32> {
         let mod_hash = self.compute_hash(key) & self.mod_mask;
         let mut displacement = 0;
 
@@ -150,7 +172,7 @@ impl HashTable for ProbeHashTable {
 
             if slot.key == key {
                 self.slots.remove(slot_index);
-                self.size -= 1;
+                self.sab[self.len_index].fetch_sub(1, Ordering::Relaxed);
                 self.backwards_shift(slot_index);
                 return Some(slot.value);
             }
