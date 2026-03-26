@@ -1,41 +1,41 @@
 use std::sync::atomic::Ordering;
-use crate::primitives::constants::{EMPTY_HASH, SLOT_SIZE};
-use crate::primitives::slot::Slot;
+use crate::primitives::constants::{EMPTY_HASH, TABLE_SLOT_SIZE};
+use crate::primitives::table_slot::TableSlot;
 use crate::primitives::types::SAB;
 
-pub struct SlotView {
+pub struct TableSlotView {
     sab: SAB,
     start_index: usize,
     slots_count: u32,
 }
 
-impl SlotView {
+impl TableSlotView {
     pub fn new(sab: SAB, start_index: usize, slots_count: u32) -> Self {
-        SlotView {
+        TableSlotView {
             sab,
             start_index,
             slots_count,
         }
     }
 
-    pub fn get(&self, index: usize) -> Slot {
+    pub fn get(&self, index: usize) -> TableSlot {
         assert!(index < self.slots_count as usize, "slot index out of bounds");
 
         let sab_index = self.calculate_index(index);
         let hash = self.sab[sab_index].load(Ordering::Relaxed);
 
         if hash == EMPTY_HASH {
-            return Slot::empty()
+            return TableSlot::empty()
         }
 
-        Slot {
+        TableSlot {
             hash,
             key: self.sab[sab_index + 1].load(Ordering::Relaxed),
             value: self.sab[sab_index + 2].load(Ordering::Relaxed),
         }
     }
 
-    pub fn set(&self, index: usize, slot: Slot) {
+    pub fn set(&self, index: usize, slot: TableSlot) {
         assert!(index < self.slots_count as usize, "slot index out of bounds");
 
         let sab_index = self.calculate_index(index);
@@ -45,17 +45,17 @@ impl SlotView {
         self.sab[sab_index + 2].store(slot.value, Ordering::Relaxed);
     }
 
-    pub fn remove(&self, index: usize) -> Slot {
+    pub fn remove(&self, index: usize) -> TableSlot {
         assert!(index < self.slots_count as usize, "slot index out of bounds");
 
         let sab_index = self.calculate_index(index);
         let hash = self.sab[sab_index].load(Ordering::Relaxed);
 
         if hash == EMPTY_HASH {
-            return Slot::empty()
+            return TableSlot::empty()
         }
 
-        let slot = Slot {
+        let slot = TableSlot {
             hash,
             key: self.sab[sab_index + 1].load(Ordering::Relaxed),
             value: self.sab[sab_index + 2].load(Ordering::Relaxed),
@@ -69,6 +69,6 @@ impl SlotView {
     }
 
     fn calculate_index(&self, index: usize) -> usize {
-        self.start_index + index * SLOT_SIZE as usize
+        self.start_index + index * TABLE_SLOT_SIZE as usize
     }
 }

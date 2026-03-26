@@ -1,15 +1,15 @@
 use crate::primitives::constants::EMPTY_HASH;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Slot {
+pub struct TableSlot {
     pub hash: i32,
     pub key: i32,
     pub value: i32,
 }
 
-impl Slot {
+impl TableSlot {
     pub fn empty() -> Self {
-        Slot {
+        TableSlot {
             hash: 0,
             key: 0,
             value: 0,

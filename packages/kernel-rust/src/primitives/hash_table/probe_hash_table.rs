@@ -1,15 +1,15 @@
 use crate::errors::table_error::TableError;
-use crate::primitives::constants::SLOT_SIZE;
-use crate::primitives::hash_table::HashTable;
-use crate::primitives::slot::Slot;
-use crate::primitives::slot_view::SlotView;
 use crate::primitives::types::SAB;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use crate::primitives::hash_table::constants::TABLE_SLOT_SIZE;
+use crate::primitives::hash_table::hash_table_trait::HashTable;
+use crate::primitives::hash_table::table_slot::TableSlot;
+use crate::primitives::hash_table::table_slot_view::TableSlotView;
 
 pub struct ProbeHashTable {
     sab: SAB,
-    slots: SlotView,
+    slots: TableSlotView,
     capacity: usize,
     mod_mask: usize,
     shift: u32,
@@ -31,10 +31,10 @@ impl ProbeHashTable {
         let shift = 32 - capacity.trailing_zeros();
         let end_index =
             Self::compute_end_index(start_index, max_entries, max_load_factor);
-        let slots = SlotView::new(Arc::clone(&sab), start_index + 1, capacity as u32);
+        let slots = TableSlotView::new(Arc::clone(&sab), start_index + 1, capacity as u32);
 
         ProbeHashTable {
-            sab,
+            sab: Arc::clone(&sab),
             slots,
             len_index: start_index,
             end_index,
@@ -50,7 +50,7 @@ impl ProbeHashTable {
         if hash == 0 { 1 } else { hash }
     }
 
-    fn compute_displacement(&self, slot: &Slot, index: usize) -> usize {
+    fn compute_displacement(&self, slot: &TableSlot, index: usize) -> usize {
         index.wrapping_sub(slot.hash as usize) & self.mod_mask
     }
 
@@ -84,7 +84,7 @@ impl HashTable for ProbeHashTable {
 
     fn compute_end_index(start_index: usize, max_entries: u32, max_load_factor: f32) -> usize {
         let capacity = Self::compute_capacity(max_entries, max_load_factor);
-        start_index + (capacity as i32 * SLOT_SIZE) as usize + 1
+        start_index + (capacity as i32 * TABLE_SLOT_SIZE) as usize + 1
     }
 
     fn len(&self) -> i32 {
@@ -124,7 +124,7 @@ impl HashTable for ProbeHashTable {
     fn set(&self, key: i32, value: i32) -> Result<(), TableError> {
         let hash = self.compute_hash(key) as i32;
         let mod_hash = hash as usize & self.mod_mask;
-        let mut slot_context = Slot { hash, key, value };
+        let mut slot_context = TableSlot { hash, key, value };
         let mut displacement = 0;
 
         for k in 0..self.capacity {
