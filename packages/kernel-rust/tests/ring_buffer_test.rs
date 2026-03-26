@@ -148,3 +148,118 @@ fn single_slot_size() {
     ring.write([99]).unwrap();
     assert_eq!(ring.read(), Some([99]));
 }
+
+// ============ Edge Cases ============
+
+#[test]
+fn exact_capacity_boundary() {
+    let sab = create_sab(4096);
+    let ring: RingBuffer<2> = RingBuffer::new(sab, 0, 4);
+
+    // Fill to exact capacity
+    for i in 0..4 {
+        ring.write([i, i + 10]).unwrap();
+    }
+    assert_eq!(ring.pending_count(), 4);
+
+    // Next write must fail
+    assert!(ring.write([99, 99]).is_err());
+
+    // Read one, freeing exactly one slot
+    assert_eq!(ring.read(), Some([0, 10]));
+    assert_eq!(ring.pending_count(), 3);
+
+    // Now one write should succeed
+    ring.write([99, 99]).unwrap();
+    assert_eq!(ring.pending_count(), 4);
+
+    // Next write must fail again
+    assert!(ring.write([100, 100]).is_err());
+}
+
+#[test]
+fn multiple_full_drain_cycles() {
+    let sab = create_sab(4096);
+    let ring: RingBuffer<2> = RingBuffer::new(sab, 0, 4);
+
+    for round in 0..10 {
+        // Fill completely
+        for i in 0..4 {
+            let val = (round * 100 + i) as i32;
+            ring.write([val, val + 1]).unwrap();
+        }
+        assert_eq!(ring.pending_count(), 4);
+        assert!(ring.write([0, 0]).is_err());
+
+        // Drain completely
+        for i in 0..4 {
+            let val = (round * 100 + i) as i32;
+            assert_eq!(ring.read(), Some([val, val + 1]));
+        }
+        assert_eq!(ring.pending_count(), 0);
+        assert_eq!(ring.read(), None);
+    }
+}
+
+#[test]
+fn i32_extreme_values_in_ring() {
+    let sab = create_sab(4096);
+    let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 4);
+
+    ring.write([i32::MAX, i32::MIN, 0, -1]).unwrap();
+    assert_eq!(ring.read(), Some([i32::MAX, i32::MIN, 0, -1]));
+}
+
+#[test]
+fn zero_values_not_confused_with_empty() {
+    let sab = create_sab(4096);
+    let ring: RingBuffer<3> = RingBuffer::new(sab, 0, 4);
+
+    ring.write([0, 0, 0]).unwrap();
+    assert_eq!(ring.pending_count(), 1);
+    assert_eq!(ring.read(), Some([0, 0, 0]));
+    assert_eq!(ring.pending_count(), 0);
+}
+
+#[test]
+fn capacity_of_one() {
+    let sab = create_sab(1024);
+    let ring: RingBuffer<2> = RingBuffer::new(sab, 0, 1);
+
+    ring.write([42, 84]).unwrap();
+    assert!(ring.write([1, 2]).is_err()); // full at 1
+
+    assert_eq!(ring.read(), Some([42, 84]));
+    assert_eq!(ring.read(), None);
+
+    // Reuse the single slot
+    ring.write([99, 100]).unwrap();
+    assert_eq!(ring.read(), Some([99, 100]));
+}
+
+#[test]
+fn large_slot_size() {
+    let sab = create_sab(4096);
+    let ring: RingBuffer<16> = RingBuffer::new(sab, 0, 4);
+
+    let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+    ring.write(data).unwrap();
+    assert_eq!(ring.read(), Some(data));
+}
+
+#[test]
+fn read_after_full_error_still_works() {
+    let sab = create_sab(4096);
+    let ring: RingBuffer<2> = RingBuffer::new(sab, 0, 2);
+
+    ring.write([1, 2]).unwrap();
+    ring.write([3, 4]).unwrap();
+
+    // Buffer full — write fails
+    assert!(ring.write([5, 6]).is_err());
+
+    // Reads should still work normally
+    assert_eq!(ring.read(), Some([1, 2]));
+    assert_eq!(ring.read(), Some([3, 4]));
+    assert_eq!(ring.read(), None);
+}
