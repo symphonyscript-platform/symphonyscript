@@ -5,6 +5,7 @@ use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::primitives::hash_table::probe_hash_table::ProbeHashTable;
 use symphonyscript_kernel::primitives::hash_table::hash_table_trait::HashTable;
 use symphonyscript_kernel::primitives::ring_buffer::RingBuffer;
+use symphonyscript_kernel::primitives::free_list::FreeList;
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);
@@ -36,35 +37,30 @@ fn benchmark_hash_table() {
     let sab = create_sab(1_000_000);
     let table = ProbeHashTable::new(sab, 0, 131072, 0.75, fibonacci_hash);
 
-    // Bench: sequential inserts
     bench("set (sequential insert)", iterations as u64, || {
         for i in 0..iterations {
             table.set(i, i * 10).unwrap();
         }
     });
 
-    // Bench: sequential lookups (all hits)
     bench("get (sequential, all hits)", iterations as u64, || {
         for i in 0..iterations {
             assert!(table.get(i).is_some());
         }
     });
 
-    // Bench: lookups for nonexistent keys (all misses)
     bench("get (sequential, all misses)", iterations as u64, || {
         for i in iterations..(iterations * 2) {
             assert!(table.get(i).is_none());
         }
     });
 
-    // Bench: overwrites
     bench("set (overwrite existing)", iterations as u64, || {
         for i in 0..iterations {
             table.set(i, i * 20).unwrap();
         }
     });
 
-    // Bench: deletes
     bench("delete (sequential)", iterations as u64, || {
         for i in 0..iterations {
             table.delete(i);
@@ -80,7 +76,6 @@ fn benchmark_ring_buffer() {
 
     let iterations: i32 = 100_000;
 
-    // Bench: write throughput
     {
         let sab = create_sab(1_000_000);
         let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 131072);
@@ -92,7 +87,6 @@ fn benchmark_ring_buffer() {
         });
     }
 
-    // Bench: read throughput (pre-filled)
     {
         let sab = create_sab(1_000_000);
         let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 131072);
@@ -108,7 +102,6 @@ fn benchmark_ring_buffer() {
         });
     }
 
-    // Bench: write/read interleaved (simulates real SPSC pattern)
     {
         let sab = create_sab(4096);
         let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 64);
@@ -121,7 +114,6 @@ fn benchmark_ring_buffer() {
         });
     }
 
-    // Bench: small slot size
     {
         let sab = create_sab(1_000_000);
         let ring: RingBuffer<1> = RingBuffer::new(sab, 0, 131072);
@@ -133,7 +125,6 @@ fn benchmark_ring_buffer() {
         });
     }
 
-    // Bench: large slot size
     {
         let sab = create_sab(4_000_000);
         let ring: RingBuffer<16> = RingBuffer::new(sab, 0, 131072);
@@ -147,3 +138,90 @@ fn benchmark_ring_buffer() {
 
     println!();
 }
+
+#[test]
+fn benchmark_free_list() {
+    println!("\n=== FreeList Benchmarks ===\n");
+
+    let iterations = 10_000u64;
+
+    // Bench: sequential alloc
+    {
+        let sab = create_sab(1_000_000);
+        let fl: FreeList<4> = FreeList::new(sab, 0, 16384);
+
+        bench("alloc (sequential, SLOT_SIZE=4)", iterations, || {
+            for _ in 0..iterations {
+                fl.alloc().unwrap();
+            }
+        });
+    }
+
+    // Bench: sequential free
+    {
+        let sab = create_sab(1_000_000);
+        let fl: FreeList<4> = FreeList::new(sab, 0, 16384);
+
+        let handles: Vec<_> = (0..iterations).map(|_| fl.alloc().unwrap()).collect();
+
+        bench("free (sequential, SLOT_SIZE=4)", iterations, || {
+            for h in handles {
+                fl.free(h).unwrap();
+            }
+        });
+    }
+
+    // Bench: alloc + free interleaved
+    {
+        let sab = create_sab(1_000_000);
+        let fl: FreeList<4> = FreeList::new(sab, 0, 16384);
+
+        bench("alloc+free interleaved (SLOT_SIZE=4)", iterations, || {
+            for _ in 0..iterations {
+                let slot = fl.alloc().unwrap();
+                fl.free(slot).unwrap();
+            }
+        });
+    }
+
+    // Bench: alloc + write + free cycle
+    {
+        let sab = create_sab(1_000_000);
+        let fl: FreeList<4> = FreeList::new(sab, 0, 16384);
+
+        bench("alloc+write+free cycle (SLOT_SIZE=4)", iterations, || {
+            for i in 0..iterations {
+                let slot = fl.alloc().unwrap();
+                slot.write_all([i as i32; 4]);
+                fl.free(slot).unwrap();
+            }
+        });
+    }
+
+    // Bench: alloc with SLOT_SIZE=1
+    {
+        let sab = create_sab(1_000_000);
+        let fl: FreeList<1> = FreeList::new(sab, 0, 16384);
+
+        bench("alloc (sequential, SLOT_SIZE=1)", iterations, || {
+            for _ in 0..iterations {
+                fl.alloc().unwrap();
+            }
+        });
+    }
+
+    // Bench: alloc with SLOT_SIZE=16
+    {
+        let sab = create_sab(4_000_000);
+        let fl: FreeList<16> = FreeList::new(sab, 0, 16384);
+
+        bench("alloc (sequential, SLOT_SIZE=16)", iterations, || {
+            for _ in 0..iterations {
+                fl.alloc().unwrap();
+            }
+        });
+    }
+
+    println!();
+}
+
