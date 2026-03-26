@@ -17,17 +17,35 @@ pub struct RingBuffer<const SLOT_SIZE: usize> {
 
 impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
     pub fn new(sab: SAB, start_index: usize, capacity: i32) -> Self {
+        Self::create(sab, start_index, capacity, false)
+    }
+
+    pub fn bind(sab: SAB, start_index: usize, capacity: i32) -> Self {
+        Self::create(sab, start_index, capacity, true)
+    }
+
+    fn create(sab: SAB, start_index: usize, capacity: i32, bind: bool) -> Self {
         assert!(capacity > 0, "capacity cannot be negative");
         assert_eq!(capacity & (capacity - 1), 0, "capacity must be power of 2");
+
+        let read_slot_index = start_index;
+        let write_slot_index = start_index + 1;
+        let pending_slot_index = start_index + 2;
+
+        if !bind {
+            sab[read_slot_index].store(0, Ordering::Relaxed);
+            sab[write_slot_index].store(0, Ordering::Relaxed);
+            sab[pending_slot_index].store(0, Ordering::Relaxed);
+        }
 
         RingBuffer {
             sab: Arc::clone(&sab),
             slots: RingView::new(Arc::clone(&sab), start_index + 3, capacity),
             capacity,
-            mod_mask: (capacity - 1) as i32,
-            read_slot_index: start_index,
-            write_slot_index: start_index + 1,
-            pending_slot_index: start_index + 2,
+            mod_mask: capacity - 1,
+            read_slot_index,
+            write_slot_index,
+            pending_slot_index,
             end_index: start_index + 3 + (capacity as usize) * SLOT_SIZE,
         }
     }

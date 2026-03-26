@@ -1,11 +1,11 @@
 use crate::errors::table_error::TableError;
-use crate::primitives::types::SAB;
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use crate::primitives::hash_table::constants::TABLE_SLOT_SIZE;
 use crate::primitives::hash_table::hash_table_trait::HashTable;
 use crate::primitives::hash_table::table_slot::TableSlot;
 use crate::primitives::hash_table::table_slot_view::TableSlotView;
+use crate::primitives::types::SAB;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 pub struct ProbeHashTable {
     sab: SAB,
@@ -26,12 +26,38 @@ impl ProbeHashTable {
         max_load_factor: f32,
         hash: fn(key: i32, shift: u32) -> usize,
     ) -> Self {
+        Self::create(sab, start_index, max_entries, max_load_factor, hash, false)
+    }
+
+    pub fn bind(
+        sab: SAB,
+        start_index: usize,
+        max_entries: u32,
+        max_load_factor: f32,
+        hash: fn(key: i32, shift: u32) -> usize,
+    ) -> Self {
+        Self::create(sab, start_index, max_entries, max_load_factor, hash, true)
+    }
+
+    fn create(
+        sab: SAB,
+        start_index: usize,
+        max_entries: u32,
+        max_load_factor: f32,
+        hash: fn(key: i32, shift: u32) -> usize,
+        bind: bool,
+    ) -> Self {
         let capacity = Self::compute_capacity(max_entries, max_load_factor);
         let mod_mask = capacity - 1;
         let shift = 32 - capacity.trailing_zeros();
-        let end_index =
-            Self::compute_end_index(start_index, max_entries, max_load_factor);
+        let end_index = Self::compute_end_index(start_index, max_entries, max_load_factor);
         let slots = TableSlotView::new(Arc::clone(&sab), start_index + 1, capacity as u32);
+
+        if !bind {
+            for i in start_index..end_index {
+                sab[i].store(0, Ordering::Relaxed);
+            }
+        }
 
         ProbeHashTable {
             sab: Arc::clone(&sab),
@@ -84,7 +110,7 @@ impl HashTable for ProbeHashTable {
 
     fn compute_end_index(start_index: usize, max_entries: u32, max_load_factor: f32) -> usize {
         let capacity = Self::compute_capacity(max_entries, max_load_factor);
-        start_index + (capacity as i32 * TABLE_SLOT_SIZE) as usize + 1
+        start_index + capacity * TABLE_SLOT_SIZE + 1
     }
 
     fn len(&self) -> i32 {
