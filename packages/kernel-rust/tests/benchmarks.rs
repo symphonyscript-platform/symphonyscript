@@ -4,7 +4,7 @@ use std::time::Instant;
 use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::primitives::hash_table::probe_hash_table::ProbeHashTable;
 use symphonyscript_kernel::primitives::hash_table::hash_table_trait::HashTable;
-use symphonyscript_kernel::primitives::ring_buffer::ring_buffer::RingBuffer;
+use symphonyscript_kernel::primitives::ring_buffer::RingBuffer;
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);

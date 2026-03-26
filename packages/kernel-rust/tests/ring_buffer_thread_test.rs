@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use std::thread;
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::primitives::ring_buffer::ring_buffer::RingBuffer;
+use symphonyscript_kernel::primitives::ring_buffer::RingBuffer;
 
 /// Creates a SAB with the given number of AtomicI32 slots.
 fn create_sab(size: usize) -> SAB {

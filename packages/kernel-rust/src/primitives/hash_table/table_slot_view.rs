@@ -19,7 +19,7 @@ impl TableSlotView {
     }
 
     pub fn get(&self, index: usize) -> TableSlot {
-        assert!(index < self.slots_count as usize, "slot index out of bounds");
+        debug_assert!(index < self.slots_count as usize, "slot index out of bounds");
 
         let sab_index = self.calculate_index(index);
         let hash = self.sab[sab_index].load(Ordering::Relaxed);
@@ -36,7 +36,7 @@ impl TableSlotView {
     }
 
     pub fn set(&self, index: usize, slot: TableSlot) {
-        assert!(index < self.slots_count as usize, "slot index out of bounds");
+        debug_assert!(index < self.slots_count as usize, "slot index out of bounds");
 
         let sab_index = self.calculate_index(index);
 
@@ -46,7 +46,7 @@ impl TableSlotView {
     }
 
     pub fn remove(&self, index: usize) -> TableSlot {
-        assert!(index < self.slots_count as usize, "slot index out of bounds");
+        debug_assert!(index < self.slots_count as usize, "slot index out of bounds");
 
         let sab_index = self.calculate_index(index);
         let hash = self.sab[sab_index].load(Ordering::Relaxed);
