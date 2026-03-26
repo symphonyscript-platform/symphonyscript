@@ -4,3 +4,18 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "hash_table_bench"
+harness = false
+
+[[bench]]
+name = "ring_buffer_bench"
+harness = false
+
+[[bench]]
+name = "free_list_bench"
+harness = false
