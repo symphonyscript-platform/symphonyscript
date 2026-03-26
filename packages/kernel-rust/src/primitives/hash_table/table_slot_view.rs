@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering;
-use crate::primitives::constants::{EMPTY_HASH, TABLE_SLOT_SIZE};
-use crate::primitives::table_slot::TableSlot;
+use crate::primitives::hash_table::constants::{EMPTY_HASH, TABLE_SLOT_SIZE};
+use crate::primitives::hash_table::table_slot::TableSlot;
 use crate::primitives::types::SAB;
 
 pub struct TableSlotView {
