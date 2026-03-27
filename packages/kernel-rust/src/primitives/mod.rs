@@ -4,3 +4,4 @@ pub mod types;
 pub mod slot_view;
 pub mod free_list;
 pub mod slot_handle;
+pub mod simple_free_list;
