@@ -877,7 +877,7 @@ Node pool:  persistent, author-managed, audio never signals release
 
 ### Decision 3: LUT Pool — Write-Once Immutable Content
 
-**Resolution:** LUT content is immutable after creation. To change a curve, allocate a new LUT slot, populate it, then atomically patch the referencing node's `lut_index` attribute.
+**Resolution:** LUT content is immutable after creation. To change a curve, allocate a new LUT slot, populate it, then atomically patch the referencing modulator's `lut_index` attribute.
 
 **Rationale:** A LUT is 1KB (256 × f32). Writing it is 256 separate stores. Audio reading mid-write sees a torn curve — half new values, half old. This produces audible artifacts.
 
@@ -893,7 +893,7 @@ CHANGE A CURVE:
      lut_pool[new_slot] = new_curve_data   // 256 × f32
 
   3. Patch attribute (atomic, instant)
-     attributes[node].lut_index.store(new_slot, Relaxed)
+     mod_configs[mod].lut_index.store(new_slot, Relaxed)
      // Audio immediately reads from new LUT on next access
 
   4. Defer-free old slot
@@ -905,12 +905,12 @@ CHANGE A CURVE:
 ```
 TIMELINE:
 
-  attributes[node].lut_index = 7        (old curve)
+  mod_configs[mod].lut_index = 7        (old curve)
        │
        ├─ lut_pool[12] = new_curve      (safe: slot 12 unreferenced)
-       ├─ attributes[node].lut_index.store(12)  (atomic switch)
+       ├─ mod_configs[mod].lut_index.store(12)  (atomic switch)
        │
-  attributes[node].lut_index = 12       (new curve)
+  mod_configs[mod].lut_index = 12       (new curve)
        │
        ├─ Audio reads lut_pool[12]       (complete, consistent curve)
        ├─ deferred: return slot 7 after next commit
@@ -1074,3 +1074,33 @@ call inside `publish()`. The safety invariant:
 All unsafe is encapsulated inside the safe `pub fn publish(&mut self)` API.
 Callers never use `unsafe`. This follows the same pattern as Rust's standard
 library (`Vec`, `HashMap`, etc.): unsafe internals, safe public interface.
+
+---
+
+### Decision 5: Sparse Modulation Topology
+
+Modulation should be per-attribute granular — "modulate pitch on node 42 with this envelope, modulate volume on node 42 with a different curve" — then baking `lut_index` into NodeAttributes is the wrong move. Here's why:
+
+**Rationale:** If `lut_index` is stored directly on the node, it assumes either a 1:1 relationship (one curve per node, which is too restrictive) or a 1:N dense relationship (one curve index per modulatable attribute, which bloats the node's stride even when unused).
+
+**Dense approach (lut_index in NodeAttributes):** You'd need one lut_index per modulatable attribute per node. Most nodes won't use most of them. You're paying stride cost on every node for slots that are overwhelmingly zero. And the stride grows with every new modulatable field.
+
+**Sparse approach (LUT references in the mod system):** A modulator (ModConfig) holds its own `lut_index`. The synapse table routes that modulator to a specific [(node, attribute)](cci:1://file:///Users/torniketsomaia/projects/@tsomaia.tech/symphonyscript/packages/kernel-rust/src/primitives/hash_table/probe_hash_table.rs:21:4-29:5) pair. Only nodes with active modulation pay the cost — and only for the attributes that are actually modulated.
+
+- Node with no modulation → zero overhead
+- Node with only pitch modulated → one mod entry, one synapse
+- Node with 6 attributes modulated independently → 6 mod entries, 6 synapses
+
+This scales exactly where the complexity is, rather than taxing every node uniformly.
+
+**So for NodeAttributes:** slot 7 stays `_reserved`. No `lut_index`. The attribute plane is purely base values. All modulation routing — including LUT references — lives in ModConfig + SynapseTable, which are designed exactly for this kind of sparse, targeted topology.
+
+This keeps NodeAttributes lean and the stride stable at 8, regardless of how sophisticated the modulation system becomes later.
+
+By adopting a sparse approach:
+1. `NodeAttributes` remains lean (strictly base parameters).
+2. A `ModConfig` acts as the modulation source. It holds the `lut_index` (if table-driven) or LFO parameters.
+3. The `SynapseTable` routes that `ModConfig` to a specific `(node, attribute)` pair.
+4. Nodes with no modulation incur zero structural or processing overhead. Nodes with complex, multi-attribute modulation naturally scale in the topology without penalizing simple nodes.
+
+**Resolution:** Automation and modulation data (such as LFO curves, envelope shapes, or automation lanes) are not intrinsic properties of a `Node`. Instead of storing a `lut_index` inside `NodeAttributes` (or elsewhere on the node), LUT binding and modulation routing live entirely within the `ModConfig` and `SynapseTable`.
