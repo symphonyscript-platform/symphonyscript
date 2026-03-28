@@ -137,6 +137,11 @@ impl TripleBufferWriter {
     pub fn publish(&mut self) {
         let current_id = self.sab[self.writer_slot_index].load(Ordering::Relaxed);
         let new_state = (current_id & 0b011) | 0b100;
+
+        // We use swap instead of CAS because of the following two reasons:
+        // 1. the writer's new state is independent of the current shared state
+        // - we unconditionally publish our buffer and set NEW_DATA.
+        // 2. In SPSC, no competing writers exist, so swap is safe and retry-free.
         let old_state = self.sab[self.state_slot_index].swap(new_state, Ordering::Release);
         let writer_new_buffer_id = old_state & 0b011;
 
@@ -148,7 +153,7 @@ impl TripleBufferWriter {
         let source_ptr = self.sab[published_buffer_index..].as_ptr() as *const i32;
         let destination_ptr = self.sab[writer_buffer_index..].as_ptr() as *mut i32;
 
-        // SAFE: The writer has exclusive ownership of the stale buffer after the CAS,
+        // SAFE: The writer has exclusive ownership of the stale buffer after the swap,
         // and the bounds are validated upon instantiation
         unsafe {
             std::ptr::copy_nonoverlapping(source_ptr, destination_ptr, self.buffer_size);
@@ -180,6 +185,13 @@ impl TripleBufferReader {
 
         let current_id = self.sab[self.reader_slot_index].load(Ordering::Relaxed);
         let new_state = current_id & 0b011;
+
+        // We use swap instead of CAS because of the following two reasons:
+        // 1. the readers's new state is independent of the current shared state.
+        // 2. In SPSC, only the reader clears NEW_DATA, so it cannot go 1->0 between
+        // the load() above and this swap().
+        // The old_state is used to determine which buffer was acquired, since
+        // state loaded by the initial load() might be stale by the time we reach this point.
         let old_state = self.sab[self.state_slot_index].swap(
             new_state,
             Ordering::Acquire,
