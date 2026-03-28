@@ -70,6 +70,7 @@ impl TripleBuffer {
         (writer, reader)
     }
 
+    // SAB must already be initialized via new
     pub fn bind_writer(sab: SAB, start_index: usize, buffer_size: usize) -> TripleBufferWriter {
         debug_assert!(buffer_size > 0, "buffer must have size");
 
@@ -83,8 +84,7 @@ impl TripleBuffer {
             buffers_start_index + buffer_size * 2,
         ];
         let end_index = buffers_start_index + buffer_size * 3;
-
-        TripleBufferWriter {
+        let writer = TripleBufferWriter {
             sab: Arc::clone(&sab),
             state_slot_index,
             writer_slot_index,
@@ -92,9 +92,18 @@ impl TripleBuffer {
             buffer_bases,
             buffer_size,
             end_index,
-        }
+        };
+
+        // Synchronize with the last publish() before reading its results.
+        sab[state_slot_index].load(Ordering::Acquire);
+        let published_index = sab[published_slot_index].load(Ordering::Relaxed);
+        let writer_index = sab[writer_slot_index].load(Ordering::Relaxed);
+        writer.sync(published_index as usize, writer_index as usize);
+
+        writer
     }
 
+    // SAB must already be initialized via new
     pub fn bind_reader(sab: SAB, start_index: usize, buffer_size: usize) -> TripleBufferReader {
         debug_assert!(buffer_size > 0, "buffer must have size");
 
@@ -147,14 +156,18 @@ impl TripleBufferWriter {
 
         self.sab[self.writer_slot_index].store(writer_new_buffer_id, Ordering::Relaxed);
         self.sab[self.published_slot_index].store(current_id, Ordering::Relaxed);
+        self.sync(current_id as usize, writer_new_buffer_id as usize);
+    }
 
-        let published_buffer_index = self.buffer_bases[current_id as usize];
-        let writer_buffer_index = self.buffer_bases[writer_new_buffer_id as usize];
+    fn sync(&self, published_index: usize, writer_index: usize) {
+        let published_buffer_index = self.buffer_bases[published_index];
+        let writer_buffer_index = self.buffer_bases[writer_index];
         let source_ptr = self.sab[published_buffer_index..].as_ptr() as *const i32;
         let destination_ptr = self.sab[writer_buffer_index..].as_ptr() as *mut i32;
 
         // SAFE: The writer has exclusive ownership of the stale buffer after the swap,
-        // and the bounds are validated upon instantiation
+        // and the bounds are validated upon instantiation.
+        //
         unsafe {
             std::ptr::copy_nonoverlapping(source_ptr, destination_ptr, self.buffer_size);
         }
@@ -177,7 +190,7 @@ impl TripleBufferReader {
     }
 
     pub fn swap(&mut self) -> bool {
-        let state = self.sab[self.state_slot_index].load(Ordering::Relaxed);
+        let state = self.sab[self.state_slot_index].load(Ordering::Acquire);
 
         if state & 0b100 == 0 {
             return false;
