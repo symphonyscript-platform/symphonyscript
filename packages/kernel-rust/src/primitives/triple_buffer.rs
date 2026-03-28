@@ -187,7 +187,7 @@ impl TripleBufferReader {
         let new_state = current_id & 0b011;
 
         // We use swap instead of CAS because of the following two reasons:
-        // 1. the readers's new state is independent of the current shared state.
+        // 1. the reader's new state is independent of the current shared state.
         // 2. In SPSC, only the reader clears NEW_DATA, so it cannot go 1->0 between
         // the load() above and this swap().
         // The old_state is used to determine which buffer was acquired, since
