@@ -150,6 +150,8 @@ impl TripleBufferWriter {
         let mut spins = 0;
 
         loop {
+            // In the idiomatic SPSC architecture, no more than 1 retries should happen.
+            // max_spins=4 is a generous cap to catch bugs in development.
             debug_assert!(spins < max_spins, "max spins of 4 exhausted");
             match self.sab[self.state_slot_index].compare_exchange(
                 state,
@@ -209,6 +211,8 @@ impl TripleBufferReader {
         let mut spins = 0;
 
         loop {
+            // In the idiomatic SPSC architecture, no more than 1 retries should happen.
+            // max_spins=4 is a generous cap to catch bugs in development.
             debug_assert!(spins < max_spins, "max spins of 4 exhausted");
             match self.sab[self.state_slot_index].compare_exchange(
                 state,
