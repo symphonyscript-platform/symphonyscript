@@ -243,7 +243,7 @@ Three buffers exist. Each has exactly one role at any moment:
 
   KEY INVARIANT: No buffer is touched by both threads simultaneously.
   Writer and Reader never access the same buffer. Shared is only
-  touched during the atomic CAS swap itself.
+  touched during the atomic swap itself.
 ```
 
 **Writer swap (main thread — after completing a batch of structural mutations):**
@@ -251,7 +251,7 @@ Three buffers exist. Each has exactly one role at any moment:
 ```
 Before:  Writer=A  Shared=B  Reader=C
 
-  main does CAS: swap Writer ↔ Shared
+  main does atomic swap: Writer ↔ Shared
   main gets back B as new workspace
   A (just published) sits in Shared
 
@@ -267,7 +267,7 @@ After:   Writer=B  Shared=A  Reader=C
 ```
 Before:  Writer=B  Shared=A  Reader=C
 
-  audio does CAS: swap Reader ↔ Shared
+  audio does atomic swap: swap Reader ↔ Shared
   audio gets A (latest from main)
   C goes to Shared (stale, will be reused)
 
@@ -286,17 +286,17 @@ TIME ─────────────────────────
 State 0:  W=A   S=B   R=C     main writes A, audio reads C
           │                    
           ├─ main finishes writing A
-          ├─ writer CAS: swap W↔S
+          ├─ writer swap: W↔S
           │
 State 1:  W=B   S=A   R=C     main writes B, audio reads C
           │                     A staged for audio
           ├─ audio callback fires
-          ├─ reader CAS: swap S↔R
+          ├─ reader swap: S↔R
           │
 State 2:  W=B   S=C   R=A     main writes B, audio reads A ← latest!
           │                     C returns to staging
           ├─ main finishes writing B
-          ├─ writer CAS: swap W↔S
+          ├─ writer swap: W↔S
           │
 State 3:  W=C   S=B   R=A     main writes C, audio reads A
           │                     B staged for audio
@@ -305,11 +305,11 @@ State 3:  W=C   S=B   R=A     main writes C, audio reads A
 
 ### 3.3 Atomic State Encoding
 
-The entire triple-buffer state is a single atomic byte:
+The triple-buffer state is stored as an `AtomicI32` slot on the SAB:
 
 ```
 ┌─────────────────────────────────────────┐
-│  AtomicU8 state                         │
+│  AtomicI32 state (on SAB)               │
 │                                         │
 │  bits [0:1]  = shared buffer index      │
 │               (0, 1, or 2)              │
@@ -325,51 +325,55 @@ The entire triple-buffer state is a single atomic byte:
 └─────────────────────────────────────────┘
 ```
 
-**Writer swap pseudocode (Rust):**
+> **Implementation deviation:** The design originally specified `AtomicU8` and `CAS` loops.
+> The implementation uses `AtomicI32` (to match SAB's element type) and `swap()` instead
+> of `CAS`. This is correct because:
+> 1. Both writer and reader compute new_state independently of current shared state
+> 2. In SPSC, no competing writers/readers exist, so swap is safe and retry-free
+> 3. swap() compiles to a single XCHG instruction — no retry loops, no livelock risk
+
+**Writer publish (Rust — actual implementation):**
 
 ```rust
-fn writer_swap(&mut self) {
-    let old = self.state.load(Relaxed);
-    let shared_idx = (old & 0b11) as usize;
-    // Our writer buffer goes to shared. Set NEW_DATA flag.
-    let new_state = (self.writer_idx as u8 & 0b11) | 0b100;
-    // CAS: may retry if reader is swapping simultaneously (rare)
-    loop {
-        match self.state.compare_exchange_weak(
-            old, new_state, Release, Relaxed
-        ) {
-            Ok(_) => {
-                self.writer_idx = shared_idx; // take old shared as workspace
-                break;
-            }
-            Err(actual) => { /* retry with actual */ }
-        }
-    }
+fn publish(&mut self) {
+    let current_id = self.sab[self.writer_slot_index].load(Relaxed);
+    let new_state = (current_id & 0b011) | 0b100;
+
+    // swap: unconditionally deposit our buffer and set NEW_DATA.
+    // writer's new_state is independent of shared state → swap, not CAS.
+    let old_state = self.sab[self.state_slot_index].swap(new_state, Release);
+    let writer_new_buffer_id = old_state & 0b011;
+
+    self.sab[self.writer_slot_index].store(writer_new_buffer_id, Relaxed);
+    self.sab[self.published_slot_index].store(current_id, Relaxed);
+
+    // Sync stale writer buffer via unsafe memcpy (~4.7µs for 104KB)
+    let src = self.sab[published_base..].as_ptr() as *const i32;
+    let dst = self.sab[writer_base..].as_ptr() as *mut i32;
+    unsafe { std::ptr::copy_nonoverlapping(src, dst, self.buffer_size); }
 }
 ```
 
-**Reader swap pseudocode (Rust):**
+**Reader swap (Rust — actual implementation):**
 
 ```rust
-fn reader_swap(&mut self) -> bool {
-    let old = self.state.load(Relaxed);
-    if old & 0b100 == 0 {
-        return false; // no new data, keep current reader buffer
+fn swap(&mut self) -> bool {
+    // Non-destructive peek: must check before committing.
+    let state = self.sab[self.state_slot_index].load(Relaxed);
+    if state & 0b100 == 0 {
+        return false; // no new data
     }
-    let shared_idx = (old & 0b11) as usize;
-    // Our reader buffer goes to shared. Clear NEW_DATA flag.
-    let new_state = self.reader_idx as u8 & 0b11; // no NEW_DATA bit
-    loop {
-        match self.state.compare_exchange_weak(
-            old, new_state, Acquire, Relaxed
-        ) {
-            Ok(_) => {
-                self.reader_idx = shared_idx;
-                return true; // got new frame
-            }
-            Err(actual) => { /* retry with actual */ }
-        }
-    }
+
+    let current_id = self.sab[self.reader_slot_index].load(Relaxed);
+    let new_state = current_id & 0b011;
+
+    // swap: unconditionally deposit our buffer and clear NEW_DATA.
+    // old_state (not loaded `state`) determines which buffer was acquired,
+    // since state may be stale by this point.
+    let old_state = self.sab[self.state_slot_index].swap(new_state, Acquire);
+    self.sab[self.reader_slot_index].store(old_state & 0b011, Relaxed);
+
+    true
 }
 ```
 
@@ -382,7 +386,7 @@ fn reader_swap(&mut self) -> bool {
 
 ```rust
 fn process(&mut self, output: &mut [f32]) {
-    // 1. Grab latest structural frame (one CAS, ~5ns)
+    // 1. Grab latest structural frame (one swap, ~11ns)
     self.triple_buffer.reader_swap();
     let frame: &StructuralFrame = self.triple_buffer.reader();
 
@@ -408,7 +412,7 @@ fn process(&mut self, output: &mut [f32]) {
 
 **Audio thread guarantees:**
 - **Never writes** to structural or attribute planes (pure reader)
-- **Never blocks** — CAS retry only occurs if writer swaps at the exact same nanosecond (astronomically rare, 1-2 iterations max)
+- **Never blocks** — swap() is a single atomic instruction, cannot fail or retry
 - **Never allocates** — all memory is pre-allocated
 - **No conditional policy branches** — reads unconditionally
 
@@ -452,7 +456,7 @@ fn insert_head(&mut self, data: NodeData) -> usize {
 
 ```rust
 fn commit(&mut self) {
-    // Publish writer buffer to shared (one CAS)
+    // Publish writer buffer to shared (one swap)
     self.triple_buffer.writer_swap();
 
     // Writer now owns a stale buffer. Sync it.
@@ -465,15 +469,15 @@ fn commit(&mut self) {
 }
 
 fn sync_stale_writer(&mut self) {
-    // Copy structural data from the buffer we just published
-    // to our new writer buffer. ~104KB memcpy, ~15µs.
+    // Copy structural data from the published buffer to our
+    // new writer buffer using unsafe copy_nonoverlapping.
+    // ~104KB memcpy, ~4.7µs (benchmarked).
     //
-    // Safe: the source buffer is either in SHARED (untouched)
-    // or in READER (audio reads it — concurrent reads are not
-    // a data race). Nobody writes to it.
-    let source = &self.published_snapshot;
-    let dest = self.triple_buffer.writer_mut();
-    dest.copy_from(source);
+    // SAFETY: The writer has exclusive ownership of the stale
+    // buffer after the swap. Bounds are validated at init.
+    let src = self.sab[published_base..].as_ptr() as *const i32;
+    let dst = self.sab[writer_base..].as_ptr() as *mut i32;
+    unsafe { std::ptr::copy_nonoverlapping(src, dst, self.buffer_size); }
 }
 ```
 
@@ -483,7 +487,7 @@ fn sync_stale_writer(&mut self) {
 Arena / Pre-allocated Memory:
 ┌─────────────────────────────────────────────────────────────┐
 │ HEADER (16 bytes)                                           │
-│  [0] TRIPLE_STATE      : AtomicU8  (packed buffer indices)  │
+│  [0] TRIPLE_STATE      : AtomicI32 (packed buffer indices)  │
 │  [1] PLAYHEAD_TICK     : AtomicI64                          │
 │  [2] TRANSPORT_STATE   : AtomicU32                          │
 ├─────────────────────────────────────────────────────────────┤
@@ -530,7 +534,7 @@ Arena / Pre-allocated Memory:
 │  ──────────────────────┼────────────────┼────────────────            │
 │  Attribute plane       │ WRITES         │ READS (atomic)             │
 │  Structural WRITER buf │ WRITES         │ never touches              │
-│  Structural SHARED buf │ CAS only       │ CAS only                   │
+│  Structural SHARED buf │ swap only      │ swap only                  │
 │  Structural READER buf │ never touches  │ READS                      │
 │  Free list metadata    │ WRITES         │ never touches              │
 │  Audio-owned zone      │ READS          │ WRITES                     │
@@ -547,7 +551,7 @@ Arena / Pre-allocated Memory:
   ALLOCATE           POPULATE            LINK              PUBLISH
   ─────────         ──────────         ──────────         ──────────
   free_list          attributes         writer             writer
-  .alloc()           [slot] =           buffer:            CAS swap
+  .alloc()           [slot] =           buffer:            swap
   → slot 42          { pitch,           insert(42)
                       velocity,         into chain
                       ... }
@@ -567,7 +571,7 @@ Arena / Pre-allocated Memory:
   REMOVE              UNLINK             PUBLISH           RECLAIM
   ─────────          ──────────         ──────────        ──────────
   mark slot           writer            writer             after swap:
-  for deferred        buffer:           CAS swap           free_list
+  for deferred        buffer:           swap               free_list
   free                remove(42)                           .free(42)
                       from chain
 
@@ -611,11 +615,11 @@ main: insert_head(NodeData { pitch: 570000, velocity: 100, ... })
      Audio cannot see it.
 
   5. COMMIT (when ready)
-     triple_buffer.writer_swap()  // CAS, ~5ns
+     triple_buffer.writer_swap()  // swap, ~10ns
      // Slot 42 now in SHARED buffer, audio picks it up next callback
 
   6. SYNC STALE WRITER
-     memcpy published → new writer buffer  // ~15µs
+     unsafe memcpy published → new writer buffer  // ~4.7µs (benchmarked)
      // Both writer and published buffers now consistent
      // Ready for next batch of mutations
 ```
@@ -659,18 +663,18 @@ SCENARIO: Main thread writes faster than audio reads
 │ Audio mutates?    │ YES ✗        │ no           │ no               │
 │ Audio blocks?     │ no           │ no           │ no               │
 │ Writer blocks?    │ no           │ CONDITIONAL ✗│ no               │
-│ Atomic reads      │ per-command  │ 1 load       │ 1 CAS (~5ns)    │
+│ Atomic reads      │ per-command  │ 1 load       │ 1 swap (~11ns)  │
 │ Data patch latency│ next pop     │ instant      │ instant          │
 │ Struct latency    │ next pop     │ next swap    │ next swap+swap   │
 │ Consistency       │ per-command  │ per-frame    │ per-frame        │
 │ Failure mode      │ overflow     │ SILENT ✗     │ visible          │
 │ Correctness inv.  │ ~8           │ 5            │ 3                │
-│ Sync cost         │ N/A          │ 150ns        │ ~15µs            │
+│ Sync cost         │ N/A          │ 150ns        │ ~4.7µs           │
 │ Memory            │ ~700KB+ring  │ ~1.5MB       │ ~780KB           │
 │ Write path        │ serialize+   │ dual-write+  │ single write     │
 │                   │ push         │ log append   │                  │
 │ Allocation?       │ ring is fixed│ no           │ no               │
-│ Protocol code?    │ YES (enum,   │ log replay   │ CAS protocol     │
+│ Protocol code?    │ YES (enum,   │ log replay   │ swap protocol    │
 │                   │  dispatch)   │              │ (well-tested)    │
 ├───────────────────┼──────────────┼──────────────┼──────────────────┤
 │ VERDICT           │ REJECTED     │ REJECTED     │ SELECTED ✓       │
@@ -682,8 +686,8 @@ SCENARIO: Main thread writes faster than audio reads
 ## 5. Costs We Accept
 
 ```
-1. ~15µs memcpy on main thread after structural commit
-   Budget: milliseconds. Impact: negligible.
+1. ~4.7µs unsafe memcpy on main thread after structural commit (benchmarked)
+   Budget: milliseconds. Impact: negligible (0.03% of 16ms frame budget).
 
 2. SoA cache pattern: 2 memory regions per node on audio thread
    Warm path (L1-hot): negligible.
@@ -692,47 +696,65 @@ SCENARIO: Main thread writes faster than audio reads
 3. 3× structural memory (~312KB vs ~208KB for double-buffer)
    Absolute: ~104KB extra. Impact: none.
 
-4. CAS instead of plain atomic load on audio reader path
-   ~5ns per callback. Uncontended CAS almost never retries.
+4. swap instead of plain atomic load on audio reader path
+   ~11ns per callback. Single XCHG instruction, cannot fail or retry.
 
 5. "Structural or attribute?" decision for every new field
    Binary test: "does corruption break traversal?" → structural.
    Everything else → attribute.
+
+6. One unsafe block: copy_nonoverlapping for structural sync
+   Idiomatic Rust (same pattern as Vec, HashMap internals).
+   Bounded and verified by sentinel test (10K rounds, no corruption).
 ```
 
 ## 6. Structures (Rust, Preliminary)
 
+> **Implementation deviation:** The TripleBuffer operates on the SAB (`Arc<Vec<AtomicI32>>`),
+> not on stack-allocated `UnsafeCell<T>` buffers. All state — metadata slots, buffer indices,
+> and structural data — lives as element indices into a flat `AtomicI32` array. This enables
+> SAB reconstruction via `bind_writer()`/`bind_reader()` for hot-reload and crash recovery.
+
 ```rust
+// SAB-based TripleBuffer (actual implementation)
+type SAB = Arc<Vec<AtomicI32>>;
+
+struct TripleBufferWriter {
+    sab: SAB,
+    state_slot_index: usize,       // AtomicI32 slot: bits [0:1]=shared, bit[2]=NEW_DATA
+    writer_slot_index: usize,      // AtomicI32 slot: current writer buffer ID
+    published_slot_index: usize,   // AtomicI32 slot: last published buffer ID
+    buffer_bases: [usize; 3],      // start indices of each buffer region
+    buffer_size: usize,            // elements per buffer
+    end_index: usize,              // first index past the TripleBuffer's region
+}
+
+struct TripleBufferReader {
+    sab: SAB,
+    state_slot_index: usize,
+    reader_slot_index: usize,      // AtomicI32 slot: current reader buffer ID
+    buffer_bases: [usize; 3],
+    buffer_size: usize,
+    end_index: usize,
+}
+
+// Kernel (conceptual — not yet implemented)
 struct Kernel {
-    triple_buffer: TripleBuffer<StructuralFrame>,
-    attributes: Box<[NodeAttributes; MAX_NODES]>,
+    sab: SAB,
+    writer: TripleBufferWriter,
     free_list: SimpleFreeList,
     mod_free_list: SimpleFreeList,
     lut_free_list: SimpleFreeList,
     deferred_frees: Vec<usize>,
     deferred_lut_frees: Vec<usize>,
-    last_published_idx: usize,          // replaces published_snapshot
 }
 
-struct TripleBuffer<T> {
-    buffers: [UnsafeCell<T>; 3],
-    state: AtomicU8,       // packed: shared_idx (2 bits) + new_data (1 bit)
-    writer_idx: usize,     // main-thread local
-    reader_idx: usize,     // audio-thread local
-}
-
-struct StructuralFrame {
-    head: i32,
-    nodes: [ChainNode; MAX_NODES],     // next/prev pointers only
-    mod_heads: [i32; MAX_MODS],
-    synapse_table: [SynapseSlot; SYNAPSE_CAPACITY],
-}
-
-#[repr(C, align(8))]
-struct ChainNode {
-    next: i32,
-    prev: i32,
-}
+// StructuralFrame is a region of the SAB, not a Rust struct.
+// Its layout within each buffer:
+//   [0..MAX_NODES*2]           node chain (next/prev pairs)
+//   [MAX_NODES*2]              chain head
+//   [MAX_NODES*2+1..+MAX_MODS] mod list heads
+//   [remaining]                synapse table slots
 
 struct NodeAttributes {
     pitch: AtomicI32,
@@ -741,16 +763,16 @@ struct NodeAttributes {
     volume: AtomicI32,
     pan: AtomicI32,
     channel: AtomicI32,
-    flags: AtomicU32,
+    flags: AtomicI32,
     _reserved: AtomicI32,
 }
 
 // Audio-owned zone (audio writes, main reads)
 struct AudioZone {
-    smoothed_values: [AtomicF32; MAX_PARAMS],
-    smoothed_deltas: [AtomicF32; MAX_MODS],
+    smoothed_values: [AtomicI32; MAX_PARAMS],
+    smoothed_deltas: [AtomicI32; MAX_MODS],
     fire_trace: [FireEvent; TRACE_CAPACITY],
-    lfo_phases: [AtomicF32; MAX_LFOS],
+    lfo_phases: [AtomicI32; MAX_LFOS],
 }
 ```
 
@@ -949,42 +971,36 @@ After writer_swap():
 
 ```rust
 struct Kernel {
+    sab: SAB,
+    writer: TripleBufferWriter,
     // ...
-    last_published_idx: usize,  // track which buffer we just published
 }
 
 fn commit(&mut self) {
-    self.last_published_idx = self.triple_buffer.writer_idx();
-    self.triple_buffer.writer_swap();
-    self.sync_stale_writer();
+    self.writer.publish();  // swap + sync in one call
     self.process_deferred_frees();
 }
-
-fn sync_stale_writer(&mut self) {
-    // SAFETY: last_published buffer is in SHARED or READER position.
-    // Both are read-only from any thread's perspective at this moment.
-    // Concurrent reads are not a data race. No thread writes to this
-    // buffer until it returns to WRITER position via future CAS swap.
-    let source = &self.triple_buffer.buffers[self.last_published_idx];
-    let dest = self.triple_buffer.writer_mut();
-    dest.copy_from(source);
-    // Cost: ~104KB memcpy, ~15µs. On main thread. Negligible.
-}
 ```
+
+> **Implementation note:** In the actual implementation, `publish()` handles
+> both the atomic swap AND the stale writer sync (unsafe `copy_nonoverlapping`)
+> in a single method call. There is no separate `last_published_idx` tracking —
+> the `published_slot_index` is stored on the SAB and the buffer bases are
+> computed from the swap return value.
 
 **Why not a local snapshot:**
 
 ```
 Local snapshot approach:
-  1. memcpy writer → snapshot    (~104KB, ~15µs)
+  1. memcpy writer → snapshot    (~104KB, ~4.7µs)
   2. writer_swap()
-  3. memcpy snapshot → new writer (~104KB, ~15µs)
-  Total: 2 copies, ~30µs, extra 104KB memory
+  3. memcpy snapshot → new writer (~104KB, ~4.7µs)
+  Total: 2 copies, ~9.4µs, extra 104KB memory
 
-Direct copy approach:
+Direct copy approach (implemented):
   1. writer_swap()
-  2. memcpy published → new writer (~104KB, ~15µs)
-  Total: 1 copy, ~15µs, no extra memory
+  2. unsafe copy_nonoverlapping published → new writer (~104KB, ~4.7µs)
+  Total: 1 copy, ~4.7µs, no extra memory
 
 Direct copy is half the cost and zero extra memory.
 The concurrent-read safety is trivially sound.
@@ -997,7 +1013,7 @@ The concurrent-read safety is trivially sound.
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ HEADER (16 bytes)                                           │
-│  [0] TRIPLE_STATE      : AtomicU8                           │
+│  [0] TRIPLE_STATE      : AtomicI32                          │
 │  [1] PLAYHEAD_TICK     : AtomicI64                          │
 │  [2] TRANSPORT_STATE   : AtomicU32                          │
 ├─────────────────────────────────────────────────────────────┤
@@ -1047,7 +1063,7 @@ No local snapshot buffer. No structural log.
 │ Attribute plane       │ WRITES          │ READS (atomic per-field)  │
 │ LUT pool (in attrs)   │ WRITE-ONCE only │ READS (by lut_index)     │
 │ Structural WRITER     │ WRITES          │ never touches             │
-│ Structural SHARED     │ CAS swap only   │ CAS swap only             │
+│ Structural SHARED     │ swap only       │ swap only                 │
 │ Structural READER     │ READS (sync)    │ READS                     │
 │ Free lists (all)      │ WRITES          │ never touches             │
 │ Audio-owned zone      │ READS           │ WRITES                    │
@@ -1062,43 +1078,14 @@ No local snapshot buffer. No structural log.
 ```
 
 **Unsafe boundary:**
-This is the single `unsafe` piercing point in the triple-buffer
-abstraction. `sync_stale_writer` accesses a buffer by raw index,
-bypassing the ownership protocol. The safety invariant:
-- `last_published_idx` is never the current WRITER index
-- The buffer at that index is in SHARED or READER position
+The `unsafe` in the TripleBuffer is localized to a single `copy_nonoverlapping`
+call inside `publish()`. The safety invariant:
+- The writer has exclusive ownership of the stale buffer after the swap
+- The source (just-published) buffer is in SHARED or READER position
 - No thread writes to SHARED or READER buffers
-- Concurrent reads are not a data race
-  Encapsulate behind `TripleBuffer::peek_buffer(idx)` with a
-  safety doc comment. All other triple-buffer access goes through
-  `writer_mut()` and `reader()` — safe API, no unsafe needed.
+- Bounds are validated at construction time
+- Verified by sentinel test: 10K publish/swap rounds with no memory corruption
 
-The clean way to handle it is to expose a dedicated method on TripleBuffer that encapsulates the unsafe access:
-```rust
-impl<T: Copy> TripleBuffer<T> {
-    /// Returns a shared reference to the buffer at `idx`.
-    ///
-    /// # Safety
-    /// Caller must guarantee that no thread holds a mutable reference
-    /// to `buffers[idx]`. This is satisfied when `idx` is in SHARED
-    /// or READER position — both are read-only from all threads.
-    /// The writer buffer is the only one that may be mutated, and
-    /// the caller must not pass the current writer index.
-    unsafe fn peek_buffer(&self, idx: usize) -> &T {
-        &*self.buffers[idx].get()
-    }
-}
-```
-Then the kernel's sync becomes:
-```rust
-fn sync_stale_writer(&mut self) {
-    // SAFETY: last_published_idx is either SHARED or READER.
-    // No thread writes to it. Writer index is different (just received
-    // from swap). Concurrent reads are not a data race.
-    let source = unsafe { self.triple_buffer.peek_buffer(self.last_published_idx) };
-    let dest = self.triple_buffer.writer_mut();
-    dest.copy_from(source);
-}
-```
-
-The unsafe block and safety comment are localized to one call site. The rest of the codebase never touches buffers[] directly. One piercing point, fully documented, reviewed once.
+All unsafe is encapsulated inside the safe `pub fn publish(&mut self)` API.
+Callers never use `unsafe`. This follows the same pattern as Rust's standard
+library (`Vec`, `HashMap`, etc.): unsafe internals, safe public interface.
