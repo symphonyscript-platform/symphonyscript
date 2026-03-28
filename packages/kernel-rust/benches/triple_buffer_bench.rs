@@ -58,7 +58,7 @@ fn bench_reader_swap_no_data(c: &mut Criterion) {
 fn bench_publish_varying_buffer_size(c: &mut Criterion) {
     let mut group = c.benchmark_group("TripleBuffer/publish_by_size");
 
-    for &size in &[8, 64, 256, 1024, 4096] {
+    for &size in &[8, 64, 256, 1024, 4096, 26000] {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             let sab = create_sab(4 + size * 3 + 100);
             let (mut writer, _reader) = TripleBuffer::new(sab.clone(), 0, size);
@@ -100,7 +100,7 @@ fn bench_full_cycle(c: &mut Criterion) {
 fn bench_write_then_publish(c: &mut Criterion) {
     let mut group = c.benchmark_group("TripleBuffer/write+publish");
 
-    for &size in &[8, 64, 256, 1024] {
+    for &size in &[8, 64, 256, 1024, 4096, 26000] {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             let sab = create_sab(4 + size * 3 + 100);
             let (mut writer, _reader) = TripleBuffer::new(sab.clone(), 0, size);

@@ -170,10 +170,13 @@ impl TripleBufferWriter {
 
         let published_buffer_index = self.buffer_bases[current_id as usize];
         let writer_buffer_index = self.buffer_bases[writer_new_buffer_id as usize];
+        let source_ptr = self.sab[published_buffer_index..].as_ptr() as *const i32;
+        let destination_ptr = self.sab[writer_buffer_index..].as_ptr() as *mut i32;
 
-        for i in 0..self.buffer_size {
-            let data = self.sab[published_buffer_index + i].load(Ordering::Relaxed);
-            self.sab[writer_buffer_index + i].store(data, Ordering::Relaxed);
+        // SAFE: The writer has exclusive ownership of the stale buffer after the CAS,
+        // and the bounds are validated upon instantiation
+        unsafe {
+            std::ptr::copy_nonoverlapping(source_ptr, destination_ptr, self.buffer_size);
         }
     }
 }
