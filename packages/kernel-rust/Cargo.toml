@@ -19,3 +19,7 @@ harness = false
 [[bench]]
 name = "free_list_bench"
 harness = false
+
+[[bench]]
+name = "simple_free_list_bench"
+harness = false

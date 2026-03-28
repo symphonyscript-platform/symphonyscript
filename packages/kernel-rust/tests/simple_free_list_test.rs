@@ -1,0 +1,433 @@
+use std::sync::Arc;
+use std::sync::atomic::AtomicI32;
+use symphonyscript_kernel::primitives::simple_free_list::SimpleFreeList;
+use symphonyscript_kernel::primitives::types::SAB;
+
+fn create_sab(size: usize) -> SAB {
+    let mut vec = Vec::with_capacity(size);
+    for _ in 0..size {
+        vec.push(AtomicI32::new(0));
+    }
+    Arc::new(vec)
+}
+
+// ============ Happy Paths ============
+
+#[test]
+fn alloc_returns_logical_slot_index() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 4);
+
+    let slot = fl.alloc();
+    assert!(slot.is_some());
+    let idx = slot.unwrap();
+    assert!(idx < 4); // logical index within capacity
+}
+
+#[test]
+fn free_count_starts_at_capacity() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 8);
+
+    assert_eq!(fl.free_count(), 8);
+}
+
+#[test]
+fn alloc_decrements_free_count() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 8);
+
+    fl.alloc().unwrap();
+    assert_eq!(fl.free_count(), 7);
+
+    fl.alloc().unwrap();
+    assert_eq!(fl.free_count(), 6);
+}
+
+#[test]
+fn free_increments_free_count() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 8);
+
+    let slot = fl.alloc().unwrap();
+    assert_eq!(fl.free_count(), 7);
+
+    fl.free(slot).unwrap();
+    assert_eq!(fl.free_count(), 8);
+}
+
+#[test]
+fn alloc_returns_sequential_indices() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 4);
+
+    // Free chain is initialized as 0 → 1 → 2 → 3, so alloc order is 0, 1, 2, 3
+    assert_eq!(fl.alloc().unwrap(), 0);
+    assert_eq!(fl.alloc().unwrap(), 1);
+    assert_eq!(fl.alloc().unwrap(), 2);
+    assert_eq!(fl.alloc().unwrap(), 3);
+}
+
+#[test]
+fn alloc_all_then_returns_none() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 4);
+
+    for _ in 0..4 {
+        fl.alloc().unwrap();
+    }
+    assert_eq!(fl.free_count(), 0);
+    assert!(fl.alloc().is_none());
+}
+
+#[test]
+fn free_and_realloc_reuses_slot() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 4);
+
+    let slot0 = fl.alloc().unwrap();
+    let _slot1 = fl.alloc().unwrap();
+
+    fl.free(slot0).unwrap();
+
+    // Freed slot goes to head of free chain, so next alloc returns it
+    let reused = fl.alloc().unwrap();
+    assert_eq!(reused, slot0);
+}
+
+#[test]
+fn end_index_is_correct() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 8);
+
+    // Layout: head(1) + free_count(1) + bitmap(ceil(8/32)=1) + slots(8) = 11
+    // end_index = start of slots + capacity = 3 + 8 = 11
+    assert_eq!(fl.end_index(), 3 + 8);
+}
+
+#[test]
+fn end_index_with_larger_capacity() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 64);
+
+    // Layout: head(1) + free_count(1) + bitmap(ceil(64/32)=2) + slots(64)
+    // end_index = 0 + 2 + 2 + 64 = 68
+    assert_eq!(fl.end_index(), 4 + 64);
+}
+
+#[test]
+fn nonzero_start_index() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 100, 8);
+
+    assert_eq!(fl.free_count(), 8);
+
+    let slot = fl.alloc().unwrap();
+    assert!(slot < 8); // logical index, not absolute
+    assert_eq!(fl.free_count(), 7);
+
+    fl.free(slot).unwrap();
+    assert_eq!(fl.free_count(), 8);
+}
+
+#[test]
+fn nonzero_start_index_end_index() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 100, 8);
+
+    // Layout: 100 + head(1) + free_count(1) + bitmap(1) + slots(8) = 111
+    assert_eq!(fl.end_index(), 100 + 2 + 1 + 8);
+}
+
+// ============ Edge Cases ============
+
+#[test]
+fn capacity_of_one() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 1);
+
+    assert_eq!(fl.free_count(), 1);
+
+    let slot = fl.alloc().unwrap();
+    assert_eq!(slot, 0);
+    assert!(fl.alloc().is_none());
+    assert_eq!(fl.free_count(), 0);
+
+    fl.free(slot).unwrap();
+    assert_eq!(fl.free_count(), 1);
+
+    let slot2 = fl.alloc().unwrap();
+    assert_eq!(slot2, 0);
+}
+
+#[test]
+fn capacity_of_two() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 2);
+
+    let a = fl.alloc().unwrap();
+    let b = fl.alloc().unwrap();
+    assert!(fl.alloc().is_none());
+
+    fl.free(a).unwrap();
+    fl.free(b).unwrap();
+    assert_eq!(fl.free_count(), 2);
+}
+
+#[test]
+fn alloc_free_alloc_cycle() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 4);
+
+    for _ in 0..10 {
+        let mut slots = Vec::new();
+        for _ in 0..4 {
+            slots.push(fl.alloc().unwrap());
+        }
+        assert!(fl.alloc().is_none());
+
+        for s in slots {
+            fl.free(s).unwrap();
+        }
+        assert_eq!(fl.free_count(), 4);
+    }
+}
+
+// ============ Double-Free Detection ============
+
+#[test]
+fn double_free_returns_error() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 4);
+
+    let slot = fl.alloc().unwrap();
+    fl.free(slot).unwrap();
+
+    let result = fl.free(slot);
+    assert!(result.is_err());
+}
+
+#[test]
+fn double_free_does_not_corrupt_free_count() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 4);
+
+    let slot = fl.alloc().unwrap();
+    fl.free(slot).unwrap();
+    assert_eq!(fl.free_count(), 4);
+
+    let _ = fl.free(slot); // should fail
+    assert_eq!(fl.free_count(), 4); // unchanged
+}
+
+#[test]
+fn free_realloc_free_is_not_double_free() {
+    let sab = create_sab(4096);
+    let fl = SimpleFreeList::new(sab, 0, 4);
+
+    let slot = fl.alloc().unwrap();
+    fl.free(slot).unwrap();
+
+    // Realloc same slot
+    let slot_again = fl.alloc().unwrap();
+    assert_eq!(slot_again, slot);
+
+    // Free again — should succeed (it's occupied now)
+    fl.free(slot_again).unwrap();
+    assert_eq!(fl.free_count(), 4);
+}
+
+// ============ Bitmap Correctness ============
+
+#[test]
+fn bitmap_spans_multiple_words() {
+    let sab = create_sab(8192);
+    // 64 slots = 2 bitmap words (64 / 32 = 2)
+    let fl = SimpleFreeList::new(sab, 0, 64);
+
+    // Alloc slots from both bitmap words
+    let mut slots = Vec::new();
+    for _ in 0..64 {
+        slots.push(fl.alloc().unwrap());
+    }
+    assert!(fl.alloc().is_none());
+
+    // Free every slot — exercises both bitmap words
+    for s in &slots {
+        fl.free(*s).unwrap();
+    }
+    assert_eq!(fl.free_count(), 64);
+
+    // Double-free check across bitmap word boundary
+    let _ = fl.alloc().unwrap(); // alloc one
+    let first_free = slots[1]; // should still be free
+    let result = fl.free(first_free);
+    assert!(result.is_err()); // it's free, so double-free
+}
+
+#[test]
+fn slot_31_and_32_bitmap_boundary() {
+    let sab = create_sab(8192);
+    let fl = SimpleFreeList::new(sab, 0, 64);
+
+    // Alloc all
+    let mut slots = Vec::new();
+    for _ in 0..64 {
+        slots.push(fl.alloc().unwrap());
+    }
+
+    // Free slot 31 (last bit of word 0) and slot 32 (first bit of word 1)
+    fl.free(31).unwrap();
+    fl.free(32).unwrap();
+    assert_eq!(fl.free_count(), 2);
+
+    // Double-free on boundary slots
+    assert!(fl.free(31).is_err());
+    assert!(fl.free(32).is_err());
+}
+
+// ============ Bind (Attach to Existing SAB) ============
+
+#[test]
+fn bind_reads_existing_state() {
+    let sab = create_sab(4096);
+
+    // Initialize with new
+    let fl = SimpleFreeList::new(sab.clone(), 0, 4);
+    let _s0 = fl.alloc().unwrap();
+    let _s1 = fl.alloc().unwrap();
+    assert_eq!(fl.free_count(), 2);
+
+    // Bind to same region — should see same state
+    let fl2 = SimpleFreeList::bind(sab, 0, 4);
+    assert_eq!(fl2.free_count(), 2);
+}
+
+#[test]
+fn bind_can_alloc_remaining() {
+    let sab = create_sab(4096);
+
+    let fl = SimpleFreeList::new(sab.clone(), 0, 4);
+    fl.alloc().unwrap();
+    fl.alloc().unwrap();
+
+    let fl2 = SimpleFreeList::bind(sab, 0, 4);
+    let s = fl2.alloc().unwrap();
+    assert_eq!(fl2.free_count(), 1);
+    fl2.free(s).unwrap();
+    assert_eq!(fl2.free_count(), 2);
+}
+
+// ============ Stress Tests ============
+
+#[test]
+fn stress_alloc_free_all_256() {
+    let sab = create_sab(65536);
+    let fl = SimpleFreeList::new(sab, 0, 256);
+
+    // Alloc all
+    let mut slots: Vec<usize> = (0..256).map(|_| fl.alloc().unwrap()).collect();
+    assert!(fl.alloc().is_none());
+    assert_eq!(fl.free_count(), 0);
+
+    // Free in reverse order
+    while let Some(s) = slots.pop() {
+        fl.free(s).unwrap();
+    }
+    assert_eq!(fl.free_count(), 256);
+
+    // Alloc all again
+    let slots: Vec<usize> = (0..256).map(|_| fl.alloc().unwrap()).collect();
+    assert!(fl.alloc().is_none());
+
+    // Free every other one
+    for (i, s) in slots.iter().enumerate() {
+        if i % 2 == 0 {
+            fl.free(*s).unwrap();
+        }
+    }
+    assert_eq!(fl.free_count(), 128);
+
+    // Alloc the freed ones back
+    for _ in 0..128 {
+        fl.alloc().unwrap();
+    }
+    assert!(fl.alloc().is_none());
+    assert_eq!(fl.free_count(), 0);
+}
+
+#[test]
+fn stress_interleaved_alloc_free() {
+    let sab = create_sab(65536);
+    let fl = SimpleFreeList::new(sab, 0, 128);
+
+    let mut active = Vec::new();
+
+    for i in 0..10_000 {
+        if active.len() < 128 && i % 3 != 0 {
+            if let Some(slot) = fl.alloc() {
+                active.push(slot);
+            }
+        } else if !active.is_empty() {
+            let slot = active.remove(0);
+            fl.free(slot).unwrap();
+        }
+    }
+
+    // Invariant: free_count + active = capacity
+    assert_eq!(fl.free_count() + active.len() as i32, 128);
+}
+
+#[test]
+fn stress_unique_indices() {
+    let sab = create_sab(65536);
+    let fl = SimpleFreeList::new(sab, 0, 256);
+
+    let slots: Vec<usize> = (0..256).map(|_| fl.alloc().unwrap()).collect();
+
+    // All indices should be unique
+    let mut sorted = slots.clone();
+    sorted.sort();
+    sorted.dedup();
+    assert_eq!(sorted.len(), 256);
+
+    // All should be in [0, 256)
+    for s in &slots {
+        assert!(*s < 256);
+    }
+}
+
+#[test]
+fn stress_free_chain_integrity_after_mixed_ops() {
+    let sab = create_sab(65536);
+    let fl = SimpleFreeList::new(sab, 0, 64);
+
+    // Alloc 64, free odd indices, alloc 32, free all
+    let slots: Vec<usize> = (0..64).map(|_| fl.alloc().unwrap()).collect();
+
+    for s in &slots {
+        if s % 2 == 1 {
+            fl.free(*s).unwrap();
+        }
+    }
+    assert_eq!(fl.free_count(), 32);
+
+    // Alloc the 32 freed slots
+    let mut reallocated = Vec::new();
+    for _ in 0..32 {
+        reallocated.push(fl.alloc().unwrap());
+    }
+    assert!(fl.alloc().is_none());
+    assert_eq!(fl.free_count(), 0);
+
+    // Free everything
+    for s in &slots {
+        if s % 2 == 0 {
+            fl.free(*s).unwrap();
+        }
+    }
+    for s in reallocated {
+        fl.free(s).unwrap();
+    }
+    assert_eq!(fl.free_count(), 64);
+}
