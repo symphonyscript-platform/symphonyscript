@@ -387,25 +387,26 @@ fn swap(&mut self) -> bool {
 ```rust
 fn process(&mut self, output: &mut [f32]) {
     // 1. Grab latest structural frame (one swap, ~11ns)
-    self.triple_buffer.reader_swap();
-    let frame: &StructuralFrame = self.triple_buffer.reader();
+    self.reader.swap();
 
-    // 2. Walk node chain using structural pointers
-    let mut slot = frame.head;
+    // 2. Walk node chain using structural indices on SAB
+    let reader_base = self.reader.current_start_index();
+    let mut slot = self.sab[reader_base + HEAD_OFFSET].load(Relaxed) as usize;
     while slot != NONE {
-        // 3. Structural data from triple-buffered frame
-        let node = &frame.nodes[slot];
+        // 3. Structural data from triple-buffered SAB region
+        let next = self.sab[reader_base + slot * 2].load(Relaxed);
+        let prev = self.sab[reader_base + slot * 2 + 1].load(Relaxed);
 
         // 4. Attribute data DIRECTLY from shared plane (atomic load, ~1ns each)
-        let pitch    = self.attributes[slot].pitch.load(Relaxed);
-        let velocity = self.attributes[slot].velocity.load(Relaxed);
-        let duration = self.attributes[slot].duration.load(Relaxed);
+        let pitch    = self.sab[attr_base + slot * ATTR_STRIDE + PITCH].load(Relaxed);
+        let velocity = self.sab[attr_base + slot * ATTR_STRIDE + VELOCITY].load(Relaxed);
+        let duration = self.sab[attr_base + slot * ATTR_STRIDE + DURATION].load(Relaxed);
 
         // 5. Synthesize
         self.render_node(pitch, velocity, duration, output);
 
         // 6. Follow chain
-        slot = node.next;
+        slot = next as usize;
     }
 }
 ```
@@ -435,18 +436,18 @@ fn insert_head(&mut self, data: NodeData) -> usize {
     let slot = self.free_list.alloc().expect("node pool full");
 
     // Write attributes to shared plane (instant)
-    self.attributes[slot].pitch.store(data.pitch, Relaxed);
-    self.attributes[slot].velocity.store(data.velocity, Relaxed);
+    self.sab[attr_base + slot * ATTR_STRIDE + PITCH].store(data.pitch, Relaxed);
+    self.sab[attr_base + slot * ATTR_STRIDE + VELOCITY].store(data.velocity, Relaxed);
 
     // Write structure to WRITER buffer (not yet visible to audio)
-    let frame = self.triple_buffer.writer_mut();
-    let old_head = frame.head;
-    frame.nodes[slot].next = old_head;
-    frame.nodes[slot].prev = NONE;
+    let writer_base = self.writer.current_start_index();
+    let old_head = self.sab[writer_base + HEAD_OFFSET].load(Relaxed) as usize;
+    self.sab[writer_base + slot * 2].store(old_head as i32, Relaxed);     // next
+    self.sab[writer_base + slot * 2 + 1].store(NONE as i32, Relaxed);     // prev
     if old_head != NONE {
-        frame.nodes[old_head].prev = slot;
+        self.sab[writer_base + old_head * 2 + 1].store(slot as i32, Relaxed); // prev
     }
-    frame.head = slot;
+    self.sab[writer_base + HEAD_OFFSET].store(slot as i32, Relaxed);
 
     slot
 }
@@ -456,11 +457,8 @@ fn insert_head(&mut self, data: NodeData) -> usize {
 
 ```rust
 fn commit(&mut self) {
-    // Publish writer buffer to shared (one swap)
-    self.triple_buffer.writer_swap();
-
-    // Writer now owns a stale buffer. Sync it.
-    self.sync_stale_writer();
+    // Publish writer buffer to shared (swap + sync in one call)
+    self.writer.publish();
 
     // Process deferred slot returns
     for slot in self.deferred_frees.drain(..) {
@@ -468,18 +466,10 @@ fn commit(&mut self) {
     }
 }
 
-fn sync_stale_writer(&mut self) {
-    // Copy structural data from the published buffer to our
-    // new writer buffer using unsafe copy_nonoverlapping.
-    // ~104KB memcpy, ~4.7µs (benchmarked).
-    //
-    // SAFETY: The writer has exclusive ownership of the stale
-    // buffer after the swap. Bounds are validated at init.
-    let src = self.sab[published_base..].as_ptr() as *const i32;
-    let dst = self.sab[writer_base..].as_ptr() as *mut i32;
-    unsafe { std::ptr::copy_nonoverlapping(src, dst, self.buffer_size); }
-}
-```
+> **Note:** `sync_stale_writer` is no longer a separate method. The sync
+> (unsafe `copy_nonoverlapping`) is performed inside `publish()` using the
+> locally captured `current_id` before the swap modifies the writer's buffer ID.
+
 
 ### 3.6 Memory Layout
 
@@ -603,25 +593,20 @@ main: insert_head(NodeData { pitch: 570000, velocity: 100, ... })
      attributes[42].velocity.store(100, Relaxed)
      attributes[42].duration.store(480, Relaxed)
 
-  3. STRUCTURE (writer buffer only)
-     let frame = triple_buffer.writer_mut()
-     frame.nodes[42].next = frame.head    // old head
-     frame.nodes[42].prev = NONE
-     frame.nodes[frame.head].prev = 42    // if head exists
-     frame.head = 42
+  3. STRUCTURE (writer buffer only, SAB indices)
+     let writer_base = writer.current_start_index()
+     sab[writer_base + 42 * 2].store(old_head)       // next
+     sab[writer_base + 42 * 2 + 1].store(NONE)       // prev
+     sab[writer_base + old_head * 2 + 1].store(42)    // if head exists
+     sab[writer_base + HEAD_OFFSET].store(42)
 
   4. NOT YET VISIBLE TO AUDIO
      Audio reads READER buffer. Slot 42 is only in WRITER buffer.
      Audio cannot see it.
 
   5. COMMIT (when ready)
-     triple_buffer.writer_swap()  // swap, ~10ns
+     writer.publish()  // swap + sync, ~10ns + ~4.7µs
      // Slot 42 now in SHARED buffer, audio picks it up next callback
-
-  6. SYNC STALE WRITER
-     unsafe memcpy published → new writer buffer  // ~4.7µs (benchmarked)
-     // Both writer and published buffers now consistent
-     // Ready for next batch of mutations
 ```
 
 ### 3.10 Dropped Frame Semantics
@@ -949,12 +934,12 @@ Revised attribute plane:
 
 ### Decision 4: Stale Writer Sync — Direct Copy from Published Buffer
 
-**Resolution:** After `writer_swap()`, copy structural data directly from the just-published buffer (now in SHARED or READER position). No local snapshot copy needed.
+**Resolution:** After the atomic swap, copy structural data directly from the just-published buffer to the new writer buffer. This is handled internally by `publish()`.
 
 **Rationale:**
 
 ```
-After writer_swap():
+After publish()'s swap:
   WRITER  = stale buffer (just received from shared)
   SHARED  = just-published buffer (latest state)
   READER  = audio's current buffer
@@ -982,23 +967,23 @@ fn commit(&mut self) {
 }
 ```
 
-> **Implementation note:** In the actual implementation, `publish()` handles
-> both the atomic swap AND the stale writer sync (unsafe `copy_nonoverlapping`)
-> in a single method call. There is no separate `last_published_idx` tracking —
-> the `published_slot_index` is stored on the SAB and the buffer bases are
-> computed from the swap return value.
+> **Implementation note:** `publish()` handles the atomic swap, the
+> `published_slot_index` update, AND the stale writer sync (unsafe
+> `copy_nonoverlapping`) in a single method call. The published buffer ID
+> is captured as a local variable before the swap, making it immune to
+> concurrent reader swaps.
 
 **Why not a local snapshot:**
 
 ```
 Local snapshot approach:
   1. memcpy writer → snapshot    (~104KB, ~4.7µs)
-  2. writer_swap()
+  2. swap
   3. memcpy snapshot → new writer (~104KB, ~4.7µs)
   Total: 2 copies, ~9.4µs, extra 104KB memory
 
-Direct copy approach (implemented):
-  1. writer_swap()
+Direct copy approach (implemented inside publish()):
+  1. swap
   2. unsafe copy_nonoverlapping published → new writer (~104KB, ~4.7µs)
   Total: 1 copy, ~4.7µs, no extra memory
 
