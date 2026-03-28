@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::thread;
-use symphonyscript_kernel::primitives::triple_buffer_reader::TripleBuffer;
+use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
 use symphonyscript_kernel::primitives::types::SAB;
 
 fn create_sab(size: usize) -> SAB {
