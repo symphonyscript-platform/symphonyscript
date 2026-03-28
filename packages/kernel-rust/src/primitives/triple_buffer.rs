@@ -70,11 +70,7 @@ impl TripleBuffer {
         (writer, reader)
     }
 
-    pub fn bind_writer(
-        sab: SAB,
-        start_index: usize,
-        buffer_size: usize,
-    ) -> TripleBufferWriter {
+    pub fn bind_writer(sab: SAB, start_index: usize, buffer_size: usize) -> TripleBufferWriter {
         debug_assert!(buffer_size > 0, "buffer must have size");
 
         let state_slot_index = start_index;
@@ -99,11 +95,7 @@ impl TripleBuffer {
         }
     }
 
-    pub fn bind_reader(
-        sab: SAB,
-        start_index: usize,
-        buffer_size: usize,
-    ) -> TripleBufferReader {
+    pub fn bind_reader(sab: SAB, start_index: usize, buffer_size: usize) -> TripleBufferReader {
         debug_assert!(buffer_size > 0, "buffer must have size");
 
         let state_slot_index = start_index;
@@ -143,30 +135,11 @@ impl TripleBufferWriter {
     }
 
     pub fn publish(&mut self) {
-        let mut state = self.sab[self.state_slot_index].load(Ordering::Relaxed);
         let current_id = self.sab[self.writer_slot_index].load(Ordering::Relaxed);
         let new_state = (current_id & 0b011) | 0b100;
-        let max_spins = 4;
-        let mut spins = 0;
+        let old_state = self.sab[self.state_slot_index].swap(new_state, Ordering::Release);
+        let writer_new_buffer_id = old_state & 0b011;
 
-        loop {
-            // In the idiomatic SPSC architecture, no more than 1 retries should happen.
-            // max_spins=4 is a generous cap to catch bugs in development.
-            debug_assert!(spins < max_spins, "max spins of 4 exhausted");
-            match self.sab[self.state_slot_index].compare_exchange(
-                state,
-                new_state,
-                Ordering::Release,
-                Ordering::Relaxed,
-            ) {
-                Ok(_) => break,
-                Err(actual) => state = actual,
-            }
-
-            spins += 1
-        }
-
-        let writer_new_buffer_id = state & 0b011;
         self.sab[self.writer_slot_index].store(writer_new_buffer_id, Ordering::Relaxed);
         self.sab[self.published_slot_index].store(current_id, Ordering::Relaxed);
 
@@ -207,27 +180,12 @@ impl TripleBufferReader {
 
         let current_id = self.sab[self.reader_slot_index].load(Ordering::Relaxed);
         let new_state = current_id & 0b011;
-        let max_spins = 4;
-        let mut spins = 0;
+        let old_state = self.sab[self.state_slot_index].swap(
+            new_state,
+            Ordering::Acquire,
+        );
 
-        loop {
-            // In the idiomatic SPSC architecture, no more than 1 retries should happen.
-            // max_spins=4 is a generous cap to catch bugs in development.
-            debug_assert!(spins < max_spins, "max spins of 4 exhausted");
-            match self.sab[self.state_slot_index].compare_exchange(
-                state,
-                new_state,
-                Ordering::Acquire,
-                Ordering::Relaxed,
-            ) {
-                Ok(_) => break,
-                Err(actual) => state = actual,
-            }
-
-            spins += 1
-        }
-
-        self.sab[self.reader_slot_index].store(state & 0b011, Ordering::Relaxed);
+        self.sab[self.reader_slot_index].store(old_state & 0b011, Ordering::Relaxed);
 
         true
     }
