@@ -172,7 +172,7 @@ impl TripleBufferReader {
     }
 
     pub fn swap(&mut self) -> bool {
-        let mut state = self.sab[self.state_slot_index].load(Ordering::Relaxed);
+        let state = self.sab[self.state_slot_index].load(Ordering::Relaxed);
 
         if state & 0b100 == 0 {
             return false;
