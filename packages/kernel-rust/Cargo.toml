@@ -23,3 +23,7 @@ harness = false
 [[bench]]
 name = "simple_free_list_bench"
 harness = false
+
+[[bench]]
+name = "triple_buffer_bench"
+harness = false

@@ -30,23 +30,6 @@ impl TripleBuffer {
         start_index: usize,
         buffer_size: usize,
     ) -> (TripleBufferWriter, TripleBufferReader) {
-        Self::create(sab, start_index, buffer_size, false)
-    }
-
-    pub fn bind(
-        sab: SAB,
-        start_index: usize,
-        buffer_size: usize,
-    ) -> (TripleBufferWriter, TripleBufferReader) {
-        Self::create(sab, start_index, buffer_size, true)
-    }
-
-    fn create(
-        sab: SAB,
-        start_index: usize,
-        buffer_size: usize,
-        bind: bool,
-    ) -> (TripleBufferWriter, TripleBufferReader) {
         debug_assert!(buffer_size > 0, "buffer must have size");
 
         let state_slot_index = start_index;
@@ -61,12 +44,10 @@ impl TripleBuffer {
         ];
         let end_index = buffers_start_index + buffer_size * 3;
 
-        if !bind {
-            sab[writer_slot_index].store(0, Ordering::Relaxed);
-            sab[state_slot_index].store(0b001, Ordering::Relaxed);
-            sab[published_slot_index].store(0, Ordering::Relaxed);
-            sab[reader_slot_index].store(2, Ordering::Relaxed);
-        }
+        sab[writer_slot_index].store(0, Ordering::Relaxed);
+        sab[state_slot_index].store(0b001, Ordering::Relaxed);
+        sab[published_slot_index].store(0, Ordering::Relaxed);
+        sab[reader_slot_index].store(2, Ordering::Relaxed);
 
         let writer = TripleBufferWriter {
             sab: Arc::clone(&sab),
@@ -87,6 +68,62 @@ impl TripleBuffer {
         };
 
         (writer, reader)
+    }
+
+    pub fn bind_writer(
+        sab: SAB,
+        start_index: usize,
+        buffer_size: usize,
+    ) -> TripleBufferWriter {
+        debug_assert!(buffer_size > 0, "buffer must have size");
+
+        let state_slot_index = start_index;
+        let writer_slot_index = start_index + 1;
+        let published_slot_index = start_index + 2;
+        let buffers_start_index = start_index + 4;
+        let buffer_bases: [usize; 3] = [
+            buffers_start_index,
+            buffers_start_index + buffer_size,
+            buffers_start_index + buffer_size * 2,
+        ];
+        let end_index = buffers_start_index + buffer_size * 3;
+
+        TripleBufferWriter {
+            sab: Arc::clone(&sab),
+            state_slot_index,
+            writer_slot_index,
+            published_slot_index,
+            buffer_bases,
+            buffer_size,
+            end_index,
+        }
+    }
+
+    pub fn bind_reader(
+        sab: SAB,
+        start_index: usize,
+        buffer_size: usize,
+    ) -> TripleBufferReader {
+        debug_assert!(buffer_size > 0, "buffer must have size");
+
+        let state_slot_index = start_index;
+        let reader_slot_index = start_index + 3;
+        let buffers_start_index = start_index + 4;
+        let buffer_bases: [usize; 3] = [
+            buffers_start_index,
+            buffers_start_index + buffer_size,
+            buffers_start_index + buffer_size * 2,
+        ];
+        let end_index = buffers_start_index + buffer_size * 3;
+
+        TripleBufferReader {
+            sab: Arc::clone(&sab),
+            state_slot_index,
+            reader_slot_index,
+            buffer_bases,
+            buffer_size,
+            end_index,
+        }
     }
 }
 
