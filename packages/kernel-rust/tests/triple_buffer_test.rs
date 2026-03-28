@@ -128,21 +128,30 @@ fn full_cycle_writer_reader_writer() {
     sab[b1].store(10, Ordering::Relaxed);
     writer.publish();
     assert!(reader.swap());
-    assert_eq!(sab[reader.current_start_index()].load(Ordering::Relaxed), 10);
+    let rbase1 = reader.current_start_index();
+    assert_eq!(sab[rbase1].load(Ordering::Relaxed), 10);
 
     // Cycle 2
     let b2 = writer.current_start_index();
+    assert_ne!(b1, b2, "Writer should get a new buffer");
     sab[b2].store(20, Ordering::Relaxed);
     writer.publish();
     assert!(reader.swap());
-    assert_eq!(sab[reader.current_start_index()].load(Ordering::Relaxed), 20);
+    let rbase2 = reader.current_start_index();
+    assert_ne!(rbase1, rbase2, "Reader should get a new buffer");
+    assert_eq!(sab[rbase2].load(Ordering::Relaxed), 20);
 
     // Cycle 3
     let b3 = writer.current_start_index();
+    assert_ne!(b2, b3, "Writer should get a new buffer");
+    assert_ne!(b1, b3, "Writer should get a new buffer");
     sab[b3].store(30, Ordering::Relaxed);
     writer.publish();
     assert!(reader.swap());
-    assert_eq!(sab[reader.current_start_index()].load(Ordering::Relaxed), 30);
+    let rbase3 = reader.current_start_index();
+    assert_ne!(rbase2, rbase3, "Reader should get a new buffer");
+    assert_ne!(rbase1, rbase3, "Reader should get a new buffer");
+    assert_eq!(sab[rbase3].load(Ordering::Relaxed), 30);
 }
 
 #[test]
@@ -456,6 +465,35 @@ fn writer_and_reader_never_see_same_buffer() {
 }
 
 #[test]
+fn published_slot_index_tracks_latest_publish() {
+    let sab = create_sab(4096);
+    let published_slot = 2; // start_index + 2
+
+    let (mut writer, mut reader) = TripleBuffer::new(sab.clone(), 0, 4);
+
+    // Initially 0
+    assert_eq!(sab[published_slot].load(Ordering::Relaxed), 0, "initially 0");
+
+    // After 1st publish (writer had buffer 0)
+    writer.publish();
+    assert_eq!(sab[published_slot].load(Ordering::Relaxed), 0, "published 0");
+
+    // Let reader swap so writer gets a new buffer
+    reader.swap();
+
+    // After 2nd publish (writer had buffer 1)
+    writer.publish();
+    assert_eq!(sab[published_slot].load(Ordering::Relaxed), 1, "published 1");
+
+    // Let reader swap
+    reader.swap();
+
+    // After 3rd publish (writer had buffer 2)
+    writer.publish();
+    assert_eq!(sab[published_slot].load(Ordering::Relaxed), 2, "published 2");
+}
+
+#[test]
 fn state_encoding_new_data_flag() {
     let sab = create_sab(4096);
     let state_slot = 0;
@@ -569,10 +607,12 @@ fn concurrent_writer_reader_stress() {
                 let rbase = reader.current_start_index();
                 let first = sab_reader[rbase].load(Ordering::Relaxed);
 
-                // Value should be monotonically non-decreasing
+                // Data is written in monotonically increasing order. The protocol
+                // guarantees the reader only gets newer frames (or the same frame),
+                // so it must never see a value from the past.
                 assert!(
                     first >= last_val,
-                    "non-monotonic: got {first}, expected >= {last_val}"
+                    "reader went backwards in time: got {first}, expected >= {last_val}"
                 );
                 last_val = first;
 
