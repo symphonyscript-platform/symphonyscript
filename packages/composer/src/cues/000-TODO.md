@@ -442,3 +442,89 @@ ___
 4. Quasi-random (low-discrepancy sequences): Van der Corput, Halton sequences. Pure function per index, no seed needed.
    Mathematically guaranteed to cover the value space more evenly than random. vanDerCorput(slot_index) produces 0.5,
    0.25, 0.75, 0.125, 0.625... — perfectly distributed.
+___
+
+Scores
+
+
+
+Thought for 38s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+You're right — those creative possibilities are real and worth exploring. Let me map each one to the existing architecture to see what's already solved and where the genuine gap is:
+
+Already solved by synapses (no channel needed)
+1. Single note → multiple instruments simultaneously:
+
+typescript
+// One clip, two synapses. All-fire model. Both play.
+parent.linkTo(clip, Piano)
+parent.linkTo(clip, Guitar)
+// Weight modulation controls the mix — this is the crossfade pattern.
+2. Modulated routing (even/odd turns):
+
+typescript
+parent.linkTo(clip, Piano).mod(LoopCounter).base(500).amount(-1000)  // fires on even
+parent.linkTo(clip, Guitar).mod(LoopCounter).base(500).amount(1000)  // fires on odd
+These work because synapse weight is already modulatable. The creative routing falls out of existing architecture.
+
+The genuine gap: per-NOTE routing within a single clip
+The cases above route the entire clip — all notes go to Piano or all go to Guitar (or both). But what about:
+
+"Note C4 goes to Piano, note G4 goes to Guitar, within the same clip"
+
+Gate modulators are evaluated per-node, but the result applies to ALL outgoing synapses equally. There's no way to say "this note fires through synapse A but not synapse B." That IS a gap.
+
+Three ways to solve it
+A. Channel in attribute plane (coupling)
+
+Kernel routes notes by channel. Maximum flexibility, minimum verbosity.
+But: clip knows about instruments, reusability drops, semantic conflict with synapses, kernel gets routing logic.
+B. Separate clips (pure separation)
+
+One clip per instrument. Clean, but verbose for the ping-pong case.
+C. DSL sugar that decomposes to B (best of both)
+
+typescript
+Score.pipe(
+note('G4').to(Piano),
+note('C4').to(Guitar),
+note('E4').to(Piano, Guitar),              // fan-out: both play
+note('A4').to(PARAM.InstrumentSelector),   // modulated!
+)
+The compiler splits this into separate clips at composition time:
+
+Clip_Piano: [G4, E4, A4(gated)]
+Clip_Guitar: [C4, E4, A4(gated)]
+Synapse routing created automatically
+.to(PARAM.X) becomes opposing GATE modulators on two synapses
+Kernel sees nothing special. No channel field, no routing logic. Just clips + synapses + gates (which already exist).
+
+Where this gets interesting
+The Score sugar could compose with existing modulation:
+
+typescript
+Score.pipe(
+note('G4').to(Piano).probability(70),        // per-note gating + routing
+note('C4').to(Guitar).humanize(30),           // per-note humanization + routing
+note('E4').to(lut([Piano, Guitar]).rotate()),  // round-robin instrument!
+)
+The creative ping-pong, modulated routing, multi-instrument cases all become DSL-level transforms over the clean kernel primitives. You get the playfulness without the coupling.
+
+The principle: instrument routing = graph topology. Creative routing patterns = creative graph topology. The DSL makes the topology easy to express. The kernel doesn't need to know about instruments at all.
+
+So: remove channel from attribute plane, and when the time comes, design Score as a composition-time DSL that expands to clips + synapses. The RFC doesn't need to spec Score now — it just needs to NOT have channel polluting the kernel.
+

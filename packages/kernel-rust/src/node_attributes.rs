@@ -1,3 +1,4 @@
+use std::sync::atomic::Ordering;
 use crate::primitives::types::SAB;
 
 pub struct NodeAttributesData {
@@ -26,7 +27,19 @@ impl NodeAttributesView {
         }
     }
 
-    pub fn pitch() -> i32 {
+    pub fn pitch(&self) -> i32 {
+        self.read(1)
+    }
 
+    pub fn pitch(&self) -> i32 {
+        self.read(1)
+    }
+
+    fn read(&self, index: usize) -> i32 {
+        self.sab[self.start_index + index].load(Ordering::Relaxed)
+    }
+
+    fn write(&self, index: usize, value: i32) {
+        self.sab[self.start_index + index].store(value, Ordering::Relaxed)
     }
 }
