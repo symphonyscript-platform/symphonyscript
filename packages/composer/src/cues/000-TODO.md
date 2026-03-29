@@ -140,11 +140,16 @@ Probability (PRNG-driven parameter) → stochastic note triggering
 The kernel is oblivious to the distinction. It just compares two i32 values. The semantics are entirely determined by
 what the outside world writes to the parameter.
 
-"The kernel does exactly what it already does for LFO curves: read a value from a pre-computed table, compare against threshold. No PRNG. No randomness in the kernel. The randomness lives in the data, not the code." I love this.
+"The kernel does exactly what it already does for LFO curves: read a value from a pre-computed table, compare against
+threshold. No PRNG. No randomness in the kernel. The randomness lives in the data, not the code." I love this.
 
-but  - should we have separate field for probabilities or re-use the same threshold? because your water-level metaphor I really liked - to modulate emergence of notes() using modulation , but what if you want BOTH modulation of threshold AND probability of note() - could there be such use-case in reality?
+but - should we have separate field for probabilities or re-use the same threshold? because your water-level metaphor I
+really liked - to modulate emergence of notes() using modulation , but what if you want BOTH modulation of threshold AND
+probability of note() - could there be such use-case in reality?
 
-You have a 16-note hi-hat pattern. Each note has a threshold for the density gate — as Intensity sweeps up, more hi-hats emerge (water level). But you ALSO want the hi-hats that passed the density gate to play only 70% of the time — adding organic stochastic variation on top of the deterministic density control.
+You have a 16-note hi-hat pattern. Each note has a threshold for the density gate — as Intensity sweeps up, more hi-hats
+emerge (water level). But you ALSO want the hi-hats that passed the density gate to play only 70% of the time — adding
+organic stochastic variation on top of the deterministic density control.
 
 Two-layer filtering:
 
@@ -152,32 +157,53 @@ Density gate: Does the note's threshold pass against the Intensity parameter? (d
 Probability gate: Does the note's probability pass against the noise LUT value? (stochastic, organic)
 Both must pass for the note to sound. This creates richer generative patterns than either alone.
 
-But — the modulation system can handle this without a second field. The sparse modulation topology allows multiple modulators on the same attribute. You attach two ModConfigs to threshold:
+But — the modulation system can handle this without a second field. The sparse modulation topology allows multiple
+modulators on the same attribute. You attach two ModConfigs to threshold:
 
 ModConfig A: sourced from Intensity parameter (smooth sweep)
 ModConfig B: sourced from noise LUT (random perturbation)
-The combined modulation effectively raises and lowers the threshold both deterministically AND stochastically. The note's base threshold is the density ranking. The modulators push it around from both sides.
+The combined modulation effectively raises and lowers the threshold both deterministically AND stochastically. The
+note's base threshold is the density ranking. The modulators push it around from both sides.
 
-One field, two modulators. No second attribute needed. The sparse modulation system you already designed handles the composition naturally.
+One field, two modulators. No second attribute needed. The sparse modulation system you already designed handles the
+composition naturally.
 
-So: threshold stays as a single field. If the musician wants density only — one modulator. Probability only — one noise LUT modulator. Both — stack two modulators on the same attribute. The kernel sees no difference.
+So: threshold stays as a single field. If the musician wants density only — one modulator. Probability only — one noise
+LUT modulator. Both — stack two modulators on the same attribute. The kernel sees no difference.
 
 _________
 
-the idea that we can provide some function pre-node(), some filter is good. kernel does not care what filter() is, it just knows that it must call it.
+the idea that we can provide some function pre-node(), some filter is good. kernel does not care what filter() is, it
+just knows that it must call it.
 
-Now, one approach is that filter() itself can be random function inside - so we hook probabilistic function into the deterministic kernel - the kernel core stays puore, butt its runtime becomes probabilistic.
+Now, one approach is that filter() itself can be random function inside - so we hook probabilistic function into the
+deterministic kernel - the kernel core stays puore, butt its runtime becomes probabilistic.
 
-Another approach is that the filter() function doesn't not itself contain random logic, it depends on LUT. and some other entity is responsible to update LUT with whatever it wants, random numbers or whatnot. this way probability is completely out of the kernel and filter() just reads already written numbers to decide. this seems more refined approach, but more complex. because we now need another lifecycle hooks: one that runs at the beginning of every clip, one that runs at the beginning of every loop - etc, but here is very important thing - the kernel does not care about clips and loops - those are high-level concepts, so how do we define boundaries without polluting kernel? easy: boundary cues.
+Another approach is that the filter() function doesn't not itself contain random logic, it depends on LUT. and some
+other entity is responsible to update LUT with whatever it wants, random numbers or whatnot. this way probability is
+completely out of the kernel and filter() just reads already written numbers to decide. this seems more refined
+approach, but more complex. because we now need another lifecycle hooks: one that runs at the beginning of every clip,
+one that runs at the beginning of every loop - etc, but here is very important thing - the kernel does not care about
+clips and loops - those are high-level concepts, so how do we define boundaries without polluting kernel? easy: boundary
+cues.
 
-then DSL layer chooses where it calls boundary(SOMETHING) (where SOMETHING is some ID). we can be explicit - by defining boundary(SOMETHING) wherever we want, but we can also define implicit boundaries (withing the DSL layer), for example Clip.pipe() would implicitly define boundary(CLIP_START) and boundary(CLIP_END). loop() would implicitly define boundary(LOOP_START) and boundary(LOOP_END).
+then DSL layer chooses where it calls boundary(SOMETHING) (where SOMETHING is some ID). we can be explicit - by defining
+boundary(SOMETHING) wherever we want, but we can also define implicit boundaries (withing the DSL layer), for example
+Clip.pipe() would implicitly define boundary(CLIP_START) and boundary(CLIP_END). loop() would implicitly define
+boundary(LOOP_START) and boundary(LOOP_END).
 
-And that's what developer would later be able to hook into. they would choose to run some probabilistic funciton that updates LUT indexes at some boundary...
+And that's what developer would later be able to hook into. they would choose to run some probabilistic funciton that
+updates LUT indexes at some boundary...
 
+BOUNDARY is just another OPCODE. The kernel already has NOTE, REST, BARRIER, CC, BEND. Adding BOUNDARY is one more enum
+variant. It's a node in the linked list like any other. When the playhead encounters it, it fires a registered function.
+The kernel doesn't know what "clip start" means — it just hit a BOUNDARY node with ID 0x01 and called whatever was
+registered for that ID.
 
-BOUNDARY is just another OPCODE. The kernel already has NOTE, REST, BARRIER, CC, BEND. Adding BOUNDARY is one more enum variant. It's a node in the linked list like any other. When the playhead encounters it, it fires a registered function. The kernel doesn't know what "clip start" means — it just hit a BOUNDARY node with ID 0x01 and called whatever was registered for that ID.
-
-The critical timing detail: For the LUT-based approach to work, the boundary callback MUST run synchronously on the audio thread — before the kernel continues to the next nodes. If the callback runs asynchronously on the JS main thread, the kernel has already passed the notes that needed the updated LUT. The callback must be a WASM function, not a JS callback.
+The critical timing detail: For the LUT-based approach to work, the boundary callback MUST run synchronously on the
+audio thread — before the kernel continues to the next nodes. If the callback runs asynchronously on the JS main thread,
+the kernel has already passed the notes that needed the updated LUT. The callback must be a WASM function, not a JS
+callback.
 
 The full flow:
 
@@ -187,46 +213,55 @@ Playhead traversal:
 → note('G4').threshold(700) ← kernel reads LUT, compares against 700
 → note('C5').threshold(300) ← kernel reads LUT, compares against 300
 → BOUNDARY(CLIP_END)        ← kernel calls registered function (cleanup, etc.)
-Every time the clip loops, the playhead hits the BOUNDARY again, the function runs again, the LUT gets fresh values, and the subsequent notes get new probability rolls. Automatically. No setInterval. No host polling. The lifecycle event IS the graph traversal.
+Every time the clip loops, the playhead hits the BOUNDARY again, the function runs again, the LUT gets fresh values, and
+the subsequent notes get new probability rolls. Automatically. No setInterval. No host polling. The lifecycle event IS
+the graph traversal.
 
 What the kernel needs:
 
 BOUNDARY opcode (one enum variant)
 A registry: Map<boundary_id, fn_pointer> — maps boundary IDs to WASM function pointers
-When the playhead hits a BOUNDARY node, call registry[boundary_id](context) where context gives write access to the LUT_POOL
+When the playhead hits a BOUNDARY node, call registry[boundary_id](context) where context gives write access to the
+LUT_POOL
 What the kernel does NOT need:
 
 Knowledge of clips, loops, or musical structure
 PRNG, randomization, or probability logic
 Lifecycle event detection — the events ARE nodes in the graph
-The kernel stays pure. Boundaries are data (nodes in the linked list). Randomization is external code (developer's WASM function). The LUT is the communication channel between them. And the DSL implicitly inserts boundaries at clip/loop starts so the developer doesn't have to think about it unless they want explicit control.
+The kernel stays pure. Boundaries are data (nodes in the linked list). Randomization is external code (developer's WASM
+function). The LUT is the communication channel between them. And the DSL implicitly inserts boundaries at clip/loop
+starts so the developer doesn't have to think about it unless they want explicit control.
 
+Yielding on every node in a JS/WASM context has a real cost. Each yield is a WASM→JS→WASM round trip. V8 typically
+takes ~100-200ns per crossing. For 200 notes per audio block:
 
-
-Yielding on every node in a JS/WASM context has a real cost. Each yield is a WASM→JS→WASM round trip. V8 typically takes ~100-200ns per crossing. For 200 notes per audio block:
-
-Yield every node: 200 × ~150ns = 30µs of pure overhead — just for 200 no-op process_next() calls where the developer does nothing.
+Yield every node: 200 × ~150ns = 30µs of pure overhead — just for 200 no-op process_next() calls where the developer
+does nothing.
 Yield only on boundaries: 2-4 yields per clip = ~600ns. 50× cheaper.
-In native Rust, function call overhead is ~1-5ns, so yielding every node is essentially free. But in WASM/AudioWorklet (your primary target), 30µs per block is ~1% of your budget wasted on bridge crossings.
+In native Rust, function call overhead is ~1-5ns, so yielding every node is essentially free. But in WASM/AudioWorklet (
+your primary target), 30µs per block is ~1% of your budget wasted on bridge crossings.
 
-The solution: yield only on boundaries by default. If the developer wants per-note control on a specific note, they insert an explicit boundary(MY_FILTER) before that note in the DSL:
+The solution: yield only on boundaries by default. If the developer wants per-note control on a specific note, they
+insert an explicit boundary(MY_FILTER) before that note in the DSL:
 
 javascript
 const clip1 = Clip.pipe(
 // implicit boundary(CLIP_START) by Clip.pipe()
-note('G4'),                                    // no yield, processed internally
-note('C5'),                                    // no yield
-boundary(PROBABILITY_GATE),                    // YIELD — developer handles this
-note('E4').threshold(700).mod(NoiseMod),       // processed after developer updates LUT
+note('G4'), // no yield, processed internally
+note('C5'), // no yield
+boundary(PROBABILITY_GATE), // YIELD — developer handles this
+note('E4').threshold(700).mod(NoiseMod), // processed after developer updates LUT
 // implicit boundary(CLIP_END)                  // YIELD
 )
-The developer gets per-note control exactly where they need it, and pays zero overhead everywhere else. The kernel processes notes at full speed between boundaries, and only yields when it encounters one.
+The developer gets per-note control exactly where they need it, and pays zero overhead everywhere else. The kernel
+processes notes at full speed between boundaries, and only yields when it encounters one.
 
 Maximum control where you want it. Zero cost where you don't.
 
 The answer is the same pattern every platform uses to wrap a low-level primitive: a Runtime layer.
 
-The kernel exposes the raw process_next() / yield API. A platform-specific Runtime class wraps it and gives the developer a simple callback interface:
+The kernel exposes the raw process_next() / yield API. A platform-specific Runtime class wraps it and gives the
+developer a simple callback interface:
 
 javascript
 // Developer writes this — no knowledge of process_next() needed
@@ -255,14 +290,15 @@ outputs[0].set(kernel.getAudioBuffer())
 }
 Two layers, clean separation:
 
-Layer	Responsibility	Platform-specific?
-Kernel	SAB traversal, yield on boundary, emit signal ID	No
-Runtime	Yield loop, callback dispatch, developer API	Yes
-Developer who doesn't care about boundaries: runtime.start() — the loop calls process_next() continuously, ignores signals. Zero friction.
+Layer Responsibility Platform-specific?
+Kernel SAB traversal, yield on boundary, emit signal ID No
+Runtime Yield loop, callback dispatch, developer API Yes
+Developer who doesn't care about boundaries: runtime.start() — the loop calls process_next() continuously, ignores
+signals. Zero friction.
 Developer who wants probability: registers one callback on CLIP_START. The runtime handles everything else.
 Advanced developer: accesses the raw process_next() API directly for full control.
-The kernel stays pure SAB math. The Runtime is the ergonomic wrapper that makes it feel like a simple event-driven API. Same pattern as Express over http, Three.js over WebGL, or React over DOM.
-
+The kernel stays pure SAB math. The Runtime is the ergonomic wrapper that makes it feel like a simple event-driven API.
+Same pattern as Express over http, Three.js over WebGL, or React over DOM.
 
 Yes. audioWorklet.addModule() is the mechanism. It loads JavaScript modules directly into the AudioWorklet's scope.
 
@@ -281,45 +317,54 @@ await runtime.loadHandlers('./my-boundary-handlers.js')
 // Wire boundary → handler by name
 runtime.on(CLIP_START, 'onClipStart')
 runtime.start()
-Under the hood, runtime.loadHandlers() calls audioContext.audioWorklet.addModule('./my-boundary-handlers.js'). The module self-registers its functions on a global handler registry inside the worklet scope. The main thread then sends string references via postMessage to tell the processor which handler name to call for which boundary ID.
+Under the hood, runtime.loadHandlers() calls audioContext.audioWorklet.addModule('./my-boundary-handlers.js'). The
+module self-registers its functions on a global handler registry inside the worklet scope. The main thread then sends
+string references via postMessage to tell the processor which handler name to call for which boundary ID.
 
 The flow:
 
 Developer writes handler functions in a separate file
 runtime.loadHandlers() loads that file into the AudioWorklet via addModule()
 runtime.on(CLIP_START, 'onClipStart') sends a string mapping via postMessage
-The AudioWorklet processor resolves the string to the registered function and calls it when the kernel yields on that boundary
-No function serialization. The code physically lives in the worklet thread. The main thread only passes strings. Math.random(), Date.now(), and any pure computation work perfectly inside the worklet scope.
+The AudioWorklet processor resolves the string to the registered function and calls it when the kernel yields on that
+boundary
+No function serialization. The code physically lives in the worklet thread. The main thread only passes strings.
+Math.random(), Date.now(), and any pure computation work perfectly inside the worklet scope.
 
-The only thing that won't work inside the worklet: DOM access, fetch(), and main-thread APIs. But for LUT filling, param writing, and mathematical operations — the worklet has everything you need.
+The only thing that won't work inside the worklet: DOM access, fetch(), and main-thread APIs. But for LUT filling, param
+writing, and mathematical operations — the worklet has everything you need.
 
-
-NoiseMod is one modulator definition, but the kernel reads a different LUT value for each node it evaluates. The per-note uniqueness comes from the LUT read index, not from having separate parameters.
+NoiseMod is one modulator definition, but the kernel reads a different LUT value for each node it evaluates. The
+per-note uniqueness comes from the LUT read index, not from having separate parameters.
 
 When the kernel evaluates NoiseMod for node at slot 42, tick 1920:
 
-read_index = (1920 + 42) % 256 = 170  →  lut[170] = 683
+read_index = (1920 + 42) % 256 = 170 → lut[170] = 683
 When it evaluates the same NoiseMod for node at slot 43, tick 2400:
 
-read_index = (2400 + 43) % 256 = 131  →  lut[131] = 294
+read_index = (2400 + 43) % 256 = 131 → lut[131] = 294
 One NoiseMod. One LUT. Different values per node — because each node is at a different
 
 (tick, slot)
 position.
 
-So threshold(700) with NoiseMod means: the noise LUT (filled with uniform 0-1000 values) produces a different number for each note. If that number is < 700, the note plays. ~70% of LUT entries are < 700, so it plays ~70% of the time. That's not magic — it's just positioning in a table of pre-distributed values.
+So threshold(700) with NoiseMod means: the noise LUT (filled with uniform 0-1000 values) produces a different number for
+each note. If that number is < 700, the note plays. ~70% of LUT entries are < 700, so it plays ~70% of the time. That's
+not magic — it's just positioning in a table of pre-distributed values.
 
 javascript
 const NoiseMod = Mod.lut(NOISE_LUT_SLOT, { target: 'threshold' })
 const clip1 = Clip.pipe(
-note('G4'),                                    // always plays (no threshold)
-note('C5').threshold(700).mod(NoiseMod),       // ~70% chance
-note('E4').threshold(300).mod(NoiseMod),        // ~30% chance
-note('A4').threshold(500).mod(NoiseMod),        // ~50% chance
+note('G4'), // always plays (no threshold)
+note('C5').threshold(700).mod(NoiseMod), // ~70% chance
+note('E4').threshold(300).mod(NoiseMod), // ~30% chance
+note('A4').threshold(500).mod(NoiseMod), // ~50% chance
 )
-One NoiseMod shared across all three notes. Zero additional parameters. The kernel's existing LUT read logic (which already uses node identity for the read index) provides the per-note differentiation automatically.
+One NoiseMod shared across all three notes. Zero additional parameters. The kernel's existing LUT read logic (which
+already uses node identity for the read index) provides the per-note differentiation automatically.
 
-No .filter() callback needed. No per-node parameters. No user code on the audio thread. Just one shared LUT modulator and per-note thresholds.
+No .filter() callback needed. No per-node parameters. No user code on the audio thread. Just one shared LUT modulator
+and per-note thresholds.
 
 ________
 
@@ -329,28 +374,27 @@ so jitter and tick_offset are really the same?
 
 Thought for 13s
 
-
-
-
-
-
-
-
 They're different musical concepts but the same kernel mechanism.
 
-tick_offset with no modulation = authored groove. The composer set it to +20 ticks. Deterministic. The note always drags by exactly 20 ticks.
-tick_offset modulated by NoiseMod = jitter. The noise LUT adds a random deviation to tick_offset on each clip iteration. The note drags by a different amount each time.
-So jitter is just tick_offset + noise modulation. You don't need a separate field. The architecture we just designed (noise LUT + boundary refresh + threshold/modulation) handles jitter for free:
+tick_offset with no modulation = authored groove. The composer set it to +20 ticks. Deterministic. The note always drags
+by exactly 20 ticks.
+tick_offset modulated by NoiseMod = jitter. The noise LUT adds a random deviation to tick_offset on each clip iteration.
+The note drags by a different amount each time.
+So jitter is just tick_offset + noise modulation. You don't need a separate field. The architecture we just designed (
+noise LUT + boundary refresh + threshold/modulation) handles jitter for free:
 
 javascript
 const TimingNoise = Mod.lut(NOISE_LUT_SLOT, { target: 'tick_offset', amount: 50 })
 const clip1 = Clip.pipe(
-note('G4').mod(TimingNoise),   // ±50 ticks of random timing jitter
-note('C5').mod(TimingNoise),   // different jitter value (different LUT position)
+note('G4').mod(TimingNoise), // ±50 ticks of random timing jitter
+note('C5').mod(TimingNoise), // different jitter value (different LUT position)
 )
-Per-synapse jitter in the SYNAPSE.WEIGHT_DATA is a separate concept — it jitters when a clip starts, not individual notes within the clip. That could also be expressed as tick_offset + noise modulation on the first node of the target clip, which would make synapse-level jitter redundant too.
+Per-synapse jitter in the SYNAPSE.WEIGHT_DATA is a separate concept — it jitters when a clip starts, not individual
+notes within the clip. That could also be expressed as tick_offset + noise modulation on the first node of the target
+clip, which would make synapse-level jitter redundant too.
 
-So: one field (tick_offset), multiple behaviors depending on what modulates it. Jitter as a separate concept disappears from the kernel.
+So: one field (tick_offset), multiple behaviors depending on what modulates it. Jitter as a separate concept disappears
+from the kernel.
 
 in that case should we have tick_offset not only on node-s, but also connections? clip1.pipe(
 use(clip2).tickOffset(20, TimingNoise)
@@ -360,13 +404,8 @@ use(clip2).tickOffset(20, TimingNoise)
 
 Thought for 20s
 
-
-
-
-
-
-
-Yes. Per-synapse tick_offset replaces the packed jitter bits currently in SYNAPSE.WEIGHT_DATA. Same concept, cleaner implementation.
+Yes. Per-synapse tick_offset replaces the packed jitter bits currently in SYNAPSE.WEIGHT_DATA. Same concept, cleaner
+implementation.
 
 Two levels of tick_offset, both modulatable:
 
@@ -374,16 +413,19 @@ Node level: Individual note timing within a clip
 Connection level: When the triggered clip starts relative to the trigger point
 javascript
 const clip1 = Clip.pipe(
-note('G4').tickOffset(10).mod(TimingNoise),      // per-note groove
-use(clip2).tickOffset(20, TimingNoise),           // per-connection jitter
+note('G4').tickOffset(10).mod(TimingNoise), // per-note groove
+use(clip2).tickOffset(20, TimingNoise), // per-connection jitter
 )
-This does raise one architectural question though: synapse weight and tick_offset are both modulatable values that need instant atomic writes. But the synapse struct currently lives in the structural plane (triple-buffered). If you want instant modulation of synapse weight and tick_offset without a
+This does raise one architectural question though: synapse weight and tick_offset are both modulatable values that need
+instant atomic writes. But the synapse struct currently lives in the structural plane (triple-buffered). If you want
+instant modulation of synapse weight and tick_offset without a
 
 publish()
-cycle, those fields need to be in an attribute plane — similar to how we moved node attributes out of the structural plane.
+cycle, those fields need to be in an attribute plane — similar to how we moved node attributes out of the structural
+plane.
 
-So you might need a SynapseAttributePlane alongside the NodeAttributePlane. Each synapse slot gets its own flat, atomic attribute array: [weight, tick_offset, _reserved, ...].
-
+So you might need a SynapseAttributePlane alongside the NodeAttributePlane. Each synapse slot gets its own flat, atomic
+attribute array: [weight, tick_offset, _reserved, ...].
 
 fn noise(seed: u32, tick: u32, slot: u32) -> u32 {
 let mut h = seed ^ tick.wrapping_mul(0x9E3779B9) ^ slot.wrapping_mul(0x517CC1B7);
@@ -394,3 +436,9 @@ h = h.wrapping_mul(0xC2B2AE35);
 h ^= h >> 16;
 h % 1000
 }
+
+___
+
+4. Quasi-random (low-discrepancy sequences): Van der Corput, Halton sequences. Pure function per index, no seed needed.
+   Mathematically guaranteed to cover the value space more evenly than random. vanDerCorput(slot_index) produces 0.5,
+   0.25, 0.75, 0.125, 0.625... — perfectly distributed.

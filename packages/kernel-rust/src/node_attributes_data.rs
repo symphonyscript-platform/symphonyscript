@@ -9,8 +9,8 @@ pub struct NodeAttributesData {
     spatial_z: i32, // up-down (elevation)
     detune: i32,
     tick_offset: i32,
-    threshold: i32, // density-gate
-    probability: i32, // based on deterministic PRNG-seed. Kernel stays pure.
+    activation_threshold: i32, // activation     threshold value
+    seed_threshold: i32, // threshold based on deterministic PRNG-seed. Kernel stays pure.
 }
 
 impl NodeAttributesData {
