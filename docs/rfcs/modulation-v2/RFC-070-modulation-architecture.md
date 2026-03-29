@@ -83,7 +83,7 @@ Final: Effective = NodeBase + Σ(Deltaᵢ) → [Clamp]
 | Bridge → `MOD_LIST_HEAD` chain | Audio engine | `CMD.CREATE_MOD` / `CMD.DELETE_MOD` via Ring Buffer |
 | Audio engine → `PARAMETER_TABLE.SMOOTHED_VALUE` | DSP voices | Single-writer (audio engine only) |
 | Audio engine → `SIGNAL_RING` | Engine (main thread) | SPSC ring buffer, overflow drops oldest |
-| Audio engine → `SynapseFireState` fields | Main thread (consumer) | Single-writer (audio engine only) |
+| Audio engine → `SynapseFireView` fields | Main thread (consumer) | Single-writer (audio engine only) |
 
 ---
 
@@ -285,16 +285,19 @@ impl ParamView {
     pub fn curve_type(&self) -> u8 { (self.read(4) >> 24) as u8 }
     pub fn smooth_type(&self) -> u8 { ((self.read(4) >> 23) & 1) as u8 }
     pub fn smooth_factor(&self) -> i32 { self.read(4) & 0x7FFFFF }
+    pub fn set_packed_cfg_a(&self, v: u32) { self.write(4, v as i32) }
 
     // Slot 5: PACKED_CFG_B — External: CurveParam. Internal: (Waveform<<24)|(FreqQ8_24)
     pub fn waveform(&self) -> u8 { (self.read(5) >> 24) as u8 }
     pub fn freq_q8_24(&self) -> u32 { (self.read(5) & 0xFFFFFF) as u32 }
+    pub fn set_packed_cfg_b(&self, v: u32) { self.write(5, v as i32) }
 
     // Slot 6: FLAGS — Bit 0: ACTIVE | Bit 1: BIPOLAR | Bit 2: INTERNAL_SOURCE | Bit 3: DERIVED
     pub fn is_active(&self) -> bool { self.read(6) & 1 != 0 }
     pub fn is_bipolar(&self) -> bool { self.read(6) & 2 != 0 }
     pub fn is_internal_source(&self) -> bool { self.read(6) & 4 != 0 }
     pub fn is_derived(&self) -> bool { self.read(6) & 8 != 0 }
+    pub fn set_flags(&self, v: u32) { self.write(6, v as i32) }
 
     // Slot 7: PHASE — LFO phase accumulator
     pub fn phase(&self) -> u32 { self.read(7) as u32 }
@@ -318,9 +321,11 @@ pub struct ModView {
 impl ModView {
     // Slot 0: TARGET_PTR — Byte offset to target node/synapse
     pub fn target_ptr(&self) -> u32 { self.read(0) as u32 }
+    pub fn set_target_ptr(&self, v: u32) { self.write(0, v as i32) }
 
     // Slot 1: PARAM_ID — Index into PARAMETER_TABLE (SOURCE=PARAM) or PARAM_NONE sentinel
     pub fn param_id(&self) -> u32 { self.read(1) as u32 }
+    pub fn set_param_id(&self, v: u32) { self.write(1, v as i32) }
 
     // Slot 2: CURRENT_STATE — Modulator's own smoothed value (Q16.16)
     pub fn current_state(&self) -> i32 { self.read(2) }
@@ -328,9 +333,11 @@ impl ModView {
 
     // Slot 3: BASE_VALUE — Gate threshold or additive window base (Q16.16)
     pub fn base_value(&self) -> i32 { self.read(3) }
+    pub fn set_base_value(&self, v: i32) { self.write(3, v) }
 
     // Slot 4: AMOUNT_VALUE — Maximum delta magnitude (Q16.16)
     pub fn amount_value(&self) -> i32 { self.read(4) }
+    pub fn set_amount_value(&self, v: i32) { self.write(4, v) }
 
     // Slot 5: PACKED_CFG_A — (TargetProperty<<24)|(TapSource<<16)|(Clamp<<15)|
     //                        (Polarity<<14)|(SourceMode<<13)|(FrozenTick<<12)|SmoothFactor
@@ -340,13 +347,16 @@ impl ModView {
     pub fn is_frozen(&self) -> bool { self.read(5) & (1 << 12) != 0 }
     pub fn is_bipolar(&self) -> bool { self.read(5) & (1 << 14) != 0 }
     pub fn smooth_factor(&self) -> i32 { self.read(5) & 0xFFF }
+    pub fn set_packed_cfg_a(&self, v: u32) { self.write(5, v as i32) }
 
     // Slot 6: PACKED_CFG_B — (CurveType<<24)|(CurveParam/ContextId & 0xFFFFFF)
     pub fn curve_type(&self) -> u8 { (self.read(6) >> 24) as u8 }
     pub fn context_id(&self) -> u32 { (self.read(6) & 0xFFFFFF) as u32 }
+    pub fn set_packed_cfg_b(&self, v: u32) { self.write(6, v as i32) }
 
     // Slot 7: NEXT_MOD_PTR — Next modulator in chain (NULL_PTR = end)
     pub fn next_mod_ptr(&self) -> u32 { self.read(7) as u32 }
+    pub fn set_next_mod_ptr(&self, v: u32) { self.write(7, v as i32) }
 
     fn read(&self, offset: usize) -> i32 {
         self.sab[self.start_index + offset].load(Ordering::Relaxed)
@@ -391,7 +401,7 @@ Bit 3: DERIVED         — RAW_VALUE computed from Expr, two-pass evaluation
 Bits 4-31: reserved
 ```
 
-### 6.3 ModSlot PACKED_CFG_A Bit Layout
+### 6.3 ModView PACKED_CFG_A Bit Layout
 
 ```
 Bits 31-24: TargetProperty (8 bits)
@@ -416,7 +426,7 @@ Bit 12: USE_BASE_TICK (0=playhead, 1=frozen)
 Bits 11-0: SmoothFactor (12 bits)
 ```
 
-### 6.3 ModSlot PACKED_CFG_B Bit Layout
+### 6.4 ModView PACKED_CFG_B Bit Layout
 
 ```
 Bits 31-24: CurveType (8 bits)
@@ -430,7 +440,7 @@ Bits 23-0: CurveParam (24 bits)
   When CurveType=GATE: threshold (Q16.16 fractional)
 ```
 
-### 6.4 LUT_POOL
+### 6.5 LUT_POOL
 
 128 slots × 256 entries × i32 = 128 KB.
 
@@ -456,7 +466,7 @@ pub const LUT_BUILTIN_COUNT: usize = 8;
 
 LUT evaluation: `output = LUT_POOL[slot * 256 + index]` — one i32 read. No interpolation (256 steps = <0.4% quantization, inaudible).
 
-### 6.5 Signal Ring Buffer
+### 6.6 Signal Ring Buffer
 
 ```rust
 /// One-way ring buffer: audio thread writes, main thread reads.
@@ -469,7 +479,7 @@ pub const SIGNAL_ENTRY_SIZE: usize = 4;     // i32 per entry
 - Audio thread writes ~2-4 entries per clip iteration (boundaries)
 - Cost per write: ~5ns
 
-### 6.6 Node Attribute Plane
+### 6.7 Node Attribute Plane
 
 16 × i32 = 64 bytes (one cache line). Shared atomic plane (not triple-buffered):
 
@@ -530,7 +540,7 @@ bits 4-31: reserved
 
 No threshold/gate fields. Every field has inherent standalone meaning. All gating lives in the modulation system.
 
-### 6.7 Synapse Attribute Plane
+### 6.8 Synapse Attribute Plane
 
 Modulatable synapse fields in shared atomic plane:
 
@@ -563,7 +573,7 @@ impl SynapseAttributesView {
 
 Synapse slots have `MOD_LIST_HEAD` in the structural plane. Gate modulators (density/probability) work on synapses same as nodes.
 
-### 6.8 SAB Memory Map
+### 6.9 SAB Memory Map
 
 ```
 ┌───────────────────────────────────────────┬──────────┐
@@ -585,7 +595,7 @@ Synapse slots have `MOD_LIST_HEAD` in the structural plane. Gate modulators (den
 └───────────────────────────────────────────┴──────────┘
 ```
 
-### 6.9 Header Fields
+### 6.10 Header Fields
 
 ```rust
 /// New header indices (appended after existing header fields).
@@ -601,7 +611,7 @@ pub const HDR_SIGNAL_RING_PTR: usize = 54;         // Byte offset to SIGNAL_RING
 pub const HDR_NOISE_SEED: usize = 55;              // Global noise seed (default: 0)
 ```
 
-### 6.10 SAB Offset Calculation
+### 6.11 SAB Offset Calculation
 
 ```rust
 pub fn param_table_offset(
@@ -643,7 +653,7 @@ pub fn signal_ring_offset(
 }
 ```
 
-### 6.11 SPSC Ownership
+### 6.12 SPSC Ownership
 
 **Parameter Table:**
 
@@ -703,20 +713,20 @@ Before node traversal (~128 samples at 48kHz):
 
 ```rust
 for param_id in 0..active_param_count {
-    let param = &mut param_table[param_id];
-    if !param.flags.contains(ACTIVE) { continue; }
+    let param = ParamView::new(sab.clone(), param_table_base + param_id * 8);
+    if !param.is_active() { continue; }
 
     // Step 0: Internal source (LFO) — generate RAW_VALUE
-    if param.flags.contains(INTERNAL_SOURCE) {
-        param.raw_value = generate_waveform(param.phase, param.waveform());
-        param.phase = param.phase.wrapping_add(phase_increment);
+    if param.is_internal_source() {
+        param.set_raw_value(generate_waveform(param.phase(), param.waveform()));
+        param.set_phase(param.phase().wrapping_add(phase_increment));
     }
 
     // Step 1: Spatial curve
-    param.curved_value = apply_curve(param.raw_value, param.packed_cfg_a, param.packed_cfg_b);
+    param.set_curved_value(apply_curve(param.raw_value(), param.curve_type()));
 
     // Step 2: Temporal smoothing
-    param.smoothed_value = smooth(param.smoothed_value, param.curved_value, param.smooth_factor());
+    param.set_smoothed_value(smooth(param.smoothed_value(), param.curved_value(), param.smooth_factor()));
 }
 ```
 
@@ -727,32 +737,38 @@ Cost: O(active_params). Typically 5-50 × 1 multiply = microseconds.
 When a node is reached during traversal:
 
 ```rust
-if !node.flags.contains(HAS_MODULATORS) { /* use base attributes */ }
+let node = NodeView::new(sab.clone(), node_offset); // structural plane view
+if node.mod_list_head() == NULL_PTR { /* use base attributes directly */ }
 
-let mut gate_effective = 1000; // implicit gate base
+let mut gate_effective: i32 = 1000; // implicit gate base
 let mut velocity_delta: i32 = 0;
 let mut pitch_delta: i32 = 0;
 // ... other target accumulators
 
-let mut mod_ptr = node.mod_list_head;
+let mut mod_ptr = node.mod_list_head();
 while mod_ptr != NULL_PTR {
-    let m = &mod_table[mod_ptr];
+    let m = ModView::new(sab.clone(), mod_table_base + mod_ptr as usize * 8);
 
     // Resolve input value based on SOURCE_MODE
     let input_value = if m.source_mode() == CONTEXT {
-        let ctx_id = m.context_id();
+        let ctx_id = m.context_id() as usize;
         let idx = noise_index(seed, tick, slot) as usize;
-        lut_pool[ctx_id * 256 + idx]
+        lut_pool_read(sab, lut_base + ctx_id * 256 + idx)
     } else {
         let tap = m.tap_source();
-        param_table[m.param_id].read(tap)
+        let p = ParamView::new(sab.clone(), param_table_base + m.param_id() as usize * 8);
+        match tap {
+            RAW => p.raw_value(),
+            CURVED => p.curved_value(),
+            _ => p.smoothed_value(),
+        }
     };
 
     // Apply modulator curve
     let curved = apply_mod_curve(input_value, m.packed_cfg_b);
 
-    // Compute delta
-    let delta = (m.amount_value as i64 * curved as i64 >> 16) as i32;
+    // Compute delta (pure integer, Q16.16)
+    let delta = ((m.amount_value() as i64 * curved as i64) >> 16) as i32;
 
     // Accumulate by target property
     match m.target_property() {
@@ -764,7 +780,7 @@ while mod_ptr != NULL_PTR {
         _ => {}
     }
 
-    mod_ptr = m.next_mod_ptr;
+    mod_ptr = m.next_mod_ptr();
 }
 
 if gate_effective <= 0 { /* skip note entirely */ }
@@ -925,11 +941,13 @@ All synapses with effective weight > 0 fire. Weight acts as a **velocity multipl
 
 ```rust
 for synapse in source.outgoing_synapses() {
-    let effective_weight = evaluate_synapse_weight(synapse); // includes modulation
+    let syn_attrs = SynapseAttributesView::new(sab.clone(), synapse.attr_offset());
+    let effective_weight = evaluate_synapse_weight(syn_attrs); // includes modulation
     if effective_weight > 0 {
-        let velocity_scale = effective_weight as f32 / 1000.0;
+        // Pure integer: weight 0-1000 acts as velocity scaler
         for note in target_clip.notes_in_range(start_tick, end_tick) {
-            fire_note_on(note.pitch, note.velocity * velocity_scale);
+            let scaled_velocity = (note.velocity * effective_weight) / 1000;
+            fire_note_on(note.pitch, scaled_velocity);
         }
     }
 }
@@ -1018,7 +1036,7 @@ No SAB coordination needed. No `VOICE_ID` or `ENVELOPE_ID` in the node struct.
 The kernel never receives a voice index. Communication is one-way:
 
 ```
-Kernel: "Channel 1, play pitch 60, velocity 0.8"  →  DSP
+Kernel: "play pitch 60, velocity 0.8"  →  DSP (routed via synapse target)
 DSP:    (internally) find_idle_voice() → allocate → render → release → reclaim
 ```
 
@@ -1032,10 +1050,10 @@ Changing a synth from 8-voice polyphonic to monophonic with glide requires zero 
 
 ```rust
 pub trait EventSink {
-    fn note_on(&mut self, channel: u32, pitch: u32, velocity: i32,
+    fn note_on(&mut self, target_id: u32, pitch: u32, velocity: i32,
                gate_offset: i32, expression_id: u32);
-    fn note_off(&mut self, channel: u32, pitch: u32, expression_id: u32);
-    fn control_change(&mut self, channel: u32, controller: u32, value: i32);
+    fn note_off(&mut self, target_id: u32, pitch: u32, expression_id: u32);
+    fn control_change(&mut self, target_id: u32, controller: u32, value: i32);
 }
 
 pub trait Sequencer {
@@ -1047,7 +1065,7 @@ pub trait Sequencer {
     /// 5. Emits BOUNDARY signals to SIGNAL_RING.
     /// 6. Routes note/CC events to the EventSink.
     fn advance(&mut self, start_tick: u32, end_tick: u32,
-               frame_count: u32, samples_per_tick: f32);
+               frame_count: u32, samples_per_tick_q16: u32);
 }
 ```
 
@@ -1098,17 +1116,17 @@ Payload: `[CMD_CREATE_MOD, NodePtr, ModulatorPtr, 0]`
 
 1. Bridge pre-writes all config fields to `MODULATION_TABLE[ModulatorPtr]` via `Atomics.store`
 2. Bridge enqueues command via Ring Buffer
-3. Worker links modulator into node's `MOD_LIST_HEAD` chain, sets `HAS_MODULATORS` flag:
+3. Worker links modulator into node's `MOD_LIST_HEAD` chain:
    ```rust
-   new_mod.next_mod_ptr = node.mod_list_head;
-   node.mod_list_head = modulator_ptr;
+   new_mod.set_next_mod_ptr(node.mod_list_head());
+   node.set_mod_list_head(modulator_ptr);
    ```
 
 ### 17.3 DELETE_MOD
 
 Payload: `[CMD_DELETE_MOD, NodePtr, ModulatorPtr, 0]`
 
-Worker traverses `MOD_LIST_HEAD` chain, unlinks modulator, returns slot to free list. If chain empty, clears `HAS_MODULATORS`.
+Worker traverses `MOD_LIST_HEAD` chain, unlinks modulator, returns slot to free list.
 
 ### 17.4 Direct Updates (No Command Needed)
 
@@ -1323,6 +1341,8 @@ pub fn generate_waveform(phase: u32, waveform: u8) -> i32 {
 }
 
 /// Phase increment per audio block.
+/// Called on bridge/main thread at init or when frequency changes — NOT in the kernel.
+/// Result stored in ParamView and used as pure integer addition in the audio loop.
 pub fn compute_phase_increment(freq_q8_24: u32, block_size: u32, sample_rate: u32) -> u32 {
     let freq_hz = freq_q8_24 as f64 / (1u64 << 24) as f64;
     ((4294967296.0 * freq_hz / sample_rate as f64) * block_size as f64) as u32
@@ -1330,6 +1350,8 @@ pub fn compute_phase_increment(freq_q8_24: u32, block_size: u32, sample_rate: u3
 ```
 
 Same signal chain: `generate RAW_VALUE → curve → smooth → modulators read SMOOTHED_VALUE`.
+
+**Note:** `compute_phase_increment` uses f64 but runs on the bridge/main thread only. The kernel's audio loop uses only the pre-computed integer result: `phase = phase.wrapping_add(phase_increment)`.
 
 LFO `PACKED_CFG_B` when `INTERNAL_SOURCE = 1`:
 
