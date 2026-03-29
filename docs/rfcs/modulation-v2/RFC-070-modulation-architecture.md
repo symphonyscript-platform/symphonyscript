@@ -252,47 +252,118 @@ With `Amount = -1000`: delta = 0 (pass) or -1000 (fail). GATE modulators default
 
 ## 6. Memory Layout
 
-### 6.1 Kernel Structs (Rust)
+### 6.1 SAB View Types
+
+All kernel data lives in the SAB (`Arc<[AtomicI32]>`). Views are zero-cost typed wrappers — they hold `(sab, start_index)` and provide domain-specific accessors. No values are stored in the view itself.
 
 ```rust
-/// Per-parameter entry in PARAMETER_TABLE.
-/// 8 × i32 = 32 bytes. Capacity: 1024 slots.
-#[repr(C, align(32))]
-pub struct ParamSlot {
-    pub raw_value: i32,       // Bridge-written (Q16.16)
-    pub curved_value: i32,    // After spatial curve (audio engine owned)
-    pub smoothed_value: i32,  // After temporal smoothing (audio engine owned)
-    pub target_value: i32,    // Smoother internal target
-    pub packed_cfg_a: u32,    // (CurveType<<24)|(SmoothType<<23)|(SmoothFactor & 0x7FFFFF)
-    pub packed_cfg_b: u32,    // External: CurveParam. Internal: (Waveform<<24)|(FreqQ8_24)
-    pub flags: u32,           // Bit 0: ACTIVE | Bit 1: BIPOLAR | Bit 2: INTERNAL_SOURCE | Bit 3: DERIVED
-    pub phase: u32,           // LFO phase accumulator
+/// Per-parameter view into PARAMETER_TABLE.
+/// 8 × i32 = 32 bytes per slot. Capacity: 1024 slots.
+pub struct ParamView {
+    sab: SAB,
+    start_index: usize,
 }
 
-/// Per-modulator entry in MODULATION_TABLE.
-/// 8 × i32 = 32 bytes. Capacity: 4096 slots.
-#[repr(C, align(32))]
-pub struct ModSlot {
-    pub target_ptr: u32,      // Byte offset to target node/synapse
-    pub param_id: u32,        // Index into PARAMETER_TABLE (SOURCE=PARAM) or PARAM_NONE sentinel
-    pub current_state: i32,   // Modulator's own smoothed value (Q16.16)
-    pub base_value: i32,      // Gate threshold or additive window base (Q16.16)
-    pub amount_value: i32,    // Maximum delta magnitude (Q16.16)
-    pub packed_cfg_a: u32,    // (TargetProperty<<24)|(TapSource<<16)|(Clamp<<15)|
-                              // (Polarity<<14)|(SourceMode<<13)|(FrozenTick<<12)|SmoothFactor
-    pub packed_cfg_b: u32,    // (CurveType<<24)|(CurveParam/ContextId & 0xFFFFFF)
-    pub next_mod_ptr: u32,    // Next modulator in chain (NULL_PTR = end)
+impl ParamView {
+    // Slot 0: RAW_VALUE — Bridge-written (Q16.16)
+    pub fn raw_value(&self) -> i32 { self.read(0) }
+    pub fn set_raw_value(&self, v: i32) { self.write(0, v) }
+
+    // Slot 1: CURVED_VALUE — After spatial curve (audio engine owned)
+    pub fn curved_value(&self) -> i32 { self.read(1) }
+    pub fn set_curved_value(&self, v: i32) { self.write(1, v) }
+
+    // Slot 2: SMOOTHED_VALUE — After temporal smoothing (audio engine owned)
+    pub fn smoothed_value(&self) -> i32 { self.read(2) }
+    pub fn set_smoothed_value(&self, v: i32) { self.write(2, v) }
+
+    // Slot 3: TARGET_VALUE — Smoother internal target
+    pub fn target_value(&self) -> i32 { self.read(3) }
+    pub fn set_target_value(&self, v: i32) { self.write(3, v) }
+
+    // Slot 4: PACKED_CFG_A — (CurveType<<24)|(SmoothType<<23)|(SmoothFactor & 0x7FFFFF)
+    pub fn curve_type(&self) -> u8 { (self.read(4) >> 24) as u8 }
+    pub fn smooth_type(&self) -> u8 { ((self.read(4) >> 23) & 1) as u8 }
+    pub fn smooth_factor(&self) -> i32 { self.read(4) & 0x7FFFFF }
+
+    // Slot 5: PACKED_CFG_B — External: CurveParam. Internal: (Waveform<<24)|(FreqQ8_24)
+    pub fn waveform(&self) -> u8 { (self.read(5) >> 24) as u8 }
+    pub fn freq_q8_24(&self) -> u32 { (self.read(5) & 0xFFFFFF) as u32 }
+
+    // Slot 6: FLAGS — Bit 0: ACTIVE | Bit 1: BIPOLAR | Bit 2: INTERNAL_SOURCE | Bit 3: DERIVED
+    pub fn is_active(&self) -> bool { self.read(6) & 1 != 0 }
+    pub fn is_bipolar(&self) -> bool { self.read(6) & 2 != 0 }
+    pub fn is_internal_source(&self) -> bool { self.read(6) & 4 != 0 }
+    pub fn is_derived(&self) -> bool { self.read(6) & 8 != 0 }
+
+    // Slot 7: PHASE — LFO phase accumulator
+    pub fn phase(&self) -> u32 { self.read(7) as u32 }
+    pub fn set_phase(&self, v: u32) { self.write(7, v as i32) }
+
+    fn read(&self, offset: usize) -> i32 {
+        self.sab[self.start_index + offset].load(Ordering::Relaxed)
+    }
+    fn write(&self, offset: usize, v: i32) {
+        self.sab[self.start_index + offset].store(v, Ordering::Relaxed)
+    }
 }
 
-/// Signal ring buffer entry.
-/// 4 × i32 = 16 bytes.
-#[repr(C)]
-pub struct SignalEntry {
-    pub signal_type: u32,     // BOUNDARY type
-    pub boundary_id: u32,     // User or implicit boundary ID
-    pub tick: u32,            // Playhead tick when signal was emitted
-    pub clip_context: u32,    // Clip/traversal context identifier
+/// Per-modulator view into MODULATION_TABLE.
+/// 8 × i32 = 32 bytes per slot. Capacity: 4096 slots.
+pub struct ModView {
+    sab: SAB,
+    start_index: usize,
 }
+
+impl ModView {
+    // Slot 0: TARGET_PTR — Byte offset to target node/synapse
+    pub fn target_ptr(&self) -> u32 { self.read(0) as u32 }
+
+    // Slot 1: PARAM_ID — Index into PARAMETER_TABLE (SOURCE=PARAM) or PARAM_NONE sentinel
+    pub fn param_id(&self) -> u32 { self.read(1) as u32 }
+
+    // Slot 2: CURRENT_STATE — Modulator's own smoothed value (Q16.16)
+    pub fn current_state(&self) -> i32 { self.read(2) }
+    pub fn set_current_state(&self, v: i32) { self.write(2, v) }
+
+    // Slot 3: BASE_VALUE — Gate threshold or additive window base (Q16.16)
+    pub fn base_value(&self) -> i32 { self.read(3) }
+
+    // Slot 4: AMOUNT_VALUE — Maximum delta magnitude (Q16.16)
+    pub fn amount_value(&self) -> i32 { self.read(4) }
+
+    // Slot 5: PACKED_CFG_A — (TargetProperty<<24)|(TapSource<<16)|(Clamp<<15)|
+    //                        (Polarity<<14)|(SourceMode<<13)|(FrozenTick<<12)|SmoothFactor
+    pub fn target_property(&self) -> u8 { (self.read(5) >> 24) as u8 }
+    pub fn tap_source(&self) -> u8 { ((self.read(5) >> 16) & 0xFF) as u8 }
+    pub fn source_mode(&self) -> u8 { ((self.read(5) >> 13) & 1) as u8 }
+    pub fn is_frozen(&self) -> bool { self.read(5) & (1 << 12) != 0 }
+    pub fn is_bipolar(&self) -> bool { self.read(5) & (1 << 14) != 0 }
+    pub fn smooth_factor(&self) -> i32 { self.read(5) & 0xFFF }
+
+    // Slot 6: PACKED_CFG_B — (CurveType<<24)|(CurveParam/ContextId & 0xFFFFFF)
+    pub fn curve_type(&self) -> u8 { (self.read(6) >> 24) as u8 }
+    pub fn context_id(&self) -> u32 { (self.read(6) & 0xFFFFFF) as u32 }
+
+    // Slot 7: NEXT_MOD_PTR — Next modulator in chain (NULL_PTR = end)
+    pub fn next_mod_ptr(&self) -> u32 { self.read(7) as u32 }
+
+    fn read(&self, offset: usize) -> i32 {
+        self.sab[self.start_index + offset].load(Ordering::Relaxed)
+    }
+    fn write(&self, offset: usize, v: i32) {
+        self.sab[self.start_index + offset].store(v, Ordering::Relaxed)
+    }
+}
+
+/// Signal ring buffer entry layout.
+/// 4 × i32 = 16 bytes per entry.
+///
+/// Slot 0: signal_type   — BOUNDARY type
+/// Slot 1: boundary_id   — User or implicit boundary ID
+/// Slot 2: tick           — Playhead tick when signal was emitted
+/// Slot 3: clip_context   — Clip/traversal context identifier
+pub const SIGNAL_ENTRY_SLOTS: usize = 4;
 ```
 
 ### 6.2 ParamSlot Bit Layouts
@@ -403,20 +474,43 @@ pub const SIGNAL_ENTRY_SIZE: usize = 4;     // i32 per entry
 16 × i32 = 64 bytes (one cache line). Shared atomic plane (not triple-buffered):
 
 ```rust
-#[repr(C, align(64))]
-pub struct NodeAttributes {
-    pub pitch: i32,           // 0
-    pub velocity: i32,        // 1
-    pub duration: i32,        // 2
-    pub volume: i32,          // 3
-    pub channel: i32,         // 4
-    pub flags: u32,           // 5
-    pub spatial_x: i32,       // 6
-    pub spatial_y: i32,       // 7
-    pub spatial_z: i32,       // 8
-    pub detune: i32,          // 9
-    pub tick_offset: i32,     // 10
-    pub _reserved: [i32; 5],  // 11-15
+/// Zero-cost view over node attribute slots in the SAB.
+pub struct NodeAttributesView {
+    sab: SAB,
+    start_index: usize,
+}
+
+impl NodeAttributesView {
+    pub fn pitch(&self) -> i32 { self.read(0) }
+    pub fn set_pitch(&self, v: i32) { self.write(0, v) }
+    pub fn velocity(&self) -> i32 { self.read(1) }
+    pub fn set_velocity(&self, v: i32) { self.write(1, v) }
+    pub fn duration(&self) -> i32 { self.read(2) }
+    pub fn set_duration(&self, v: i32) { self.write(2, v) }
+    pub fn volume(&self) -> i32 { self.read(3) }
+    pub fn set_volume(&self, v: i32) { self.write(3, v) }
+    pub fn channel(&self) -> i32 { self.read(4) }
+    pub fn flags(&self) -> u32 { self.read(5) as u32 }
+    pub fn spatial_x(&self) -> i32 { self.read(6) }
+    pub fn spatial_y(&self) -> i32 { self.read(7) }
+    pub fn spatial_z(&self) -> i32 { self.read(8) }
+    pub fn detune(&self) -> i32 { self.read(9) }
+    pub fn tick_offset(&self) -> i32 { self.read(10) }
+    // Slots 11-15: reserved
+
+    // Flag accessors
+    pub fn has_modulators(&self) -> bool { self.flags() & 1 != 0 }
+    pub fn is_muted(&self) -> bool { self.flags() & 2 != 0 }
+    pub fn is_solo(&self) -> bool { self.flags() & 4 != 0 }
+    pub fn is_legato_tie(&self) -> bool { self.flags() & 8 != 0 }
+    pub fn is_ghost_note(&self) -> bool { self.flags() & 16 != 0 }
+
+    fn read(&self, offset: usize) -> i32 {
+        self.sab[self.start_index + offset].load(Ordering::Relaxed)
+    }
+    fn write(&self, offset: usize, v: i32) {
+        self.sab[self.start_index + offset].store(v, Ordering::Relaxed)
+    }
 }
 ```
 
@@ -438,11 +532,29 @@ No threshold/gate fields. Every field has inherent standalone meaning. All gatin
 Modulatable synapse fields in shared atomic plane:
 
 ```rust
-#[repr(C)]
-pub struct SynapseAttributes {
-    pub weight: i32,          // Velocity multiplier (0-1000). weight > 0 fires.
-    pub tick_offset: i32,     // Timing offset. Modulated = jitter.
-    pub _reserved: [i32; 2],
+/// Zero-cost view over synapse attribute slots in the SAB.
+pub struct SynapseAttributesView {
+    sab: SAB,
+    start_index: usize,
+}
+
+impl SynapseAttributesView {
+    // Slot 0: weight — Velocity multiplier (0-1000). weight > 0 fires.
+    pub fn weight(&self) -> i32 { self.read(0) }
+    pub fn set_weight(&self, v: i32) { self.write(0, v) }
+
+    // Slot 1: tick_offset — Timing offset. Modulated = jitter.
+    pub fn tick_offset(&self) -> i32 { self.read(1) }
+    pub fn set_tick_offset(&self, v: i32) { self.write(1, v) }
+
+    // Slots 2-3: reserved
+
+    fn read(&self, offset: usize) -> i32 {
+        self.sab[self.start_index + offset].load(Ordering::Relaxed)
+    }
+    fn write(&self, offset: usize, v: i32) {
+        self.sab[self.start_index + offset].store(v, Ordering::Relaxed)
+    }
 }
 ```
 
@@ -1316,12 +1428,33 @@ parent.linkTo(verseClip)
 Fire trace is SAB **state**, not a stream. Audio thread overwrites per-synapse fields during resolution. Consumer pulls snapshots on demand.
 
 ```rust
-pub struct SynapseFireState {
-    pub last_fire_tick: u32,
-    pub last_effective_weight: i32,
-    pub last_effective_pitch: i32,
-    pub last_effective_velocity: i32,
-    pub fire_count: u32,
+/// Zero-cost view over synapse fire trace slots in the SAB.
+pub struct SynapseFireView {
+    sab: SAB,
+    start_index: usize,
+}
+
+impl SynapseFireView {
+    pub fn last_fire_tick(&self) -> u32 { self.read(0) as u32 }
+    pub fn set_last_fire_tick(&self, v: u32) { self.write(0, v as i32) }
+    pub fn last_effective_weight(&self) -> i32 { self.read(1) }
+    pub fn set_last_effective_weight(&self, v: i32) { self.write(1, v) }
+    pub fn last_effective_pitch(&self) -> i32 { self.read(2) }
+    pub fn set_last_effective_pitch(&self, v: i32) { self.write(2, v) }
+    pub fn last_effective_velocity(&self) -> i32 { self.read(3) }
+    pub fn set_last_effective_velocity(&self, v: i32) { self.write(3, v) }
+    pub fn fire_count(&self) -> u32 { self.read(4) as u32 }
+    pub fn increment_fire_count(&self) {
+        self.write(4, self.read(4) + 1)
+    }
+    pub fn reset_fire_count(&self) { self.write(4, 0) }
+
+    fn read(&self, offset: usize) -> i32 {
+        self.sab[self.start_index + offset].load(Ordering::Relaxed)
+    }
+    fn write(&self, offset: usize, v: i32) {
+        self.sab[self.start_index + offset].store(v, Ordering::Relaxed)
+    }
 }
 ```
 
