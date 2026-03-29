@@ -265,7 +265,7 @@ pub struct ParamSlot {
     pub target_value: i32,    // Smoother internal target
     pub packed_cfg_a: u32,    // (CurveType<<24)|(SmoothType<<23)|(SmoothFactor & 0x7FFFFF)
     pub packed_cfg_b: u32,    // External: CurveParam. Internal: (Waveform<<24)|(FreqQ8_24)
-    pub flags: u32,           // ACTIVE | BIPOLAR | INTERNAL_SOURCE | DERIVED
+    pub flags: u32,           // Bit 0: ACTIVE | Bit 1: BIPOLAR | Bit 2: INTERNAL_SOURCE | Bit 3: DERIVED
     pub phase: u32,           // LFO phase accumulator
 }
 
@@ -295,7 +295,32 @@ pub struct SignalEntry {
 }
 ```
 
-### 6.2 ModSlot PACKED_CFG_A Bit Layout
+### 6.2 ParamSlot Bit Layouts
+
+**PACKED_CFG_A:**
+
+```
+Bits 31-24: CurveType (8 bits)
+  0x00 = LINEAR       0x03 = GATE
+  0x01 = QUADRATIC    0x04 = LUT
+  0x02 = STEP
+
+Bit 23: SmoothType (0=exponential, 1=linear)
+
+Bits 22-0: SmoothFactor (23 bits, Q16.16 fractional)
+```
+
+**FLAGS:**
+
+```
+Bit 0: ACTIVE          — included in batch pass
+Bit 1: BIPOLAR         — maps output [-65536, +65536] instead of [0, 65536]
+Bit 2: INTERNAL_SOURCE — audio engine generates RAW_VALUE (LFO)
+Bit 3: DERIVED         — RAW_VALUE computed from Expr, two-pass evaluation
+Bits 4-31: reserved
+```
+
+### 6.3 ModSlot PACKED_CFG_A Bit Layout
 
 ```
 Bits 31-24: TargetProperty (8 bits)
@@ -1110,6 +1135,22 @@ Clip.melody()
 ```
 
 Both paths (reusable modulator + inline cursor) produce identical `MODULATION_TABLE` entries.
+
+**Reusable modulator attachment workflow:**
+
+```typescript
+// 1. Create reusable modulator (no SAB write yet — just config object)
+const intensityVel = Modulator.velocity(Intensity).base(700).amount(300).easeIn();
+
+// 2. Attach to a note property (triggers SAB allocation)
+note('C4').velocity(700, intensityVel);
+
+// Under the hood:
+// a) Bridge claims free slot from MOD_ALLOC free-list
+// b) Bridge writes all 8 config fields via Atomics.store
+// c) Bridge enqueues CMD_CREATE_MOD(nodePtr, modSlotPtr)
+// d) Audio thread links modulator into node's MOD_LIST_HEAD chain
+```
 
 ### 18.6 Gating DSL
 
