@@ -577,3 +577,30 @@ note('B4', 4)   // ticks 4-8  ← overlaps by 1 tick
 The DSP layer handles the transition: a monophonic string patch receives noteOn(B4) while A4 is still active → glides to B4 instead of re-attacking. That's the DSP's glide_mode / portamento setting — not a kernel concern.
 
 So the builder controls the default gap, which in turn controls whether the instrument sounds "continuous" or "articulated." Kernel is oblivious — it just sends noteOn/noteOff at the computed ticks.
+
+___
+
+wow so that simplifies kernel even further right? if we remove expressions (it's the right term right?) from kernel and it becomes DSL's responsibility
+
+Thought for 14s
+
+
+
+
+
+
+Yes, "expressions" or "articulations" — both are correct terms. And yes, it simplifies the kernel:
+
+Before: Kernel flags had 5 bits (HAS_MODULATORS, MUTED, SOLO, LEGATO_TIE, GHOST_NOTE) and the kernel needed to understand what those mean during traversal.
+
+After: Attribute flags have 2 bits — MUTED and SOLO. That's it. LEGATO_TIE moves to structural plane (sequencer control flow). Everything else is DSL-compiled into fundamental property values before the kernel ever sees them.
+
+The kernel's job becomes even more minimal:
+
+Read pitch, velocity, duration, volume, tick_offset, detune (raw integers)
+Apply modulation deltas (also raw integers)
+Clamp
+Fire noteOn/noteOff
+It doesn't know what "ghost" is. It doesn't know what "staccato" is. It doesn't know what "accent" is. It receives integers that are the result of those decisions, made by the DSL layer at composition time.
+
+That's the "functions are data" principle applied to expressions too — the meaning lives in the DSL, the kernel only sees values.
