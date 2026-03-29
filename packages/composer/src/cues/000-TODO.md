@@ -528,3 +528,52 @@ The principle: instrument routing = graph topology. Creative routing patterns = 
 
 So: remove channel from attribute plane, and when the time comes, design Score as a composition-time DSL that expands to clips + synapses. The RFC doesn't need to spec Score now — it just needs to NOT have channel polluting the kernel.
 
+_______
+
+
+
+Thought for 19s
+
+
+
+
+
+
+
+
+
+
+
+
+How much to shorten: There's no universal rule. It's tempo-dependent and style-dependent:
+
+Normal articulation: ~90% of written duration (small gap)
+Staccato: ~50%
+Legato/tenuto: 100% (no gap)
+At 120 BPM, a quarter note is 500ms. Normal articulation might shorten to 450ms (50ms gap). At 60 BPM that same quarter note is 1000ms — 50ms gap sounds different than at 120. So it could be tempo-aware.
+
+Does it only apply to keyboards? No — it applies to any instrument where notes are discrete events. But the DEFAULT differs by instrument:
+
+Piano: percussive, notes naturally decay. Default ~90% duration makes sense.
+Strings (violin): continuous bow, legato by default. Default 100% (or even slight overlap).
+Winds: breath-based, similar to strings. Default ~100%.
+Drums: hits, no meaningful "duration" for most drums.
+This is a builder-level default, not a kernel concern. A string builder would default to 100% duration ("legato by default"), a piano builder to 90%.
+
+How does a clip express violin-style continuous melody?
+
+Durations that touch or overlap:
+
+typescript
+// Contiguous: each note starts exactly when the previous ends
+note('A4', 4)   // ticks 0-4
+note('B4', 4)   // ticks 4-8
+note('C5', 2)   // ticks 8-10
+The kernel fires noteOn(B4) at the same tick as noteOff(A4). No gap = continuous. For true legato (slight overlap):
+
+typescript
+note('A4', 5)   // ticks 0-5
+note('B4', 4)   // ticks 4-8  ← overlaps by 1 tick
+The DSP layer handles the transition: a monophonic string patch receives noteOn(B4) while A4 is still active → glides to B4 instead of re-attacking. That's the DSP's glide_mode / portamento setting — not a kernel concern.
+
+So the builder controls the default gap, which in turn controls whether the instrument sounds "continuous" or "articulated." Kernel is oblivious — it just sends noteOn/noteOff at the computed ticks.
