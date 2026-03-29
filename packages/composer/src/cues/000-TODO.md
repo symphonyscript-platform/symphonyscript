@@ -383,3 +383,14 @@ publish()
 cycle, those fields need to be in an attribute plane — similar to how we moved node attributes out of the structural plane.
 
 So you might need a SynapseAttributePlane alongside the NodeAttributePlane. Each synapse slot gets its own flat, atomic attribute array: [weight, tick_offset, _reserved, ...].
+
+
+fn noise(seed: u32, tick: u32, slot: u32) -> u32 {
+let mut h = seed ^ tick.wrapping_mul(0x9E3779B9) ^ slot.wrapping_mul(0x517CC1B7);
+h ^= h >> 16;
+h = h.wrapping_mul(0x85EBCA6B);
+h ^= h >> 13;
+h = h.wrapping_mul(0xC2B2AE35);
+h ^= h >> 16;
+h % 1000
+}
