@@ -489,21 +489,25 @@ impl NodeAttributesView {
     pub fn set_duration(&self, v: i32) { self.write(2, v) }
     pub fn volume(&self) -> i32 { self.read(3) }
     pub fn set_volume(&self, v: i32) { self.write(3, v) }
-    pub fn channel(&self) -> i32 { self.read(4) }
+    // Slot 4: reserved (instrument routing is handled by synapses, not attributes)
     pub fn flags(&self) -> u32 { self.read(5) as u32 }
+    pub fn set_flags(&self, v: u32) { self.write(5, v as i32) }
     pub fn spatial_x(&self) -> i32 { self.read(6) }
+    pub fn set_spatial_x(&self, v: i32) { self.write(6, v) }
     pub fn spatial_y(&self) -> i32 { self.read(7) }
+    pub fn set_spatial_y(&self, v: i32) { self.write(7, v) }
     pub fn spatial_z(&self) -> i32 { self.read(8) }
+    pub fn set_spatial_z(&self, v: i32) { self.write(8, v) }
     pub fn detune(&self) -> i32 { self.read(9) }
+    pub fn set_detune(&self, v: i32) { self.write(9, v) }
     pub fn tick_offset(&self) -> i32 { self.read(10) }
+    pub fn set_tick_offset(&self, v: i32) { self.write(10, v) }
     // Slots 11-15: reserved
 
-    // Flag accessors
-    pub fn has_modulators(&self) -> bool { self.flags() & 1 != 0 }
-    pub fn is_muted(&self) -> bool { self.flags() & 2 != 0 }
-    pub fn is_solo(&self) -> bool { self.flags() & 4 != 0 }
-    pub fn is_legato_tie(&self) -> bool { self.flags() & 8 != 0 }
-    pub fn is_ghost_note(&self) -> bool { self.flags() & 16 != 0 }
+    pub fn is_muted(&self) -> bool { self.flags() & 1 != 0 }
+    pub fn is_solo(&self) -> bool { self.flags() & 2 != 0 }
+    pub fn is_legato_tie(&self) -> bool { self.flags() & 4 != 0 }
+    pub fn is_ghost_note(&self) -> bool { self.flags() & 8 != 0 }
 
     fn read(&self, offset: usize) -> i32 {
         self.sab[self.start_index + offset].load(Ordering::Relaxed)
@@ -517,12 +521,11 @@ impl NodeAttributesView {
 **Flags field (slot 5):**
 
 ```
-bit 0: HAS_MODULATORS
-bit 1: MUTED          — direct skip, no modulation evaluation
-bit 2: SOLO           — mute everything else
-bit 3: LEGATO_TIE
-bit 4: GHOST_NOTE
-bits 5-31: reserved
+bit 0: MUTED          — direct skip, no modulation evaluation
+bit 1: SOLO           — mute everything else
+bit 2: LEGATO_TIE
+bit 3: GHOST_NOTE
+bits 4-31: reserved
 ```
 
 No threshold/gate fields. Every field has inherent standalone meaning. All gating lives in the modulation system.
