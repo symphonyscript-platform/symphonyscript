@@ -516,8 +516,6 @@ impl NodeAttributesView {
 
     pub fn is_muted(&self) -> bool { self.flags() & 1 != 0 }
     pub fn is_solo(&self) -> bool { self.flags() & 2 != 0 }
-    pub fn is_legato_tie(&self) -> bool { self.flags() & 4 != 0 }
-    pub fn is_ghost_note(&self) -> bool { self.flags() & 8 != 0 }
 
     fn read(&self, offset: usize) -> i32 {
         self.sab[self.start_index + offset].load(Ordering::Relaxed)
@@ -533,10 +531,10 @@ impl NodeAttributesView {
 ```
 bit 0: MUTED          — direct skip, no modulation evaluation
 bit 1: SOLO           — mute everything else
-bit 2: LEGATO_TIE
-bit 3: GHOST_NOTE
-bits 4-31: reserved
+bits 2-31: reserved
 ```
+
+LEGATO_TIE lives in the structural plane (sequencer control flow: suppress noteOn, extend noteOff). GHOST_NOTE is a DSL-level expression (compiles to velocity modification). Neither is a kernel attribute.
 
 No threshold/gate fields. Every field has inherent standalone meaning. All gating lives in the modulation system.
 
@@ -1046,6 +1044,8 @@ Changing a synth from 8-voice polyphonic to monophonic with glide requires zero 
 
 ## 16. Sequencer
 
+> **Extraction mandate:** Sequencing logic currently resides in `packages/web/src/runtime/processor.ts`. This RFC mandates its extraction into `packages/kernel` (Rust). After extraction, `processor.ts` retains only I/O glue — zero musical logic.
+
 ### 16.1 Kernel-Side Interface
 
 ```rust
@@ -1240,7 +1240,52 @@ class Modulator {
 }
 ```
 
-Property-specific interfaces extend `IModulatorBase` with domain-specific convenience methods (e.g., `IPitchModulator.octaves(n)`).
+#### 18.4.1 Property-Specific Interfaces
+
+```typescript
+interface IVelocityModulator extends IModulatorBase<IVelocityModulator> {
+  // Default polarity: UNIPOLAR (only adds velocity)
+  // Default clamping: CLAMP_0_1 = true
+}
+
+interface IPitchModulator extends IModulatorBase<IPitchModulator> {
+  /** Convenience: set amount in octaves (amount × 12). */
+  octaves(n: number): this;
+  // Default polarity: BIPOLAR
+  // Default clamping: false (unbounded)
+}
+
+interface IDurationModulator extends IModulatorBase<IDurationModulator> {
+  // Default polarity: BIPOLAR
+  // Default clamping: false
+}
+
+interface ITempoModulator extends IModulatorBase<ITempoModulator> {
+  // Default polarity: BIPOLAR (speed up / slow down)
+  // Default clamping: floor clamp at 20 BPM
+}
+
+interface IFilterModulator extends IModulatorBase<IFilterModulator> {
+  // Default polarity: UNIPOLAR
+  // Default clamping: false (unbounded Hz)
+}
+
+interface IVolumeModulator extends IModulatorBase<IVolumeModulator> {
+  // Default polarity: UNIPOLAR
+  // Default clamping: CLAMP_0_1 = true
+}
+
+interface IPanModulator extends IModulatorBase<IPanModulator> {
+  // Default polarity: BIPOLAR (left/right)
+  // Default clamping: clamped to [-65536, 65536]
+}
+
+interface ISynapseWeightModulator extends IModulatorBase<ISynapseWeightModulator> {
+  // Default polarity: UNIPOLAR
+  // Default clamping: CLAMP_0_1 = true (0-1000)
+  // Evaluated at synapse resolution, not voice render
+}
+```
 
 ### 18.5 Inline Cursors
 
@@ -1276,9 +1321,11 @@ Both paths (reusable modulator + inline cursor) produce identical `MODULATION_TA
 const intensityVel = Modulator.velocity(Intensity).base(700).amount(300).easeIn();
 
 // 2. Attach to a note property (triggers SAB allocation)
-note('C4').velocity(700, intensityVel);
+note('C4').velocity(700, intensityVel);         // explicit base + mod
+note('E4').velocity(intensityVel);              // mod's internal base
+note('G4').velocity(900, intensityVel, energyVel); // two mods (additive)
 
-// Under the hood:
+// Under the hood (per modulator attachment):
 // a) Bridge claims free slot from MOD_ALLOC free-list
 // b) Bridge writes all 8 config fields via Atomics.store
 // c) Bridge enqueues CMD_CREATE_MOD(nodePtr, modSlotPtr)
@@ -1366,6 +1413,20 @@ Bits 23-0:  Frequency (Q8.24 fixed-point Hz). Example: 4.0 Hz = 4 << 24 = 671088
 
 Unified expression system for derived parameter values and conditional routing. Data structures, not closures — serializable and kernel-compilable.
 
+### 20.0 IExpr Interface
+
+```typescript
+interface IExpr {
+  readonly type: ExprType;
+  /** Compile to kernel-side packed representation. */
+  compile(): { cfgB: number; auxFields?: number[] };
+  /** Serialize to JSON (for save/export). */
+  toJSON(): object;
+}
+```
+
+All `Expr` factory methods return `IExpr`. Both `IParam` and `IExpr` are accepted as sources.
+
 ### 20.1 Arithmetic Operators
 
 ```typescript
@@ -1444,6 +1505,20 @@ parent.linkTo(verseClip)
 
 `.when()` gates the modulator's delta to 0 when the condition is false. Condition stored in modulator auxiliary field. Evaluated during modulator chain traversal.
 
+#### 20.6.1 Dual-Mode `.when()`
+
+Both serializable expressions and arrow functions are accepted:
+
+```typescript
+// Serializable — kernel-compiled, preserves phantom type
+.when(Expr.gt(Scene, 500))
+
+// Arrow — taints clip as Unserializable (RFC-058 phantom type)
+.when(v => v > 500)
+```
+
+The `Expr` form compiles to kernel-side evaluation (condition encoded in modulator auxiliary field). The arrow form is evaluated by the engine layer at block rate — the same code module is loaded in the AudioWorklet via `addModule()`, giving the audio thread access to the callback. Arrow-based `.when()` taints the clip as `Unserializable` per RFC-058 phantom type system.
+
 ---
 
 ## 21. Fire Trace (Observability)
@@ -1495,7 +1570,21 @@ Consumer API: `getFireTraceSnapshot(buffer)`, `resetFireCounters()`. Zero alloca
 
 Additive — a dedicated SPSC ring buffer alongside snapshots for event history, analytics, or replay.
 
----
+#### 21.2.1 Stream Entry Format
+
+```rust
+pub const TRACE_TICK: usize = 0;               // Tick when event fired
+pub const TRACE_NODE_PTR: usize = 1;            // Byte offset of target node
+pub const TRACE_SYNAPSE_PTR: usize = 2;         // Byte offset of synapse that fired
+pub const TRACE_EFFECTIVE_WEIGHT: usize = 3;    // Effective weight after modulation (0-1000)
+pub const TRACE_EFFECTIVE_PITCH: usize = 4;     // Effective pitch after deltas (Q16.16)
+pub const TRACE_EFFECTIVE_VELOCITY: usize = 5;  // Effective velocity after deltas (Q16.16)
+pub const TRACE_EFFECTIVE_DURATION: usize = 6;  // Effective duration after deltas
+pub const TRACE_RESERVED: usize = 7;            // Reserved
+pub const TRACE_STRIDE_I32: usize = 8;          // 32 bytes per entry
+```
+
+Power-of-2 slot count (e.g., 256 entries). Overflow drops entries, never blocks audio. SPSC: audio thread writes, main thread reads.
 
 ## 22. Mechanical Specifications
 
@@ -1661,3 +1750,291 @@ fn cubic_bezier_y(t: f64, y1: f64, y2: f64) -> f64 {
     3.0 * mt * mt * t * y1 + 3.0 * mt * t * t * y2 + t * t * t
 }
 ```
+
+---
+
+## Appendix D: Reference Modulator Factory Implementation
+
+```typescript
+/**
+ * Reference implementation of Modulator.velocity().
+ * All other factories (pitch, volume, pan, tempo, filter, synapseWeight)
+ * follow the same pattern — they differ only in:
+ *   1. targetProperty (PACKED_CFG_A bits 31-24)
+ *   2. defaultClamp (PACKED_CFG_A bit 15)
+ *   3. defaultPolarity (PACKED_CFG_A bit 14)
+ *   4. Domain-specific convenience methods
+ */
+class VelocityModulatorConfig implements IVelocityModulator {
+  private _paramId: number;
+  private _base: number = 0;                  // Q16.16
+  private _amount: number = 0;                // Q16.16
+  private _smoothFactor: number = 0;          // 12-bit
+  private _clamp: boolean = true;             // Velocity default: clamped
+  private _polarity: boolean = false;         // Velocity default: unipolar
+  private _tapSource: number = 0x00;          // SMOOTHED (default)
+  private _curveType: number = 0x00;          // LINEAR (default)
+  private _curveParam: number = 0;
+  private _sourceMode: number = 0;            // PARAM (default)
+  private _frozenTick: boolean = false;
+
+  constructor(param: IParam) {
+    this._paramId = param.paramId;
+  }
+
+  base(value: number): this {
+    this._base = (value * 65536 / 1000) | 0;
+    return this;
+  }
+
+  amount(value: number): this {
+    this._amount = (value * 65536 / 1000) | 0;
+    return this;
+  }
+
+  smooth(factor: number): this {
+    this._smoothFactor = (factor * 4096) | 0; // 12-bit
+    return this;
+  }
+
+  curve(type: string | [number, number, number, number]): this {
+    if (Array.isArray(type)) {
+      this._curveType = 0x04;   // LUT
+      // LUT index assigned during register() — bridge.allocLut(type)
+    } else {
+      switch (type) {
+        case 'centered': this._curveType = 0x04; this._curveParam = 1; break;
+        case 'diverge':  this._curveType = 0x04; this._curveParam = 2; break;
+        case 'converge': this._curveType = 0x04; this._curveParam = 3; break;
+        case 'symmetric':this._curveType = 0x04; this._curveParam = 4; break;
+        case 'ducker':   this._curveType = 0x04; this._curveParam = 5; break;
+      }
+    }
+    return this;
+  }
+
+  unipolar(): this { this._polarity = false; return this; }
+  bipolar(): this  { this._polarity = true; return this; }
+  linear(): this   { this._curveType = 0x00; return this; }
+  easeIn(): this   { this._curveType = 0x01; return this; }
+  easeOut(): this  { this._curveType = 0x01; this._curveParam = 256; return this; }
+  centered(): this { return this.curve('centered'); }
+  diverge(): this  { return this.curve('diverge'); }
+  converge(): this { return this.curve('converge'); }
+  symmetric(): this { return this.curve('symmetric'); }
+  ducker(): this   { return this.curve('ducker'); }
+  tapSmoothed(): this { this._tapSource = 0x00; return this; }
+  tapCurved(): this   { this._tapSource = 0x01; return this; }
+  tapRaw(): this      { this._tapSource = 0x02; return this; }
+  direct(): this      { return this.tapRaw(); }
+
+  /** Pack config into MODULATION_TABLE PACKED_CFG_A. */
+  packConfigA(): number {
+    const targetProperty = 0x00; // VELOCITY
+    return (targetProperty << 24)
+         | (this._tapSource << 16)
+         | (this._clamp ? (1 << 15) : 0)
+         | (this._polarity ? (1 << 14) : 0)
+         | (this._sourceMode << 13)
+         | (this._frozenTick ? (1 << 12) : 0)
+         | (this._smoothFactor & 0xFFF);
+  }
+
+  packConfigB(): number {
+    return (this._curveType << 24) | (this._curveParam & 0x00FFFFFF);
+  }
+
+  getParamId(): number { return this._paramId; }
+  getBase(): number { return this._base; }
+  getAmount(): number { return this._amount; }
+}
+
+// Factory:
+class Modulator {
+  static velocity(param: IParam): IVelocityModulator {
+    return new VelocityModulatorConfig(param);
+  }
+  // Other factories differ only in:
+  // pitch():  targetProperty=0x01, clamp=false, polarity=true(bipolar)
+  // volume(): targetProperty=0x05, clamp=true,  polarity=false(unipolar)
+  // pan():    targetProperty=0x06, clamp=true,  polarity=true(bipolar)
+  // tempo():  targetProperty=0x03, clamp=true,  polarity=true(bipolar)
+  // filter(): targetProperty=0x04, clamp=false, polarity=false(unipolar)
+  // synapseWeight(): targetProperty=0x07, clamp=true, polarity=false(unipolar)
+}
+```
+
+---
+
+## Appendix E: Sequencer Extraction Map
+
+Line-by-line mapping from `packages/web/src/runtime/processor.ts` to the kernel-side `Sequencer`.
+
+### E.1 Source → Destination
+
+| Source (processor.ts) | Destination | Notes |
+|:---|:---|:---|
+| Tempo calculation: `samplesPerTick = ...` | `Sequencer::compute_tempo()` | Reads from `PARAMETER_TABLE[TEMPO].SMOOTHED_VALUE` |
+| Node traversal: `while (ptr !== NULL_PTR)` | `Sequencer::advance()` | Main loop. Add synapse resolution at chain end |
+| `routeNodeEvents()` | `Sequencer::route_node()` | Add `MOD_LIST_HEAD != NULL_PTR` check for lazy eval |
+| `normalizeMidi()` | `Sequencer::normalize_midi()` | Copy unchanged |
+| `tickToGateOffset()` | `Sequencer::tick_to_gate_offset()` | Copy unchanged |
+| **New:** Parameter batch | `Sequencer::evaluate_params()` | §8.1 pseudocode. Runs before traversal |
+| **New:** Synapse resolution | `Sequencer::resolve_synapses()` | All-fire model (§13.1) |
+
+### E.2 What Stays in processor.ts
+
+```typescript
+// packages/web/src/runtime/processor.ts — post-extraction (thin shell)
+class SymphonyScriptProcessor extends AudioWorkletProcessor {
+  private sequencer!: Sequencer;
+  private engine!: Engine;  // implements EventSink
+
+  public process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+    const output = outputs[0];
+    if (!output) return true;
+    this.clearOutput(output);
+    if (!this.isInitialized || !this.isPlaying) return true;
+
+    this.linker.poll();
+    const startTick = this.linker.getPlayheadTick();
+    const frameCount = output[0]?.length ?? 0;
+
+    this.sequencer.advance(startTick, startTick + ticksInBlock,
+                           frameCount, samplesPerTickQ16);
+
+    const rendered = this.engine.render();
+    this.copyRenderedBuffer(rendered, output);
+    this.linker.setPlayheadTick(endTick);
+    return true;
+  }
+  // clearOutput(), copyRenderedBuffer(), handleMessage() stay — web-specific I/O
+}
+```
+
+---
+
+## 23. Migration Plan
+
+### 23.1 Phased Implementation Order
+
+1. **Phase 1 — Constants + Node expansion.** Update `constants.ts`: `NODE_SIZE_I32 = 16`, add `MOD_LIST_HEAD`, new `HDR` fields. All dependent code auto-adjusts via `NODE_SIZE_I32` / `NODE_SIZE_BYTES`. Update `Int32Array(8)` allocations.
+
+2. **Phase 2 — Stochastic removal.** Delete `SynapticCursor.ts`. Remove `jitter` from all APIs. Remove `SYN_PACK.JITTER_*` constants. Implement deterministic all-fire resolution.
+
+3. **Phase 3 — New SAB tables.** Add `PARAMETER_TABLE`, `MODULATION_TABLE`, `LUT_POOL` constants, offset functions, `calculateSABSize()` updates. Initialization in `init.ts`.
+
+4. **Phase 4 — Command protocol.** Add `CMD_CREATE_MOD` / `CMD_DELETE_MOD` handlers to `processCommands()`.
+
+5. **Phase 5 — Bridge integration.** Add `setParam()`, modulator allocation, LUT deduplication to `SiliconBridge`.
+
+6. **Phase 6 — Sequencer extraction.** Move `routeNodeEvents` logic to kernel-side `Sequencer`. Add parameter batch evaluation, synapse resolution (all-fire).
+
+7. **Phase 7 — Composition API.** Implement `Param`, `Modulator` factories, inline cursors, `linkTo()` modulation.
+
+### 23.2 Files Affected (Phase 1 — Node Expansion)
+
+| File | Change |
+|:---|:---|
+| `constants.ts` | `NODE_SIZE_I32 = 16`, `MOD_LIST_HEAD`, new HDR fields, offset functions, `calculateSABSize()` |
+| `silicon-synapse.ts` | `nodeOffset()`, `writeNodeData()`, `readNodeRaw()`, buffer sizing |
+| `silicon-bridge.ts` | `nodeBuf = new Int32Array(16)`, `writeNodeData` calls |
+| `local-allocator.ts` | Extend zeroing to 16 fields |
+| `processor.ts` | `nodeBuf = new Int32Array(16)` |
+| Test files (7) | `Int32Array(8)` → `Int32Array(16)`, offset calculations |
+
+### 23.3 Files Affected (Phase 2 — Stochastic Removal)
+
+| File | Change |
+|:---|:---|
+| `SynapticCursor.ts` | **Deleted** |
+| `SynapticNode.ts` | Remove `jitter` param from `linkTo()` / `connect()` |
+| `silicon-bridge.ts` | Remove `jitter` from `connect()`, `connectAsync()`, snapshots |
+| `synapse-allocator.ts` | Remove `jitter` from `connect()`, update `WEIGHT_DATA` packing |
+| `constants.ts` | Remove `SYN_PACK.JITTER_MASK/SHIFT` |
+| `types.ts` | Remove `jitter` from `SynapseResolutionCallback`, `SynapseSnapshot` |
+
+---
+
+## Appendix F: Test Plan
+
+### F.1 Phase 1 — Node Expansion
+
+| Test | Assertion |
+|:---|:---|
+| `NODE_SIZE_I32 === 16` | Constant check |
+| `NODE_SIZE_BYTES === 64` | Constant check |
+| Allocate node, verify 16 slots writable | Write/read all slots 0-15 |
+| `MOD_LIST_HEAD` default = `NULL_PTR` | Verify slot 8 = 0 after allocation |
+| Existing tests pass unchanged | Full suite regression |
+
+### F.2 Phase 2 — Stochastic Removal
+
+| Test | Assertion |
+|:---|:---|
+| `SynapticCursor.ts` does not exist | File system check |
+| `SYN_PACK.JITTER_*` do not exist | Grep verify |
+| Multiple synapses from same source all fire | Create 3 synapses with weights 800, 500, 300. All 3 targets receive noteOn |
+| Weight 0 does NOT fire | Create synapse with weight 0. No noteOn |
+| Weight scales velocity | Weight 500 → velocity = original × 0.5 |
+
+### F.3 Phase 3 — New SAB Tables
+
+| Test | Assertion |
+|:---|:---|
+| Offset functions return correct values | `getParamTableOffset()`, `getModTableOffset()`, `getLutPoolOffset()` |
+| `calculateSABSize()` includes new regions | Size ≥ previous + 32KB + 128KB + 128KB |
+| Parameter slot write/read via `Atomics` | Write `RAW_VALUE`, read back |
+| Modulator slot write/read | Write all 8 fields, read back |
+| LUT slot write 256 entries | Write LUT, read entries 0 and 255 |
+
+### F.4 Phase 4 — Command Protocol
+
+| Test | Assertion |
+|:---|:---|
+| `CMD_CREATE_MOD` links modulator to node | `MOD_LIST_HEAD` points to mod |
+| Multiple mods form linked list | Create 3 mods on same node. Traverse chain, verify all 3 |
+| `CMD_DELETE_MOD` unlinks modulator | Chain skips deleted mod |
+| Delete returns slot to free list | Slot reusable via next CREATE_MOD |
+
+### F.5 Phase 5 — Bridge Integration
+
+| Test | Assertion |
+|:---|:---|
+| `setParam(id, 750)` writes correct Q16.16 | `Atomics.load` returns `(750 * 65536 / 1000) \| 0 = 49152` |
+| `createModulator()` when full returns error | `BRIDGE_ERR_MOD_TABLE_FULL` |
+| LUT dedup: same curve reuses slot | Alloc [0.42,0,0.58,1] twice → same lutIndex, refCount=2 |
+| `inspectParam()` reads all 8 fields | Write known values, inspect, verify |
+
+### F.6 Phase 6 — Sequencer Extraction
+
+| Test | Assertion |
+|:---|:---|
+| `advance()` fires noteOn for nodes in range | Same behavior as processor.ts |
+| Parameter batch evaluation runs before traversal | Set RAW_VALUE, verify SMOOTHED_VALUE updated after advance() |
+| LFO generates changing RAW_VALUE | Create sine 4Hz param. Two advance() calls → different RAW_VALUE |
+| Synapse resolution: all weight > 0 fire | End-of-clip triggers noteOn on all connected targets |
+| processor.ts has zero musical logic | Grep for `routeNodeEvents` → not found |
+
+### F.7 Phase 7 — Composition API
+
+| Test | Assertion |
+|:---|:---|
+| `Param.create().smooth(0.95)` stores config | PACKED_CFG_A contains smooth factor |
+| `Param.create().lfo('sine', 4.0)` sets INTERNAL_SOURCE | FLAGS bit 2 set |
+| `Modulator.velocity().amount(500).easeIn()` packs correctly | targetProperty=0x00, clamp=1, polarity=0 |
+| Inline cursor creates mod entry | MODULATION_TABLE slot populated |
+| Built-in shapes: `.centered()` uses LUT slot 1 | PACKED_CFG_B = (0x04 << 24) \| 1 |
+
+### F.8 Expr DSL & Derived Parameters
+
+| Test | Assertion |
+|:---|:---|
+| `Expr.add(paramA, paramB)` produces correct type | `expr.type === 'add'` |
+| Simple expr compiles to single PACKED_CFG_B | Operator=ADD, srcA, srcB packed |
+| Complex nested expr uses LUT_POOL slot | COMPLEX flag set, LUT slot index encoded |
+| `Param.derive()` sets FLAGS.DERIVED | FLAGS bit 3 set |
+| Derived param RAW_VALUE updated after source change | Set A=500, B=300. After evaluateParams(), derived = 800 |
+| Circular dependency rejected | `Param.derive(Expr.add(self, B))` throws |
+| `.when(Expr.gt(Scene, 500))` gates modulator | Scene=400 → delta=0. Scene=600 → delta=Amount |
+| `Expr.toJSON()` round-trips | Parse back, reconstruct, verify identical compilation |
