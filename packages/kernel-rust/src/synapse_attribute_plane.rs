@@ -45,6 +45,6 @@ impl SynapseAttributePlane {
         view.set_weight(data.weight);
         view.set_tick_offset(data.tick_offset);
         view.set_transpose(data.transpose);
-        view.set_volume_scale(data.transpose);
+        view.set_volume_scale(data.volume_scale);
     }
 }
