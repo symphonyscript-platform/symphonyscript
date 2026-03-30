@@ -17,9 +17,9 @@ impl IntoNodeAttributesArray<16> for ControlAttributes {
     }
 }
 
-pub struct NoteAttributesView<'a>(pub NodeAttributesView<'a>);
+pub struct ControlAttributesView<'a>(pub NodeAttributesView<'a>);
 
-impl<'a> crate::node::note_attributes::NoteAttributesView<'a> {
+impl<'a> ControlAttributesView<'a> {
     pub fn control_id(&self) -> i32 {
         self.0.read(0)
     }

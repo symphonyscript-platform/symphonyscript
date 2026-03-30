@@ -1,7 +1,7 @@
 use crate::into_node_attributes_array::IntoNodeAttributesArray;
 use crate::node_attributes_view::NodeAttributesView;
 
-pub struct NoteAttributesData {
+pub struct NoteAttributes {
     pub pitch: i32,
     pub velocity: i32,
     pub duration: i32,
@@ -15,7 +15,7 @@ pub struct NoteAttributesData {
                     // +24 bytes reserved
 }
 
-impl IntoNodeAttributesArray<16> for NoteAttributesData {
+impl IntoNodeAttributesArray<16> for NoteAttributes {
     fn to_array(&self) -> [i32; 16] {
         let mut data = [0; 16];
 
