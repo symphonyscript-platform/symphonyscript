@@ -47,10 +47,13 @@ impl ProbeHashTable {
         hash: fn(key: i32, shift: u32) -> usize,
         bind: bool,
     ) -> Self {
+        let end_index = Self::compute_end_index(start_index, max_entries, max_load_factor);
+
+        assert!(end_index < sab.len(), "ProbeHashTable out of bounds");
+
         let capacity = Self::compute_capacity(max_entries, max_load_factor);
         let mod_mask = capacity - 1;
         let shift = 32 - capacity.trailing_zeros();
-        let end_index = Self::compute_end_index(start_index, max_entries, max_load_factor);
         let slots = TableSlotView::new(Arc::clone(&sab), start_index + 1, capacity as u32);
 
         if !bind {

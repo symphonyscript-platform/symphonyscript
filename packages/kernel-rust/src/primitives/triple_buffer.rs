@@ -44,6 +44,8 @@ impl TripleBuffer {
         ];
         let end_index = buffers_start_index + buffer_size * 3;
 
+        assert!(end_index < sab.len(), "TripleBuffer out of bounds");;
+
         sab[writer_slot_index].store(0, Ordering::Relaxed);
         sab[state_slot_index].store(0b001, Ordering::Relaxed);
         sab[published_slot_index].store(0, Ordering::Relaxed);
