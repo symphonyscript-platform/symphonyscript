@@ -1,20 +1,20 @@
 use crate::node_attributes::{NodeAttributesData, NodeAttributesView};
 use crate::primitives::types::SAB;
 
-pub struct AttributePlane {
+pub struct NodeAttributePlane {
     sab: SAB,
     start_index: usize,
     end_index: usize,
     capacity: usize,
 }
 
-impl AttributePlane {
+impl NodeAttributePlane {
     pub fn new(sab: SAB, start_index: usize, capacity: usize) -> Self {
         let end_index = start_index + capacity * NodeAttributesView::SLOT_SIZE;
 
         assert!(end_index < sab.len(), "AttributePlane out of bounds");
 
-        AttributePlane {
+        NodeAttributePlane {
             sab,
             start_index,
             end_index,

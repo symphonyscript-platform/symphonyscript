@@ -2,7 +2,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion, Benchmark
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::attribute_plane::AttributePlane;
+use symphonyscript_kernel::node_attribute_plane::NodeAttributePlane;
 use symphonyscript_kernel::node_attributes::{NodeAttributesData, NodeAttributesView};
 
 fn create_sab(size: usize) -> SAB {
@@ -116,7 +116,7 @@ fn bench_view_flags_check(c: &mut Criterion) {
 
 fn bench_plane_set(c: &mut Criterion) {
     let sab = create_sab(65536);
-    let plane = AttributePlane::new(sab, 0, 4096);
+    let plane = NodeAttributePlane::new(sab, 0, 4096);
 
     c.bench_function("AttributePlane/set", |b| {
         b.iter(|| {
@@ -127,7 +127,7 @@ fn bench_plane_set(c: &mut Criterion) {
 
 fn bench_plane_get(c: &mut Criterion) {
     let sab = create_sab(65536);
-    let plane = AttributePlane::new(sab, 0, 4096);
+    let plane = NodeAttributePlane::new(sab, 0, 4096);
     plane.set(0, sample_data());
 
     c.bench_function("AttributePlane/get", |b| {
@@ -140,7 +140,7 @@ fn bench_plane_get(c: &mut Criterion) {
 
 fn bench_plane_set_get_cycle(c: &mut Criterion) {
     let sab = create_sab(65536);
-    let plane = AttributePlane::new(sab, 0, 4096);
+    let plane = NodeAttributePlane::new(sab, 0, 4096);
 
     c.bench_function("AttributePlane/set+get_cycle", |b| {
         b.iter(|| {
@@ -157,7 +157,7 @@ fn bench_plane_sequential_read(c: &mut Criterion) {
     for &count in &[32, 128, 512, 2048] {
         let sab_size = count * NodeAttributesView::SLOT_SIZE + 1;
         let sab = create_sab(sab_size);
-        let plane = AttributePlane::new(sab, 0, count);
+        let plane = NodeAttributePlane::new(sab, 0, count);
 
         for i in 0..count {
             plane.set(i, NodeAttributesData {
@@ -194,7 +194,7 @@ fn bench_plane_sequential_write(c: &mut Criterion) {
     for &count in &[32, 128, 512, 2048] {
         let sab_size = count * NodeAttributesView::SLOT_SIZE + 1;
         let sab = create_sab(sab_size);
-        let plane = AttributePlane::new(sab, 0, count);
+        let plane = NodeAttributePlane::new(sab, 0, count);
 
         group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
             b.iter(|| {
@@ -212,7 +212,7 @@ fn bench_plane_random_access(c: &mut Criterion) {
     let capacity = 4096;
     let sab_size = capacity * NodeAttributesView::SLOT_SIZE + 1;
     let sab = create_sab(sab_size);
-    let plane = AttributePlane::new(sab, 0, capacity);
+    let plane = NodeAttributePlane::new(sab, 0, capacity);
 
     for i in 0..capacity {
         plane.set(i, sample_data());
