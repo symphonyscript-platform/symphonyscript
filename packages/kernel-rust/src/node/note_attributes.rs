@@ -34,7 +34,7 @@ impl IntoNodeAttributesArray<16> for NoteAttributesData {
     }
 }
 
-pub struct NoteAttributesView<'a>(NodeAttributesView<'a>);
+pub struct NoteAttributesView<'a>(pub NodeAttributesView<'a>);
 
 impl<'a> NoteAttributesView<'a> {
     pub fn is_muted(&self) -> bool {
@@ -54,90 +54,82 @@ impl<'a> NoteAttributesView<'a> {
     }
 
     pub fn pitch(&self) -> i32 {
-        self.read(0)
+        self.0.read(0)
     }
 
     pub fn set_pitch(&self, value: i32) {
-        self.write(0, value)
+        self.0.write(0, value)
     }
 
     pub fn velocity(&self) -> i32 {
-        self.read(1)
+        self.0.read(1)
     }
 
     pub fn set_velocity(&self, value: i32) {
-        self.write(1, value)
+        self.0.write(1, value)
     }
 
     pub fn duration(&self) -> i32 {
-        self.read(2)
+        self.0.read(2)
     }
 
     pub fn set_duration(&self, value: i32) {
-        self.write(2, value)
+        self.0.write(2, value)
     }
 
     pub fn volume(&self) -> i32 {
-        self.read(3)
+        self.0.read(3)
     }
 
     pub fn set_volume(&self, value: i32) {
-        self.write(3, value)
+        self.0.write(3, value)
     }
 
     pub fn spatial_x(&self) -> i32 {
-        self.read(4)
+        self.0.read(4)
     }
 
     pub fn set_spatial_x(&self, value: i32) {
-        self.write(4, value)
+        self.0.write(4, value)
     }
 
     pub fn spatial_y(&self) -> i32 {
-        self.read(5)
+        self.0.read(5)
     }
 
     pub fn set_spatial_y(&self, value: i32) {
-        self.write(5, value)
+        self.0.write(5, value)
     }
 
     pub fn spatial_z(&self) -> i32 {
-        self.read(6)
+        self.0.read(6)
     }
 
     pub fn set_spatial_z(&self, value: i32) {
-        self.write(6, value)
+        self.0.write(6, value)
     }
 
     pub fn detune(&self) -> i32 {
-        self.read(7)
+        self.0.read(7)
     }
 
     pub fn set_detune(&self, value: i32) {
-        self.write(7, value)
+        self.0.write(7, value)
     }
 
     pub fn tick_offset(&self) -> i32 {
-        self.read(8)
+        self.0.read(8)
     }
 
     pub fn set_tick_offset(&self, value: i32) {
-        self.write(8, value)
+        self.0.write(8, value)
     }
 
     pub fn flags(&self) -> u32 {
-        self.read(9) as u32
+        self.0.read(9) as u32
     }
 
     pub fn set_flags(&self, value: u32) {
-        self.write(9, value as i32)
-    }
-
-    fn read(&self, offset: usize) -> i32 {
-        self.0.read(offset)
-    }
-
-    fn write(&self, offset: usize, value: i32) {
-        self.0.write(offset, value)
+        self.0.write(9, value as i32)
     }
 }
