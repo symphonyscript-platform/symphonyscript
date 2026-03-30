@@ -1,5 +1,5 @@
 use std::sync::atomic::Ordering;
-use crate::into_attributes_array::IntoAttributesArray;
+use crate::into_array::IntoArray;
 use crate::attributes_view::AttributesView;
 use crate::primitives::types::SAB;
 
@@ -41,7 +41,7 @@ impl<const SLOT_SIZE: usize> AttributePlane<SLOT_SIZE> {
         }
     }
 
-    pub fn set<T: IntoAttributesArray<SLOT_SIZE>>(&self, offset: usize, data: T) {
+    pub fn set<T: IntoArray<SLOT_SIZE>>(&self, offset: usize, data: T) {
         debug_assert!(offset < self.capacity, "offset out of bounds");
 
         let data = data.to_array();

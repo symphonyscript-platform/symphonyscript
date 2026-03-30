@@ -1,8 +1,10 @@
+use crate::errors::free_list_error::FreeListError;
 use crate::into_array::IntoArray;
 use crate::primitives::simple_free_list::SimpleFreeList;
 use crate::primitives::triple_buffer::TripleBufferWriter;
+use crate::slot_write_view::SlotWriteView;
 
-pub struct NodeAllocator<'a, const SLOT_SIZE: usize> {
+pub struct SlotWriter<'a, const SLOT_SIZE: usize> {
     writer: &'a TripleBufferWriter,
     free_list: &'a SimpleFreeList,
     start_offset: usize,
@@ -10,7 +12,7 @@ pub struct NodeAllocator<'a, const SLOT_SIZE: usize> {
     capacity: i32,
 }
 
-impl<'a, const SLOT_SIZE: usize> NodeAllocator<'a, SLOT_SIZE> {
+impl<'a, const SLOT_SIZE: usize> SlotWriter<'a, SLOT_SIZE> {
     pub fn new(
         writer: &'a TripleBufferWriter,
         free_list: &'a SimpleFreeList,
@@ -33,7 +35,7 @@ impl<'a, const SLOT_SIZE: usize> NodeAllocator<'a, SLOT_SIZE> {
             writer.buffer_capacity(),
         );
 
-        NodeAllocator {
+        SlotWriter {
             writer,
             free_list,
             start_offset,
@@ -54,7 +56,7 @@ impl<'a, const SLOT_SIZE: usize> NodeAllocator<'a, SLOT_SIZE> {
         self.capacity
     }
 
-    pub fn insert_head<T: IntoArray<SLOT_SIZE>>(&self, data: T) -> Option<usize> {
+    pub fn insert<T: IntoArray<SLOT_SIZE>>(&self, data: T) -> Option<usize> {
         match self.free_list.alloc() {
             Some(slot) => {
                 let data = data.to_array();
@@ -68,5 +70,30 @@ impl<'a, const SLOT_SIZE: usize> NodeAllocator<'a, SLOT_SIZE> {
             }
             None => None,
         }
+    }
+
+    pub fn free(&self, slot: usize) -> Result<(), FreeListError> {
+        self.free_list.free(slot)
+    }
+
+    pub fn get(&'_ self, slot: usize) -> SlotWriteView<'_, SLOT_SIZE> {
+        let start_offset = self.resolve_writer_offset(slot);
+
+        SlotWriteView {
+            writer: &self.writer,
+            start_offset,
+        }
+    }
+
+    pub fn write_field(&'_ self, slot: usize, offset: usize, value: i32) {
+        debug_assert!(offset < SLOT_SIZE, "offset out of bounds");
+        let start_offset = self.resolve_writer_offset(slot);
+        self.writer.write(start_offset + offset, value)
+    }
+
+    pub fn read_field(&'_ self, slot: usize, offset: usize) -> i32 {
+        debug_assert!(offset < SLOT_SIZE, "offset out of bounds");
+        let start_offset = self.resolve_writer_offset(slot);
+        self.writer.read(start_offset + offset)
     }
 }

@@ -10,7 +10,7 @@ pub struct TripleBufferWriter {
     writer_slot_index: usize,
     published_slot_index: usize,
     buffer_bases: [usize; 3],
-    buffer_size: usize,
+    buffer_capacity: usize,
     end_index: usize,
 }
 
@@ -19,7 +19,7 @@ pub struct TripleBufferReader {
     state_slot_index: usize,
     reader_slot_index: usize,
     buffer_bases: [usize; 3],
-    buffer_size: usize,
+    buffer_capacity: usize,
     end_index: usize,
 }
 
@@ -28,9 +28,9 @@ impl TripleBuffer {
     pub fn new(
         sab: SAB,
         start_index: usize,
-        buffer_size: usize,
+        buffer_capacity: usize,
     ) -> (TripleBufferWriter, TripleBufferReader) {
-        debug_assert!(buffer_size > 0, "buffer must have size");
+        debug_assert!(buffer_capacity > 0, "buffer must have positive capacity");
 
         let state_slot_index = start_index;
         let writer_slot_index = start_index + 1;
@@ -39,12 +39,12 @@ impl TripleBuffer {
         let buffers_start_index = start_index + 4;
         let buffer_bases: [usize; 3] = [
             buffers_start_index,
-            buffers_start_index + buffer_size,
-            buffers_start_index + buffer_size * 2,
+            buffers_start_index + buffer_capacity,
+            buffers_start_index + buffer_capacity * 2,
         ];
-        let end_index = buffers_start_index + buffer_size * 3;
+        let end_index = buffers_start_index + buffer_capacity * 3;
 
-        assert!(end_index < sab.len(), "TripleBuffer out of bounds");;
+        assert!(end_index < sab.len(), "TripleBuffer out of bounds");
 
         sab[writer_slot_index].store(0, Ordering::Relaxed);
         sab[state_slot_index].store(0b001, Ordering::Relaxed);
@@ -57,7 +57,7 @@ impl TripleBuffer {
             writer_slot_index,
             published_slot_index,
             buffer_bases,
-            buffer_size,
+            buffer_capacity,
             end_index,
         };
         let reader = TripleBufferReader {
@@ -65,7 +65,7 @@ impl TripleBuffer {
             state_slot_index,
             reader_slot_index,
             buffer_bases,
-            buffer_size,
+            buffer_capacity,
             end_index,
         };
 
@@ -73,8 +73,8 @@ impl TripleBuffer {
     }
 
     // SAB must already be initialized via new
-    pub fn bind_writer(sab: SAB, start_index: usize, buffer_size: usize) -> TripleBufferWriter {
-        debug_assert!(buffer_size > 0, "buffer must have size");
+    pub fn bind_writer(sab: SAB, start_index: usize, buffer_capacity: usize) -> TripleBufferWriter {
+        debug_assert!(buffer_capacity > 0, "buffer must have size");
 
         let state_slot_index = start_index;
         let writer_slot_index = start_index + 1;
@@ -82,17 +82,17 @@ impl TripleBuffer {
         let buffers_start_index = start_index + 4;
         let buffer_bases: [usize; 3] = [
             buffers_start_index,
-            buffers_start_index + buffer_size,
-            buffers_start_index + buffer_size * 2,
+            buffers_start_index + buffer_capacity,
+            buffers_start_index + buffer_capacity * 2,
         ];
-        let end_index = buffers_start_index + buffer_size * 3;
+        let end_index = buffers_start_index + buffer_capacity * 3;
         let writer = TripleBufferWriter {
             sab: Arc::clone(&sab),
             state_slot_index,
             writer_slot_index,
             published_slot_index,
             buffer_bases,
-            buffer_size,
+            buffer_capacity,
             end_index,
         };
 
@@ -106,25 +106,25 @@ impl TripleBuffer {
     }
 
     // SAB must already be initialized via new
-    pub fn bind_reader(sab: SAB, start_index: usize, buffer_size: usize) -> TripleBufferReader {
-        debug_assert!(buffer_size > 0, "buffer must have size");
+    pub fn bind_reader(sab: SAB, start_index: usize, buffer_capacity: usize) -> TripleBufferReader {
+        debug_assert!(buffer_capacity > 0, "buffer must have size");
 
         let state_slot_index = start_index;
         let reader_slot_index = start_index + 3;
         let buffers_start_index = start_index + 4;
         let buffer_bases: [usize; 3] = [
             buffers_start_index,
-            buffers_start_index + buffer_size,
-            buffers_start_index + buffer_size * 2,
+            buffers_start_index + buffer_capacity,
+            buffers_start_index + buffer_capacity * 2,
         ];
-        let end_index = buffers_start_index + buffer_size * 3;
+        let end_index = buffers_start_index + buffer_capacity * 3;
 
         TripleBufferReader {
             sab: Arc::clone(&sab),
             state_slot_index,
             reader_slot_index,
             buffer_bases,
-            buffer_size,
+            buffer_capacity,
             end_index,
         }
     }
@@ -132,8 +132,8 @@ impl TripleBuffer {
 
 // Writer - main thread
 impl TripleBufferWriter {
-    pub fn buffer_size(&self) -> usize {
-        self.buffer_size
+    pub fn buffer_capacity(&self) -> usize {
+        self.buffer_capacity
     }
 
     pub fn end_index(&self) -> usize {
@@ -171,15 +171,28 @@ impl TripleBufferWriter {
         // and the bounds are validated upon instantiation.
         //
         unsafe {
-            std::ptr::copy_nonoverlapping(source_ptr, destination_ptr, self.buffer_size);
+            std::ptr::copy_nonoverlapping(source_ptr, destination_ptr, self.buffer_capacity);
         }
+    }
+
+    pub fn write(&self, offset: usize, value: i32) {
+        debug_assert!(offset < self.buffer_capacity, "offset out of bounds");
+        let base = self.current_start_index();
+        self.sab[base + offset].store(value, Ordering::Relaxed)
+    }
+
+    pub fn read(&self, offset: usize) -> i32 {
+        debug_assert!(offset < self.buffer_capacity, "offset out of bounds");
+        let base = self.current_start_index();
+        self.sab[base + offset].load(Ordering::Relaxed)
     }
 }
 
+
 // Reader - Audio thread
 impl TripleBufferReader {
-    pub fn buffer_size(&self) -> usize {
-        self.buffer_size
+    pub fn buffer_capacity(&self) -> usize {
+        self.buffer_capacity
     }
 
     pub fn end_index(&self) -> usize {
@@ -215,5 +228,11 @@ impl TripleBufferReader {
         self.sab[self.reader_slot_index].store(old_state & 0b011, Ordering::Relaxed);
 
         true
+    }
+
+    pub fn read(&self, offset: usize) -> i32 {
+        debug_assert!(offset < self.buffer_capacity, "offset out of bounds");
+        let base = self.current_start_index();
+        self.sab[base + offset].load(Ordering::Relaxed)
     }
 }

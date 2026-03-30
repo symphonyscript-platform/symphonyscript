@@ -1,5 +1,6 @@
 use crate::primitives::types::SAB;
 use std::sync::atomic::Ordering;
+use crate::into_array::IntoArray;
 
 pub struct NodeData {
     pub opcode: i32,
@@ -10,6 +11,22 @@ pub struct NodeData {
     pub reverse_synapse_head: i32,
     pub mod_list_head: i32,
     // +4 bytes reserved
+}
+
+impl IntoArray<8> for NodeData {
+    fn to_array(&self) -> [i32; 8] {
+        let mut data = [0; 8];
+
+        data[0] = self.opcode;
+        data[1] = self.base_tick;
+        data[2] = self.next_ptr;
+        data[3] = self.prev_ptr;
+        data[4] = self.synapse_list_head;
+        data[5] = self.reverse_synapse_head;
+        data[6] = self.mod_list_head;
+
+        data
+    }
 }
 
 pub struct NodeView<'a> {

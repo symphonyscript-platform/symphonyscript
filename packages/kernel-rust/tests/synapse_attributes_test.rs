@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::attributes::synapse_attributes::{SynapseAttributes, SynapseAttributesView};
 use symphonyscript_kernel::attributes_view::AttributesView;
-use symphonyscript_kernel::into_attributes_array::IntoAttributesArray;
+use symphonyscript_kernel::into_array::IntoArray;
 use symphonyscript_kernel::constants::SYNAPSE_ATTRIBUTES_SLOT_SIZE;
 
 fn create_sab(size: usize) -> SAB {

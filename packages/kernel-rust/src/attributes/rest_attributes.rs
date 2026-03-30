@@ -1,12 +1,12 @@
 use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
-use crate::into_attributes_array::IntoAttributesArray;
+use crate::into_array::IntoArray;
 use crate::attributes_view::AttributesView;
 
 pub struct RestAttributes {
     pub duration: i32,
 }
 
-impl IntoAttributesArray<16> for RestAttributes {
+impl IntoArray<16> for RestAttributes {
     fn to_array(&self) -> [i32; 16] {
         let mut data = [0; 16];
 

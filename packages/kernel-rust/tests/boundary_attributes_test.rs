@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::attributes::boundary_attributes::{BoundaryAttributes, BoundaryAttributesView};
 use symphonyscript_kernel::attributes_view::AttributesView;
-use symphonyscript_kernel::into_attributes_array::IntoAttributesArray;
+use symphonyscript_kernel::into_array::IntoArray;
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);

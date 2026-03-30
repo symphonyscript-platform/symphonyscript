@@ -67,6 +67,10 @@ impl SimpleFreeList {
         self.end_index
     }
 
+    pub fn capacity(&self) -> i32 {
+        self.capacity
+    }
+
     pub fn alloc(&self) -> Option<usize> {
         let head_index = self.sab[self.head_slot_index].load(Ordering::Relaxed);
 
