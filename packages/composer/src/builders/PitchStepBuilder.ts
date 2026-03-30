@@ -39,6 +39,15 @@ export interface PitchStepParams {
   transposeCents: number
   /** Channel aftertouch value sent with the note. `null` = no aftertouch. */
   aftertouch: number | null
+
+  // @todo
+  humanize: number | null;
+
+  // @todo
+  swing: number | null;
+
+  // @todo
+  groove: unknown | null;
 }
 
 /**
