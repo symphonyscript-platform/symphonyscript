@@ -6,6 +6,7 @@ pub struct SynapseAttributesData {
     pub tick_offset: i32,
     pub transpose: i32,
     pub volume_scale: i32,
+    // +16 bytes reserved
 }
 
 pub struct SynapseAttributesView<'a> {
@@ -14,7 +15,7 @@ pub struct SynapseAttributesView<'a> {
 }
 
 impl<'a> SynapseAttributesView<'a> {
-    pub const SLOT_SIZE: usize = 4;
+    pub const SLOT_SIZE: usize = 8;
 
     pub fn new(sab: &'a SAB, start_index: usize) -> Self {
         let end_index = start_index + Self::SLOT_SIZE;

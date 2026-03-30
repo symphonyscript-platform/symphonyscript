@@ -1,39 +1,36 @@
 use crate::primitives::types::SAB;
 use std::sync::atomic::Ordering;
 
-pub struct NodeAttributesData {
-    pub pitch: i32,
-    pub velocity: i32,
-    pub duration: i32,
-    pub volume: i32,
-    pub spatial_x: i32, // left-right (stereo-pan)
-    pub spatial_y: i32, // front-back (depth)
-    pub spatial_z: i32, // up-down (elevation)
-    pub detune: i32,
-    pub tick_offset: i32,
-    pub flags: u32, // bit 0: muted | bit 1: solo | bits 2-31: reserved
-    // +24 bytes reserved
+pub struct NodeData {
+    pub opcode: i32,
+    pub base_tick: i32,
+    pub next_ptr: i32,
+    pub prev_ptr: i32,
+    pub synapse_list_head: i32,
+    pub reverse_synapse_head: i32,
+    pub mod_list_head: i32,
+    // +4 bytes reserved
 }
 
-pub struct NodeAttributesView<'a> {
+pub struct NodeView<'a> {
     pub(crate) sab: &'a SAB,
     pub(crate) start_index: usize,
 }
 
-impl<'a> NodeAttributesView<'a> {
-    pub const SLOT_SIZE: usize = 16;
+impl<'a> NodeView<'a> {
+    pub const SLOT_SIZE: usize = 8;
 
     pub fn new(sab: &'a SAB, start_index: usize) -> Self {
         let end_index = start_index + Self::SLOT_SIZE;
-        debug_assert!(end_index < sab.len(), "NodeAttributesView out of bounds");
-        NodeAttributesView {
+        debug_assert!(end_index < sab.len(), "NodeView out of bounds");
+        NodeView {
             sab: &sab,
             start_index,
         }
     }
 
     pub fn resolve_sab_index(start_index: usize, offset: usize) -> usize {
-        start_index + (offset * NodeAttributesView::SLOT_SIZE)
+        start_index + (offset * NodeView::SLOT_SIZE)
     }
 
     pub fn is_muted(&self) -> bool {

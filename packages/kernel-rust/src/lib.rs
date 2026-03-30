@@ -9,6 +9,7 @@ pub mod node_attribute_plane;
 pub mod node_attributes;
 pub mod synapse_attributes;
 pub mod synapse_attribute_plane;
+mod node_view;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
