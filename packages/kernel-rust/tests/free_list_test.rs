@@ -166,7 +166,7 @@ fn slot_size_of_one() {
 #[test]
 fn large_slot_size() {
     let sab = create_sab(8192);
-    let fl: FreeList<16> = FreeList::new(sab, 0, 8);
+    let fl: FreeList<SLOT_SIZE> = FreeList::new(sab, 0, 8);
 
     let slot = fl.alloc().unwrap();
     let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];

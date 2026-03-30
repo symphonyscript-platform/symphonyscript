@@ -3,6 +3,8 @@ use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::primitives::ring_buffer::RingBuffer;
 
+const SLOT_SIZE: usize = 16;
+
 /// Creates a SAB with the given number of AtomicI32 slots.
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);
@@ -240,7 +242,7 @@ fn capacity_of_one() {
 #[test]
 fn large_slot_size() {
     let sab = create_sab(4096);
-    let ring: RingBuffer<16> = RingBuffer::new(sab, 0, 4);
+    let ring: RingBuffer<SLOT_SIZE> = RingBuffer::new(sab, 0, 4);
 
     let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
     ring.write(data).unwrap();

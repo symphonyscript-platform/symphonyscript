@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::node_attributes_view::NodeAttributesView;
+use symphonyscript_kernel::node_attributes_view::AttributesView;
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);
@@ -12,14 +12,9 @@ fn create_sab(size: usize) -> SAB {
 }
 
 #[test]
-fn slot_size_is_16() {
-    assert_eq!(NodeAttributesView::SLOT_SIZE, 16);
-}
-
-#[test]
 fn new_creates_view_at_start_index() {
     let sab = create_sab(128);
-    let view = NodeAttributesView::new(&sab, 0);
+    let view = AttributesView::new(&sab, 0);
     
     // Ensure zeroes
     for i in 0..16 {
@@ -30,7 +25,7 @@ fn new_creates_view_at_start_index() {
 #[test]
 fn raw_read_write_round_trip() {
     let sab = create_sab(128);
-    let view = NodeAttributesView::new(&sab, 10); // Offset it slightly
+    let view = AttributesView::new(&sab, 10); // Offset it slightly
     
     view.write(0, 500);
     view.write(15, -42);
@@ -42,7 +37,7 @@ fn raw_read_write_round_trip() {
 #[test]
 fn fields_do_not_bleed() {
     let sab = create_sab(128);
-    let view = NodeAttributesView::new(&sab, 0);
+    let view = AttributesView::new(&sab, 0);
     
     view.write(0, i32::MAX);
     assert_eq!(view.read(1), 0);
@@ -54,8 +49,8 @@ fn fields_do_not_bleed() {
 #[test]
 fn two_views_different_offsets_are_independent() {
     let sab = create_sab(128);
-    let view_a = NodeAttributesView::new(&sab, 0);
-    let view_b = NodeAttributesView::new(&sab, 16);
+    let view_a = AttributesView::new(&sab, 0);
+    let view_b = AttributesView::new(&sab, 16);
     
     view_a.write(0, 100);
     view_b.write(0, 200);
@@ -67,8 +62,8 @@ fn two_views_different_offsets_are_independent() {
 #[test]
 fn two_views_share_sab_see_writes() {
     let sab = create_sab(128);
-    let view_a = NodeAttributesView::new(&sab, 10);
-    let view_b = NodeAttributesView::new(&sab, 10);
+    let view_a = AttributesView::new(&sab, 10);
+    let view_b = AttributesView::new(&sab, 10);
     
     view_a.write(5, 999);
     assert_eq!(view_b.read(5), 999);
@@ -78,12 +73,12 @@ fn two_views_share_sab_see_writes() {
 #[should_panic(expected = "NodeAttributesView out of bounds")]
 fn new_panics_if_out_of_bounds() {
     let sab = create_sab(10); // Too small for SLOT_SIZE (16)
-    let _view = NodeAttributesView::new(&sab, 0);
+    let _view = AttributesView::new(&sab, 0);
 }
 
 #[test]
 #[should_panic(expected = "NodeAttributesView out of bounds")]
 fn new_panics_if_start_index_crosses_bounds() {
     let sab = create_sab(32);
-    let _view = NodeAttributesView::new(&sab, 20); // 20 + 16 = 36 > 32
+    let _view = AttributesView::new(&sab, 20); // 20 + 16 = 36 > 32
 }

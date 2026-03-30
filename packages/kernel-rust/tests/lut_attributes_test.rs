@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::node::lut_attributes::{LutAttributes, LutAttributesView};
-use symphonyscript_kernel::node_attributes_view::NodeAttributesView;
+use symphonyscript_kernel::attributes::lut_attributes::{LutAttributes, LutAttributesView};
+use symphonyscript_kernel::node_attributes_view::AttributesView;
 use symphonyscript_kernel::into_node_attributes_array::IntoNodeAttributesArray;
 
 fn create_sab(size: usize) -> SAB {
@@ -27,7 +27,7 @@ fn to_array_maps_slots_correctly() {
 #[test]
 fn view_round_trip() {
     let sab = create_sab(32);
-    let view = LutAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = LutAttributesView(AttributesView::new(&sab, 0));
     
     view.set_lut_index(5);
     assert_eq!(view.lut_index(), 5);

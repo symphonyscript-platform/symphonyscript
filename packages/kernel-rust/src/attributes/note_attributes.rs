@@ -1,5 +1,6 @@
+use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
 use crate::into_node_attributes_array::IntoNodeAttributesArray;
-use crate::node_attributes_view::NodeAttributesView;
+use crate::node_attributes_view::AttributesView;
 
 pub struct NoteAttributes {
     pub pitch: i32,
@@ -34,7 +35,7 @@ impl IntoNodeAttributesArray<16> for NoteAttributes {
     }
 }
 
-pub struct NoteAttributesView<'a>(pub NodeAttributesView<'a>);
+pub struct NoteAttributesView<'a>(pub AttributesView<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
 
 impl<'a> NoteAttributesView<'a> {
     pub fn is_muted(&self) -> bool {

@@ -1,5 +1,6 @@
+use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
 use crate::into_node_attributes_array::IntoNodeAttributesArray;
-use crate::node_attributes_view::NodeAttributesView;
+use crate::node_attributes_view::AttributesView;
 
 pub struct LutAttributes {
     pub lut_index: i32,
@@ -15,7 +16,7 @@ impl IntoNodeAttributesArray<16> for LutAttributes {
     }
 }
 
-pub struct LutAttributesView<'a>(pub NodeAttributesView<'a>);
+pub struct LutAttributesView<'a>(pub AttributesView<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
 
 impl<'a> LutAttributesView<'a> {
     pub fn lut_index(&self) -> i32 {

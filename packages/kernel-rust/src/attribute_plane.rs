@@ -1,22 +1,22 @@
 use std::sync::atomic::Ordering;
 use crate::into_node_attributes_array::IntoNodeAttributesArray;
-use crate::node_attributes_view::NodeAttributesView;
+use crate::node_attributes_view::AttributesView;
 use crate::primitives::types::SAB;
 
-pub struct NodeAttributePlane<const SLOT_SIZE: usize> {
+pub struct AttributePlane<const SLOT_SIZE: usize> {
     sab: SAB,
     start_index: usize,
     end_index: usize,
     capacity: usize,
 }
 
-impl<const SLOT_SIZE: usize> NodeAttributePlane<SLOT_SIZE> {
+impl<const SLOT_SIZE: usize> AttributePlane<SLOT_SIZE> {
     pub fn new(sab: SAB, start_index: usize, capacity: usize) -> Self {
-        let end_index = start_index + capacity * NodeAttributesView::SLOT_SIZE;
+        let end_index = start_index + capacity * SLOT_SIZE;
 
         assert!(end_index < sab.len(), "NodeAttributePlane out of bounds");
 
-        NodeAttributePlane {
+        AttributePlane {
             sab,
             start_index,
             end_index,
@@ -32,10 +32,10 @@ impl<const SLOT_SIZE: usize> NodeAttributePlane<SLOT_SIZE> {
         self.end_index
     }
 
-    pub fn get(&'_ self, offset: usize) -> NodeAttributesView<'_> {
+    pub fn get(&'_ self, offset: usize) -> AttributesView<'_, SLOT_SIZE> {
         debug_assert!(offset < self.capacity, "offset out of bounds");
 
-        NodeAttributesView {
+        AttributesView {
             sab: &self.sab,
             start_index: self.resolve_sab_index(offset),
         }

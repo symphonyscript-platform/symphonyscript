@@ -1,5 +1,6 @@
+use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
 use crate::into_node_attributes_array::IntoNodeAttributesArray;
-use crate::node_attributes_view::NodeAttributesView;
+use crate::node_attributes_view::AttributesView;
 
 pub struct ControlAttributes {
     pub control_id: i32,
@@ -17,7 +18,7 @@ impl IntoNodeAttributesArray<16> for ControlAttributes {
     }
 }
 
-pub struct ControlAttributesView<'a>(pub NodeAttributesView<'a>);
+pub struct ControlAttributesView<'a>(pub AttributesView<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
 
 impl<'a> ControlAttributesView<'a> {
     pub fn control_id(&self) -> i32 {

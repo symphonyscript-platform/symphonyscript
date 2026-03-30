@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::node::control_attributes::{ControlAttributes, ControlAttributesView};
-use symphonyscript_kernel::node_attributes_view::NodeAttributesView;
+use symphonyscript_kernel::attributes::control_attributes::{ControlAttributes, ControlAttributesView};
+use symphonyscript_kernel::node_attributes_view::AttributesView;
 use symphonyscript_kernel::into_node_attributes_array::IntoNodeAttributesArray;
 
 fn create_sab(size: usize) -> SAB {
@@ -29,7 +29,7 @@ fn to_array_maps_slots_correctly() {
 #[test]
 fn view_round_trip() {
     let sab = create_sab(32);
-    let view = ControlAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = ControlAttributesView(AttributesView::new(&sab, 0));
     
     view.set_control_id(128);
     view.set_value(500);

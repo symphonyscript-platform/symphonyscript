@@ -1,18 +1,16 @@
 use crate::primitives::types::SAB;
 use std::sync::atomic::Ordering;
 
-pub struct NodeAttributesView<'a> {
+pub struct AttributesView<'a, const SLOT_SIZE: usize> {
     pub(crate) sab: &'a SAB,
     pub(crate) start_index: usize,
 }
 
-impl<'a> NodeAttributesView<'a> {
-    pub const SLOT_SIZE: usize = 16;
-
+impl<'a, const SLOT_SIZE: usize> AttributesView<'a, SLOT_SIZE> {
     pub fn new(sab: &'a SAB, start_index: usize) -> Self {
-        let end_index = start_index + Self::SLOT_SIZE;
+        let end_index = start_index + SLOT_SIZE;
         debug_assert!(end_index < sab.len(), "NodeAttributesView out of bounds");
-        NodeAttributesView {
+        AttributesView {
             sab: &sab,
             start_index,
         }

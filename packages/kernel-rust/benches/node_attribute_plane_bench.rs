@@ -2,9 +2,9 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion, Benchmark
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::node_attribute_plane::NodeAttributePlane;
-use symphonyscript_kernel::node_attributes_view::NodeAttributesView;
-use symphonyscript_kernel::node::note_attributes::{NoteAttributes, NoteAttributesView};
+use symphonyscript_kernel::attribute_plane::AttributePlane;
+use symphonyscript_kernel::node_attributes_view::AttributesView;
+use symphonyscript_kernel::attributes::note_attributes::{NoteAttributes, NoteAttributesView};
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);
@@ -33,7 +33,7 @@ fn sample_data() -> NoteAttributes {
 
 fn bench_view_read_single_field(c: &mut Criterion) {
     let sab = create_sab(1024);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_pitch(570000);
 
     c.bench_function("NodeAttributesView/read_pitch", |b| {
@@ -43,7 +43,7 @@ fn bench_view_read_single_field(c: &mut Criterion) {
 
 fn bench_view_write_single_field(c: &mut Criterion) {
     let sab = create_sab(1024);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
 
     c.bench_function("NodeAttributesView/write_pitch", |b| {
         b.iter(|| view.set_pitch(black_box(570000)));
@@ -52,7 +52,7 @@ fn bench_view_write_single_field(c: &mut Criterion) {
 
 fn bench_view_read_all_fields(c: &mut Criterion) {
     let sab = create_sab(1024);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_pitch(570000);
     view.set_velocity(100);
     view.set_duration(480);
@@ -82,7 +82,7 @@ fn bench_view_read_all_fields(c: &mut Criterion) {
 
 fn bench_view_write_all_fields(c: &mut Criterion) {
     let sab = create_sab(1024);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
 
     c.bench_function("NodeAttributesView/write_all_10_fields", |b| {
         b.iter(|| {
@@ -102,7 +102,7 @@ fn bench_view_write_all_fields(c: &mut Criterion) {
 
 fn bench_view_flags_check(c: &mut Criterion) {
     let sab = create_sab(1024);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_flags(0b11);
 
     c.bench_function("NodeAttributesView/is_muted+is_solo", |b| {
@@ -117,7 +117,7 @@ fn bench_view_flags_check(c: &mut Criterion) {
 
 fn bench_plane_set(c: &mut Criterion) {
     let sab = create_sab(65536);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, 4096);
+    let plane = AttributePlane::<16>::new(sab, 0, 4096);
 
     c.bench_function("AttributePlane/set", |b| {
         b.iter(|| {
@@ -128,7 +128,7 @@ fn bench_plane_set(c: &mut Criterion) {
 
 fn bench_plane_get(c: &mut Criterion) {
     let sab = create_sab(65536);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, 4096);
+    let plane = AttributePlane::<16>::new(sab, 0, 4096);
     plane.set(0, sample_data());
 
     c.bench_function("AttributePlane/get", |b| {
@@ -141,7 +141,7 @@ fn bench_plane_get(c: &mut Criterion) {
 
 fn bench_plane_set_get_cycle(c: &mut Criterion) {
     let sab = create_sab(65536);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, 4096);
+    let plane = AttributePlane::<16>::new(sab, 0, 4096);
 
     c.bench_function("AttributePlane/set+get_cycle", |b| {
         b.iter(|| {
@@ -156,9 +156,9 @@ fn bench_plane_sequential_read(c: &mut Criterion) {
     let mut group = c.benchmark_group("AttributePlane/sequential_read");
 
     for &count in &[32, 128, 512, 2048] {
-        let sab_size = count * NodeAttributesView::SLOT_SIZE + 1;
+        let sab_size = count * AttributesView::SLOT_SIZE + 1;
         let sab = create_sab(sab_size);
-        let plane = NodeAttributePlane::<16>::new(sab, 0, count);
+        let plane = AttributePlane::<16>::new(sab, 0, count);
 
         for i in 0..count {
             plane.set(i, NoteAttributes {
@@ -193,9 +193,9 @@ fn bench_plane_sequential_write(c: &mut Criterion) {
     let mut group = c.benchmark_group("AttributePlane/sequential_write");
 
     for &count in &[32, 128, 512, 2048] {
-        let sab_size = count * NodeAttributesView::SLOT_SIZE + 1;
+        let sab_size = count * AttributesView::SLOT_SIZE + 1;
         let sab = create_sab(sab_size);
-        let plane = NodeAttributePlane::<16>::new(sab, 0, count);
+        let plane = AttributePlane::<16>::new(sab, 0, count);
 
         group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
             b.iter(|| {
@@ -211,9 +211,9 @@ fn bench_plane_sequential_write(c: &mut Criterion) {
 
 fn bench_plane_random_access(c: &mut Criterion) {
     let capacity = 4096;
-    let sab_size = capacity * NodeAttributesView::SLOT_SIZE + 1;
+    let sab_size = capacity * AttributesView::SLOT_SIZE + 1;
     let sab = create_sab(sab_size);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, capacity);
+    let plane = AttributePlane::<16>::new(sab, 0, capacity);
 
     for i in 0..capacity {
         plane.set(i, sample_data());

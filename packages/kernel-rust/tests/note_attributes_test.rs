@@ -1,9 +1,11 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::node_attributes_view::NodeAttributesView;
-use symphonyscript_kernel::node::note_attributes::{NoteAttributes, NoteAttributesView};
+use symphonyscript_kernel::node_attributes_view::AttributesView;
+use symphonyscript_kernel::attributes::note_attributes::{NoteAttributes, NoteAttributesView};
 use symphonyscript_kernel::into_node_attributes_array::IntoNodeAttributesArray;
+
+const SLOT_SIZE: usize = 16;
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);
@@ -18,7 +20,7 @@ fn create_sab(size: usize) -> SAB {
 #[test]
 fn new_creates_view_at_start_index() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     assert_eq!(view.pitch(), 0);
     assert_eq!(view.velocity(), 0);
     assert_eq!(view.flags(), 0);
@@ -27,13 +29,13 @@ fn new_creates_view_at_start_index() {
 #[test]
 fn new_creates_view_at_nonzero_start_index() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 50));
+    let view = NoteAttributesView(AttributesView::new(&sab, 50));
     assert_eq!(view.pitch(), 0);
 }
 
 #[test]
 fn slot_size_is_16() {
-    assert_eq!(NodeAttributesView::SLOT_SIZE, 16);
+    assert_eq!(SLOT_SIZE, 16);
 }
 
 // ============ Read/Write Round-Trip ============
@@ -41,7 +43,7 @@ fn slot_size_is_16() {
 #[test]
 fn pitch_round_trip() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_pitch(570000);
     assert_eq!(view.pitch(), 570000);
 }
@@ -49,7 +51,7 @@ fn pitch_round_trip() {
 #[test]
 fn velocity_round_trip() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_velocity(127);
     assert_eq!(view.velocity(), 127);
 }
@@ -57,7 +59,7 @@ fn velocity_round_trip() {
 #[test]
 fn duration_round_trip() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_duration(480);
     assert_eq!(view.duration(), 480);
 }
@@ -65,7 +67,7 @@ fn duration_round_trip() {
 #[test]
 fn volume_round_trip() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_volume(1000);
     assert_eq!(view.volume(), 1000);
 }
@@ -73,7 +75,7 @@ fn volume_round_trip() {
 #[test]
 fn spatial_x_round_trip() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_spatial_x(-1000);
     assert_eq!(view.spatial_x(), -1000);
 }
@@ -81,7 +83,7 @@ fn spatial_x_round_trip() {
 #[test]
 fn spatial_y_round_trip() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_spatial_y(500);
     assert_eq!(view.spatial_y(), 500);
 }
@@ -89,7 +91,7 @@ fn spatial_y_round_trip() {
 #[test]
 fn spatial_z_round_trip() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_spatial_z(-250);
     assert_eq!(view.spatial_z(), -250);
 }
@@ -97,7 +99,7 @@ fn spatial_z_round_trip() {
 #[test]
 fn detune_round_trip() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_detune(42);
     assert_eq!(view.detune(), 42);
 }
@@ -105,7 +107,7 @@ fn detune_round_trip() {
 #[test]
 fn tick_offset_round_trip() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_tick_offset(-15);
     assert_eq!(view.tick_offset(), -15);
 }
@@ -113,7 +115,7 @@ fn tick_offset_round_trip() {
 #[test]
 fn flags_round_trip() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_flags(0b11);
     assert_eq!(view.flags(), 0b11);
 }
@@ -121,7 +123,7 @@ fn flags_round_trip() {
 #[test]
 fn negative_values_preserved() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
 
     view.set_pitch(-100);
     view.set_velocity(-1);
@@ -135,7 +137,7 @@ fn negative_values_preserved() {
 #[test]
 fn extreme_values() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
 
     view.set_pitch(i32::MAX);
     assert_eq!(view.pitch(), i32::MAX);
@@ -155,14 +157,14 @@ fn extreme_values() {
 #[test]
 fn is_muted_default_false() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     assert!(!view.is_muted());
 }
 
 #[test]
 fn set_muted_then_is_muted() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_muted();
     assert!(view.is_muted());
 }
@@ -170,14 +172,14 @@ fn set_muted_then_is_muted() {
 #[test]
 fn is_solo_default_false() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     assert!(!view.is_solo());
 }
 
 #[test]
 fn set_solo_then_is_solo() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
     view.set_solo();
     assert!(view.is_solo());
 }
@@ -185,7 +187,7 @@ fn set_solo_then_is_solo() {
 #[test]
 fn muted_and_solo_independent() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
 
     view.set_muted();
     assert!(view.is_muted());
@@ -199,7 +201,7 @@ fn muted_and_solo_independent() {
 #[test]
 fn set_muted_preserves_other_flags() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
 
     view.set_flags(0b11111100); // bits 2-7 set
     view.set_muted();
@@ -210,7 +212,7 @@ fn set_muted_preserves_other_flags() {
 #[test]
 fn set_solo_preserves_other_flags() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
 
     view.set_flags(0b11111101); // bit 0 + bits 2-7
     view.set_solo();
@@ -225,8 +227,8 @@ fn set_solo_preserves_other_flags() {
 #[test]
 fn two_views_different_offsets_are_independent() {
     let sab = create_sab(256);
-    let view_a = NoteAttributesView(NodeAttributesView::new(&sab, 0));
-    let view_b = NoteAttributesView(NodeAttributesView::new(&sab, 10));
+    let view_a = NoteAttributesView(AttributesView::new(&sab, 0));
+    let view_b = NoteAttributesView(AttributesView::new(&sab, 10));
 
     view_a.set_pitch(100);
     view_b.set_pitch(200);
@@ -238,8 +240,8 @@ fn two_views_different_offsets_are_independent() {
 #[test]
 fn views_share_sab_see_each_others_writes() {
     let sab = create_sab(128);
-    let view_a = NoteAttributesView(NodeAttributesView::new(&sab, 0));
-    let view_b = NoteAttributesView(NodeAttributesView::new(&sab, 0)); // same offset
+    let view_a = NoteAttributesView(AttributesView::new(&sab, 0));
+    let view_b = NoteAttributesView(AttributesView::new(&sab, 0)); // same offset
 
     view_a.set_pitch(999);
     assert_eq!(view_b.pitch(), 999);
@@ -250,7 +252,7 @@ fn views_share_sab_see_each_others_writes() {
 #[test]
 fn overwrite_replaces_value() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
 
     view.set_pitch(100);
     assert_eq!(view.pitch(), 100);
@@ -262,7 +264,7 @@ fn overwrite_replaces_value() {
 #[test]
 fn fields_do_not_bleed_into_neighbors() {
     let sab = create_sab(128);
-    let view = NoteAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = NoteAttributesView(AttributesView::new(&sab, 0));
 
     view.set_pitch(i32::MAX);
     assert_eq!(view.velocity(), 0);

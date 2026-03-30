@@ -1,5 +1,6 @@
+use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
 use crate::into_node_attributes_array::IntoNodeAttributesArray;
-use crate::node_attributes_view::NodeAttributesView;
+use crate::node_attributes_view::AttributesView;
 
 pub struct BarrierAttributes {
     pub phase_target: i32,
@@ -15,7 +16,7 @@ impl IntoNodeAttributesArray<16> for BarrierAttributes {
     }
 }
 
-pub struct BarrierAttributesView<'a>(pub NodeAttributesView<'a>);
+pub struct BarrierAttributesView<'a>(pub AttributesView<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
 
 impl<'a> BarrierAttributesView<'a> {
     pub fn phase_target(&self) -> i32 {

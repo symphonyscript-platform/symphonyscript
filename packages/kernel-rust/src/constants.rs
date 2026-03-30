@@ -1,0 +1,2 @@
+pub const NODE_ATTRIBUTES_SLOT_SIZE: usize = 16;
+pub const SYNAPSE_ATTRIBUTES_SLOT_SIZE: usize = 16;

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::node::barrier_attributes::{BarrierAttributes, BarrierAttributesView};
-use symphonyscript_kernel::node_attributes_view::NodeAttributesView;
+use symphonyscript_kernel::attributes::barrier_attributes::{BarrierAttributes, BarrierAttributesView};
+use symphonyscript_kernel::node_attributes_view::AttributesView;
 use symphonyscript_kernel::into_node_attributes_array::IntoNodeAttributesArray;
 
 fn create_sab(size: usize) -> SAB {
@@ -28,7 +28,7 @@ fn to_array_maps_slots_correctly() {
 #[test]
 fn view_round_trip() {
     let sab = create_sab(32);
-    let view = BarrierAttributesView(NodeAttributesView::new(&sab, 0));
+    let view = BarrierAttributesView(AttributesView::new(&sab, 0));
     
     view.set_phase_target(960);
     assert_eq!(view.phase_target(), 960);

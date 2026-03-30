@@ -1,9 +1,11 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::node_attribute_plane::NodeAttributePlane;
-use symphonyscript_kernel::node_attributes_view::NodeAttributesView;
-use symphonyscript_kernel::node::note_attributes::{NoteAttributes, NoteAttributesView};
+use symphonyscript_kernel::attribute_plane::AttributePlane;
+use symphonyscript_kernel::node_attributes_view::AttributesView;
+use symphonyscript_kernel::attributes::note_attributes::{NoteAttributes, NoteAttributesView};
+
+const SLOT_SIZE: usize = 16;
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);
@@ -48,31 +50,31 @@ fn sample_data_b() -> NoteAttributes {
 #[test]
 fn new_creates_plane() {
     let sab = create_sab(1024);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, 10);
-    assert_eq!(plane.end_index(), 10 * NodeAttributesView::SLOT_SIZE);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
+    assert_eq!(plane.end_index(), 10 * SLOT_SIZE);
 }
 
 #[test]
 fn new_with_nonzero_start() {
     let sab = create_sab(1024);
-    let plane = NodeAttributePlane::<16>::new(sab, 100, 10);
-    assert_eq!(plane.end_index(), 100 + 10 * NodeAttributesView::SLOT_SIZE);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 100, 10);
+    assert_eq!(plane.end_index(), 100 + 10 * SLOT_SIZE);
 }
 
 #[test]
 #[should_panic(expected = "AttributePlane out of bounds")]
 fn new_panics_when_exceeding_sab() {
     let sab = create_sab(50);
-    let _plane = NodeAttributePlane::<16>::new(sab, 0, 100); // 100 * 10 = 1000 > 50
+    let _plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 100); // 100 * 10 = 1000 > 50
 }
 
 #[test]
 #[should_panic(expected = "AttributePlane out of bounds")]
 fn new_panics_at_exact_boundary() {
     // end_index == sab.len() should still panic (< not <=)
-    let size = 10 * NodeAttributesView::SLOT_SIZE;
+    let size = 10 * SLOT_SIZE;
     let sab = create_sab(size);
-    let _plane = NodeAttributePlane::<16>::new(sab, 0, 10);
+    let _plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
 }
 
 // ============ Set and Get Round-Trip ============
@@ -80,7 +82,7 @@ fn new_panics_at_exact_boundary() {
 #[test]
 fn set_then_get_all_fields() {
     let sab = create_sab(1024);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, 10);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
     let data = sample_data();
 
     plane.set(0, data);
@@ -101,7 +103,7 @@ fn set_then_get_all_fields() {
 #[test]
 fn set_at_different_offsets() {
     let sab = create_sab(1024);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, 10);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
 
     plane.set(0, sample_data());
     plane.set(1, sample_data_b());
@@ -122,7 +124,7 @@ fn set_at_different_offsets() {
 #[test]
 fn set_overwrites_previous() {
     let sab = create_sab(1024);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, 10);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
 
     plane.set(0, sample_data());
     assert_eq!(NoteAttributesView(plane.get(0)).pitch(), 570000);
@@ -137,7 +139,7 @@ fn set_overwrites_previous() {
 #[test]
 fn slots_are_independent() {
     let sab = create_sab(1024);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, 10);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
 
     plane.set(3, sample_data());
 
@@ -156,7 +158,7 @@ fn slots_are_independent() {
 #[test]
 fn view_write_visible_through_plane() {
     let sab = create_sab(1024);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, 10);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
 
     {
         let view = NoteAttributesView(plane.get(0));
@@ -174,7 +176,7 @@ fn view_write_visible_through_plane() {
 #[test]
 fn nonzero_start_reads_correct_sab_region() {
     let sab = create_sab(1024);
-    let plane = NodeAttributePlane::<16>::new(sab.clone(), 200, 10);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab.clone(), 200, 10);
 
     plane.set(0, sample_data());
 
@@ -186,7 +188,7 @@ fn nonzero_start_reads_correct_sab_region() {
 #[test]
 fn nonzero_start_slot_1_correct_offset() {
     let sab = create_sab(1024);
-    let plane = NodeAttributePlane::<16>::new(sab.clone(), 200, 10);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab.clone(), 200, 10);
 
     plane.set(1, sample_data());
 
@@ -200,14 +202,14 @@ fn nonzero_start_slot_1_correct_offset() {
 #[test]
 fn end_index_zero_start() {
     let sab = create_sab(1024);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, 8);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 8);
     assert_eq!(plane.end_index(), 8 * 16);
 }
 
 #[test]
 fn end_index_with_start_offset() {
     let sab = create_sab(1024);
-    let plane = NodeAttributePlane::<16>::new(sab, 50, 8);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 50, 8);
     assert_eq!(plane.end_index(), 50 + 8 * 16);
 }
 
@@ -216,7 +218,7 @@ fn end_index_with_start_offset() {
 #[test]
 fn get_last_valid_slot() {
     let sab = create_sab(1024);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, 10);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
 
     plane.set(9, sample_data());
     assert_eq!(NoteAttributesView(plane.get(9)).pitch(), 570000);
@@ -225,7 +227,7 @@ fn get_last_valid_slot() {
 #[test]
 fn set_last_valid_slot() {
     let sab = create_sab(1024);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, 10);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
 
     plane.set(9, sample_data_b());
     assert_eq!(NoteAttributesView(plane.get(9)).velocity(), 80);
@@ -236,9 +238,9 @@ fn set_last_valid_slot() {
 #[test]
 fn stress_fill_all_slots() {
     let capacity = 256;
-    let sab_size = capacity * NodeAttributesView::SLOT_SIZE + 1;
+    let sab_size = capacity * SLOT_SIZE + 1;
     let sab = create_sab(sab_size);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, capacity);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, capacity);
 
     for i in 0..capacity {
         plane.set(i, NoteAttributes {
@@ -265,9 +267,9 @@ fn stress_fill_all_slots() {
 #[test]
 fn stress_overwrite_all_slots() {
     let capacity = 128;
-    let sab_size = capacity * NodeAttributesView::SLOT_SIZE + 1;
+    let sab_size = capacity * SLOT_SIZE + 1;
     let sab = create_sab(sab_size);
-    let plane = NodeAttributePlane::<16>::new(sab, 0, capacity);
+    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, capacity);
 
     // Write pass 1
     for i in 0..capacity {
