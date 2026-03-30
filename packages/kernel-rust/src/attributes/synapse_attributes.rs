@@ -8,6 +8,7 @@ pub struct SynapseAttributes {
     pub transpose: i32,
     pub volume_scale: i32,
     pub duration_scale: i32,
+    pub tempo_scale: i32,
 }
 
 impl IntoAttributesArray<16> for SynapseAttributes {
@@ -19,6 +20,7 @@ impl IntoAttributesArray<16> for SynapseAttributes {
         data[2] = self.transpose;
         data[3] = self.volume_scale;
         data[4] = self.duration_scale;
+        data[5] = self.tempo_scale;
 
         data
     }
@@ -60,10 +62,18 @@ impl<'a> SynapseAttributesView<'a> {
     }
 
     pub fn duration_scale(&self) -> i32 {
-        self.0.read(3)
+        self.0.read(4)
     }
 
     pub fn set_duration_scale(&self, value: i32) {
         self.0.write(4, value)
+    }
+
+    pub fn tempo_scale(&self) -> i32 {
+        self.0.read(5)
+    }
+
+    pub fn set_tempo_scale(&self, value: i32) {
+        self.0.write(5, value)
     }
 }
