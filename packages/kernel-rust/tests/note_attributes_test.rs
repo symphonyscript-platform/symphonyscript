@@ -2,7 +2,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::node_attributes_view::NodeAttributesView;
-use symphonyscript_kernel::node::note_attributes::{NoteAttributesView};
+use symphonyscript_kernel::node::note_attributes::{NoteAttributes, NoteAttributesView};
+use symphonyscript_kernel::into_node_attributes_array::IntoNodeAttributesArray;
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);
@@ -269,4 +270,38 @@ fn fields_do_not_bleed_into_neighbors() {
 
     view.set_flags(u32::MAX);
     assert_eq!(view.tick_offset(), 0);
+}
+
+#[test]
+fn to_array_maps_slots_correctly() {
+    let attrs = NoteAttributes {
+        pitch: 600000,
+        velocity: 100,
+        duration: 960,
+        volume: 800,
+        spatial_x: -50,
+        spatial_y: 200,
+        spatial_z: 0,
+        detune: 15,
+        tick_offset: -5,
+        flags: 0b11,
+    };
+    
+    let array = attrs.to_array();
+    
+    // Explicit padding and assignment assertions
+    assert_eq!(array[0], 600000);
+    assert_eq!(array[1], 100);
+    assert_eq!(array[2], 960);
+    assert_eq!(array[3], 800);
+    assert_eq!(array[4], -50);
+    assert_eq!(array[5], 200);
+    assert_eq!(array[6], 0);
+    assert_eq!(array[7], 15);
+    assert_eq!(array[8], -5);
+    assert_eq!(array[9], 0b11);
+    
+    for i in 10..16 {
+        assert_eq!(array[i], 0);
+    }
 }
