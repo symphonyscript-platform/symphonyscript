@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::node_attributes_view::AttributesView;
+use symphonyscript_kernel::attributes_view::AttributesView;
 use symphonyscript_kernel::attributes::note_attributes::{NoteAttributes, NoteAttributesView};
-use symphonyscript_kernel::into_node_attributes_array::IntoNodeAttributesArray;
+use symphonyscript_kernel::into_attributes_array::IntoAttributesArray;
 
 const SLOT_SIZE: usize = 16;
 

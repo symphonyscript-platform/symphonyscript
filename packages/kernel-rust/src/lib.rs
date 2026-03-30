@@ -6,9 +6,9 @@ pub mod node_chain;
 pub mod node_allocator;
 pub mod node_chain_buffer;
 pub mod attribute_plane;
-pub mod node_attributes_view;
+pub mod attributes_view;
 pub mod node_view;
-pub mod into_node_attributes_array;
+pub mod into_attributes_array;
 pub mod attributes;
 pub mod constants;
 

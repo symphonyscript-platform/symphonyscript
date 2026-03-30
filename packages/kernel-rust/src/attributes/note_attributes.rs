@@ -1,6 +1,6 @@
 use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
-use crate::into_node_attributes_array::IntoNodeAttributesArray;
-use crate::node_attributes_view::AttributesView;
+use crate::into_attributes_array::IntoAttributesArray;
+use crate::attributes_view::AttributesView;
 
 pub struct NoteAttributes {
     pub pitch: i32,
@@ -16,7 +16,7 @@ pub struct NoteAttributes {
                     // +24 bytes reserved
 }
 
-impl IntoNodeAttributesArray<16> for NoteAttributes {
+impl IntoAttributesArray<16> for NoteAttributes {
     fn to_array(&self) -> [i32; 16] {
         let mut data = [0; 16];
 
