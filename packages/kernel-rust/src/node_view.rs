@@ -19,6 +19,13 @@ pub struct NodeView<'a> {
 
 impl<'a> NodeView<'a> {
     pub const SLOT_SIZE: usize = 8;
+    pub const OPCODE_NOTE: i32 = 0x01;
+    pub const OPCODE_REST: i32 = 0x02;
+    pub const OPCODE_BARRIER: i32 = 0x03;
+    pub const OPCODE_CONTROL: i32 = 0x04; // 0-127 - MIDI, 128 - BEND, 129 Channel Pressure (Aftertouch), 130+ - custom
+    pub const OPCODE_BOUNDARY: i32 = 0x05;
+    pub const OPCODE_SEED: i32 = 0x06;
+    pub const OPCODE_LUT: i32 = 0x07;
 
     pub fn new(sab: &'a SAB, start_index: usize) -> Self {
         let end_index = start_index + Self::SLOT_SIZE;
@@ -33,24 +40,8 @@ impl<'a> NodeView<'a> {
         start_index + (offset * NodeView::SLOT_SIZE)
     }
 
-    pub fn is_muted(&self) -> bool {
-        self.flags() & (1 << 0) != 0
-    }
-
-    pub fn set_muted(&self) {
-        self.set_flags(self.flags() | (1 << 0))
-    }
-
-    pub fn is_solo(&self) -> bool {
-        self.flags() & (1 << 1) != 0
-    }
-
-    pub fn set_solo(&self) {
-        self.set_flags(self.flags() | (1 << 1))
-    }
-
-    pub fn pitch(&self) -> i32 {
-        self.read(0)
+    pub fn get_opcode(&self) -> i32 {
+        self.read(0) >> 24
     }
 
     pub fn set_pitch(&self, value: i32) {

@@ -1,14 +1,16 @@
-use crate::node_attributes::{NodeAttributesData, NodeAttributesView};
+use std::sync::atomic::Ordering;
+use crate::into_node_attributes_array::IntoNodeAttributesArray;
+use crate::node_attributes_view::NodeAttributesView;
 use crate::primitives::types::SAB;
 
-pub struct NodeAttributePlane {
+pub struct NodeAttributePlane<const SLOT_SIZE: usize> {
     sab: SAB,
     start_index: usize,
     end_index: usize,
     capacity: usize,
 }
 
-impl NodeAttributePlane {
+impl<const SLOT_SIZE: usize> NodeAttributePlane<SLOT_SIZE> {
     pub fn new(sab: SAB, start_index: usize, capacity: usize) -> Self {
         let end_index = start_index + capacity * NodeAttributesView::SLOT_SIZE;
 
@@ -22,35 +24,31 @@ impl NodeAttributePlane {
         }
     }
 
+    pub fn resolve_sab_index(&self, offset: usize) -> usize {
+        self.start_index + (offset * SLOT_SIZE)
+    }
+
     pub fn end_index(&self) -> usize {
         self.end_index
     }
 
-    pub fn get(&self, offset: usize) -> NodeAttributesView<'_> {
+    pub fn get(&'_ self, offset: usize) -> NodeAttributesView<'_> {
         debug_assert!(offset < self.capacity, "offset out of bounds");
 
         NodeAttributesView {
             sab: &self.sab,
-            start_index: NodeAttributesView::resolve_sab_index(self.start_index, offset),
+            start_index: self.resolve_sab_index(offset),
         }
     }
 
-    pub fn set(&self, offset: usize, data: NodeAttributesData) {
+    pub fn set<T: IntoNodeAttributesArray<SLOT_SIZE>>(&self, offset: usize, data: T) {
         debug_assert!(offset < self.capacity, "offset out of bounds");
 
-        let view = NodeAttributesView {
-            sab: &self.sab,
-            start_index: NodeAttributesView::resolve_sab_index(self.start_index, offset),
-        };
-        view.set_pitch(data.pitch);
-        view.set_velocity(data.velocity);
-        view.set_duration(data.duration);
-        view.set_volume(data.volume);
-        view.set_spatial_x(data.spatial_x);
-        view.set_spatial_y(data.spatial_y);
-        view.set_spatial_z(data.spatial_z);
-        view.set_detune(data.detune);
-        view.set_tick_offset(data.tick_offset);
-        view.set_flags(data.flags);
+        let data = data.to_array();
+        let base = self.resolve_sab_index(offset);
+
+        for i in 0..SLOT_SIZE {
+            self.sab[base + i].store(data[i], Ordering::Relaxed);
+        }
     }
 }

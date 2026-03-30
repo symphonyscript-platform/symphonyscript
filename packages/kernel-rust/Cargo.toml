@@ -29,5 +29,9 @@ name = "triple_buffer_bench"
 harness = false
 
 [[bench]]
-name = "attribute_plane_bench"
+name = "node_attribute_plane_bench"
+harness = false
+
+[[bench]]
+name = "synapse_attribute_plane_bench"
 harness = false

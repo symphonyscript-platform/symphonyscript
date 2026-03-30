@@ -1,7 +1,7 @@
-use crate::primitives::types::SAB;
-use std::sync::atomic::Ordering;
+use crate::into_node_attributes_array::IntoNodeAttributesArray;
+use crate::node_attributes_view::NodeAttributesView;
 
-pub struct NodeAttributesData {
+pub struct NoteAttributesData {
     pub pitch: i32,
     pub velocity: i32,
     pub duration: i32,
@@ -12,30 +12,31 @@ pub struct NodeAttributesData {
     pub detune: i32,
     pub tick_offset: i32,
     pub flags: u32, // bit 0: muted | bit 1: solo | bits 2-31: reserved
-    // +24 bytes reserved
+                    // +24 bytes reserved
 }
 
-pub struct NodeAttributesView<'a> {
-    pub(crate) sab: &'a SAB,
-    pub(crate) start_index: usize,
+impl IntoNodeAttributesArray<16> for NoteAttributesData {
+    fn to_array(&self) -> [i32; 16] {
+        let mut data = [0; 16];
+
+        data[0] = self.pitch;
+        data[1] = self.velocity;
+        data[2] = self.duration;
+        data[3] = self.volume;
+        data[4] = self.spatial_x;
+        data[5] = self.spatial_y;
+        data[6] = self.spatial_z;
+        data[7] = self.detune;
+        data[8] = self.tick_offset;
+        data[9] = self.flags as i32;
+
+        data
+    }
 }
 
-impl<'a> NodeAttributesView<'a> {
-    pub const SLOT_SIZE: usize = 16;
+pub struct NoteAttributesView<'a>(NodeAttributesView<'a>);
 
-    pub fn new(sab: &'a SAB, start_index: usize) -> Self {
-        let end_index = start_index + Self::SLOT_SIZE;
-        debug_assert!(end_index < sab.len(), "NodeAttributesView out of bounds");
-        NodeAttributesView {
-            sab: &sab,
-            start_index,
-        }
-    }
-
-    pub fn resolve_sab_index(start_index: usize, offset: usize) -> usize {
-        start_index + (offset * NodeAttributesView::SLOT_SIZE)
-    }
-
+impl<'a> NoteAttributesView<'a> {
     pub fn is_muted(&self) -> bool {
         self.flags() & (1 << 0) != 0
     }
@@ -132,11 +133,11 @@ impl<'a> NodeAttributesView<'a> {
         self.write(9, value as i32)
     }
 
-    fn read(&self, index: usize) -> i32 {
-        self.sab[self.start_index + index].load(Ordering::Relaxed)
+    fn read(&self, offset: usize) -> i32 {
+        self.0.read(offset)
     }
 
-    fn write(&self, index: usize, value: i32) {
-        self.sab[self.start_index + index].store(value, Ordering::Relaxed)
+    fn write(&self, offset: usize, value: i32) {
+        self.0.write(offset, value)
     }
 }
