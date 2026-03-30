@@ -252,6 +252,74 @@ With `Amount = -1000`: delta = 0 (pass) or -1000 (fail). GATE modulators default
 
 ## 6. Memory Layout
 
+### 6.0 64-Byte Node (Structural Plane)
+
+`NODE_SIZE_I32 = 16`, `NODE_SIZE_BYTES = 64` — exactly one CPU cache line (x86 and ARM). Eliminates false sharing. Stride: `<< 4`.
+
+The structural plane is triple-buffered (main thread writes, audio thread reads a frozen snapshot). The audio thread traverses a pre-linearized chain — no revisit detection needed.
+
+```rust
+/// Structural node layout — triple-buffered plane.
+/// 16 × i32 = 64 bytes per node. Capacity: 4096 nodes.
+pub struct NodeView {
+    sab: SAB,
+    start_index: usize,
+}
+
+impl NodeView {
+    // Slot 0: OPCODE — node type (note, rest, boundary, seed, etc.)
+    pub fn opcode(&self) -> u8 { (self.read(0) >> 24) as u8 }
+    pub fn set_opcode(&self, v: u8) { self.write(0, (v as i32) << 24) }
+
+    // Slot 1: BASE_TICK — grid-aligned timing
+    pub fn base_tick(&self) -> i32 { self.read(1) }
+    pub fn set_base_tick(&self, v: i32) { self.write(1, v) }
+
+    // Slot 2: DURATION — in ticks
+    pub fn duration(&self) -> i32 { self.read(2) }
+    pub fn set_duration(&self, v: i32) { self.write(2, v) }
+
+    // Slot 3: NEXT_PTR — byte offset to next node in timeline chain (0 = end)
+    pub fn next_ptr(&self) -> u32 { self.read(3) as u32 }
+    pub fn set_next_ptr(&self, v: u32) { self.write(3, v as i32) }
+
+    // Slot 4: PREV_PTR — byte offset to prev node (0 = head)
+    pub fn prev_ptr(&self) -> u32 { self.read(4) as u32 }
+    pub fn set_prev_ptr(&self, v: u32) { self.write(4, v as i32) }
+
+    // Slot 5: MOD_LIST_HEAD — head ptr to modulation chain (NULL_PTR = none)
+    pub fn mod_list_head(&self) -> u32 { self.read(5) as u32 }
+    pub fn set_mod_list_head(&self, v: u32) { self.write(5, v as i32) }
+
+    // Slot 6: SYNAPSE_LIST_HEAD — head ptr to outgoing synapse chain (NULL_PTR = none)
+    pub fn synapse_list_head(&self) -> u32 { self.read(6) as u32 }
+    pub fn set_synapse_list_head(&self, v: u32) { self.write(6, v as i32) }
+
+    // Slot 7: REVERSE_SYNAPSE_HEAD — head ptr to incoming synapse chain (NULL_PTR = none)
+    pub fn reverse_synapse_head(&self) -> u32 { self.read(7) as u32 }
+    pub fn set_reverse_synapse_head(&self, v: u32) { self.write(7, v as i32) }
+
+    // Slots 8-15: reserved
+
+    fn read(&self, offset: usize) -> i32 {
+        self.sab[self.start_index + offset].load(Ordering::Relaxed)
+    }
+    fn write(&self, offset: usize, v: i32) {
+        self.sab[self.start_index + offset].store(v, Ordering::Relaxed)
+    }
+}
+```
+
+**Design notes:**
+
+- `PACKED_A` (RFC-050) is now just `OPCODE`. Pitch, velocity, flags moved to the attribute plane (§6.7).
+- `SOURCE_ID` removed — identity table handles TID→offset mapping externally.
+- `SEQ_FLAGS` removed — sequencer state managed through traversal context, not per-node storage.
+- `LAST_PASS_ID` removed — triple buffer provides a frozen, pre-linearized snapshot. Revisit is impossible by construction.
+- `SYNAPSE_LIST_HEAD` added — direct O(1) access to outgoing synapse chain (replaces hash probe lookup).
+- `REVERSE_SYNAPSE_HEAD` added — head of incoming synapse chain for bidirectional graph traversal.
+- Memory: 4096 nodes × 64B = 256 KB (vs. 128 KB at 32B). Negligible vs Synapse Table (640 KB).
+
 ### 6.1 SAB View Types
 
 All kernel data lives in the SAB (`Arc<[AtomicI32]>`). Views are zero-cost typed wrappers — they hold `(sab, start_index)` and provide domain-specific accessors. No values are stored in the view itself.
