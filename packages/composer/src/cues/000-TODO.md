@@ -604,3 +604,31 @@ Fire noteOn/noteOff
 It doesn't know what "ghost" is. It doesn't know what "staccato" is. It doesn't know what "accent" is. It receives integers that are the result of those decisions, made by the DSL layer at composition time.
 
 That's the "functions are data" principle applied to expressions too — the meaning lives in the DSL, the kernel only sees values.
+
+
+____
+
+We're not missing anything. RFC-070 already expresses exactly what the agent was struggling to say:
+
+typescript
+// The LFO is a Param, not a clip
+const Vibrato = Param.create(PARAM.Vibrato)
+.lfo('sine', 4.0)
+.bipolar(true);
+// The "patch cable" is a Modulator, not a synapse
+const myMelody = Clip.pipe(
+note('C4'),
+note('E4'),
+note('G4').mod(Vibrato).amount(50),
+note('C5').mod(Vibrato).amount(50),
+);
+That's the agent's exact use case — "wobble the pitch with a sine wave" — expressed through the correct abstractions. The agent was reaching for the right idea but grabbing the wrong tools (clips and synapses) because they didn't know the Parameter/Modulator system existed.
+
+The mapping is:
+
+Agent's concept	RFC-070 equivalent
+"LFO Clip"	Param.create().lfo('sine', 4.0)
+"Modulation Synapse"	Modulator.pitch(Vibrato).amount(50)
+"Patch cable"	.mod(Vibrato) on the note
+No missing pieces.
+
