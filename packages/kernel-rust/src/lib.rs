@@ -14,6 +14,8 @@ pub mod constants;
 pub mod writer_structural_plane;
 pub mod slot_writer;
 pub mod slot_write_view;
+pub mod slot_reader;
+pub mod slot_readonly_view;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
