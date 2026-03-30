@@ -36,8 +36,7 @@ impl<'a> NodeAttributesView<'a> {
     }
 
     pub fn is_muted(&self) -> bool {
-        let flags = self.flags();
-        flags & (1 << 0) != 0
+        self.flags() & (1 << 0) != 0
     }
 
     pub fn set_muted(&self) {
@@ -45,8 +44,7 @@ impl<'a> NodeAttributesView<'a> {
     }
 
     pub fn is_solo(&self) -> bool {
-        let flags = self.flags();
-        flags & (1 << 1) != 0
+        self.flags() & (1 << 1) != 0
     }
 
     pub fn set_solo(&self) {
