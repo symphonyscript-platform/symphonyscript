@@ -1,0 +1,316 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicI32, Ordering};
+use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::attribute_plane::AttributePlane;
+use symphonyscript_kernel::node_attributes::{NodeAttributesData, NodeAttributesView};
+
+fn create_sab(size: usize) -> SAB {
+    let mut vec = Vec::with_capacity(size);
+    for _ in 0..size {
+        vec.push(AtomicI32::new(0));
+    }
+    Arc::new(vec)
+}
+
+fn sample_data() -> NodeAttributesData {
+    NodeAttributesData {
+        pitch: 570000,
+        velocity: 100,
+        duration: 480,
+        volume: 800,
+        spatial_x: -500,
+        spatial_y: 200,
+        spatial_z: 0,
+        detune: 50,
+        tick_offset: -10,
+        flags: 0,
+    }
+}
+
+fn sample_data_b() -> NodeAttributesData {
+    NodeAttributesData {
+        pitch: 440000,
+        velocity: 80,
+        duration: 240,
+        volume: 600,
+        spatial_x: 300,
+        spatial_y: -100,
+        spatial_z: 50,
+        detune: -20,
+        tick_offset: 5,
+        flags: 0b11,
+    }
+}
+
+// ============ Construction ============
+
+#[test]
+fn new_creates_plane() {
+    let sab = create_sab(1024);
+    let plane = AttributePlane::new(sab, 0, 10);
+    assert_eq!(plane.end_index(), 10 * NodeAttributesView::SLOT_SIZE);
+}
+
+#[test]
+fn new_with_nonzero_start() {
+    let sab = create_sab(1024);
+    let plane = AttributePlane::new(sab, 100, 10);
+    assert_eq!(plane.end_index(), 100 + 10 * NodeAttributesView::SLOT_SIZE);
+}
+
+#[test]
+#[should_panic(expected = "AttributePlane out of bounds")]
+fn new_panics_when_exceeding_sab() {
+    let sab = create_sab(50);
+    let _plane = AttributePlane::new(sab, 0, 100); // 100 * 10 = 1000 > 50
+}
+
+#[test]
+#[should_panic(expected = "AttributePlane out of bounds")]
+fn new_panics_at_exact_boundary() {
+    // end_index == sab.len() should still panic (< not <=)
+    let size = 10 * NodeAttributesView::SLOT_SIZE;
+    let sab = create_sab(size);
+    let _plane = AttributePlane::new(sab, 0, 10);
+}
+
+// ============ Set and Get Round-Trip ============
+
+#[test]
+fn set_then_get_all_fields() {
+    let sab = create_sab(1024);
+    let plane = AttributePlane::new(sab, 0, 10);
+    let data = sample_data();
+
+    plane.set(0, data);
+    let view = plane.get(0);
+
+    assert_eq!(view.pitch(), 570000);
+    assert_eq!(view.velocity(), 100);
+    assert_eq!(view.duration(), 480);
+    assert_eq!(view.volume(), 800);
+    assert_eq!(view.spatial_x(), -500);
+    assert_eq!(view.spatial_y(), 200);
+    assert_eq!(view.spatial_z(), 0);
+    assert_eq!(view.detune(), 50);
+    assert_eq!(view.tick_offset(), -10);
+    assert_eq!(view.flags(), 0);
+}
+
+#[test]
+fn set_at_different_offsets() {
+    let sab = create_sab(1024);
+    let plane = AttributePlane::new(sab, 0, 10);
+
+    plane.set(0, sample_data());
+    plane.set(1, sample_data_b());
+
+    let view_a = plane.get(0);
+    let view_b = plane.get(1);
+
+    assert_eq!(view_a.pitch(), 570000);
+    assert_eq!(view_b.pitch(), 440000);
+
+    assert_eq!(view_a.velocity(), 100);
+    assert_eq!(view_b.velocity(), 80);
+
+    assert_eq!(view_a.flags(), 0);
+    assert_eq!(view_b.flags(), 0b11);
+}
+
+#[test]
+fn set_overwrites_previous() {
+    let sab = create_sab(1024);
+    let plane = AttributePlane::new(sab, 0, 10);
+
+    plane.set(0, sample_data());
+    assert_eq!(plane.get(0).pitch(), 570000);
+
+    plane.set(0, sample_data_b());
+    assert_eq!(plane.get(0).pitch(), 440000);
+    assert_eq!(plane.get(0).velocity(), 80);
+}
+
+// ============ Slot Isolation ============
+
+#[test]
+fn slots_are_independent() {
+    let sab = create_sab(1024);
+    let plane = AttributePlane::new(sab, 0, 10);
+
+    plane.set(3, sample_data());
+
+    // Neighbor slots should be untouched
+    let view_2 = plane.get(2);
+    let view_4 = plane.get(4);
+
+    assert_eq!(view_2.pitch(), 0);
+    assert_eq!(view_2.velocity(), 0);
+    assert_eq!(view_4.pitch(), 0);
+    assert_eq!(view_4.velocity(), 0);
+}
+
+// ============ View Writes Through to Plane ============
+
+#[test]
+fn view_write_visible_through_plane() {
+    let sab = create_sab(1024);
+    let plane = AttributePlane::new(sab, 0, 10);
+
+    {
+        let view = plane.get(0);
+        view.set_pitch(999);
+        view.set_velocity(42);
+    }
+
+    let view2 = plane.get(0);
+    assert_eq!(view2.pitch(), 999);
+    assert_eq!(view2.velocity(), 42);
+}
+
+// ============ Nonzero Start Index ============
+
+#[test]
+fn nonzero_start_reads_correct_sab_region() {
+    let sab = create_sab(1024);
+    let plane = AttributePlane::new(sab.clone(), 200, 10);
+
+    plane.set(0, sample_data());
+
+    // Verify the SAB was written at the correct offset
+    let raw_pitch = sab[200].load(Ordering::Relaxed);
+    assert_eq!(raw_pitch, 570000);
+}
+
+#[test]
+fn nonzero_start_slot_1_correct_offset() {
+    let sab = create_sab(1024);
+    let plane = AttributePlane::new(sab.clone(), 200, 10);
+
+    plane.set(1, sample_data());
+
+    // Slot 1 starts at 200 + 10 = 210
+    let raw_pitch = sab[210].load(Ordering::Relaxed);
+    assert_eq!(raw_pitch, 570000);
+}
+
+// ============ End Index ============
+
+#[test]
+fn end_index_zero_start() {
+    let sab = create_sab(1024);
+    let plane = AttributePlane::new(sab, 0, 8);
+    assert_eq!(plane.end_index(), 8 * 10);
+}
+
+#[test]
+fn end_index_with_start_offset() {
+    let sab = create_sab(1024);
+    let plane = AttributePlane::new(sab, 50, 8);
+    assert_eq!(plane.end_index(), 50 + 8 * 10);
+}
+
+// ============ Capacity Boundary ============
+
+#[test]
+fn get_last_valid_slot() {
+    let sab = create_sab(1024);
+    let plane = AttributePlane::new(sab, 0, 10);
+
+    plane.set(9, sample_data());
+    assert_eq!(plane.get(9).pitch(), 570000);
+}
+
+#[test]
+fn set_last_valid_slot() {
+    let sab = create_sab(1024);
+    let plane = AttributePlane::new(sab, 0, 10);
+
+    plane.set(9, sample_data_b());
+    assert_eq!(plane.get(9).velocity(), 80);
+}
+
+// ============ Stress ============
+
+#[test]
+fn stress_fill_all_slots() {
+    let capacity = 256;
+    let sab_size = capacity * NodeAttributesView::SLOT_SIZE + 1;
+    let sab = create_sab(sab_size);
+    let plane = AttributePlane::new(sab, 0, capacity);
+
+    for i in 0..capacity {
+        plane.set(i, NodeAttributesData {
+            pitch: i as i32 * 1000,
+            velocity: i as i32,
+            duration: 480,
+            volume: 800,
+            spatial_x: 0,
+            spatial_y: 0,
+            spatial_z: 0,
+            detune: 0,
+            tick_offset: 0,
+            flags: 0,
+        });
+    }
+
+    for i in 0..capacity {
+        let view = plane.get(i);
+        assert_eq!(view.pitch(), i as i32 * 1000);
+        assert_eq!(view.velocity(), i as i32);
+    }
+}
+
+#[test]
+fn stress_overwrite_all_slots() {
+    let capacity = 128;
+    let sab_size = capacity * NodeAttributesView::SLOT_SIZE + 1;
+    let sab = create_sab(sab_size);
+    let plane = AttributePlane::new(sab, 0, capacity);
+
+    // Write pass 1
+    for i in 0..capacity {
+        plane.set(i, NodeAttributesData {
+            pitch: 100,
+            velocity: 100,
+            duration: 100,
+            volume: 100,
+            spatial_x: 100,
+            spatial_y: 100,
+            spatial_z: 100,
+            detune: 100,
+            tick_offset: 100,
+            flags: 100,
+        });
+    }
+
+    // Write pass 2 (overwrite)
+    for i in 0..capacity {
+        plane.set(i, NodeAttributesData {
+            pitch: i as i32,
+            velocity: i as i32 + 1,
+            duration: i as i32 + 2,
+            volume: i as i32 + 3,
+            spatial_x: i as i32 + 4,
+            spatial_y: i as i32 + 5,
+            spatial_z: i as i32 + 6,
+            detune: i as i32 + 7,
+            tick_offset: i as i32 + 8,
+            flags: i as u32 + 9,
+        });
+    }
+
+    for i in 0..capacity {
+        let v = plane.get(i);
+        assert_eq!(v.pitch(), i as i32);
+        assert_eq!(v.velocity(), i as i32 + 1);
+        assert_eq!(v.duration(), i as i32 + 2);
+        assert_eq!(v.volume(), i as i32 + 3);
+        assert_eq!(v.spatial_x(), i as i32 + 4);
+        assert_eq!(v.spatial_y(), i as i32 + 5);
+        assert_eq!(v.spatial_z(), i as i32 + 6);
+        assert_eq!(v.detune(), i as i32 + 7);
+        assert_eq!(v.tick_offset(), i as i32 + 8);
+        assert_eq!(v.flags(), i as u32 + 9);
+    }
+}

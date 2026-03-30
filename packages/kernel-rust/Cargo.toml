@@ -27,3 +27,7 @@ harness = false
 [[bench]]
 name = "triple_buffer_bench"
 harness = false
+
+[[bench]]
+name = "attribute_plane_bench"
+harness = false
