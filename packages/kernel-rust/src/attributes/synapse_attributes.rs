@@ -2,26 +2,31 @@ use crate::constants::SYNAPSE_ATTRIBUTES_SLOT_SIZE;
 use crate::into_attributes_array::IntoAttributesArray;
 use crate::attributes_view::AttributesView;
 
-pub struct SeedAttributes {
+pub struct SynapseAttributes {
     pub weight: i32,
     pub tick_offset: i32,
     pub transpose: i32,
     pub volume_scale: i32,
+    pub duration_scale: i32,
 }
 
-impl IntoAttributesArray<16> for SeedAttributes {
+impl IntoAttributesArray<16> for SynapseAttributes {
     fn to_array(&self) -> [i32; 16] {
         let mut data = [0; 16];
 
-        data[0] = self.seed_value;
+        data[0] = self.weight;
+        data[1] = self.tick_offset;
+        data[2] = self.transpose;
+        data[3] = self.volume_scale;
+        data[4] = self.duration_scale;
 
         data
     }
 }
 
-pub struct SeedAttributesView<'a>(pub AttributesView<'a, SYNAPSE_ATTRIBUTES_SLOT_SIZE>);
+pub struct SynapseAttributesView<'a>(pub AttributesView<'a, SYNAPSE_ATTRIBUTES_SLOT_SIZE>);
 
-impl<'a> SeedAttributesView<'a> {
+impl<'a> SynapseAttributesView<'a> {
     pub fn weight(&self) -> i32 {
         self.0.read(0)
     }
@@ -52,5 +57,13 @@ impl<'a> SeedAttributesView<'a> {
 
     pub fn set_volume_scale(&self, value: i32) {
         self.0.write(3, value)
+    }
+
+    pub fn duration_scale(&self) -> i32 {
+        self.0.read(3)
+    }
+
+    pub fn set_duration_scale(&self, value: i32) {
+        self.0.write(4, value)
     }
 }
