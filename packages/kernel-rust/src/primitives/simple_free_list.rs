@@ -33,6 +33,8 @@ impl SimpleFreeList {
         let slots_start_index = bitmap_slot_end_index;
         let slots_end_index = slots_start_index + (capacity as usize);
 
+        assert!(slots_end_index < sab.len(), "SimpleFreeList out of bounds");
+
         if !bind {
             for i in 0..capacity {
                 sab[slots_start_index + (i as usize)].store(i + 1, Ordering::Relaxed);

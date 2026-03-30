@@ -25,6 +25,9 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
     }
 
     fn create(sab: SAB, start_index: usize, capacity: i32, bind: bool) -> Self {
+        let end_index = start_index + 3 + (capacity as usize) * SLOT_SIZE;
+
+        assert!(end_index < sab.len(), "RingBuffer out of bounds");
         debug_assert!(capacity > 0, "capacity cannot be negative");
         debug_assert_eq!(capacity & (capacity - 1), 0, "capacity must be power of 2");
 
@@ -46,7 +49,7 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
             read_slot_index,
             write_slot_index,
             pending_slot_index,
-            end_index: start_index + 3 + (capacity as usize) * SLOT_SIZE,
+            end_index,
         }
     }
 
