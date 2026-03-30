@@ -32,6 +32,3 @@ harness = false
 name = "node_attribute_plane_bench"
 harness = false
 
-[[bench]]
-name = "synapse_attribute_plane_bench"
-harness = false

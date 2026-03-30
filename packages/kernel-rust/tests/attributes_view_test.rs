@@ -14,9 +14,8 @@ fn create_sab(size: usize) -> SAB {
 #[test]
 fn new_creates_view_at_start_index() {
     let sab = create_sab(128);
-    let view = AttributesView::new(&sab, 0);
+    let view: AttributesView<'_, 16> = AttributesView::new(&sab, 0);
     
-    // Ensure zeroes
     for i in 0..16 {
         assert_eq!(view.read(i), 0);
     }
@@ -25,7 +24,7 @@ fn new_creates_view_at_start_index() {
 #[test]
 fn raw_read_write_round_trip() {
     let sab = create_sab(128);
-    let view = AttributesView::new(&sab, 10); // Offset it slightly
+    let view: AttributesView<'_, 16> = AttributesView::new(&sab, 10);
     
     view.write(0, 500);
     view.write(15, -42);
@@ -37,7 +36,7 @@ fn raw_read_write_round_trip() {
 #[test]
 fn fields_do_not_bleed() {
     let sab = create_sab(128);
-    let view = AttributesView::new(&sab, 0);
+    let view: AttributesView<'_, 16> = AttributesView::new(&sab, 0);
     
     view.write(0, i32::MAX);
     assert_eq!(view.read(1), 0);
@@ -49,8 +48,8 @@ fn fields_do_not_bleed() {
 #[test]
 fn two_views_different_offsets_are_independent() {
     let sab = create_sab(128);
-    let view_a = AttributesView::new(&sab, 0);
-    let view_b = AttributesView::new(&sab, 16);
+    let view_a: AttributesView<'_, 16> = AttributesView::new(&sab, 0);
+    let view_b: AttributesView<'_, 16> = AttributesView::new(&sab, 16);
     
     view_a.write(0, 100);
     view_b.write(0, 200);
@@ -62,23 +61,36 @@ fn two_views_different_offsets_are_independent() {
 #[test]
 fn two_views_share_sab_see_writes() {
     let sab = create_sab(128);
-    let view_a = AttributesView::new(&sab, 10);
-    let view_b = AttributesView::new(&sab, 10);
+    let view_a: AttributesView<'_, 16> = AttributesView::new(&sab, 10);
+    let view_b: AttributesView<'_, 16> = AttributesView::new(&sab, 10);
     
     view_a.write(5, 999);
     assert_eq!(view_b.read(5), 999);
 }
 
 #[test]
+fn works_with_different_slot_sizes() {
+    let sab = create_sab(128);
+    let view_8: AttributesView<'_, 8> = AttributesView::new(&sab, 0);
+    let view_16: AttributesView<'_, 16> = AttributesView::new(&sab, 64);
+    
+    view_8.write(0, 111);
+    view_16.write(0, 222);
+    
+    assert_eq!(view_8.read(0), 111);
+    assert_eq!(view_16.read(0), 222);
+}
+
+#[test]
 #[should_panic(expected = "NodeAttributesView out of bounds")]
 fn new_panics_if_out_of_bounds() {
-    let sab = create_sab(10); // Too small for SLOT_SIZE (16)
-    let _view = AttributesView::new(&sab, 0);
+    let sab = create_sab(10);
+    let _view: AttributesView<'_, 16> = AttributesView::new(&sab, 0);
 }
 
 #[test]
 #[should_panic(expected = "NodeAttributesView out of bounds")]
 fn new_panics_if_start_index_crosses_bounds() {
     let sab = create_sab(32);
-    let _view = AttributesView::new(&sab, 20); // 20 + 16 = 36 > 32
+    let _view: AttributesView<'_, 16> = AttributesView::new(&sab, 20);
 }
