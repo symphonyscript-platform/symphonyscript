@@ -12,7 +12,7 @@ impl NodeAttributePlane {
     pub fn new(sab: SAB, start_index: usize, capacity: usize) -> Self {
         let end_index = start_index + capacity * NodeAttributesView::SLOT_SIZE;
 
-        assert!(end_index < sab.len(), "AttributePlane out of bounds");
+        assert!(end_index < sab.len(), "NodeAttributePlane out of bounds");
 
         NodeAttributePlane {
             sab,
