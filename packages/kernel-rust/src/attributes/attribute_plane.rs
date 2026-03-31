@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering;
-use crate::into_array::IntoArray;
-use crate::attributes_view::AttributesView;
+use crate::primitives::into_array::IntoArray;
+use crate::attributes::attributes_view::AttributesView;
 use crate::primitives::types::SAB;
 
 pub struct AttributePlane<const SLOT_SIZE: usize> {

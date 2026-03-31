@@ -5,4 +5,6 @@ pub mod lut_attributes;pub mod note_attributes;
 pub mod rest_attributes;
 pub mod seed_attributes;
 pub mod synapse_attributes;
+pub mod attribute_plane;
+pub mod attributes_view;
 

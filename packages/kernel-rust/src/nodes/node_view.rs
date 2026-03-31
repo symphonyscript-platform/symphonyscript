@@ -1,6 +1,6 @@
 use crate::primitives::types::SAB;
 use std::sync::atomic::Ordering;
-use crate::into_array::IntoArray;
+use crate::primitives::into_array::IntoArray;
 
 pub struct NodeData {
     pub opcode: i32,

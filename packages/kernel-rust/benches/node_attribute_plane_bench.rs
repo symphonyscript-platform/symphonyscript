@@ -2,8 +2,8 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion, Benchmark
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::attribute_plane::AttributePlane;
-use symphonyscript_kernel::attributes_view::AttributesView;
+use symphonyscript_kernel::attributes::attribute_plane::AttributePlane;
+use symphonyscript_kernel::attributes::attributes_view::AttributesView;
 use symphonyscript_kernel::attributes::note_attributes::{NoteAttributes, NoteAttributesView};
 
 fn create_sab(size: usize) -> SAB {

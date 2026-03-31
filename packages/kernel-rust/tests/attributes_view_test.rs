@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::attributes_view::AttributesView;
+use symphonyscript_kernel::attributes::attributes_view::AttributesView;
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);

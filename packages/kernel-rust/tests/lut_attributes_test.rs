@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::attributes::lut_attributes::{LutAttributes, LutAttributesView};
-use symphonyscript_kernel::attributes_view::AttributesView;
-use symphonyscript_kernel::into_array::IntoArray;
+use symphonyscript_kernel::attributes::attributes_view::AttributesView;
+use symphonyscript_kernel::primitives::into_array::IntoArray;
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);

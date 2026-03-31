@@ -1,6 +1,6 @@
 use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
-use crate::into_array::IntoArray;
-use crate::attributes_view::AttributesView;
+use crate::primitives::into_array::IntoArray;
+use crate::attributes::attributes_view::AttributesView;
 
 pub struct ControlAttributes {
     pub control_id: i32,

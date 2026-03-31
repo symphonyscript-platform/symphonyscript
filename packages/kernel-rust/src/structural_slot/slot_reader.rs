@@ -1,6 +1,5 @@
-use crate::primitives::simple_free_list::SimpleFreeList;
 use crate::primitives::triple_buffer::TripleBufferReader;
-use crate::slot_readonly_view::SlotReadonlyView;
+use crate::structural_slot::slot_readonly_view::SlotReadonlyView;
 
 pub struct SlotReader<'a, const SLOT_SIZE: usize> {
     reader: &'a TripleBufferReader,
@@ -10,11 +9,7 @@ pub struct SlotReader<'a, const SLOT_SIZE: usize> {
 }
 
 impl<'a, const SLOT_SIZE: usize> SlotReader<'a, SLOT_SIZE> {
-    pub fn new(
-        reader: &'a TripleBufferReader,
-        start_offset: usize,
-        capacity: i32,
-    ) -> Self {
+    pub fn new(reader: &'a TripleBufferReader, start_offset: usize, capacity: i32) -> Self {
         let end_offset = start_offset + (capacity as usize) * SLOT_SIZE;
 
         debug_assert!(
