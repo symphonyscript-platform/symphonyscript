@@ -1,14 +1,14 @@
 use crate::primitives::triple_buffer::TripleBufferReader;
-use crate::structural_slot::slot_readonly_view::SlotReadonlyView;
+use crate::structural_plane::slot_view::SlotView;
 
-pub struct SlotReader<'a, const SLOT_SIZE: usize> {
+pub struct StructuralReader<'a, const SLOT_SIZE: usize> {
     reader: &'a TripleBufferReader,
     start_offset: usize,
     end_offset: usize,
     capacity: i32,
 }
 
-impl<'a, const SLOT_SIZE: usize> SlotReader<'a, SLOT_SIZE> {
+impl<'a, const SLOT_SIZE: usize> StructuralReader<'a, SLOT_SIZE> {
     pub fn new(reader: &'a TripleBufferReader, start_offset: usize, capacity: i32) -> Self {
         let end_offset = start_offset + (capacity as usize) * SLOT_SIZE;
 
@@ -19,7 +19,7 @@ impl<'a, const SLOT_SIZE: usize> SlotReader<'a, SLOT_SIZE> {
             reader.buffer_capacity(),
         );
 
-        SlotReader {
+        StructuralReader {
             reader,
             start_offset,
             end_offset,
@@ -39,10 +39,10 @@ impl<'a, const SLOT_SIZE: usize> SlotReader<'a, SLOT_SIZE> {
         self.capacity
     }
 
-    pub fn get(&'_ self, slot: usize) -> SlotReadonlyView<'_, SLOT_SIZE> {
+    pub fn get(&'_ self, slot: usize) -> SlotView<'_, SLOT_SIZE> {
         let start_offset = self.resolve_reader_offset(slot);
 
-        SlotReadonlyView {
+        SlotView {
             reader: &self.reader,
             start_offset,
         }

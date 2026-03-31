@@ -5,8 +5,7 @@ pub mod errors;
 pub mod attributes;
 pub mod constants;
 pub mod writer_structural_plane;
-pub mod nodes;
-pub mod structural_slot;
+pub mod structural_plane;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
