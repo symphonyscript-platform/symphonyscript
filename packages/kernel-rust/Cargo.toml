@@ -32,3 +32,10 @@ harness = false
 name = "node_attribute_plane_bench"
 harness = false
 
+[[bench]]
+name = "slot_writer_bench"
+harness = false
+
+[[bench]]
+name = "slot_reader_bench"
+harness = false
