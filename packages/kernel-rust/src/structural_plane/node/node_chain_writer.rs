@@ -7,30 +7,30 @@ use crate::structural_plane::structural_writer::StructuralWriter;
 pub struct NodeChainWriter<'a> {
     buffer: &'a TripleBufferWriter,
     writer: &'a StructuralWriter<'a, NODE_SLOT_SIZE>,
-    head_ptr: usize,
+    buffer_head_offset: usize,
 }
 
 impl<'a> NodeChainWriter<'a> {
     pub fn new(
         buffer: &'a TripleBufferWriter,
         writer: &'a StructuralWriter<'a, NODE_SLOT_SIZE>,
-        head_ptr: usize,
+        buffer_head_offset: usize,
     ) -> Self {
         debug_assert!(
-            head_ptr < buffer.buffer_capacity(),
-            "head_ptr ({}) out of bounds",
-            head_ptr,
+            buffer_head_offset < buffer.buffer_capacity(),
+            "buffer_head_offset ({}) out of bounds",
+            buffer_head_offset,
         );
 
         NodeChainWriter {
             buffer,
             writer,
-            head_ptr,
+            buffer_head_offset,
         }
     }
 
     pub fn get_head(&'_ self) -> Option<NodeWriter<'_>> {
-        let head_slot = self.buffer.read(self.head_ptr);
+        let head_slot = self.buffer.read(self.buffer_head_offset);
 
         if head_slot == 0 {
             return None;
@@ -44,7 +44,7 @@ impl<'a> NodeChainWriter<'a> {
     }
 
     pub fn insert_head(&self, data: NodeDraft) -> Option<usize> {
-        let current_head_slot = self.buffer.read(self.head_ptr);
+        let current_head_slot = self.buffer.read(self.buffer_head_offset);
         let result = self.writer.insert(NodeData {
             opcode: data.opcode,
             base_tick: data.base_tick,
@@ -62,7 +62,7 @@ impl<'a> NodeChainWriter<'a> {
                     current_head.set_prev_ptr(slot);
                 }
 
-                self.buffer.write(self.head_ptr, slot as i32);
+                self.buffer.write(self.buffer_head_offset, slot as i32);
                 Some(slot)
             }
             None => None,

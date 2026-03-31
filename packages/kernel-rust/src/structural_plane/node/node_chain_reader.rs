@@ -6,24 +6,24 @@ use crate::structural_plane::structural_reader::StructuralReader;
 pub struct NodeChainReader<'a> {
     buffer: &'a TripleBufferReader,
     reader: &'a StructuralReader<'a, NODE_SLOT_SIZE>,
-    head_ptr: usize,
+    buffer_head_offset: usize,
 }
 
 impl<'a> NodeChainReader<'a> {
     pub fn new(
         buffer: &'a TripleBufferReader,
         reader: &'a StructuralReader<'a, NODE_SLOT_SIZE>,
-        head_ptr: usize,
+        buffer_head_offset: usize,
     ) -> Self {
         NodeChainReader {
             buffer,
             reader,
-            head_ptr,
+            buffer_head_offset,
         }
     }
 
     pub fn get_head(&'_ self) -> Option<NodeReader<'_>> {
-        let head_slot = self.buffer.read(self.head_ptr);
+        let head_slot = self.buffer.read(self.buffer_head_offset);
 
         if head_slot == 0 {
             return None;
