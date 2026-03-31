@@ -9,7 +9,7 @@ pub struct StructuralWriter<'a, const SLOT_SIZE: usize> {
     free_list: &'a SimpleFreeList,
     start_offset: usize,
     end_offset: usize,
-    capacity: i32,
+    capacity: usize,
 }
 
 impl<'a, const SLOT_SIZE: usize> StructuralWriter<'a, SLOT_SIZE> {
@@ -17,7 +17,7 @@ impl<'a, const SLOT_SIZE: usize> StructuralWriter<'a, SLOT_SIZE> {
         writer: &'a TripleBufferWriter,
         free_list: &'a SimpleFreeList,
         start_offset: usize,
-        capacity: i32,
+        capacity: usize,
     ) -> Self {
         debug_assert!(
             free_list.capacity() >= capacity,
@@ -52,7 +52,7 @@ impl<'a, const SLOT_SIZE: usize> StructuralWriter<'a, SLOT_SIZE> {
         self.end_offset
     }
 
-    pub fn capacity(&self) -> i32 {
+    pub fn capacity(&self) -> usize {
         self.capacity
     }
 

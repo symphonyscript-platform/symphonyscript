@@ -1,26 +1,55 @@
+use crate::constants::NODE_SLOT_SIZE;
 use crate::errors::free_list_error::FreeListError;
+use crate::primitives::triple_buffer::TripleBufferWriter;
 use crate::structural_plane::node_writer::{NodeData, NodeDraft, NodeWriter};
 use crate::structural_plane::structural_writer::StructuralWriter;
 
 pub struct NodeChainWriter<'a> {
-    writer: &'a StructuralWriter<'a, { NodeWriter::SLOT_SIZE }>,
-    capacity: i32,
+    buffer: &'a TripleBufferWriter,
+    writer: &'a StructuralWriter<'a, NODE_SLOT_SIZE>,
+    head_ptr: usize,
+    capacity: usize,
 }
 
 impl<'a> NodeChainWriter<'a> {
-    pub fn new(writer: &'a StructuralWriter<'a, { NodeWriter::SLOT_SIZE }>, capacity: i32) -> Self {
+    pub fn new(
+        buffer: &'a TripleBufferWriter,
+        writer: &'a StructuralWriter<'a, NODE_SLOT_SIZE>,
+        head_ptr: usize,
+        capacity: usize,
+    ) -> Self {
         debug_assert!(
             capacity <= writer.capacity(),
             "capacity ({}) must be <= writer capacity ({})",
             capacity,
             writer.capacity(),
         );
+        debug_assert!(
+            head_ptr < buffer.buffer_capacity(),
+            "head_ptr ({}) out of bounds",
+            head_ptr,
+        );
 
-        NodeChainWriter { writer, capacity }
+        NodeChainWriter {
+            buffer,
+            writer,
+            head_ptr,
+            capacity,
+        }
     }
 
-    pub fn capacity(&self) -> i32 {
+    pub fn capacity(&self) -> usize {
         self.capacity
+    }
+
+    pub fn get_head(&'_ self) -> Option<NodeWriter<'_>> {
+        let head_slot = self.buffer.read(self.head_ptr);
+
+        if head_slot == 0 {
+            return None;
+        }
+
+        Some(self.get(head_slot as usize))
     }
 
     pub fn get(&'_ self, slot: usize) -> NodeWriter<'_> {
@@ -33,15 +62,29 @@ impl<'a> NodeChainWriter<'a> {
     }
 
     pub fn insert_head(&self, data: NodeDraft) -> Option<usize> {
-        self.writer.insert(NodeData {
+        let current_head_slot = self.buffer.read(self.head_ptr);
+        let result = self.writer.insert(NodeData {
             opcode: data.opcode,
             base_tick: data.base_tick,
             prev_ptr: 0,
-            next_ptr: 0,
+            next_ptr: current_head_slot as usize,
             synapse_list_head: 0,
             reverse_synapse_head: 0,
             mod_list_head: 0,
-        })
+        });
+
+        match result {
+            Some(slot) => {
+                if current_head_slot != 0 {
+                    let current_head = self.get(current_head_slot as usize);
+                    current_head.set_prev_ptr(slot);
+                }
+
+                self.buffer.write(self.head_ptr, slot as i32);
+                Some(slot)
+            }
+            None => None,
+        }
     }
 
     pub fn insert_after(&self, prev_slot: usize, data: NodeDraft) -> Option<usize> {
@@ -54,7 +97,7 @@ impl<'a> NodeChainWriter<'a> {
         let result = self.writer.insert(NodeData {
             opcode: data.opcode,
             base_tick: data.base_tick,
-            prev_ptr: prev_slot as i32,
+            prev_ptr: prev_slot,
             next_ptr: prev_next_slot,
             synapse_list_head: 0,
             reverse_synapse_head: 0,
@@ -63,10 +106,10 @@ impl<'a> NodeChainWriter<'a> {
 
         match result {
             Some(new_slot) => {
-                prev.set_next_ptr(new_slot as i32);
+                prev.set_next_ptr(new_slot);
                 if prev_next_slot != 0 {
-                    let prev_next = self.get(prev_next_slot as usize);
-                    prev_next.set_prev_ptr(new_slot as i32);
+                    let prev_next = self.get(prev_next_slot);
+                    prev_next.set_prev_ptr(new_slot);
                 }
                 Some(new_slot)
             }
@@ -85,7 +128,7 @@ impl<'a> NodeChainWriter<'a> {
             opcode: data.opcode,
             base_tick: data.base_tick,
             prev_ptr: next_prev_slot,
-            next_ptr: next_slot as i32,
+            next_ptr: next_slot,
             synapse_list_head: 0,
             reverse_synapse_head: 0,
             mod_list_head: 0,
@@ -93,10 +136,10 @@ impl<'a> NodeChainWriter<'a> {
 
         match result {
             Some(new_slot) => {
-                next.set_prev_ptr(new_slot as i32);
+                next.set_prev_ptr(new_slot);
                 if next_prev_slot != 0 {
                     let next_prev = self.get(next_prev_slot as usize);
-                    next_prev.set_next_ptr(new_slot as i32);
+                    next_prev.set_next_ptr(new_slot);
                 }
                 Some(new_slot)
             }

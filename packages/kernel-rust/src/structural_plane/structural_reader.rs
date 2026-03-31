@@ -5,12 +5,12 @@ pub struct StructuralReader<'a, const SLOT_SIZE: usize> {
     reader: &'a TripleBufferReader,
     start_offset: usize,
     end_offset: usize,
-    capacity: i32,
+    capacity: usize,
 }
 
 impl<'a, const SLOT_SIZE: usize> StructuralReader<'a, SLOT_SIZE> {
-    pub fn new(reader: &'a TripleBufferReader, start_offset: usize, capacity: i32) -> Self {
-        let end_offset = start_offset + (capacity as usize) * SLOT_SIZE;
+    pub fn new(reader: &'a TripleBufferReader, start_offset: usize, capacity: usize) -> Self {
+        let end_offset = start_offset + capacity * SLOT_SIZE;
 
         debug_assert!(
             end_offset <= reader.buffer_capacity(),
@@ -35,12 +35,15 @@ impl<'a, const SLOT_SIZE: usize> StructuralReader<'a, SLOT_SIZE> {
         self.end_offset
     }
 
-    pub fn capacity(&self) -> i32 {
+    pub fn capacity(&self) -> usize {
         self.capacity
     }
 
     pub fn get(&'_ self, slot: usize) -> SlotReader<'_, SLOT_SIZE> {
-        debug_assert!(slot > 0 && slot <= self.capacity() as usize, "slot out of bounds");
+        debug_assert!(
+            slot > 0 && slot <= self.capacity() as usize,
+            "slot out of bounds"
+        );
         let start_offset = self.resolve_reader_offset(slot);
 
         SlotReader {

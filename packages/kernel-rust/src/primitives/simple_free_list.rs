@@ -9,20 +9,20 @@ pub struct SimpleFreeList {
     sab_head_ptr: usize,
     sab_free_count_ptr: usize,
     sab_bitmap_ptr: usize,
-    capacity: i32,
+    capacity: usize,
     end_index: usize,
 }
 
 impl SimpleFreeList {
-    pub fn new(sab: SAB, start_index: usize, capacity: i32) -> Self {
+    pub fn new(sab: SAB, start_index: usize, capacity: usize) -> Self {
         Self::create(sab, start_index, capacity, false)
     }
 
-    pub fn bind(sab: SAB, start_index: usize, capacity: i32) -> Self {
+    pub fn bind(sab: SAB, start_index: usize, capacity: usize) -> Self {
         Self::create(sab, start_index, capacity, true)
     }
 
-    fn create(sab: SAB, start_index: usize, capacity: i32, bind: bool) -> Self {
+    fn create(sab: SAB, start_index: usize, capacity: usize, bind: bool) -> Self {
         debug_assert!(capacity > 0, "capacity must be positive");
         debug_assert_eq!(capacity & (capacity - 1), 0, "capacity must be power of 2");
 
@@ -37,7 +37,7 @@ impl SimpleFreeList {
 
         if !bind {
             for i in 0..capacity {
-                sab[slots_start_index + (i as usize)].store(i + 1, Ordering::Relaxed);
+                sab[slots_start_index + i].store((i as i32) + 1, Ordering::Relaxed);
             }
 
             for i in bitmap_slot_start_index..bitmap_slot_end_index {
@@ -45,7 +45,7 @@ impl SimpleFreeList {
             }
 
             sab[start_index].store(0, Ordering::Relaxed);
-            sab[free_count_slot_index].store(capacity, Ordering::Relaxed);
+            sab[free_count_slot_index].store(capacity as i32, Ordering::Relaxed);
         }
 
         SimpleFreeList {
@@ -67,14 +67,14 @@ impl SimpleFreeList {
         self.end_index
     }
 
-    pub fn capacity(&self) -> i32 {
+    pub fn capacity(&self) -> usize {
         self.capacity
     }
 
     pub fn alloc(&self) -> Option<usize> {
         let head_index = self.sab[self.sab_head_ptr].load(Ordering::Relaxed);
 
-        if head_index >= self.capacity {
+        if head_index >= self.capacity as i32 {
             return None;
         }
 
