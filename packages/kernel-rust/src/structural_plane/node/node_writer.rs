@@ -37,27 +37,43 @@ impl<'a> NodeWriter<'a> {
         self.0.write(3, value as i32)
     }
 
-    pub fn get_synapse_list_head(&self) -> usize {
+    pub fn get_outgoing_synapse_head(&self) -> usize {
         self.0.read(4) as usize
     }
 
-    pub fn set_synapse_list_head(&self, value: usize) {
+    pub fn set_outgoing_synapse_head(&self, value: usize) {
         self.0.write(4, value as i32)
     }
 
-    pub fn get_reverse_synapse_head(&self) -> usize {
+    pub fn get_outgoing_synapse_tail(&self) -> usize {
         self.0.read(5) as usize
     }
 
-    pub fn set_reverse_synapse_head(&self, value: usize) {
+    pub fn set_outgoing_synapse_tail(&self, value: usize) {
         self.0.write(5, value as i32)
     }
 
-    pub fn get_mod_list_head(&self) -> usize {
+    pub fn get_incoming_synapse_head(&self) -> usize {
         self.0.read(6) as usize
     }
 
-    pub fn set_mod_list_head(&self, value: usize) {
+    pub fn set_incoming_synapse_head(&self, value: usize) {
         self.0.write(6, value as i32)
+    }
+
+    pub fn get_incoming_synapse_tail(&self) -> usize {
+        self.0.read(7) as usize
+    }
+
+    pub fn set_incoming_synapse_tail(&self, value: usize) {
+        self.0.write(7, value as i32)
+    }
+
+    pub fn get_mod_head(&self) -> usize {
+        self.0.read(8) as usize
+    }
+
+    pub fn set_mod_head(&self, value: usize) {
+        self.0.write(8, value as i32)
     }
 }

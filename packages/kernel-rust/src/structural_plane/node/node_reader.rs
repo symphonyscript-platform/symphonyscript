@@ -20,15 +20,23 @@ impl<'a> NodeReader<'a> {
         self.0.read(3) as usize
     }
 
-    pub fn get_synapse_list_head(&self) -> usize {
+    pub fn get_outgoing_synapse_head(&self) -> usize {
         self.0.read(4) as usize
     }
 
-    pub fn get_reverse_synapse_head(&self) -> usize {
+    pub fn get_outgoing_synapse_tail(&self) -> usize {
         self.0.read(5) as usize
     }
 
-    pub fn get_mod_list_head(&self) -> usize {
+    pub fn get_incoming_synapse_head(&self) -> usize {
         self.0.read(6) as usize
+    }
+
+    pub fn get_incoming_synapse_tail(&self) -> usize {
+        self.0.read(7) as usize
+    }
+
+    pub fn get_mod_head(&self) -> usize {
+        self.0.read(8) as usize
     }
 }

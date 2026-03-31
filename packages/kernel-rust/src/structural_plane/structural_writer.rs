@@ -77,7 +77,7 @@ impl<'a, const SLOT_SIZE: usize> StructuralWriter<'a, SLOT_SIZE> {
     }
 
     pub fn get(&'_ self, slot: usize) -> SlotWriter<'_, SLOT_SIZE> {
-        debug_assert!(slot > 0 && slot <= self.capacity() as usize, "slot out of bounds");
+        debug_assert!(slot > 0 && slot <= self.capacity(), "slot out of bounds");
         let start_offset = self.resolve_writer_offset(slot);
 
         SlotWriter {
