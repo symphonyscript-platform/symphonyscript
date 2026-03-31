@@ -23,6 +23,15 @@ impl<'a> NodeChainWriter<'a> {
         self.capacity
     }
 
+    pub fn get(&'_ self, slot: usize) -> NodeView<'_> {
+        debug_assert!(
+            slot > 0 && slot <= self.capacity() as usize,
+            "slot out of bounds"
+        );
+
+        NodeView(self.writer.get(slot))
+    }
+
     pub fn insert_head(&self, data: NodeDraft) -> Option<usize> {
         self.writer.insert(NodeData {
             opcode: data.opcode,
@@ -33,15 +42,6 @@ impl<'a> NodeChainWriter<'a> {
             reverse_synapse_head: 0,
             mod_list_head: 0,
         })
-    }
-
-    pub fn get(&'_ self, slot: usize) -> NodeView<'_> {
-        debug_assert!(
-            slot > 0 && slot <= self.capacity() as usize,
-            "slot out of bounds"
-        );
-
-        NodeView(self.writer.get(slot))
     }
 
     pub fn insert_after(&self, prev_slot: usize, data: NodeDraft) -> Option<usize> {
