@@ -8,7 +8,6 @@ pub struct NodeChainWriter<'a> {
     buffer: &'a TripleBufferWriter,
     writer: &'a StructuralWriter<'a, NODE_SLOT_SIZE>,
     head_ptr: usize,
-    capacity: usize,
 }
 
 impl<'a> NodeChainWriter<'a> {
@@ -16,14 +15,7 @@ impl<'a> NodeChainWriter<'a> {
         buffer: &'a TripleBufferWriter,
         writer: &'a StructuralWriter<'a, NODE_SLOT_SIZE>,
         head_ptr: usize,
-        capacity: usize,
     ) -> Self {
-        debug_assert!(
-            capacity <= writer.capacity(),
-            "capacity ({}) must be <= writer capacity ({})",
-            capacity,
-            writer.capacity(),
-        );
         debug_assert!(
             head_ptr < buffer.buffer_capacity(),
             "head_ptr ({}) out of bounds",
@@ -34,12 +26,7 @@ impl<'a> NodeChainWriter<'a> {
             buffer,
             writer,
             head_ptr,
-            capacity,
         }
-    }
-
-    pub fn capacity(&self) -> usize {
-        self.capacity
     }
 
     pub fn get_head(&'_ self) -> Option<NodeWriter<'_>> {
@@ -53,11 +40,6 @@ impl<'a> NodeChainWriter<'a> {
     }
 
     pub fn get(&'_ self, slot: usize) -> NodeWriter<'_> {
-        debug_assert!(
-            slot > 0 && slot <= self.capacity() as usize,
-            "slot out of bounds"
-        );
-
         NodeWriter(self.writer.get(slot))
     }
 
@@ -88,10 +70,6 @@ impl<'a> NodeChainWriter<'a> {
     }
 
     pub fn insert_after(&self, prev_slot: usize, data: NodeDraft) -> Option<usize> {
-        debug_assert!(
-            prev_slot > 0 && prev_slot <= self.capacity() as usize,
-            "slot out of bounds"
-        );
         let prev = self.get(prev_slot);
         let prev_next_slot = prev.get_next_ptr();
         let result = self.writer.insert(NodeData {
@@ -118,10 +96,6 @@ impl<'a> NodeChainWriter<'a> {
     }
 
     pub fn insert_before(&self, next_slot: usize, data: NodeDraft) -> Option<usize> {
-        debug_assert!(
-            next_slot > 0 && next_slot <= self.capacity() as usize,
-            "slot out of bounds"
-        );
         let next = self.get(next_slot);
         let next_prev_slot = next.get_prev_ptr();
         let result = self.writer.insert(NodeData {
@@ -148,11 +122,6 @@ impl<'a> NodeChainWriter<'a> {
     }
 
     pub fn remove(&self, slot: usize) -> Result<(), FreeListError> {
-        debug_assert!(
-            slot > 0 && slot <= self.capacity() as usize,
-            "slot out of bounds"
-        );
-
         let node = self.get(slot);
         let prev_slot = node.get_prev_ptr();
         let next_slot = node.get_next_ptr();
