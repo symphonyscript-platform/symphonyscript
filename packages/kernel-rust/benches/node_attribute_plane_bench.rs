@@ -116,7 +116,7 @@ fn bench_view_flags_check(c: &mut Criterion) {
 // ============ AttributePlane Benchmarks ============
 
 fn bench_plane_set(c: &mut Criterion) {
-    let sab = create_sab(65536);
+    let sab = create_sab(65538);
     let plane = AttributePlane::<16>::new(sab, 0, 4096);
 
     c.bench_function("AttributePlane/set", |b| {
@@ -127,7 +127,7 @@ fn bench_plane_set(c: &mut Criterion) {
 }
 
 fn bench_plane_get(c: &mut Criterion) {
-    let sab = create_sab(65536);
+    let sab = create_sab(65538);
     let plane = AttributePlane::<16>::new(sab, 0, 4096);
     plane.set(0, sample_data());
 
@@ -140,7 +140,7 @@ fn bench_plane_get(c: &mut Criterion) {
 }
 
 fn bench_plane_set_get_cycle(c: &mut Criterion) {
-    let sab = create_sab(65536);
+    let sab = create_sab(65538);
     let plane = AttributePlane::<16>::new(sab, 0, 4096);
 
     c.bench_function("AttributePlane/set+get_cycle", |b| {
@@ -156,7 +156,7 @@ fn bench_plane_sequential_read(c: &mut Criterion) {
     let mut group = c.benchmark_group("AttributePlane/sequential_read");
 
     for &count in &[32, 128, 512, 2048] {
-        let sab_size = count * AttributesView::SLOT_SIZE + 1;
+        let sab_size = count * 16 + 1;
         let sab = create_sab(sab_size);
         let plane = AttributePlane::<16>::new(sab, 0, count);
 
@@ -193,7 +193,7 @@ fn bench_plane_sequential_write(c: &mut Criterion) {
     let mut group = c.benchmark_group("AttributePlane/sequential_write");
 
     for &count in &[32, 128, 512, 2048] {
-        let sab_size = count * AttributesView::SLOT_SIZE + 1;
+        let sab_size = count * 16 + 1;
         let sab = create_sab(sab_size);
         let plane = AttributePlane::<16>::new(sab, 0, count);
 
@@ -211,7 +211,7 @@ fn bench_plane_sequential_write(c: &mut Criterion) {
 
 fn bench_plane_random_access(c: &mut Criterion) {
     let capacity = 4096;
-    let sab_size = capacity * AttributesView::SLOT_SIZE + 1;
+    let sab_size = capacity * 16 + 1;
     let sab = create_sab(sab_size);
     let plane = AttributePlane::<16>::new(sab, 0, capacity);
 
