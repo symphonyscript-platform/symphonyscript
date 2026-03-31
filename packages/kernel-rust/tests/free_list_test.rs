@@ -3,6 +3,8 @@ use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::primitives::free_list::FreeList;
 
+const SLOT_SIZE: usize = 16;
+
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
