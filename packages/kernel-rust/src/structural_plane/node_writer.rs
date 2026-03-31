@@ -18,8 +18,8 @@ pub struct NodeData {
 }
 
 impl IntoArray<8> for NodeData {
-    fn to_array(&self) -> [i32; NodeView::SLOT_SIZE] {
-        let mut data = [0; NodeView::SLOT_SIZE];
+    fn to_array(&self) -> [i32; NodeWriter::SLOT_SIZE] {
+        let mut data = [0; NodeWriter::SLOT_SIZE];
 
         data[0] = self.opcode;
         data[1] = self.base_tick;
@@ -33,9 +33,9 @@ impl IntoArray<8> for NodeData {
     }
 }
 
-pub struct NodeView<'a>(pub SlotWriter<'a, { NodeView::SLOT_SIZE }>);
+pub struct NodeWriter<'a>(pub SlotWriter<'a, { NodeWriter::SLOT_SIZE }>);
 
-impl<'a> NodeView<'a> {
+impl<'a> NodeWriter<'a> {
     pub const SLOT_SIZE: usize = 8;
     pub const OPCODE_NOTE: i32 = 0x01;
     pub const OPCODE_REST: i32 = 0x02;

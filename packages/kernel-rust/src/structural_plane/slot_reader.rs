@@ -1,18 +1,18 @@
 use crate::primitives::triple_buffer::TripleBufferReader;
 
-pub struct SlotView<'a, const SLOT_SIZE: usize> {
+pub struct SlotReader<'a, const SLOT_SIZE: usize> {
     pub(crate) reader: &'a TripleBufferReader,
     pub(crate) start_offset: usize,
 }
 
-impl<'a, const SLOT_SIZE: usize> SlotView<'a, SLOT_SIZE> {
+impl<'a, const SLOT_SIZE: usize> SlotReader<'a, SLOT_SIZE> {
     pub fn new(reader: &'a TripleBufferReader, start_offset: usize) -> Self {
         let end_index = start_offset + SLOT_SIZE;
         debug_assert!(
             end_index <= reader.buffer_capacity(),
             "SlotReadonlyView out of bounds"
         );
-        SlotView {
+        SlotReader {
             reader: &reader,
             start_offset,
         }

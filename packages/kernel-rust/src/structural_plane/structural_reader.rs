@@ -1,5 +1,5 @@
 use crate::primitives::triple_buffer::TripleBufferReader;
-use crate::structural_plane::slot_view::SlotView;
+use crate::structural_plane::slot_reader::SlotReader;
 
 pub struct StructuralReader<'a, const SLOT_SIZE: usize> {
     reader: &'a TripleBufferReader,
@@ -39,11 +39,11 @@ impl<'a, const SLOT_SIZE: usize> StructuralReader<'a, SLOT_SIZE> {
         self.capacity
     }
 
-    pub fn get(&'_ self, slot: usize) -> SlotView<'_, SLOT_SIZE> {
+    pub fn get(&'_ self, slot: usize) -> SlotReader<'_, SLOT_SIZE> {
         debug_assert!(slot > 0 && slot <= self.capacity() as usize, "slot out of bounds");
         let start_offset = self.resolve_reader_offset(slot);
 
-        SlotView {
+        SlotReader {
             reader: &self.reader,
             start_offset,
         }

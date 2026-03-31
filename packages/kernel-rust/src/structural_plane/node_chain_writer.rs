@@ -1,14 +1,14 @@
 use crate::errors::free_list_error::FreeListError;
-use crate::structural_plane::node_view::{NodeData, NodeDraft, NodeView};
+use crate::structural_plane::node_writer::{NodeData, NodeDraft, NodeWriter};
 use crate::structural_plane::structural_writer::StructuralWriter;
 
 pub struct NodeChainWriter<'a> {
-    writer: &'a StructuralWriter<'a, { NodeView::SLOT_SIZE }>,
+    writer: &'a StructuralWriter<'a, { NodeWriter::SLOT_SIZE }>,
     capacity: i32,
 }
 
 impl<'a> NodeChainWriter<'a> {
-    pub fn new(writer: &'a StructuralWriter<'a, { NodeView::SLOT_SIZE }>, capacity: i32) -> Self {
+    pub fn new(writer: &'a StructuralWriter<'a, { NodeWriter::SLOT_SIZE }>, capacity: i32) -> Self {
         debug_assert!(
             capacity <= writer.capacity(),
             "capacity ({}) must be <= writer capacity ({})",
@@ -23,13 +23,13 @@ impl<'a> NodeChainWriter<'a> {
         self.capacity
     }
 
-    pub fn get(&'_ self, slot: usize) -> NodeView<'_> {
+    pub fn get(&'_ self, slot: usize) -> NodeWriter<'_> {
         debug_assert!(
             slot > 0 && slot <= self.capacity() as usize,
             "slot out of bounds"
         );
 
-        NodeView(self.writer.get(slot))
+        NodeWriter(self.writer.get(slot))
     }
 
     pub fn insert_head(&self, data: NodeDraft) -> Option<usize> {
