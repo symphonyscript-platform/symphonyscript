@@ -1,6 +1,6 @@
 use crate::constants::NODE_SLOT_SIZE;
 use crate::primitives::triple_buffer::TripleBufferReader;
-use crate::structural_plane::node_reader::NodeReader;
+use crate::structural_plane::node::node_reader::NodeReader;
 use crate::structural_plane::structural_reader::StructuralReader;
 
 pub struct NodeChainReader<'a> {

@@ -1,7 +1,7 @@
 use crate::constants::NODE_SLOT_SIZE;
 use crate::errors::free_list_error::FreeListError;
 use crate::primitives::triple_buffer::TripleBufferWriter;
-use crate::structural_plane::node_writer::{NodeData, NodeDraft, NodeWriter};
+use crate::structural_plane::node::node_writer::{NodeData, NodeDraft, NodeWriter};
 use crate::structural_plane::structural_writer::StructuralWriter;
 
 pub struct NodeChainWriter<'a> {
