@@ -10,7 +10,7 @@ impl<'a, const SLOT_SIZE: usize> SlotWriter<'a, SLOT_SIZE> {
         let end_index = start_offset + SLOT_SIZE;
         debug_assert!(
             end_index <= writer.buffer_capacity(),
-            "SlotView out of bounds"
+            "SlotWriter out of bounds"
         );
         SlotWriter {
             writer: &writer,

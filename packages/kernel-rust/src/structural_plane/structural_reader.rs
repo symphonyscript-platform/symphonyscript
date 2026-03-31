@@ -28,7 +28,7 @@ impl<'a, const SLOT_SIZE: usize> StructuralReader<'a, SLOT_SIZE> {
     }
 
     pub fn resolve_reader_offset(&self, slot: usize) -> usize {
-        self.start_offset + slot * SLOT_SIZE
+        self.start_offset + (slot - 1) * SLOT_SIZE
     }
 
     pub fn end_index(&self) -> usize {

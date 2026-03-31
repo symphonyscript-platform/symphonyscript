@@ -10,7 +10,7 @@ impl<'a, const SLOT_SIZE: usize> SlotReader<'a, SLOT_SIZE> {
         let end_index = start_offset + SLOT_SIZE;
         debug_assert!(
             end_index <= reader.buffer_capacity(),
-            "SlotReadonlyView out of bounds"
+            "SlotReader out of bounds"
         );
         SlotReader {
             reader: &reader,

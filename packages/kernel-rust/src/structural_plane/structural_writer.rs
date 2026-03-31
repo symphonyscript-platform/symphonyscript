@@ -26,7 +26,7 @@ impl<'a, const SLOT_SIZE: usize> StructuralWriter<'a, SLOT_SIZE> {
             capacity,
         );
 
-        let end_offset = start_offset + (capacity as usize) * SLOT_SIZE;
+        let end_offset = start_offset + capacity * SLOT_SIZE;
 
         debug_assert!(
             end_offset <= writer.buffer_capacity(),
@@ -45,7 +45,7 @@ impl<'a, const SLOT_SIZE: usize> StructuralWriter<'a, SLOT_SIZE> {
     }
 
     pub fn resolve_writer_offset(&self, slot: usize) -> usize {
-        self.start_offset + slot * SLOT_SIZE
+        self.start_offset + (slot - 1) * SLOT_SIZE
     }
 
     pub fn end_index(&self) -> usize {
