@@ -1,3 +1,4 @@
+use crate::errors::free_list_error::FreeListError;
 use crate::structural_plane::node_view::{NodeData, NodeDraft, NodeView};
 use crate::structural_plane::structural_writer::StructuralWriter;
 
@@ -34,12 +35,21 @@ impl<'a> NodeChainWriter<'a> {
         })
     }
 
+    pub fn get(&'_ self, slot: usize) -> NodeView<'_> {
+        debug_assert!(
+            slot > 0 && slot <= self.capacity() as usize,
+            "slot out of bounds"
+        );
+
+        NodeView(self.writer.get(slot))
+    }
+
     pub fn insert_after(&self, prev_slot: usize, data: NodeDraft) -> Option<usize> {
         debug_assert!(
             prev_slot > 0 && prev_slot <= self.capacity() as usize,
             "slot out of bounds"
         );
-        let prev = NodeView(self.writer.get(prev_slot));
+        let prev = self.get(prev_slot);
         let prev_next_slot = prev.get_next_ptr();
         let result = self.writer.insert(NodeData {
             opcode: data.opcode,
@@ -55,7 +65,7 @@ impl<'a> NodeChainWriter<'a> {
             Some(new_slot) => {
                 prev.set_next_ptr(new_slot as i32);
                 if prev_next_slot != 0 {
-                    let prev_next = NodeView(self.writer.get(prev_next_slot as usize));
+                    let prev_next = self.get(prev_next_slot as usize);
                     prev_next.set_prev_ptr(new_slot as i32);
                 }
                 Some(new_slot)
@@ -69,7 +79,7 @@ impl<'a> NodeChainWriter<'a> {
             next_slot > 0 && next_slot <= self.capacity() as usize,
             "slot out of bounds"
         );
-        let next = NodeView(self.writer.get(next_slot));
+        let next = self.get(next_slot);
         let next_prev_slot = next.get_prev_ptr();
         let result = self.writer.insert(NodeData {
             opcode: data.opcode,
@@ -85,12 +95,33 @@ impl<'a> NodeChainWriter<'a> {
             Some(new_slot) => {
                 next.set_prev_ptr(new_slot as i32);
                 if next_prev_slot != 0 {
-                    let next_prev = NodeView(self.writer.get(next_prev_slot as usize));
+                    let next_prev = self.get(next_prev_slot as usize);
                     next_prev.set_next_ptr(new_slot as i32);
                 }
                 Some(new_slot)
             }
             None => None,
         }
+    }
+
+    pub fn remove(&self, slot: usize) -> Result<(), FreeListError> {
+        debug_assert!(
+            slot > 0 && slot <= self.capacity() as usize,
+            "slot out of bounds"
+        );
+
+        let node = self.get(slot);
+        let prev_slot = node.get_prev_ptr();
+        let next_slot = node.get_next_ptr();
+
+        if prev_slot != 0 {
+            self.get(prev_slot as usize).set_next_ptr(next_slot);
+        }
+
+        if next_slot != 0 {
+            self.get(next_slot as usize).set_prev_ptr(prev_slot);
+        }
+
+        self.writer.free(slot)
     }
 }
