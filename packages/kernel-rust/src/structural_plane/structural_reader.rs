@@ -40,6 +40,7 @@ impl<'a, const SLOT_SIZE: usize> StructuralReader<'a, SLOT_SIZE> {
     }
 
     pub fn get(&'_ self, slot: usize) -> SlotView<'_, SLOT_SIZE> {
+        debug_assert!(slot > 0 && slot <= self.capacity() as usize, "slot out of bounds");
         let start_offset = self.resolve_reader_offset(slot);
 
         SlotView {

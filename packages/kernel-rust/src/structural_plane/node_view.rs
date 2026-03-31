@@ -1,6 +1,10 @@
-use crate::primitives::types::SAB;
-use std::sync::atomic::Ordering;
 use crate::primitives::into_array::IntoArray;
+use crate::structural_plane::slot_writer::SlotWriter;
+
+pub struct NodeDraft {
+    pub opcode: i32,
+    pub base_tick: i32,
+}
 
 pub struct NodeData {
     pub opcode: i32,
@@ -14,8 +18,8 @@ pub struct NodeData {
 }
 
 impl IntoArray<8> for NodeData {
-    fn to_array(&self) -> [i32; 8] {
-        let mut data = [0; 8];
+    fn to_array(&self) -> [i32; NodeView::SLOT_SIZE] {
+        let mut data = [0; NodeView::SLOT_SIZE];
 
         data[0] = self.opcode;
         data[1] = self.base_tick;
@@ -29,10 +33,7 @@ impl IntoArray<8> for NodeData {
     }
 }
 
-pub struct NodeView<'a> {
-    pub(crate) sab: &'a SAB,
-    pub(crate) start_index: usize,
-}
+pub struct NodeView<'a>(pub SlotWriter<'a, { NodeView::SLOT_SIZE }>);
 
 impl<'a> NodeView<'a> {
     pub const SLOT_SIZE: usize = 8;
@@ -44,104 +45,60 @@ impl<'a> NodeView<'a> {
     pub const OPCODE_SEED: i32 = 0x06;
     pub const OPCODE_LUT: i32 = 0x07;
 
-    pub fn new(sab: &'a SAB, start_index: usize) -> Self {
-        let end_index = start_index + Self::SLOT_SIZE;
-        debug_assert!(end_index < sab.len(), "NodeView out of bounds");
-        NodeView {
-            sab: &sab,
-            start_index,
-        }
-    }
-
-    pub fn resolve_sab_index(start_index: usize, offset: usize) -> usize {
-        start_index + (offset * NodeView::SLOT_SIZE)
-    }
-
     pub fn get_opcode(&self) -> i32 {
-        self.read(0) >> 24
+        self.0.read(0) >> 24
     }
 
-    pub fn set_pitch(&self, value: i32) {
-        self.write(0, value)
+    pub fn set_opcode(&self, value: i32) {
+        let bitmask = self.0.read(0) & ((1 << 24) - 1);
+        self.0.write(0, bitmask | value << 24)
     }
 
-    pub fn velocity(&self) -> i32 {
-        self.read(1)
+    pub fn get_base_tick(&self) -> i32 {
+        self.0.read(1)
     }
 
-    pub fn set_velocity(&self, value: i32) {
-        self.write(1, value)
+    pub fn set_base_tick(&self, value: i32) {
+        self.0.write(1, value)
     }
 
-    pub fn duration(&self) -> i32 {
-        self.read(2)
+    pub fn get_next_ptr(&self) -> i32 {
+        self.0.read(2)
     }
 
-    pub fn set_duration(&self, value: i32) {
-        self.write(2, value)
+    pub fn set_next_ptr(&self, value: i32) {
+        self.0.write(2, value)
     }
 
-    pub fn volume(&self) -> i32 {
-        self.read(3)
+    pub fn get_prev_ptr(&self) -> i32 {
+        self.0.read(3)
     }
 
-    pub fn set_volume(&self, value: i32) {
-        self.write(3, value)
+    pub fn set_prev_ptr(&self, value: i32) {
+        self.0.write(3, value)
     }
 
-    pub fn spatial_x(&self) -> i32 {
-        self.read(4)
+    pub fn get_synapse_list_head(&self) -> i32 {
+        self.0.read(4)
     }
 
-    pub fn set_spatial_x(&self, value: i32) {
-        self.write(4, value)
+    pub fn set_synapse_list_head(&self, value: i32) {
+        self.0.write(4, value)
     }
 
-    pub fn spatial_y(&self) -> i32 {
-        self.read(5)
+    pub fn get_reverse_synapse_head(&self) -> i32 {
+        self.0.read(5)
     }
 
-    pub fn set_spatial_y(&self, value: i32) {
-        self.write(5, value)
+    pub fn set_reverse_synapse_head(&self, value: i32) {
+        self.0.write(5, value)
     }
 
-    pub fn spatial_z(&self) -> i32 {
-        self.read(6)
+    pub fn get_mod_list_head(&self) -> i32 {
+        self.0.read(6)
     }
 
-    pub fn set_spatial_z(&self, value: i32) {
-        self.write(6, value)
-    }
-
-    pub fn detune(&self) -> i32 {
-        self.read(7)
-    }
-
-    pub fn set_detune(&self, value: i32) {
-        self.write(7, value)
-    }
-
-    pub fn tick_offset(&self) -> i32 {
-        self.read(8)
-    }
-
-    pub fn set_tick_offset(&self, value: i32) {
-        self.write(8, value)
-    }
-
-    pub fn flags(&self) -> u32 {
-        self.read(9) as u32
-    }
-
-    pub fn set_flags(&self, value: u32) {
-        self.write(9, value as i32)
-    }
-
-    fn read(&self, index: usize) -> i32 {
-        self.sab[self.start_index + index].load(Ordering::Relaxed)
-    }
-
-    fn write(&self, index: usize, value: i32) {
-        self.sab[self.start_index + index].store(value, Ordering::Relaxed)
+    pub fn set_mod_list_head(&self, value: i32) {
+        self.0.write(6, value)
     }
 }
