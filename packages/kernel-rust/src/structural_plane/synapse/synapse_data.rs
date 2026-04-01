@@ -20,7 +20,7 @@ impl IntoArray<SYNAPSE_SLOT_SIZE> for SynapseData {
     fn to_array(&self) -> [i32; SYNAPSE_SLOT_SIZE] {
         let mut data = [0; SYNAPSE_SLOT_SIZE];
 
-        data[0] = self.opcode;
+        data[0] = self.opcode << 24;
         data[1] = self.source_ptr as i32;
         data[2] = self.target_ptr as i32;
         data[3] = self.outgoing_next_ptr as i32;
