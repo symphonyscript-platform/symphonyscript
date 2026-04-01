@@ -39,3 +39,7 @@ harness = false
 [[bench]]
 name = "slot_reader_bench"
 harness = false
+
+[[bench]]
+name = "synapse_chain_bench"
+harness = false
