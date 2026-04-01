@@ -21,7 +21,7 @@ fn alloc_returns_logical_slot_index() {
     let slot = fl.alloc();
     assert!(slot.is_some());
     let idx = slot.unwrap();
-    assert!(idx < 4); // logical index within capacity
+    assert!(idx >= 1 && idx <= 4); // 1-based slot index within capacity
 }
 
 #[test]
@@ -61,11 +61,11 @@ fn alloc_returns_sequential_indices() {
     let sab = create_sab(4096);
     let fl = SimpleFreeList::new(sab, 0, 4);
 
-    // Free chain is initialized as 0 → 1 → 2 → 3, so alloc order is 0, 1, 2, 3
-    assert_eq!(fl.alloc().unwrap(), 0);
+    // Free chain is initialized as 0 → 1 → 2 → 3, alloc returns slot_index + 1
     assert_eq!(fl.alloc().unwrap(), 1);
     assert_eq!(fl.alloc().unwrap(), 2);
     assert_eq!(fl.alloc().unwrap(), 3);
+    assert_eq!(fl.alloc().unwrap(), 4);
 }
 
 #[test]
@@ -123,7 +123,7 @@ fn nonzero_start_index() {
     assert_eq!(fl.free_count(), 8);
 
     let slot = fl.alloc().unwrap();
-    assert!(slot < 8); // logical index, not absolute
+    assert!(slot >= 1 && slot <= 8); // 1-based slot index
     assert_eq!(fl.free_count(), 7);
 
     fl.free(slot).unwrap();
@@ -149,7 +149,7 @@ fn capacity_of_one() {
     assert_eq!(fl.free_count(), 1);
 
     let slot = fl.alloc().unwrap();
-    assert_eq!(slot, 0);
+    assert_eq!(slot, 1);
     assert!(fl.alloc().is_none());
     assert_eq!(fl.free_count(), 0);
 
@@ -157,7 +157,7 @@ fn capacity_of_one() {
     assert_eq!(fl.free_count(), 1);
 
     let slot2 = fl.alloc().unwrap();
-    assert_eq!(slot2, 0);
+    assert_eq!(slot2, 1);
 }
 
 #[test]
@@ -276,14 +276,15 @@ fn slot_31_and_32_bitmap_boundary() {
         slots.push(fl.alloc().unwrap());
     }
 
-    // Free slot 31 (last bit of word 0) and slot 32 (first bit of word 1)
-    fl.free(31).unwrap();
+    // Free slot 32 (1-based: internal index 31, last bit of word 0)
+    // and slot 33 (1-based: internal index 32, first bit of word 1)
     fl.free(32).unwrap();
+    fl.free(33).unwrap();
     assert_eq!(fl.free_count(), 2);
 
     // Double-free on boundary slots
-    assert!(fl.free(31).is_err());
     assert!(fl.free(32).is_err());
+    assert!(fl.free(33).is_err());
 }
 
 // ============ Bind (Attach to Existing SAB) ============
@@ -391,9 +392,9 @@ fn stress_unique_indices() {
     sorted.dedup();
     assert_eq!(sorted.len(), 256);
 
-    // All should be in [0, 256)
+    // All should be in [1, 256] (1-based)
     for s in &slots {
-        assert!(*s < 256);
+        assert!(*s >= 1 && *s <= 256);
     }
 }
 
@@ -406,7 +407,7 @@ fn stress_free_chain_integrity_after_mixed_ops() {
     let slots: Vec<usize> = (0..64).map(|_| fl.alloc().unwrap()).collect();
 
     for s in &slots {
-        if s % 2 == 1 {
+        if s % 2 == 0 {
             fl.free(*s).unwrap();
         }
     }
@@ -422,7 +423,7 @@ fn stress_free_chain_integrity_after_mixed_ops() {
 
     // Free everything
     for s in &slots {
-        if s % 2 == 0 {
+        if s % 2 == 1 {
             fl.free(*s).unwrap();
         }
     }
