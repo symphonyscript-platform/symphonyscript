@@ -4,8 +4,8 @@ use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
 use symphonyscript_kernel::primitives::simple_free_list::SimpleFreeList;
-use symphonyscript_kernel::into_array::IntoArray;
-use symphonyscript_kernel::slot_writer::SlotWriter;
+use symphonyscript_kernel::primitives::into_array::IntoArray;
+use symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter;
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);
@@ -30,7 +30,7 @@ const SAB_SIZE: usize = 65536;
 const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 16384;
 const FL_START: usize = 50000;
-const CAPACITY: i32 = 512;
+const CAPACITY: usize = 512;
 
 fn setup() -> (SAB, symphonyscript_kernel::primitives::triple_buffer::TripleBufferWriter, symphonyscript_kernel::primitives::triple_buffer::TripleBufferReader, SimpleFreeList) {
     let sab = create_sab(SAB_SIZE);
@@ -43,29 +43,29 @@ fn bench_slot_writer(c: &mut Criterion) {
     let (_sab, writer, _reader, free_list) = setup();
 
     // Pre-insert a slot for read/write benchmarks
-    let sw: SlotWriter<'_, 16> = SlotWriter::new(&writer, &free_list, 0, CAPACITY);
+    let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
     let slot = sw.insert(TestPayload { a: 42, b: 99 }).unwrap();
 
-    c.bench_function("SlotWriter/write_field", |b| {
+    c.bench_function("StructuralWriter/write_field", |b| {
         b.iter(|| {
             sw.write_field(black_box(slot), black_box(0), black_box(123));
         });
     });
 
-    c.bench_function("SlotWriter/read_field", |b| {
+    c.bench_function("StructuralWriter/read_field", |b| {
         b.iter(|| {
             black_box(sw.read_field(black_box(slot), black_box(0)));
         });
     });
 
-    c.bench_function("SlotWriter/get_view", |b| {
+    c.bench_function("StructuralWriter/get_view", |b| {
         b.iter(|| {
             let view = sw.get(black_box(slot));
             black_box(view.read(0));
         });
     });
 
-    c.bench_function("SlotWriter/insert+free_cycle", |b| {
+    c.bench_function("StructuralWriter/insert+free_cycle", |b| {
         b.iter(|| {
             let s = sw.insert(TestPayload { a: black_box(1), b: black_box(2) }).unwrap();
             sw.free(s).unwrap();

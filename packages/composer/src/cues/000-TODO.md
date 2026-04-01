@@ -632,3 +632,109 @@ Agent's concept	RFC-070 equivalent
 "Patch cable"	.mod(Vibrato) on the note
 No missing pieces.
 
+____
+
+Now, my initial vision was to design twNow, my initial vision was to design two DSL layers, one pre-defined and modulated (modulation would allow not only rich offline playback/export but also rich live-shows) AND another minimalistic DSL for pattern/cycle based live-coding to fill the gaps - conceptually creating two models - one predefined but modulatable, another live-coded but different DSL. To add more,  the live-coding pattern/cycle based  model (similar to tidal cycles) would be supported not by the main SAB but by simple command ring from main->audio. In this model both models would merge into single stream on the audio thread - yes, but still conceptually two models.
+
+Today I was thinking and giving it more though: "Why am I creating Tripple Buffer architecture and O(1) - practically latency-free architecture if it's only going to be used by static/modulated layer while live-coding layer completely bypasses it?" - it was boggling me and bothering me, making me think "I'm creating ferrary engine and putting it in a go-cart", then it finally hit me...
+
+
+What if there would be no dual layers opposing each other, but instead two complementary layers where live-coding layer makes the same "old" DSL live?
+
+and I drafted the concept:
+
+/Users/torniketsomaia/projects/@tsomaia.tech/symphonyscript/packages/kernel-rust/research/live_concept.md
+
+in this concept live layer sits ON TOP of the DSL layer, making it alive.
+
+It's filled with pseudo-code for simplicity, but please do read it and try to understand my reasoning - if something is unclear please do ask me because eventually I want us to discuss if it has some potential
+
+It's filled with pseudo-code for simplicity, but please do read it and try to understand my reasoning - if something is unclear please do ask me because eventually I want us to discuss if it has some potential
+
+____
+
+1. when clips are fired parallelly they both share the same portion of their cycle - BECAUSE they all fire simultaneously. simultaneous firing is not something only live-show related, its the fundamental nature of synapses (opcode 0x02 - parallel) - when synapse fires "on the background" or non-blockingly while the clip continues - if there is nothing to continue - clip waits for all its ongoing background clips to finish in order to exit (this would be the correct choice right? or should clip not wait for background clips? this is more architectural question, not live-code related)
+
+2. they are materialized all at once. that's the synaptic kernel in action
+
+3. they get recycled. their memory gets freed so allocator can reallocate their memory space later. sounds good?
+
+4. that's where I need your help
+
+
+5. what is "rev"? "fast"?" explain them
+
+why can't kernel allocate memory for live-coding part too on the SAB?
+
+6. that's powerful.... thoughts?
+
+7. sure. like a flexbox :D [c1 c2] c3 is powerful
+
+8. problem?
+
+9. what's the problem with changing one note inside a clip?
+
+
+Let me take these in order.
+
+**1. Should a clip wait for parallel children?**
+
+In the live context, the question is moot — the cycle has a fixed duration. Parallel clips fill the same temporal space, they don't extend it. If c1 and c2 fire in parallel within a 333-unit portion, both are constrained to that portion. Stretch or truncate.
+
+In the composition context (no live cycle), I'd say **join semantics as the default** — clip waits for all parallel children. The clip's effective duration = `max(own chain, longest parallel child)`. This gives predictable boundaries. A `detach` modifier could opt into fire-and-forget for ambient layers that intentionally bleed across boundaries.
+
+**2 & 3.** Confirmed, clean.
+
+**4. Cycle clock — here's my thinking:**
+
+**Ahead-of-time materialization.** The main thread doesn't wait for the boundary — it materializes the next cycle immediately after publishing the current one. It stays one cycle ahead. Flow:
+
+```
+Main thread:                          Audio thread:
+                                      
+materialize cycle 1 → publish         
+materialize cycle 2 → publish ←─ audio swaps to cycle 1, plays it
+free cycle 0's nodes                  
+hot-reload detected!                  
+re-materialize cycle 2 → publish ←─ audio swaps to cycle 2, plays it
+materialize cycle 3 → publish         
+free cycle 1's nodes                  
+...
+```
+
+The main thread is always one cycle ahead. If the live-coder hot-reloads, the main thread re-materializes and re-publishes the upcoming cycle. The triple buffer's dropped-frame semantics guarantee the audio thread always gets the latest. The main thread never needs to know *exactly* where the playhead is — it just needs to stay ahead.
+
+The audio thread signals cycle boundaries implicitly: when it swaps, the old cycle's nodes become reclaimable. The main thread doesn't poll — it just observes that its last publish was consumed (the triple buffer's NEW_DATA flag was cleared).
+
+**5. Tidal transformations:**
+
+| Transform | What it does | How it maps to your kernel |
+|---|---|---|
+| `rev` | Reverse pattern order. `a b c d` → `d c b a` | Reverse the node array before materializing. Pattern-level operation, main thread only |
+| `fast 2` | Play pattern twice in one cycle. Everything half-duration | Materialize the pattern twice within the cycle portion, each at half the subdivision |
+| `slow 2` | Pattern spans 2 cycles. Cycle 1 plays first half, cycle 2 plays second | Main thread tracks which half to materialize. Cycle-counting state |
+| `every 4 rev` | Apply `rev` every 4th cycle, normal otherwise | Cycle counter on main thread. Trivial state: `cycle_count % 4 == 0` |
+| `jux rev` | Left channel plays forward, right channel plays backward | Two parallel clips, one reversed, panned opposite. Uses your existing spatial attributes |
+
+None of these require kernel changes. They're all **main-thread pattern transformations** applied before materialization. The kernel sees regular nodes with regular ticks.
+
+As for cycle-counting state — the main thread owns it. A simple `HashMap<loop_id, cycle_count>` incremented at each materialization. Can live on the SAB if you want it persistent, or in Rust-side memory if not.
+
+**6. Polymetric loops:**
+
+Two loops with different cycle lengths, materializing into the same structural plane. Different head pointers, different chains, same SAB. The audio thread traverses both. This works today — nothing stops you from having multiple node chains.
+
+The power: `loop(3beats) { kick hat kick }` against `loop(4beats) { snare . snare . }` gives you a 3-against-4 polymetric groove that phases naturally. This is genuinely hard to do in Tidal without gymnastics.
+
+**8. Free list churn:**
+
+Not a problem, just a sizing constraint. Since you're always one cycle behind on frees, your node pool needs capacity for **two cycles** worth of nodes simultaneously (current playing + next materialized). For typical patterns (4-32 nodes per clip, 3-4 clips per cycle), that's maybe 256 nodes max. Your free list supports 4096. No issue.
+
+**9. Single note diff:**
+
+No problem at all. Two strategies:
+
+- **Attribute-only diff**: same node stays, just update pitch/velocity/instrument via attribute plane. Instant, no structural change. Works when the node type doesn't change.
+- **Structural diff**: free old node, alloc new, rewire chain pointers. Needed when node type changes (note → rest) or node count changes.
+
+For v1, full clip-level replacement (free all, realloc all) is simple and correct. Node-level diffing is an optimization for later — and honestly, with the free list speeds you're seeing, replacing 16 nodes is microseconds. Not worth optimizing prematurely.
