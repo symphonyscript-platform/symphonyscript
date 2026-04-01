@@ -18,8 +18,8 @@ fn create_sab(size: usize) -> SAB {
 fn new_creates_writer_and_reader() {
     let sab = create_sab(4096);
     let (writer, reader) = TripleBuffer::new(sab, 0, 10);
-    assert_eq!(writer.buffer_size(), 10);
-    assert_eq!(reader.buffer_size(), 10);
+    assert_eq!(writer.buffer_capacity(), 10);
+    assert_eq!(reader.buffer_capacity(), 10);
 }
 
 #[test]
