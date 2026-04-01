@@ -283,18 +283,6 @@ fn write_field_visible_through_get() {
     assert_eq!(view.read(7), 12345, "write_field must be visible through get()");
 }
 
-#[test]
-fn get_write_visible_through_read_field() {
-    let (_sab, writer, _reader, free_list) = setup();
-    let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
-
-    let slot = sw.insert(TestPayload { a: 0, b: 0 }).unwrap();
-    let view = sw.get(slot);
-    view.write(7, 54321);
-
-    assert_eq!(sw.read_field(slot, 7), 54321, "get().write() must be visible through read_field");
-}
-
 // ============ Full Exhaust -> Free -> Refill ============
 
 #[test]

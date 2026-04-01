@@ -98,3 +98,70 @@ impl<'a, const SLOT_SIZE: usize> StructuralWriter<'a, SLOT_SIZE> {
         self.writer.read(start_offset + offset)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::primitives::into_array::IntoArray;
+    use crate::primitives::simple_free_list::SimpleFreeList;
+    use crate::primitives::triple_buffer::TripleBuffer;
+    use crate::primitives::types::SAB;
+    use crate::structural_plane::structural_writer::StructuralWriter;
+    use std::sync::atomic::AtomicI32;
+    use std::sync::Arc;
+
+    fn create_sab(size: usize) -> SAB {
+        let mut vec = Vec::with_capacity(size);
+        for _ in 0..size {
+            vec.push(AtomicI32::new(0));
+        }
+        Arc::new(vec)
+    }
+
+    struct TestPayload {
+        a: i32,
+        b: i32,
+    }
+
+    impl IntoArray<16> for TestPayload {
+        fn to_array(&self) -> [i32; 16] {
+            let mut data = [0; 16];
+            data[0] = self.a;
+            data[1] = self.b;
+            data
+        }
+    }
+
+    const SAB_SIZE: usize = 2048;
+    const TB_START: usize = 0;
+    const TB_BUF_CAP: usize = 256;
+    const FL_START: usize = 800;
+    const CAPACITY: usize = 8;
+
+    fn setup() -> (
+        SAB,
+        crate::primitives::triple_buffer::TripleBufferWriter,
+        crate::primitives::triple_buffer::TripleBufferReader,
+        SimpleFreeList,
+    ) {
+        let sab = create_sab(SAB_SIZE);
+        let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
+        let free_list = SimpleFreeList::new(Arc::clone(&sab), FL_START, CAPACITY);
+        (sab, writer, reader, free_list)
+    }
+
+    #[test]
+    fn get_write_visible_through_read_field() {
+        let (_sab, writer, _reader, free_list) = setup();
+        let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
+
+        let slot = sw.insert(TestPayload { a: 0, b: 0 }).unwrap();
+        let view = sw.get(slot);
+        view.write(7, 54321);
+
+        assert_eq!(
+            sw.read_field(slot, 7),
+            54321,
+            "get().write() must be visible through read_field"
+        );
+    }
+}
