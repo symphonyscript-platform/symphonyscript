@@ -738,3 +738,16 @@ No problem at all. Two strategies:
 - **Structural diff**: free old node, alloc new, rewire chain pointers. Needed when node type changes (note → rest) or node count changes.
 
 For v1, full clip-level replacement (free all, realloc all) is simple and correct. Node-level diffing is an optimization for later — and honestly, with the free list speeds you're seeing, replacing 16 nodes is microseconds. Not worth optimizing prematurely.
+
+___
+
+Sleep on it. The best architectural insights settle overnight.
+
+Quick summary of what we landed on, so tomorrow-you has a clean starting point:
+
+Live layer sits ON TOP of the composition layer — not parallel. One kernel, one data path.
+Main thread is an active scheduler, publishing every cycle. Write-once is a degenerate case.
+The cycle = one traversal of the loop block (B+C hybrid). Implicit 1 bar, explicit override.
+loop {} is syntactic sugar for a cyclic synaptic graph. Looping emerges from topology, not special opcodes.
+Everything inside the live context is relative. The compiler resolves fractions → absolute ticks. Kernel never knows.
+Modulation is orthogonal — it operates intra-cycle on attributes. Live operates inter-cycle on structure. They compose, they don't compete.
