@@ -23,7 +23,7 @@ impl IntoArray<NODE_SLOT_SIZE> for NodeData {
     fn to_array(&self) -> [i32; NODE_SLOT_SIZE] {
         let mut data = [0; NODE_SLOT_SIZE];
 
-        data[0] = self.opcode;
+        data[0] = self.opcode << 24;
         data[1] = self.base_tick;
         data[2] = self.next_ptr as i32;
         data[3] = self.prev_ptr as i32;
