@@ -23,7 +23,7 @@ impl<'a, const SLOT_SIZE: usize> SlotWriter<'a, SLOT_SIZE> {
         self.writer.read(self.start_offset + offset)
     }
 
-    pub fn write(&self, offset: usize, value: i32) {
+    pub(crate) fn write(&self, offset: usize, value: i32) {
         debug_assert!(offset < SLOT_SIZE, "offset out of bounds");
         self.writer.write(self.start_offset + offset, value)
     }
