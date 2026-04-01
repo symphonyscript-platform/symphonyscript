@@ -61,3 +61,8 @@ impl<'a> SynapseWriter<'a> {
         self.0.write(6, value as i32)
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+}
