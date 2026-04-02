@@ -11,9 +11,9 @@ pub struct SynapseAttributes {
     pub tempo_scale: i32,
 }
 
-impl IntoArray<16> for SynapseAttributes {
-    fn to_array(&self) -> [i32; 16] {
-        let mut data = [0; 16];
+impl IntoArray<SYNAPSE_ATTRIBUTES_SLOT_SIZE> for SynapseAttributes {
+    fn to_array(&self) -> [i32; SYNAPSE_ATTRIBUTES_SLOT_SIZE] {
+        let mut data = [0; SYNAPSE_ATTRIBUTES_SLOT_SIZE];
 
         data[0] = self.weight;
         data[1] = self.tick_offset;

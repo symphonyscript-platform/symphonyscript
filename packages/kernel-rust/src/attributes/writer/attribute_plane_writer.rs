@@ -15,7 +15,7 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
     pub fn new(sab: SAB, start_index: usize, capacity: usize) -> Self {
         let end_index = start_index + capacity * SLOT_SIZE;
 
-        assert!(end_index < sab.len(), "AttributePlaneWriter out of bounds");
+        debug_assert!(end_index < sab.len(), "AttributePlaneWriter out of bounds");
 
         AttributePlaneWriter {
             sab,

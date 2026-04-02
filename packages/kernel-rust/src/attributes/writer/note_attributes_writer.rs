@@ -1,6 +1,6 @@
+use crate::attributes::writer::attributes_writer::AttributesWriter;
 use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
 use crate::primitives::into_array::IntoArray;
-use crate::attributes::writer::attributes_writer::AttributesWriter;
 
 pub struct NoteAttributes {
     pub pitch: i32,
@@ -16,9 +16,9 @@ pub struct NoteAttributes {
                     // +24 bytes reserved
 }
 
-impl IntoArray<16> for NoteAttributes {
-    fn to_array(&self) -> [i32; 16] {
-        let mut data = [0; 16];
+impl IntoArray<NODE_ATTRIBUTES_SLOT_SIZE> for NoteAttributes {
+    fn to_array(&self) -> [i32; NODE_ATTRIBUTES_SLOT_SIZE] {
+        let mut data = [0; NODE_ATTRIBUTES_SLOT_SIZE];
 
         data[0] = self.pitch;
         data[1] = self.velocity;
