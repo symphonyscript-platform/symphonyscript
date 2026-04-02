@@ -62,19 +62,19 @@ fn new_with_nonzero_start() {
 }
 
 #[test]
-#[should_panic(expected = "AttributePlane out of bounds")]
+#[should_panic(expected = "AttributePlaneWriter out of bounds")]
 fn new_panics_when_exceeding_sab() {
     let sab = create_sab(50);
     let _plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 100); // 100 * 10 = 1000 > 50
 }
 
 #[test]
-#[should_panic(expected = "AttributePlane out of bounds")]
-fn new_panics_at_exact_boundary() {
-    // end_index == sab.len() should still panic (< not <=)
+fn new_succeeds_at_exact_boundary() {
+    // end_index == sab.len() is valid and should not panic (<=, not <)
     let size = 10 * SLOT_SIZE;
     let sab = create_sab(size);
-    let _plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 10);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 10);
+    assert_eq!(plane.end_index(), size);
 }
 
 // ============ Set and Get Round-Trip ============

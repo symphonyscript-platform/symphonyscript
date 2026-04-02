@@ -65,6 +65,7 @@ impl<'a> SynapseWriter<'a> {
 #[cfg(test)]
 mod tests {
     use crate::constants::{NODE_SLOT_SIZE, SYNAPSE_SLOT_SIZE};
+    use crate::primitives::deferred_frees_list::DeferredFreesList;
     use crate::primitives::simple_free_list::SimpleFreeList;
     use crate::primitives::triple_buffer::TripleBuffer;
     use crate::primitives::types::SAB;
@@ -100,20 +101,28 @@ mod tests {
         writer: crate::primitives::triple_buffer::TripleBufferWriter,
         _reader: crate::primitives::triple_buffer::TripleBufferReader,
         node_fl: SimpleFreeList,
+        node_dfl: DeferredFreesList,
         synapse_fl: SimpleFreeList,
+        synapse_dfl: DeferredFreesList,
     }
 
     fn setup() -> TestHarness {
         let sab = create_sab(SAB_SIZE);
         let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
         let node_fl = SimpleFreeList::new(Arc::clone(&sab), NODE_FL_START, NODE_CAPACITY);
-        let synapse_fl = SimpleFreeList::new(Arc::clone(&sab), SYNAPSE_FL_START, SYNAPSE_CAPACITY);
+        let node_dfl = DeferredFreesList::new(Arc::clone(&sab), node_fl.end_index(), NODE_CAPACITY);
+        let synapse_fl =
+            SimpleFreeList::new(Arc::clone(&sab), node_dfl.end_index(), SYNAPSE_CAPACITY);
+        let synapse_dfl =
+            DeferredFreesList::new(Arc::clone(&sab), synapse_fl.end_index(), SYNAPSE_CAPACITY);
         TestHarness {
             _sab: sab,
             writer,
             _reader: reader,
             node_fl,
+            node_dfl,
             synapse_fl,
+            synapse_dfl,
         }
     }
 
@@ -123,12 +132,14 @@ mod tests {
         let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
             h.writer.clone(),
             h.node_fl.clone(),
+            h.node_dfl.clone(),
             NODE_START_OFFSET,
             NODE_CAPACITY,
         );
         let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
             h.writer.clone(),
             h.synapse_fl.clone(),
+            h.synapse_dfl.clone(),
             SYNAPSE_START_OFFSET,
             SYNAPSE_CAPACITY,
         );
@@ -187,12 +198,14 @@ mod tests {
         let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
             h.writer.clone(),
             h.node_fl.clone(),
+            h.node_dfl.clone(),
             NODE_START_OFFSET,
             NODE_CAPACITY,
         );
         let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
             h.writer.clone(),
             h.synapse_fl.clone(),
+            h.synapse_dfl.clone(),
             SYNAPSE_START_OFFSET,
             SYNAPSE_CAPACITY,
         );

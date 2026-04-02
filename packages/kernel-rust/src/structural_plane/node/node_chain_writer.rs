@@ -1,5 +1,4 @@
 use crate::constants::NODE_SLOT_SIZE;
-use crate::errors::free_list_error::FreeListError;
 use crate::primitives::triple_buffer::TripleBufferWriter;
 use crate::structural_plane::node::node_data::{NodeData, NodeDraft};
 use crate::structural_plane::node::node_writer::NodeWriter;
@@ -137,7 +136,7 @@ impl NodeChainWriter {
         }
     }
 
-    pub fn remove(&self, slot: usize) -> Result<(), FreeListError> {
+    pub fn remove(&self, slot: usize) {
         let node = self.get(slot);
         let prev_slot = node.get_prev_ptr();
         let next_slot = node.get_next_ptr();
@@ -152,13 +151,14 @@ impl NodeChainWriter {
             self.get(next_slot).set_prev_ptr(prev_slot);
         }
 
-        self.writer.free(slot)
+        self.writer.defer_free(slot)
     }
 }
 
 #[cfg(test)]
 mod test {
     use crate::constants::NODE_SLOT_SIZE;
+    use crate::primitives::deferred_frees_list::DeferredFreesList;
     use crate::primitives::simple_free_list::SimpleFreeList;
     use crate::primitives::triple_buffer::TripleBuffer;
     use crate::primitives::types::SAB;
@@ -196,17 +196,21 @@ mod test {
         writer: crate::primitives::triple_buffer::TripleBufferWriter,
         reader: crate::primitives::triple_buffer::TripleBufferReader,
         free_list: SimpleFreeList,
+        deferred_frees_list: DeferredFreesList,
     }
 
     fn setup() -> TestHarness {
         let sab = create_sab(SAB_SIZE);
         let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
         let free_list = SimpleFreeList::new(Arc::clone(&sab), FL_START, CAPACITY);
+        let deferred_frees_list =
+            DeferredFreesList::new(Arc::clone(&sab), free_list.end_index(), CAPACITY);
         TestHarness {
             _sab: sab,
             writer,
             reader,
             free_list,
+            deferred_frees_list,
         }
     }
 
@@ -225,6 +229,7 @@ mod test {
         let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
             h.writer.clone(),
             h.free_list,
+            h.deferred_frees_list,
             NODE_START_OFFSET,
             CAPACITY,
         );
@@ -265,6 +270,7 @@ mod test {
         let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
             h.writer.clone(),
             h.free_list.clone(),
+            h.deferred_frees_list.clone(),
             NODE_START_OFFSET,
             CAPACITY,
         );
@@ -292,6 +298,7 @@ mod test {
             let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
                 h.writer.clone(),
                 h.free_list.clone(),
+                h.deferred_frees_list.clone(),
                 NODE_START_OFFSET,
                 CAPACITY,
             );
@@ -327,6 +334,7 @@ mod test {
         let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
             h.writer.clone(),
             h.free_list.clone(),
+            h.deferred_frees_list.clone(),
             NODE_START_OFFSET,
             CAPACITY,
         );
@@ -344,7 +352,7 @@ mod test {
 
         // mutate siblings: insert between c and b, then remove b
         let d = chain.insert_after(c, make_draft(4, 400)).unwrap();
-        chain.remove(b).unwrap();
+        chain.remove(b);
         // chain: c -> d -> a
 
         // a's data must be completely intact

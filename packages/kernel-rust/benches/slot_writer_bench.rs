@@ -68,7 +68,7 @@ fn bench_slot_writer(c: &mut Criterion) {
     c.bench_function("StructuralWriter/insert+free_cycle", |b| {
         b.iter(|| {
             let s = sw.insert(TestPayload { a: black_box(1), b: black_box(2) }).unwrap();
-            sw.free(s).unwrap();
+            sw.defer_free(s).unwrap();
         });
     });
 }

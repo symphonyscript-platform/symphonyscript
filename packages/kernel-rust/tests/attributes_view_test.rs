@@ -82,14 +82,14 @@ fn works_with_different_slot_sizes() {
 }
 
 #[test]
-#[should_panic(expected = "NodeAttributesView out of bounds")]
+#[should_panic(expected = "AttributesWriter out of bounds")]
 fn new_panics_if_out_of_bounds() {
     let sab = create_sab(10);
     let _view: AttributesWriter<'_, 16> = AttributesWriter::new(&sab, 0);
 }
 
 #[test]
-#[should_panic(expected = "NodeAttributesView out of bounds")]
+#[should_panic(expected = "AttributesWriter out of bounds")]
 fn new_panics_if_start_index_crosses_bounds() {
     let sab = create_sab(32);
     let _view: AttributesWriter<'_, 16> = AttributesWriter::new(&sab, 20);

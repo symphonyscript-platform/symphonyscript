@@ -1,5 +1,4 @@
 use crate::constants::SYNAPSE_SLOT_SIZE;
-use crate::errors::free_list_error::FreeListError;
 use crate::structural_plane::node::node_chain_writer::NodeChainWriter;
 use crate::structural_plane::structural_writer::StructuralWriter;
 use crate::structural_plane::synapse::synapse_data::{SynapseData, SynapseDraft};
@@ -82,7 +81,7 @@ impl SynapseChainWriter {
         }
     }
 
-    pub fn disconnect(&self, slot: usize) -> Result<(), FreeListError> {
+    pub fn disconnect(&self, slot: usize) {
         let synapse = self.get(slot);
         let source = self.node_chain.get(synapse.get_source_ptr());
         let target = self.node_chain.get(synapse.get_target_ptr());
@@ -119,6 +118,6 @@ impl SynapseChainWriter {
             target.set_incoming_synapse_tail(synapse_incoming_prev_ptr);
         }
 
-        self.synapse_writer.free(slot)
+        self.synapse_writer.defer_free(slot)
     }
 }

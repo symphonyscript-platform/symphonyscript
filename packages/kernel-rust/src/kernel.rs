@@ -85,12 +85,14 @@ impl Kernel {
         let node_structural_writer = StructuralWriter::<NODE_SLOT_SIZE>::bind(
             triple_buffer_writer.clone(),
             node_free_list.clone(),
+            node_deferred_frees_list.clone(),
             buffer_head_offset + 1,
             config.max_nodes,
         );
         let synapse_structural_writer = StructuralWriter::<SYNAPSE_SLOT_SIZE>::bind(
             triple_buffer_writer.clone(),
             synapse_free_list.clone(),
+            synapse_deferred_frees_list.clone(),
             node_structural_writer.end_offset(),
             config.max_synapses,
         );
@@ -152,12 +154,14 @@ impl Kernel {
         let node_structural_writer = StructuralWriter::<NODE_SLOT_SIZE>::new(
             triple_buffer_writer.clone(),
             node_free_list.clone(),
+            node_deferred_frees_list.clone(),
             buffer_head_offset + 1,
             config.max_nodes,
         );
         let synapse_structural_writer = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
             triple_buffer_writer.clone(),
             synapse_free_list.clone(),
+            synapse_deferred_frees_list.clone(),
             node_structural_writer.end_offset(),
             config.max_synapses,
         );
@@ -191,7 +195,9 @@ impl Kernel {
         let node_attribute_plane_size =
             AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::calculate_size(config.max_nodes);
         let synapse_attribute_plane_size =
-            AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::calculate_size(config.max_synapses);
+            AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::calculate_size(
+                config.max_synapses,
+            );
         let structural_plane_size =
             TripleBuffer::calculate_size(Self::compute_triple_buffer_size(config));
 
@@ -226,7 +232,10 @@ impl Kernel {
         self.node_chain_writer.get(slot)
     }
 
-    pub fn get_node_attributes(&'_ self, slot: usize) -> AttributesWriter<NODE_ATTRIBUTES_SLOT_SIZE> {
+    pub fn get_node_attributes(
+        &'_ self,
+        slot: usize,
+    ) -> AttributesWriter<NODE_ATTRIBUTES_SLOT_SIZE> {
         self.node_attribute_plane.get(slot)
     }
 
@@ -260,10 +269,9 @@ impl Kernel {
         self.node_chain_writer.insert_before(next_slot, data)
     }
 
-    pub fn remove_node(&self, slot: usize) -> Result<(), FreeListError> {
-        self.node_chain_writer.remove(slot)?;
+    pub fn remove_node(&self, slot: usize) {
+        self.node_chain_writer.remove(slot);
         self.node_deferred_frees_list.push(slot);
-        Ok(())
     }
 
     pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_> {
@@ -307,10 +315,9 @@ impl Kernel {
             .connect(source_slot, target_slot, data)
     }
 
-    pub fn disconnect(&self, slot: usize) -> Result<(), FreeListError> {
-        self.synapse_chain_writer.disconnect(slot)?;
+    pub fn disconnect(&self, slot: usize) {
+        self.synapse_chain_writer.disconnect(slot);
         self.synapse_deferred_frees_list.push(slot);
-        Ok(())
     }
 
     pub fn publish(&mut self) -> Result<(), FreeListError> {

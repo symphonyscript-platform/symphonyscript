@@ -1,4 +1,4 @@
-use crate::errors::free_list_error::FreeListError;
+use crate::primitives::deferred_frees_list::DeferredFreesList;
 use crate::primitives::into_array::IntoArray;
 use crate::primitives::simple_free_list::SimpleFreeList;
 use crate::primitives::triple_buffer::TripleBufferWriter;
@@ -8,16 +8,17 @@ use crate::structural_plane::slot_writer::SlotWriter;
 pub struct StructuralWriter<const SLOT_SIZE: usize> {
     writer: TripleBufferWriter,
     free_list: SimpleFreeList,
+    deferred_frees_list: DeferredFreesList,
     start_offset: usize,
     end_offset: usize,
     capacity: usize,
 }
 
-
 impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
     pub fn new(
         writer: TripleBufferWriter,
         free_list: SimpleFreeList,
+        deferred_frees_list: DeferredFreesList,
         start_offset: usize,
         capacity: usize,
     ) -> Self {
@@ -40,6 +41,7 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
         StructuralWriter {
             writer,
             free_list,
+            deferred_frees_list,
             start_offset,
             end_offset,
             capacity,
@@ -49,10 +51,17 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
     pub fn bind(
         writer: TripleBufferWriter,
         free_list: SimpleFreeList,
+        deferred_frees_list: DeferredFreesList,
         start_offset: usize,
         capacity: usize,
     ) -> Self {
-        Self::new(writer, free_list, start_offset, capacity)
+        Self::new(
+            writer,
+            free_list,
+            deferred_frees_list,
+            start_offset,
+            capacity,
+        )
     }
 
     pub fn resolve_writer_offset(&self, slot: usize) -> usize {
@@ -83,8 +92,8 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
         }
     }
 
-    pub fn free(&self, slot: usize) -> Result<(), FreeListError> {
-        self.free_list.free(slot)
+    pub fn defer_free(&self, slot: usize) {
+        self.deferred_frees_list.push(slot)
     }
 
     pub fn get(&'_ self, slot: usize) -> SlotWriter<'_, SLOT_SIZE> {
@@ -112,6 +121,7 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
 
 #[cfg(test)]
 mod tests {
+    use crate::primitives::deferred_frees_list::DeferredFreesList;
     use crate::primitives::into_array::IntoArray;
     use crate::primitives::simple_free_list::SimpleFreeList;
     use crate::primitives::triple_buffer::TripleBuffer;
@@ -153,17 +163,21 @@ mod tests {
         crate::primitives::triple_buffer::TripleBufferWriter,
         crate::primitives::triple_buffer::TripleBufferReader,
         SimpleFreeList,
+        DeferredFreesList,
     ) {
         let sab = create_sab(SAB_SIZE);
         let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
         let free_list = SimpleFreeList::new(Arc::clone(&sab), FL_START, CAPACITY);
-        (sab, writer, reader, free_list)
+        let deferred_frees_lsit =
+            DeferredFreesList::new(Arc::clone(&sab), free_list.end_index(), CAPACITY);
+        (sab, writer, reader, free_list, deferred_frees_lsit)
     }
 
     #[test]
     fn get_write_visible_through_read_field() {
-        let (_sab, writer, _reader, free_list) = setup();
-        let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list, 0, CAPACITY);
+        let (_sab, writer, _reader, free_list, deferred_frees_list) = setup();
+        let sw: StructuralWriter<16> =
+            StructuralWriter::new(writer.clone(), free_list, deferred_frees_list, 0, CAPACITY);
 
         let slot = sw.insert(TestPayload { a: 0, b: 0 }).unwrap();
         let view = sw.get(slot);
