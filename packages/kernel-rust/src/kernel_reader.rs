@@ -26,7 +26,7 @@ impl KernelReader {
     pub fn bind(sab: SAB, config: KernelConfig) -> Self {
         let node_attribute_plane = AttributePlaneReader::<NODE_ATTRIBUTES_SLOT_SIZE>::bind(
             Arc::clone(&sab),
-            Kernel::compute_header_size(&config),
+            Kernel::compute_headers_size(&config),
             config.max_nodes,
         );
         let synapse_attribute_plane = AttributePlaneReader::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::bind(

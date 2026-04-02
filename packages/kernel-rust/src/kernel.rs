@@ -184,13 +184,13 @@ impl Kernel {
         let structural_plane_size =
             TripleBuffer::calculate_size(Self::compute_triple_buffer_size(config));
 
-        Self::compute_header_size(&config)
+        Self::compute_headers_size(&config)
             + node_attribute_plane_size
             + synapse_attribute_plane_size
             + structural_plane_size
     }
 
-    pub fn compute_header_size(config: &KernelConfig) -> usize {
+    pub fn compute_headers_size(config: &KernelConfig) -> usize {
         let node_free_list_size = SimpleFreeList::calculate_size(config.max_nodes);
         let synapse_free_list_size = SimpleFreeList::calculate_size(config.max_synapses);
         let node_deferred_free_list_size = DeferredFreesList::calculate_size(config.max_nodes);
