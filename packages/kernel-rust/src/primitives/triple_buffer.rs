@@ -174,6 +174,10 @@ impl TripleBufferWriter {
     }
 
     fn sync(&self, published_index: usize, writer_index: usize) {
+        if published_index == writer_index {
+            return;
+        }
+
         let published_buffer_index = self.buffer_bases[published_index];
         let writer_buffer_index = self.buffer_bases[writer_index];
         let source_ptr = self.sab[published_buffer_index..].as_ptr() as *const i32;
