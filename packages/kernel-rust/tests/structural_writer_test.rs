@@ -132,6 +132,8 @@ fn free_then_reinsert_reuses_slot() {
 
     let slot = sw.insert(TestPayload { a: 10, b: 20 }).unwrap();
     sw.defer_free(slot);
+    deferred.free_deferred_slots(&free_list).unwrap();
+    deferred.free_deferred_slots(&free_list).unwrap();
 
     // Must reclaim the freed slot, not grab a new one
     let slot2 = sw.insert(TestPayload { a: 30, b: 40 }).unwrap();
@@ -306,6 +308,8 @@ fn exhaust_free_all_refill_all() {
     }
 
     // refill all 8 with new data
+    deferred.free_deferred_slots(&free_list).unwrap();
+    deferred.free_deferred_slots(&free_list).unwrap();
     let mut new_slots = Vec::new();
     for i in 0..CAPACITY {
         let slot = sw.insert(TestPayload { a: (i as i32) * 100, b: 0 }).unwrap();

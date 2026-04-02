@@ -406,6 +406,9 @@ fn full_connect_disconnect_reconnect_cycle() {
     assert_eq!(node_chain.get(src).get_outgoing_synapse_head(), 0);
     assert_eq!(node_chain.get(tgt).get_incoming_synapse_head(), 0);
 
+    h.deferred.free_deferred_slots(&h.synapse_fl).unwrap();
+    h.deferred.free_deferred_slots(&h.synapse_fl).unwrap();
+
     // reconnect (slot should be reused)
     let s2 = synapse_chain.connect(src, tgt, draft(20)).unwrap();
     assert_eq!(s2, s1, "freed synapse slot should be reused");

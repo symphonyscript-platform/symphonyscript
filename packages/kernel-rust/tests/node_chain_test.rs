@@ -43,7 +43,7 @@ struct TestHarness {
 fn setup() -> TestHarness {
     let sab = create_sab(SAB_SIZE);
     let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
-    let deferred = DeferredFreesList::new(Arc::clone(&sab), FL_START + 5000, CAPACITY);
+    let deferred = DeferredFreesList::new(Arc::clone(&sab), FL_START + 1000, CAPACITY);
     let free_list = SimpleFreeList::new(Arc::clone(&sab), FL_START, CAPACITY);
     TestHarness {
         _sab: sab,
