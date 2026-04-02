@@ -4,18 +4,20 @@ use crate::primitives::simple_free_list::SimpleFreeList;
 use crate::primitives::triple_buffer::TripleBufferWriter;
 use crate::structural_plane::slot_writer::SlotWriter;
 
-pub struct StructuralWriter<'a, const SLOT_SIZE: usize> {
-    writer: &'a TripleBufferWriter,
-    free_list: &'a SimpleFreeList,
+#[derive(Clone)]
+pub struct StructuralWriter<const SLOT_SIZE: usize> {
+    writer: TripleBufferWriter,
+    free_list: SimpleFreeList,
     start_offset: usize,
     end_offset: usize,
     capacity: usize,
 }
 
-impl<'a, const SLOT_SIZE: usize> StructuralWriter<'a, SLOT_SIZE> {
+
+impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
     pub fn new(
-        writer: &'a TripleBufferWriter,
-        free_list: &'a SimpleFreeList,
+        writer: TripleBufferWriter,
+        free_list: SimpleFreeList,
         start_offset: usize,
         capacity: usize,
     ) -> Self {
@@ -44,11 +46,20 @@ impl<'a, const SLOT_SIZE: usize> StructuralWriter<'a, SLOT_SIZE> {
         }
     }
 
+    pub fn bind(
+        writer: TripleBufferWriter,
+        free_list: SimpleFreeList,
+        start_offset: usize,
+        capacity: usize,
+    ) -> Self {
+        Self::new(writer, free_list, start_offset, capacity)
+    }
+
     pub fn resolve_writer_offset(&self, slot: usize) -> usize {
         self.start_offset + (slot - 1) * SLOT_SIZE
     }
 
-    pub fn end_index(&self) -> usize {
+    pub fn end_offset(&self) -> usize {
         self.end_offset
     }
 
@@ -152,7 +163,7 @@ mod tests {
     #[test]
     fn get_write_visible_through_read_field() {
         let (_sab, writer, _reader, free_list) = setup();
-        let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
+        let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list, 0, CAPACITY);
 
         let slot = sw.insert(TestPayload { a: 0, b: 0 }).unwrap();
         let view = sw.get(slot);

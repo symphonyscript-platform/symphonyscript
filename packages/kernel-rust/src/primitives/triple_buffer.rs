@@ -4,8 +4,10 @@ use std::sync::Arc;
 
 pub struct TripleBuffer;
 
+#[derive(Clone)]
 pub struct TripleBufferWriter {
     sab: SAB,
+    start_index: usize,
     state_slot_index: usize,
     writer_slot_index: usize,
     published_slot_index: usize,
@@ -14,8 +16,10 @@ pub struct TripleBufferWriter {
     end_index: usize,
 }
 
+#[derive(Clone)]
 pub struct TripleBufferReader {
     sab: SAB,
+    start_index: usize,
     state_slot_index: usize,
     reader_slot_index: usize,
     buffer_bases: [usize; 3],
@@ -53,6 +57,7 @@ impl TripleBuffer {
 
         let writer = TripleBufferWriter {
             sab: Arc::clone(&sab),
+            start_index,
             state_slot_index,
             writer_slot_index,
             published_slot_index,
@@ -62,6 +67,7 @@ impl TripleBuffer {
         };
         let reader = TripleBufferReader {
             sab: Arc::clone(&sab),
+            start_index,
             state_slot_index,
             reader_slot_index,
             buffer_bases,
@@ -88,6 +94,7 @@ impl TripleBuffer {
         let end_index = buffers_start_index + buffer_capacity * 3;
         let writer = TripleBufferWriter {
             sab: Arc::clone(&sab),
+            start_index,
             state_slot_index,
             writer_slot_index,
             published_slot_index,
@@ -121,12 +128,17 @@ impl TripleBuffer {
 
         TripleBufferReader {
             sab: Arc::clone(&sab),
+            start_index,
             state_slot_index,
             reader_slot_index,
             buffer_bases,
             buffer_capacity,
             end_index,
         }
+    }
+
+    pub fn calculate_size(frame_capacity: usize) -> usize {
+        4 + frame_capacity * 3
     }
 }
 

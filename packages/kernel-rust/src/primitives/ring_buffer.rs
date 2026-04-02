@@ -4,6 +4,7 @@ use crate::primitives::types::SAB;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct RingBuffer<const SLOT_SIZE: usize> {
     sab: SAB,
     slots: SlotView<SLOT_SIZE>,

@@ -1,3 +1,5 @@
+pub const SAB_MAGIC: usize = 0x53594D53;
+
 pub const NODE_SLOT_SIZE: usize = 16;
 pub const NODE_ATTRIBUTES_SLOT_SIZE: usize = 16;
 

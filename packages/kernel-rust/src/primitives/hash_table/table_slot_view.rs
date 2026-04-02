@@ -1,8 +1,9 @@
-use std::sync::atomic::Ordering;
 use crate::primitives::hash_table::constants::{EMPTY_HASH, TABLE_SLOT_SIZE};
 use crate::primitives::hash_table::table_slot::TableSlot;
 use crate::primitives::types::SAB;
+use std::sync::atomic::Ordering;
 
+#[derive(Clone)]
 pub struct TableSlotView {
     sab: SAB,
     start_index: usize,
@@ -18,14 +19,21 @@ impl TableSlotView {
         }
     }
 
+    pub fn bind(sab: SAB, start_index: usize, slots_count: u32) -> Self {
+        Self::new(sab, start_index, slots_count)
+    }
+
     pub fn get(&self, index: usize) -> TableSlot {
-        debug_assert!(index < self.slots_count as usize, "slot index out of bounds");
+        debug_assert!(
+            index < self.slots_count as usize,
+            "slot index out of bounds"
+        );
 
         let sab_index = self.calculate_index(index);
         let hash = self.sab[sab_index].load(Ordering::Relaxed);
 
         if hash == EMPTY_HASH {
-            return TableSlot::empty()
+            return TableSlot::empty();
         }
 
         TableSlot {
@@ -36,7 +44,10 @@ impl TableSlotView {
     }
 
     pub fn set(&self, index: usize, slot: TableSlot) {
-        debug_assert!(index < self.slots_count as usize, "slot index out of bounds");
+        debug_assert!(
+            index < self.slots_count as usize,
+            "slot index out of bounds"
+        );
 
         let sab_index = self.calculate_index(index);
 
@@ -46,13 +57,16 @@ impl TableSlotView {
     }
 
     pub fn remove(&self, index: usize) -> TableSlot {
-        debug_assert!(index < self.slots_count as usize, "slot index out of bounds");
+        debug_assert!(
+            index < self.slots_count as usize,
+            "slot index out of bounds"
+        );
 
         let sab_index = self.calculate_index(index);
         let hash = self.sab[sab_index].load(Ordering::Relaxed);
 
         if hash == EMPTY_HASH {
-            return TableSlot::empty()
+            return TableSlot::empty();
         }
 
         let slot = TableSlot {

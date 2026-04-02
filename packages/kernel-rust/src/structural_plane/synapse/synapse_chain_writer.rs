@@ -5,20 +5,28 @@ use crate::structural_plane::structural_writer::StructuralWriter;
 use crate::structural_plane::synapse::synapse_data::{SynapseData, SynapseDraft};
 use crate::structural_plane::synapse::synapse_writer::SynapseWriter;
 
-pub struct SynapseChainWriter<'a> {
-    node_chain: &'a NodeChainWriter<'a>,
-    synapse_writer: &'a StructuralWriter<'a, SYNAPSE_SLOT_SIZE>,
+#[derive(Clone)]
+pub struct SynapseChainWriter {
+    node_chain: NodeChainWriter,
+    synapse_writer: StructuralWriter<SYNAPSE_SLOT_SIZE>,
 }
 
-impl<'a> SynapseChainWriter<'a> {
+impl SynapseChainWriter {
     pub fn new(
-        node_chain: &'a NodeChainWriter<'a>,
-        synapse_writer: &'a StructuralWriter<'a, SYNAPSE_SLOT_SIZE>,
+        node_chain: NodeChainWriter,
+        synapse_writer: StructuralWriter<SYNAPSE_SLOT_SIZE>,
     ) -> Self {
         SynapseChainWriter {
             node_chain,
             synapse_writer,
         }
+    }
+
+    pub fn bind(
+        node_chain: NodeChainWriter,
+        synapse_writer: StructuralWriter<SYNAPSE_SLOT_SIZE>,
+    ) -> Self {
+        Self::new(node_chain, synapse_writer)
     }
 
     pub fn get(&'_ self, slot: usize) -> SynapseWriter<'_> {

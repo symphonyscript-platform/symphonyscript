@@ -1,14 +1,18 @@
 use crate::primitives::types::SAB;
 use std::sync::atomic::Ordering;
 
-pub struct SlotHandle<const SLOT_SIZE: usize> {
-    sab: SAB,
+pub struct SlotHandle<'a, const SLOT_SIZE: usize> {
+    sab: &'a SAB,
     pub(crate) start_index: usize,
 }
 
-impl<const SLOT_SIZE: usize> SlotHandle<SLOT_SIZE> {
-    pub fn new(sab: SAB, start_index: usize) -> Self {
+impl<'a, const SLOT_SIZE: usize> SlotHandle<'a, SLOT_SIZE> {
+    pub fn new(sab: &'a SAB, start_index: usize) -> Self {
         SlotHandle { sab, start_index }
+    }
+
+    pub fn bind(sab: &'a SAB, start_index: usize) -> Self {
+        Self::new(sab, start_index)
     }
 
     pub fn read(&self, index: usize) -> i32 {

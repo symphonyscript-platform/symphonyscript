@@ -3,16 +3,16 @@ use crate::primitives::triple_buffer::TripleBufferReader;
 use crate::structural_plane::node::node_reader::NodeReader;
 use crate::structural_plane::structural_reader::StructuralReader;
 
-pub struct NodeChainReader<'a> {
-    buffer: &'a TripleBufferReader,
-    reader: &'a StructuralReader<'a, NODE_SLOT_SIZE>,
+pub struct NodeChainReader {
+    buffer: TripleBufferReader,
+    reader: StructuralReader<NODE_SLOT_SIZE>,
     buffer_head_offset: usize,
 }
 
-impl<'a> NodeChainReader<'a> {
+impl NodeChainReader {
     pub fn new(
-        buffer: &'a TripleBufferReader,
-        reader: &'a StructuralReader<'a, NODE_SLOT_SIZE>,
+        buffer: TripleBufferReader,
+        reader: StructuralReader<NODE_SLOT_SIZE>,
         buffer_head_offset: usize,
     ) -> Self {
         NodeChainReader {

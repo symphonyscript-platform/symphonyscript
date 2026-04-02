@@ -1,6 +1,7 @@
-use std::sync::atomic::Ordering;
 use crate::primitives::types::SAB;
+use std::sync::atomic::Ordering;
 
+#[derive(Clone)]
 pub struct SlotView<const SLOT_SIZE: usize> {
     sab: SAB,
     start_index: usize,
@@ -17,12 +18,19 @@ impl<const SLOT_SIZE: usize> SlotView<SLOT_SIZE> {
         }
     }
 
+    pub fn bind(sab: SAB, start_index: usize, capacity: i32) -> Self {
+        Self::new(sab, start_index, capacity)
+    }
+
     pub fn sab_index(&self, slot_index: usize) -> usize {
         self.start_index + slot_index * SLOT_SIZE
     }
 
     pub fn get_at(&self, slot_index: usize, slot_item_index: usize) -> i32 {
-        debug_assert!(slot_index < self.capacity as usize, "slot index out of bounds");
+        debug_assert!(
+            slot_index < self.capacity as usize,
+            "slot index out of bounds"
+        );
         debug_assert!(slot_item_index < SLOT_SIZE, "slot item index out of bounds");
 
         let sab_index = self.start_index + slot_index * SLOT_SIZE + slot_item_index;
@@ -31,7 +39,10 @@ impl<const SLOT_SIZE: usize> SlotView<SLOT_SIZE> {
     }
 
     pub fn set_at(&self, slot_index: usize, slot_item_index: usize, value: i32) {
-        debug_assert!(slot_index < self.capacity as usize, "slot index out of bounds");
+        debug_assert!(
+            slot_index < self.capacity as usize,
+            "slot index out of bounds"
+        );
         debug_assert!(slot_item_index < SLOT_SIZE, "slot item index out of bounds");
 
         let sab_index = self.start_index + slot_index * SLOT_SIZE + slot_item_index;

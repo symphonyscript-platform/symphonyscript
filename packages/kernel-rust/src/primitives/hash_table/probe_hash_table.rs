@@ -7,6 +7,7 @@ use crate::primitives::types::SAB;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct ProbeHashTable {
     sab: SAB,
     slots: TableSlotView,

@@ -4,6 +4,7 @@ use crate::primitives::types::SAB;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct FreeList<const SLOT_SIZE: usize> {
     sab: SAB,
     start_index: usize,
@@ -70,7 +71,7 @@ impl<const SLOT_SIZE: usize> FreeList<SLOT_SIZE> {
         self.end_index
     }
 
-    pub fn alloc(&self) -> Option<SlotHandle<SLOT_SIZE>> {
+    pub fn alloc(&'_ self) -> Option<SlotHandle<'_, SLOT_SIZE>> {
         let head_index = self.sab[self.head_slot_index].load(Ordering::Relaxed);
 
         if head_index >= self.capacity {
@@ -78,7 +79,7 @@ impl<const SLOT_SIZE: usize> FreeList<SLOT_SIZE> {
         }
 
         let slot = SlotHandle::<SLOT_SIZE>::new(
-            Arc::clone(&self.sab),
+            &self.sab,
             self.start_index + (head_index as usize) * SLOT_SIZE,
         );
         let next_index = slot.read(0);

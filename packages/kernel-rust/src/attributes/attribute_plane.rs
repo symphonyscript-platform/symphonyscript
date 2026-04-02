@@ -1,8 +1,9 @@
-use std::sync::atomic::Ordering;
-use crate::primitives::into_array::IntoArray;
 use crate::attributes::attributes_view::AttributesView;
+use crate::primitives::into_array::IntoArray;
 use crate::primitives::types::SAB;
+use std::sync::atomic::Ordering;
 
+#[derive(Clone)]
 pub struct AttributePlane<const SLOT_SIZE: usize> {
     sab: SAB,
     start_index: usize,
@@ -22,6 +23,14 @@ impl<const SLOT_SIZE: usize> AttributePlane<SLOT_SIZE> {
             end_index,
             capacity,
         }
+    }
+
+    pub fn bind(sab: SAB, start_index: usize, capacity: usize) -> Self {
+        Self::new(sab, start_index, capacity)
+    }
+
+    pub fn calculate_size(capacity: usize) -> usize {
+        capacity * SLOT_SIZE
     }
 
     pub fn resolve_sab_index(&self, offset: usize) -> usize {

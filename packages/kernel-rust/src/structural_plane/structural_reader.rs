@@ -1,15 +1,16 @@
 use crate::primitives::triple_buffer::TripleBufferReader;
 use crate::structural_plane::slot_reader::SlotReader;
 
-pub struct StructuralReader<'a, const SLOT_SIZE: usize> {
-    reader: &'a TripleBufferReader,
+#[derive(Clone)]
+pub struct StructuralReader<const SLOT_SIZE: usize> {
+    reader: TripleBufferReader,
     start_offset: usize,
     end_offset: usize,
     capacity: usize,
 }
 
-impl<'a, const SLOT_SIZE: usize> StructuralReader<'a, SLOT_SIZE> {
-    pub fn new(reader: &'a TripleBufferReader, start_offset: usize, capacity: usize) -> Self {
+impl<const SLOT_SIZE: usize> StructuralReader<SLOT_SIZE> {
+    pub fn new(reader: TripleBufferReader, start_offset: usize, capacity: usize) -> Self {
         let end_offset = start_offset + capacity * SLOT_SIZE;
 
         debug_assert!(
@@ -27,11 +28,15 @@ impl<'a, const SLOT_SIZE: usize> StructuralReader<'a, SLOT_SIZE> {
         }
     }
 
+    pub fn bind(reader: TripleBufferReader, start_offset: usize, capacity: usize) -> Self {
+        Self::new(reader, start_offset, capacity)
+    }
+
     pub fn resolve_reader_offset(&self, slot: usize) -> usize {
         self.start_offset + (slot - 1) * SLOT_SIZE
     }
 
-    pub fn end_index(&self) -> usize {
+    pub fn end_offset(&self) -> usize {
         self.end_offset
     }
 

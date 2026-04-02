@@ -120,14 +120,36 @@ mod tests {
     #[test]
     fn synapse_writer_set_get_all_fields() {
         let h = setup();
-        let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(&h.writer, &h.node_fl, NODE_START_OFFSET, NODE_CAPACITY);
-        let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(&h.writer, &h.synapse_fl, SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
-        let node_chain = NodeChainWriter::new(&h.writer, &node_sw, NODE_HEAD_OFFSET);
-        let synapse_chain = SynapseChainWriter::new(&node_chain, &synapse_sw);
+        let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+            h.writer.clone(),
+            h.node_fl.clone(),
+            NODE_START_OFFSET,
+            NODE_CAPACITY,
+        );
+        let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+            h.writer.clone(),
+            h.synapse_fl.clone(),
+            SYNAPSE_START_OFFSET,
+            SYNAPSE_CAPACITY,
+        );
+        let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
+        let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
-        let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
-        let tgt = node_chain.insert_head(NodeDraft { opcode: 2, base_tick: 0 }).unwrap();
-        let syn = synapse_chain.connect(src, tgt, SynapseDraft { opcode: 5 }).unwrap();
+        let src = node_chain
+            .insert_head(NodeDraft {
+                opcode: 1,
+                base_tick: 0,
+            })
+            .unwrap();
+        let tgt = node_chain
+            .insert_head(NodeDraft {
+                opcode: 2,
+                base_tick: 0,
+            })
+            .unwrap();
+        let syn = synapse_chain
+            .connect(src, tgt, SynapseDraft { opcode: 5 })
+            .unwrap();
 
         let s = synapse_chain.get(syn);
 
@@ -162,14 +184,36 @@ mod tests {
     #[test]
     fn synapse_writer_opcode_bitmask_preserves_lower_bits() {
         let h = setup();
-        let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(&h.writer, &h.node_fl, NODE_START_OFFSET, NODE_CAPACITY);
-        let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(&h.writer, &h.synapse_fl, SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
-        let node_chain = NodeChainWriter::new(&h.writer, &node_sw, NODE_HEAD_OFFSET);
-        let synapse_chain = SynapseChainWriter::new(&node_chain, &synapse_sw);
+        let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+            h.writer.clone(),
+            h.node_fl.clone(),
+            NODE_START_OFFSET,
+            NODE_CAPACITY,
+        );
+        let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+            h.writer.clone(),
+            h.synapse_fl.clone(),
+            SYNAPSE_START_OFFSET,
+            SYNAPSE_CAPACITY,
+        );
+        let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
+        let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
-        let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
-        let tgt = node_chain.insert_head(NodeDraft { opcode: 2, base_tick: 0 }).unwrap();
-        let syn = synapse_chain.connect(src, tgt, SynapseDraft { opcode: 0 }).unwrap();
+        let src = node_chain
+            .insert_head(NodeDraft {
+                opcode: 1,
+                base_tick: 0,
+            })
+            .unwrap();
+        let tgt = node_chain
+            .insert_head(NodeDraft {
+                opcode: 2,
+                base_tick: 0,
+            })
+            .unwrap();
+        let syn = synapse_chain
+            .connect(src, tgt, SynapseDraft { opcode: 0 })
+            .unwrap();
 
         let s = synapse_chain.get(syn);
 

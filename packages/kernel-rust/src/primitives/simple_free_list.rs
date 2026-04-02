@@ -3,6 +3,7 @@ use crate::primitives::types::SAB;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct SimpleFreeList {
     sab: SAB,
     slots_start_index: usize,
@@ -22,6 +23,10 @@ impl SimpleFreeList {
         Self::create(sab, start_index, capacity, true)
     }
 
+    pub fn calculate_size(capacity: usize) -> usize {
+        2 + (capacity + 31) / 32 + capacity
+    }
+
     fn create(sab: SAB, start_index: usize, capacity: usize, bind: bool) -> Self {
         debug_assert!(capacity > 0, "capacity must be positive");
         debug_assert_eq!(capacity & (capacity - 1), 0, "capacity must be power of 2");
@@ -29,9 +34,9 @@ impl SimpleFreeList {
         let free_count_slot_index = start_index + 1;
         let bitmap_slot_start_index = start_index + 2;
         let bitmap_size = (capacity + 31) / 32;
-        let bitmap_slot_end_index = bitmap_slot_start_index + bitmap_size as usize;
+        let bitmap_slot_end_index = bitmap_slot_start_index + bitmap_size;
         let slots_start_index = bitmap_slot_end_index;
-        let slots_end_index = slots_start_index + (capacity as usize);
+        let slots_end_index = slots_start_index + capacity;
 
         assert!(slots_end_index < sab.len(), "SimpleFreeList out of bounds");
 

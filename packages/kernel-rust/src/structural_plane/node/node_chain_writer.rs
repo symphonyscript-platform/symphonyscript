@@ -5,16 +5,17 @@ use crate::structural_plane::node::node_data::{NodeData, NodeDraft};
 use crate::structural_plane::node::node_writer::NodeWriter;
 use crate::structural_plane::structural_writer::StructuralWriter;
 
-pub struct NodeChainWriter<'a> {
-    buffer: &'a TripleBufferWriter,
-    writer: &'a StructuralWriter<'a, NODE_SLOT_SIZE>,
+#[derive(Clone)]
+pub struct NodeChainWriter {
+    buffer: TripleBufferWriter,
+    writer: StructuralWriter<NODE_SLOT_SIZE>,
     buffer_head_offset: usize,
 }
 
-impl<'a> NodeChainWriter<'a> {
+impl NodeChainWriter {
     pub fn new(
-        buffer: &'a TripleBufferWriter,
-        writer: &'a StructuralWriter<'a, NODE_SLOT_SIZE>,
+        buffer: TripleBufferWriter,
+        writer: StructuralWriter<NODE_SLOT_SIZE>,
         buffer_head_offset: usize,
     ) -> Self {
         debug_assert!(
@@ -28,6 +29,14 @@ impl<'a> NodeChainWriter<'a> {
             writer,
             buffer_head_offset,
         }
+    }
+
+    pub fn bind(
+        buffer: TripleBufferWriter,
+        writer: StructuralWriter<NODE_SLOT_SIZE>,
+        buffer_head_offset: usize,
+    ) -> Self {
+        Self::new(buffer, writer, buffer_head_offset)
     }
 
     pub fn get_head(&'_ self) -> Option<NodeWriter<'_>> {
@@ -214,12 +223,12 @@ mod test {
     fn node_writer_set_get_all_fields() {
         let h = setup();
         let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
-            &h.writer,
-            &h.free_list,
+            h.writer.clone(),
+            h.free_list,
             NODE_START_OFFSET,
             CAPACITY,
         );
-        let chain = NodeChainWriter::new(&h.writer, &sw, HEAD_OFFSET);
+        let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
         let slot = chain.insert_head(make_draft(5, 999)).unwrap();
         let node = chain.get(slot);
@@ -254,12 +263,12 @@ mod test {
     fn node_writer_opcode_bitmask_preserves_lower_bits() {
         let h = setup();
         let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
-            &h.writer,
-            &h.free_list,
+            h.writer.clone(),
+            h.free_list.clone(),
             NODE_START_OFFSET,
             CAPACITY,
         );
-        let chain = NodeChainWriter::new(&h.writer, &sw, HEAD_OFFSET);
+        let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
         let slot = chain.insert_head(make_draft(0, 0)).unwrap();
         let node = chain.get(slot);
@@ -281,12 +290,12 @@ mod test {
 
         let slot = {
             let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
-                &h.writer,
-                &h.free_list,
+                h.writer.clone(),
+                h.free_list.clone(),
                 NODE_START_OFFSET,
                 CAPACITY,
             );
-            let chain = NodeChainWriter::new(&h.writer, &sw, HEAD_OFFSET);
+            let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
             let slot = chain
                 .insert_head(NodeDraft {
                     opcode: 12,
@@ -300,8 +309,9 @@ mod test {
         h.writer.publish();
         h.reader.swap();
 
-        let sr = StructuralReader::<NODE_SLOT_SIZE>::new(&h.reader, NODE_START_OFFSET, CAPACITY);
-        let chain_reader = NodeChainReader::new(&h.reader, &sr, HEAD_OFFSET);
+        let sr =
+            StructuralReader::<NODE_SLOT_SIZE>::new(h.reader.clone(), NODE_START_OFFSET, CAPACITY);
+        let chain_reader = NodeChainReader::new(h.reader.clone(), sr.clone(), HEAD_OFFSET);
         let node = chain_reader.get(slot);
 
         assert_eq!(node.get_opcode(), 12);
@@ -315,12 +325,12 @@ mod test {
     fn uninvolved_node_data_survives_sibling_mutations() {
         let h = setup();
         let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
-            &h.writer,
-            &h.free_list,
+            h.writer.clone(),
+            h.free_list.clone(),
             NODE_START_OFFSET,
             CAPACITY,
         );
-        let chain = NodeChainWriter::new(&h.writer, &sw, HEAD_OFFSET);
+        let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
         let a = chain.insert_head(make_draft(1, 100)).unwrap();
         let b = chain.insert_head(make_draft(2, 200)).unwrap();
