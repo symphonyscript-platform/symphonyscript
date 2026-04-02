@@ -26,6 +26,7 @@ pub struct KernelConfig {
 
 #[derive(Clone)]
 pub struct Kernel {
+    sab: SAB,
     node_free_list: SimpleFreeList,
     synapse_free_list: SimpleFreeList,
     node_deferred_frees_list: DeferredFreesList,
@@ -40,69 +41,12 @@ pub struct Kernel {
 impl Kernel {
     pub fn new(config: KernelConfig) -> Self {
         let sab = Self::create_sab(Self::compute_sab_size(&config));
-        let node_free_list = SimpleFreeList::new(Arc::clone(&sab), 1, config.max_nodes);
-        let synapse_free_list = SimpleFreeList::new(
-            Arc::clone(&sab),
-            node_free_list.end_index(),
-            config.max_synapses,
-        );
-        let node_deferred_frees_list = DeferredFreesList::new(
-            Arc::clone(&sab),
-            synapse_free_list.end_index(),
-            config.max_nodes,
-        );
-        let synapse_deferred_frees_list = DeferredFreesList::new(
-            Arc::clone(&sab),
-            node_deferred_frees_list.end_index(),
-            config.max_synapses,
-        );
-        let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(
-            Arc::clone(&sab),
-            synapse_deferred_frees_list.end_index(),
-            config.max_nodes,
-        );
-        let synapse_attribute_plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::new(
-            Arc::clone(&sab),
-            node_attribute_plane.end_index(),
-            config.max_synapses,
-        );
-        let (triple_buffer_writer, _) = TripleBuffer::new(
-            Arc::clone(&sab),
-            synapse_attribute_plane.end_index(),
-            Self::compute_triple_buffer_size(&config),
-        );
-        let buffer_head_offset = 0;
-        let node_structural_writer = StructuralWriter::<NODE_SLOT_SIZE>::new(
-            triple_buffer_writer.clone(),
-            node_free_list.clone(),
-            buffer_head_offset + 1,
-            config.max_nodes,
-        );
-        let synapse_structural_writer = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
-            triple_buffer_writer.clone(),
-            synapse_free_list.clone(),
-            node_structural_writer.end_offset(),
-            config.max_synapses,
-        );
-        let node_chain_writer = NodeChainWriter::new(
-            triple_buffer_writer.clone(),
-            node_structural_writer.clone(),
-            buffer_head_offset,
-        );
-        let synapse_chain_writer =
-            SynapseChainWriter::new(node_chain_writer.clone(), synapse_structural_writer.clone());
+        Self::create(sab, config)
+    }
 
-        Kernel {
-            node_free_list,
-            synapse_free_list,
-            node_deferred_frees_list,
-            synapse_deferred_frees_list,
-            node_attribute_plane,
-            synapse_attribute_plane,
-            triple_buffer_writer,
-            node_chain_writer,
-            synapse_chain_writer,
-        }
+    #[cfg(test)]
+    pub fn new_test(sab: SAB, config: KernelConfig) -> Self {
+        Self::create(sab, config)
     }
 
     pub fn bind(sab: SAB, config: KernelConfig) -> Self {
@@ -160,6 +104,74 @@ impl Kernel {
             SynapseChainWriter::bind(node_chain_writer.clone(), synapse_structural_writer.clone());
 
         Kernel {
+            sab,
+            node_free_list,
+            synapse_free_list,
+            node_deferred_frees_list,
+            synapse_deferred_frees_list,
+            node_attribute_plane,
+            synapse_attribute_plane,
+            triple_buffer_writer,
+            node_chain_writer,
+            synapse_chain_writer,
+        }
+    }
+
+    fn create(sab: SAB, config: KernelConfig) -> Self {
+        let node_free_list = SimpleFreeList::new(Arc::clone(&sab), 1, config.max_nodes);
+        let synapse_free_list = SimpleFreeList::new(
+            Arc::clone(&sab),
+            node_free_list.end_index(),
+            config.max_synapses,
+        );
+        let node_deferred_frees_list = DeferredFreesList::new(
+            Arc::clone(&sab),
+            synapse_free_list.end_index(),
+            config.max_nodes,
+        );
+        let synapse_deferred_frees_list = DeferredFreesList::new(
+            Arc::clone(&sab),
+            node_deferred_frees_list.end_index(),
+            config.max_synapses,
+        );
+        let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(
+            Arc::clone(&sab),
+            synapse_deferred_frees_list.end_index(),
+            config.max_nodes,
+        );
+        let synapse_attribute_plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::new(
+            Arc::clone(&sab),
+            node_attribute_plane.end_index(),
+            config.max_synapses,
+        );
+        let (triple_buffer_writer, _) = TripleBuffer::new(
+            Arc::clone(&sab),
+            synapse_attribute_plane.end_index(),
+            Self::compute_triple_buffer_size(&config),
+        );
+        let buffer_head_offset = 0;
+        let node_structural_writer = StructuralWriter::<NODE_SLOT_SIZE>::new(
+            triple_buffer_writer.clone(),
+            node_free_list.clone(),
+            buffer_head_offset + 1,
+            config.max_nodes,
+        );
+        let synapse_structural_writer = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+            triple_buffer_writer.clone(),
+            synapse_free_list.clone(),
+            node_structural_writer.end_offset(),
+            config.max_synapses,
+        );
+        let node_chain_writer = NodeChainWriter::new(
+            triple_buffer_writer.clone(),
+            node_structural_writer.clone(),
+            buffer_head_offset,
+        );
+        let synapse_chain_writer =
+            SynapseChainWriter::new(node_chain_writer.clone(), synapse_structural_writer.clone());
+
+        Kernel {
+            sab,
             node_free_list,
             synapse_free_list,
             node_deferred_frees_list,
@@ -173,7 +185,7 @@ impl Kernel {
     }
 
     pub fn compute_triple_buffer_size(config: &KernelConfig) -> usize {
-        NODE_SLOT_SIZE * config.max_nodes + SYNAPSE_SLOT_SIZE * config.max_synapses
+        1 + NODE_SLOT_SIZE * config.max_nodes + SYNAPSE_SLOT_SIZE * config.max_synapses
     }
 
     pub fn compute_sab_size(config: &KernelConfig) -> usize {
@@ -201,6 +213,11 @@ impl Kernel {
             + synapse_free_list_size
             + node_deferred_free_list_size
             + synapse_deferred_free_list_size
+    }
+
+    #[cfg(test)]
+    pub fn get_sab(&self) -> SAB {
+        Arc::clone(&self.sab)
     }
 
     pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_>> {
