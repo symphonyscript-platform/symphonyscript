@@ -751,3 +751,26 @@ The cycle = one traversal of the loop block (B+C hybrid). Implicit 1 bar, explic
 loop {} is syntactic sugar for a cyclic synaptic graph. Looping emerges from topology, not special opcodes.
 Everything inside the live context is relative. The compiler resolves fractions → absolute ticks. Kernel never knows.
 Modulation is orthogonal — it operates intra-cycle on attributes. Live operates inter-cycle on structure. They compose, they don't compete.
+
+___
+
+Three corrections taken:
+
+1. **We agree on the model.** Notes are not special — they scale just like children. Everything proportional. I misread your earlier description.
+
+2. **Direction was backwards, you're right.** More notes = more content in the same budget = everything plays faster (scale factor shrinks). Fewer notes = less content = everything stretches out. I wrote it inverted.
+
+3. **Parallel synapses get the remainder, not the full allocation.** If the clip has sequential events consuming some of the budget before the parallel synapses fire, the parallel children share whatever's left at that point. Correct — the parallel fire point determines their available time window, not the clip's total allocation.
+
+```
+Clip c1 (budget: 1000 ticks, natural: 1400, scale: 0.71x):
+  A4 4n    → consumes 170 scaled ticks (sequential)
+  B4 4n    → consumes 170 scaled ticks (sequential)
+  ── parallel point ──
+  synapse → c4 | parallel  → gets remaining 660 ticks
+  synapse → c5 | parallel  → gets same 660 ticks (concurrent)
+```
+
+This is more nuanced and more correct than "full parent allocation." The parallel children's budget depends on where in the clip's timeline they appear.
+
+The model is settling: recursive tempo scaling with proportional time allocation flowing through the graph, scaling mode as a synapse-level policy, and parallel children inheriting the remainder at their fire point. Clean.
