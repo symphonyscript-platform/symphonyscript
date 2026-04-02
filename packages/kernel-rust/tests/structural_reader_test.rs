@@ -52,21 +52,21 @@ fn setup() -> (
 #[test]
 fn new_creates_structural_reader() {
     let (_sab, _writer, reader, _free_list) = setup();
-    let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 0, CAPACITY);
+    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
     assert_eq!(sr.capacity(), CAPACITY);
 }
 
 #[test]
 fn end_index_correct() {
     let (_sab, _writer, reader, _free_list) = setup();
-    let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 0, CAPACITY);
-    assert_eq!(sr.end_index(), CAPACITY * 16);
+    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
+    assert_eq!(sr.end_offset(), CAPACITY * 16);
 }
 
 #[test]
 fn resolve_reader_offset() {
     let (_sab, _writer, reader, _free_list) = setup();
-    let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 0, CAPACITY);
+    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
     // slot 1 (1-based) -> index 0 -> offset 0
     assert_eq!(sr.resolve_reader_offset(1), 0);
     // slot 2 -> index 1 -> offset 16
@@ -78,7 +78,7 @@ fn resolve_reader_offset() {
 #[test]
 fn resolve_reader_offset_with_start_offset() {
     let (_sab, _writer, reader, _free_list) = setup();
-    let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 50, CAPACITY);
+    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 50, CAPACITY);
     // slot 1 -> index 0 -> 50 + 0 = 50
     assert_eq!(sr.resolve_reader_offset(1), 50);
     // slot 2 -> index 1 -> 50 + 16 = 66
@@ -90,13 +90,13 @@ fn resolve_reader_offset_with_start_offset() {
 #[test]
 fn reads_published_data_via_writer_round_trip() {
     let (_sab, mut writer, mut reader, free_list) = setup();
-    let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), 0, CAPACITY);
 
     let slot = sw.insert(TestPayload { a: 777, b: 888 }).unwrap();
     writer.publish();
     reader.swap();
 
-    let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 0, CAPACITY);
+    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
     assert_eq!(sr.read_field(slot, 0), 777);
     assert_eq!(sr.read_field(slot, 1), 888);
 }
@@ -104,14 +104,14 @@ fn reads_published_data_via_writer_round_trip() {
 #[test]
 fn reads_published_data_via_view() {
     let (_sab, mut writer, mut reader, free_list) = setup();
-    let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), 0, CAPACITY);
 
     let slot1 = sw.insert(TestPayload { a: 111, b: 0 }).unwrap();
     let slot2 = sw.insert(TestPayload { a: 222, b: 0 }).unwrap();
     writer.publish();
     reader.swap();
 
-    let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 0, CAPACITY);
+    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
     let v1 = sr.get(slot1);
     let v2 = sr.get(slot2);
 
@@ -122,7 +122,7 @@ fn reads_published_data_via_view() {
 #[test]
 fn slots_are_independent() {
     let (_sab, mut writer, mut reader, free_list) = setup();
-    let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), 0, CAPACITY);
 
     let slot1 = sw.insert(TestPayload { a: 100, b: 0 }).unwrap();
     let slot2 = sw.insert(TestPayload { a: 0, b: 0 }).unwrap(); // untouched
@@ -130,7 +130,7 @@ fn slots_are_independent() {
     writer.publish();
     reader.swap();
 
-    let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 0, CAPACITY);
+    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
     assert_eq!(sr.read_field(slot1, 0), 100);
     assert_eq!(sr.read_field(slot2, 0), 0);
     assert_eq!(sr.read_field(slot3, 0), 300);
@@ -139,19 +139,19 @@ fn slots_are_independent() {
 #[test]
 fn does_not_see_unpublished_writes() {
     let (_sab, writer, reader, free_list) = setup();
-    let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), 0, CAPACITY);
 
     let slot = sw.insert(TestPayload { a: 999, b: 0 }).unwrap();
     // no publish, no swap
 
-    let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 0, CAPACITY);
+    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
     assert_eq!(sr.read_field(slot, 0), 0); // reader hasn't seen it
 }
 
 #[test]
 fn get_returns_view_with_zero_defaults() {
     let (_sab, _writer, reader, _free_list) = setup();
-    let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 0, CAPACITY);
+    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
 
     let view = sr.get(1); // 1-based: first real slot
     for i in 0..16 {
@@ -167,7 +167,7 @@ fn reader_sees_updated_data_after_second_publish_swap() {
 
     // cycle 1: insert and publish
     let slot = {
-        let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
+        let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), 0, CAPACITY);
         let slot = sw.insert(TestPayload { a: 100, b: 200 }).unwrap();
         slot
     };
@@ -175,20 +175,20 @@ fn reader_sees_updated_data_after_second_publish_swap() {
     reader.swap();
 
     {
-        let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 0, CAPACITY);
+        let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
         assert_eq!(sr.read_field(slot, 0), 100);
     }
 
     // cycle 2: mutate the same slot, publish again
     {
-        let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
+        let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), 0, CAPACITY);
         sw.write_field(slot, 0, 999);
     }
     writer.publish();
     reader.swap();
 
     {
-        let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 0, CAPACITY);
+        let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
         assert_eq!(sr.read_field(slot, 0), 999);
     }
 }
@@ -198,7 +198,7 @@ fn reader_retains_old_data_without_swap() {
     let (_sab, mut writer, mut reader, free_list) = setup();
 
     let slot = {
-        let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
+        let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), 0, CAPACITY);
         sw.insert(TestPayload { a: 42, b: 0 }).unwrap()
     };
     writer.publish();
@@ -206,14 +206,14 @@ fn reader_retains_old_data_without_swap() {
 
     // writer updates + publishes, but reader does NOT swap
     {
-        let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
+        let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), 0, CAPACITY);
         sw.write_field(slot, 0, 999);
     }
     writer.publish();
 
     // reader still sees old value (no swap)
     {
-        let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 0, CAPACITY);
+        let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
         assert_eq!(sr.read_field(slot, 0), 42);
     }
 }
@@ -226,13 +226,13 @@ fn nonzero_start_offset_full_round_trip() {
     let start_offset = 48;
 
     let slot = {
-        let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, start_offset, CAPACITY);
+        let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), start_offset, CAPACITY);
         sw.insert(TestPayload { a: 0xABCD, b: 0x1234 }).unwrap()
     };
     writer.publish();
     reader.swap();
 
-    let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, start_offset, CAPACITY);
+    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), start_offset, CAPACITY);
     assert_eq!(sr.read_field(slot, 0), 0xABCD);
     assert_eq!(sr.read_field(slot, 1), 0x1234);
 }
@@ -244,7 +244,7 @@ fn reader_reads_from_correct_sab_offset() {
     let (sab, mut writer, mut reader, free_list) = setup();
 
     let slot = {
-        let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
+        let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), 0, CAPACITY);
         sw.insert(TestPayload { a: 0xFACE, b: 0xFEED }).unwrap()
     };
     writer.publish();
@@ -266,7 +266,7 @@ fn reader_sees_first_and_last_slot() {
     let (_sab, mut writer, mut reader, free_list) = setup();
 
     let first = {
-        let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
+        let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), 0, CAPACITY);
         let first = sw.insert(TestPayload { a: 111, b: 0 }).unwrap();
         // fill remaining
         for _ in 1..CAPACITY {
@@ -279,7 +279,7 @@ fn reader_sees_first_and_last_slot() {
     writer.publish();
     reader.swap();
 
-    let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 0, CAPACITY);
+    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
     assert_eq!(sr.read_field(first, 0), 111, "first slot");
     assert_eq!(sr.read_field(CAPACITY, 0), 888, "last slot");
 }
@@ -291,13 +291,13 @@ fn two_reader_views_same_snapshot() {
     let (_sab, mut writer, mut reader, free_list) = setup();
 
     let slot = {
-        let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
+        let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), 0, CAPACITY);
         sw.insert(TestPayload { a: 77, b: 88 }).unwrap()
     };
     writer.publish();
     reader.swap();
 
-    let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 0, CAPACITY);
+    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
     let v1 = sr.get(slot);
     let v2 = sr.get(slot);
 
