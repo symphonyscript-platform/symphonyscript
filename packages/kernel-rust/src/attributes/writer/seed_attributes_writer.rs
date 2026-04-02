@@ -1,6 +1,6 @@
 use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
 use crate::primitives::into_array::IntoArray;
-use crate::attributes::attributes_view::AttributesView;
+use crate::attributes::writer::attributes_writer::AttributesWriter;
 
 pub struct SeedAttributes {
     pub seed_value: i32,
@@ -16,9 +16,9 @@ impl IntoArray<16> for SeedAttributes {
     }
 }
 
-pub struct SeedAttributesView<'a>(pub AttributesView<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
+pub struct SeedAttributesWriter<'a>(pub AttributesWriter<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
 
-impl<'a> SeedAttributesView<'a> {
+impl<'a> SeedAttributesWriter<'a> {
     pub fn seed_value(&self) -> i32 {
         self.0.read(0)
     }

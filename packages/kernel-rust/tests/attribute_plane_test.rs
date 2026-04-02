@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::attributes::attribute_plane::AttributePlane;
-use symphonyscript_kernel::attributes::attributes_view::AttributesView;
-use symphonyscript_kernel::attributes::note_attributes::{NoteAttributes, NoteAttributesView};
+use symphonyscript_kernel::attributes::writer::attribute_plane_writer::AttributePlaneWriter;
+use symphonyscript_kernel::attributes::writer::attributes_writer::AttributesWriter;
+use symphonyscript_kernel::attributes::writer::note_attributes_writer::{NoteAttributes, NoteAttributesWriter};
 
 const SLOT_SIZE: usize = 16;
 
@@ -50,14 +50,14 @@ fn sample_data_b() -> NoteAttributes {
 #[test]
 fn new_creates_plane() {
     let sab = create_sab(1024);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 10);
     assert_eq!(plane.end_index(), 10 * SLOT_SIZE);
 }
 
 #[test]
 fn new_with_nonzero_start() {
     let sab = create_sab(1024);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 100, 10);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 100, 10);
     assert_eq!(plane.end_index(), 100 + 10 * SLOT_SIZE);
 }
 
@@ -65,7 +65,7 @@ fn new_with_nonzero_start() {
 #[should_panic(expected = "AttributePlane out of bounds")]
 fn new_panics_when_exceeding_sab() {
     let sab = create_sab(50);
-    let _plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 100); // 100 * 10 = 1000 > 50
+    let _plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 100); // 100 * 10 = 1000 > 50
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn new_panics_at_exact_boundary() {
     // end_index == sab.len() should still panic (< not <=)
     let size = 10 * SLOT_SIZE;
     let sab = create_sab(size);
-    let _plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
+    let _plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 10);
 }
 
 // ============ Set and Get Round-Trip ============
@@ -82,11 +82,11 @@ fn new_panics_at_exact_boundary() {
 #[test]
 fn set_then_get_all_fields() {
     let sab = create_sab(1024);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 10);
     let data = sample_data();
 
     plane.set(0, data);
-    let view = NoteAttributesView(plane.get(0));
+    let view = NoteAttributesWriter(plane.get(0));
 
     assert_eq!(view.pitch(), 570000);
     assert_eq!(view.velocity(), 100);
@@ -103,13 +103,13 @@ fn set_then_get_all_fields() {
 #[test]
 fn set_at_different_offsets() {
     let sab = create_sab(1024);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 10);
 
     plane.set(0, sample_data());
     plane.set(1, sample_data_b());
 
-    let view_a = NoteAttributesView(plane.get(0));
-    let view_b = NoteAttributesView(plane.get(1));
+    let view_a = NoteAttributesWriter(plane.get(0));
+    let view_b = NoteAttributesWriter(plane.get(1));
 
     assert_eq!(view_a.pitch(), 570000);
     assert_eq!(view_b.pitch(), 440000);
@@ -124,14 +124,14 @@ fn set_at_different_offsets() {
 #[test]
 fn set_overwrites_previous() {
     let sab = create_sab(1024);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 10);
 
     plane.set(0, sample_data());
-    assert_eq!(NoteAttributesView(plane.get(0)).pitch(), 570000);
+    assert_eq!(NoteAttributesWriter(plane.get(0)).pitch(), 570000);
 
     plane.set(0, sample_data_b());
-    assert_eq!(NoteAttributesView(plane.get(0)).pitch(), 440000);
-    assert_eq!(NoteAttributesView(plane.get(0)).velocity(), 80);
+    assert_eq!(NoteAttributesWriter(plane.get(0)).pitch(), 440000);
+    assert_eq!(NoteAttributesWriter(plane.get(0)).velocity(), 80);
 }
 
 // ============ Slot Isolation ============
@@ -139,13 +139,13 @@ fn set_overwrites_previous() {
 #[test]
 fn slots_are_independent() {
     let sab = create_sab(1024);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 10);
 
     plane.set(3, sample_data());
 
     // Neighbor slots should be untouched
-    let view_2 = NoteAttributesView(plane.get(2));
-    let view_4 = NoteAttributesView(plane.get(4));
+    let view_2 = NoteAttributesWriter(plane.get(2));
+    let view_4 = NoteAttributesWriter(plane.get(4));
 
     assert_eq!(view_2.pitch(), 0);
     assert_eq!(view_2.velocity(), 0);
@@ -158,15 +158,15 @@ fn slots_are_independent() {
 #[test]
 fn view_write_visible_through_plane() {
     let sab = create_sab(1024);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 10);
 
     {
-        let view = NoteAttributesView(plane.get(0));
+        let view = NoteAttributesWriter(plane.get(0));
         view.set_pitch(999);
         view.set_velocity(42);
     }
 
-    let view2 = NoteAttributesView(plane.get(0));
+    let view2 = NoteAttributesWriter(plane.get(0));
     assert_eq!(view2.pitch(), 999);
     assert_eq!(view2.velocity(), 42);
 }
@@ -176,7 +176,7 @@ fn view_write_visible_through_plane() {
 #[test]
 fn nonzero_start_reads_correct_sab_region() {
     let sab = create_sab(1024);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab.clone(), 200, 10);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab.clone(), 200, 10);
 
     plane.set(0, sample_data());
 
@@ -188,7 +188,7 @@ fn nonzero_start_reads_correct_sab_region() {
 #[test]
 fn nonzero_start_slot_1_correct_offset() {
     let sab = create_sab(1024);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab.clone(), 200, 10);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab.clone(), 200, 10);
 
     plane.set(1, sample_data());
 
@@ -202,14 +202,14 @@ fn nonzero_start_slot_1_correct_offset() {
 #[test]
 fn end_index_zero_start() {
     let sab = create_sab(1024);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 8);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 8);
     assert_eq!(plane.end_index(), 8 * 16);
 }
 
 #[test]
 fn end_index_with_start_offset() {
     let sab = create_sab(1024);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 50, 8);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 50, 8);
     assert_eq!(plane.end_index(), 50 + 8 * 16);
 }
 
@@ -218,19 +218,19 @@ fn end_index_with_start_offset() {
 #[test]
 fn get_last_valid_slot() {
     let sab = create_sab(1024);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 10);
 
     plane.set(9, sample_data());
-    assert_eq!(NoteAttributesView(plane.get(9)).pitch(), 570000);
+    assert_eq!(NoteAttributesWriter(plane.get(9)).pitch(), 570000);
 }
 
 #[test]
 fn set_last_valid_slot() {
     let sab = create_sab(1024);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, 10);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 10);
 
     plane.set(9, sample_data_b());
-    assert_eq!(NoteAttributesView(plane.get(9)).velocity(), 80);
+    assert_eq!(NoteAttributesWriter(plane.get(9)).velocity(), 80);
 }
 
 // ============ Stress ============
@@ -240,7 +240,7 @@ fn stress_fill_all_slots() {
     let capacity = 256;
     let sab_size = capacity * SLOT_SIZE + 1;
     let sab = create_sab(sab_size);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, capacity);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, capacity);
 
     for i in 0..capacity {
         plane.set(i, NoteAttributes {
@@ -258,7 +258,7 @@ fn stress_fill_all_slots() {
     }
 
     for i in 0..capacity {
-        let view = NoteAttributesView(plane.get(i));
+        let view = NoteAttributesWriter(plane.get(i));
         assert_eq!(view.pitch(), i as i32 * 1000);
         assert_eq!(view.velocity(), i as i32);
     }
@@ -269,7 +269,7 @@ fn stress_overwrite_all_slots() {
     let capacity = 128;
     let sab_size = capacity * SLOT_SIZE + 1;
     let sab = create_sab(sab_size);
-    let plane = AttributePlane::<SLOT_SIZE>::new(sab, 0, capacity);
+    let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, capacity);
 
     // Write pass 1
     for i in 0..capacity {
@@ -304,7 +304,7 @@ fn stress_overwrite_all_slots() {
     }
 
     for i in 0..capacity {
-        let v = NoteAttributesView(plane.get(i));
+        let v = NoteAttributesWriter(plane.get(i));
         assert_eq!(v.pitch(), i as i32);
         assert_eq!(v.velocity(), i as i32 + 1);
         assert_eq!(v.duration(), i as i32 + 2);

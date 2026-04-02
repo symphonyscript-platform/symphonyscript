@@ -1,6 +1,6 @@
 use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
 use crate::primitives::into_array::IntoArray;
-use crate::attributes::attributes_view::AttributesView;
+use crate::attributes::writer::attributes_writer::AttributesWriter;
 
 pub struct RestAttributes {
     pub duration: i32,
@@ -16,9 +16,9 @@ impl IntoArray<16> for RestAttributes {
     }
 }
 
-pub struct RestAttributesView<'a>(pub AttributesView<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
+pub struct RestAttributesWriter<'a>(pub AttributesWriter<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
 
-impl<'a> RestAttributesView<'a> {
+impl<'a> RestAttributesWriter<'a> {
     pub fn duration(&self) -> i32 {
         self.0.read(0)
     }

@@ -127,19 +127,20 @@ fn bench_batch_free(c: &mut Criterion) {
 
     for &batch in &[10, 100, 1_000] {
         group.bench_with_input(BenchmarkId::from_parameter(batch), &batch, |b, &batch| {
-            b.iter_with_setup(
-                || {
-                    let sab = create_sab(1_000_000);
-                    let fl = FreeList::<4>::new(sab, 0, 16384);
+            b.iter_custom(|iters| {
+                let sab = create_sab(1_000_000);
+                let fl = FreeList::<4>::new(sab, 0, 16384);
+                let mut total = std::time::Duration::ZERO;
+                for _ in 0..iters {
                     let handles: Vec<_> = (0..batch).map(|_| fl.alloc().unwrap()).collect();
-                    (fl, handles)
-                },
-                |(fl, handles)| {
+                    let start = std::time::Instant::now();
                     for h in handles {
                         black_box(fl.free(h).unwrap());
                     }
-                },
-            );
+                    total += start.elapsed();
+                }
+                total
+            });
         });
     }
 

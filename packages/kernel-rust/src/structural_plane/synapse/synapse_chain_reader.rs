@@ -2,6 +2,7 @@ use crate::constants::SYNAPSE_SLOT_SIZE;
 use crate::structural_plane::structural_reader::StructuralReader;
 use crate::structural_plane::synapse::synapse_reader::SynapseReader;
 
+#[derive(Clone)]
 pub struct SynapseChainReader {
     reader: StructuralReader<SYNAPSE_SLOT_SIZE>,
 }

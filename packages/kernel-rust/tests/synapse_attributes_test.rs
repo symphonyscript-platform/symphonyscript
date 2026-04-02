@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::attributes::synapse_attributes::{SynapseAttributes, SynapseAttributesView};
-use symphonyscript_kernel::attributes::attributes_view::AttributesView;
+use symphonyscript_kernel::attributes::writer::synapse_attributes_writer::{SynapseAttributes, SynapseAttributesWriter};
+use symphonyscript_kernel::attributes::writer::attributes_writer::AttributesWriter;
 use symphonyscript_kernel::primitives::into_array::IntoArray;
 use symphonyscript_kernel::constants::SYNAPSE_ATTRIBUTES_SLOT_SIZE;
 
@@ -46,7 +46,7 @@ fn to_array_maps_slots_correctly() {
 #[test]
 fn weight_round_trip() {
     let sab = create_sab(64);
-    let view = SynapseAttributesView(AttributesView::new(&sab, 0));
+    let view = SynapseAttributesWriter(AttributesWriter::new(&sab, 0));
 
     view.set_weight(750);
     assert_eq!(view.weight(), 750);
@@ -55,7 +55,7 @@ fn weight_round_trip() {
 #[test]
 fn tick_offset_round_trip() {
     let sab = create_sab(64);
-    let view = SynapseAttributesView(AttributesView::new(&sab, 0));
+    let view = SynapseAttributesWriter(AttributesWriter::new(&sab, 0));
 
     view.set_tick_offset(-15);
     assert_eq!(view.tick_offset(), -15);
@@ -64,7 +64,7 @@ fn tick_offset_round_trip() {
 #[test]
 fn transpose_round_trip() {
     let sab = create_sab(64);
-    let view = SynapseAttributesView(AttributesView::new(&sab, 0));
+    let view = SynapseAttributesWriter(AttributesWriter::new(&sab, 0));
 
     view.set_transpose(-7);
     assert_eq!(view.transpose(), -7);
@@ -73,7 +73,7 @@ fn transpose_round_trip() {
 #[test]
 fn volume_scale_round_trip() {
     let sab = create_sab(64);
-    let view = SynapseAttributesView(AttributesView::new(&sab, 0));
+    let view = SynapseAttributesWriter(AttributesWriter::new(&sab, 0));
 
     view.set_volume_scale(1200);
     assert_eq!(view.volume_scale(), 1200);
@@ -82,7 +82,7 @@ fn volume_scale_round_trip() {
 #[test]
 fn duration_scale_round_trip() {
     let sab = create_sab(64);
-    let view = SynapseAttributesView(AttributesView::new(&sab, 0));
+    let view = SynapseAttributesWriter(AttributesWriter::new(&sab, 0));
 
     view.set_duration_scale(300);
     assert_eq!(view.duration_scale(), 300);
@@ -91,7 +91,7 @@ fn duration_scale_round_trip() {
 #[test]
 fn tempo_scale_round_trip() {
     let sab = create_sab(64);
-    let view = SynapseAttributesView(AttributesView::new(&sab, 0));
+    let view = SynapseAttributesWriter(AttributesWriter::new(&sab, 0));
 
     view.set_tempo_scale(120);
     assert_eq!(view.tempo_scale(), 120);
@@ -102,7 +102,7 @@ fn tempo_scale_round_trip() {
 #[test]
 fn fields_do_not_bleed() {
     let sab = create_sab(64);
-    let view = SynapseAttributesView(AttributesView::new(&sab, 0));
+    let view = SynapseAttributesWriter(AttributesWriter::new(&sab, 0));
 
     view.set_weight(i32::MAX);
     assert_eq!(view.tick_offset(), 0);
@@ -115,7 +115,7 @@ fn fields_do_not_bleed() {
 #[test]
 fn reserved_slots_are_zero() {
     let sab = create_sab(64);
-    let view = SynapseAttributesView(AttributesView::new(&sab, 0));
+    let view = SynapseAttributesWriter(AttributesWriter::new(&sab, 0));
 
     view.set_weight(999);
     view.set_tick_offset(888);

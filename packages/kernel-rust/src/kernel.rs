@@ -1,5 +1,5 @@
-use crate::attributes::attribute_plane::AttributePlane;
-use crate::attributes::attributes_view::AttributesView;
+use crate::attributes::writer::attribute_plane_writer::AttributePlaneWriter;
+use crate::attributes::writer::attributes_writer::AttributesWriter;
 use crate::constants::{
     NODE_ATTRIBUTES_SLOT_SIZE, NODE_SLOT_SIZE, SYNAPSE_ATTRIBUTES_SLOT_SIZE, SYNAPSE_SLOT_SIZE,
 };
@@ -30,8 +30,8 @@ pub struct Kernel {
     synapse_free_list: SimpleFreeList,
     node_deferred_frees_list: DeferredFreesList,
     synapse_deferred_frees_list: DeferredFreesList,
-    node_attribute_plane: AttributePlane<NODE_ATTRIBUTES_SLOT_SIZE>,
-    synapse_attribute_plane: AttributePlane<SYNAPSE_ATTRIBUTES_SLOT_SIZE>,
+    node_attribute_plane: AttributePlaneWriter<NODE_ATTRIBUTES_SLOT_SIZE>,
+    synapse_attribute_plane: AttributePlaneWriter<SYNAPSE_ATTRIBUTES_SLOT_SIZE>,
     triple_buffer_writer: TripleBufferWriter,
     node_chain_writer: NodeChainWriter,
     synapse_chain_writer: SynapseChainWriter,
@@ -56,12 +56,12 @@ impl Kernel {
             node_deferred_frees_list.end_index(),
             config.max_synapses,
         );
-        let node_attribute_plane = AttributePlane::<NODE_ATTRIBUTES_SLOT_SIZE>::new(
+        let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(
             Arc::clone(&sab),
             synapse_deferred_frees_list.end_index(),
             config.max_nodes,
         );
-        let synapse_attribute_plane = AttributePlane::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::new(
+        let synapse_attribute_plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::new(
             Arc::clone(&sab),
             node_attribute_plane.end_index(),
             config.max_synapses,
@@ -122,12 +122,12 @@ impl Kernel {
             node_deferred_frees_list.end_index(),
             config.max_synapses,
         );
-        let node_attribute_plane = AttributePlane::<NODE_ATTRIBUTES_SLOT_SIZE>::bind(
+        let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::bind(
             Arc::clone(&sab),
             synapse_deferred_frees_list.end_index(),
             config.max_nodes,
         );
-        let synapse_attribute_plane = AttributePlane::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::bind(
+        let synapse_attribute_plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::bind(
             Arc::clone(&sab),
             node_attribute_plane.end_index(),
             config.max_synapses,
@@ -177,32 +177,41 @@ impl Kernel {
     }
 
     pub fn compute_sab_size(config: &KernelConfig) -> usize {
+        let node_attribute_plane_size =
+            AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::calculate_size(config.max_nodes);
+        let synapse_attribute_plane_size =
+            AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::calculate_size(config.max_synapses);
         let structural_plane_size =
             TripleBuffer::calculate_size(Self::compute_triple_buffer_size(config));
+
+        Self::compute_header_size(&config)
+            + node_attribute_plane_size
+            + synapse_attribute_plane_size
+            + structural_plane_size
+    }
+
+    pub fn compute_header_size(config: &KernelConfig) -> usize {
         let node_free_list_size = SimpleFreeList::calculate_size(config.max_nodes);
         let synapse_free_list_size = SimpleFreeList::calculate_size(config.max_synapses);
-        let node_attribute_plane_size =
-            AttributePlane::<NODE_ATTRIBUTES_SLOT_SIZE>::calculate_size(config.max_nodes);
-        let synapse_attribute_plane_size =
-            AttributePlane::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::calculate_size(config.max_synapses);
         let node_deferred_free_list_size = DeferredFreesList::calculate_size(config.max_nodes);
         let synapse_deferred_free_list_size =
             DeferredFreesList::calculate_size(config.max_synapses);
 
-        1 + structural_plane_size
-            + node_free_list_size
+        1 + node_free_list_size
             + synapse_free_list_size
-            + node_attribute_plane_size
-            + synapse_attribute_plane_size
             + node_deferred_free_list_size
             + synapse_deferred_free_list_size
+    }
+
+    pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_>> {
+        self.node_chain_writer.get_head()
     }
 
     pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_> {
         self.node_chain_writer.get(slot)
     }
 
-    pub fn get_node_attributes(&'_ self, slot: usize) -> AttributesView<NODE_ATTRIBUTES_SLOT_SIZE> {
+    pub fn get_node_attributes(&'_ self, slot: usize) -> AttributesWriter<NODE_ATTRIBUTES_SLOT_SIZE> {
         self.node_attribute_plane.get(slot)
     }
 
@@ -249,7 +258,7 @@ impl Kernel {
     pub fn get_synapse_attributes(
         &'_ self,
         slot: usize,
-    ) -> AttributesView<SYNAPSE_ATTRIBUTES_SLOT_SIZE> {
+    ) -> AttributesWriter<SYNAPSE_ATTRIBUTES_SLOT_SIZE> {
         self.synapse_attribute_plane.get(slot)
     }
 

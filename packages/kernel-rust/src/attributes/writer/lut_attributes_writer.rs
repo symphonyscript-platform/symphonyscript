@@ -1,6 +1,6 @@
 use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
 use crate::primitives::into_array::IntoArray;
-use crate::attributes::attributes_view::AttributesView;
+use crate::attributes::writer::attributes_writer::AttributesWriter;
 
 pub struct LutAttributes {
     pub lut_index: i32,
@@ -16,9 +16,9 @@ impl IntoArray<16> for LutAttributes {
     }
 }
 
-pub struct LutAttributesView<'a>(pub AttributesView<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
+pub struct LutAttributesWriter<'a>(pub AttributesWriter<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
 
-impl<'a> LutAttributesView<'a> {
+impl<'a> LutAttributesWriter<'a> {
     pub fn lut_index(&self) -> i32 {
         self.0.read(0)
     }

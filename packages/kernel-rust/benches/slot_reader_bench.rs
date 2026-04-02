@@ -31,7 +31,7 @@ fn bench_slot_reader(c: &mut Criterion) {
     writer.publish();
     reader.swap();
 
-    let sr: StructuralReader<'_, 16> = StructuralReader::new(&reader, 0, CAPACITY);
+    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
 
     c.bench_function("StructuralReader/read_field", |b| {
         b.iter(|| {

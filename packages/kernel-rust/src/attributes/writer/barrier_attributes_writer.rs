@@ -1,6 +1,6 @@
 use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
 use crate::primitives::into_array::IntoArray;
-use crate::attributes::attributes_view::AttributesView;
+use crate::attributes::writer::attributes_writer::AttributesWriter;
 
 pub struct BarrierAttributes {
     pub phase_target: i32,
@@ -16,9 +16,9 @@ impl IntoArray<16> for BarrierAttributes {
     }
 }
 
-pub struct BarrierAttributesView<'a>(pub AttributesView<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
+pub struct BarrierAttributesWriter<'a>(pub AttributesWriter<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
 
-impl<'a> BarrierAttributesView<'a> {
+impl<'a> BarrierAttributesWriter<'a> {
     pub fn phase_target(&self) -> i32 {
         self.0.read(0)
     }

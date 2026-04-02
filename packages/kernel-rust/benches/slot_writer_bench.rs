@@ -43,7 +43,7 @@ fn bench_slot_writer(c: &mut Criterion) {
     let (_sab, writer, _reader, free_list) = setup();
 
     // Pre-insert a slot for read/write benchmarks
-    let sw: StructuralWriter<'_, 16> = StructuralWriter::new(&writer, &free_list, 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), 0, CAPACITY);
     let slot = sw.insert(TestPayload { a: 42, b: 99 }).unwrap();
 
     c.bench_function("StructuralWriter/write_field", |b| {

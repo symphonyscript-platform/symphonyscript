@@ -1,6 +1,6 @@
 use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
 use crate::primitives::into_array::IntoArray;
-use crate::attributes::attributes_view::AttributesView;
+use crate::attributes::writer::attributes_writer::AttributesWriter;
 
 pub struct BoundaryAttributes {
     pub boundary_id: i32,
@@ -16,9 +16,9 @@ impl IntoArray<16> for BoundaryAttributes {
     }
 }
 
-pub struct BoundaryAttributesView<'a>(pub AttributesView<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
+pub struct BoundaryAttributesWriter<'a>(pub AttributesWriter<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
 
-impl<'a> BoundaryAttributesView<'a> {
+impl<'a> BoundaryAttributesWriter<'a> {
     pub fn boundary_id(&self) -> i32 {
         self.0.read(0)
     }

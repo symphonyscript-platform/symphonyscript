@@ -1,6 +1,6 @@
+use crate::attributes::writer::attributes_writer::AttributesWriter;
 use crate::constants::SYNAPSE_ATTRIBUTES_SLOT_SIZE;
 use crate::primitives::into_array::IntoArray;
-use crate::attributes::attributes_view::AttributesView;
 
 pub struct SynapseAttributes {
     pub weight: i32,
@@ -26,9 +26,9 @@ impl IntoArray<16> for SynapseAttributes {
     }
 }
 
-pub struct SynapseAttributesView<'a>(pub AttributesView<'a, SYNAPSE_ATTRIBUTES_SLOT_SIZE>);
+pub struct SynapseAttributesWriter<'a>(pub AttributesWriter<'a, SYNAPSE_ATTRIBUTES_SLOT_SIZE>);
 
-impl<'a> SynapseAttributesView<'a> {
+impl<'a> SynapseAttributesWriter<'a> {
     pub fn weight(&self) -> i32 {
         self.0.read(0)
     }
