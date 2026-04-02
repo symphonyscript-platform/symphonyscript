@@ -44,8 +44,7 @@ impl Kernel {
         Self::create(sab, config)
     }
 
-    #[cfg(test)]
-    pub fn new_test(sab: SAB, config: KernelConfig) -> Self {
+    pub fn new_from_sab(sab: SAB, config: KernelConfig) -> Self {
         Self::create(sab, config)
     }
 
@@ -215,7 +214,6 @@ impl Kernel {
             + synapse_deferred_free_list_size
     }
 
-    #[cfg(test)]
     pub fn get_sab(&self) -> SAB {
         Arc::clone(&self.sab)
     }
