@@ -774,3 +774,33 @@ Clip c1 (budget: 1000 ticks, natural: 1400, scale: 0.71x):
 This is more nuanced and more correct than "full parent allocation." The parallel children's budget depends on where in the clip's timeline they appear.
 
 The model is settling: recursive tempo scaling with proportional time allocation flowing through the graph, scaling mode as a synapse-level policy, and parallel children inheriting the remainder at their fire point. Clean.
+
+__
+
+(Looks like point 3 got cut off — I'll address 1 and 2.)
+
+## 1. Relative Durations
+
+Yes. The composer writes `4n`, `2n`, `1n` — these are **proportional** to the clip's context. In a standalone clip, the proportion resolves against a declared tempo (or default). In a relative context (nested, live), the proportion resolves against the allocated time from the parent. "Bar" is not an absolute unit — it's "one full cycle of my parent's allocation."
+
+The note values define **ratios** between events. The absolute timing is derived from context. The same `4n` plays in 500ms or 50ms depending on the budget. The kernel sees computed ticks either way.
+
+## 2. Absolute Tempo in Relative Context
+
+Your logic is sharp. Let me trace it:
+
+- **No explicit tempo** → `scaling('fit')` default → fully relative. Clip stretches/compresses to fill budget. Note ratios preserved. Tempo is emergent: `events / allocated_time`.
+
+- **Explicit `tempo(60)`** → user is demanding absolute timing → `scaling('overflow')` implied. The clip plays at 60 BPM regardless of budget. If it overflows, it bleeds. User can add `scaling('truncate')` to cut instead of bleed.
+
+- **`scaling('fit')` + `tempo(60)`** → contradiction. Fit says "adapt to budget." Tempo says "play at 60." One must win. Your answer: **fit overrides tempo**. Tempo becomes a no-op in fit mode. Natural — if you're asking the system to fit, you're accepting that timing is relative. Don't declare tempo if you want fit behavior.
+
+This creates a clean rule: **`tempo()` is an opt-out of relative timing.** It says "I know my parent's budget, I don't care, play at this speed." The default (no tempo) is fully relative.
+
+The "beats per cycle" idea reinforces this — it's a unit that's **inherently relative**. Instead of `tempo(60)` (absolute), you'd say `density(4)` — "I have 4 beats, distribute them across whatever time I get." No contradiction with `fit` mode possible.
+
+This gives you two rhythmic dimensions:
+- **Density**: how many events fill the space (relative)
+- **Tempo**: how fast the clock ticks (absolute, opt-in, implies overflow)
+
+Clean separation. Did point 3 have more, or shall we park this?
