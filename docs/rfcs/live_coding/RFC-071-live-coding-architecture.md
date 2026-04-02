@@ -120,11 +120,13 @@ All live mutations (pattern replacement, clip reordering, attribute changes) tak
 
 ## 5. Temporal Model: Recursive Proportional Scaling
 
-### 5.1 Relative Time by Default
+### 5.1 Relative Musical Units as DSL-Wide Default
 
-Inside the live context, all durations are **relative to the enclosing context**. Note values (`4n`, `2n`, `1n`) define proportional ratios, not absolute durations. A `4n` (quarter note) means "1/4 of the available time," not "X milliseconds."
+Relative time is **not a live-coding feature** — it is the **default for the entire DSL**, composition included. The user-facing DSL is built around musical units: bars, beats, and note values (`4n`, `2n`, `1n`). Ticks are the kernel's internal representation and **never appear in user-facing code.**
 
-The compiler resolves relative proportions into absolute ticks during materialization. The kernel sees only ticks.
+Note values define proportional ratios, not absolute durations. A `4n` (quarter note) means "1/4 of the available time," not "X milliseconds." In a standalone composition context, the proportion resolves against the declared tempo (or default). In a relative/live context, the proportion resolves against the allocated time from the parent.
+
+The compiler is the bridge between musical units and ticks. It resolves relative proportions into absolute tick positions during materialization. The kernel sees only ticks. The user sees only bars and notes. The two should never meet in user-facing code.
 
 ### 5.2 Subdivision Within a Cycle
 
@@ -196,6 +198,14 @@ Clip c1 (budget: 1000 ticks, natural: 1400, scale: 0.71x):
 
 Parallel children play simultaneously and share the same time window. They do not subdivide the remaining time — they each get the full remainder.
 
+### 5.5 Cascade Effect (Intended Behavior)
+
+Because parallel children's budgets depend on how much time sequential siblings consume before the parallel fire point, **changing sequential content cascades to parallel children's effective duration.** Adding a note before the parallel fire point reduces the remainder; removing one increases it.
+
+This is an inherent consequence of the proportional model, not a bug. It is the same behavior Tidal exhibits with nested grouping. Live coders should understand: a clip's internal structure determines how time flows to its children.
+
+For cases where a parallel child needs a guaranteed budget regardless of sibling changes, the `fixed` scaling mode (Section 6.2) provides an explicit escape hatch.
+
 ---
 
 ## 6. Scaling Modes
@@ -211,8 +221,25 @@ A **scaling mode** is a synapse-level (or clip-level) policy that determines how
 | `fit` | Tempo-scale clip content to fill the allocated budget. Proportions preserved. | **Yes** |
 | `overflow` | Play at natural/declared tempo. If content exceeds budget, bleed past boundary. | No |
 | `truncate` | Play at natural/declared tempo. If content exceeds budget, cut at boundary. | No |
+| `fixed(N)` | Demand exactly N ticks regardless of parent's subdivision. Budget is deducted before `fit` children are allocated. | No |
 
-### 6.3 Placement
+### 6.3 Fixed Mode and Allocation Order
+
+When `fixed` children coexist with `fit` children, allocation follows CSS flexbox semantics:
+
+1. **Allocate `fixed` children first.** Their declared budgets are deducted from the parent's total.
+2. **Distribute the remainder among `fit` children.** Proportional subdivision applies to what's left.
+
+```
+Clip c1 (budget: 1000 ticks):
+  c4 | parallel, fixed(400)  → always gets 400 ticks
+  c5 | parallel, fit         → gets remainder (600 ticks)
+  Sequential notes           → scale to fit within 600 ticks alongside c5
+```
+
+This guarantees `fixed` children a stable budget unaffected by sibling mutations — the escape hatch for the cascade effect described in Section 5.5.
+
+### 6.4 Placement
 
 The scaling mode lives on the **synapse**, not the clip. The same clip can be `fit` in one context and `overflow` in another. The synapse already carries contextual properties (`tempo_scale`, `weight`, `transpose`). `scaling_mode` is a natural addition.
 
@@ -222,7 +249,8 @@ SynapseAttributes {
     tick_offset: i32,       // timing offset
     transpose: i32,         // pitch shift
     velocity_scale: i32,    // velocity scaling
-    scaling_mode: i32,      // 0 = fit (default), 1 = overflow, 2 = truncate
+    scaling_mode: i32,      // 0 = fit (default), 1 = overflow, 2 = truncate, 3 = fixed
+    fixed_budget: i32,      // ticks, only used when scaling_mode = fixed
 }
 ```
 
@@ -400,6 +428,16 @@ On hot-reload, the diff engine compares the previous live state against the new 
 
 **V2 (optimization):** Node-level diffing. Compare old and new patterns element-by-element. If only one note's pitch changed, update the attribute plane (no structural change). If a note was inserted/removed, perform minimal chain surgery. More complex, deferred to later.
 
+### 10.4 V2 Stable Identity Strategy
+
+For V2 node-level diffing, nodes need stable identity across hot-reloads. The recommended heuristic is **position-based identity**: "the note at index 3 in the pattern is the same note as index 3 in the previous pattern."
+
+- If the note at position 3 changed pitch (A4 → B4): attribute write only, no structural change.
+- If a note at position 3 was deleted: structural removal + chain surgery.
+- If a note was inserted at position 3: structural insertion, positions 3+ shift.
+
+Content-based identity ("match by pitch and duration") is fragile — two identical notes are indistinguishable. Position-based identity is unambiguous and predictable. This seed is planted here for the V2 design phase; V1 does not implement it.
+
 ---
 
 ## 11. Polymetric Loops
@@ -453,13 +491,36 @@ These are attribute writes, not structural mutations. No publish needed. Effecti
 
 ---
 
-## 13. Offline Export Compatibility
+## 13. Triple-Buffer Hot-Reload Guarantee
 
-### 13.1 Deterministic Execution
+### 13.1 The Load-Bearing Mechanism
 
-The same live script, executed with the same initial clip state and the same sequence of hot-reloads, produces bit-identical output. The kernel is deterministic (hash-based stochastic functions, no PRNG), and the main thread's cycle clock produces identical tick sequences regardless of real-time vs. offline execution.
+The entire hot-reload story rests on a single guarantee: **the audio thread never observes a partially-mutated graph.** It is either reading the old complete snapshot or the new complete snapshot. There is no intermediate state.
 
-### 13.2 Offline Mode
+This guarantee is provided by the triple buffer's atomic swap semantics:
+
+1. The main thread writes all structural mutations (node insertions, synapse rewiring, chain updates) to the **writer buffer**. The audio thread cannot see this buffer.
+2. The main thread calls `publish()`, which performs a `memcpy` from the writer buffer to the **published buffer** and atomically updates the state bits.
+3. At the next audio callback, the audio thread calls `swap()`. If a new published buffer is available, the reader and published buffers swap atomically. The audio thread now reads the new snapshot.
+4. If the main thread publishes multiple times before the audio thread swaps, intermediate publishes are **dropped** — the audio thread always gets the latest. This is the "dropped-frame" property.
+
+### 13.2 Implications for Live Coding
+
+- **Glitch-free pattern replacement:** The main thread can free old nodes, allocate new ones, rewire the chain, and publish — all while the audio thread reads the old chain uninterrupted. The audio thread sees the old pattern until it swaps, then sees the complete new pattern. No torn reads, no partially-wired chains.
+- **Rapid successive edits:** If the performer saves twice before a cycle boundary, the first publish is dropped. The audio thread skips directly to the second. This is correct behavior — only the latest state matters.
+- **Zero coordination:** The main thread never waits for the audio thread. The audio thread never waits for the main thread. The triple buffer mediates asynchronously.
+
+---
+
+## 14. Offline Export Compatibility
+
+### 14.1 Deterministic Execution
+
+The same live script, executed with the same initial clip state and the same sequence of hot-reloads, produces **bit-identical output.** The kernel is deterministic (hash-based stochastic functions, no PRNG), and the main thread's cycle clock produces identical tick sequences regardless of real-time vs. offline execution.
+
+This is a significant architectural advantage. Most live coding systems are inherently real-time and non-deterministic — the output depends on when the performer hits save, which is tied to wall-clock time. In SymphonyScript, the same live script executed offline with the same event log produces the same audio. Live performances are reproducible. Studio work and live work share the same toolchain.
+
+### 14.2 Offline Mode
 
 Offline export runs the same cycle-boundary materialization in a tight loop:
 
@@ -474,13 +535,17 @@ while not_finished {
 
 The only difference from live mode: the cycle clock advances as fast as the CPU allows, and hot-reloads are replaced by a deterministic event log.
 
+### 14.3 Why This Matters
+
+Bit-identical offline export is a trivial consequence of the unified architecture — not a special mode, not a separate rendering pipeline. The same `LiveScheduler`, the same `DiffEngine`, the same `PatternCompiler`, the same kernel operations. Only the clock source changes. This falls out for free from the design.
+
 ---
 
-## 14. Contract: Key Interfaces
+## 15. Contract: Key Interfaces
 
 The following signatures define the contract between the live layer and the kernel. These are the public interfaces the live scheduler calls. Implementation is not specified.
 
-### 14.1 Live Scheduler
+### 15.1 Live Scheduler
 
 ```rust
 pub struct LiveScheduler {
@@ -509,7 +574,7 @@ impl LiveScheduler {
 }
 ```
 
-### 14.2 Cycle Clock
+### 15.2 Cycle Clock
 
 ```rust
 pub struct CycleClock {
@@ -529,7 +594,7 @@ impl CycleClock {
 }
 ```
 
-### 14.3 Diff Engine
+### 15.3 Diff Engine
 
 ```rust
 pub struct DiffEngine;
@@ -550,7 +615,7 @@ pub enum KernelMutation {
 }
 ```
 
-### 14.4 Pattern Compiler
+### 15.4 Pattern Compiler
 
 ```rust
 pub struct PatternCompiler;
@@ -567,9 +632,10 @@ impl PatternCompiler {
 }
 
 pub enum ScalingMode {
-    Fit,        // default: scale to fill budget
-    Overflow,   // play at natural tempo, bleed past budget
-    Truncate,   // play at natural tempo, cut at budget
+    Fit,            // default: scale to fill budget
+    Overflow,       // play at natural tempo, bleed past budget
+    Truncate,       // play at natural tempo, cut at budget
+    Fixed(u64),     // demand exactly N ticks, deducted before fit allocation
 }
 
 pub struct PatternEvent {
@@ -579,7 +645,7 @@ pub struct PatternEvent {
 }
 ```
 
-### 14.5 Live Handle Resolution
+### 15.5 Live Handle Resolution
 
 ```rust
 pub struct LiveHandleRegistry {
@@ -603,7 +669,7 @@ pub struct ClipHandle {
 
 ---
 
-## 15. Non-Goals (Explicitly Out of Scope)
+## 16. Non-Goals (Explicitly Out of Scope)
 
 1. **DSL syntax design.** The exact syntax of the live DSL (mini-notation, pattern combinators, grouping operators) is a separate design effort. This RFC defines the architecture, not the language.
 
@@ -617,18 +683,22 @@ pub struct ClipHandle {
 
 ---
 
-## 16. Summary of Design Decisions
+## 17. Summary of Design Decisions
 
 | Decision | Resolution | Rationale |
 |---|---|---|
 | Live layer placement | On top of composition layer, not parallel | Reuses kernel's O(1) operations; one data path |
 | Main thread role | Active scheduler, publishes every cycle | Enables live mutation; write-once is degenerate case |
+| DSL temporal unit | Musical units (bars, beats, note values); never ticks | Ticks are kernel-internal; user-facing code is musical |
 | Cycle definition | One traversal of the `loop` block | Global synchronization point; changes snap here |
 | Loop implementation | Syntactic sugar for cyclic synaptic graph | Looping emerges from topology, not special opcodes |
 | Time model | Recursive proportional scaling | Preserves note ratios; composes hierarchically |
 | Default scaling | `fit` (tempo-scale to fill budget) | Most intuitive for live-coding; Tidal-equivalent |
+| Fixed scaling mode | Demand exact tick budget; allocated before `fit` siblings | Escape hatch for cascade effect on parallel children |
 | Tempo declaration | Opt-out of relative timing; implies `overflow` | Absolute timing is explicit, not default |
 | Pattern mutation | Full pattern replacement (V1) | Simple, correct; node-level diff deferred |
+| V2 diff identity | Position-based (index within pattern) | Unambiguous; content-based is fragile |
 | Modulator fate | Destroyed with old nodes on replacement | Clean slate; parameter-table mods survive |
 | Change timing | Applied at next cycle boundary | Predictable, glitch-free transitions |
-| Offline export | Same code path, faster clock | Bit-identical to live execution |
+| Hot-reload safety | Triple buffer's dropped-frame semantics | Audio thread never sees partially-mutated graph |
+| Offline export | Same code path, faster clock | Bit-identical to live execution; falls out for free |
