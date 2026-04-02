@@ -271,7 +271,6 @@ impl Kernel {
 
     pub fn remove_node(&self, slot: usize) {
         self.node_chain_writer.remove(slot);
-        self.node_deferred_frees_list.push(slot);
     }
 
     pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_> {
@@ -317,7 +316,6 @@ impl Kernel {
 
     pub fn disconnect(&self, slot: usize) {
         self.synapse_chain_writer.disconnect(slot);
-        self.synapse_deferred_frees_list.push(slot);
     }
 
     pub fn publish(&mut self) -> Result<(), FreeListError> {
