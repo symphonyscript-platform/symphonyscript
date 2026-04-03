@@ -26,7 +26,6 @@ pub struct KernelController {
 impl KernelController {
     pub fn new(config: SynapticGraphConfig) -> Self {
         let sab = Self::create_sab(SynapticGraphWriter::compute_size(&config));
-
         Self::new_from_sab(sab, config)
     }
 
