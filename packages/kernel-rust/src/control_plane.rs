@@ -1,13 +1,17 @@
 use crate::synaptic_graph_reader::SynapticGraphReader;
 use std::sync::atomic::{AtomicPtr, Ordering};
+use crate::constants::CONTROLLER_MAGIC;
 
+#[repr(C)]
 pub struct ControlPlane {
+    signature: u32,
     shared_graph_ptr: AtomicPtr<SynapticGraphReader>,
 }
 
 impl ControlPlane {
     pub fn new(shared_graph_ptr: *mut SynapticGraphReader) -> Self {
         ControlPlane {
+            signature: CONTROLLER_MAGIC,
             shared_graph_ptr: AtomicPtr::new(shared_graph_ptr),
         }
     }

@@ -1,3 +1,4 @@
+use crate::constants::CONTROLLER_MAGIC;
 use crate::control_plane::ControlPlane;
 use crate::synaptic_graph_reader::SynapticGraphReader;
 
@@ -7,6 +8,12 @@ pub struct KernelProcessor {
 
 impl KernelProcessor {
     pub fn new(control_plane_address: usize) -> Self {
+        let signature = unsafe { std::ptr::read(control_plane_address as *const u32) };
+
+        if signature != CONTROLLER_MAGIC {
+            panic!("invalid control_plane_address provided to the KernelProcessor")
+        }
+
         KernelProcessor {
             control_plane_ptr: control_plane_address as *const ControlPlane,
         }
