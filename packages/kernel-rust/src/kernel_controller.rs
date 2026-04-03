@@ -12,7 +12,7 @@ use crate::structural_plane::synapse::synapse_writer::SynapseWriter;
 use crate::synaptic_graph_config::SynapticGraphConfig;
 use crate::synaptic_graph_reader::SynapticGraphReader;
 use crate::synaptic_graph_writer::SynapticGraphWriter;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 
 pub struct KernelController {
@@ -24,8 +24,6 @@ pub struct KernelController {
 }
 
 impl KernelController {
-    pub const CONTROLLER_SAB_SIZE: usize = 8;
-
     pub fn new(config: SynapticGraphConfig) -> Self {
         let sab = Self::create_sab(SynapticGraphWriter::compute_size(&config));
 
