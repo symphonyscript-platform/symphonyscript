@@ -1,4 +1,4 @@
-use crate::attributes::reader::attributes_reader::AttributesReader;
+use crate::attribute_plane::reader::attributes_reader::AttributesReader;
 use crate::constants::SYNAPSE_ATTRIBUTES_SLOT_SIZE;
 
 pub struct SynapseAttributesReader<'a>(pub AttributesReader<'a, SYNAPSE_ATTRIBUTES_SLOT_SIZE>);

@@ -1,14 +1,15 @@
-use symphonyscript_kernel::attributes::writer::note_attributes_writer::NoteAttributes;
-use symphonyscript_kernel::attributes::writer::synapse_attributes_writer::SynapseAttributes;
+use symphonyscript_kernel::attribute_plane::writer::note_attributes_writer::NoteAttributes;
+use symphonyscript_kernel::attribute_plane::writer::synapse_attributes_writer::SynapseAttributes;
 use symphonyscript_kernel::structural_plane::node::node_data::NodeDraft;
 use symphonyscript_kernel::structural_plane::synapse::synapse_data::SynapseDraft;
+use symphonyscript_kernel::synaptic_graph_config::SynapticGraphConfig;
 use symphonyscript_kernel::synaptic_graph_reader::SynapticGraphReader;
-use symphonyscript_kernel::synaptic_graph_writer::{SynapticGraphConfig, SynapticGraphWriter};
+use symphonyscript_kernel::synaptic_graph_writer::SynapticGraphWriter;
 
 fn config() -> SynapticGraphConfig {
     SynapticGraphConfig {
-        max_nodes: 16,
-        max_synapses: 32,
+        node_capacity: 16,
+        synapse_capacity: 32,
     }
 }
 

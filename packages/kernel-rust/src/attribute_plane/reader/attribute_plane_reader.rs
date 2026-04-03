@@ -1,23 +1,21 @@
-use crate::attributes::writer::attributes_writer::AttributesWriter;
-use crate::primitives::into_array::IntoArray;
+use crate::attribute_plane::reader::attributes_reader::AttributesReader;
 use crate::primitives::types::SAB;
-use std::sync::atomic::Ordering;
 
 #[derive(Clone)]
-pub struct AttributePlaneWriter<const SLOT_SIZE: usize> {
+pub struct AttributePlaneReader<const SLOT_SIZE: usize> {
     sab: SAB,
     start_index: usize,
     end_index: usize,
     capacity: usize,
 }
 
-impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
+impl<const SLOT_SIZE: usize> AttributePlaneReader<SLOT_SIZE> {
     pub fn new(sab: SAB, start_index: usize, capacity: usize) -> Self {
         let end_index = start_index + capacity * SLOT_SIZE;
 
-        debug_assert!(end_index <= sab.len(), "AttributePlaneWriter out of bounds");
+        debug_assert!(end_index <= sab.len(), "AttributePlaneReader out of bounds");
 
-        AttributePlaneWriter {
+        AttributePlaneReader {
             sab,
             start_index,
             end_index,
@@ -41,23 +39,12 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
         self.end_index
     }
 
-    pub fn get(&'_ self, offset: usize) -> AttributesWriter<'_, SLOT_SIZE> {
+    pub fn get(&'_ self, offset: usize) -> AttributesReader<'_, SLOT_SIZE> {
         debug_assert!(offset < self.capacity, "offset out of bounds");
 
-        AttributesWriter {
+        AttributesReader {
             sab: &self.sab,
             start_index: self.resolve_sab_index(offset),
-        }
-    }
-
-    pub fn set<T: IntoArray<SLOT_SIZE>>(&self, offset: usize, data: T) {
-        debug_assert!(offset < self.capacity, "offset out of bounds");
-
-        let data = data.to_array();
-        let base = self.resolve_sab_index(offset);
-
-        for i in 0..SLOT_SIZE {
-            self.sab[base + i].store(data[i], Ordering::Relaxed);
         }
     }
 }

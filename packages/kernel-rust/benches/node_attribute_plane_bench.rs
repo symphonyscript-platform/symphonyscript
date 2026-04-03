@@ -2,9 +2,9 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion, Benchmark
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::attributes::writer::attribute_plane_writer::AttributePlaneWriter;
-use symphonyscript_kernel::attributes::writer::attributes_writer::AttributesWriter;
-use symphonyscript_kernel::attributes::writer::note_attributes_writer::{NoteAttributes, NoteAttributesWriter};
+use symphonyscript_kernel::attribute_plane::writer::attribute_plane_writer::AttributePlaneWriter;
+use symphonyscript_kernel::attribute_plane::writer::attributes_writer::AttributesWriter;
+use symphonyscript_kernel::attribute_plane::writer::note_attributes_writer::{NoteAttributes, NoteAttributesWriter};
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);

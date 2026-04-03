@@ -1,6 +1,6 @@
 use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
 use crate::primitives::into_array::IntoArray;
-use crate::attributes::writer::attributes_writer::AttributesWriter;
+use crate::attribute_plane::writer::attributes_writer::AttributesWriter;
 
 pub struct BarrierAttributes {
     pub phase_target: i32,

@@ -1,13 +1,14 @@
-use symphonyscript_kernel::attributes::writer::note_attributes_writer::NoteAttributes;
-use symphonyscript_kernel::attributes::writer::synapse_attributes_writer::SynapseAttributes;
+use symphonyscript_kernel::attribute_plane::writer::note_attributes_writer::NoteAttributes;
+use symphonyscript_kernel::attribute_plane::writer::synapse_attributes_writer::SynapseAttributes;
 use symphonyscript_kernel::structural_plane::node::node_data::NodeDraft;
 use symphonyscript_kernel::structural_plane::synapse::synapse_data::SynapseDraft;
-use symphonyscript_kernel::synaptic_graph_writer::{SynapticGraphConfig, SynapticGraphWriter};
+use symphonyscript_kernel::synaptic_graph_config::SynapticGraphConfig;
+use symphonyscript_kernel::synaptic_graph_writer::SynapticGraphWriter;
 
 fn config() -> SynapticGraphConfig {
     SynapticGraphConfig {
-        max_nodes: 16,
-        max_synapses: 32,
+        node_capacity: 16,
+        synapse_capacity: 32,
     }
 }
 
@@ -444,13 +445,13 @@ fn self_loop_connect_disconnect() {
 #[test]
 fn compute_sab_size_is_positive() {
     let cfg = config();
-    assert!(SynapticGraphWriter::compute_sab_size(&cfg) > 0);
+    assert!(SynapticGraphWriter::compute_size(&cfg) > 0);
 }
 
 #[test]
 fn compute_triple_buffer_size_matches_slot_count() {
     let cfg = config();
-    let expected = 1 + 16 * cfg.max_nodes + 8 * cfg.max_synapses;
+    let expected = 1 + 16 * cfg.node_capacity + 8 * cfg.synapse_capacity;
     assert_eq!(
         SynapticGraphWriter::compute_triple_buffer_size(&cfg),
         expected

@@ -6,6 +6,8 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct SimpleFreeList {
     sab: SAB,
+    start_index: usize,
+    bitmap_size: usize,
     slots_start_index: usize,
     sab_head_ptr: usize,
     sab_free_count_ptr: usize,
@@ -55,17 +57,23 @@ impl SimpleFreeList {
 
         SimpleFreeList {
             sab: Arc::clone(&sab),
+            start_index,
             sab_head_ptr: start_index,
             sab_free_count_ptr: free_count_slot_index,
             sab_bitmap_ptr: bitmap_slot_start_index,
             slots_start_index,
+            bitmap_size,
             end_index: slots_end_index,
             capacity,
         }
     }
 
-    pub fn free_count(&self) -> i32 {
-        self.sab[self.sab_free_count_ptr].load(Ordering::Relaxed)
+    pub fn free_count(&self) -> usize {
+        self.sab[self.sab_free_count_ptr].load(Ordering::Relaxed) as usize
+    }
+
+    pub fn start_index(&self) -> usize {
+        self.start_index
     }
 
     pub fn end_index(&self) -> usize {
@@ -83,7 +91,8 @@ impl SimpleFreeList {
             return None;
         }
 
-        let next_index = self.sab[self.slots_start_index + head_index as usize].load(Ordering::Relaxed);
+        let next_index =
+            self.sab[self.slots_start_index + head_index as usize].load(Ordering::Relaxed);
         let slot_index = head_index as usize;
         self.mark_as_occupied(slot_index);
 
@@ -95,24 +104,52 @@ impl SimpleFreeList {
 
     pub fn free(&self, slot_number: usize) -> Result<(), FreeListError> {
         let slot_index = slot_number - 1;
-        debug_assert!(
-            slot_index < (self.capacity as usize),
-            "slot_number out of bounds"
-        );
+        debug_assert!(slot_index < self.capacity, "slot_number out of bounds");
 
         if self.is_free(slot_index) {
             return Err(FreeListError::DoubleFree);
         }
 
-        let head_index = self.sab[self.sab_head_ptr].load(Ordering::Relaxed);
-
-        self.sab[self.slots_start_index + slot_index].store(head_index, Ordering::Relaxed);
+        self.trust_free(slot_index);
         self.mark_as_free(slot_index);
 
-        self.sab[self.sab_head_ptr].store(slot_index as i32, Ordering::Relaxed);
-        self.sab[self.sab_free_count_ptr].fetch_add(1, Ordering::Relaxed);
-
         Ok(())
+    }
+
+    pub fn copy_from(&mut self, source: &SimpleFreeList) {
+        debug_assert!(
+            source.capacity <= self.capacity,
+            "copy_from source cannot be greater than destination"
+        );
+
+        self.sab[self.sab_head_ptr].store(
+            source.sab[source.sab_head_ptr].load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.sab[self.sab_free_count_ptr].store(
+            source.sab[source.sab_free_count_ptr].load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+
+        for i in 0..source.bitmap_size {
+            self.sab[self.sab_bitmap_ptr + i].store(
+                source.sab[source.sab_bitmap_ptr + i].load(Ordering::Relaxed),
+                Ordering::Relaxed,
+            )
+        }
+
+        for i in 0..source.capacity {
+            self.sab[self.slots_start_index + i].store(
+                source.sab[source.slots_start_index + i].load(Ordering::Relaxed),
+                Ordering::Relaxed,
+            )
+        }
+
+        if self.capacity > source.capacity {
+            for i in source.capacity..self.capacity {
+                self.trust_free(i);
+            }
+        }
     }
 
     fn is_free(&self, slot_index: usize) -> bool {
@@ -128,5 +165,13 @@ impl SimpleFreeList {
     fn mark_as_free(&self, slot_index: usize) {
         self.sab[self.sab_bitmap_ptr + (slot_index >> 5)]
             .fetch_and(!(1 << (slot_index & 31)), Ordering::Relaxed);
+    }
+
+    fn trust_free(&self, slot_index: usize) {
+        debug_assert!(slot_index < self.capacity, "slot_index out of bounds");
+        let head_index = self.sab[self.sab_head_ptr].load(Ordering::Relaxed);
+        self.sab[self.slots_start_index + slot_index].store(head_index, Ordering::Relaxed);
+        self.sab[self.sab_head_ptr].store(slot_index as i32, Ordering::Relaxed);
+        self.sab[self.sab_free_count_ptr].fetch_add(1, Ordering::Relaxed);
     }
 }

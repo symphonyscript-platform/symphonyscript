@@ -1,7 +1,8 @@
-use crate::attributes::writer::attribute_plane_writer::AttributePlaneWriter;
-use crate::attributes::writer::attributes_writer::AttributesWriter;
+use crate::attribute_plane::writer::attribute_plane_writer::AttributePlaneWriter;
+use crate::attribute_plane::writer::attributes_writer::AttributesWriter;
 use crate::constants::{
-    NODE_ATTRIBUTES_SLOT_SIZE, NODE_SLOT_SIZE, SYNAPSE_ATTRIBUTES_SLOT_SIZE, SYNAPSE_SLOT_SIZE,
+    GRAPH_MAGIC, NODE_ATTRIBUTES_SLOT_SIZE, NODE_SLOT_SIZE, SYNAPSE_ATTRIBUTES_SLOT_SIZE,
+    SYNAPSE_SLOT_SIZE,
 };
 use crate::errors::free_list_error::FreeListError;
 use crate::primitives::deferred_frees_list::DeferredFreesList;
@@ -16,16 +17,14 @@ use crate::structural_plane::structural_writer::StructuralWriter;
 use crate::structural_plane::synapse::synapse_chain_writer::SynapseChainWriter;
 use crate::structural_plane::synapse::synapse_data::SynapseDraft;
 use crate::structural_plane::synapse::synapse_writer::SynapseWriter;
-use std::sync::atomic::AtomicI32;
+use crate::synaptic_graph_config::SynapticGraphConfig;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
-
-pub struct SynapticGraphConfig {
-    pub max_nodes: usize,
-    pub max_synapses: usize,
-}
 
 #[derive(Clone)]
 pub struct SynapticGraphWriter {
+    node_capacity: usize,
+    synapse_capacity: usize,
     sab: SAB,
     node_free_list: SimpleFreeList,
     synapse_free_list: SimpleFreeList,
@@ -39,72 +38,77 @@ pub struct SynapticGraphWriter {
 }
 
 impl SynapticGraphWriter {
-    pub fn new(config: SynapticGraphConfig) -> Self {
-        let sab = Self::create_sab(Self::compute_sab_size(&config));
-        Self::create(sab, config)
-    }
+    pub fn new(sab: SAB, config: SynapticGraphConfig) -> Self {
+        assert_eq!(
+            sab[0].load(Ordering::Acquire),
+            0,
+            "Attempted to initialize SynapticGraphWriter on already allocated memory"
+        );
 
-    pub fn new_from_sab(sab: SAB, config: SynapticGraphConfig) -> Self {
-        Self::create(sab, config)
-    }
+        assert!(
+            sab.len() >= Self::compute_size(&config),
+            "Provided SAB is too small for this configuration"
+        );
 
-    pub fn bind(sab: SAB, config: SynapticGraphConfig) -> Self {
-        let node_free_list = SimpleFreeList::bind(Arc::clone(&sab), 1, config.max_nodes);
-        let synapse_free_list = SimpleFreeList::bind(
+        sab[0].store(GRAPH_MAGIC, Ordering::Release);
+
+        let node_free_list = SimpleFreeList::new(Arc::clone(&sab), 1, config.node_capacity);
+        let synapse_free_list = SimpleFreeList::new(
             Arc::clone(&sab),
             node_free_list.end_index(),
-            config.max_synapses,
+            config.synapse_capacity,
         );
-        let node_deferred_frees_list = DeferredFreesList::bind(
+        let node_deferred_frees_list = DeferredFreesList::new(
             Arc::clone(&sab),
             synapse_free_list.end_index(),
-            config.max_nodes,
+            config.node_capacity,
         );
-        let synapse_deferred_frees_list = DeferredFreesList::bind(
+        let synapse_deferred_frees_list = DeferredFreesList::new(
             Arc::clone(&sab),
             node_deferred_frees_list.end_index(),
-            config.max_synapses,
+            config.synapse_capacity,
         );
-        let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::bind(
+        let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(
             Arc::clone(&sab),
             synapse_deferred_frees_list.end_index(),
-            config.max_nodes,
+            config.node_capacity,
         );
-        let synapse_attribute_plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::bind(
+        let synapse_attribute_plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::new(
             Arc::clone(&sab),
             node_attribute_plane.end_index(),
-            config.max_synapses,
+            config.synapse_capacity,
         );
-        let triple_buffer_size = Self::compute_triple_buffer_size(&config);
-        let triple_buffer_writer = TripleBuffer::bind_writer(
+        let (triple_buffer_writer, _) = TripleBuffer::new(
             Arc::clone(&sab),
             synapse_attribute_plane.end_index(),
-            triple_buffer_size,
+            Self::compute_triple_buffer_size(&config),
         );
         let buffer_head_offset = 0;
-        let node_structural_writer = StructuralWriter::<NODE_SLOT_SIZE>::bind(
+        let node_structural_writer = StructuralWriter::<NODE_SLOT_SIZE>::new(
             triple_buffer_writer.clone(),
             node_free_list.clone(),
             node_deferred_frees_list.clone(),
             buffer_head_offset + 1,
-            config.max_nodes,
+            config.node_capacity,
         );
-        let synapse_structural_writer = StructuralWriter::<SYNAPSE_SLOT_SIZE>::bind(
+        let synapse_structural_writer = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
             triple_buffer_writer.clone(),
             synapse_free_list.clone(),
             synapse_deferred_frees_list.clone(),
             node_structural_writer.end_offset(),
-            config.max_synapses,
+            config.synapse_capacity,
         );
-        let node_chain_writer = NodeChainWriter::bind(
+        let node_chain_writer = NodeChainWriter::new(
             triple_buffer_writer.clone(),
             node_structural_writer.clone(),
             buffer_head_offset,
         );
         let synapse_chain_writer =
-            SynapseChainWriter::bind(node_chain_writer.clone(), synapse_structural_writer.clone());
+            SynapseChainWriter::new(node_chain_writer.clone(), synapse_structural_writer.clone());
 
         SynapticGraphWriter {
+            node_capacity: config.node_capacity,
+            synapse_capacity: config.synapse_capacity,
             sab,
             node_free_list,
             synapse_free_list,
@@ -118,62 +122,76 @@ impl SynapticGraphWriter {
         }
     }
 
-    fn create(sab: SAB, config: SynapticGraphConfig) -> Self {
-        let node_free_list = SimpleFreeList::new(Arc::clone(&sab), 1, config.max_nodes);
-        let synapse_free_list = SimpleFreeList::new(
+    pub fn bind(sab: SAB, config: SynapticGraphConfig) -> Self {
+        assert_eq!(
+            sab[0].load(Ordering::Acquire),
+            GRAPH_MAGIC,
+            "Attempted to initialize SynapticGraphWriter on foreign memory"
+        );
+
+        assert!(
+            sab.len() >= Self::compute_size(&config),
+            "Provided SAB is too small for this configuration"
+        );
+
+        let node_free_list = SimpleFreeList::bind(Arc::clone(&sab), 1, config.node_capacity);
+        let synapse_free_list = SimpleFreeList::bind(
             Arc::clone(&sab),
             node_free_list.end_index(),
-            config.max_synapses,
+            config.synapse_capacity,
         );
-        let node_deferred_frees_list = DeferredFreesList::new(
+        let node_deferred_frees_list = DeferredFreesList::bind(
             Arc::clone(&sab),
             synapse_free_list.end_index(),
-            config.max_nodes,
+            config.node_capacity,
         );
-        let synapse_deferred_frees_list = DeferredFreesList::new(
+        let synapse_deferred_frees_list = DeferredFreesList::bind(
             Arc::clone(&sab),
             node_deferred_frees_list.end_index(),
-            config.max_synapses,
+            config.synapse_capacity,
         );
-        let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(
+        let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::bind(
             Arc::clone(&sab),
             synapse_deferred_frees_list.end_index(),
-            config.max_nodes,
+            config.node_capacity,
         );
-        let synapse_attribute_plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::new(
+        let synapse_attribute_plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::bind(
             Arc::clone(&sab),
             node_attribute_plane.end_index(),
-            config.max_synapses,
+            config.synapse_capacity,
         );
-        let (triple_buffer_writer, _) = TripleBuffer::new(
+        let triple_buffer_size = Self::compute_triple_buffer_size(&config);
+        let triple_buffer_writer = TripleBuffer::bind_writer(
             Arc::clone(&sab),
             synapse_attribute_plane.end_index(),
-            Self::compute_triple_buffer_size(&config),
+            triple_buffer_size,
         );
         let buffer_head_offset = 0;
-        let node_structural_writer = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        let node_structural_writer = StructuralWriter::<NODE_SLOT_SIZE>::bind(
             triple_buffer_writer.clone(),
             node_free_list.clone(),
             node_deferred_frees_list.clone(),
             buffer_head_offset + 1,
-            config.max_nodes,
+            config.node_capacity,
         );
-        let synapse_structural_writer = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        let synapse_structural_writer = StructuralWriter::<SYNAPSE_SLOT_SIZE>::bind(
             triple_buffer_writer.clone(),
             synapse_free_list.clone(),
             synapse_deferred_frees_list.clone(),
             node_structural_writer.end_offset(),
-            config.max_synapses,
+            config.synapse_capacity,
         );
-        let node_chain_writer = NodeChainWriter::new(
+        let node_chain_writer = NodeChainWriter::bind(
             triple_buffer_writer.clone(),
             node_structural_writer.clone(),
             buffer_head_offset,
         );
         let synapse_chain_writer =
-            SynapseChainWriter::new(node_chain_writer.clone(), synapse_structural_writer.clone());
+            SynapseChainWriter::bind(node_chain_writer.clone(), synapse_structural_writer.clone());
 
         SynapticGraphWriter {
+            node_capacity: config.node_capacity,
+            synapse_capacity: config.synapse_capacity,
             sab,
             node_free_list,
             synapse_free_list,
@@ -188,15 +206,15 @@ impl SynapticGraphWriter {
     }
 
     pub fn compute_triple_buffer_size(config: &SynapticGraphConfig) -> usize {
-        1 + NODE_SLOT_SIZE * config.max_nodes + SYNAPSE_SLOT_SIZE * config.max_synapses
+        1 + NODE_SLOT_SIZE * config.node_capacity + SYNAPSE_SLOT_SIZE * config.synapse_capacity
     }
 
-    pub fn compute_sab_size(config: &SynapticGraphConfig) -> usize {
+    pub fn compute_size(config: &SynapticGraphConfig) -> usize {
         let node_attribute_plane_size =
-            AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::calculate_size(config.max_nodes);
+            AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::calculate_size(config.node_capacity);
         let synapse_attribute_plane_size =
             AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::calculate_size(
-                config.max_synapses,
+                config.synapse_capacity,
             );
         let structural_plane_size =
             TripleBuffer::calculate_size(Self::compute_triple_buffer_size(config));
@@ -208,11 +226,11 @@ impl SynapticGraphWriter {
     }
 
     pub fn compute_headers_size(config: &SynapticGraphConfig) -> usize {
-        let node_free_list_size = SimpleFreeList::calculate_size(config.max_nodes);
-        let synapse_free_list_size = SimpleFreeList::calculate_size(config.max_synapses);
-        let node_deferred_free_list_size = DeferredFreesList::calculate_size(config.max_nodes);
+        let node_free_list_size = SimpleFreeList::calculate_size(config.node_capacity);
+        let synapse_free_list_size = SimpleFreeList::calculate_size(config.synapse_capacity);
+        let node_deferred_free_list_size = DeferredFreesList::calculate_size(config.node_capacity);
         let synapse_deferred_free_list_size =
-            DeferredFreesList::calculate_size(config.max_synapses);
+            DeferredFreesList::calculate_size(config.synapse_capacity);
 
         1 + node_free_list_size
             + synapse_free_list_size
@@ -220,8 +238,32 @@ impl SynapticGraphWriter {
             + synapse_deferred_free_list_size
     }
 
-    pub fn get_sab(&self) -> SAB {
-        Arc::clone(&self.sab)
+    pub fn node_capacity(&self) -> usize {
+        self.node_capacity
+    }
+
+    pub fn node_count(&self) -> usize {
+        self.node_capacity - self.node_free_list.free_count()
+    }
+
+    pub fn node_utilization(&self) -> f32 {
+        self.node_count() as f32 / self.node_capacity() as f32
+    }
+
+    pub fn synapse_capacity(&self) -> usize {
+        self.synapse_capacity
+    }
+
+    pub fn synapse_count(&self) -> usize {
+        self.synapse_capacity - self.synapse_free_list.free_count()
+    }
+
+    pub fn synapse_utilization(&self) -> f32 {
+        self.synapse_count() as f32 / self.synapse_capacity() as f32
+    }
+
+    pub fn peek_utilization(&self) -> f32 {
+        self.node_utilization().max(self.synapse_utilization())
     }
 
     pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_>> {
@@ -327,9 +369,22 @@ impl SynapticGraphWriter {
         Ok(())
     }
 
-    fn create_sab(size: usize) -> SAB {
-        let sab: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
+    pub fn get_sab(&self) -> SAB {
+        Arc::clone(&self.sab)
+    }
 
-        Arc::new(sab)
+    pub fn copy_from(&mut self, source: &SynapticGraphWriter) {
+        self.node_free_list.copy_from(&source.node_free_list);
+        self.synapse_free_list.copy_from(&source.synapse_free_list);
+        self.node_deferred_frees_list
+            .copy_from(&source.node_deferred_frees_list);
+        self.synapse_deferred_frees_list
+            .copy_from(&source.synapse_deferred_frees_list);
+        self.node_attribute_plane
+            .copy_from(&source.node_attribute_plane);
+        self.synapse_attribute_plane
+            .copy_from(&source.synapse_attribute_plane);
+        self.triple_buffer_writer
+            .copy_from(&source.triple_buffer_writer);
     }
 }

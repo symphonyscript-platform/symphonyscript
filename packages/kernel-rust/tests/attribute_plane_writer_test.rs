@@ -1,19 +1,19 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use symphonyscript_kernel::attributes::writer::attribute_plane_writer::AttributePlaneWriter;
-use symphonyscript_kernel::attributes::writer::barrier_attributes_writer::{
+use symphonyscript_kernel::attribute_plane::writer::attribute_plane_writer::AttributePlaneWriter;
+use symphonyscript_kernel::attribute_plane::writer::barrier_attributes_writer::{
     BarrierAttributes, BarrierAttributesWriter,
 };
-use symphonyscript_kernel::attributes::writer::boundary_attributes_writer::{
+use symphonyscript_kernel::attribute_plane::writer::boundary_attributes_writer::{
     BoundaryAttributes, BoundaryAttributesWriter,
 };
-use symphonyscript_kernel::attributes::writer::control_attributes_writer::{
+use symphonyscript_kernel::attribute_plane::writer::control_attributes_writer::{
     ControlAttributes, ControlAttributesWriter,
 };
-use symphonyscript_kernel::attributes::writer::note_attributes_writer::{
+use symphonyscript_kernel::attribute_plane::writer::note_attributes_writer::{
     NoteAttributes, NoteAttributesWriter,
 };
-use symphonyscript_kernel::attributes::writer::synapse_attributes_writer::{
+use symphonyscript_kernel::attribute_plane::writer::synapse_attributes_writer::{
     SynapseAttributes, SynapseAttributesWriter,
 };
 use symphonyscript_kernel::constants::{NODE_ATTRIBUTES_SLOT_SIZE, SYNAPSE_ATTRIBUTES_SLOT_SIZE};

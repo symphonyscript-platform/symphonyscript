@@ -202,8 +202,42 @@ impl TripleBufferWriter {
         let base = self.current_start_index();
         self.sab[base + offset].load(Ordering::Relaxed)
     }
-}
 
+    pub fn copy_from(&self, source: &TripleBufferWriter) {
+        debug_assert!(
+            source.buffer_capacity <= self.buffer_capacity,
+            "copy_from source cannot be greater than destination"
+        );
+
+        self.sab[self.state_slot_index].store(
+            source.sab[source.state_slot_index].load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.sab[self.writer_slot_index].store(
+            source.sab[source.writer_slot_index].load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.sab[self.published_slot_index].store(
+            source.sab[source.published_slot_index].load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.sab[self.published_slot_index + 1].store(
+            source.sab[source.published_slot_index + 1].load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+
+        for i in 0..3 {
+            let self_base = self.buffer_bases[i];
+            let source_base = source.buffer_bases[i];
+            for k in 0..source.buffer_capacity {
+                self.sab[self_base + k].store(
+                    source.sab[source_base + k].load(Ordering::Relaxed),
+                    Ordering::Relaxed,
+                );
+            }
+        }
+    }
+}
 
 // Reader - Audio thread
 impl TripleBufferReader {
@@ -236,10 +270,7 @@ impl TripleBufferReader {
         // the load() above and this swap().
         // The old_state is used to determine which buffer was acquired, since
         // state loaded by the initial load() might be stale by the time we reach this point.
-        let old_state = self.sab[self.state_slot_index].swap(
-            new_state,
-            Ordering::Acquire,
-        );
+        let old_state = self.sab[self.state_slot_index].swap(new_state, Ordering::Acquire);
 
         self.sab[self.reader_slot_index].store(old_state & 0b011, Ordering::Relaxed);
 

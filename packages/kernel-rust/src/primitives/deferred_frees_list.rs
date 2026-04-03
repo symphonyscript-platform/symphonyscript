@@ -126,4 +126,33 @@ impl DeferredFreesList {
 
         Ok(())
     }
+
+    pub fn copy_from(&self, source: &DeferredFreesList) {
+        debug_assert!(
+            source.max_slots <= self.max_slots,
+            "copy_from source cannot be greater than destination"
+        );
+
+        let len_0 = source.sab[source.len_0_slot_index].load(Ordering::Relaxed);
+        let len_1 = source.sab[source.len_1_slot_index].load(Ordering::Relaxed);
+
+        self.sab[self.len_0_slot_index].store(len_0, Ordering::Relaxed);
+        self.sab[self.len_1_slot_index].store(len_1, Ordering::Relaxed);
+        self.sab[self.current_list_slot_index].store(
+            source.sab[source.current_list_slot_index].load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+
+        for i in 0..2 {
+            let self_base = self.list_start_index + self.max_slots * i;
+            let source_base = source.list_start_index + source.max_slots * i;
+            let len = if i == 0 { len_0 as usize } else { len_1 as usize };
+            for k in 0..len {
+                self.sab[self_base + k].store(
+                    source.sab[source_base + k].load(Ordering::Relaxed),
+                    Ordering::Relaxed,
+                )
+            }
+        }
+    }
 }

@@ -1,10 +1,10 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 
-use symphonyscript_kernel::attributes::reader::attribute_plane_reader::AttributePlaneReader;
-use symphonyscript_kernel::attributes::reader::note_attributes_reader::NoteAttributesReader;
-use symphonyscript_kernel::attributes::writer::attribute_plane_writer::AttributePlaneWriter;
-use symphonyscript_kernel::attributes::writer::note_attributes_writer::NoteAttributes;
+use symphonyscript_kernel::attribute_plane::reader::attribute_plane_reader::AttributePlaneReader;
+use symphonyscript_kernel::attribute_plane::reader::note_attributes_reader::NoteAttributesReader;
+use symphonyscript_kernel::attribute_plane::writer::attribute_plane_writer::AttributePlaneWriter;
+use symphonyscript_kernel::attribute_plane::writer::note_attributes_writer::NoteAttributes;
 
 use symphonyscript_kernel::constants::NODE_ATTRIBUTES_SLOT_SIZE;
 use symphonyscript_kernel::primitives::types::SAB;

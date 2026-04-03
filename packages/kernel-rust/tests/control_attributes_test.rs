@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use symphonyscript_kernel::attributes::writer::attributes_writer::AttributesWriter;
-use symphonyscript_kernel::attributes::writer::control_attributes_writer::{
+use symphonyscript_kernel::attribute_plane::writer::attributes_writer::AttributesWriter;
+use symphonyscript_kernel::attribute_plane::writer::control_attributes_writer::{
     ControlAttributes, ControlAttributesWriter,
 };
 use symphonyscript_kernel::primitives::into_array::IntoArray;

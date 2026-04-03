@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
-use symphonyscript_kernel::attributes::writer::attribute_plane_writer::AttributePlaneWriter;
-use symphonyscript_kernel::attributes::writer::note_attributes_writer::{
+use symphonyscript_kernel::attribute_plane::writer::attribute_plane_writer::AttributePlaneWriter;
+use symphonyscript_kernel::attribute_plane::writer::note_attributes_writer::{
     NoteAttributes, NoteAttributesWriter,
 };
 use symphonyscript_kernel::primitives::types::SAB;

@@ -2,12 +2,17 @@ extern crate core;
 
 pub mod primitives;
 pub mod errors;
-pub mod attributes;
+pub mod attribute_plane;
 pub mod constants;
 pub mod writer_structural_plane;
 pub mod structural_plane;
 pub mod synaptic_graph_writer;
 pub mod synaptic_graph_reader;
+pub mod kernel_processor;
+pub mod kernel_controller;
+pub mod controller_plane;
+mod synaptic_graph_config;
+pub mod control_plane;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right

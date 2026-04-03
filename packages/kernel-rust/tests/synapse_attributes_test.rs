@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use symphonyscript_kernel::attributes::writer::attributes_writer::AttributesWriter;
-use symphonyscript_kernel::attributes::writer::synapse_attributes_writer::{
+use symphonyscript_kernel::attribute_plane::writer::attributes_writer::AttributesWriter;
+use symphonyscript_kernel::attribute_plane::writer::synapse_attributes_writer::{
     SynapseAttributes, SynapseAttributesWriter,
 };
 use symphonyscript_kernel::constants::SYNAPSE_ATTRIBUTES_SLOT_SIZE;
