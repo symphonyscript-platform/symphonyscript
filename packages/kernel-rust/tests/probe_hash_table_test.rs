@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::primitives::hash_table::probe_hash_table::ProbeHashTable;
+use std::sync::Arc;
 use symphonyscript_kernel::primitives::hash_table::hash_table_trait::HashTable;
+use symphonyscript_kernel::primitives::hash_table::probe_hash_table::ProbeHashTable;
+use symphonyscript_kernel::primitives::types::SAB;
 
 /// Fibonacci hash function for testing.
 fn fibonacci_hash(key: i32, shift: u32) -> usize {

@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::Arc;
 use std::thread;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
 use symphonyscript_kernel::primitives::types::SAB;
@@ -277,7 +277,12 @@ fn all_three_buffers_are_distinct() {
     seen_bases.insert(writer.current_start_index());
 
     // All three buffers should have been observed
-    assert_eq!(seen_bases.len(), 3, "expected 3 distinct buffer bases, got {:?}", seen_bases);
+    assert_eq!(
+        seen_bases.len(),
+        3,
+        "expected 3 distinct buffer bases, got {:?}",
+        seen_bases
+    );
 }
 
 #[test]
@@ -472,25 +477,41 @@ fn published_slot_index_tracks_latest_publish() {
     let (mut writer, mut reader) = TripleBuffer::new(sab.clone(), 0, 4);
 
     // Initially 0
-    assert_eq!(sab[published_slot].load(Ordering::Relaxed), 0, "initially 0");
+    assert_eq!(
+        sab[published_slot].load(Ordering::Relaxed),
+        0,
+        "initially 0"
+    );
 
     // After 1st publish (writer had buffer 0)
     writer.publish();
-    assert_eq!(sab[published_slot].load(Ordering::Relaxed), 0, "published 0");
+    assert_eq!(
+        sab[published_slot].load(Ordering::Relaxed),
+        0,
+        "published 0"
+    );
 
     // Let reader swap so writer gets a new buffer
     reader.swap();
 
     // After 2nd publish (writer had buffer 1)
     writer.publish();
-    assert_eq!(sab[published_slot].load(Ordering::Relaxed), 1, "published 1");
+    assert_eq!(
+        sab[published_slot].load(Ordering::Relaxed),
+        1,
+        "published 1"
+    );
 
     // Let reader swap
     reader.swap();
 
     // After 3rd publish (writer had buffer 2)
     writer.publish();
-    assert_eq!(sab[published_slot].load(Ordering::Relaxed), 2, "published 2");
+    assert_eq!(
+        sab[published_slot].load(Ordering::Relaxed),
+        2,
+        "published 2"
+    );
 }
 
 #[test]
@@ -631,7 +652,10 @@ fn concurrent_writer_reader_stress() {
             thread::yield_now();
         }
 
-        assert!(frames_read > 0, "reader should have consumed at least one frame");
+        assert!(
+            frames_read > 0,
+            "reader should have consumed at least one frame"
+        );
         frames_read
     });
 
@@ -793,61 +817,70 @@ fn publish_does_not_corrupt_surrounding_sab_memory() {
     let buffer_size = 64;
     // Layout: padding + 4 metadata slots + 3*64 buffer slots + padding
     let sab = create_sab(padding + 4 + buffer_size * 3 + padding);
-    
+
     // Fill the ENTIRE SAB with a sentinel value
     for i in 0..sab.len() {
         sab[i].store(7777, Ordering::Relaxed);
     }
-    
+
     let start_index = padding;
     let (mut writer, mut reader) = TripleBuffer::new(sab.clone(), start_index, buffer_size);
-    
+
     // Perform bulk writes and rapid publishes to heavily exercise the memcpy loop
     for round in 0..10_000 {
         let base = writer.current_start_index();
-        
+
         // Write pattern into the writer buffer
         for i in 0..buffer_size {
             sab[base + i].store((round as i32) * 100 + (i as i32), Ordering::Relaxed);
         }
-        
+
         writer.publish();
-        
+
         // Let the reader swap occasionally to force buffer rotation
         if round % 3 == 0 {
             reader.swap();
         }
     }
-    
+
     // 1. Verify leading memory is completely untouched
     for i in 0..padding {
         assert_eq!(
-            sab[i].load(Ordering::Relaxed), 
-            7777, 
+            sab[i].load(Ordering::Relaxed),
+            7777,
             "Memory corruption (underflow) before start_index at sab index {i}"
         );
     }
-    
+
     // 2. Verify trailing memory is completely untouched
     let end_index = writer.end_index();
     for i in end_index..sab.len() {
         assert_eq!(
-            sab[i].load(Ordering::Relaxed), 
-            7777, 
+            sab[i].load(Ordering::Relaxed),
+            7777,
             "Memory corruption (overflow) after end_index at sab index {i}"
         );
     }
-    
+
     // 3. Verify metadata slots did not get swept up in an overflowing memcpy
     let state = sab[start_index].load(Ordering::Relaxed);
     assert!((0..=7).contains(&state), "State slot corrupted: {state}");
-    
+
     let writer_id = sab[start_index + 1].load(Ordering::Relaxed);
-    assert!((0..=2).contains(&writer_id), "Writer ID slot corrupted: {writer_id}");
-    
+    assert!(
+        (0..=2).contains(&writer_id),
+        "Writer ID slot corrupted: {writer_id}"
+    );
+
     let published_id = sab[start_index + 2].load(Ordering::Relaxed);
-    assert!((0..=2).contains(&published_id), "Published ID slot corrupted: {published_id}");
-    
+    assert!(
+        (0..=2).contains(&published_id),
+        "Published ID slot corrupted: {published_id}"
+    );
+
     let reader_id = sab[start_index + 3].load(Ordering::Relaxed);
-    assert!((0..=2).contains(&reader_id), "Reader ID slot corrupted: {reader_id}");
+    assert!(
+        (0..=2).contains(&reader_id),
+        "Reader ID slot corrupted: {reader_id}"
+    );
 }

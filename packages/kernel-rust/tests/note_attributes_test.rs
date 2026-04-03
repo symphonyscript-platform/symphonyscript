@@ -1,9 +1,11 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use symphonyscript_kernel::primitives::types::SAB;
+use std::sync::Arc;
 use symphonyscript_kernel::attributes::writer::attributes_writer::AttributesWriter;
-use symphonyscript_kernel::attributes::writer::note_attributes_writer::{NoteAttributes, NoteAttributesWriter};
+use symphonyscript_kernel::attributes::writer::note_attributes_writer::{
+    NoteAttributes, NoteAttributesWriter,
+};
 use symphonyscript_kernel::primitives::into_array::IntoArray;
+use symphonyscript_kernel::primitives::types::SAB;
 
 const SLOT_SIZE: usize = 16;
 
@@ -221,7 +223,6 @@ fn set_solo_preserves_other_flags() {
     assert!(view.is_muted());
 }
 
-
 // ============ Multiple Views on Same SAB ============
 
 #[test]
@@ -288,9 +289,9 @@ fn to_array_maps_slots_correctly() {
         tick_offset: -5,
         flags: 0b11,
     };
-    
+
     let array = attrs.to_array();
-    
+
     // Explicit padding and assignment assertions
     assert_eq!(array[0], 600000);
     assert_eq!(array[1], 100);
@@ -302,7 +303,7 @@ fn to_array_maps_slots_correctly() {
     assert_eq!(array[7], 15);
     assert_eq!(array[8], -5);
     assert_eq!(array[9], 0b11);
-    
+
     for i in 10..16 {
         assert_eq!(array[i], 0);
     }

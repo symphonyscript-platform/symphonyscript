@@ -1,7 +1,7 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use symphonyscript_kernel::primitives::types::SAB;
+use std::sync::Arc;
 use symphonyscript_kernel::primitives::free_list::FreeList;
+use symphonyscript_kernel::primitives::types::SAB;
 
 const SLOT_SIZE: usize = 16;
 
@@ -264,7 +264,6 @@ fn double_free_detected_via_bitmap() {
     fl.free(d).unwrap();
     assert_eq!(fl.free_count(), 4);
 }
-
 
 // ============ Stress Tests ============
 

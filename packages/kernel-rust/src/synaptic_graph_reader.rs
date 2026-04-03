@@ -3,7 +3,6 @@ use crate::attributes::reader::attributes_reader::AttributesReader;
 use crate::constants::{
     NODE_ATTRIBUTES_SLOT_SIZE, NODE_SLOT_SIZE, SYNAPSE_ATTRIBUTES_SLOT_SIZE, SYNAPSE_SLOT_SIZE,
 };
-use crate::kernel::{Kernel, KernelConfig};
 use crate::primitives::triple_buffer::{TripleBuffer, TripleBufferReader};
 use crate::primitives::types::SAB;
 use crate::structural_plane::node::node_chain_reader::NodeChainReader;
@@ -11,10 +10,11 @@ use crate::structural_plane::node::node_reader::NodeReader;
 use crate::structural_plane::structural_reader::StructuralReader;
 use crate::structural_plane::synapse::synapse_chain_reader::SynapseChainReader;
 use crate::structural_plane::synapse::synapse_reader::SynapseReader;
+use crate::synaptic_graph_writer::{SynapticGraphConfig, SynapticGraphWriter};
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct KernelReader {
+pub struct SynapticGraphReader {
     node_attribute_plane: AttributePlaneReader<NODE_ATTRIBUTES_SLOT_SIZE>,
     synapse_attribute_plane: AttributePlaneReader<SYNAPSE_ATTRIBUTES_SLOT_SIZE>,
     triple_buffer_reader: TripleBufferReader,
@@ -22,11 +22,11 @@ pub struct KernelReader {
     synapse_chain_reader: SynapseChainReader,
 }
 
-impl KernelReader {
-    pub fn bind(sab: SAB, config: KernelConfig) -> Self {
+impl SynapticGraphReader {
+    pub fn bind(sab: SAB, config: SynapticGraphConfig) -> Self {
         let node_attribute_plane = AttributePlaneReader::<NODE_ATTRIBUTES_SLOT_SIZE>::bind(
             Arc::clone(&sab),
-            Kernel::compute_headers_size(&config),
+            SynapticGraphWriter::compute_headers_size(&config),
             config.max_nodes,
         );
         let synapse_attribute_plane = AttributePlaneReader::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::bind(
@@ -34,7 +34,7 @@ impl KernelReader {
             node_attribute_plane.end_index(),
             config.max_synapses,
         );
-        let triple_buffer_size = Kernel::compute_triple_buffer_size(&config);
+        let triple_buffer_size = SynapticGraphWriter::compute_triple_buffer_size(&config);
         let triple_buffer_reader = TripleBuffer::bind_reader(
             Arc::clone(&sab),
             synapse_attribute_plane.end_index(),
@@ -58,7 +58,7 @@ impl KernelReader {
         );
         let synapse_chain_reader = SynapseChainReader::bind(synapse_structural_reader.clone());
 
-        KernelReader {
+        SynapticGraphReader {
             node_attribute_plane,
             synapse_attribute_plane,
             triple_buffer_reader,

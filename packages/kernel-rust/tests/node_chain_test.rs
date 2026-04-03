@@ -1,15 +1,15 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
+use std::sync::Arc;
 use symphonyscript_kernel::constants::NODE_SLOT_SIZE;
-use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
-use symphonyscript_kernel::primitives::simple_free_list::SimpleFreeList;
-use symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter;
 use symphonyscript_kernel::primitives::deferred_frees_list::DeferredFreesList;
-use symphonyscript_kernel::structural_plane::structural_reader::StructuralReader;
-use symphonyscript_kernel::structural_plane::node::node_chain_writer::NodeChainWriter;
+use symphonyscript_kernel::primitives::simple_free_list::SimpleFreeList;
+use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
+use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::structural_plane::node::node_chain_reader::NodeChainReader;
+use symphonyscript_kernel::structural_plane::node::node_chain_writer::NodeChainWriter;
 use symphonyscript_kernel::structural_plane::node::node_data::NodeDraft;
+use symphonyscript_kernel::structural_plane::structural_reader::StructuralReader;
+use symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter;
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);
@@ -66,7 +66,13 @@ fn make_draft(opcode: i32, tick: i32) -> NodeDraft {
 #[test]
 fn insert_head_into_empty_chain() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     assert!(chain.get_head().is_none());
@@ -83,7 +89,13 @@ fn insert_head_into_empty_chain() {
 #[test]
 fn insert_head_pushes_existing_head() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -105,7 +117,13 @@ fn insert_head_pushes_existing_head() {
 #[test]
 fn insert_head_three_nodes_links_correct() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 10)).unwrap();
@@ -128,7 +146,13 @@ fn insert_head_three_nodes_links_correct() {
 #[test]
 fn insert_after_tail() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -143,7 +167,13 @@ fn insert_after_tail() {
 #[test]
 fn insert_after_middle() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -164,7 +194,13 @@ fn insert_after_middle() {
 #[test]
 fn insert_before_head_does_not_update_chain_head() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -182,7 +218,13 @@ fn insert_before_head_does_not_update_chain_head() {
 #[test]
 fn insert_before_middle_node() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -202,7 +244,13 @@ fn insert_before_middle_node() {
 #[test]
 fn remove_only_node_empties_chain() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -214,7 +262,13 @@ fn remove_only_node_empties_chain() {
 #[test]
 fn remove_head_promotes_next() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -233,7 +287,13 @@ fn remove_head_promotes_next() {
 #[test]
 fn remove_tail_patches_prev() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -251,7 +311,13 @@ fn remove_tail_patches_prev() {
 #[test]
 fn remove_middle_heals_chain() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -269,7 +335,13 @@ fn remove_middle_heals_chain() {
 #[test]
 fn remove_all_then_reinsert() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -293,7 +365,13 @@ fn remove_all_then_reinsert() {
 #[test]
 fn double_remove_returns_error() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -308,7 +386,13 @@ fn chain_reader_traverses_full_chain() {
     let mut h = setup();
 
     let (a, b, c) = {
-        let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+        let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+            h.writer.clone(),
+            h.free_list.clone(),
+            h.deferred.clone(),
+            NODE_START_OFFSET,
+            CAPACITY,
+        );
         let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
         let a = chain.insert_head(make_draft(1, 10)).unwrap();
@@ -352,7 +436,13 @@ fn chain_reader_sees_removal_after_publish() {
     let mut h = setup();
 
     {
-        let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+        let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+            h.writer.clone(),
+            h.free_list.clone(),
+            h.deferred.clone(),
+            NODE_START_OFFSET,
+            CAPACITY,
+        );
         let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
         let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -377,13 +467,22 @@ fn chain_reader_sees_removal_after_publish() {
 #[test]
 fn insert_head_exhausts_capacity() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     for i in 0..CAPACITY {
         assert!(chain.insert_head(make_draft(i as i32, 0)).is_some());
     }
-    assert!(chain.insert_head(make_draft(99, 0)).is_none(), "capacity exhausted");
+    assert!(
+        chain.insert_head(make_draft(99, 0)).is_none(),
+        "capacity exhausted"
+    );
 }
 
 // ============ Pointer stability across operations ============
@@ -391,7 +490,13 @@ fn insert_head_exhausts_capacity() {
 #[test]
 fn insert_after_does_not_mutate_unrelated_nodes() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -418,7 +523,13 @@ fn insert_after_does_not_mutate_unrelated_nodes() {
 #[test]
 fn four_node_chain_traversal_forward_and_backward() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     // build chain via insert_head: d(head) -> c -> b -> a(tail)
@@ -450,7 +561,13 @@ fn four_node_chain_traversal_forward_and_backward() {
 #[test]
 fn insert_after_returns_none_on_exhaustion() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let head = chain.insert_head(make_draft(0, 0)).unwrap();
@@ -468,7 +585,13 @@ fn insert_after_returns_none_on_exhaustion() {
 #[test]
 fn insert_before_returns_none_on_exhaustion() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let head = chain.insert_head(make_draft(0, 0)).unwrap();
@@ -487,7 +610,13 @@ fn insert_before_returns_none_on_exhaustion() {
 #[test]
 fn insert_before_tail_in_three_node_chain() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -511,7 +640,13 @@ fn insert_before_tail_in_three_node_chain() {
 #[test]
 fn remove_tail_first_then_middle_then_head() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -543,7 +678,13 @@ fn remove_tail_first_then_middle_then_head() {
 #[test]
 fn remove_arbitrary_order_on_five_node_chain() {
     let h = setup();
-    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+    let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.free_list.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        CAPACITY,
+    );
     let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
@@ -591,7 +732,13 @@ fn reader_traverses_chain_after_mid_chain_removal() {
     let mut h = setup();
 
     {
-        let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.free_list.clone(), h.deferred.clone(), NODE_START_OFFSET, CAPACITY);
+        let sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+            h.writer.clone(),
+            h.free_list.clone(),
+            h.deferred.clone(),
+            NODE_START_OFFSET,
+            CAPACITY,
+        );
         let chain = NodeChainWriter::new(h.writer.clone(), sw.clone(), HEAD_OFFSET);
 
         let _a = chain.insert_head(make_draft(1, 10)).unwrap();

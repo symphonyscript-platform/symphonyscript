@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
+use std::sync::Arc;
 use std::thread;
-use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::primitives::ring_buffer::RingBuffer;
+use symphonyscript_kernel::primitives::types::SAB;
 
 /// Creates a SAB with the given number of AtomicI32 slots.
 fn create_sab(size: usize) -> SAB {
@@ -240,7 +240,11 @@ fn spsc_pending_count_consistency() {
         while received < message_count {
             let pending = ring.pending_count();
             assert!(pending >= 0, "pending count went negative: {}", pending);
-            assert!(pending <= 32, "pending count exceeded capacity: {}", pending);
+            assert!(
+                pending <= 32,
+                "pending count exceeded capacity: {}",
+                pending
+            );
 
             if let Some(_) = ring.read() {
                 received += 1;

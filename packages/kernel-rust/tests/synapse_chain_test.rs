@@ -1,17 +1,17 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
+use std::sync::Arc;
 use symphonyscript_kernel::constants::{NODE_SLOT_SIZE, SYNAPSE_SLOT_SIZE};
-use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
-use symphonyscript_kernel::primitives::simple_free_list::SimpleFreeList;
-use symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter;
 use symphonyscript_kernel::primitives::deferred_frees_list::DeferredFreesList;
-use symphonyscript_kernel::structural_plane::structural_reader::StructuralReader;
-use symphonyscript_kernel::structural_plane::node::node_chain_writer::NodeChainWriter;
+use symphonyscript_kernel::primitives::simple_free_list::SimpleFreeList;
+use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
+use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::structural_plane::node::node_chain_reader::NodeChainReader;
+use symphonyscript_kernel::structural_plane::node::node_chain_writer::NodeChainWriter;
 use symphonyscript_kernel::structural_plane::node::node_data::NodeDraft;
-use symphonyscript_kernel::structural_plane::synapse::synapse_chain_writer::SynapseChainWriter;
+use symphonyscript_kernel::structural_plane::structural_reader::StructuralReader;
+use symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter;
 use symphonyscript_kernel::structural_plane::synapse::synapse_chain_reader::SynapseChainReader;
+use symphonyscript_kernel::structural_plane::synapse::synapse_chain_writer::SynapseChainWriter;
 use symphonyscript_kernel::structural_plane::synapse::synapse_data::SynapseDraft;
 
 fn create_sab(size: usize) -> SAB {
@@ -74,8 +74,20 @@ fn node(opcode: i32) -> NodeDraft {
 #[test]
 fn connect_single_synapse_between_two_nodes() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -110,8 +122,20 @@ fn connect_single_synapse_between_two_nodes() {
 #[test]
 fn connect_two_synapses_from_same_source() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -124,8 +148,16 @@ fn connect_two_synapses_from_same_source() {
 
     // source's outgoing chain: s1 -> s2 (tail-append)
     let src_node = node_chain.get(src);
-    assert_eq!(src_node.get_outgoing_synapse_head(), s1, "head is first connected");
-    assert_eq!(src_node.get_outgoing_synapse_tail(), s2, "tail is last connected");
+    assert_eq!(
+        src_node.get_outgoing_synapse_head(),
+        s1,
+        "head is first connected"
+    );
+    assert_eq!(
+        src_node.get_outgoing_synapse_tail(),
+        s2,
+        "tail is last connected"
+    );
 
     // s1 outgoing links
     let syn1 = synapse_chain.get(s1);
@@ -149,8 +181,20 @@ fn connect_two_synapses_from_same_source() {
 #[test]
 fn connect_two_synapses_to_same_target() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -184,8 +228,20 @@ fn connect_two_synapses_to_same_target() {
 #[test]
 fn disconnect_only_synapse_clears_node_pointers() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -211,8 +267,20 @@ fn disconnect_only_synapse_clears_node_pointers() {
 #[test]
 fn disconnect_head_of_outgoing_chain() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -228,7 +296,11 @@ fn disconnect_head_of_outgoing_chain() {
     // src outgoing: s2
 
     let src_node = node_chain.get(src);
-    assert_eq!(src_node.get_outgoing_synapse_head(), s2, "head promoted to s2");
+    assert_eq!(
+        src_node.get_outgoing_synapse_head(),
+        s2,
+        "head promoted to s2"
+    );
     assert_eq!(src_node.get_outgoing_synapse_tail(), s2, "tail unchanged");
 
     let syn2 = synapse_chain.get(s2);
@@ -240,8 +312,20 @@ fn disconnect_head_of_outgoing_chain() {
 #[test]
 fn disconnect_tail_of_outgoing_chain() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -258,7 +342,11 @@ fn disconnect_tail_of_outgoing_chain() {
 
     let src_node = node_chain.get(src);
     assert_eq!(src_node.get_outgoing_synapse_head(), s1);
-    assert_eq!(src_node.get_outgoing_synapse_tail(), s1, "tail demoted to s1");
+    assert_eq!(
+        src_node.get_outgoing_synapse_tail(),
+        s1,
+        "tail demoted to s1"
+    );
 
     let syn1 = synapse_chain.get(s1);
     assert_eq!(syn1.get_outgoing_next_ptr(), 0, "s1 is now tail");
@@ -269,8 +357,20 @@ fn disconnect_tail_of_outgoing_chain() {
 #[test]
 fn disconnect_middle_of_outgoing_chain() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -300,8 +400,20 @@ fn disconnect_middle_of_outgoing_chain() {
 #[test]
 fn disconnect_heals_incoming_chain() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -331,8 +443,20 @@ fn disconnect_heals_incoming_chain() {
 #[test]
 fn disconnect_heals_both_chains_independently() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -371,8 +495,20 @@ fn disconnect_heals_both_chains_independently() {
 #[test]
 fn double_disconnect_returns_error() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -389,8 +525,20 @@ fn double_disconnect_returns_error() {
 #[test]
 fn full_connect_disconnect_reconnect_cycle() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -421,8 +569,20 @@ fn full_connect_disconnect_reconnect_cycle() {
 #[test]
 fn connect_self_loop() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -443,8 +603,20 @@ fn connect_self_loop() {
 #[test]
 fn disconnect_self_loop_clears_both_chains() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -466,8 +638,20 @@ fn synapse_chain_reader_sees_connections_after_publish() {
     let mut h = setup();
 
     let (src, tgt, syn) = {
-        let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-        let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+        let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+            h.writer.clone(),
+            h.node_fl.clone(),
+            h.deferred.clone(),
+            NODE_START_OFFSET,
+            NODE_CAPACITY,
+        );
+        let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+            h.writer.clone(),
+            h.synapse_fl.clone(),
+            h.deferred.clone(),
+            SYNAPSE_START_OFFSET,
+            SYNAPSE_CAPACITY,
+        );
         let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
         let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -479,8 +663,13 @@ fn synapse_chain_reader_sees_connections_after_publish() {
     h.writer.publish();
     h.reader.swap();
 
-    let node_sr = StructuralReader::<NODE_SLOT_SIZE>::new(h.reader.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sr = StructuralReader::<SYNAPSE_SLOT_SIZE>::new(h.reader.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sr =
+        StructuralReader::<NODE_SLOT_SIZE>::new(h.reader.clone(), NODE_START_OFFSET, NODE_CAPACITY);
+    let synapse_sr = StructuralReader::<SYNAPSE_SLOT_SIZE>::new(
+        h.reader.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain_r = NodeChainReader::new(h.reader.clone(), node_sr.clone(), NODE_HEAD_OFFSET);
     let synapse_chain_r = SynapseChainReader::new(synapse_sr.clone());
 
@@ -500,8 +689,20 @@ fn synapse_chain_reader_sees_connections_after_publish() {
 #[test]
 fn disconnect_head_of_incoming_chain() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -519,9 +720,17 @@ fn disconnect_head_of_incoming_chain() {
     // tgt incoming: s2 -> s3
 
     let tgt_node = node_chain.get(tgt);
-    assert_eq!(tgt_node.get_incoming_synapse_head(), s2, "head promoted to s2");
+    assert_eq!(
+        tgt_node.get_incoming_synapse_head(),
+        s2,
+        "head promoted to s2"
+    );
     assert_eq!(tgt_node.get_incoming_synapse_tail(), s3, "tail unchanged");
-    assert_eq!(synapse_chain.get(s2).get_incoming_prev_ptr(), 0, "s2 is now head");
+    assert_eq!(
+        synapse_chain.get(s2).get_incoming_prev_ptr(),
+        0,
+        "s2 is now head"
+    );
     assert_eq!(synapse_chain.get(s2).get_incoming_next_ptr(), s3);
 }
 
@@ -530,8 +739,20 @@ fn disconnect_head_of_incoming_chain() {
 #[test]
 fn disconnect_tail_of_incoming_chain() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -550,8 +771,16 @@ fn disconnect_tail_of_incoming_chain() {
 
     let tgt_node = node_chain.get(tgt);
     assert_eq!(tgt_node.get_incoming_synapse_head(), s1, "head unchanged");
-    assert_eq!(tgt_node.get_incoming_synapse_tail(), s2, "tail demoted to s2");
-    assert_eq!(synapse_chain.get(s2).get_incoming_next_ptr(), 0, "s2 is now tail");
+    assert_eq!(
+        tgt_node.get_incoming_synapse_tail(),
+        s2,
+        "tail demoted to s2"
+    );
+    assert_eq!(
+        synapse_chain.get(s2).get_incoming_next_ptr(),
+        0,
+        "s2 is now tail"
+    );
 }
 
 // ============ chain traversal ============
@@ -559,8 +788,20 @@ fn disconnect_tail_of_incoming_chain() {
 #[test]
 fn outgoing_chain_traversal_order_is_insertion_order() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -603,8 +844,20 @@ fn outgoing_chain_traversal_order_is_insertion_order() {
 #[test]
 fn incoming_chain_traversal_order_is_insertion_order() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -637,8 +890,20 @@ fn incoming_chain_traversal_order_is_insertion_order() {
 #[test]
 fn disconnect_outgoing_does_not_affect_incoming() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -669,8 +934,20 @@ fn disconnect_outgoing_does_not_affect_incoming() {
 #[test]
 fn disconnect_incoming_does_not_affect_outgoing() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -699,8 +976,20 @@ fn disconnect_incoming_does_not_affect_outgoing() {
 #[test]
 fn triangle_topology_disconnect_one_edge() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -743,8 +1032,20 @@ fn triangle_topology_disconnect_one_edge() {
 #[test]
 fn connect_exhausts_synapse_capacity() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -754,7 +1055,8 @@ fn connect_exhausts_synapse_capacity() {
     for i in 0..SYNAPSE_CAPACITY {
         assert!(
             synapse_chain.connect(src, tgt, draft(i as i32)).is_some(),
-            "synapse {} should succeed", i
+            "synapse {} should succeed",
+            i
         );
     }
     assert!(
@@ -768,8 +1070,20 @@ fn connect_exhausts_synapse_capacity() {
 #[test]
 fn disconnect_all_synapses_leaves_node_clean() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
@@ -800,8 +1114,20 @@ fn disconnect_all_synapses_leaves_node_clean() {
 #[test]
 fn two_self_loops_on_same_node() {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), h.deferred.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), h.deferred.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.node_fl.clone(),
+        h.deferred.clone(),
+        NODE_START_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        h.writer.clone(),
+        h.synapse_fl.clone(),
+        h.deferred.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
     let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 

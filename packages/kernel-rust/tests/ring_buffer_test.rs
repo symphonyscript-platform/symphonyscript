@@ -1,7 +1,7 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use symphonyscript_kernel::primitives::types::SAB;
+use std::sync::Arc;
 use symphonyscript_kernel::primitives::ring_buffer::RingBuffer;
+use symphonyscript_kernel::primitives::types::SAB;
 
 const SLOT_SIZE: usize = 16;
 

@@ -19,13 +19,13 @@ use crate::structural_plane::synapse::synapse_writer::SynapseWriter;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 
-pub struct KernelConfig {
+pub struct SynapticGraphConfig {
     pub max_nodes: usize,
     pub max_synapses: usize,
 }
 
 #[derive(Clone)]
-pub struct Kernel {
+pub struct SynapticGraphWriter {
     sab: SAB,
     node_free_list: SimpleFreeList,
     synapse_free_list: SimpleFreeList,
@@ -38,17 +38,17 @@ pub struct Kernel {
     synapse_chain_writer: SynapseChainWriter,
 }
 
-impl Kernel {
-    pub fn new(config: KernelConfig) -> Self {
+impl SynapticGraphWriter {
+    pub fn new(config: SynapticGraphConfig) -> Self {
         let sab = Self::create_sab(Self::compute_sab_size(&config));
         Self::create(sab, config)
     }
 
-    pub fn new_from_sab(sab: SAB, config: KernelConfig) -> Self {
+    pub fn new_from_sab(sab: SAB, config: SynapticGraphConfig) -> Self {
         Self::create(sab, config)
     }
 
-    pub fn bind(sab: SAB, config: KernelConfig) -> Self {
+    pub fn bind(sab: SAB, config: SynapticGraphConfig) -> Self {
         let node_free_list = SimpleFreeList::bind(Arc::clone(&sab), 1, config.max_nodes);
         let synapse_free_list = SimpleFreeList::bind(
             Arc::clone(&sab),
@@ -104,7 +104,7 @@ impl Kernel {
         let synapse_chain_writer =
             SynapseChainWriter::bind(node_chain_writer.clone(), synapse_structural_writer.clone());
 
-        Kernel {
+        SynapticGraphWriter {
             sab,
             node_free_list,
             synapse_free_list,
@@ -118,7 +118,7 @@ impl Kernel {
         }
     }
 
-    fn create(sab: SAB, config: KernelConfig) -> Self {
+    fn create(sab: SAB, config: SynapticGraphConfig) -> Self {
         let node_free_list = SimpleFreeList::new(Arc::clone(&sab), 1, config.max_nodes);
         let synapse_free_list = SimpleFreeList::new(
             Arc::clone(&sab),
@@ -173,7 +173,7 @@ impl Kernel {
         let synapse_chain_writer =
             SynapseChainWriter::new(node_chain_writer.clone(), synapse_structural_writer.clone());
 
-        Kernel {
+        SynapticGraphWriter {
             sab,
             node_free_list,
             synapse_free_list,
@@ -187,11 +187,11 @@ impl Kernel {
         }
     }
 
-    pub fn compute_triple_buffer_size(config: &KernelConfig) -> usize {
+    pub fn compute_triple_buffer_size(config: &SynapticGraphConfig) -> usize {
         1 + NODE_SLOT_SIZE * config.max_nodes + SYNAPSE_SLOT_SIZE * config.max_synapses
     }
 
-    pub fn compute_sab_size(config: &KernelConfig) -> usize {
+    pub fn compute_sab_size(config: &SynapticGraphConfig) -> usize {
         let node_attribute_plane_size =
             AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::calculate_size(config.max_nodes);
         let synapse_attribute_plane_size =
@@ -207,7 +207,7 @@ impl Kernel {
             + structural_plane_size
     }
 
-    pub fn compute_headers_size(config: &KernelConfig) -> usize {
+    pub fn compute_headers_size(config: &SynapticGraphConfig) -> usize {
         let node_free_list_size = SimpleFreeList::calculate_size(config.max_nodes);
         let synapse_free_list_size = SimpleFreeList::calculate_size(config.max_synapses);
         let node_deferred_free_list_size = DeferredFreesList::calculate_size(config.max_nodes);

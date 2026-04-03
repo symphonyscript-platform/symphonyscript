@@ -1,7 +1,7 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use symphonyscript_kernel::primitives::types::SAB;
+use std::sync::Arc;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
+use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::structural_plane::slot_reader::SlotReader;
 
 fn create_sab(size: usize) -> SAB {

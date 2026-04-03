@@ -6,8 +6,8 @@ pub mod attributes;
 pub mod constants;
 pub mod writer_structural_plane;
 pub mod structural_plane;
-pub mod kernel;
-pub mod kernel_reader;
+pub mod synaptic_graph_writer;
+pub mod synaptic_graph_reader;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right

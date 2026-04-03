@@ -1,9 +1,10 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
-use symphonyscript_kernel::primitives::types::SAB;
+use std::sync::Arc;
 use symphonyscript_kernel::attributes::writer::attribute_plane_writer::AttributePlaneWriter;
-use symphonyscript_kernel::attributes::writer::attributes_writer::AttributesWriter;
-use symphonyscript_kernel::attributes::writer::note_attributes_writer::{NoteAttributes, NoteAttributesWriter};
+use symphonyscript_kernel::attributes::writer::note_attributes_writer::{
+    NoteAttributes, NoteAttributesWriter,
+};
+use symphonyscript_kernel::primitives::types::SAB;
 
 const SLOT_SIZE: usize = 16;
 
@@ -243,18 +244,21 @@ fn stress_fill_all_slots() {
     let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, capacity);
 
     for i in 0..capacity {
-        plane.set(i, NoteAttributes {
-            pitch: i as i32 * 1000,
-            velocity: i as i32,
-            duration: 480,
-            volume: 800,
-            spatial_x: 0,
-            spatial_y: 0,
-            spatial_z: 0,
-            detune: 0,
-            tick_offset: 0,
-            flags: 0,
-        });
+        plane.set(
+            i,
+            NoteAttributes {
+                pitch: i as i32 * 1000,
+                velocity: i as i32,
+                duration: 480,
+                volume: 800,
+                spatial_x: 0,
+                spatial_y: 0,
+                spatial_z: 0,
+                detune: 0,
+                tick_offset: 0,
+                flags: 0,
+            },
+        );
     }
 
     for i in 0..capacity {
@@ -273,34 +277,40 @@ fn stress_overwrite_all_slots() {
 
     // Write pass 1
     for i in 0..capacity {
-        plane.set(i, NoteAttributes {
-            pitch: 100,
-            velocity: 100,
-            duration: 100,
-            volume: 100,
-            spatial_x: 100,
-            spatial_y: 100,
-            spatial_z: 100,
-            detune: 100,
-            tick_offset: 100,
-            flags: 100,
-        });
+        plane.set(
+            i,
+            NoteAttributes {
+                pitch: 100,
+                velocity: 100,
+                duration: 100,
+                volume: 100,
+                spatial_x: 100,
+                spatial_y: 100,
+                spatial_z: 100,
+                detune: 100,
+                tick_offset: 100,
+                flags: 100,
+            },
+        );
     }
 
     // Write pass 2 (overwrite)
     for i in 0..capacity {
-        plane.set(i, NoteAttributes {
-            pitch: i as i32,
-            velocity: i as i32 + 1,
-            duration: i as i32 + 2,
-            volume: i as i32 + 3,
-            spatial_x: i as i32 + 4,
-            spatial_y: i as i32 + 5,
-            spatial_z: i as i32 + 6,
-            detune: i as i32 + 7,
-            tick_offset: i as i32 + 8,
-            flags: i as u32 + 9,
-        });
+        plane.set(
+            i,
+            NoteAttributes {
+                pitch: i as i32,
+                velocity: i as i32 + 1,
+                duration: i as i32 + 2,
+                volume: i as i32 + 3,
+                spatial_x: i as i32 + 4,
+                spatial_y: i as i32 + 5,
+                spatial_z: i as i32 + 6,
+                detune: i as i32 + 7,
+                tick_offset: i as i32 + 8,
+                flags: i as u32 + 9,
+            },
+        );
     }
 
     for i in 0..capacity {

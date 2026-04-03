@@ -1,10 +1,12 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::attributes::writer::synapse_attributes_writer::{SynapseAttributes, SynapseAttributesWriter};
+use std::sync::Arc;
 use symphonyscript_kernel::attributes::writer::attributes_writer::AttributesWriter;
-use symphonyscript_kernel::primitives::into_array::IntoArray;
+use symphonyscript_kernel::attributes::writer::synapse_attributes_writer::{
+    SynapseAttributes, SynapseAttributesWriter,
+};
 use symphonyscript_kernel::constants::SYNAPSE_ATTRIBUTES_SLOT_SIZE;
+use symphonyscript_kernel::primitives::into_array::IntoArray;
+use symphonyscript_kernel::primitives::types::SAB;
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);

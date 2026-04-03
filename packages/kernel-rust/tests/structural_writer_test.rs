@@ -1,11 +1,11 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use symphonyscript_kernel::primitives::types::SAB;
-use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
-use symphonyscript_kernel::primitives::simple_free_list::SimpleFreeList;
-use symphonyscript_kernel::primitives::into_array::IntoArray;
-use symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter;
+use std::sync::Arc;
 use symphonyscript_kernel::primitives::deferred_frees_list::DeferredFreesList;
+use symphonyscript_kernel::primitives::into_array::IntoArray;
+use symphonyscript_kernel::primitives::simple_free_list::SimpleFreeList;
+use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
+use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter;
 
 fn create_sab(size: usize) -> SAB {
     let mut vec = Vec::with_capacity(size);
@@ -37,7 +37,13 @@ const TB_BUF_CAP: usize = 256;
 const FL_START: usize = 800;
 const CAPACITY: usize = 8;
 
-fn setup() -> (SAB, symphonyscript_kernel::primitives::triple_buffer::TripleBufferWriter, symphonyscript_kernel::primitives::triple_buffer::TripleBufferReader, SimpleFreeList, DeferredFreesList) {
+fn setup() -> (
+    SAB,
+    symphonyscript_kernel::primitives::triple_buffer::TripleBufferWriter,
+    symphonyscript_kernel::primitives::triple_buffer::TripleBufferReader,
+    SimpleFreeList,
+    DeferredFreesList,
+) {
     let sab = create_sab(SAB_SIZE);
     let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
     let free_list = SimpleFreeList::new(Arc::clone(&sab), FL_START, CAPACITY);
@@ -50,21 +56,39 @@ fn setup() -> (SAB, symphonyscript_kernel::primitives::triple_buffer::TripleBuff
 #[test]
 fn new_creates_slot_writer() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
     assert_eq!(sw.capacity(), CAPACITY);
 }
 
 #[test]
 fn end_index_correct() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
     assert_eq!(sw.end_offset(), CAPACITY * 16);
 }
 
 #[test]
 fn resolve_writer_offset() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
     // slot 1 (1-based) maps to index 0 -> offset 0
     assert_eq!(sw.resolve_writer_offset(1), 0);
     // slot 2 -> index 1 -> offset 16
@@ -76,7 +100,13 @@ fn resolve_writer_offset() {
 #[test]
 fn resolve_writer_offset_with_start_offset() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 100, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        100,
+        CAPACITY,
+    );
     // slot 1 -> index 0 -> 100 + 0 = 100
     assert_eq!(sw.resolve_writer_offset(1), 100);
     // slot 2 -> index 1 -> 100 + 16 = 116
@@ -88,7 +118,13 @@ fn resolve_writer_offset_with_start_offset() {
 #[test]
 fn insert_returns_slot_index() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
     let slot = sw.insert(TestPayload { a: 42, b: 99 });
     assert!(slot.is_some());
@@ -98,7 +134,13 @@ fn insert_returns_slot_index() {
 #[test]
 fn insert_writes_data_readable_via_get() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
     let slot = sw.insert(TestPayload { a: 42, b: 99 }).unwrap();
     let view = sw.get(slot);
@@ -114,7 +156,13 @@ fn insert_writes_data_readable_via_get() {
 #[test]
 fn insert_exhausts_capacity_returns_none() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
     for _ in 0..CAPACITY {
         assert!(sw.insert(TestPayload { a: 1, b: 2 }).is_some());
@@ -128,7 +176,13 @@ fn insert_exhausts_capacity_returns_none() {
 #[test]
 fn free_then_reinsert_reuses_slot() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
     let slot = sw.insert(TestPayload { a: 10, b: 20 }).unwrap();
     sw.defer_free(slot);
@@ -146,7 +200,13 @@ fn free_then_reinsert_reuses_slot() {
 #[test]
 fn double_free_returns_error() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
     let _slot = sw.insert(TestPayload { a: 1, b: 2 }).unwrap();
     /* commented ok check */
@@ -158,7 +218,13 @@ fn double_free_returns_error() {
 #[test]
 fn write_field_read_field_round_trip() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
     let slot = sw.insert(TestPayload { a: 0, b: 0 }).unwrap();
     sw.write_field(slot, 5, 999);
@@ -168,7 +234,13 @@ fn write_field_read_field_round_trip() {
 #[test]
 fn write_field_does_not_bleed() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
     let slot = sw.insert(TestPayload { a: 0, b: 0 }).unwrap();
     sw.write_field(slot, 0, i32::MAX);
@@ -180,7 +252,13 @@ fn write_field_does_not_bleed() {
 #[test]
 fn multiple_slots_are_independent() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
     let s0 = sw.insert(TestPayload { a: 100, b: 200 }).unwrap();
     let s1 = sw.insert(TestPayload { a: 300, b: 400 }).unwrap();
@@ -196,7 +274,13 @@ fn multiple_slots_are_independent() {
 #[test]
 fn first_slot_is_one() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
     let slot = sw.insert(TestPayload { a: 42, b: 0 }).unwrap();
     assert_eq!(slot, 1, "first allocated slot must be 1");
@@ -205,19 +289,34 @@ fn first_slot_is_one() {
 #[test]
 fn last_slot_is_capacity() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
     let mut last_slot = 0;
     for _ in 0..CAPACITY {
         last_slot = sw.insert(TestPayload { a: 0, b: 0 }).unwrap();
     }
-    assert_eq!(last_slot, CAPACITY, "last allocated slot must equal capacity");
+    assert_eq!(
+        last_slot, CAPACITY,
+        "last allocated slot must equal capacity"
+    );
 }
 
 #[test]
 fn first_and_last_slots_data_integrity() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
     let first = sw.insert(TestPayload { a: 111, b: 222 }).unwrap();
     // fill remaining slots
@@ -238,9 +337,20 @@ fn first_and_last_slots_data_integrity() {
 #[test]
 fn insert_lands_at_correct_sab_offset() {
     let (sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
-    let slot = sw.insert(TestPayload { a: 0xDEAD, b: 0xBEEF }).unwrap();
+    let slot = sw
+        .insert(TestPayload {
+            a: 0xDEAD,
+            b: 0xBEEF,
+        })
+        .unwrap();
 
     // slot 1 -> index 0 -> TB offset 0.
     // The writer's current_start_index() gives us the actual SAB base.
@@ -253,7 +363,12 @@ fn insert_lands_at_correct_sab_offset() {
 
     // remaining 14 fields must be zero
     for i in 2..16 {
-        assert_eq!(sab[expected_sab_offset + i].load(Ordering::Relaxed), 0, "field {} should be zero", i);
+        assert_eq!(
+            sab[expected_sab_offset + i].load(Ordering::Relaxed),
+            0,
+            "field {} should be zero",
+            i
+        );
     }
 }
 
@@ -261,9 +376,20 @@ fn insert_lands_at_correct_sab_offset() {
 fn insert_with_nonzero_start_lands_at_correct_sab_offset() {
     let (sab, writer, _reader, free_list, deferred) = setup();
     let start_offset = 32;
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), start_offset, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        start_offset,
+        CAPACITY,
+    );
 
-    let slot = sw.insert(TestPayload { a: 0xCAFE, b: 0xBABE }).unwrap();
+    let slot = sw
+        .insert(TestPayload {
+            a: 0xCAFE,
+            b: 0xBABE,
+        })
+        .unwrap();
 
     let tb_base = writer.current_start_index();
     let expected_sab_offset = tb_base + start_offset + (slot - 1) * 16;
@@ -278,13 +404,23 @@ fn insert_with_nonzero_start_lands_at_correct_sab_offset() {
 #[test]
 fn write_field_visible_through_get() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
     let slot = sw.insert(TestPayload { a: 0, b: 0 }).unwrap();
     sw.write_field(slot, 7, 12345);
 
     let view = sw.get(slot);
-    assert_eq!(view.read(7), 12345, "write_field must be visible through get()");
+    assert_eq!(
+        view.read(7),
+        12345,
+        "write_field must be visible through get()"
+    );
 }
 
 // ============ Full Exhaust -> Free -> Refill ============
@@ -292,15 +428,29 @@ fn write_field_visible_through_get() {
 #[test]
 fn exhaust_free_all_refill_all() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
     // fill all 8 slots
     let mut slots = Vec::new();
     for i in 0..CAPACITY {
-        let slot = sw.insert(TestPayload { a: (i as i32) * 10, b: 0 }).unwrap();
+        let slot = sw
+            .insert(TestPayload {
+                a: (i as i32) * 10,
+                b: 0,
+            })
+            .unwrap();
         slots.push(slot);
     }
-    assert!(sw.insert(TestPayload { a: 0, b: 0 }).is_none(), "should be exhausted");
+    assert!(
+        sw.insert(TestPayload { a: 0, b: 0 }).is_none(),
+        "should be exhausted"
+    );
 
     // free all 8
     for &slot in &slots {
@@ -312,10 +462,18 @@ fn exhaust_free_all_refill_all() {
     deferred.free_deferred_slots(&free_list).unwrap();
     let mut new_slots = Vec::new();
     for i in 0..CAPACITY {
-        let slot = sw.insert(TestPayload { a: (i as i32) * 100, b: 0 }).unwrap();
+        let slot = sw
+            .insert(TestPayload {
+                a: (i as i32) * 100,
+                b: 0,
+            })
+            .unwrap();
         new_slots.push(slot);
     }
-    assert!(sw.insert(TestPayload { a: 0, b: 0 }).is_none(), "should be exhausted again");
+    assert!(
+        sw.insert(TestPayload { a: 0, b: 0 }).is_none(),
+        "should be exhausted again"
+    );
 
     // verify new data
     for (i, &slot) in new_slots.iter().enumerate() {
@@ -328,11 +486,16 @@ fn exhaust_free_all_refill_all() {
 #[test]
 fn negative_values_roundtrip_through_insert() {
     let (_sab, writer, _reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), deferred.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        writer.clone(),
+        free_list.clone(),
+        deferred.clone(),
+        0,
+        CAPACITY,
+    );
 
     let slot = sw.insert(TestPayload { a: i32::MIN, b: -1 }).unwrap();
     let view = sw.get(slot);
     assert_eq!(view.read(0), i32::MIN);
     assert_eq!(view.read(1), -1);
 }
-

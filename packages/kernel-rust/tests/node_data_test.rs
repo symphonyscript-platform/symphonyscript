@@ -1,4 +1,4 @@
-use symphonyscript_kernel::constants::{NODE_SLOT_SIZE};
+use symphonyscript_kernel::constants::NODE_SLOT_SIZE;
 use symphonyscript_kernel::primitives::into_array::IntoArray;
 use symphonyscript_kernel::structural_plane::node::node_data::NodeData;
 
@@ -23,13 +23,13 @@ fn node_data_to_array_field_layout() {
     // opcode is bit-packed: stored as opcode << 24 in field 0
     assert_eq!(arr[0], 42 << 24, "field 0: opcode (shifted)");
     assert_eq!(arr[1], 100, "field 1: base_tick");
-    assert_eq!(arr[2], 3,   "field 2: next_ptr");
-    assert_eq!(arr[3], 7,   "field 3: prev_ptr");
-    assert_eq!(arr[4], 10,  "field 4: outgoing_synapse_head");
-    assert_eq!(arr[5], 11,  "field 5: outgoing_synapse_tail");
-    assert_eq!(arr[6], 20,  "field 6: incoming_synapse_head");
-    assert_eq!(arr[7], 21,  "field 7: incoming_synapse_tail");
-    assert_eq!(arr[8], 55,  "field 8: mod_head");
+    assert_eq!(arr[2], 3, "field 2: next_ptr");
+    assert_eq!(arr[3], 7, "field 3: prev_ptr");
+    assert_eq!(arr[4], 10, "field 4: outgoing_synapse_head");
+    assert_eq!(arr[5], 11, "field 5: outgoing_synapse_tail");
+    assert_eq!(arr[6], 20, "field 6: incoming_synapse_head");
+    assert_eq!(arr[7], 21, "field 7: incoming_synapse_tail");
+    assert_eq!(arr[8], 55, "field 8: mod_head");
 }
 
 #[test]

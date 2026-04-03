@@ -20,12 +20,12 @@ fn synapse_data_to_array_field_layout() {
 
     // opcode is bit-packed: stored as opcode << 24 in field 0
     assert_eq!(arr[0], 99 << 24, "field 0: opcode (shifted)");
-    assert_eq!(arr[1], 1,  "field 1: source_ptr");
-    assert_eq!(arr[2], 2,  "field 2: target_ptr");
-    assert_eq!(arr[3], 3,  "field 3: outgoing_next_ptr");
-    assert_eq!(arr[4], 4,  "field 4: outgoing_prev_ptr");
-    assert_eq!(arr[5], 5,  "field 5: incoming_next_ptr");
-    assert_eq!(arr[6], 6,  "field 6: incoming_prev_ptr");
+    assert_eq!(arr[1], 1, "field 1: source_ptr");
+    assert_eq!(arr[2], 2, "field 2: target_ptr");
+    assert_eq!(arr[3], 3, "field 3: outgoing_next_ptr");
+    assert_eq!(arr[4], 4, "field 4: outgoing_prev_ptr");
+    assert_eq!(arr[5], 5, "field 5: incoming_next_ptr");
+    assert_eq!(arr[6], 6, "field 6: incoming_prev_ptr");
 }
 
 #[test]
