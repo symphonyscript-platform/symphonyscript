@@ -65,7 +65,7 @@ impl<'a> SynapseWriter<'a> {
 #[cfg(test)]
 mod tests {
     use crate::constants::{NODE_SLOT_SIZE, SYNAPSE_SLOT_SIZE};
-    use crate::primitives::deferred_frees_list::DeferredFreesList;
+    use crate::primitives::staging_buffer::StagingBuffer;
     use crate::primitives::simple_free_list::SimpleFreeList;
     use crate::primitives::triple_buffer::TripleBuffer;
     use crate::primitives::types::SAB;

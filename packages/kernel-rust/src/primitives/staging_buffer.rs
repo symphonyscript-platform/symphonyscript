@@ -1,13 +1,11 @@
-use crate::errors::free_list_error::FreeListError;
-use crate::primitives::simple_free_list::SimpleFreeList;
 use crate::primitives::types::SAB;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct DeferredFreesList {
+pub struct StagingBuffer {
     sab: SAB,
-    max_slots: usize,
+    capacity: usize,
     start_index: usize,
     len_0_slot_index: usize,
     len_1_slot_index: usize,
@@ -16,13 +14,13 @@ pub struct DeferredFreesList {
     end_index: usize,
 }
 
-pub struct DeferredFreesListIterator {
+pub struct StagingBufferIterator {
     sab: SAB,
     current_index: usize,
     end_index: usize,
 }
 
-impl Iterator for DeferredFreesListIterator {
+impl Iterator for StagingBufferIterator {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -36,7 +34,7 @@ impl Iterator for DeferredFreesListIterator {
     }
 }
 
-impl DeferredFreesList {
+impl StagingBuffer {
     pub fn new(sab: SAB, start_index: usize, max_slots: usize) -> Self {
         Self::create(sab, start_index, max_slots, false)
     }
@@ -45,23 +43,15 @@ impl DeferredFreesList {
         Self::create(sab, start_index, max_slots, true)
     }
 
-    pub fn calculate_size(max_slots: usize) -> usize {
-        3 + max_slots * 2
-    }
-
-    fn create(sab: SAB, start_index: usize, max_slots: usize, bind: bool) -> Self {
-        debug_assert!(max_slots > 0, "capacity must be positive");
-        debug_assert_eq!(
-            max_slots & (max_slots - 1),
-            0,
-            "capacity must be power of 2"
-        );
+    pub fn create(sab: SAB, start_index: usize, capacity: usize, bind: bool) -> Self {
+        debug_assert!(capacity > 0, "capacity must be positive");
+        debug_assert_eq!(capacity & (capacity - 1), 0, "capacity must be power of 2");
 
         let len_0_slot_index = start_index;
         let len_1_slot_index = start_index + 1;
         let current_list_slot_index = start_index + 2;
         let list_start_index = start_index + 3;
-        let end_index = list_start_index + max_slots * 2;
+        let end_index = list_start_index + capacity * 2;
 
         if !bind {
             sab[current_list_slot_index].store(0, Ordering::Relaxed);
@@ -70,7 +60,7 @@ impl DeferredFreesList {
             }
         }
 
-        DeferredFreesList {
+        StagingBuffer {
             sab,
             start_index,
             len_0_slot_index,
@@ -78,13 +68,27 @@ impl DeferredFreesList {
             current_list_slot_index,
             list_start_index,
             end_index,
-            max_slots,
+            capacity,
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub fn calculate_size_on_sab(max_slots: usize) -> usize {
+        3 + max_slots * 2
+    }
+
+    pub fn active_count(&self) -> usize {
         let list_index = self.sab[self.current_list_slot_index].load(Ordering::Relaxed) as usize;
         self.sab[self.start_index + list_index].load(Ordering::Relaxed) as usize
+    }
+
+    pub fn staged_count(&self) -> usize {
+        let list_index = self.sab[self.current_list_slot_index].load(Ordering::Relaxed) as usize;
+        let prev_index = 1 - list_index;
+        self.sab[self.start_index + prev_index].load(Ordering::Relaxed) as usize
+    }
+
+    pub fn len(&self) -> usize {
+        self.active_count() + self.staged_count()
     }
 
     pub fn sab_end_index(&self) -> usize {
@@ -92,44 +96,38 @@ impl DeferredFreesList {
     }
 
     pub fn push(&self, slot: usize) {
-        let len = self.len();
+        let len = self.active_count();
 
-        debug_assert!(len < self.max_slots, "DeferredFreesList overflow");
+        debug_assert!(len < self.capacity, "StagingBuffer overflow");
 
         let list_index = self.sab[self.current_list_slot_index].load(Ordering::Relaxed) as usize;
         let len_slot_index = self.start_index + list_index;
-        self.sab[self.list_start_index + (self.max_slots * list_index) + len]
+
+        self.sab[self.list_start_index + (self.capacity * list_index) + len]
             .store(slot as i32, Ordering::Relaxed);
         self.sab[len_slot_index].store((len as i32) + 1, Ordering::Relaxed);
     }
 
-    pub fn drain(&'_ self) -> DeferredFreesListIterator {
+    pub fn drain(&'_ self) -> StagingBufferIterator {
         let list_index = self.sab[self.current_list_slot_index].load(Ordering::Relaxed) as usize;
         let prev_index = 1 - list_index;
-        let start_index = self.list_start_index + (self.max_slots * prev_index);
+        let start_index = self.list_start_index + (self.capacity * prev_index);
         let len_slot_index = self.start_index + prev_index;
         let len = self.sab[len_slot_index].load(Ordering::Relaxed) as usize;
 
         self.sab[len_slot_index].store(0, Ordering::Relaxed);
         self.sab[self.current_list_slot_index].store(prev_index as i32, Ordering::Relaxed);
-        DeferredFreesListIterator {
+
+        StagingBufferIterator {
             sab: Arc::clone(&self.sab),
             current_index: start_index,
             end_index: start_index + len,
         }
     }
 
-    pub fn free_deferred_slots(&self, free_list: &SimpleFreeList) -> Result<(), FreeListError> {
-        for slot in self.drain() {
-            free_list.free(slot)?
-        }
-
-        Ok(())
-    }
-
-    pub fn copy_from(&self, source: &DeferredFreesList) {
+    pub fn copy_from(&self, source: &StagingBuffer) {
         debug_assert!(
-            source.max_slots <= self.max_slots,
+            source.capacity <= self.capacity,
             "copy_from source cannot be greater than destination"
         );
 
@@ -144,9 +142,13 @@ impl DeferredFreesList {
         );
 
         for i in 0..2 {
-            let self_base = self.list_start_index + self.max_slots * i;
-            let source_base = source.list_start_index + source.max_slots * i;
-            let len = if i == 0 { len_0 as usize } else { len_1 as usize };
+            let self_base = self.list_start_index + self.capacity * i;
+            let source_base = source.list_start_index + source.capacity * i;
+            let len = if i == 0 {
+                len_0 as usize
+            } else {
+                len_1 as usize
+            };
             for k in 0..len {
                 self.sab[self_base + k].store(
                     source.sab[source_base + k].load(Ordering::Relaxed),

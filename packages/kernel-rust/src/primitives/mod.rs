@@ -7,4 +7,6 @@ pub mod slot_handle;
 pub mod simple_free_list;
 pub mod triple_buffer;
 pub mod into_array;
-pub mod deferred_frees_list;
+pub mod staging_buffer;
+pub mod slot_allocator;
+pub mod bitmap;

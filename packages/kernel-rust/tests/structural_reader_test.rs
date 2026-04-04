@@ -46,7 +46,7 @@ fn setup_custom(
     let sab = create_sab(SAB_SIZE);
     let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
     let free_list = SimpleFreeList::new(Arc::clone(&sab), FL_START, CAPACITY);
-    let deferred = symphonyscript_kernel::primitives::deferred_frees_list::DeferredFreesList::new(
+    let deferred = symphonyscript_kernel::primitives::staging_buffer::StagingBuffer::new(
         Arc::clone(&sab),
         FL_START + 500,
         CAPACITY,

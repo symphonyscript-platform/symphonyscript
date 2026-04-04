@@ -221,7 +221,9 @@ impl NodeChainWriter {
         }
     }
 
-    pub fn remove(&self, slot: usize) {
+    pub fn remove(&self, slot: usize) -> Result<(), FreeListError> {
+        self.writer.defer_free(slot)?;
+
         let node = self.get(slot);
         let prev_slot = node.get_prev_ptr();
         let next_slot = node.get_next_ptr();
@@ -237,11 +239,11 @@ impl NodeChainWriter {
             self.get(next_slot).set_prev_ptr(prev_slot);
         }
 
-        self.writer.defer_free(slot)
+        Ok(())
     }
 
-    pub fn free_deferred_slots(&mut self) -> Result<(), FreeListError> {
-        self.writer.free_deferred_slots()
+    pub fn flush_deferred(&mut self) -> Result<(), FreeListError> {
+        self.writer.flush_deferred()
     }
 
     pub fn copy_from(&self, source: &NodeChainWriter) {

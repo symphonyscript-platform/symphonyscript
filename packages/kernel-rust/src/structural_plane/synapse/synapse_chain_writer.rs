@@ -178,7 +178,9 @@ impl SynapseChainWriter {
         }
     }
 
-    pub fn disconnect(&self, slot: usize) {
+    pub fn disconnect(&self, slot: usize) -> Result<(), FreeListError> {
+        self.synapse_writer.defer_free(slot)?;
+
         let synapse = self.get(slot);
         let source = self.node_chain.get(synapse.get_source_ptr());
         let target = self.node_chain.get(synapse.get_target_ptr());
@@ -215,11 +217,11 @@ impl SynapseChainWriter {
             target.set_incoming_synapse_tail(synapse_incoming_prev_ptr);
         }
 
-        self.synapse_writer.defer_free(slot)
+        Ok(())
     }
 
-    pub fn free_deferred_slots(&mut self) -> Result<(), FreeListError> {
-        self.synapse_writer.free_deferred_slots()
+    pub fn flush_deferred(&mut self) -> Result<(), FreeListError> {
+        self.synapse_writer.flush_deferred()
     }
 
     pub fn copy_from(&self, source: &SynapseChainWriter) {
