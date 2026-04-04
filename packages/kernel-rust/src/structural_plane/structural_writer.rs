@@ -12,8 +12,8 @@ pub struct StructuralWriter<const SLOT_SIZE: usize> {
     allocator: SlotAllocator,
     mem_start_offset: usize,
     mem_end_offset: usize,
-    triple_buffer_start_offset: usize,
-    triple_buffer_end_offset: usize,
+    tb_start_offset: usize,
+    tb_end_offset: usize,
     capacity: usize,
 }
 
@@ -22,14 +22,14 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
         mem: AtomicBuffer,
         writer: TripleBufferWriter,
         mem_start_offset: usize,
-        triple_buffer_start_offset: usize,
+        tb_start_offset: usize,
         capacity: usize,
     ) -> Self {
         Self::create(
             mem,
             writer,
             mem_start_offset,
-            triple_buffer_start_offset,
+            tb_start_offset,
             capacity,
             false,
         )
@@ -39,14 +39,14 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
         mem: AtomicBuffer,
         writer: TripleBufferWriter,
         mem_start_offset: usize,
-        triple_buffer_start_offset: usize,
+        tb_start_offset: usize,
         capacity: usize,
     ) -> Self {
         Self::create(
             mem,
             writer,
             mem_start_offset,
-            triple_buffer_start_offset,
+            tb_start_offset,
             capacity,
             true,
         )
@@ -56,16 +56,16 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
         mem: AtomicBuffer,
         writer: TripleBufferWriter,
         mem_start_offset: usize,
-        triple_buffer_start_offset: usize,
+        tb_start_offset: usize,
         capacity: usize,
         bind: bool,
     ) -> Self {
-        let triple_buffer_end_offset = triple_buffer_start_offset + capacity * SLOT_SIZE;
+        let tb_end_offset = tb_start_offset + capacity * SLOT_SIZE;
 
         debug_assert!(
-            triple_buffer_end_offset <= writer.buffer_capacity(),
+            tb_end_offset <= writer.buffer_capacity(),
             "StructuralWriter::create | range [{}..{}] exceeds buffer capacity {}",
-            triple_buffer_start_offset,
+            tb_start_offset,
             capacity * SLOT_SIZE,
             writer.buffer_capacity(),
         );
@@ -78,8 +78,8 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
             allocator,
             mem_start_offset,
             mem_end_offset,
-            triple_buffer_start_offset,
-            triple_buffer_end_offset,
+            tb_start_offset,
+            tb_end_offset,
             capacity,
         }
     }
@@ -100,12 +100,12 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
         self.mem_end_offset
     }
 
-    pub fn triple_buffer_start_offset(&self) -> usize {
-        self.triple_buffer_start_offset
+    pub fn tb_start_offset(&self) -> usize {
+        self.tb_start_offset
     }
 
-    pub fn triple_buffer_end_offset(&self) -> usize {
-        self.triple_buffer_end_offset
+    pub fn tb_end_offset(&self) -> usize {
+        self.tb_end_offset
     }
 
     pub fn capacity(&self) -> usize {
@@ -213,14 +213,14 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
         self.allocator.copy_from(&source.allocator);
         self.writer.copy_region_from(
             &source.writer,
-            source.triple_buffer_start_offset,
-            self.triple_buffer_start_offset,
+            source.tb_start_offset,
+            self.tb_start_offset,
             Self::compute_size_on_triple_buffer(source.capacity),
         );
     }
 
     pub fn resolve_writer_offset(&self, slot: usize) -> usize {
-        self.triple_buffer_start_offset + (slot - 1) * SLOT_SIZE
+        self.tb_start_offset + (slot - 1) * SLOT_SIZE
     }
 }
 

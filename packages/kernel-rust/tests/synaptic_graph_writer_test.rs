@@ -459,11 +459,11 @@ fn compute_mem_size_is_positive() {
 }
 
 #[test]
-fn compute_triple_buffer_size_matches_slot_count() {
+fn compute_tb_size_matches_slot_count() {
     let cfg = config();
     let expected = 1 + 16 * cfg.node_capacity + 8 * cfg.synapse_capacity;
     assert_eq!(
-        SynapticGraphWriter::compute_triple_buffer_size(&cfg),
+        SynapticGraphWriter::compute_tb_size(&cfg),
         expected
     );
 }

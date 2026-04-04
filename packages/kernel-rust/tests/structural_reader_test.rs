@@ -78,7 +78,7 @@ fn new_creates_structural_reader() {
 #[test]
 fn mem_end_offset_correct() {
     let (_mem, _writer, _reader, _sw, sr) = setup();
-    assert_eq!(sr.triple_buffer_end_offset(), CAPACITY * 16);
+    assert_eq!(sr.tb_end_offset(), CAPACITY * 16);
 }
 
 #[test]

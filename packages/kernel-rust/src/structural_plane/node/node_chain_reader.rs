@@ -7,60 +7,60 @@ use crate::structural_plane::structural_reader::StructuralReader;
 pub struct NodeChainReader {
     buffer: TripleBufferReader,
     reader: StructuralReader<NODE_SLOT_SIZE>,
-    triple_buffer_start_offset: usize,
-    triple_buffer_end_offset: usize,
+    tb_start_offset: usize,
+    tb_end_offset: usize,
     capacity: usize,
 }
 
 impl NodeChainReader {
     pub fn new(
         buffer: TripleBufferReader,
-        triple_buffer_start_offset: usize,
+        tb_start_offset: usize,
         capacity: usize,
     ) -> Self {
         let reader = StructuralReader::<NODE_SLOT_SIZE>::new(
             buffer.clone(),
-            triple_buffer_start_offset + 1,
+            tb_start_offset + 1,
             capacity,
         );
-        let triple_buffer_end_offset = reader.triple_buffer_end_offset();
+        let tb_end_offset = reader.tb_end_offset();
 
         NodeChainReader {
             buffer,
             reader,
-            triple_buffer_start_offset,
-            triple_buffer_end_offset,
+            tb_start_offset,
+            tb_end_offset,
             capacity,
         }
     }
 
     pub fn bind(
         buffer: TripleBufferReader,
-        triple_buffer_start_offset: usize,
+        tb_start_offset: usize,
         capacity: usize,
     ) -> Self {
         let reader = StructuralReader::<NODE_SLOT_SIZE>::bind(
             buffer.clone(),
-            triple_buffer_start_offset + 1,
+            tb_start_offset + 1,
             capacity,
         );
-        let triple_buffer_end_offset = reader.triple_buffer_end_offset();
+        let tb_end_offset = reader.tb_end_offset();
 
         NodeChainReader {
             buffer,
             reader,
-            triple_buffer_start_offset,
-            triple_buffer_end_offset,
+            tb_start_offset,
+            tb_end_offset,
             capacity,
         }
     }
 
-    pub fn triple_buffer_start_offset(&self) -> usize {
-        self.triple_buffer_start_offset
+    pub fn tb_start_offset(&self) -> usize {
+        self.tb_start_offset
     }
 
-    pub fn triple_buffer_end_offset(&self) -> usize {
-        self.triple_buffer_end_offset
+    pub fn tb_end_offset(&self) -> usize {
+        self.tb_end_offset
     }
 
     pub fn capacity(&self) -> usize {
@@ -68,7 +68,7 @@ impl NodeChainReader {
     }
 
     pub fn get_head(&'_ self) -> Option<NodeReader<'_>> {
-        let head_slot = self.buffer.read(self.triple_buffer_start_offset);
+        let head_slot = self.buffer.read(self.tb_start_offset);
 
         if head_slot == 0 {
             return None;

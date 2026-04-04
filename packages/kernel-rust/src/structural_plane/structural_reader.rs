@@ -4,27 +4,27 @@ use crate::structural_plane::slot_reader::SlotReader;
 #[derive(Clone)]
 pub struct StructuralReader<const SLOT_SIZE: usize> {
     reader: TripleBufferReader,
-    triple_buffer_start_offset: usize,
-    triple_buffer_end_offset: usize,
+    tb_start_offset: usize,
+    tb_end_offset: usize,
     capacity: usize,
 }
 
 impl<const SLOT_SIZE: usize> StructuralReader<SLOT_SIZE> {
-    pub fn new(reader: TripleBufferReader, triple_buffer_start_offset: usize, capacity: usize) -> Self {
-        let triple_buffer_end_offset = triple_buffer_start_offset + capacity * SLOT_SIZE;
+    pub fn new(reader: TripleBufferReader, tb_start_offset: usize, capacity: usize) -> Self {
+        let tb_end_offset = tb_start_offset + capacity * SLOT_SIZE;
 
         debug_assert!(
-            triple_buffer_end_offset <= reader.buffer_capacity(),
+            tb_end_offset <= reader.buffer_capacity(),
             "StructuralReader::new | range [{}..{}] exceeds buffer capacity {}",
-            triple_buffer_start_offset,
+            tb_start_offset,
             capacity * SLOT_SIZE,
             reader.buffer_capacity(),
         );
 
         StructuralReader {
             reader,
-            triple_buffer_start_offset,
-            triple_buffer_end_offset,
+            tb_start_offset,
+            tb_end_offset,
             capacity,
         }
     }
@@ -34,15 +34,15 @@ impl<const SLOT_SIZE: usize> StructuralReader<SLOT_SIZE> {
     }
 
     pub fn resolve_reader_offset(&self, slot: usize) -> usize {
-        self.triple_buffer_start_offset + (slot - 1) * SLOT_SIZE
+        self.tb_start_offset + (slot - 1) * SLOT_SIZE
     }
 
-    pub fn triple_buffer_start_offset(&self) -> usize {
-        self.triple_buffer_start_offset
+    pub fn tb_start_offset(&self) -> usize {
+        self.tb_start_offset
     }
 
-    pub fn triple_buffer_end_offset(&self) -> usize {
-        self.triple_buffer_end_offset
+    pub fn tb_end_offset(&self) -> usize {
+        self.tb_end_offset
     }
 
     pub fn capacity(&self) -> usize {

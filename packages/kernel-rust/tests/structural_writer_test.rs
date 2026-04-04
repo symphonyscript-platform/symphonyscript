@@ -73,7 +73,7 @@ fn new_creates_slot_writer() {
 #[test]
 fn mem_end_offset_correct() {
     let (_mem, _writer, sw) = setup();
-    assert_eq!(sw.triple_buffer_end_offset(), CAPACITY * 16);
+    assert_eq!(sw.tb_end_offset(), CAPACITY * 16);
 }
 
 #[test]

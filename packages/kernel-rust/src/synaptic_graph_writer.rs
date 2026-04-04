@@ -22,7 +22,7 @@ pub struct SynapticGraphWriter {
     mem: AtomicBuffer,
     node_attribute_plane: AttributePlaneWriter<NODE_ATTRIBUTES_SLOT_SIZE>,
     synapse_attribute_plane: AttributePlaneWriter<SYNAPSE_ATTRIBUTES_SLOT_SIZE>,
-    triple_buffer_writer: TripleBufferWriter,
+    tb_writer: TripleBufferWriter,
     node_chain_writer: NodeChainWriter,
     synapse_chain_writer: SynapseChainWriter,
 }
@@ -45,7 +45,7 @@ impl SynapticGraphWriter {
         mem[1].store(KERNEL_VERSION, Ordering::Release);
 
         let mem_start_offset = 2;
-        let triple_buffer_start_offset = 0;
+        let tb_start_offset = 0;
 
         let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(
             Arc::clone(&mem),
@@ -57,24 +57,24 @@ impl SynapticGraphWriter {
             node_attribute_plane.mem_end_offset(),
             config.synapse_capacity,
         );
-        let (triple_buffer_writer, _) = TripleBuffer::new(
+        let (tb_writer, _) = TripleBuffer::new(
             Arc::clone(&mem),
             synapse_attribute_plane.mem_end_offset(),
-            Self::compute_triple_buffer_size(&config),
+            Self::compute_tb_size(&config),
         );
         let node_chain_writer = NodeChainWriter::new(
             Arc::clone(&mem),
-            triple_buffer_writer.clone(),
-            triple_buffer_writer.mem_end_offset(),
-            triple_buffer_start_offset,
+            tb_writer.clone(),
+            tb_writer.mem_end_offset(),
+            tb_start_offset,
             config.node_capacity,
         );
         let synapse_chain_writer = SynapseChainWriter::new(
             Arc::clone(&mem),
-            triple_buffer_writer.clone(),
+            tb_writer.clone(),
             node_chain_writer.clone(),
             node_chain_writer.mem_end_offset(),
-            node_chain_writer.triple_buffer_end_offset(),
+            node_chain_writer.tb_end_offset(),
             config.synapse_capacity,
         );
 
@@ -82,7 +82,7 @@ impl SynapticGraphWriter {
             mem,
             node_attribute_plane,
             synapse_attribute_plane,
-            triple_buffer_writer,
+            tb_writer,
             node_chain_writer,
             synapse_chain_writer,
         }
@@ -106,7 +106,7 @@ impl SynapticGraphWriter {
         );
 
         let mem_start_offset = 2;
-        let triple_buffer_start_offset = 0;
+        let tb_start_offset = 0;
 
         let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::bind(
             Arc::clone(&mem),
@@ -118,24 +118,24 @@ impl SynapticGraphWriter {
             node_attribute_plane.mem_end_offset(),
             config.synapse_capacity,
         );
-        let triple_buffer_writer = TripleBuffer::bind_writer(
+        let tb_writer = TripleBuffer::bind_writer(
             Arc::clone(&mem),
             synapse_attribute_plane.mem_end_offset(),
-            Self::compute_triple_buffer_size(&config),
+            Self::compute_tb_size(&config),
         );
         let node_chain_writer = NodeChainWriter::bind(
             Arc::clone(&mem),
-            triple_buffer_writer.clone(),
-            triple_buffer_writer.mem_end_offset(),
-            triple_buffer_start_offset,
+            tb_writer.clone(),
+            tb_writer.mem_end_offset(),
+            tb_start_offset,
             config.node_capacity,
         );
         let synapse_chain_writer = SynapseChainWriter::bind(
             Arc::clone(&mem),
-            triple_buffer_writer.clone(),
+            tb_writer.clone(),
             node_chain_writer.clone(),
             node_chain_writer.mem_end_offset(),
-            node_chain_writer.triple_buffer_end_offset(),
+            node_chain_writer.tb_end_offset(),
             config.synapse_capacity,
         );
 
@@ -143,13 +143,13 @@ impl SynapticGraphWriter {
             mem,
             node_attribute_plane,
             synapse_attribute_plane,
-            triple_buffer_writer,
+            tb_writer,
             node_chain_writer,
             synapse_chain_writer,
         }
     }
 
-    pub fn compute_triple_buffer_size(config: &SynapticGraphConfig) -> usize {
+    pub fn compute_tb_size(config: &SynapticGraphConfig) -> usize {
         NodeChainWriter::compute_size_on_triple_buffer(config.node_capacity)
             + SynapseChainWriter::compute_size_on_triple_buffer(config.synapse_capacity)
     }
@@ -164,7 +164,7 @@ impl SynapticGraphWriter {
             + AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::calculate_size(
                 config.synapse_capacity,
             )
-            + TripleBuffer::calculate_size(Self::compute_triple_buffer_size(config))
+            + TripleBuffer::calculate_size(Self::compute_tb_size(config))
     }
 
     pub fn node_capacity(&self) -> usize {
@@ -336,7 +336,7 @@ impl SynapticGraphWriter {
     pub fn publish(&mut self) {
         self.node_chain_writer.flush_deferred();
         self.synapse_chain_writer.flush_deferred();
-        self.triple_buffer_writer.publish();
+        self.tb_writer.publish();
     }
 
     pub fn get_mem(&self) -> AtomicBuffer {
@@ -348,8 +348,8 @@ impl SynapticGraphWriter {
             .copy_from(&source.node_attribute_plane);
         self.synapse_attribute_plane
             .copy_from(&source.synapse_attribute_plane);
-        self.triple_buffer_writer
-            .copy_metadata_from(&source.triple_buffer_writer);
+        self.tb_writer
+            .copy_metadata_from(&source.tb_writer);
         self.node_chain_writer.copy_from(&source.node_chain_writer);
         self.synapse_chain_writer
             .copy_from(&source.synapse_chain_writer);

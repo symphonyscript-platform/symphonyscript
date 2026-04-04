@@ -17,7 +17,7 @@ use std::sync::Arc;
 pub struct SynapticGraphReader {
     node_attribute_plane: AttributePlaneReader<NODE_ATTRIBUTES_SLOT_SIZE>,
     synapse_attribute_plane: AttributePlaneReader<SYNAPSE_ATTRIBUTES_SLOT_SIZE>,
-    triple_buffer_reader: TripleBufferReader,
+    tb_reader: TripleBufferReader,
     node_chain_reader: NodeChainReader,
     synapse_chain_reader: SynapseChainReader,
 }
@@ -25,7 +25,7 @@ pub struct SynapticGraphReader {
 impl SynapticGraphReader {
     pub fn bind(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
         let mem_start_offset = SynapticGraphWriter::HEADERS_SIZE;
-        let triple_buffer_start_offset = 0;
+        let tb_start_offset = 0;
 
         let node_attribute_plane = AttributePlaneReader::<NODE_ATTRIBUTES_SLOT_SIZE>::bind(
             Arc::clone(&mem),
@@ -37,27 +37,27 @@ impl SynapticGraphReader {
             node_attribute_plane.mem_end_offset(),
             config.synapse_capacity,
         );
-        let triple_buffer_size = SynapticGraphWriter::compute_triple_buffer_size(&config);
-        let triple_buffer_reader = TripleBuffer::bind_reader(
+        let tb_size = SynapticGraphWriter::compute_tb_size(&config);
+        let tb_reader = TripleBuffer::bind_reader(
             Arc::clone(&mem),
             synapse_attribute_plane.mem_end_offset(),
-            triple_buffer_size,
+            tb_size,
         );
         let node_chain_reader = NodeChainReader::bind(
-            triple_buffer_reader.clone(),
-            triple_buffer_start_offset,
+            tb_reader.clone(),
+            tb_start_offset,
             config.node_capacity,
         );
         let synapse_chain_reader = SynapseChainReader::bind(
-            triple_buffer_reader.clone(),
-            node_chain_reader.triple_buffer_end_offset(),
+            tb_reader.clone(),
+            node_chain_reader.tb_end_offset(),
             config.synapse_capacity,
         );
 
         SynapticGraphReader {
             node_attribute_plane,
             synapse_attribute_plane,
-            triple_buffer_reader,
+            tb_reader,
             node_chain_reader,
             synapse_chain_reader,
         }
@@ -100,6 +100,6 @@ impl SynapticGraphReader {
     }
 
     pub fn swap(&mut self) -> bool {
-        self.triple_buffer_reader.swap()
+        self.tb_reader.swap()
     }
 }

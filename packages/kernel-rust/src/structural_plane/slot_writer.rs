@@ -2,24 +2,24 @@ use crate::primitives::triple_buffer::TripleBufferWriter;
 
 pub struct  SlotWriter<'a, const SLOT_SIZE: usize> {
     pub(crate) writer: &'a TripleBufferWriter,
-    pub(crate) triple_buffer_start_offset: usize,
-    pub(crate) triple_buffer_end_offset: usize,
+    pub(crate) tb_start_offset: usize,
+    pub(crate) tb_end_offset: usize,
 }
 
 impl<'a, const SLOT_SIZE: usize> SlotWriter<'a, SLOT_SIZE> {
-    pub fn new(writer: &'a TripleBufferWriter, triple_buffer_start_offset: usize) -> Self {
-        let triple_buffer_end_offset = triple_buffer_start_offset + SLOT_SIZE;
+    pub fn new(writer: &'a TripleBufferWriter, tb_start_offset: usize) -> Self {
+        let tb_end_offset = tb_start_offset + SLOT_SIZE;
         debug_assert!(
-            triple_buffer_end_offset <= writer.buffer_capacity(),
+            tb_end_offset <= writer.buffer_capacity(),
             "SlotWriter::create | range [{}..{}] exceeds buffer capacity {}",
-            triple_buffer_start_offset,
+            tb_start_offset,
             SLOT_SIZE,
             writer.buffer_capacity(),
         );
         SlotWriter {
             writer: &writer,
-            triple_buffer_start_offset,
-            triple_buffer_end_offset,
+            tb_start_offset,
+            tb_end_offset,
         }
     }
 
@@ -29,7 +29,7 @@ impl<'a, const SLOT_SIZE: usize> SlotWriter<'a, SLOT_SIZE> {
             "SlotWriter.read | offset {} out of bounds",
             offset
         );
-        self.writer.read(self.triple_buffer_start_offset + offset)
+        self.writer.read(self.tb_start_offset + offset)
     }
 
     pub(crate) fn write(&self, offset: usize, value: i32) {
@@ -39,15 +39,15 @@ impl<'a, const SLOT_SIZE: usize> SlotWriter<'a, SLOT_SIZE> {
             offset
         );
         self.writer
-            .write(self.triple_buffer_start_offset + offset, value)
+            .write(self.tb_start_offset + offset, value)
     }
 
-    pub fn triple_buffer_start_offset(&self) -> usize {
-        self.triple_buffer_start_offset
+    pub fn tb_start_offset(&self) -> usize {
+        self.tb_start_offset
     }
 
-    pub fn triple_buffer_end_offset(&self) -> usize {
-        self.triple_buffer_end_offset
+    pub fn tb_end_offset(&self) -> usize {
+        self.tb_end_offset
     }
 }
 

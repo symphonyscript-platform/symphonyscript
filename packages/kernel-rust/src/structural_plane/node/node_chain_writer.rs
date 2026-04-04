@@ -12,8 +12,8 @@ pub struct NodeChainWriter {
     writer: StructuralWriter<NODE_SLOT_SIZE>,
     mem_start_offset: usize,
     mem_end_offset: usize,
-    triple_buffer_start_offset: usize,
-    triple_buffer_end_offset: usize,
+    tb_start_offset: usize,
+    tb_end_offset: usize,
     capacity: usize,
 }
 
@@ -22,14 +22,14 @@ impl NodeChainWriter {
         mem: AtomicBuffer,
         buffer: TripleBufferWriter,
         mem_start_offset: usize,
-        triple_buffer_start_offset: usize,
+        tb_start_offset: usize,
         capacity: usize,
     ) -> Self {
         Self::create(
             mem,
             buffer,
             mem_start_offset,
-            triple_buffer_start_offset,
+            tb_start_offset,
             capacity,
             false,
         )
@@ -39,14 +39,14 @@ impl NodeChainWriter {
         mem: AtomicBuffer,
         buffer: TripleBufferWriter,
         mem_start_offset: usize,
-        triple_buffer_start_offset: usize,
+        tb_start_offset: usize,
         capacity: usize,
     ) -> Self {
         Self::create(
             mem,
             buffer,
             mem_start_offset,
-            triple_buffer_start_offset,
+            tb_start_offset,
             capacity,
             true,
         )
@@ -56,31 +56,31 @@ impl NodeChainWriter {
         mem: AtomicBuffer,
         buffer: TripleBufferWriter,
         mem_start_offset: usize,
-        triple_buffer_start_offset: usize,
+        tb_start_offset: usize,
         capacity: usize,
         bind: bool,
     ) -> Self {
         debug_assert!(
-            triple_buffer_start_offset < buffer.buffer_capacity(),
-            "NodeChainWriter::create | triple_buffer_start_offset {} out of bounds",
-            triple_buffer_start_offset,
+            tb_start_offset < buffer.buffer_capacity(),
+            "NodeChainWriter::create | tb_start_offset {} out of bounds",
+            tb_start_offset,
         );
 
         let structural_writer = StructuralWriter::<NODE_SLOT_SIZE>::create(
             mem,
             buffer.clone(),
             mem_start_offset,
-            triple_buffer_start_offset + 1,
+            tb_start_offset + 1,
             capacity,
             bind,
         );
         let mem_end_offset = structural_writer.mem_end_offset();
-        let triple_buffer_end_offset = structural_writer.triple_buffer_end_offset();
+        let tb_end_offset = structural_writer.tb_end_offset();
 
         debug_assert!(
-            triple_buffer_end_offset <= buffer.buffer_capacity(),
-            "NodeChainWriter::create | triple_buffer_end_offset {} out of bounds",
-            triple_buffer_end_offset,
+            tb_end_offset <= buffer.buffer_capacity(),
+            "NodeChainWriter::create | tb_end_offset {} out of bounds",
+            tb_end_offset,
         );
 
         NodeChainWriter {
@@ -88,8 +88,8 @@ impl NodeChainWriter {
             writer: structural_writer,
             mem_start_offset,
             mem_end_offset,
-            triple_buffer_start_offset,
-            triple_buffer_end_offset,
+            tb_start_offset,
+            tb_end_offset,
             capacity,
         }
     }
@@ -110,12 +110,12 @@ impl NodeChainWriter {
         self.mem_end_offset
     }
 
-    pub fn triple_buffer_start_offset(&self) -> usize {
-        self.triple_buffer_start_offset
+    pub fn tb_start_offset(&self) -> usize {
+        self.tb_start_offset
     }
 
-    pub fn triple_buffer_end_offset(&self) -> usize {
-        self.triple_buffer_end_offset
+    pub fn tb_end_offset(&self) -> usize {
+        self.tb_end_offset
     }
 
     pub fn capacity(&self) -> usize {
@@ -135,7 +135,7 @@ impl NodeChainWriter {
     }
 
     pub fn get_head_slot(&self) -> usize {
-        self.buffer.read(self.triple_buffer_start_offset) as usize
+        self.buffer.read(self.tb_start_offset) as usize
     }
 
     pub fn get_head(&'_ self) -> Option<NodeWriter<'_>> {
@@ -153,7 +153,7 @@ impl NodeChainWriter {
     }
 
     pub fn insert_head(&self, data: NodeDraft) -> Option<usize> {
-        let current_head_slot = self.buffer.read(self.triple_buffer_start_offset);
+        let current_head_slot = self.buffer.read(self.tb_start_offset);
         let result = self.writer.insert(NodeData {
             opcode: data.opcode,
             base_tick: data.base_tick,
@@ -174,7 +174,7 @@ impl NodeChainWriter {
                 }
 
                 self.buffer
-                    .write(self.triple_buffer_start_offset, slot as i32);
+                    .write(self.tb_start_offset, slot as i32);
                 Some(slot)
             }
             None => None,
@@ -248,7 +248,7 @@ impl NodeChainWriter {
             self.get(prev_slot).set_next_ptr(next_slot);
         } else {
             self.buffer
-                .write(self.triple_buffer_start_offset, next_slot as i32)
+                .write(self.tb_start_offset, next_slot as i32)
         }
 
         if next_slot != 0 {
@@ -272,8 +272,8 @@ impl NodeChainWriter {
 
         self.buffer.copy_region_from(
             &source.buffer,
-            source.triple_buffer_start_offset,
-            self.triple_buffer_start_offset,
+            source.tb_start_offset,
+            self.tb_start_offset,
             1,
         );
         self.writer.copy_from(&source.writer);
