@@ -160,7 +160,7 @@ fn mutations_invisible_to_audio_thread_before_publish_and_swap() {
     assert!(audio.get_head_node().is_none());
 
     // Published but not swapped
-    controller.publish().unwrap();
+    controller.publish();
     assert!(audio.get_head_node().is_none());
 
     // Swapped
@@ -189,7 +189,7 @@ fn multiple_mutations_batch_into_single_publish() {
     // Everything invisible
     assert!(audio.get_head_node().is_none());
 
-    controller.publish().unwrap();
+    controller.publish();
     audio.swap();
 
     let head = audio.get_head_node().unwrap();
@@ -211,7 +211,7 @@ fn double_swap_without_publish_returns_false() {
     let audio = unsafe { &mut *reader_ptr };
 
     controller.insert_head(draft(1)).unwrap();
-    controller.publish().unwrap();
+    controller.publish();
 
     assert!(audio.swap()); // first swap consumes the publish
     assert!(!audio.swap()); // nothing new to swap
@@ -426,7 +426,7 @@ fn grow_audio_thread_sees_migrated_data_after_publish_swap() {
     controller.set_synapse_attribute(s1, 0, 5000);
 
     controller.grow(config(32)).unwrap();
-    controller.publish().unwrap();
+    controller.publish();
 
     let audio = unsafe { mock_audio_reader(&controller) };
     audio.swap();
@@ -460,7 +460,7 @@ fn grow_after_heavy_fragmentation() {
     controller.remove_node(slots[7]).unwrap();
 
     // Publish to flush deferred frees
-    controller.publish().unwrap();
+    controller.publish();
 
     // Now grow with fragmented free list
     controller.grow(config(16)).unwrap();
@@ -493,9 +493,9 @@ fn gc_pipeline_rotates_through_publish_cycles() {
     assert_eq!(controller.node_capacity(), 16);
 
     // First publish: backlog -> pending_deletion
-    controller.publish().unwrap();
+    controller.publish();
     // Second publish: pending_deletion dropped
-    controller.publish().unwrap();
+    controller.publish();
 
     // Audio thread sees migrated data
     let audio = unsafe { mock_audio_reader(&controller) };
@@ -510,13 +510,13 @@ fn consecutive_grows_without_crash() {
     controller.insert_head(draft(1)).unwrap();
 
     controller.grow(config(8)).unwrap();
-    controller.publish().unwrap();
+    controller.publish();
 
     controller.grow(config(16)).unwrap();
-    controller.publish().unwrap();
+    controller.publish();
 
     controller.grow(config(32)).unwrap();
-    controller.publish().unwrap();
+    controller.publish();
 
     assert_eq!(controller.node_capacity(), 32);
     let head = controller.get_head_node().unwrap();
@@ -534,7 +534,7 @@ fn grow_then_mutate_then_publish() {
     let n2 = controller.insert_after(n1, draft(2)).unwrap();
     controller.set_node_attribute(n2, 0, 777);
 
-    controller.publish().unwrap();
+    controller.publish();
 
     let audio = unsafe { mock_audio_reader(&controller) };
     audio.swap();
