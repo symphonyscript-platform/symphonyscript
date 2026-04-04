@@ -202,16 +202,21 @@ impl KernelController {
 
         writer.copy_from(&self.active_writer);
 
-        let reader = SynapticGraphReader::bind(Arc::clone(&sab), config.clone());
-        let reader_box = Box::new(reader);
-        let reader_ptr =
-            reader_box.as_ref() as *const SynapticGraphReader as *mut SynapticGraphReader;
-        let old_reader = std::mem::replace(&mut self.active_reader, reader_box);
+        let new_reader = Box::new(SynapticGraphReader::bind(Arc::clone(&sab), config.clone()));
+
         self.active_writer = writer;
-        self.backlog = Some(old_reader);
-        self.control_plane.set_shared_graph_ptr(reader_ptr);
+        self.backlog = Some(self.replace_reader(new_reader));
 
         Ok(())
+    }
+
+    fn replace_reader(&mut self, new_reader: Box<SynapticGraphReader>) -> Box<SynapticGraphReader> {
+        let new_reader_ptr =
+            new_reader.as_ref() as *const SynapticGraphReader as *mut SynapticGraphReader;
+        let old_reader = std::mem::replace(&mut self.active_reader, new_reader);
+        self.control_plane.set_shared_graph_ptr(new_reader_ptr);
+
+        old_reader
     }
 
     fn create_sab(size: usize) -> SAB {
