@@ -199,7 +199,7 @@ impl KernelController {
         }
 
         let sab = Self::create_sab(SynapticGraphWriter::compute_size(&config));
-        let writer = SynapticGraphWriter::bind(Arc::clone(&sab), config.clone());
+        let writer = SynapticGraphWriter::new(Arc::clone(&sab), config.clone());
 
         writer.copy_from(&self.active_writer);
 

@@ -132,7 +132,10 @@ impl SimpleFreeList {
             return Err(FreeListError::DoubleFree);
         }
 
-        self.trust_free(slot_index);
+        let head_index = self.sab[self.sab_head_ptr].load(Ordering::Relaxed);
+        self.sab[self.slots_start_index + slot_index].store(head_index, Ordering::Relaxed);
+        self.sab[self.sab_head_ptr].store(slot_index as i32, Ordering::Relaxed);
+        self.sab[self.sab_free_count_ptr].fetch_add(1, Ordering::Relaxed);
         self.alloc_bitmap.off(slot_index);
 
         Ok(())
@@ -146,12 +149,15 @@ impl SimpleFreeList {
             self.capacity,
         );
 
+        let additional_capacity = (self.capacity() - source.capacity) as i32;
+        let old_free_count = source.sab[source.sab_free_count_ptr].load(Ordering::Relaxed);
+
         self.sab[self.sab_head_ptr].store(
             source.sab[source.sab_head_ptr].load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
         self.sab[self.sab_free_count_ptr].store(
-            source.sab[source.sab_free_count_ptr].load(Ordering::Relaxed),
+            old_free_count + additional_capacity,
             Ordering::Relaxed,
         );
 
@@ -163,23 +169,5 @@ impl SimpleFreeList {
                 Ordering::Relaxed,
             )
         }
-
-        if self.capacity > source.capacity {
-            for i in source.capacity..self.capacity {
-                self.trust_free(i);
-            }
-        }
-    }
-
-    fn trust_free(&self, slot_index: usize) {
-        debug_assert!(
-            slot_index < self.capacity,
-            "SimpleFreeList.trust_free | slot_index {} out of bounds",
-            slot_index
-        );
-        let head_index = self.sab[self.sab_head_ptr].load(Ordering::Relaxed);
-        self.sab[self.slots_start_index + slot_index].store(head_index, Ordering::Relaxed);
-        self.sab[self.sab_head_ptr].store(slot_index as i32, Ordering::Relaxed);
-        self.sab[self.sab_free_count_ptr].fetch_add(1, Ordering::Relaxed);
     }
 }
