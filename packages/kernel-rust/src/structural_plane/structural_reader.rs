@@ -36,7 +36,11 @@ impl<const SLOT_SIZE: usize> StructuralReader<SLOT_SIZE> {
         self.start_offset + (slot - 1) * SLOT_SIZE
     }
 
-    pub fn end_offset(&self) -> usize {
+    pub fn triple_buffer_start_offset(&self) -> usize {
+        self.start_offset
+    }
+
+    pub fn triple_buffer_end_offset(&self) -> usize {
         self.end_offset
     }
 

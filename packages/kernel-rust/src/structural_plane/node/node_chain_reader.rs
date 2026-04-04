@@ -7,32 +7,68 @@ use crate::structural_plane::structural_reader::StructuralReader;
 pub struct NodeChainReader {
     buffer: TripleBufferReader,
     reader: StructuralReader<NODE_SLOT_SIZE>,
-    buffer_head_offset: usize,
+    triple_buffer_start_offset: usize,
+    triple_buffer_end_offset: usize,
+    capacity: usize,
 }
 
 impl NodeChainReader {
     pub fn new(
         buffer: TripleBufferReader,
-        reader: StructuralReader<NODE_SLOT_SIZE>,
-        buffer_head_offset: usize,
+        triple_buffer_start_offset: usize,
+        capacity: usize,
     ) -> Self {
+        let reader = StructuralReader::<NODE_SLOT_SIZE>::new(
+            buffer.clone(),
+            triple_buffer_start_offset + 1,
+            capacity,
+        );
+        let triple_buffer_end_offset = reader.triple_buffer_end_offset();
+
         NodeChainReader {
             buffer,
             reader,
-            buffer_head_offset,
+            triple_buffer_start_offset,
+            triple_buffer_end_offset,
+            capacity,
         }
     }
 
     pub fn bind(
         buffer: TripleBufferReader,
-        reader: StructuralReader<NODE_SLOT_SIZE>,
-        buffer_head_offset: usize,
+        triple_buffer_start_offset: usize,
+        capacity: usize,
     ) -> Self {
-        Self::new(buffer, reader, buffer_head_offset)
+        let reader = StructuralReader::<NODE_SLOT_SIZE>::bind(
+            buffer.clone(),
+            triple_buffer_start_offset + 1,
+            capacity,
+        );
+        let triple_buffer_end_offset = reader.triple_buffer_end_offset();
+
+        NodeChainReader {
+            buffer,
+            reader,
+            triple_buffer_start_offset,
+            triple_buffer_end_offset,
+            capacity,
+        }
+    }
+
+    pub fn triple_buffer_start_offset(&self) -> usize {
+        self.triple_buffer_start_offset
+    }
+
+    pub fn triple_buffer_end_offset(&self) -> usize {
+        self.triple_buffer_end_offset
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.capacity
     }
 
     pub fn get_head(&'_ self) -> Option<NodeReader<'_>> {
-        let head_slot = self.buffer.read(self.buffer_head_offset);
+        let head_slot = self.buffer.read(self.triple_buffer_start_offset);
 
         if head_slot == 0 {
             return None;

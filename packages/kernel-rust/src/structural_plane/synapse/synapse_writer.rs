@@ -97,54 +97,44 @@ mod tests {
     const SYNAPSE_FL_START: usize = 51000;
 
     struct TestHarness {
-        _sab: SAB,
+        sab: SAB,
         writer: crate::primitives::triple_buffer::TripleBufferWriter,
         _reader: crate::primitives::triple_buffer::TripleBufferReader,
-        node_fl: SimpleFreeList,
-        node_dfl: DeferredFreesList,
-        synapse_fl: SimpleFreeList,
-        synapse_dfl: DeferredFreesList,
+        // node_fl: SimpleFreeList,
+        // node_dfl: DeferredFreesList,
+        // synapse_fl: SimpleFreeList,
+        // synapse_dfl: DeferredFreesList,
     }
 
     fn setup() -> TestHarness {
         let sab = create_sab(SAB_SIZE);
         let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
-        let node_fl = SimpleFreeList::new(Arc::clone(&sab), NODE_FL_START, NODE_CAPACITY);
-        let node_dfl = DeferredFreesList::new(Arc::clone(&sab), node_fl.end_index(), NODE_CAPACITY);
-        let synapse_fl =
-            SimpleFreeList::new(Arc::clone(&sab), node_dfl.end_index(), SYNAPSE_CAPACITY);
-        let synapse_dfl =
-            DeferredFreesList::new(Arc::clone(&sab), synapse_fl.end_index(), SYNAPSE_CAPACITY);
+
         TestHarness {
-            _sab: sab,
+            sab,
             writer,
             _reader: reader,
-            node_fl,
-            node_dfl,
-            synapse_fl,
-            synapse_dfl,
         }
     }
 
     #[test]
     fn synapse_writer_set_get_all_fields() {
         let h = setup();
-        let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        let node_chain = NodeChainWriter::new(
+            Arc::clone(&h.sab),
             h.writer.clone(),
-            h.node_fl.clone(),
-            h.node_dfl.clone(),
-            NODE_START_OFFSET,
+            NODE_FL_START,
+            NODE_HEAD_OFFSET,
             NODE_CAPACITY,
         );
-        let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        let synapse_chain = SynapseChainWriter::new(
+            Arc::clone(&h.sab),
             h.writer.clone(),
-            h.synapse_fl.clone(),
-            h.synapse_dfl.clone(),
+            node_chain.clone(),
+            node_chain.sab_end_index(),
             SYNAPSE_START_OFFSET,
             SYNAPSE_CAPACITY,
         );
-        let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
-        let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
         let src = node_chain
             .insert_head(NodeDraft {
@@ -195,22 +185,21 @@ mod tests {
     #[test]
     fn synapse_writer_opcode_bitmask_preserves_lower_bits() {
         let h = setup();
-        let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        let node_chain = NodeChainWriter::new(
+            Arc::clone(&h.sab),
             h.writer.clone(),
-            h.node_fl.clone(),
-            h.node_dfl.clone(),
-            NODE_START_OFFSET,
+            NODE_FL_START,
+            NODE_HEAD_OFFSET,
             NODE_CAPACITY,
         );
-        let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        let synapse_chain = SynapseChainWriter::new(
+            Arc::clone(&h.sab),
             h.writer.clone(),
-            h.synapse_fl.clone(),
-            h.synapse_dfl.clone(),
+            node_chain.clone(),
+            node_chain.sab_end_index(),
             SYNAPSE_START_OFFSET,
             SYNAPSE_CAPACITY,
         );
-        let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
-        let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
 
         let src = node_chain
             .insert_head(NodeDraft {

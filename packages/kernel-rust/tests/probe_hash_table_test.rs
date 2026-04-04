@@ -158,7 +158,7 @@ fn end_index_is_correct() {
     let cap = ProbeHashTable::compute_capacity(8, 0.75);
     // end_index = start(0) + 1(len header) + capacity * 3(slot size)
     let expected = 0 + 1 + cap * 3;
-    assert_eq!(table.end_index(), expected);
+    assert_eq!(table.sab_end_index(), expected);
 }
 
 #[test]

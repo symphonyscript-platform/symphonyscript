@@ -32,7 +32,7 @@ const CAPACITY: usize = 16;
 fn plane_writer_new_and_end_index() {
     let sab = create_sab(SAB_SIZE);
     let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
-    assert_eq!(plane.end_index(), CAPACITY * NODE_ATTRIBUTES_SLOT_SIZE);
+    assert_eq!(plane.sab_end_index(), CAPACITY * NODE_ATTRIBUTES_SLOT_SIZE);
 }
 
 #[test]
@@ -41,7 +41,7 @@ fn plane_writer_with_nonzero_start() {
     let start = 100;
     let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, start, CAPACITY);
     assert_eq!(
-        plane.end_index(),
+        plane.sab_end_index(),
         start + CAPACITY * NODE_ATTRIBUTES_SLOT_SIZE
     );
 }
@@ -391,4 +391,45 @@ fn note_attributes_negative_values() {
     assert_eq!(note.pitch(), i32::MIN);
     assert_eq!(note.velocity(), i32::MAX);
     assert_eq!(note.detune(), -1);
+}
+
+// ============ Copy From ============
+
+#[test]
+fn copy_from_preserves_plane_data() {
+    let sab_small = create_sab(SAB_SIZE);
+    let small_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab_small, 0, 4);
+
+    let view1 = small_plane.get(0);
+    view1.write(0, 42);
+    view1.write(5, 99);
+    
+    let view2 = small_plane.get(3);
+    view2.write(1, 1000);
+
+    let sab_large = create_sab(SAB_SIZE);
+    let mut large_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab_large, 0, 16);
+    
+    large_plane.copy_from(&small_plane);
+
+    // The data perfectly translates to exactly the same logical slots inside the larger capacity bounds
+    assert_eq!(large_plane.get(0).read(0), 42);
+    assert_eq!(large_plane.get(0).read(5), 99);
+    assert_eq!(large_plane.get(3).read(1), 1000);
+    
+    // Remaining newly allocated memory should be completely 0
+    assert_eq!(large_plane.get(4).read(0), 0);
+    assert_eq!(large_plane.get(15).read(5), 0);
+}
+
+#[test]
+#[should_panic]
+fn copy_from_panics_if_source_larger() {
+    let sab_small = create_sab(SAB_SIZE);
+    let mut small_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab_small, 0, 4);
+
+    let sab_large = create_sab(SAB_SIZE);
+    let large_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab_large, 0, 16);
+    
+    small_plane.copy_from(&large_plane);
 }

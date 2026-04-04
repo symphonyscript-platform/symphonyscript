@@ -121,7 +121,7 @@ impl HashTable for ProbeHashTable {
         self.sab[self.len_index].load(Ordering::Relaxed)
     }
 
-    fn end_index(&self) -> usize {
+    fn sab_end_index(&self) -> usize {
         self.end_index
     }
 

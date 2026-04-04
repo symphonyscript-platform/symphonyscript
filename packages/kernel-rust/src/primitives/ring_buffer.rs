@@ -58,7 +58,7 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
         self.sab[self.pending_slot_index].load(Ordering::Acquire)
     }
 
-    pub fn end_index(&self) -> usize {
+    pub fn sab_end_index(&self) -> usize {
         self.end_index
     }
 

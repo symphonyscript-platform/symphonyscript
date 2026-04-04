@@ -1,79 +1,130 @@
+use crate::constants::NODE_SLOT_SIZE;
+use crate::errors::free_list_error::FreeListError;
 use crate::primitives::deferred_frees_list::DeferredFreesList;
 use crate::primitives::into_array::IntoArray;
 use crate::primitives::simple_free_list::SimpleFreeList;
 use crate::primitives::triple_buffer::TripleBufferWriter;
+use crate::primitives::types::SAB;
 use crate::structural_plane::slot_writer::SlotWriter;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct StructuralWriter<const SLOT_SIZE: usize> {
     writer: TripleBufferWriter,
     free_list: SimpleFreeList,
     deferred_frees_list: DeferredFreesList,
-    start_offset: usize,
-    end_offset: usize,
+    sab_start_index: usize,
+    sab_end_index: usize,
+    triple_buffer_start_offset: usize,
+    triple_buffer_end_offset: usize,
     capacity: usize,
 }
 
 impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
     pub fn new(
+        sab: SAB,
         writer: TripleBufferWriter,
-        free_list: SimpleFreeList,
-        deferred_frees_list: DeferredFreesList,
-        start_offset: usize,
+        sab_start_index: usize,
+        triple_buffer_start_offset: usize,
         capacity: usize,
     ) -> Self {
-        debug_assert!(
-            free_list.capacity() >= capacity,
-            "free_list capacity ({}) must be >= capacity ({})",
-            free_list.capacity(),
-            capacity,
-        );
-
-        let end_offset = start_offset + capacity * SLOT_SIZE;
+        let triple_buffer_end_offset = triple_buffer_start_offset + capacity * SLOT_SIZE;
 
         debug_assert!(
-            end_offset <= writer.buffer_capacity(),
+            triple_buffer_end_offset <= writer.buffer_capacity(),
             "node region ({}) exceeds writer buffer capacity ({})",
-            end_offset,
+            triple_buffer_end_offset,
             writer.buffer_capacity(),
         );
+
+        let free_list = SimpleFreeList::new(Arc::clone(&sab), sab_start_index, capacity);
+        let deferred_frees_list =
+            DeferredFreesList::new(Arc::clone(&sab), free_list.sab_end_index(), capacity);
+        let sab_end_index = deferred_frees_list.sab_end_index();
 
         StructuralWriter {
             writer,
             free_list,
             deferred_frees_list,
-            start_offset,
-            end_offset,
+            sab_start_index,
+            sab_end_index,
+            triple_buffer_start_offset,
+            triple_buffer_end_offset,
             capacity,
         }
     }
 
     pub fn bind(
+        sab: SAB,
         writer: TripleBufferWriter,
-        free_list: SimpleFreeList,
-        deferred_frees_list: DeferredFreesList,
-        start_offset: usize,
+        sab_start_index: usize,
+        triple_buffer_start_offset: usize,
         capacity: usize,
     ) -> Self {
-        Self::new(
+        let triple_buffer_end_offset = triple_buffer_start_offset + capacity * SLOT_SIZE;
+
+        debug_assert!(
+            triple_buffer_end_offset <= writer.buffer_capacity(),
+            "node region ({}) exceeds writer buffer capacity ({})",
+            triple_buffer_end_offset,
+            writer.buffer_capacity(),
+        );
+
+        let free_list = SimpleFreeList::bind(Arc::clone(&sab), sab_start_index, capacity);
+        let deferred_frees_list =
+            DeferredFreesList::bind(Arc::clone(&sab), free_list.sab_end_index(), capacity);
+        let sab_end_index = deferred_frees_list.sab_end_index();
+
+        StructuralWriter {
             writer,
             free_list,
             deferred_frees_list,
-            start_offset,
+            sab_start_index,
+            sab_end_index,
+            triple_buffer_start_offset,
+            triple_buffer_end_offset,
             capacity,
-        )
+        }
     }
 
-    pub fn resolve_writer_offset(&self, slot: usize) -> usize {
-        self.start_offset + (slot - 1) * SLOT_SIZE
+    pub fn compute_size_on_sab(capacity: usize) -> usize {
+        SimpleFreeList::calculate_size(capacity) + DeferredFreesList::calculate_size(capacity)
     }
 
-    pub fn end_offset(&self) -> usize {
-        self.end_offset
+    pub fn compute_size_on_triple_buffer(capacity: usize) -> usize {
+        capacity * SLOT_SIZE
+    }
+
+    pub fn sab_start_index(&self) -> usize {
+        self.sab_start_index
+    }
+
+    pub fn sab_end_index(&self) -> usize {
+        self.sab_end_index
+    }
+
+    pub fn triple_buffer_start_offset(&self) -> usize {
+        self.triple_buffer_start_offset
+    }
+
+    pub fn triple_buffer_end_offset(&self) -> usize {
+        self.triple_buffer_end_offset
     }
 
     pub fn capacity(&self) -> usize {
         self.capacity
+    }
+
+    pub fn free_count(&self) -> usize {
+        self.free_list.free_count()
+    }
+
+    pub fn count(&self) -> usize {
+        self.free_list.alloc_count()
+    }
+
+    pub fn utilization(&self) -> f32 {
+        self.free_list.utilization()
     }
 
     pub fn insert<T: IntoArray<SLOT_SIZE>>(&self, data: T) -> Option<usize> {
@@ -117,13 +168,20 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
         let start_offset = self.resolve_writer_offset(slot);
         self.writer.read(start_offset + offset)
     }
+
+    pub fn free_deferred_slots(&mut self) -> Result<(), FreeListError> {
+        self.deferred_frees_list
+            .free_deferred_slots(&self.free_list)
+    }
+
+    fn resolve_writer_offset(&self, slot: usize) -> usize {
+        self.triple_buffer_start_offset + (slot - 1) * SLOT_SIZE
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::primitives::deferred_frees_list::DeferredFreesList;
     use crate::primitives::into_array::IntoArray;
-    use crate::primitives::simple_free_list::SimpleFreeList;
     use crate::primitives::triple_buffer::TripleBuffer;
     use crate::primitives::types::SAB;
     use crate::structural_plane::structural_writer::StructuralWriter;
@@ -162,22 +220,17 @@ mod tests {
         SAB,
         crate::primitives::triple_buffer::TripleBufferWriter,
         crate::primitives::triple_buffer::TripleBufferReader,
-        SimpleFreeList,
-        DeferredFreesList,
     ) {
         let sab = create_sab(SAB_SIZE);
         let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
-        let free_list = SimpleFreeList::new(Arc::clone(&sab), FL_START, CAPACITY);
-        let deferred_frees_lsit =
-            DeferredFreesList::new(Arc::clone(&sab), free_list.end_index(), CAPACITY);
-        (sab, writer, reader, free_list, deferred_frees_lsit)
+        (sab, writer, reader)
     }
 
     #[test]
     fn get_write_visible_through_read_field() {
-        let (_sab, writer, _reader, free_list, deferred_frees_list) = setup();
+        let (sab, writer, _reader) = setup();
         let sw: StructuralWriter<16> =
-            StructuralWriter::new(writer.clone(), free_list, deferred_frees_list, 0, CAPACITY);
+            StructuralWriter::new(sab, writer.clone(), FL_START, 0, CAPACITY);
 
         let slot = sw.insert(TestPayload { a: 0, b: 0 }).unwrap();
         let view = sw.get(slot);

@@ -148,7 +148,7 @@ impl TripleBufferWriter {
         self.buffer_capacity
     }
 
-    pub fn end_index(&self) -> usize {
+    pub fn sab_end_index(&self) -> usize {
         self.end_index
     }
 
@@ -203,12 +203,7 @@ impl TripleBufferWriter {
         self.sab[base + offset].load(Ordering::Relaxed)
     }
 
-    pub fn copy_from(&self, source: &TripleBufferWriter) {
-        debug_assert!(
-            source.buffer_capacity <= self.buffer_capacity,
-            "copy_from source cannot be greater than destination"
-        );
-
+    pub fn copy_metadata_from(&self, source: &TripleBufferWriter) {
         self.sab[self.state_slot_index].store(
             source.sab[source.state_slot_index].load(Ordering::Relaxed),
             Ordering::Relaxed,
@@ -224,6 +219,30 @@ impl TripleBufferWriter {
         self.sab[self.published_slot_index + 1].store(
             source.sab[source.published_slot_index + 1].load(Ordering::Relaxed),
             Ordering::Relaxed,
+        );
+
+    }
+
+    pub fn copy_region_from(
+        &self,
+        source: &TripleBufferWriter,
+        source_offset: usize,
+        destination_offset: usize,
+        count: usize,
+    ) {
+        debug_assert!(
+            destination_offset + count <= self.buffer_capacity,
+            "copy_region: destination range [{}..{}] exceeds buffer_capacity {}",
+            destination_offset,
+            count,
+            self.buffer_capacity,
+        );
+        debug_assert!(
+            source_offset + count <= self.buffer_capacity,
+            "copy_region: source range [{}..{}] exceeds buffer_capacity {}",
+            source_offset,
+            count,
+            source.buffer_capacity,
         );
 
         for i in 0..3 {
@@ -245,7 +264,7 @@ impl TripleBufferReader {
         self.buffer_capacity
     }
 
-    pub fn end_index(&self) -> usize {
+    pub fn sab_end_index(&self) -> usize {
         self.end_index
     }
 

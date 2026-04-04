@@ -128,7 +128,7 @@ fn end_index_is_correct() {
     let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 8);
 
     // end_index = start(0) + header(3) + capacity(8) * SLOT_SIZE(4) = 35
-    assert_eq!(ring.end_index(), 35);
+    assert_eq!(ring.sab_end_index(), 35);
 }
 
 #[test]

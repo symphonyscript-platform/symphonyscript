@@ -19,7 +19,7 @@ const CAPACITY: usize = 16;
 fn plane_reader_new_and_end_index() {
     let sab = create_sab(SAB_SIZE);
     let reader = AttributePlaneReader::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
-    assert_eq!(reader.end_index(), CAPACITY * NODE_ATTRIBUTES_SLOT_SIZE);
+    assert_eq!(reader.sab_end_index(), CAPACITY * NODE_ATTRIBUTES_SLOT_SIZE);
 }
 
 #[test]
@@ -28,7 +28,7 @@ fn plane_reader_bind_with_nonzero_start() {
     let start = 250;
     let reader = AttributePlaneReader::<NODE_ATTRIBUTES_SLOT_SIZE>::bind(sab, start, CAPACITY);
     assert_eq!(
-        reader.end_index(),
+        reader.sab_end_index(),
         start + CAPACITY * NODE_ATTRIBUTES_SLOT_SIZE
     );
 }

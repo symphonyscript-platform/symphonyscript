@@ -1,4 +1,7 @@
 use crate::constants::SYNAPSE_SLOT_SIZE;
+use crate::errors::free_list_error::FreeListError;
+use crate::primitives::triple_buffer::TripleBufferWriter;
+use crate::primitives::types::SAB;
 use crate::structural_plane::node::node_chain_writer::NodeChainWriter;
 use crate::structural_plane::structural_writer::StructuralWriter;
 use crate::structural_plane::synapse::synapse_data::{SynapseData, SynapseDraft};
@@ -8,24 +11,118 @@ use crate::structural_plane::synapse::synapse_writer::SynapseWriter;
 pub struct SynapseChainWriter {
     node_chain: NodeChainWriter,
     synapse_writer: StructuralWriter<SYNAPSE_SLOT_SIZE>,
+    sab_start_index: usize,
+    sab_end_index: usize,
+    triple_buffer_start_offset: usize,
+    triple_buffer_end_offset: usize,
+    capacity: usize,
 }
 
 impl SynapseChainWriter {
     pub fn new(
+        sab: SAB,
+        buffer: TripleBufferWriter,
         node_chain: NodeChainWriter,
-        synapse_writer: StructuralWriter<SYNAPSE_SLOT_SIZE>,
+        sab_start_index: usize,
+        triple_buffer_start_offset: usize,
+        capacity: usize,
     ) -> Self {
+        debug_assert!(
+            triple_buffer_start_offset < buffer.buffer_capacity(),
+            "triple_buffer_start_offset ({}) out of bounds",
+            triple_buffer_start_offset,
+        );
+
+        let synapse_writer = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+            sab,
+            buffer.clone(),
+            sab_start_index,
+            triple_buffer_start_offset,
+            capacity,
+        );
+        let sab_end_index = synapse_writer.sab_end_index();
+        let triple_buffer_end_offset = synapse_writer.triple_buffer_end_offset();
+
         SynapseChainWriter {
             node_chain,
             synapse_writer,
+            sab_start_index,
+            sab_end_index,
+            triple_buffer_start_offset,
+            triple_buffer_end_offset,
+            capacity,
         }
     }
 
     pub fn bind(
+        sab: SAB,
+        buffer: TripleBufferWriter,
         node_chain: NodeChainWriter,
-        synapse_writer: StructuralWriter<SYNAPSE_SLOT_SIZE>,
+        sab_start_index: usize,
+        triple_buffer_start_offset: usize,
+        capacity: usize,
     ) -> Self {
-        Self::new(node_chain, synapse_writer)
+        debug_assert!(
+            triple_buffer_start_offset < buffer.buffer_capacity(),
+            "triple_buffer_start_offset ({}) out of bounds",
+            triple_buffer_start_offset,
+        );
+
+        let synapse_writer = StructuralWriter::<SYNAPSE_SLOT_SIZE>::bind(
+            sab,
+            buffer.clone(),
+            sab_start_index,
+            triple_buffer_start_offset,
+            capacity,
+        );
+        let sab_end_index = synapse_writer.sab_end_index();
+        let triple_buffer_end_offset = synapse_writer.triple_buffer_end_offset();
+
+        SynapseChainWriter {
+            node_chain,
+            synapse_writer,
+            sab_start_index,
+            sab_end_index,
+            triple_buffer_start_offset,
+            triple_buffer_end_offset,
+            capacity,
+        }
+    }
+
+    pub fn compute_size_on_sab(capacity: usize) -> usize {
+        StructuralWriter::<SYNAPSE_SLOT_SIZE>::compute_size_on_sab(capacity)
+    }
+
+    pub fn compute_size_on_triple_buffer(capacity: usize) -> usize {
+        StructuralWriter::<SYNAPSE_SLOT_SIZE>::compute_size_on_triple_buffer(capacity)
+    }
+
+    pub fn sab_start_index(&self) -> usize {
+        self.sab_start_index
+    }
+
+    pub fn sab_end_index(&self) -> usize {
+        self.sab_end_index
+    }
+
+    pub fn triple_buffer_start_offset(&self) -> usize {
+        self.triple_buffer_start_offset
+    }
+
+    pub fn triple_buffer_end_offset(&self) -> usize {
+        self.triple_buffer_end_offset
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    pub fn count(&self) -> usize {
+        self.synapse_writer.count()
+    }
+
+    pub fn utilization(&self) -> f32 {
+        self.synapse_writer.utilization()
     }
 
     pub fn get(&'_ self, slot: usize) -> SynapseWriter<'_> {
@@ -119,5 +216,9 @@ impl SynapseChainWriter {
         }
 
         self.synapse_writer.defer_free(slot)
+    }
+
+    pub fn free_deferred_slots(&mut self) -> Result<(), FreeListError> {
+        self.synapse_writer.free_deferred_slots()
     }
 }

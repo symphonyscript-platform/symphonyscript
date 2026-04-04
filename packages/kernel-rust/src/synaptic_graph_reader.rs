@@ -1,13 +1,12 @@
 use crate::attribute_plane::reader::attribute_plane_reader::AttributePlaneReader;
 use crate::attribute_plane::reader::attributes_reader::AttributesReader;
 use crate::constants::{
-    NODE_ATTRIBUTES_SLOT_SIZE, NODE_SLOT_SIZE, SYNAPSE_ATTRIBUTES_SLOT_SIZE, SYNAPSE_SLOT_SIZE,
+    NODE_ATTRIBUTES_SLOT_SIZE, SYNAPSE_ATTRIBUTES_SLOT_SIZE,
 };
 use crate::primitives::triple_buffer::{TripleBuffer, TripleBufferReader};
 use crate::primitives::types::SAB;
 use crate::structural_plane::node::node_chain_reader::NodeChainReader;
 use crate::structural_plane::node::node_reader::NodeReader;
-use crate::structural_plane::structural_reader::StructuralReader;
 use crate::structural_plane::synapse::synapse_chain_reader::SynapseChainReader;
 use crate::structural_plane::synapse::synapse_reader::SynapseReader;
 use crate::synaptic_graph_config::SynapticGraphConfig;
@@ -25,39 +24,35 @@ pub struct SynapticGraphReader {
 
 impl SynapticGraphReader {
     pub fn bind(sab: SAB, config: SynapticGraphConfig) -> Self {
+        let sab_start_index = SynapticGraphWriter::HEADERS_SIZE;
+        let triple_buffer_start_offset = 0;
+
         let node_attribute_plane = AttributePlaneReader::<NODE_ATTRIBUTES_SLOT_SIZE>::bind(
             Arc::clone(&sab),
-            SynapticGraphWriter::compute_headers_size(&config),
+            sab_start_index,
             config.node_capacity,
         );
         let synapse_attribute_plane = AttributePlaneReader::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::bind(
             Arc::clone(&sab),
-            node_attribute_plane.end_index(),
+            node_attribute_plane.sab_end_index(),
             config.synapse_capacity,
         );
         let triple_buffer_size = SynapticGraphWriter::compute_triple_buffer_size(&config);
         let triple_buffer_reader = TripleBuffer::bind_reader(
             Arc::clone(&sab),
-            synapse_attribute_plane.end_index(),
+            synapse_attribute_plane.sab_end_index(),
             triple_buffer_size,
-        );
-        let buffer_head_offset = 0;
-        let node_structural_reader = StructuralReader::<NODE_SLOT_SIZE>::bind(
-            triple_buffer_reader.clone(),
-            buffer_head_offset + 1,
-            config.node_capacity,
-        );
-        let synapse_structural_reader = StructuralReader::<SYNAPSE_SLOT_SIZE>::bind(
-            triple_buffer_reader.clone(),
-            node_structural_reader.end_offset(),
-            config.synapse_capacity,
         );
         let node_chain_reader = NodeChainReader::bind(
             triple_buffer_reader.clone(),
-            node_structural_reader.clone(),
-            buffer_head_offset,
+            triple_buffer_start_offset,
+            config.node_capacity,
         );
-        let synapse_chain_reader = SynapseChainReader::bind(synapse_structural_reader.clone());
+        let synapse_chain_reader = SynapseChainReader::bind(
+            triple_buffer_reader.clone(),
+            node_chain_reader.triple_buffer_end_offset(),
+            config.synapse_capacity,
+        );
 
         SynapticGraphReader {
             node_attribute_plane,

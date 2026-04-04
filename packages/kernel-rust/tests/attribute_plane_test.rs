@@ -52,14 +52,14 @@ fn sample_data_b() -> NoteAttributes {
 fn new_creates_plane() {
     let sab = create_sab(1024);
     let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 10);
-    assert_eq!(plane.end_index(), 10 * SLOT_SIZE);
+    assert_eq!(plane.sab_end_index(), 10 * SLOT_SIZE);
 }
 
 #[test]
 fn new_with_nonzero_start() {
     let sab = create_sab(1024);
     let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 100, 10);
-    assert_eq!(plane.end_index(), 100 + 10 * SLOT_SIZE);
+    assert_eq!(plane.sab_end_index(), 100 + 10 * SLOT_SIZE);
 }
 
 #[test]
@@ -75,7 +75,7 @@ fn new_succeeds_at_exact_boundary() {
     let size = 10 * SLOT_SIZE;
     let sab = create_sab(size);
     let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 10);
-    assert_eq!(plane.end_index(), size);
+    assert_eq!(plane.sab_end_index(), size);
 }
 
 // ============ Set and Get Round-Trip ============
@@ -204,14 +204,14 @@ fn nonzero_start_slot_1_correct_offset() {
 fn end_index_zero_start() {
     let sab = create_sab(1024);
     let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 8);
-    assert_eq!(plane.end_index(), 8 * 16);
+    assert_eq!(plane.sab_end_index(), 8 * 16);
 }
 
 #[test]
 fn end_index_with_start_offset() {
     let sab = create_sab(1024);
     let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 50, 8);
-    assert_eq!(plane.end_index(), 50 + 8 * 16);
+    assert_eq!(plane.sab_end_index(), 50 + 8 * 16);
 }
 
 // ============ Capacity Boundary ============

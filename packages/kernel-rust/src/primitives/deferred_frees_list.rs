@@ -87,7 +87,7 @@ impl DeferredFreesList {
         self.sab[self.start_index + list_index].load(Ordering::Relaxed) as usize
     }
 
-    pub fn end_index(&self) -> usize {
+    pub fn sab_end_index(&self) -> usize {
         self.end_index
     }
 

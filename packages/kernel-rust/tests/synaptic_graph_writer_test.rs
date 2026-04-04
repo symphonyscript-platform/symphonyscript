@@ -1,5 +1,5 @@
-use symphonyscript_kernel::attribute_plane::writer::note_attributes_writer::NoteAttributes;
-use symphonyscript_kernel::attribute_plane::writer::synapse_attributes_writer::SynapseAttributes;
+use symphonyscript_kernel::attribute_plane::writer::note_attributes_writer::{NoteAttributes, NoteAttributesWriter};
+use symphonyscript_kernel::attribute_plane::writer::synapse_attributes_writer::{SynapseAttributes, SynapseAttributesWriter};
 use symphonyscript_kernel::structural_plane::node::node_data::NodeDraft;
 use symphonyscript_kernel::structural_plane::synapse::synapse_data::SynapseDraft;
 use symphonyscript_kernel::synaptic_graph_config::SynapticGraphConfig;
@@ -466,4 +466,75 @@ fn compute_triple_buffer_size_matches_slot_count() {
         SynapticGraphWriter::compute_triple_buffer_size(&cfg),
         expected
     );
+}
+
+// ============ Copy From ============
+
+#[test]
+fn copy_from_scales_full_topology_graph() {
+    let small_cfg = config();
+    let small_sab: Vec<AtomicI32> = (0..SynapticGraphWriter::compute_size(&small_cfg))
+        .map(|_| AtomicI32::new(0))
+        .collect();
+    let mut small_kernel = SynapticGraphWriter::new(Arc::new(small_sab), small_cfg.clone());
+
+    let src = small_kernel.insert_head(draft(1, 0)).unwrap();
+    let tgt = small_kernel.insert_head(draft(2, 0)).unwrap();
+    let syn = small_kernel.connect(src, tgt, syn_draft(10)).unwrap();
+
+    let note = NoteAttributesWriter(small_kernel.get_node_attributes(src));
+    note.set_pitch(60);
+    
+    small_kernel.publish().unwrap(); 
+
+    let mut large_cfg = config();
+    large_cfg.node_capacity = 32;
+    large_cfg.synapse_capacity = 64;
+    let large_sab: Vec<AtomicI32> = (0..SynapticGraphWriter::compute_size(&large_cfg))
+        .map(|_| AtomicI32::new(0))
+        .collect();
+    let mut large_kernel = SynapticGraphWriter::new(Arc::new(large_sab), large_cfg);
+
+    large_kernel.copy_from(&small_kernel);
+
+    // Validate nodes survived
+    let n_src = large_kernel.get_node(src);
+    assert_eq!(n_src.get_opcode(), 1);
+    
+    let n_tgt = large_kernel.get_node(tgt);
+    assert_eq!(n_tgt.get_opcode(), 2);
+    
+    // Validate synapse survived
+    let s_syn = large_kernel.get_synapse(syn);
+    assert_eq!(s_syn.get_opcode(), 10);
+    assert_eq!(s_syn.get_source_ptr(), src);
+    assert_eq!(s_syn.get_target_ptr(), tgt);
+    
+    // Validate structural links
+    assert_eq!(n_src.get_outgoing_synapse_head(), syn);
+    assert_eq!(n_tgt.get_incoming_synapse_head(), syn);
+    
+    // Validate attributes survived
+    let note_large = NoteAttributesWriter(large_kernel.get_node_attributes(src));
+    assert_eq!(note_large.pitch(), 60);
+}
+
+#[test]
+#[should_panic]
+fn copy_from_panics_if_source_larger() {
+    let mut small_cfg = config();
+    small_cfg.node_capacity = 16;
+    let small_sab: Vec<AtomicI32> = (0..SynapticGraphWriter::compute_size(&small_cfg))
+        .map(|_| AtomicI32::new(0))
+        .collect();
+    let mut small_kernel = SynapticGraphWriter::new(Arc::new(small_sab), small_cfg);
+
+    let mut large_cfg = config();
+    large_cfg.node_capacity = 32;
+    let large_sab: Vec<AtomicI32> = (0..SynapticGraphWriter::compute_size(&large_cfg))
+        .map(|_| AtomicI32::new(0))
+        .collect();
+    let large_kernel = SynapticGraphWriter::new(Arc::new(large_sab), large_cfg);
+
+    small_kernel.copy_from(&large_kernel);
 }

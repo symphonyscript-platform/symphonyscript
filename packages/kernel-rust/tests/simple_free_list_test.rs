@@ -102,7 +102,7 @@ fn end_index_is_correct() {
 
     // Layout: head(1) + free_count(1) + bitmap(ceil(8/32)=1) + slots(8) = 11
     // end_index = start of slots + capacity = 3 + 8 = 11
-    assert_eq!(fl.end_index(), 3 + 8);
+    assert_eq!(fl.sab_end_index(), 3 + 8);
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn end_index_with_larger_capacity() {
 
     // Layout: head(1) + free_count(1) + bitmap(ceil(64/32)=2) + slots(64)
     // end_index = 0 + 2 + 2 + 64 = 68
-    assert_eq!(fl.end_index(), 4 + 64);
+    assert_eq!(fl.sab_end_index(), 4 + 64);
 }
 
 #[test]
@@ -136,7 +136,7 @@ fn nonzero_start_index_end_index() {
     let fl = SimpleFreeList::new(sab, 100, 8);
 
     // Layout: 100 + head(1) + free_count(1) + bitmap(1) + slots(8) = 111
-    assert_eq!(fl.end_index(), 100 + 2 + 1 + 8);
+    assert_eq!(fl.sab_end_index(), 100 + 2 + 1 + 8);
 }
 
 // ============ Edge Cases ============
@@ -431,4 +431,57 @@ fn stress_free_chain_integrity_after_mixed_ops() {
         fl.free(s).unwrap();
     }
     assert_eq!(fl.free_count(), 64);
+}
+
+// ============ Copy From / Resize ============
+
+#[test]
+fn copy_from_preserves_state_and_adds_capacity() {
+    let sab_small = create_sab(4096);
+    let small_fl = SimpleFreeList::new(sab_small, 0, 16);
+
+    let a = small_fl.alloc().unwrap();
+    let b = small_fl.alloc().unwrap();
+    let c = small_fl.alloc().unwrap();
+    
+    small_fl.free(b).unwrap(); // b is freed, free_count is 14
+
+    assert_eq!(small_fl.free_count(), 14);
+
+    let sab_large = create_sab(4096);
+    let mut large_fl = SimpleFreeList::new(sab_large, 0, 32);
+
+    large_fl.copy_from(&small_fl);
+
+    // Initial 16 had 14 free. 16 new slots added. Total free: 30.
+    assert_eq!(large_fl.free_count(), 30);
+
+    // We can alloc the new capacity slots. Since they were trust_free'd from 16 to 31,
+    // they are prepended to the free list, so they pop in reverse order: 32, 31, ...
+    let d = large_fl.alloc().unwrap();
+    assert_eq!(d, 32);
+
+    let e = large_fl.alloc().unwrap();
+    assert_eq!(e, 31);
+    
+    // If we pop 14 more times to exhaust the new capacity (16 total)
+    for _ in 0..14 {
+        large_fl.alloc().unwrap();
+    }
+    
+    // The next alloc should be the head of the OLD free list, which was `b` (slot 2)
+    let b_again = large_fl.alloc().unwrap();
+    assert_eq!(b_again, b);
+}
+
+#[test]
+#[should_panic]
+fn copy_from_panics_if_source_larger() {
+    let sab_small = create_sab(4096);
+    let mut small_fl = SimpleFreeList::new(sab_small, 0, 16);
+
+    let sab_large = create_sab(4096);
+    let large_fl = SimpleFreeList::new(sab_large, 0, 32);
+
+    small_fl.copy_from(&large_fl);
 }

@@ -160,8 +160,8 @@ fn end_index_is_correct() {
     let (writer, reader) = TripleBuffer::new(sab, 0, 10);
 
     // Layout: 4 metadata slots + 3 × 10 buffer slots = 34
-    assert_eq!(writer.end_index(), 4 + 3 * 10);
-    assert_eq!(reader.end_index(), 4 + 3 * 10);
+    assert_eq!(writer.sab_end_index(), 4 + 3 * 10);
+    assert_eq!(reader.sab_end_index(), 4 + 3 * 10);
 }
 
 #[test]
@@ -169,8 +169,8 @@ fn nonzero_start_index() {
     let sab = create_sab(4096);
     let (mut writer, mut reader) = TripleBuffer::new(sab.clone(), 100, 8);
 
-    assert_eq!(writer.end_index(), 100 + 4 + 3 * 8);
-    assert_eq!(reader.end_index(), 100 + 4 + 3 * 8);
+    assert_eq!(writer.sab_end_index(), 100 + 4 + 3 * 8);
+    assert_eq!(reader.sab_end_index(), 100 + 4 + 3 * 8);
 
     let base = writer.current_start_index();
     assert!(base >= 104); // at least after metadata
@@ -739,7 +739,7 @@ fn two_triple_buffers_on_same_sab() {
     // First triple buffer at offset 0, size 10
     let (mut w1, mut r1) = TripleBuffer::new(sab.clone(), 0, 10);
     // Second triple buffer at offset after first one ends
-    let offset2 = w1.end_index();
+    let offset2 = w1.sab_end_index();
     let (mut w2, mut r2) = TripleBuffer::new(sab.clone(), offset2, 8);
 
     // Write different data to each
@@ -853,7 +853,7 @@ fn publish_does_not_corrupt_surrounding_sab_memory() {
     }
 
     // 2. Verify trailing memory is completely untouched
-    let end_index = writer.end_index();
+    let end_index = writer.sab_end_index();
     for i in end_index..sab.len() {
         assert_eq!(
             sab[i].load(Ordering::Relaxed),
@@ -883,4 +883,58 @@ fn publish_does_not_corrupt_surrounding_sab_memory() {
         (0..=2).contains(&reader_id),
         "Reader ID slot corrupted: {reader_id}"
     );
+}
+
+// ============ Copy From / Resize ============
+
+#[test]
+fn copy_from_preserves_state_and_resizes() {
+    let padding = 100;
+    let small_size = 4;
+    let sab_small = create_sab(padding + 4 + small_size * 3 + padding);
+    let (mut w_small, mut r_small) = TripleBuffer::new(sab_small.clone(), padding, small_size);
+
+    let base = w_small.current_start_index();
+    sab_small[base].store(42, Ordering::Relaxed);
+    sab_small[base + 1].store(99, Ordering::Relaxed);
+    
+    w_small.publish();
+    r_small.swap(); 
+    
+    let base2 = w_small.current_start_index();
+    sab_small[base2].store(1000, Ordering::Relaxed);
+    
+    let large_size = 8;
+    let sab_large = create_sab(padding + 4 + large_size * 3 + padding);
+    let (mut w_large, mut r_large) = TripleBuffer::new(sab_large.clone(), padding, large_size);
+    
+    w_large.copy_from(&w_small);
+    
+    let base_large_w = w_large.current_start_index();
+    assert_eq!(sab_large[base_large_w].load(Ordering::Relaxed), 1000);
+    
+    assert!(!r_large.swap(), "copied state correctly reflects no new publishes yet");
+    
+    sab_large[base_large_w + 1].store(2000, Ordering::Relaxed);
+    w_large.publish();
+    
+    assert!(r_large.swap());
+    let r_base_large = r_large.current_start_index();
+    
+    assert_eq!(sab_large[r_base_large].load(Ordering::Relaxed), 1000); // from previous un-published state that carried over!
+    assert_eq!(sab_large[r_base_large + 1].load(Ordering::Relaxed), 2000); // newly written state
+}
+
+#[test]
+#[should_panic]
+fn copy_from_panics_if_source_larger() {
+    let padding = 100;
+    
+    let sab_small = create_sab(padding + 4 + 4 * 3 + padding);
+    let mut w_small = TripleBuffer::bind_writer(sab_small.clone(), padding, 4);
+    
+    let sab_large = create_sab(padding + 4 + 8 * 3 + padding);
+    let w_large = TripleBuffer::bind_writer(sab_large.clone(), padding, 8);
+    
+    w_small.copy_from(&w_large);
 }

@@ -66,7 +66,7 @@ fn new_creates_structural_reader() {
 fn end_index_correct() {
     let (_sab, _writer, reader, _free_list, deferred) = setup();
     let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
-    assert_eq!(sr.end_offset(), CAPACITY * 16);
+    assert_eq!(sr.triple_buffer_end_offset(), CAPACITY * 16);
 }
 
 #[test]

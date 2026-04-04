@@ -10,7 +10,7 @@ pub trait HashTable {
         Self: Sized;
 
     fn len(&self) -> i32;
-    fn end_index(&self) -> usize;
+    fn sab_end_index(&self) -> usize;
     fn get(&self, key: i32) -> Option<i32>;
     fn set(&self, key: i32, value: i32) -> Result<(), TableError>;
     fn delete(&self, key: i32) -> Option<i32>;

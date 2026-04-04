@@ -35,7 +35,7 @@ impl<const SLOT_SIZE: usize> AttributePlaneReader<SLOT_SIZE> {
         self.start_index + (offset * SLOT_SIZE)
     }
 
-    pub fn end_index(&self) -> usize {
+    pub fn sab_end_index(&self) -> usize {
         self.end_index
     }
 

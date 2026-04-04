@@ -76,7 +76,7 @@ fn end_index_correct() {
         0,
         CAPACITY,
     );
-    assert_eq!(sw.end_offset(), CAPACITY * 16);
+    assert_eq!(sw.triple_buffer_end_offset(), CAPACITY * 16);
 }
 
 #[test]

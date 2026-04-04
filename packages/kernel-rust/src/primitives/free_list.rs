@@ -67,7 +67,7 @@ impl<const SLOT_SIZE: usize> FreeList<SLOT_SIZE> {
         self.sab[self.free_count_slot_index].load(Ordering::Relaxed)
     }
 
-    pub fn end_index(&self) -> usize {
+    pub fn sab_end_index(&self) -> usize {
         self.end_index
     }
 
