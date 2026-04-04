@@ -27,7 +27,7 @@ impl NodeChainWriter {
     ) -> Self {
         debug_assert!(
             triple_buffer_start_offset < buffer.buffer_capacity(),
-            "triple_buffer_start_offset ({}) out of bounds",
+            "NodeChainWriter::new | triple_buffer_start_offset {} out of bounds",
             triple_buffer_start_offset,
         );
 
@@ -61,7 +61,7 @@ impl NodeChainWriter {
     ) -> Self {
         debug_assert!(
             triple_buffer_start_offset < buffer.buffer_capacity(),
-            "triple_buffer_start_offset ({}) out of bounds",
+            "NodeChainWriter::bind | triple_buffer_start_offset {} out of bounds",
             triple_buffer_start_offset,
         );
 
@@ -120,6 +120,10 @@ impl NodeChainWriter {
 
     pub fn utilization(&self) -> f32 {
         self.writer.utilization()
+    }
+
+    pub fn is_active_slot(&self, slot: usize) -> bool {
+        self.writer.is_active_slot(slot)
     }
 
     pub fn get_head(&'_ self) -> Option<NodeWriter<'_>> {
@@ -249,7 +253,9 @@ impl NodeChainWriter {
     pub fn copy_from(&self, source: &NodeChainWriter) {
         debug_assert!(
             source.capacity <= self.capacity,
-            "NodeChainWriter.copy_from | source cannot be greater than destination"
+            "NodeChainWriter.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
+            source.capacity,
+            self.capacity,
         );
 
         self.buffer.copy_region_from(
@@ -355,7 +361,11 @@ mod tests {
         // mutate whatever shares field 0's lower 24 bits
         node.set_prev_ptr(0x00FFFFFF);
         let raw = node.0.read(0);
-        assert_eq!(raw >> 24, 0x7F, "opcode preserved after mutable field write");
+        assert_eq!(
+            raw >> 24,
+            0x7F,
+            "opcode preserved after mutable field write"
+        );
     }
 
     #[test]
