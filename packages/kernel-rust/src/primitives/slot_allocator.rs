@@ -100,6 +100,10 @@ impl SlotAllocator {
     }
 
     pub fn defer_free(&self, slot_number: usize) -> Result<(), FreeListError> {
+        if !self.is_allocated(slot_number) {
+            return Err(FreeListError::InvalidSlot);
+        }
+
         let slot_index = slot_number - 1;
 
         if self.deferred_bitmap.is_on(slot_index) {
