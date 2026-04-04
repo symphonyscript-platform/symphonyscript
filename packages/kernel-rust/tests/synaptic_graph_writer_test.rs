@@ -5,11 +5,21 @@ use symphonyscript_kernel::structural_plane::synapse::synapse_data::SynapseDraft
 use symphonyscript_kernel::synaptic_graph_config::SynapticGraphConfig;
 use symphonyscript_kernel::synaptic_graph_writer::SynapticGraphWriter;
 
+use std::sync::atomic::AtomicI32;
+use std::sync::Arc;
+
 fn config() -> SynapticGraphConfig {
     SynapticGraphConfig {
         node_capacity: 16,
         synapse_capacity: 32,
     }
+}
+
+fn create_writer() -> SynapticGraphWriter {
+    let cfg = config();
+    let size = SynapticGraphWriter::compute_size(&cfg);
+    let sab: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
+    SynapticGraphWriter::new(Arc::new(sab), cfg)
 }
 
 fn draft(opcode: i32, tick: i32) -> NodeDraft {
@@ -27,7 +37,7 @@ fn syn_draft(opcode: i32) -> SynapseDraft {
 
 #[test]
 fn kernel_new_creates_empty_chain() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
     assert!(kernel.get_head_node().is_none());
 }
 
@@ -35,7 +45,7 @@ fn kernel_new_creates_empty_chain() {
 
 #[test]
 fn insert_head_returns_slot() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
     let slot = kernel.insert_head(draft(1, 0));
     assert!(slot.is_some());
     assert!(slot.unwrap() > 0);
@@ -43,7 +53,7 @@ fn insert_head_returns_slot() {
 
 #[test]
 fn insert_head_writes_opcode_and_tick() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
     let slot = kernel.insert_head(draft(5, 999)).unwrap();
 
     let node = kernel.get_node(slot);
@@ -53,7 +63,7 @@ fn insert_head_writes_opcode_and_tick() {
 
 #[test]
 fn insert_head_chain_ordering() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
 
     let a = kernel.insert_head(draft(1, 10)).unwrap();
     let b = kernel.insert_head(draft(2, 20)).unwrap();
@@ -70,7 +80,7 @@ fn insert_head_chain_ordering() {
 
 #[test]
 fn insert_after_splices_correctly() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
 
     let a = kernel.insert_head(draft(1, 0)).unwrap();
     let c = kernel.insert_after(a, draft(3, 0)).unwrap();
@@ -84,7 +94,7 @@ fn insert_after_splices_correctly() {
 
 #[test]
 fn insert_before_splices_correctly() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
 
     let a = kernel.insert_head(draft(1, 0)).unwrap();
     let c = kernel.insert_after(a, draft(3, 0)).unwrap();
@@ -98,7 +108,7 @@ fn insert_before_splices_correctly() {
 
 #[test]
 fn insert_exhausts_capacity() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
 
     for i in 0..16 {
         assert!(kernel.insert_head(draft(i, 0)).is_some());
@@ -110,7 +120,7 @@ fn insert_exhausts_capacity() {
 
 #[test]
 fn remove_node_heals_chain() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
 
     let a = kernel.insert_head(draft(1, 0)).unwrap();
     let b = kernel.insert_head(draft(2, 0)).unwrap();
@@ -126,7 +136,7 @@ fn remove_node_heals_chain() {
 
 #[test]
 fn remove_then_publish_reclaims_slot() {
-    let mut kernel = SynapticGraphWriter::new(config());
+    let mut kernel = create_writer();
 
     // fill all slots
     let mut slots = Vec::new();
@@ -162,7 +172,7 @@ fn remove_then_publish_reclaims_slot() {
 // ============ Synapse connect/disconnect ============
 #[test]
 fn connect_creates_synapse() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
 
     let src = kernel.insert_head(draft(1, 0)).unwrap();
     let tgt = kernel.insert_head(draft(2, 0)).unwrap();
@@ -177,7 +187,7 @@ fn connect_creates_synapse() {
 
 #[test]
 fn connect_updates_node_synapse_pointers() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
 
     let src = kernel.insert_head(draft(1, 0)).unwrap();
     let tgt = kernel.insert_head(draft(2, 0)).unwrap();
@@ -191,7 +201,7 @@ fn connect_updates_node_synapse_pointers() {
 
 #[test]
 fn disconnect_heals_synapse_chain() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
 
     let src = kernel.insert_head(draft(1, 0)).unwrap();
     let tgt1 = kernel.insert_head(draft(2, 0)).unwrap();
@@ -209,7 +219,7 @@ fn disconnect_heals_synapse_chain() {
 
 #[test]
 fn disconnect_then_publish_reclaims_synapse_slot() {
-    let mut kernel = SynapticGraphWriter::new(config());
+    let mut kernel = create_writer();
 
     let src = kernel.insert_head(draft(1, 0)).unwrap();
     let tgt = kernel.insert_head(draft(2, 0)).unwrap();
@@ -255,7 +265,7 @@ fn disconnect_then_publish_reclaims_synapse_slot() {
 // ============ Node attributes ============
 #[test]
 fn set_node_attribute_single_field() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
     let slot = kernel.insert_head(draft(1, 0)).unwrap();
 
     kernel.set_node_attribute(slot, 0, 60); // pitch
@@ -267,7 +277,7 @@ fn set_node_attribute_single_field() {
 
 #[test]
 fn set_node_attributes_bulk() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
     let slot = kernel.insert_head(draft(1, 0)).unwrap();
 
     kernel.set_node_attributes(
@@ -293,7 +303,7 @@ fn set_node_attributes_bulk() {
 
 #[test]
 fn get_node_attributes_returns_view() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
     let slot = kernel.insert_head(draft(1, 0)).unwrap();
 
     kernel.set_node_attribute(slot, 0, 42);
@@ -306,7 +316,7 @@ fn get_node_attributes_returns_view() {
 
 #[test]
 fn node_attributes_independent_across_slots() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
     let a = kernel.insert_head(draft(1, 0)).unwrap();
     let b = kernel.insert_head(draft(2, 0)).unwrap();
 
@@ -321,7 +331,7 @@ fn node_attributes_independent_across_slots() {
 
 #[test]
 fn set_synapse_attribute_single_field() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
     let src = kernel.insert_head(draft(1, 0)).unwrap();
     let tgt = kernel.insert_head(draft(2, 0)).unwrap();
     let syn = kernel.connect(src, tgt, syn_draft(10)).unwrap();
@@ -335,7 +345,7 @@ fn set_synapse_attribute_single_field() {
 
 #[test]
 fn set_synapse_attributes_bulk() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
     let src = kernel.insert_head(draft(1, 0)).unwrap();
     let tgt = kernel.insert_head(draft(2, 0)).unwrap();
     let syn = kernel.connect(src, tgt, syn_draft(10)).unwrap();
@@ -361,13 +371,13 @@ fn set_synapse_attributes_bulk() {
 
 #[test]
 fn publish_succeeds_on_empty_kernel() {
-    let mut kernel = SynapticGraphWriter::new(config());
+    let mut kernel = create_writer();
     assert!(kernel.publish().is_ok());
 }
 
 #[test]
 fn publish_after_mutations_succeeds() {
-    let mut kernel = SynapticGraphWriter::new(config());
+    let mut kernel = create_writer();
 
     let src = kernel.insert_head(draft(1, 0)).unwrap();
     let tgt = kernel.insert_head(draft(2, 0)).unwrap();
@@ -378,7 +388,7 @@ fn publish_after_mutations_succeeds() {
 
 #[test]
 fn multiple_publish_cycles() {
-    let mut kernel = SynapticGraphWriter::new(config());
+    let mut kernel = create_writer();
 
     // cycle 1: insert
     let a = kernel.insert_head(draft(1, 0)).unwrap();
@@ -400,7 +410,7 @@ fn multiple_publish_cycles() {
 
 #[test]
 fn deferred_free_two_cycle_delay() {
-    let mut kernel = SynapticGraphWriter::new(config());
+    let mut kernel = create_writer();
 
     // fill capacity
     let mut slots = Vec::new();
@@ -426,7 +436,7 @@ fn deferred_free_two_cycle_delay() {
 
 #[test]
 fn self_loop_connect_disconnect() {
-    let kernel = SynapticGraphWriter::new(config());
+    let kernel = create_writer();
     let n = kernel.insert_head(draft(1, 0)).unwrap();
 
     let syn = kernel.connect(n, n, syn_draft(99)).unwrap();

@@ -376,7 +376,7 @@ fn stress_interleaved_alloc_free() {
     }
 
     // Invariant: free_count + active = capacity
-    assert_eq!(fl.free_count() + active.len() as i32, 128);
+    assert_eq!(fl.free_count() + active.len(), 128);
 }
 
 #[test]

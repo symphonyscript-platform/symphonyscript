@@ -6,6 +6,9 @@ use symphonyscript_kernel::synaptic_graph_config::SynapticGraphConfig;
 use symphonyscript_kernel::synaptic_graph_reader::SynapticGraphReader;
 use symphonyscript_kernel::synaptic_graph_writer::SynapticGraphWriter;
 
+use std::sync::atomic::AtomicI32;
+use std::sync::Arc;
+
 fn config() -> SynapticGraphConfig {
     SynapticGraphConfig {
         node_capacity: 16,
@@ -15,9 +18,12 @@ fn config() -> SynapticGraphConfig {
 
 fn setup() -> (SynapticGraphWriter, SynapticGraphReader) {
     let cfg = config();
-    let kernel = SynapticGraphWriter::new(cfg);
-    // Bind reader using the newly exposed get_sab() test method
-    let reader = SynapticGraphReader::bind(kernel.get_sab(), config());
+    let size = SynapticGraphWriter::compute_size(&cfg);
+    let sab: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
+    let sab_arc = Arc::new(sab);
+    
+    let kernel = SynapticGraphWriter::new(Arc::clone(&sab_arc), cfg.clone());
+    let reader = SynapticGraphReader::bind(Arc::clone(&sab_arc), cfg);
     (kernel, reader)
 }
 
