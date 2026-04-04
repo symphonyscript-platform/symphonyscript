@@ -24,11 +24,7 @@ impl<const SLOT_SIZE: usize> FreeList<SLOT_SIZE> {
         Self::create(sab, start_index, capacity, true)
     }
 
-    pub fn capacity(&self) -> i32 {
-        self.capacity
-    }
-
-    fn create(sab: SAB, start_index: usize, capacity: i32, bind: bool) -> Self {
+    pub fn create(sab: SAB, start_index: usize, capacity: i32, bind: bool) -> Self {
         debug_assert!(capacity > 0, "capacity cannot be negative");
         debug_assert_eq!(capacity & (capacity - 1), 0, "capacity must be power of 2");
 
@@ -61,6 +57,10 @@ impl<const SLOT_SIZE: usize> FreeList<SLOT_SIZE> {
             end_index: slots_end_index,
             capacity,
         }
+    }
+
+    pub fn capacity(&self) -> i32 {
+        self.capacity
     }
 
     pub fn free_count(&self) -> i32 {

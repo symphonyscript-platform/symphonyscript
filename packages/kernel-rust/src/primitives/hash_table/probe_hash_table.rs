@@ -40,7 +40,7 @@ impl ProbeHashTable {
         Self::create(sab, start_index, max_entries, max_load_factor, hash, true)
     }
 
-    fn create(
+    pub fn create(
         sab: SAB,
         start_index: usize,
         max_entries: u32,

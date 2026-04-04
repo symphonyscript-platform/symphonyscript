@@ -25,7 +25,7 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
         Self::create(sab, start_index, capacity, true)
     }
 
-    fn create(sab: SAB, start_index: usize, capacity: i32, bind: bool) -> Self {
+    pub fn create(sab: SAB, start_index: usize, capacity: i32, bind: bool) -> Self {
         let end_index = start_index + 3 + (capacity as usize) * SLOT_SIZE;
 
         assert!(end_index < sab.len(), "RingBuffer out of bounds");

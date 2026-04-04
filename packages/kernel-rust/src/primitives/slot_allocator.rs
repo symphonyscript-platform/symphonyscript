@@ -87,6 +87,10 @@ impl SlotAllocator {
         self.free_list.is_allocated(slot)
     }
 
+    pub fn is_active(&self, slot: usize) -> bool {
+        self.is_allocated(slot) && !self.is_deferred(slot)
+    }
+
     pub fn is_deferred(&self, slot: usize) -> bool {
         self.deferred_bitmap.is_on(slot - 1)
     }
