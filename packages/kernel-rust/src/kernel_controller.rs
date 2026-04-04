@@ -181,10 +181,9 @@ impl KernelController {
         self.active_writer.disconnect(slot)
     }
 
-    pub fn publish(&mut self) -> Result<(), FreeListError> {
+    pub fn publish(&mut self) {
         self.active_writer.publish();
         self.pending_deletion = self.backlog.take();
-        Ok(())
     }
 
     pub fn should_grow(&self, target_resize_threshold: f32) -> bool {
