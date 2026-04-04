@@ -4,7 +4,7 @@ use crate::control_plane::ControlPlane;
 use crate::errors::free_list_error::FreeListError;
 use crate::errors::kernel_error::KernelError;
 use crate::primitives::into_array::IntoArray;
-use crate::primitives::types::SAB;
+use crate::primitives::types::AtomicBuffer;
 use crate::structural_plane::node::node_data::NodeDraft;
 use crate::structural_plane::node::node_writer::NodeWriter;
 use crate::structural_plane::synapse::synapse_data::SynapseDraft;
@@ -25,13 +25,13 @@ pub struct KernelController {
 
 impl KernelController {
     pub fn new(config: SynapticGraphConfig) -> Self {
-        let sab = Self::create_sab(SynapticGraphWriter::compute_size(&config));
-        Self::new_from_sab(sab, config)
+        let mem = Self::create_mem(SynapticGraphWriter::compute_size(&config));
+        Self::new_from_mem(mem, config)
     }
 
-    pub fn new_from_sab(sab: SAB, config: SynapticGraphConfig) -> Self {
-        let writer = SynapticGraphWriter::new(Arc::clone(&sab), config.clone());
-        let reader = SynapticGraphReader::bind(Arc::clone(&sab), config.clone());
+    pub fn new_from_mem(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
+        let writer = SynapticGraphWriter::new(Arc::clone(&mem), config.clone());
+        let reader = SynapticGraphReader::bind(Arc::clone(&mem), config.clone());
         let reader_box = Box::new(reader);
         let reader_ptr =
             reader_box.as_ref() as *const SynapticGraphReader as *mut SynapticGraphReader;
@@ -76,6 +76,10 @@ impl KernelController {
 
     pub fn peek_utilization(&self) -> f32 {
         self.active_writer.peek_utilization()
+    }
+
+    pub fn get_head_node_slot(&'_ self) -> usize {
+        self.active_writer.get_head_node_slot()
     }
 
     pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_>> {
@@ -197,12 +201,12 @@ impl KernelController {
             return Err(KernelError::InsufficientCapacity);
         }
 
-        let sab = Self::create_sab(SynapticGraphWriter::compute_size(&config));
-        let writer = SynapticGraphWriter::new(Arc::clone(&sab), config.clone());
+        let mem = Self::create_mem(SynapticGraphWriter::compute_size(&config));
+        let writer = SynapticGraphWriter::new(Arc::clone(&mem), config.clone());
 
         writer.copy_from(&self.active_writer);
 
-        let new_reader = Box::new(SynapticGraphReader::bind(Arc::clone(&sab), config.clone()));
+        let new_reader = Box::new(SynapticGraphReader::bind(Arc::clone(&mem), config.clone()));
 
         self.active_writer = writer;
         self.backlog = Some(self.replace_reader(new_reader));
@@ -219,9 +223,9 @@ impl KernelController {
         old_reader
     }
 
-    fn create_sab(size: usize) -> SAB {
-        let sab: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
+    fn create_mem(size: usize) -> AtomicBuffer {
+        let mem: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
 
-        Arc::new(sab)
+        Arc::new(mem)
     }
 }

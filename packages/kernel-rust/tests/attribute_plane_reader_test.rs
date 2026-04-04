@@ -4,31 +4,31 @@ use std::sync::Arc;
 use symphonyscript_kernel::attribute_plane::reader::attribute_plane_reader::AttributePlaneReader;
 
 use symphonyscript_kernel::constants::NODE_ATTRIBUTES_SLOT_SIZE;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     Arc::new((0..size).map(|_| AtomicI32::new(0)).collect())
 }
 
-const SAB_SIZE: usize = 4096;
+const MEM_SIZE: usize = 4096;
 const CAPACITY: usize = 16;
 
 // ============ AttributePlaneReader: construction ============
 
 #[test]
 fn plane_reader_new_and_end_index() {
-    let sab = create_sab(SAB_SIZE);
-    let reader = AttributePlaneReader::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
-    assert_eq!(reader.sab_end_index(), CAPACITY * NODE_ATTRIBUTES_SLOT_SIZE);
+    let mem = create_mem(MEM_SIZE);
+    let reader = AttributePlaneReader::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
+    assert_eq!(reader.mem_end_offset(), CAPACITY * NODE_ATTRIBUTES_SLOT_SIZE);
 }
 
 #[test]
 fn plane_reader_bind_with_nonzero_start() {
-    let sab = create_sab(SAB_SIZE);
+    let mem = create_mem(MEM_SIZE);
     let start = 250;
-    let reader = AttributePlaneReader::<NODE_ATTRIBUTES_SLOT_SIZE>::bind(sab, start, CAPACITY);
+    let reader = AttributePlaneReader::<NODE_ATTRIBUTES_SLOT_SIZE>::bind(mem, start, CAPACITY);
     assert_eq!(
-        reader.sab_end_index(),
+        reader.mem_end_offset(),
         start + CAPACITY * NODE_ATTRIBUTES_SLOT_SIZE
     );
 }

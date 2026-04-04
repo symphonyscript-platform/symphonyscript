@@ -1,22 +1,22 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use symphonyscript_kernel::primitives::staging_buffer::StagingBuffer;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 
-fn create_list(capacity: usize) -> (StagingBuffer, SAB) {
-    let size = StagingBuffer::calculate_size_on_sab(capacity);
+fn create_list(capacity: usize) -> (StagingBuffer, AtomicBuffer) {
+    let size = StagingBuffer::calculate_size_on_mem(capacity);
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
     }
-    let sab = Arc::new(vec);
-    let list = StagingBuffer::new(Arc::clone(&sab), 0, capacity);
-    (list, sab)
+    let mem = Arc::new(vec);
+    let list = StagingBuffer::new(Arc::clone(&mem), 0, capacity);
+    (list, mem)
 }
 
 #[test]
 fn push_and_drain_lifecycle() {
-    let (list, _sab) = create_list(4);
+    let (list, _mem) = create_list(4);
 
     assert_eq!(list.len(), 0);
     assert_eq!(list.active_count(), 0);
@@ -44,7 +44,7 @@ fn push_and_drain_lifecycle() {
 
 #[test]
 fn over_rotation_draining_empty() {
-    let (list, _sab) = create_list(4);
+    let (list, _mem) = create_list(4);
     
     list.drain();
     list.drain();
@@ -57,7 +57,7 @@ fn over_rotation_draining_empty() {
 #[test]
 #[should_panic]
 fn push_panics_if_capacity_exceeded() {
-    let (list, _sab) = create_list(2);
+    let (list, _mem) = create_list(2);
     list.push(1);
     list.push(2);
     list.push(3); // panics here

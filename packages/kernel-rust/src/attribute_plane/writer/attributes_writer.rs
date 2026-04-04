@@ -1,34 +1,34 @@
-use crate::primitives::types::SAB;
+use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 
 pub struct AttributesWriter<'a, const SLOT_SIZE: usize> {
-    pub(crate) sab: &'a SAB,
-    pub(crate) sab_start_index: usize,
-    pub(crate) sab_end_index: usize,
+    pub(crate) mem: &'a AtomicBuffer,
+    pub(crate) mem_start_offset: usize,
+    pub(crate) mem_end_offset: usize,
 }
 
 impl<'a, const SLOT_SIZE: usize> AttributesWriter<'a, SLOT_SIZE> {
-    pub fn new(sab: &'a SAB, sab_start_index: usize) -> Self {
-        let sab_end_index = sab_start_index + SLOT_SIZE;
+    pub fn new(mem: &'a AtomicBuffer, mem_start_offset: usize) -> Self {
+        let mem_end_offset = mem_start_offset + SLOT_SIZE;
         debug_assert!(
-            sab_end_index <= sab.len(),
-            "AttributesWriter::new | range [{}..{}] exceeds SAB boundaries",
-            sab_start_index,
+            mem_end_offset <= mem.len(),
+            "AttributesWriter::new | range [{}..{}] exceeds MEM boundaries",
+            mem_start_offset,
             SLOT_SIZE
         );
         AttributesWriter {
-            sab: &sab,
-            sab_start_index,
-            sab_end_index,
+            mem: &mem,
+            mem_start_offset,
+            mem_end_offset,
         }
     }
 
-    pub fn sab_start_index(&self) -> usize {
-        self.sab_start_index
+    pub fn mem_start_offset(&self) -> usize {
+        self.mem_start_offset
     }
 
-    pub fn sab_end_index(&self) -> usize {
-        self.sab_end_index
+    pub fn mem_end_offset(&self) -> usize {
+        self.mem_end_offset
     }
 
     pub fn read(&self, offset: usize) -> i32 {
@@ -37,7 +37,7 @@ impl<'a, const SLOT_SIZE: usize> AttributesWriter<'a, SLOT_SIZE> {
             "AttributesWriter.read | offset {} out of bounds",
             offset
         );
-        self.sab[self.sab_start_index + offset].load(Ordering::Relaxed)
+        self.mem[self.mem_start_offset + offset].load(Ordering::Relaxed)
     }
 
     pub fn write(&self, offset: usize, value: i32) {
@@ -46,6 +46,6 @@ impl<'a, const SLOT_SIZE: usize> AttributesWriter<'a, SLOT_SIZE> {
             "AttributesWriter.write | offset {} out of bounds",
             offset
         );
-        self.sab[self.sab_start_index + offset].store(value, Ordering::Relaxed)
+        self.mem[self.mem_start_offset + offset].store(value, Ordering::Relaxed)
     }
 }

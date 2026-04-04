@@ -6,7 +6,7 @@ use crate::constants::{
 use crate::errors::free_list_error::FreeListError;
 use crate::primitives::into_array::IntoArray;
 use crate::primitives::triple_buffer::{TripleBuffer, TripleBufferWriter};
-use crate::primitives::types::SAB;
+use crate::primitives::types::AtomicBuffer;
 use crate::structural_plane::node::node_chain_writer::NodeChainWriter;
 use crate::structural_plane::node::node_data::NodeDraft;
 use crate::structural_plane::node::node_writer::NodeWriter;
@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct SynapticGraphWriter {
-    sab: SAB,
+    mem: AtomicBuffer,
     node_attribute_plane: AttributePlaneWriter<NODE_ATTRIBUTES_SLOT_SIZE>,
     synapse_attribute_plane: AttributePlaneWriter<SYNAPSE_ATTRIBUTES_SLOT_SIZE>,
     triple_buffer_writer: TripleBufferWriter,
@@ -30,56 +30,56 @@ pub struct SynapticGraphWriter {
 impl SynapticGraphWriter {
     pub const HEADERS_SIZE: usize = 2;
 
-    pub fn new(sab: SAB, config: SynapticGraphConfig) -> Self {
+    pub fn new(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
         assert!(
-            sab[0].load(Ordering::Acquire) == 0 && sab[1].load(Ordering::Acquire) == 0,
+            mem[0].load(Ordering::Acquire) == 0 && mem[1].load(Ordering::Acquire) == 0,
             "Attempted to initialize SynapticGraphWriter on already allocated memory"
         );
 
         assert!(
-            sab.len() >= Self::compute_size(&config),
-            "Provided SAB is too small for this configuration"
+            mem.len() >= Self::compute_size(&config),
+            "Provided MEM is too small for this configuration"
         );
 
-        sab[0].store(GRAPH_MAGIC, Ordering::Release);
-        sab[1].store(KERNEL_VERSION, Ordering::Release);
+        mem[0].store(GRAPH_MAGIC, Ordering::Release);
+        mem[1].store(KERNEL_VERSION, Ordering::Release);
 
-        let sab_start_index = 2;
+        let mem_start_offset = 2;
         let triple_buffer_start_offset = 0;
 
         let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(
-            Arc::clone(&sab),
-            sab_start_index,
+            Arc::clone(&mem),
+            mem_start_offset,
             config.node_capacity,
         );
         let synapse_attribute_plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::new(
-            Arc::clone(&sab),
-            node_attribute_plane.sab_end_index(),
+            Arc::clone(&mem),
+            node_attribute_plane.mem_end_offset(),
             config.synapse_capacity,
         );
         let (triple_buffer_writer, _) = TripleBuffer::new(
-            Arc::clone(&sab),
-            synapse_attribute_plane.sab_end_index(),
+            Arc::clone(&mem),
+            synapse_attribute_plane.mem_end_offset(),
             Self::compute_triple_buffer_size(&config),
         );
         let node_chain_writer = NodeChainWriter::new(
-            Arc::clone(&sab),
+            Arc::clone(&mem),
             triple_buffer_writer.clone(),
-            triple_buffer_writer.sab_end_index(),
+            triple_buffer_writer.mem_end_offset(),
             triple_buffer_start_offset,
             config.node_capacity,
         );
         let synapse_chain_writer = SynapseChainWriter::new(
-            Arc::clone(&sab),
+            Arc::clone(&mem),
             triple_buffer_writer.clone(),
             node_chain_writer.clone(),
-            node_chain_writer.sab_end_index(),
+            node_chain_writer.mem_end_offset(),
             node_chain_writer.triple_buffer_end_offset(),
             config.synapse_capacity,
         );
 
         SynapticGraphWriter {
-            sab,
+            mem,
             node_attribute_plane,
             synapse_attribute_plane,
             triple_buffer_writer,
@@ -88,59 +88,59 @@ impl SynapticGraphWriter {
         }
     }
 
-    pub fn bind(sab: SAB, config: SynapticGraphConfig) -> Self {
+    pub fn bind(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
         assert_eq!(
-            sab[0].load(Ordering::Acquire),
+            mem[0].load(Ordering::Acquire),
             GRAPH_MAGIC,
             "Attempted to initialize SynapticGraphWriter on foreign memory"
         );
         assert_eq!(
-            sab[1].load(Ordering::Acquire),
+            mem[1].load(Ordering::Acquire),
             KERNEL_VERSION,
-            "Attempted to initialize SynapticGraphWriter on mismatched SAB version"
+            "Attempted to initialize SynapticGraphWriter on mismatched MEM version"
         );
 
         assert!(
-            sab.len() >= Self::compute_size(&config),
-            "Provided SAB is too small for this configuration"
+            mem.len() >= Self::compute_size(&config),
+            "Provided MEM is too small for this configuration"
         );
 
-        let sab_start_index = 2;
+        let mem_start_offset = 2;
         let triple_buffer_start_offset = 0;
 
         let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::bind(
-            Arc::clone(&sab),
-            sab_start_index,
+            Arc::clone(&mem),
+            mem_start_offset,
             config.node_capacity,
         );
         let synapse_attribute_plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::bind(
-            Arc::clone(&sab),
-            node_attribute_plane.sab_end_index(),
+            Arc::clone(&mem),
+            node_attribute_plane.mem_end_offset(),
             config.synapse_capacity,
         );
         let triple_buffer_writer = TripleBuffer::bind_writer(
-            Arc::clone(&sab),
-            synapse_attribute_plane.sab_end_index(),
+            Arc::clone(&mem),
+            synapse_attribute_plane.mem_end_offset(),
             Self::compute_triple_buffer_size(&config),
         );
         let node_chain_writer = NodeChainWriter::bind(
-            Arc::clone(&sab),
+            Arc::clone(&mem),
             triple_buffer_writer.clone(),
-            triple_buffer_writer.sab_end_index(),
+            triple_buffer_writer.mem_end_offset(),
             triple_buffer_start_offset,
             config.node_capacity,
         );
         let synapse_chain_writer = SynapseChainWriter::bind(
-            Arc::clone(&sab),
+            Arc::clone(&mem),
             triple_buffer_writer.clone(),
             node_chain_writer.clone(),
-            node_chain_writer.sab_end_index(),
+            node_chain_writer.mem_end_offset(),
             node_chain_writer.triple_buffer_end_offset(),
             config.synapse_capacity,
         );
 
         SynapticGraphWriter {
-            sab,
+            mem,
             node_attribute_plane,
             synapse_attribute_plane,
             triple_buffer_writer,
@@ -156,8 +156,8 @@ impl SynapticGraphWriter {
 
     pub fn compute_size(config: &SynapticGraphConfig) -> usize {
         Self::HEADERS_SIZE
-            + NodeChainWriter::compute_size_on_sab(config.node_capacity)
-            + SynapseChainWriter::compute_size_on_sab(config.synapse_capacity)
+            + NodeChainWriter::compute_size_on_mem(config.node_capacity)
+            + SynapseChainWriter::compute_size_on_mem(config.synapse_capacity)
             + AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::calculate_size(
                 config.node_capacity,
             )
@@ -193,6 +193,10 @@ impl SynapticGraphWriter {
 
     pub fn peek_utilization(&self) -> f32 {
         self.node_utilization().max(self.synapse_utilization())
+    }
+
+    pub fn get_head_node_slot(&self) -> usize {
+        self.node_chain_writer.get_head_slot()
     }
 
     pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_>> {
@@ -335,8 +339,8 @@ impl SynapticGraphWriter {
         self.triple_buffer_writer.publish();
     }
 
-    pub fn get_sab(&self) -> SAB {
-        Arc::clone(&self.sab)
+    pub fn get_mem(&self) -> AtomicBuffer {
+        Arc::clone(&self.mem)
     }
 
     pub fn copy_from(&self, source: &SynapticGraphWriter) {

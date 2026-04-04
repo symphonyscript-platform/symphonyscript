@@ -305,11 +305,11 @@ State 3:  W=C   S=B   R=A     main writes C, audio reads A
 
 ### 3.3 Atomic State Encoding
 
-The triple-buffer state is stored as an `AtomicI32` slot on the SAB:
+The triple-buffer state is stored as an `AtomicI32` slot on the AtomicBuffer:
 
 ```
 ┌─────────────────────────────────────────┐
-│  AtomicI32 state (on SAB)               │
+│  AtomicI32 state (on AtomicBuffer)               │
 │                                         │
 │  bits [0:1]  = shared buffer index      │
 │               (0, 1, or 2)              │
@@ -326,7 +326,7 @@ The triple-buffer state is stored as an `AtomicI32` slot on the SAB:
 ```
 
 > **Implementation deviation:** The design originally specified `AtomicU8` and `CAS` loops.
-> The implementation uses `AtomicI32` (to match SAB's element type) and `swap()` instead
+> The implementation uses `AtomicI32` (to match AtomicBuffer's element type) and `swap()` instead
 > of `CAS`. This is correct because:
 > 1. Both writer and reader compute new_state independently of current shared state
 > 2. In SPSC, no competing writers/readers exist, so swap is safe and retry-free
@@ -336,20 +336,20 @@ The triple-buffer state is stored as an `AtomicI32` slot on the SAB:
 
 ```rust
 fn publish(&mut self) {
-    let current_id = self.sab[self.writer_slot_index].load(Relaxed);
+    let current_id = self.mem[self.writer_slot_index].load(Relaxed);
     let new_state = (current_id & 0b011) | 0b100;
 
     // swap: unconditionally deposit our buffer and set NEW_DATA.
     // writer's new_state is independent of shared state → swap, not CAS.
-    let old_state = self.sab[self.state_slot_index].swap(new_state, Release);
+    let old_state = self.mem[self.state_slot_index].swap(new_state, Release);
     let writer_new_buffer_id = old_state & 0b011;
 
-    self.sab[self.writer_slot_index].store(writer_new_buffer_id, Relaxed);
-    self.sab[self.published_slot_index].store(current_id, Relaxed);
+    self.mem[self.writer_slot_index].store(writer_new_buffer_id, Relaxed);
+    self.mem[self.published_slot_index].store(current_id, Relaxed);
 
     // Sync stale writer buffer via unsafe memcpy (~4.7µs for 104KB)
-    let src = self.sab[published_base..].as_ptr() as *const i32;
-    let dst = self.sab[writer_base..].as_ptr() as *mut i32;
+    let src = self.mem[published_base..].as_ptr() as *const i32;
+    let dst = self.mem[writer_base..].as_ptr() as *mut i32;
     unsafe { std::ptr::copy_nonoverlapping(src, dst, self.buffer_size); }
 }
 ```
@@ -359,19 +359,19 @@ fn publish(&mut self) {
 ```rust
 fn swap(&mut self) -> bool {
     // Non-destructive peek: must check before committing.
-    let state = self.sab[self.state_slot_index].load(Relaxed);
+    let state = self.mem[self.state_slot_index].load(Relaxed);
     if state & 0b100 == 0 {
         return false; // no new data
     }
 
-    let current_id = self.sab[self.reader_slot_index].load(Relaxed);
+    let current_id = self.mem[self.reader_slot_index].load(Relaxed);
     let new_state = current_id & 0b011;
 
     // swap: unconditionally deposit our buffer and clear NEW_DATA.
     // old_state (not loaded `state`) determines which buffer was acquired,
     // since state may be stale by this point.
-    let old_state = self.sab[self.state_slot_index].swap(new_state, Acquire);
-    self.sab[self.reader_slot_index].store(old_state & 0b011, Relaxed);
+    let old_state = self.mem[self.state_slot_index].swap(new_state, Acquire);
+    self.mem[self.reader_slot_index].store(old_state & 0b011, Relaxed);
 
     true
 }
@@ -389,18 +389,18 @@ fn process(&mut self, output: &mut [f32]) {
     // 1. Grab latest structural frame (one swap, ~11ns)
     self.reader.swap();
 
-    // 2. Walk node chain using structural indices on SAB
+    // 2. Walk node chain using structural indices on AtomicBuffer
     let reader_base = self.reader.current_start_index();
-    let mut slot = self.sab[reader_base + HEAD_OFFSET].load(Relaxed) as usize;
+    let mut slot = self.mem[reader_base + HEAD_OFFSET].load(Relaxed) as usize;
     while slot != NONE {
-        // 3. Structural data from triple-buffered SAB region
-        let next = self.sab[reader_base + slot * 2].load(Relaxed);
-        let prev = self.sab[reader_base + slot * 2 + 1].load(Relaxed);
+        // 3. Structural data from triple-buffered MEM region
+        let next = self.mem[reader_base + slot * 2].load(Relaxed);
+        let prev = self.mem[reader_base + slot * 2 + 1].load(Relaxed);
 
         // 4. Attribute data DIRECTLY from shared plane (atomic load, ~1ns each)
-        let pitch    = self.sab[attr_base + slot * ATTR_STRIDE + PITCH].load(Relaxed);
-        let velocity = self.sab[attr_base + slot * ATTR_STRIDE + VELOCITY].load(Relaxed);
-        let duration = self.sab[attr_base + slot * ATTR_STRIDE + DURATION].load(Relaxed);
+        let pitch    = self.mem[attr_base + slot * ATTR_STRIDE + PITCH].load(Relaxed);
+        let velocity = self.mem[attr_base + slot * ATTR_STRIDE + VELOCITY].load(Relaxed);
+        let duration = self.mem[attr_base + slot * ATTR_STRIDE + DURATION].load(Relaxed);
 
         // 5. Synthesize
         self.render_node(pitch, velocity, duration, output);
@@ -436,18 +436,18 @@ fn insert_head(&mut self, data: NodeData) -> usize {
     let slot = self.free_list.alloc().expect("node pool full");
 
     // Write attributes to shared plane (instant)
-    self.sab[attr_base + slot * ATTR_STRIDE + PITCH].store(data.pitch, Relaxed);
-    self.sab[attr_base + slot * ATTR_STRIDE + VELOCITY].store(data.velocity, Relaxed);
+    self.mem[attr_base + slot * ATTR_STRIDE + PITCH].store(data.pitch, Relaxed);
+    self.mem[attr_base + slot * ATTR_STRIDE + VELOCITY].store(data.velocity, Relaxed);
 
     // Write structure to WRITER buffer (not yet visible to audio)
     let writer_base = self.writer.current_start_index();
-    let old_head = self.sab[writer_base + HEAD_OFFSET].load(Relaxed) as usize;
-    self.sab[writer_base + slot * 2].store(old_head as i32, Relaxed);     // next
-    self.sab[writer_base + slot * 2 + 1].store(NONE as i32, Relaxed);     // prev
+    let old_head = self.mem[writer_base + HEAD_OFFSET].load(Relaxed) as usize;
+    self.mem[writer_base + slot * 2].store(old_head as i32, Relaxed);     // next
+    self.mem[writer_base + slot * 2 + 1].store(NONE as i32, Relaxed);     // prev
     if old_head != NONE {
-        self.sab[writer_base + old_head * 2 + 1].store(slot as i32, Relaxed); // prev
+        self.mem[writer_base + old_head * 2 + 1].store(slot as i32, Relaxed); // prev
     }
-    self.sab[writer_base + HEAD_OFFSET].store(slot as i32, Relaxed);
+    self.mem[writer_base + HEAD_OFFSET].store(slot as i32, Relaxed);
 
     slot
 }
@@ -593,12 +593,12 @@ main: insert_head(NodeData { pitch: 570000, velocity: 100, ... })
      attributes[42].velocity.store(100, Relaxed)
      attributes[42].duration.store(480, Relaxed)
 
-  3. STRUCTURE (writer buffer only, SAB indices)
+  3. STRUCTURE (writer buffer only, MEM indices)
      let writer_base = writer.current_start_index()
-     sab[writer_base + 42 * 2].store(old_head)       // next
-     sab[writer_base + 42 * 2 + 1].store(NONE)       // prev
-     sab[writer_base + old_head * 2 + 1].store(42)    // if head exists
-     sab[writer_base + HEAD_OFFSET].store(42)
+     mem[writer_base + 42 * 2].store(old_head)       // next
+     mem[writer_base + 42 * 2 + 1].store(NONE)       // prev
+     mem[writer_base + old_head * 2 + 1].store(42)    // if head exists
+     mem[writer_base + HEAD_OFFSET].store(42)
 
   4. NOT YET VISIBLE TO AUDIO
      Audio reads READER buffer. Slot 42 is only in WRITER buffer.
@@ -695,37 +695,37 @@ SCENARIO: Main thread writes faster than audio reads
 
 ## 6. Structures (Rust, Preliminary)
 
-> **Implementation deviation:** The TripleBuffer operates on the SAB (`Arc<Vec<AtomicI32>>`),
+> **Implementation deviation:** The TripleBuffer operates on the MEM (`Arc<Vec<AtomicI32>>`),
 > not on stack-allocated `UnsafeCell<T>` buffers. All state — metadata slots, buffer indices,
 > and structural data — lives as element indices into a flat `AtomicI32` array. This enables
-> SAB reconstruction via `bind_writer()`/`bind_reader()` for hot-reload and crash recovery.
+> MEM reconstruction via `bind_writer()`/`bind_reader()` for hot-reload and crash recovery.
 
 ```rust
-// SAB-based TripleBuffer (actual implementation)
-type SAB = Arc<Vec<AtomicI32>>;
+// AtomicBuffer-based TripleBuffer (actual implementation)
+type MEM = Arc<Vec<AtomicI32>>;
 
 struct TripleBufferWriter {
-    sab: SAB,
+    mem: MEM,
     state_slot_index: usize,       // AtomicI32 slot: bits [0:1]=shared, bit[2]=NEW_DATA
     writer_slot_index: usize,      // AtomicI32 slot: current writer buffer ID
     published_slot_index: usize,   // AtomicI32 slot: last published buffer ID
     buffer_bases: [usize; 3],      // start indices of each buffer region
     buffer_size: usize,            // elements per buffer
-    sab_end_index: usize,              // first index past the TripleBuffer's region
+    mem_end_offset: usize,              // first index past the TripleBuffer's region
 }
 
 struct TripleBufferReader {
-    sab: SAB,
+    mem: MEM,
     state_slot_index: usize,
     reader_slot_index: usize,      // AtomicI32 slot: current reader buffer ID
     buffer_bases: [usize; 3],
     buffer_size: usize,
-    sab_end_index: usize,
+    mem_end_offset: usize,
 }
 
 // Kernel (conceptual — not yet implemented)
 struct Kernel {
-    sab: SAB,
+    mem: MEM,
     writer: TripleBufferWriter,
     free_list: SimpleFreeList,
     mod_free_list: SimpleFreeList,
@@ -734,7 +734,7 @@ struct Kernel {
     deferred_lut_frees: Vec<usize>,
 }
 
-// StructuralFrame is a region of the SAB, not a Rust struct.
+// StructuralFrame is a region of the AtomicBuffer, not a Rust struct.
 // Its layout within each buffer:
 //   [0..MAX_NODES*2]           node chain (next/prev pairs)
 //   [MAX_NODES*2]              chain head
@@ -956,7 +956,7 @@ After publish()'s swap:
 
 ```rust
 struct Kernel {
-    sab: SAB,
+    mem: MEM,
     writer: TripleBufferWriter,
     // ...
 }

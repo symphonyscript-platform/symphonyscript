@@ -1,0 +1,11 @@
+[package]
+name = "kernel-wasm"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+symphonyscript-kernel = { version = "0.1.0", path="../kernel-rust" }
+wasm-bindgen = "0.2"

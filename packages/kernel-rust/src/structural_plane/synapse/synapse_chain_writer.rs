@@ -1,7 +1,7 @@
 use crate::constants::SYNAPSE_SLOT_SIZE;
 use crate::errors::free_list_error::FreeListError;
 use crate::primitives::triple_buffer::TripleBufferWriter;
-use crate::primitives::types::SAB;
+use crate::primitives::types::AtomicBuffer;
 use crate::structural_plane::node::node_chain_writer::NodeChainWriter;
 use crate::structural_plane::structural_writer::StructuralWriter;
 use crate::structural_plane::synapse::synapse_data::{SynapseData, SynapseDraft};
@@ -11,8 +11,8 @@ use crate::structural_plane::synapse::synapse_writer::SynapseWriter;
 pub struct SynapseChainWriter {
     node_chain: NodeChainWriter,
     synapse_writer: StructuralWriter<SYNAPSE_SLOT_SIZE>,
-    sab_start_index: usize,
-    sab_end_index: usize,
+    mem_start_offset: usize,
+    mem_end_offset: usize,
     triple_buffer_start_offset: usize,
     triple_buffer_end_offset: usize,
     capacity: usize,
@@ -20,18 +20,18 @@ pub struct SynapseChainWriter {
 
 impl SynapseChainWriter {
     pub fn new(
-        sab: SAB,
+        mem: AtomicBuffer,
         buffer: TripleBufferWriter,
         node_chain: NodeChainWriter,
-        sab_start_index: usize,
+        mem_start_offset: usize,
         triple_buffer_start_offset: usize,
         capacity: usize,
     ) -> Self {
         Self::create(
-            sab,
+            mem,
             buffer,
             node_chain,
-            sab_start_index,
+            mem_start_offset,
             triple_buffer_start_offset,
             capacity,
             false,
@@ -39,18 +39,18 @@ impl SynapseChainWriter {
     }
 
     pub fn bind(
-        sab: SAB,
+        mem: AtomicBuffer,
         buffer: TripleBufferWriter,
         node_chain: NodeChainWriter,
-        sab_start_index: usize,
+        mem_start_offset: usize,
         triple_buffer_start_offset: usize,
         capacity: usize,
     ) -> Self {
         Self::create(
-            sab,
+            mem,
             buffer,
             node_chain,
-            sab_start_index,
+            mem_start_offset,
             triple_buffer_start_offset,
             capacity,
             true,
@@ -58,10 +58,10 @@ impl SynapseChainWriter {
     }
 
     pub fn create(
-        sab: SAB,
+        mem: AtomicBuffer,
         buffer: TripleBufferWriter,
         node_chain: NodeChainWriter,
-        sab_start_index: usize,
+        mem_start_offset: usize,
         triple_buffer_start_offset: usize,
         capacity: usize,
         bind: bool,
@@ -73,14 +73,14 @@ impl SynapseChainWriter {
         );
 
         let synapse_writer = StructuralWriter::<SYNAPSE_SLOT_SIZE>::create(
-            sab,
+            mem,
             buffer.clone(),
-            sab_start_index,
+            mem_start_offset,
             triple_buffer_start_offset,
             capacity,
             bind,
         );
-        let sab_end_index = synapse_writer.sab_end_index();
+        let mem_end_offset = synapse_writer.mem_end_offset();
         let triple_buffer_end_offset = synapse_writer.triple_buffer_end_offset();
 
         debug_assert!(
@@ -92,28 +92,28 @@ impl SynapseChainWriter {
         SynapseChainWriter {
             node_chain,
             synapse_writer,
-            sab_start_index,
-            sab_end_index,
+            mem_start_offset,
+            mem_end_offset,
             triple_buffer_start_offset,
             triple_buffer_end_offset,
             capacity,
         }
     }
 
-    pub fn compute_size_on_sab(capacity: usize) -> usize {
-        StructuralWriter::<SYNAPSE_SLOT_SIZE>::compute_size_on_sab(capacity)
+    pub fn compute_size_on_mem(capacity: usize) -> usize {
+        StructuralWriter::<SYNAPSE_SLOT_SIZE>::compute_size_on_mem(capacity)
     }
 
     pub fn compute_size_on_triple_buffer(capacity: usize) -> usize {
         StructuralWriter::<SYNAPSE_SLOT_SIZE>::compute_size_on_triple_buffer(capacity)
     }
 
-    pub fn sab_start_index(&self) -> usize {
-        self.sab_start_index
+    pub fn mem_start_offset(&self) -> usize {
+        self.mem_start_offset
     }
 
-    pub fn sab_end_index(&self) -> usize {
-        self.sab_end_index
+    pub fn mem_end_offset(&self) -> usize {
+        self.mem_end_offset
     }
 
     pub fn triple_buffer_start_offset(&self) -> usize {

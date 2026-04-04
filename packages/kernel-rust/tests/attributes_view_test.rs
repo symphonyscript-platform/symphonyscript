@@ -1,9 +1,9 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use symphonyscript_kernel::attribute_plane::writer::attributes_writer::AttributesWriter;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -13,8 +13,8 @@ fn create_sab(size: usize) -> SAB {
 
 #[test]
 fn new_creates_view_at_start_index() {
-    let sab = create_sab(128);
-    let view: AttributesWriter<'_, 16> = AttributesWriter::new(&sab, 0);
+    let mem = create_mem(128);
+    let view: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 0);
 
     for i in 0..16 {
         assert_eq!(view.read(i), 0);
@@ -23,8 +23,8 @@ fn new_creates_view_at_start_index() {
 
 #[test]
 fn raw_read_write_round_trip() {
-    let sab = create_sab(128);
-    let view: AttributesWriter<'_, 16> = AttributesWriter::new(&sab, 10);
+    let mem = create_mem(128);
+    let view: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 10);
 
     view.write(0, 500);
     view.write(15, -42);
@@ -35,8 +35,8 @@ fn raw_read_write_round_trip() {
 
 #[test]
 fn fields_do_not_bleed() {
-    let sab = create_sab(128);
-    let view: AttributesWriter<'_, 16> = AttributesWriter::new(&sab, 0);
+    let mem = create_mem(128);
+    let view: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 0);
 
     view.write(0, i32::MAX);
     assert_eq!(view.read(1), 0);
@@ -47,9 +47,9 @@ fn fields_do_not_bleed() {
 
 #[test]
 fn two_views_different_offsets_are_independent() {
-    let sab = create_sab(128);
-    let view_a: AttributesWriter<'_, 16> = AttributesWriter::new(&sab, 0);
-    let view_b: AttributesWriter<'_, 16> = AttributesWriter::new(&sab, 16);
+    let mem = create_mem(128);
+    let view_a: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 0);
+    let view_b: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 16);
 
     view_a.write(0, 100);
     view_b.write(0, 200);
@@ -59,10 +59,10 @@ fn two_views_different_offsets_are_independent() {
 }
 
 #[test]
-fn two_views_share_sab_see_writes() {
-    let sab = create_sab(128);
-    let view_a: AttributesWriter<'_, 16> = AttributesWriter::new(&sab, 10);
-    let view_b: AttributesWriter<'_, 16> = AttributesWriter::new(&sab, 10);
+fn two_views_share_mem_see_writes() {
+    let mem = create_mem(128);
+    let view_a: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 10);
+    let view_b: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 10);
 
     view_a.write(5, 999);
     assert_eq!(view_b.read(5), 999);
@@ -70,9 +70,9 @@ fn two_views_share_sab_see_writes() {
 
 #[test]
 fn works_with_different_slot_sizes() {
-    let sab = create_sab(128);
-    let view_8: AttributesWriter<'_, 8> = AttributesWriter::new(&sab, 0);
-    let view_16: AttributesWriter<'_, 16> = AttributesWriter::new(&sab, 64);
+    let mem = create_mem(128);
+    let view_8: AttributesWriter<'_, 8> = AttributesWriter::new(&mem, 0);
+    let view_16: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 64);
 
     view_8.write(0, 111);
     view_16.write(0, 222);
@@ -84,13 +84,13 @@ fn works_with_different_slot_sizes() {
 #[test]
 #[should_panic(expected = "AttributesWriter::new | range")]
 fn new_panics_if_out_of_bounds() {
-    let sab = create_sab(10);
-    let _view: AttributesWriter<'_, 16> = AttributesWriter::new(&sab, 0);
+    let mem = create_mem(10);
+    let _view: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 0);
 }
 
 #[test]
 #[should_panic(expected = "AttributesWriter::new | range")]
 fn new_panics_if_start_index_crosses_bounds() {
-    let sab = create_sab(32);
-    let _view: AttributesWriter<'_, 16> = AttributesWriter::new(&sab, 20);
+    let mem = create_mem(32);
+    let _view: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 20);
 }

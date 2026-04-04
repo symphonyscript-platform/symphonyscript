@@ -1,11 +1,11 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
 use symphonyscript_kernel::structural_plane::structural_reader::StructuralReader;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -13,14 +13,14 @@ fn create_sab(size: usize) -> SAB {
     Arc::new(vec)
 }
 
-const SAB_SIZE: usize = 65536;
+const MEM_SIZE: usize = 65536;
 const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 16384;
 const CAPACITY: usize = 512;
 
 fn bench_slot_reader(c: &mut Criterion) {
-    let sab = create_sab(SAB_SIZE);
-    let (mut writer, mut reader) = TripleBuffer::new(sab, TB_START, TB_BUF_CAP);
+    let mem = create_mem(MEM_SIZE);
+    let (mut writer, mut reader) = TripleBuffer::new(mem, TB_START, TB_BUF_CAP);
 
     // Populate data then publish
     // slot 1 = offset 0: fields 0 and 1

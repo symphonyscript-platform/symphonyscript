@@ -1,21 +1,21 @@
-use crate::primitives::types::SAB;
+use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 
 pub struct SlotHandle<'a, const SLOT_SIZE: usize> {
-    sab: &'a SAB,
-    pub(crate) sab_start_index: usize,
+    mem: &'a AtomicBuffer,
+    pub(crate) mem_start_offset: usize,
 }
 
 impl<'a, const SLOT_SIZE: usize> SlotHandle<'a, SLOT_SIZE> {
-    pub fn new(sab: &'a SAB, sab_start_index: usize) -> Self {
+    pub fn new(mem: &'a AtomicBuffer, mem_start_offset: usize) -> Self {
         SlotHandle {
-            sab,
-            sab_start_index,
+            mem,
+            mem_start_offset,
         }
     }
 
-    pub fn bind(sab: &'a SAB, sab_start_index: usize) -> Self {
-        Self::new(sab, sab_start_index)
+    pub fn bind(mem: &'a AtomicBuffer, mem_start_offset: usize) -> Self {
+        Self::new(mem, mem_start_offset)
     }
 
     pub fn read(&self, index: usize) -> i32 {
@@ -24,14 +24,14 @@ impl<'a, const SLOT_SIZE: usize> SlotHandle<'a, SLOT_SIZE> {
             "SlotHandle.read | index {} out of bounds",
             index
         );
-        self.sab[self.sab_start_index + index].load(Ordering::Relaxed)
+        self.mem[self.mem_start_offset + index].load(Ordering::Relaxed)
     }
 
     pub fn read_all(&self) -> [i32; SLOT_SIZE] {
         let mut data: [i32; SLOT_SIZE] = [0; SLOT_SIZE];
 
         for i in 0..SLOT_SIZE {
-            data[i] = self.sab[self.sab_start_index + i].load(Ordering::Relaxed);
+            data[i] = self.mem[self.mem_start_offset + i].load(Ordering::Relaxed);
         }
 
         data
@@ -42,12 +42,12 @@ impl<'a, const SLOT_SIZE: usize> SlotHandle<'a, SLOT_SIZE> {
             "SlotHandle.write | index {} out of bounds",
             index
         );
-        self.sab[self.sab_start_index + index].store(value, Ordering::Relaxed);
+        self.mem[self.mem_start_offset + index].store(value, Ordering::Relaxed);
     }
 
     pub fn write_all(&self, data: [i32; SLOT_SIZE]) {
         for i in 0..SLOT_SIZE {
-            self.sab[self.sab_start_index + i].store(data[i], Ordering::Relaxed);
+            self.mem[self.mem_start_offset + i].store(data[i], Ordering::Relaxed);
         }
     }
 }

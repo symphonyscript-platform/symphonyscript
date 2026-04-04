@@ -2,10 +2,10 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use std::thread;
 use symphonyscript_kernel::primitives::ring_buffer::RingBuffer;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 
-/// Creates a SAB with the given number of AtomicI32 slots.
-fn create_sab(size: usize) -> SAB {
+/// Creates a MEM with the given number of AtomicI32 slots.
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -17,13 +17,13 @@ fn create_sab(size: usize) -> SAB {
 /// Writer produces N messages, reader consumes and verifies all.
 #[test]
 fn spsc_basic_integrity() {
-    let sab = create_sab(4096);
+    let mem = create_mem(4096);
     let message_count = 1000;
 
     // Writer side
-    let writer_sab = Arc::clone(&sab);
+    let writer_mem = Arc::clone(&mem);
     let writer = thread::spawn(move || {
-        let ring: RingBuffer<2> = RingBuffer::new(writer_sab, 0, 64);
+        let ring: RingBuffer<2> = RingBuffer::new(writer_mem, 0, 64);
 
         for i in 0..message_count {
             // Spin until write succeeds (buffer might be full)
@@ -37,9 +37,9 @@ fn spsc_basic_integrity() {
     });
 
     // Reader side
-    let reader_sab = Arc::clone(&sab);
+    let reader_mem = Arc::clone(&mem);
     let reader = thread::spawn(move || {
-        let ring: RingBuffer<2> = RingBuffer::bind(reader_sab, 0, 64);
+        let ring: RingBuffer<2> = RingBuffer::bind(reader_mem, 0, 64);
         let mut received = 0i32;
 
         while received < message_count {
@@ -64,12 +64,12 @@ fn spsc_basic_integrity() {
 /// SPSC stress test: high volume with small buffer to maximize contention.
 #[test]
 fn spsc_stress_small_buffer() {
-    let sab = create_sab(4096);
+    let mem = create_mem(4096);
     let message_count: i32 = 10_000;
 
-    let writer_sab = Arc::clone(&sab);
+    let writer_mem = Arc::clone(&mem);
     let writer = thread::spawn(move || {
-        let ring: RingBuffer<4> = RingBuffer::new(writer_sab, 0, 8); // tiny buffer = max contention
+        let ring: RingBuffer<4> = RingBuffer::new(writer_mem, 0, 8); // tiny buffer = max contention
 
         for i in 0..message_count {
             loop {
@@ -81,9 +81,9 @@ fn spsc_stress_small_buffer() {
         }
     });
 
-    let reader_sab = Arc::clone(&sab);
+    let reader_mem = Arc::clone(&mem);
     let reader = thread::spawn(move || {
-        let ring: RingBuffer<4> = RingBuffer::bind(reader_sab, 0, 8);
+        let ring: RingBuffer<4> = RingBuffer::bind(reader_mem, 0, 8);
         let mut received = 0i32;
 
         while received < message_count {
@@ -110,12 +110,12 @@ fn spsc_stress_small_buffer() {
 /// Uses large slot size to increase window for tearing.
 #[test]
 fn spsc_no_data_tearing() {
-    let sab = create_sab(8192);
+    let mem = create_mem(8192);
     let message_count: i32 = 5_000;
 
-    let writer_sab = Arc::clone(&sab);
+    let writer_mem = Arc::clone(&mem);
     let writer = thread::spawn(move || {
-        let ring: RingBuffer<8> = RingBuffer::new(writer_sab, 0, 16);
+        let ring: RingBuffer<8> = RingBuffer::new(writer_mem, 0, 16);
 
         for i in 0..message_count {
             // Each message: all fields set to the same value.
@@ -130,9 +130,9 @@ fn spsc_no_data_tearing() {
         }
     });
 
-    let reader_sab = Arc::clone(&sab);
+    let reader_mem = Arc::clone(&mem);
     let reader = thread::spawn(move || {
-        let ring: RingBuffer<8> = RingBuffer::bind(reader_sab, 0, 16);
+        let ring: RingBuffer<8> = RingBuffer::bind(reader_mem, 0, 16);
         let mut received = 0i32;
 
         while received < message_count {
@@ -165,14 +165,14 @@ fn spsc_no_data_tearing() {
 /// Tests wrap-around under bursty patterns.
 #[test]
 fn spsc_bursty_pattern() {
-    let sab = create_sab(4096);
+    let mem = create_mem(4096);
     let burst_size = 16;
     let burst_count = 100;
     let total_messages: i32 = burst_size * burst_count;
 
-    let writer_sab = Arc::clone(&sab);
+    let writer_mem = Arc::clone(&mem);
     let writer = thread::spawn(move || {
-        let ring: RingBuffer<2> = RingBuffer::new(writer_sab, 0, 32);
+        let ring: RingBuffer<2> = RingBuffer::new(writer_mem, 0, 32);
 
         for burst in 0..burst_count {
             for i in 0..burst_size {
@@ -189,9 +189,9 @@ fn spsc_bursty_pattern() {
         }
     });
 
-    let reader_sab = Arc::clone(&sab);
+    let reader_mem = Arc::clone(&mem);
     let reader = thread::spawn(move || {
-        let ring: RingBuffer<2> = RingBuffer::bind(reader_sab, 0, 32);
+        let ring: RingBuffer<2> = RingBuffer::bind(reader_mem, 0, 32);
         let mut received = 0i32;
 
         while received < total_messages {
@@ -215,12 +215,12 @@ fn spsc_bursty_pattern() {
 /// SPSC: pending count remains consistent after concurrent read/write.
 #[test]
 fn spsc_pending_count_consistency() {
-    let sab = create_sab(4096);
+    let mem = create_mem(4096);
     let message_count: i32 = 5_000;
 
-    let writer_sab = Arc::clone(&sab);
+    let writer_mem = Arc::clone(&mem);
     let writer = thread::spawn(move || {
-        let ring: RingBuffer<2> = RingBuffer::new(writer_sab, 0, 32);
+        let ring: RingBuffer<2> = RingBuffer::new(writer_mem, 0, 32);
 
         for i in 0..message_count {
             loop {
@@ -232,9 +232,9 @@ fn spsc_pending_count_consistency() {
         }
     });
 
-    let reader_sab = Arc::clone(&sab);
+    let reader_mem = Arc::clone(&mem);
     let reader = thread::spawn(move || {
-        let ring: RingBuffer<2> = RingBuffer::bind(reader_sab, 0, 32);
+        let ring: RingBuffer<2> = RingBuffer::bind(reader_mem, 0, 32);
         let mut received = 0i32;
 
         while received < message_count {

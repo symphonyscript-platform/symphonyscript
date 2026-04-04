@@ -1,2 +1,3 @@
 [workspace]
-members = ["packages/kernel-rust"]
+members = ["packages/kernel-rust", "packages/kernel-wasm"]
+resolver = "3"

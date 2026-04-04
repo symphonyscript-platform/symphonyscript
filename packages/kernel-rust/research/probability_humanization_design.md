@@ -16,7 +16,7 @@ fn noise(seed: u32, tick: u32, slot: u32) -> u32 {
 }
 ```
 
-- Inputs: `seed` (from SAB header or clip-local), `tick` (absolute playhead), `slot` (node/synapse index)
+- Inputs: `seed` (from MEM header or clip-local), `tick` (absolute playhead), `slot` (node/synapse index)
 - Output: 0–999, uniformly distributed
 - Pure integer math — identical results in Rust and JS (`Math.imul` for wrapping multiply)
 - No LUT, no boundary callbacks, no external filling
@@ -73,7 +73,7 @@ note('G4').humanize(30, Feel)
 
 ## Seed Management
 
-**Global default**: `NOISE_SEED` in SAB header. Default `0`. Writable by bridge: `bridge.setSeed(value)`.
+**Global default**: `NOISE_SEED` in MEM header. Default `0`. Writable by bridge: `bridge.setSeed(value)`.
 
 **Clip-local seed**: `seed()` node at the start of a clip's chain.
 

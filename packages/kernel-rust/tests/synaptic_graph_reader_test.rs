@@ -19,11 +19,11 @@ fn config() -> SynapticGraphConfig {
 fn setup() -> (SynapticGraphWriter, SynapticGraphReader) {
     let cfg = config();
     let size = SynapticGraphWriter::compute_size(&cfg);
-    let sab: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
-    let sab_arc = Arc::new(sab);
+    let mem: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
+    let mem_arc = Arc::new(mem);
     
-    let kernel = SynapticGraphWriter::new(Arc::clone(&sab_arc), cfg.clone());
-    let reader = SynapticGraphReader::bind(Arc::clone(&sab_arc), cfg);
+    let kernel = SynapticGraphWriter::new(Arc::clone(&mem_arc), cfg.clone());
+    let reader = SynapticGraphReader::bind(Arc::clone(&mem_arc), cfg);
     (kernel, reader)
 }
 

@@ -1,11 +1,11 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 use symphonyscript_kernel::primitives::hash_table::probe_hash_table::ProbeHashTable;
 use symphonyscript_kernel::primitives::hash_table::hash_table_trait::HashTable;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -25,8 +25,8 @@ fn bench_set_insert(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             b.iter_with_setup(
                 || {
-                    let sab = create_sab(1_000_000);
-                    ProbeHashTable::new(sab, 0, 131072, 0.75, fibonacci_hash)
+                    let mem = create_mem(1_000_000);
+                    ProbeHashTable::new(mem, 0, 131072, 0.75, fibonacci_hash)
                 },
                 |table| {
                     for i in 0..size {
@@ -44,8 +44,8 @@ fn bench_get_hit(c: &mut Criterion) {
     let mut group = c.benchmark_group("HashTable/get_hit");
 
     for &size in &[100, 1_000, 10_000, 50_000] {
-        let sab = create_sab(1_000_000);
-        let table = ProbeHashTable::new(sab, 0, 131072, 0.75, fibonacci_hash);
+        let mem = create_mem(1_000_000);
+        let table = ProbeHashTable::new(mem, 0, 131072, 0.75, fibonacci_hash);
         for i in 0..size {
             table.set(i, i * 10).unwrap();
         }
@@ -66,8 +66,8 @@ fn bench_get_miss(c: &mut Criterion) {
     let mut group = c.benchmark_group("HashTable/get_miss");
 
     for &size in &[100, 1_000, 10_000] {
-        let sab = create_sab(1_000_000);
-        let table = ProbeHashTable::new(sab, 0, 131072, 0.75, fibonacci_hash);
+        let mem = create_mem(1_000_000);
+        let table = ProbeHashTable::new(mem, 0, 131072, 0.75, fibonacci_hash);
         for i in 0..size {
             table.set(i, i * 10).unwrap();
         }
@@ -85,8 +85,8 @@ fn bench_get_miss(c: &mut Criterion) {
 }
 
 fn bench_overwrite(c: &mut Criterion) {
-    let sab = create_sab(1_000_000);
-    let table = ProbeHashTable::new(sab, 0, 131072, 0.75, fibonacci_hash);
+    let mem = create_mem(1_000_000);
+    let table = ProbeHashTable::new(mem, 0, 131072, 0.75, fibonacci_hash);
     for i in 0..10_000 {
         table.set(i, i * 10).unwrap();
     }
@@ -104,8 +104,8 @@ fn bench_delete(c: &mut Criterion) {
     c.bench_function("HashTable/delete_10k", |b| {
         b.iter_with_setup(
             || {
-                let sab = create_sab(1_000_000);
-                let table = ProbeHashTable::new(sab, 0, 131072, 0.75, fibonacci_hash);
+                let mem = create_mem(1_000_000);
+                let table = ProbeHashTable::new(mem, 0, 131072, 0.75, fibonacci_hash);
                 for i in 0..10_000 {
                     table.set(i, i * 10).unwrap();
                 }
@@ -124,8 +124,8 @@ fn bench_mixed_workload(c: &mut Criterion) {
     c.bench_function("HashTable/mixed_workload", |b| {
         b.iter_with_setup(
             || {
-                let sab = create_sab(1_000_000);
-                ProbeHashTable::new(sab, 0, 131072, 0.75, fibonacci_hash)
+                let mem = create_mem(1_000_000);
+                ProbeHashTable::new(mem, 0, 131072, 0.75, fibonacci_hash)
             },
             |table| {
                 // Insert 1000

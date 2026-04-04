@@ -11,7 +11,6 @@ pub mod kernel_processor;
 pub mod kernel_controller;
 pub mod synaptic_graph_config;
 pub mod control_plane;
-pub mod wasm;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right

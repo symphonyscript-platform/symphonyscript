@@ -1,10 +1,10 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 use symphonyscript_kernel::primitives::free_list::FreeList;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -18,22 +18,22 @@ fn bench_alloc(c: &mut Criterion) {
     for &slot_size_label in &[1, 4, 16] {
         match slot_size_label {
             1 => {
-                let sab = create_sab(1_000_000);
-                let fl: FreeList<1> = FreeList::new(sab, 0, 131072);
+                let mem = create_mem(1_000_000);
+                let fl: FreeList<1> = FreeList::new(mem, 0, 131072);
                 group.bench_function(BenchmarkId::new("SLOT_SIZE", 1), |b| {
                     b.iter(|| black_box(fl.alloc()));
                 });
             }
             4 => {
-                let sab = create_sab(1_000_000);
-                let fl: FreeList<4> = FreeList::new(sab, 0, 131072);
+                let mem = create_mem(1_000_000);
+                let fl: FreeList<4> = FreeList::new(mem, 0, 131072);
                 group.bench_function(BenchmarkId::new("SLOT_SIZE", 4), |b| {
                     b.iter(|| black_box(fl.alloc()));
                 });
             }
             16 => {
-                let sab = create_sab(4_000_000);
-                let fl: FreeList<16> = FreeList::new(sab, 0, 131072);
+                let mem = create_mem(4_000_000);
+                let fl: FreeList<16> = FreeList::new(mem, 0, 131072);
                 group.bench_function(BenchmarkId::new("SLOT_SIZE", 16), |b| {
                     b.iter(|| black_box(fl.alloc()));
                 });
@@ -51,8 +51,8 @@ fn bench_alloc_free_cycle(c: &mut Criterion) {
     for &slot_size_label in &[1, 4, 16] {
         match slot_size_label {
             1 => {
-                let sab = create_sab(1_000_000);
-                let fl: FreeList<1> = FreeList::new(sab, 0, 131072);
+                let mem = create_mem(1_000_000);
+                let fl: FreeList<1> = FreeList::new(mem, 0, 131072);
                 group.bench_function(BenchmarkId::new("SLOT_SIZE", 1), |b| {
                     b.iter(|| {
                         let slot = fl.alloc().unwrap();
@@ -61,8 +61,8 @@ fn bench_alloc_free_cycle(c: &mut Criterion) {
                 });
             }
             4 => {
-                let sab = create_sab(1_000_000);
-                let fl: FreeList<4> = FreeList::new(sab, 0, 131072);
+                let mem = create_mem(1_000_000);
+                let fl: FreeList<4> = FreeList::new(mem, 0, 131072);
                 group.bench_function(BenchmarkId::new("SLOT_SIZE", 4), |b| {
                     b.iter(|| {
                         let slot = fl.alloc().unwrap();
@@ -71,8 +71,8 @@ fn bench_alloc_free_cycle(c: &mut Criterion) {
                 });
             }
             16 => {
-                let sab = create_sab(4_000_000);
-                let fl: FreeList<16> = FreeList::new(sab, 0, 131072);
+                let mem = create_mem(4_000_000);
+                let fl: FreeList<16> = FreeList::new(mem, 0, 131072);
                 group.bench_function(BenchmarkId::new("SLOT_SIZE", 16), |b| {
                     b.iter(|| {
                         let slot = fl.alloc().unwrap();
@@ -88,8 +88,8 @@ fn bench_alloc_free_cycle(c: &mut Criterion) {
 }
 
 fn bench_alloc_write_free(c: &mut Criterion) {
-    let sab = create_sab(1_000_000);
-    let fl: FreeList<4> = FreeList::new(sab, 0, 131072);
+    let mem = create_mem(1_000_000);
+    let fl: FreeList<4> = FreeList::new(mem, 0, 131072);
 
     c.bench_function("FreeList/alloc+write+free", |b| {
         b.iter(|| {
@@ -107,8 +107,8 @@ fn bench_batch_alloc(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(batch), &batch, |b, &batch| {
             b.iter_with_setup(
                 || {
-                    let sab = create_sab(1_000_000);
-                    FreeList::<4>::new(sab, 0, 16384)
+                    let mem = create_mem(1_000_000);
+                    FreeList::<4>::new(mem, 0, 16384)
                 },
                 |fl| {
                     for _ in 0..batch {
@@ -128,8 +128,8 @@ fn bench_batch_free(c: &mut Criterion) {
     for &batch in &[10, 100, 1_000] {
         group.bench_with_input(BenchmarkId::from_parameter(batch), &batch, |b, &batch| {
             b.iter_custom(|iters| {
-                let sab = create_sab(1_000_000);
-                let fl = FreeList::<4>::new(sab, 0, 16384);
+                let mem = create_mem(1_000_000);
+                let fl = FreeList::<4>::new(mem, 0, 16384);
                 let mut total = std::time::Duration::ZERO;
                 for _ in 0..iters {
                     let handles: Vec<_> = (0..batch).map(|_| fl.alloc().unwrap()).collect();
@@ -148,8 +148,8 @@ fn bench_batch_free(c: &mut Criterion) {
 }
 
 fn bench_alloc_empty(c: &mut Criterion) {
-    let sab = create_sab(4096);
-    let fl: FreeList<4> = FreeList::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let fl: FreeList<4> = FreeList::new(mem, 0, 4);
 
     // Exhaust the free list
     let _a = fl.alloc().unwrap();
@@ -163,8 +163,8 @@ fn bench_alloc_empty(c: &mut Criterion) {
 }
 
 fn bench_slot_read_write(c: &mut Criterion) {
-    let sab = create_sab(1_000_000);
-    let fl: FreeList<4> = FreeList::new(sab, 0, 131072);
+    let mem = create_mem(1_000_000);
+    let fl: FreeList<4> = FreeList::new(mem, 0, 131072);
     let slot = fl.alloc().unwrap();
 
     c.bench_function("SlotHandle/write+read (SLOT_SIZE=4)", |b| {

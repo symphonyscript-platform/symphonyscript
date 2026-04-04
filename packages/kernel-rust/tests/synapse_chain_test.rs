@@ -2,7 +2,7 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use symphonyscript_kernel::constants::NODE_SLOT_SIZE;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 use symphonyscript_kernel::structural_plane::node::node_chain_reader::NodeChainReader;
 use symphonyscript_kernel::structural_plane::node::node_chain_writer::NodeChainWriter;
 use symphonyscript_kernel::structural_plane::node::node_data::NodeDraft;
@@ -10,7 +10,7 @@ use symphonyscript_kernel::structural_plane::synapse::synapse_chain_reader::Syna
 use symphonyscript_kernel::structural_plane::synapse::synapse_chain_writer::SynapseChainWriter;
 use symphonyscript_kernel::structural_plane::synapse::synapse_data::SynapseDraft;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -18,7 +18,7 @@ fn create_sab(size: usize) -> SAB {
     Arc::new(vec)
 }
 
-const SAB_SIZE: usize = 65536;
+const MEM_SIZE: usize = 65536;
 const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 16384;
 const NODE_CAPACITY: usize = 16;
@@ -30,7 +30,7 @@ const NODE_FL_START: usize = 50000;
 const SYNAPSE_FL_START: usize = 51000;
 
 struct TestHarness {
-    _sab: SAB,
+    _mem: AtomicBuffer,
     writer: symphonyscript_kernel::primitives::triple_buffer::TripleBufferWriter,
     reader: symphonyscript_kernel::primitives::triple_buffer::TripleBufferReader,
     node_chain: NodeChainWriter,
@@ -38,17 +38,17 @@ struct TestHarness {
 }
 
 fn setup() -> TestHarness {
-    let sab = create_sab(SAB_SIZE);
-    let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
+    let mem = create_mem(MEM_SIZE);
+    let (writer, reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
     let node_chain = NodeChainWriter::new(
-        Arc::clone(&sab),
+        Arc::clone(&mem),
         writer.clone(),
         NODE_FL_START,
         NODE_START_OFFSET,
         NODE_CAPACITY,
     );
     let synapse_chain = SynapseChainWriter::new(
-        Arc::clone(&sab),
+        Arc::clone(&mem),
         writer.clone(),
         node_chain.clone(),
         SYNAPSE_FL_START,
@@ -56,7 +56,7 @@ fn setup() -> TestHarness {
         SYNAPSE_CAPACITY,
     );
     TestHarness {
-        _sab: sab,
+        _mem: mem,
         writer,
         reader,
         node_chain,
@@ -802,20 +802,20 @@ fn copy_from_preserves_topology_and_deep_data() {
 
     src_h.synapse_chain.disconnect(s2).unwrap(); // defer s2
 
-    let dst_sab = create_sab(SAB_SIZE);
-    let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_sab), TB_START, TB_BUF_CAP);
+    let dst_mem = create_mem(MEM_SIZE);
+    let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
     let dst_node_chain = NodeChainWriter::new(
-        Arc::clone(&dst_sab),
+        Arc::clone(&dst_mem),
         dst_tb.clone(),
         NODE_FL_START,
         NODE_HEAD_OFFSET,
         NODE_CAPACITY,
     );
     let mut dst_synapse_chain = SynapseChainWriter::new(
-        dst_sab,
+        dst_mem,
         dst_tb,
         dst_node_chain.clone(),
-        dst_node_chain.sab_end_index(),
+        dst_node_chain.mem_end_offset(),
         SYNAPSE_START_OFFSET,
         SYNAPSE_CAPACITY * 2,
     );
@@ -840,10 +840,10 @@ fn copy_from_preserves_topology_and_deep_data() {
 fn copy_from_panics_if_source_larger() {
     let src_h = setup();
 
-    let dst_sab = create_sab(SAB_SIZE);
-    let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_sab), TB_START, TB_BUF_CAP);
+    let dst_mem = create_mem(MEM_SIZE);
+    let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
     let dst_node_chain = NodeChainWriter::new(
-        Arc::clone(&dst_sab),
+        Arc::clone(&dst_mem),
         dst_tb.clone(),
         NODE_FL_START,
         NODE_HEAD_OFFSET,
@@ -851,10 +851,10 @@ fn copy_from_panics_if_source_larger() {
     );
     // Create destination with half capacity
     let dst_synapse_chain = SynapseChainWriter::new(
-        dst_sab,
+        dst_mem,
         dst_tb,
         dst_node_chain.clone(),
-        dst_node_chain.sab_end_index(),
+        dst_node_chain.mem_end_offset(),
         SYNAPSE_START_OFFSET,
         SYNAPSE_CAPACITY / 2,
     );

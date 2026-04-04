@@ -2,14 +2,14 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use symphonyscript_kernel::constants::NODE_SLOT_SIZE;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 use symphonyscript_kernel::structural_plane::node::node_chain_writer::NodeChainWriter;
 use symphonyscript_kernel::structural_plane::node::node_data::NodeDraft;
 use symphonyscript_kernel::structural_plane::synapse::synapse_chain_reader::SynapseChainReader;
 use symphonyscript_kernel::structural_plane::synapse::synapse_chain_writer::SynapseChainWriter;
 use symphonyscript_kernel::structural_plane::synapse::synapse_data::SynapseDraft;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -17,7 +17,7 @@ fn create_sab(size: usize) -> SAB {
     Arc::new(vec)
 }
 
-const SAB_SIZE: usize = 65536;
+const MEM_SIZE: usize = 65536;
 const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 16384;
 const NODE_CAPACITY: usize = 16;
@@ -29,7 +29,7 @@ const NODE_FL_START: usize = 50000;
 const SYNAPSE_FL_START: usize = 51000;
 
 struct TestHarness {
-    _sab: SAB,
+    _mem: AtomicBuffer,
     writer: symphonyscript_kernel::primitives::triple_buffer::TripleBufferWriter,
     reader: symphonyscript_kernel::primitives::triple_buffer::TripleBufferReader,
     node_chain: NodeChainWriter,
@@ -38,17 +38,17 @@ struct TestHarness {
 }
 
 fn setup() -> TestHarness {
-    let sab = create_sab(SAB_SIZE);
-    let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
+    let mem = create_mem(MEM_SIZE);
+    let (writer, reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
     let node_chain = NodeChainWriter::new(
-        Arc::clone(&sab),
+        Arc::clone(&mem),
         writer.clone(),
         NODE_FL_START,
         NODE_START_OFFSET,
         NODE_CAPACITY,
     );
     let synapse_chain = SynapseChainWriter::new(
-        Arc::clone(&sab),
+        Arc::clone(&mem),
         writer.clone(),
         node_chain.clone(),
         SYNAPSE_FL_START,
@@ -58,7 +58,7 @@ fn setup() -> TestHarness {
     let synapse_chain_r =
         SynapseChainReader::new(reader.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
     TestHarness {
-        _sab: sab,
+        _mem: mem,
         writer,
         reader,
         node_chain,

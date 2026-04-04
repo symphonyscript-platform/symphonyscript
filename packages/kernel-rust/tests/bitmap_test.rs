@@ -2,9 +2,9 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use std::thread;
 use symphonyscript_kernel::primitives::bitmap::Bitmap;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -14,8 +14,8 @@ fn create_sab(size: usize) -> SAB {
 
 #[test]
 fn new_creates_bitmap_all_off() {
-    let sab = create_sab(100);
-    let bitmap = Bitmap::new(Arc::clone(&sab), 0, 32);
+    let mem = create_mem(100);
+    let bitmap = Bitmap::new(Arc::clone(&mem), 0, 32);
     for i in 0..32 {
         assert!(bitmap.is_off(i));
         assert!(!bitmap.is_on(i));
@@ -24,8 +24,8 @@ fn new_creates_bitmap_all_off() {
 
 #[test]
 fn on_and_off_toggles_correctly() {
-    let sab = create_sab(100);
-    let bitmap = Bitmap::new(Arc::clone(&sab), 0, 32);
+    let mem = create_mem(100);
+    let bitmap = Bitmap::new(Arc::clone(&mem), 0, 32);
     
     bitmap.on(5);
     assert!(bitmap.is_on(5));
@@ -38,13 +38,13 @@ fn on_and_off_toggles_correctly() {
 
 #[test]
 fn copy_from_transfers_bit_state() {
-    let sab1 = create_sab(100);
-    let b1 = Bitmap::new(Arc::clone(&sab1), 0, 32);
+    let mem1 = create_mem(100);
+    let b1 = Bitmap::new(Arc::clone(&mem1), 0, 32);
     b1.on(1);
     b1.on(31);
     
-    let sab2 = create_sab(100);
-    let b2 = Bitmap::new(Arc::clone(&sab2), 0, 32);
+    let mem2 = create_mem(100);
+    let b2 = Bitmap::new(Arc::clone(&mem2), 0, 32);
     b2.copy_from(&b1);
     
     assert!(b2.is_on(1));
@@ -55,27 +55,27 @@ fn copy_from_transfers_bit_state() {
 #[test]
 #[should_panic]
 fn is_on_panics_out_of_bounds() {
-    let sab = create_sab(100);
-    let bitmap = Bitmap::new(Arc::clone(&sab), 0, 32);
+    let mem = create_mem(100);
+    let bitmap = Bitmap::new(Arc::clone(&mem), 0, 32);
     bitmap.is_on(32);
 }
 
 #[test]
 #[should_panic]
 fn on_panics_out_of_bounds() {
-    let sab = create_sab(100);
-    let bitmap = Bitmap::new(Arc::clone(&sab), 0, 32);
+    let mem = create_mem(100);
+    let bitmap = Bitmap::new(Arc::clone(&mem), 0, 32);
     bitmap.on(32);
 }
 
 #[test]
 #[should_panic]
 fn copy_from_panics_if_source_larger() {
-    let sab1 = create_sab(100);
-    let b_large = Bitmap::new(Arc::clone(&sab1), 0, 64);
+    let mem1 = create_mem(100);
+    let b_large = Bitmap::new(Arc::clone(&mem1), 0, 64);
     
-    let sab2 = create_sab(100);
-    let b_small = Bitmap::new(Arc::clone(&sab2), 0, 32);
+    let mem2 = create_mem(100);
+    let b_small = Bitmap::new(Arc::clone(&mem2), 0, 32);
     
     // Attempting to copy 64 bits into 32 bits capacity will natively panic due to user's fix
     b_small.copy_from(&b_large);
@@ -83,8 +83,8 @@ fn copy_from_panics_if_source_larger() {
 
 #[test]
 fn bitmap_thread_stress_test() {
-    let sab = create_sab(100);
-    let bitmap = Arc::new(Bitmap::new(Arc::clone(&sab), 0, 32));
+    let mem = create_mem(100);
+    let bitmap = Arc::new(Bitmap::new(Arc::clone(&mem), 0, 32));
     
     let mut handles = vec![];
     for i in 0..16 {

@@ -1,10 +1,10 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 use symphonyscript_kernel::structural_plane::slot_writer::SlotWriter;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -16,8 +16,8 @@ fn create_sab(size: usize) -> SAB {
 
 #[test]
 fn new_creates_view() {
-    let sab = create_sab(1024);
-    let (writer, _reader) = TripleBuffer::new(sab, 0, 256);
+    let mem = create_mem(1024);
+    let (writer, _reader) = TripleBuffer::new(mem, 0, 256);
     let view: SlotWriter<'_, 16> = SlotWriter::new(&writer, 0);
     assert_eq!(view.read(0), 0);
 }
@@ -27,7 +27,7 @@ fn new_creates_view() {
 #[test]
 #[should_panic(expected = "SlotWriter::create | range")]
 fn panics_if_out_of_bounds() {
-    let sab = create_sab(1024);
-    let (writer, _reader) = TripleBuffer::new(sab, 0, 16);
+    let mem = create_mem(1024);
+    let (writer, _reader) = TripleBuffer::new(mem, 0, 16);
     let _view: SlotWriter<'_, 16> = SlotWriter::new(&writer, 8);
 }

@@ -1,10 +1,10 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 use symphonyscript_kernel::structural_plane::slot_reader::SlotReader;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -16,16 +16,16 @@ fn create_sab(size: usize) -> SAB {
 
 #[test]
 fn new_creates_view() {
-    let sab = create_sab(1024);
-    let (_writer, reader) = TripleBuffer::new(sab, 0, 256);
+    let mem = create_mem(1024);
+    let (_writer, reader) = TripleBuffer::new(mem, 0, 256);
     let view: SlotReader<'_, 16> = SlotReader::new(&reader, 0);
     assert_eq!(view.read(0), 0);
 }
 
 #[test]
-fn read_returns_zero_on_fresh_sab() {
-    let sab = create_sab(1024);
-    let (_writer, reader) = TripleBuffer::new(sab, 0, 256);
+fn read_returns_zero_on_fresh_mem() {
+    let mem = create_mem(1024);
+    let (_writer, reader) = TripleBuffer::new(mem, 0, 256);
     let view: SlotReader<'_, 16> = SlotReader::new(&reader, 0);
 
     for i in 0..16 {
@@ -35,8 +35,8 @@ fn read_returns_zero_on_fresh_sab() {
 
 #[test]
 fn read_at_nonzero_offset() {
-    let sab = create_sab(1024);
-    let (mut writer, mut reader) = TripleBuffer::new(sab, 0, 256);
+    let mem = create_mem(1024);
+    let (mut writer, mut reader) = TripleBuffer::new(mem, 0, 256);
 
     // Write at offset 32 (slot 2 if SLOT_SIZE=16)
     writer.write(32, 777);
@@ -49,8 +49,8 @@ fn read_at_nonzero_offset() {
 
 #[test]
 fn reads_are_isolated_between_slots() {
-    let sab = create_sab(1024);
-    let (mut writer, mut reader) = TripleBuffer::new(sab, 0, 256);
+    let mem = create_mem(1024);
+    let (mut writer, mut reader) = TripleBuffer::new(mem, 0, 256);
 
     writer.write(0, 100);
     writer.write(16, 200);
@@ -67,8 +67,8 @@ fn reads_are_isolated_between_slots() {
 #[test]
 #[should_panic(expected = "SlotReader::create | range")]
 fn panics_if_out_of_bounds() {
-    let sab = create_sab(1024);
-    let (_writer, reader) = TripleBuffer::new(sab, 0, 16);
+    let mem = create_mem(1024);
+    let (_writer, reader) = TripleBuffer::new(mem, 0, 16);
     // 16 buffer capacity, start at 8, SLOT_SIZE=16 => 8+16=24 > 16
     let _view: SlotReader<'_, 16> = SlotReader::new(&reader, 8);
 }

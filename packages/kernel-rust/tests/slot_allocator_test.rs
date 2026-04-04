@@ -2,22 +2,22 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use symphonyscript_kernel::errors::free_list_error::FreeListError;
 use symphonyscript_kernel::primitives::slot_allocator::SlotAllocator;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 
-fn create_allocator(capacity: usize) -> (SlotAllocator, SAB) {
-    let size = SlotAllocator::calculate_size_on_sab(capacity);
+fn create_allocator(capacity: usize) -> (SlotAllocator, AtomicBuffer) {
+    let size = SlotAllocator::calculate_size_on_mem(capacity);
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
     }
-    let sab = Arc::new(vec);
-    let alloc = SlotAllocator::new(Arc::clone(&sab), 0, capacity);
-    (alloc, sab)
+    let mem = Arc::new(vec);
+    let alloc = SlotAllocator::new(Arc::clone(&mem), 0, capacity);
+    (alloc, mem)
 }
 
 #[test]
 fn alloc_defer_flush_lifecycle() {
-    let (alloc, _sab) = create_allocator(4);
+    let (alloc, _mem) = create_allocator(4);
 
     let s1 = alloc.alloc().unwrap();
     assert_eq!(alloc.free_count(), 3);
@@ -39,7 +39,7 @@ fn alloc_defer_flush_lifecycle() {
 
 #[test]
 fn unallocated_deferral_timebomb_is_disarmed() {
-    let (alloc, _sab) = create_allocator(4);
+    let (alloc, _mem) = create_allocator(4);
     
     // Attempting to defer slot 1 which has NOT been allocated
     let res = alloc.defer_free(1);
@@ -51,7 +51,7 @@ fn unallocated_deferral_timebomb_is_disarmed() {
 
 #[test]
 fn double_defer_returns_error() {
-    let (alloc, _sab) = create_allocator(4);
+    let (alloc, _mem) = create_allocator(4);
     let s1 = alloc.alloc().unwrap();
     
     alloc.defer_free(s1).unwrap();
@@ -63,20 +63,20 @@ fn double_defer_returns_error() {
 #[test]
 #[should_panic]
 fn is_allocated_panics_if_out_of_bounds() {
-    let (alloc, _sab) = create_allocator(4);
+    let (alloc, _mem) = create_allocator(4);
     alloc.is_allocated(5); // panics natively via Bitmap bounds
 }
 
 #[test]
 #[should_panic]
 fn defer_free_panics_if_zero() {
-    let (alloc, _sab) = create_allocator(4);
+    let (alloc, _mem) = create_allocator(4);
     let _ = alloc.defer_free(0);
 }
 
 #[test]
 #[should_panic]
 fn defer_free_panics_if_beyond_capacity() {
-    let (alloc, _sab) = create_allocator(4);
+    let (alloc, _mem) = create_allocator(4);
     let _ = alloc.defer_free(5);
 }

@@ -1,12 +1,12 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use symphonyscript_kernel::primitives::ring_buffer::RingBuffer;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 
 const SLOT_SIZE: usize = 16;
 
-/// Creates a SAB with the given number of AtomicI32 slots.
-fn create_sab(size: usize) -> SAB {
+/// Creates a MEM with the given number of AtomicI32 slots.
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -16,16 +16,16 @@ fn create_sab(size: usize) -> SAB {
 
 #[test]
 fn read_empty_buffer_returns_none() {
-    let sab = create_sab(1024);
-    let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 8);
+    let mem = create_mem(1024);
+    let ring: RingBuffer<4> = RingBuffer::new(mem, 0, 8);
 
     assert_eq!(ring.read(), None);
 }
 
 #[test]
 fn write_and_read_single_entry() {
-    let sab = create_sab(1024);
-    let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 8);
+    let mem = create_mem(1024);
+    let ring: RingBuffer<4> = RingBuffer::new(mem, 0, 8);
 
     let data = [1, 2, 3, 4];
     assert!(ring.write(data).is_ok());
@@ -36,8 +36,8 @@ fn write_and_read_single_entry() {
 
 #[test]
 fn fifo_ordering() {
-    let sab = create_sab(4096);
-    let ring: RingBuffer<2> = RingBuffer::new(sab, 0, 8);
+    let mem = create_mem(4096);
+    let ring: RingBuffer<2> = RingBuffer::new(mem, 0, 8);
 
     ring.write([10, 20]).unwrap();
     ring.write([30, 40]).unwrap();
@@ -51,8 +51,8 @@ fn fifo_ordering() {
 
 #[test]
 fn pending_count_tracks_entries() {
-    let sab = create_sab(1024);
-    let ring: RingBuffer<2> = RingBuffer::new(sab, 0, 8);
+    let mem = create_mem(1024);
+    let ring: RingBuffer<2> = RingBuffer::new(mem, 0, 8);
 
     assert_eq!(ring.pending_count(), 0);
 
@@ -71,8 +71,8 @@ fn pending_count_tracks_entries() {
 
 #[test]
 fn write_full_buffer_returns_error() {
-    let sab = create_sab(4096);
-    let ring: RingBuffer<2> = RingBuffer::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let ring: RingBuffer<2> = RingBuffer::new(mem, 0, 4);
 
     ring.write([1, 2]).unwrap();
     ring.write([3, 4]).unwrap();
@@ -85,8 +85,8 @@ fn write_full_buffer_returns_error() {
 
 #[test]
 fn wrap_around_read_write() {
-    let sab = create_sab(4096);
-    let ring: RingBuffer<2> = RingBuffer::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let ring: RingBuffer<2> = RingBuffer::new(mem, 0, 4);
 
     // Fill and drain to advance read/write pointers
     for round in 0..3 {
@@ -107,8 +107,8 @@ fn wrap_around_read_write() {
 
 #[test]
 fn interleaved_read_write() {
-    let sab = create_sab(4096);
-    let ring: RingBuffer<3> = RingBuffer::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let ring: RingBuffer<3> = RingBuffer::new(mem, 0, 4);
 
     ring.write([1, 2, 3]).unwrap();
     ring.write([4, 5, 6]).unwrap();
@@ -123,19 +123,19 @@ fn interleaved_read_write() {
 }
 
 #[test]
-fn sab_end_index_is_correct() {
-    let sab = create_sab(4096);
-    let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 8);
+fn mem_end_offset_is_correct() {
+    let mem = create_mem(4096);
+    let ring: RingBuffer<4> = RingBuffer::new(mem, 0, 8);
 
-    // sab_end_index = start(0) + header(3) + capacity(8) * SLOT_SIZE(4) = 35
-    assert_eq!(ring.sab_end_index(), 35);
+    // mem_end_offset = start(0) + header(3) + capacity(8) * SLOT_SIZE(4) = 35
+    assert_eq!(ring.mem_end_offset(), 35);
 }
 
 #[test]
 fn works_with_nonzero_start_index() {
-    let sab = create_sab(4096);
+    let mem = create_mem(4096);
     let start = 200;
-    let ring: RingBuffer<2> = RingBuffer::new(sab, start, 4);
+    let ring: RingBuffer<2> = RingBuffer::new(mem, start, 4);
 
     ring.write([42, 84]).unwrap();
     assert_eq!(ring.read(), Some([42, 84]));
@@ -144,8 +144,8 @@ fn works_with_nonzero_start_index() {
 
 #[test]
 fn single_slot_size() {
-    let sab = create_sab(1024);
-    let ring: RingBuffer<1> = RingBuffer::new(sab, 0, 4);
+    let mem = create_mem(1024);
+    let ring: RingBuffer<1> = RingBuffer::new(mem, 0, 4);
 
     ring.write([99]).unwrap();
     assert_eq!(ring.read(), Some([99]));
@@ -155,8 +155,8 @@ fn single_slot_size() {
 
 #[test]
 fn exact_capacity_boundary() {
-    let sab = create_sab(4096);
-    let ring: RingBuffer<2> = RingBuffer::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let ring: RingBuffer<2> = RingBuffer::new(mem, 0, 4);
 
     // Fill to exact capacity
     for i in 0..4 {
@@ -181,8 +181,8 @@ fn exact_capacity_boundary() {
 
 #[test]
 fn multiple_full_drain_cycles() {
-    let sab = create_sab(4096);
-    let ring: RingBuffer<2> = RingBuffer::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let ring: RingBuffer<2> = RingBuffer::new(mem, 0, 4);
 
     for round in 0..10 {
         // Fill completely
@@ -205,8 +205,8 @@ fn multiple_full_drain_cycles() {
 
 #[test]
 fn i32_extreme_values_in_ring() {
-    let sab = create_sab(4096);
-    let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let ring: RingBuffer<4> = RingBuffer::new(mem, 0, 4);
 
     ring.write([i32::MAX, i32::MIN, 0, -1]).unwrap();
     assert_eq!(ring.read(), Some([i32::MAX, i32::MIN, 0, -1]));
@@ -214,8 +214,8 @@ fn i32_extreme_values_in_ring() {
 
 #[test]
 fn zero_values_not_confused_with_empty() {
-    let sab = create_sab(4096);
-    let ring: RingBuffer<3> = RingBuffer::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let ring: RingBuffer<3> = RingBuffer::new(mem, 0, 4);
 
     ring.write([0, 0, 0]).unwrap();
     assert_eq!(ring.pending_count(), 1);
@@ -225,8 +225,8 @@ fn zero_values_not_confused_with_empty() {
 
 #[test]
 fn capacity_of_one() {
-    let sab = create_sab(1024);
-    let ring: RingBuffer<2> = RingBuffer::new(sab, 0, 1);
+    let mem = create_mem(1024);
+    let ring: RingBuffer<2> = RingBuffer::new(mem, 0, 1);
 
     ring.write([42, 84]).unwrap();
     assert!(ring.write([1, 2]).is_err()); // full at 1
@@ -241,8 +241,8 @@ fn capacity_of_one() {
 
 #[test]
 fn large_slot_size() {
-    let sab = create_sab(4096);
-    let ring: RingBuffer<SLOT_SIZE> = RingBuffer::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let ring: RingBuffer<SLOT_SIZE> = RingBuffer::new(mem, 0, 4);
 
     let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
     ring.write(data).unwrap();
@@ -251,8 +251,8 @@ fn large_slot_size() {
 
 #[test]
 fn read_after_full_error_still_works() {
-    let sab = create_sab(4096);
-    let ring: RingBuffer<2> = RingBuffer::new(sab, 0, 2);
+    let mem = create_mem(4096);
+    let ring: RingBuffer<2> = RingBuffer::new(mem, 0, 2);
 
     ring.write([1, 2]).unwrap();
     ring.write([3, 4]).unwrap();

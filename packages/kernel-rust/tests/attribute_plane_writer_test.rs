@@ -17,31 +17,31 @@ use symphonyscript_kernel::attribute_plane::writer::synapse_attributes_writer::{
     SynapseAttributes, SynapseAttributesWriter,
 };
 use symphonyscript_kernel::constants::{NODE_ATTRIBUTES_SLOT_SIZE, SYNAPSE_ATTRIBUTES_SLOT_SIZE};
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     Arc::new((0..size).map(|_| AtomicI32::new(0)).collect())
 }
 
-const SAB_SIZE: usize = 4096;
+const MEM_SIZE: usize = 4096;
 const CAPACITY: usize = 16;
 
 // ============ AttributePlaneWriter: construction ============
 
 #[test]
 fn plane_writer_new_and_end_index() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
-    assert_eq!(plane.sab_end_index(), CAPACITY * NODE_ATTRIBUTES_SLOT_SIZE);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
+    assert_eq!(plane.mem_end_offset(), CAPACITY * NODE_ATTRIBUTES_SLOT_SIZE);
 }
 
 #[test]
 fn plane_writer_with_nonzero_start() {
-    let sab = create_sab(SAB_SIZE);
+    let mem = create_mem(MEM_SIZE);
     let start = 100;
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, start, CAPACITY);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, start, CAPACITY);
     assert_eq!(
-        plane.sab_end_index(),
+        plane.mem_end_offset(),
         start + CAPACITY * NODE_ATTRIBUTES_SLOT_SIZE
     );
 }
@@ -50,8 +50,8 @@ fn plane_writer_with_nonzero_start() {
 
 #[test]
 fn plane_writer_get_write_read_round_trip() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     let view = plane.get(0);
     view.write(0, 42);
@@ -63,8 +63,8 @@ fn plane_writer_get_write_read_round_trip() {
 
 #[test]
 fn plane_writer_slots_are_independent() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     plane.get(0).write(0, 111);
     plane.get(1).write(0, 222);
@@ -77,8 +77,8 @@ fn plane_writer_slots_are_independent() {
 
 #[test]
 fn plane_writer_set_bulk_via_into_array() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     plane.set(
         0,
@@ -105,8 +105,8 @@ fn plane_writer_set_bulk_via_into_array() {
 
 #[test]
 fn plane_writer_set_then_overwrite() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     plane.get(0).write(0, 100);
     assert_eq!(plane.get(0).read(0), 100);
@@ -119,8 +119,8 @@ fn plane_writer_set_then_overwrite() {
 
 #[test]
 fn note_attributes_writer_all_fields() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     let view = plane.get(0);
     let note = NoteAttributesWriter(view);
@@ -148,8 +148,8 @@ fn note_attributes_writer_all_fields() {
 
 #[test]
 fn note_attributes_writer_flags_muted_solo() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     let note = NoteAttributesWriter(plane.get(0));
 
@@ -167,8 +167,8 @@ fn note_attributes_writer_flags_muted_solo() {
 
 #[test]
 fn note_attributes_bulk_set_matches_field_accessors() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     plane.set(
         0,
@@ -204,8 +204,8 @@ fn note_attributes_bulk_set_matches_field_accessors() {
 
 #[test]
 fn synapse_attributes_writer_all_fields() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     let syn = SynapseAttributesWriter(plane.get(0));
 
@@ -226,8 +226,8 @@ fn synapse_attributes_writer_all_fields() {
 
 #[test]
 fn synapse_attributes_bulk_set() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     plane.set(
         0,
@@ -254,8 +254,8 @@ fn synapse_attributes_bulk_set() {
 
 #[test]
 fn control_attributes_writer_round_trip() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     let ctrl = ControlAttributesWriter(plane.get(0));
     ctrl.set_control_id(64);
@@ -267,8 +267,8 @@ fn control_attributes_writer_round_trip() {
 
 #[test]
 fn control_attributes_bulk_set() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     plane.set(
         0,
@@ -287,8 +287,8 @@ fn control_attributes_bulk_set() {
 
 #[test]
 fn barrier_attributes_writer_round_trip() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     let barrier = BarrierAttributesWriter(plane.get(0));
     barrier.set_phase_target(42);
@@ -297,8 +297,8 @@ fn barrier_attributes_writer_round_trip() {
 
 #[test]
 fn barrier_attributes_bulk_set() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     plane.set(0, BarrierAttributes { phase_target: 7 });
 
@@ -310,8 +310,8 @@ fn barrier_attributes_bulk_set() {
 
 #[test]
 fn boundary_attributes_writer_round_trip() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     let boundary = BoundaryAttributesWriter(plane.get(0));
     boundary.set_boundary_id(99);
@@ -320,8 +320,8 @@ fn boundary_attributes_writer_round_trip() {
 
 #[test]
 fn boundary_attributes_bulk_set() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     plane.set(0, BoundaryAttributes { boundary_id: 55 });
 
@@ -333,8 +333,8 @@ fn boundary_attributes_bulk_set() {
 
 #[test]
 fn different_slots_hold_different_note_data() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     plane.set(
         0,
@@ -380,8 +380,8 @@ fn different_slots_hold_different_note_data() {
 
 #[test]
 fn note_attributes_negative_values() {
-    let sab = create_sab(SAB_SIZE);
-    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab, 0, CAPACITY);
+    let mem = create_mem(MEM_SIZE);
+    let plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem, 0, CAPACITY);
 
     let note = NoteAttributesWriter(plane.get(0));
     note.set_pitch(i32::MIN);
@@ -397,8 +397,8 @@ fn note_attributes_negative_values() {
 
 #[test]
 fn copy_from_preserves_plane_data() {
-    let sab_small = create_sab(SAB_SIZE);
-    let small_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab_small, 0, 4);
+    let mem_small = create_mem(MEM_SIZE);
+    let small_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem_small, 0, 4);
 
     let view1 = small_plane.get(0);
     view1.write(0, 42);
@@ -407,8 +407,8 @@ fn copy_from_preserves_plane_data() {
     let view2 = small_plane.get(3);
     view2.write(1, 1000);
 
-    let sab_large = create_sab(SAB_SIZE);
-    let large_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab_large, 0, 16);
+    let mem_large = create_mem(MEM_SIZE);
+    let large_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem_large, 0, 16);
     
     large_plane.copy_from(&small_plane);
 
@@ -425,11 +425,11 @@ fn copy_from_preserves_plane_data() {
 #[test]
 #[should_panic]
 fn copy_from_panics_if_source_larger() {
-    let sab_small = create_sab(SAB_SIZE);
-    let small_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab_small, 0, 4);
+    let mem_small = create_mem(MEM_SIZE);
+    let small_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem_small, 0, 4);
 
-    let sab_large = create_sab(SAB_SIZE);
-    let large_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(sab_large, 0, 16);
+    let mem_large = create_mem(MEM_SIZE);
+    let large_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SLOT_SIZE>::new(mem_large, 0, 16);
     
     small_plane.copy_from(&large_plane);
 }

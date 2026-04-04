@@ -1,9 +1,9 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use symphonyscript_kernel::primitives::simple_free_list::SimpleFreeList;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -15,8 +15,8 @@ fn create_sab(size: usize) -> SAB {
 
 #[test]
 fn alloc_returns_logical_slot_index() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 4);
 
     let slot = fl.alloc();
     assert!(slot.is_some());
@@ -26,16 +26,16 @@ fn alloc_returns_logical_slot_index() {
 
 #[test]
 fn free_count_starts_at_capacity() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 8);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 8);
 
     assert_eq!(fl.free_count(), 8);
 }
 
 #[test]
 fn alloc_decrements_free_count() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 8);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 8);
 
     fl.alloc().unwrap();
     assert_eq!(fl.free_count(), 7);
@@ -46,8 +46,8 @@ fn alloc_decrements_free_count() {
 
 #[test]
 fn free_increments_free_count() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 8);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 8);
 
     let slot = fl.alloc().unwrap();
     assert_eq!(fl.free_count(), 7);
@@ -58,8 +58,8 @@ fn free_increments_free_count() {
 
 #[test]
 fn alloc_returns_sequential_indices() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 4);
 
     // Free chain is initialized as 0 → 1 → 2 → 3, alloc returns slot_index + 1
     assert_eq!(fl.alloc().unwrap(), 1);
@@ -70,8 +70,8 @@ fn alloc_returns_sequential_indices() {
 
 #[test]
 fn alloc_all_then_returns_none() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 4);
 
     for _ in 0..4 {
         fl.alloc().unwrap();
@@ -82,8 +82,8 @@ fn alloc_all_then_returns_none() {
 
 #[test]
 fn free_and_realloc_reuses_slot() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 4);
 
     let slot0 = fl.alloc().unwrap();
     let _slot1 = fl.alloc().unwrap();
@@ -96,29 +96,29 @@ fn free_and_realloc_reuses_slot() {
 }
 
 #[test]
-fn sab_end_index_is_correct() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 8);
+fn mem_end_offset_is_correct() {
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 8);
 
     // Layout: head(1) + free_count(1) + bitmap(ceil(8/32)=1) + slots(8) = 11
-    // sab_end_index = start of slots + capacity = 3 + 8 = 11
-    assert_eq!(fl.sab_end_index(), 3 + 8);
+    // mem_end_offset = start of slots + capacity = 3 + 8 = 11
+    assert_eq!(fl.mem_end_offset(), 3 + 8);
 }
 
 #[test]
-fn sab_end_index_with_larger_capacity() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 64);
+fn mem_end_offset_with_larger_capacity() {
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 64);
 
     // Layout: head(1) + free_count(1) + bitmap(ceil(64/32)=2) + slots(64)
-    // sab_end_index = 0 + 2 + 2 + 64 = 68
-    assert_eq!(fl.sab_end_index(), 4 + 64);
+    // mem_end_offset = 0 + 2 + 2 + 64 = 68
+    assert_eq!(fl.mem_end_offset(), 4 + 64);
 }
 
 #[test]
 fn nonzero_start_index() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 100, 8);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 100, 8);
 
     assert_eq!(fl.free_count(), 8);
 
@@ -132,19 +132,19 @@ fn nonzero_start_index() {
 
 #[test]
 fn nonzero_start_index_end_index() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 100, 8);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 100, 8);
 
     // Layout: 100 + head(1) + free_count(1) + bitmap(1) + slots(8) = 111
-    assert_eq!(fl.sab_end_index(), 100 + 2 + 1 + 8);
+    assert_eq!(fl.mem_end_offset(), 100 + 2 + 1 + 8);
 }
 
 // ============ Edge Cases ============
 
 #[test]
 fn capacity_of_one() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 1);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 1);
 
     assert_eq!(fl.free_count(), 1);
 
@@ -162,8 +162,8 @@ fn capacity_of_one() {
 
 #[test]
 fn capacity_of_two() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 2);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 2);
 
     let a = fl.alloc().unwrap();
     let b = fl.alloc().unwrap();
@@ -176,8 +176,8 @@ fn capacity_of_two() {
 
 #[test]
 fn alloc_free_alloc_cycle() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 4);
 
     for _ in 0..10 {
         let mut slots = Vec::new();
@@ -197,8 +197,8 @@ fn alloc_free_alloc_cycle() {
 
 #[test]
 fn double_free_returns_error() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 4);
 
     let slot = fl.alloc().unwrap();
     fl.free(slot).unwrap();
@@ -209,8 +209,8 @@ fn double_free_returns_error() {
 
 #[test]
 fn double_free_does_not_corrupt_free_count() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 4);
 
     let slot = fl.alloc().unwrap();
     fl.free(slot).unwrap();
@@ -222,8 +222,8 @@ fn double_free_does_not_corrupt_free_count() {
 
 #[test]
 fn free_realloc_free_is_not_double_free() {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 4);
 
     let slot = fl.alloc().unwrap();
     fl.free(slot).unwrap();
@@ -241,9 +241,9 @@ fn free_realloc_free_is_not_double_free() {
 
 #[test]
 fn bitmap_spans_multiple_words() {
-    let sab = create_sab(8192);
+    let mem = create_mem(8192);
     // 64 slots = 2 bitmap words (64 / 32 = 2)
-    let fl = SimpleFreeList::new(sab, 0, 64);
+    let fl = SimpleFreeList::new(mem, 0, 64);
 
     // Alloc slots from both bitmap words
     let mut slots = Vec::new();
@@ -267,8 +267,8 @@ fn bitmap_spans_multiple_words() {
 
 #[test]
 fn slot_31_and_32_bitmap_boundary() {
-    let sab = create_sab(8192);
-    let fl = SimpleFreeList::new(sab, 0, 64);
+    let mem = create_mem(8192);
+    let fl = SimpleFreeList::new(mem, 0, 64);
 
     // Alloc all
     let mut slots = Vec::new();
@@ -287,32 +287,32 @@ fn slot_31_and_32_bitmap_boundary() {
     assert!(fl.free(33).is_err());
 }
 
-// ============ Bind (Attach to Existing SAB) ============
+// ============ Bind (Attach to Existing AtomicBuffer) ============
 
 #[test]
 fn bind_reads_existing_state() {
-    let sab = create_sab(4096);
+    let mem = create_mem(4096);
 
     // Initialize with new
-    let fl = SimpleFreeList::new(sab.clone(), 0, 4);
+    let fl = SimpleFreeList::new(mem.clone(), 0, 4);
     let _s0 = fl.alloc().unwrap();
     let _s1 = fl.alloc().unwrap();
     assert_eq!(fl.free_count(), 2);
 
     // Bind to same region — should see same state
-    let fl2 = SimpleFreeList::bind(sab, 0, 4);
+    let fl2 = SimpleFreeList::bind(mem, 0, 4);
     assert_eq!(fl2.free_count(), 2);
 }
 
 #[test]
 fn bind_can_alloc_remaining() {
-    let sab = create_sab(4096);
+    let mem = create_mem(4096);
 
-    let fl = SimpleFreeList::new(sab.clone(), 0, 4);
+    let fl = SimpleFreeList::new(mem.clone(), 0, 4);
     fl.alloc().unwrap();
     fl.alloc().unwrap();
 
-    let fl2 = SimpleFreeList::bind(sab, 0, 4);
+    let fl2 = SimpleFreeList::bind(mem, 0, 4);
     let s = fl2.alloc().unwrap();
     assert_eq!(fl2.free_count(), 1);
     fl2.free(s).unwrap();
@@ -323,8 +323,8 @@ fn bind_can_alloc_remaining() {
 
 #[test]
 fn stress_alloc_free_all_256() {
-    let sab = create_sab(65536);
-    let fl = SimpleFreeList::new(sab, 0, 256);
+    let mem = create_mem(65536);
+    let fl = SimpleFreeList::new(mem, 0, 256);
 
     // Alloc all
     let mut slots: Vec<usize> = (0..256).map(|_| fl.alloc().unwrap()).collect();
@@ -359,8 +359,8 @@ fn stress_alloc_free_all_256() {
 
 #[test]
 fn stress_interleaved_alloc_free() {
-    let sab = create_sab(65536);
-    let fl = SimpleFreeList::new(sab, 0, 128);
+    let mem = create_mem(65536);
+    let fl = SimpleFreeList::new(mem, 0, 128);
 
     let mut active = Vec::new();
 
@@ -381,8 +381,8 @@ fn stress_interleaved_alloc_free() {
 
 #[test]
 fn stress_unique_indices() {
-    let sab = create_sab(65536);
-    let fl = SimpleFreeList::new(sab, 0, 256);
+    let mem = create_mem(65536);
+    let fl = SimpleFreeList::new(mem, 0, 256);
 
     let slots: Vec<usize> = (0..256).map(|_| fl.alloc().unwrap()).collect();
 
@@ -400,8 +400,8 @@ fn stress_unique_indices() {
 
 #[test]
 fn stress_free_chain_integrity_after_mixed_ops() {
-    let sab = create_sab(65536);
-    let fl = SimpleFreeList::new(sab, 0, 64);
+    let mem = create_mem(65536);
+    let fl = SimpleFreeList::new(mem, 0, 64);
 
     // Alloc 64, free odd indices, alloc 32, free all
     let slots: Vec<usize> = (0..64).map(|_| fl.alloc().unwrap()).collect();
@@ -437,8 +437,8 @@ fn stress_free_chain_integrity_after_mixed_ops() {
 
 #[test]
 fn copy_from_preserves_state_and_adds_capacity() {
-    let sab_small = create_sab(4096);
-    let small_fl = SimpleFreeList::new(sab_small, 0, 16);
+    let mem_small = create_mem(4096);
+    let small_fl = SimpleFreeList::new(mem_small, 0, 16);
 
     let _a = small_fl.alloc().unwrap();
     let b = small_fl.alloc().unwrap();
@@ -448,8 +448,8 @@ fn copy_from_preserves_state_and_adds_capacity() {
 
     assert_eq!(small_fl.free_count(), 14);
 
-    let sab_large = create_sab(4096);
-    let large_fl = SimpleFreeList::new(sab_large, 0, 32);
+    let mem_large = create_mem(4096);
+    let large_fl = SimpleFreeList::new(mem_large, 0, 32);
 
     large_fl.copy_from(&small_fl);
 
@@ -481,11 +481,11 @@ fn copy_from_preserves_state_and_adds_capacity() {
 #[test]
 #[should_panic]
 fn copy_from_panics_if_source_larger() {
-    let sab_small = create_sab(4096);
-    let small_fl = SimpleFreeList::new(sab_small, 0, 16);
+    let mem_small = create_mem(4096);
+    let small_fl = SimpleFreeList::new(mem_small, 0, 16);
 
-    let sab_large = create_sab(4096);
-    let large_fl = SimpleFreeList::new(sab_large, 0, 32);
+    let mem_large = create_mem(4096);
+    let large_fl = SimpleFreeList::new(mem_large, 0, 32);
 
     small_fl.copy_from(&large_fl);
 }

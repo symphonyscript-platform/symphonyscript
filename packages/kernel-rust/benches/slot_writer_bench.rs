@@ -1,12 +1,12 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
 use symphonyscript_kernel::primitives::into_array::IntoArray;
 use symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -25,24 +25,24 @@ impl IntoArray<16> for TestPayload {
     }
 }
 
-const SAB_SIZE: usize = 65536;
+const MEM_SIZE: usize = 65536;
 const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 16384;
 const FL_START: usize = 50000;
 const CAPACITY: usize = 512;
 const TB_OFFSET: usize = 0;
 
-fn setup() -> (SAB, symphonyscript_kernel::primitives::triple_buffer::TripleBufferWriter, symphonyscript_kernel::primitives::triple_buffer::TripleBufferReader) {
-    let sab = create_sab(SAB_SIZE);
-    let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
-    (sab, writer, reader)
+fn setup() -> (AtomicBuffer, symphonyscript_kernel::primitives::triple_buffer::TripleBufferWriter, symphonyscript_kernel::primitives::triple_buffer::TripleBufferReader) {
+    let mem = create_mem(MEM_SIZE);
+    let (writer, reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
+    (mem, writer, reader)
 }
 
 fn bench_slot_writer(c: &mut Criterion) {
-    let (sab, writer, _reader) = setup();
+    let (mem, writer, _reader) = setup();
 
     let sw: StructuralWriter<16> = StructuralWriter::new(
-        Arc::clone(&sab),
+        Arc::clone(&mem),
         writer.clone(),
         FL_START,
         TB_OFFSET,

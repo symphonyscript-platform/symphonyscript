@@ -2,7 +2,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion, Benchmark
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::constants::{NODE_SLOT_SIZE, SYNAPSE_SLOT_SIZE};
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
 use symphonyscript_kernel::structural_plane::node::node_chain_writer::NodeChainWriter;
 use symphonyscript_kernel::structural_plane::node::node_chain_reader::NodeChainReader;
@@ -11,7 +11,7 @@ use symphonyscript_kernel::structural_plane::synapse::synapse_chain_writer::Syna
 use symphonyscript_kernel::structural_plane::synapse::synapse_chain_reader::SynapseChainReader;
 use symphonyscript_kernel::structural_plane::synapse::synapse_data::SynapseDraft;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -19,7 +19,7 @@ fn create_sab(size: usize) -> SAB {
     Arc::new(vec)
 }
 
-const SAB_SIZE: usize = 262144;
+const MEM_SIZE: usize = 262144;
 const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 65536;
 const NODE_CAPACITY: usize = 512;
@@ -30,15 +30,15 @@ const SYNAPSE_FL_START: usize = 210000;
 const FLUSH_INTERVAL: u64 = 512;
 
 struct Harness {
-    sab: SAB,
+    mem: AtomicBuffer,
     writer: symphonyscript_kernel::primitives::triple_buffer::TripleBufferWriter,
     reader: symphonyscript_kernel::primitives::triple_buffer::TripleBufferReader,
 }
 
 fn setup() -> Harness {
-    let sab = create_sab(SAB_SIZE);
-    let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
-    Harness { sab, writer, reader }
+    let mem = create_mem(MEM_SIZE);
+    let (writer, reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
+    Harness { mem, writer, reader }
 }
 
 fn synapse_tb_offset() -> usize {
@@ -47,14 +47,14 @@ fn synapse_tb_offset() -> usize {
 
 fn make_chains(h: &Harness) -> (NodeChainWriter, SynapseChainWriter) {
     let node_chain = NodeChainWriter::new(
-        Arc::clone(&h.sab),
+        Arc::clone(&h.mem),
         h.writer.clone(),
         NODE_FL_START,
         NODE_TB_OFFSET,
         NODE_CAPACITY,
     );
     let synapse_chain = SynapseChainWriter::new(
-        Arc::clone(&h.sab),
+        Arc::clone(&h.mem),
         h.writer.clone(),
         node_chain.clone(),
         SYNAPSE_FL_START,

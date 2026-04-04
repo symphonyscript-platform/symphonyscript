@@ -1,25 +1,25 @@
-use crate::primitives::types::SAB;
+use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 
 #[derive(Clone)]
 pub struct Bitmap {
-    sab: SAB,
-    sab_start_index: usize,
-    sab_end_index: usize,
+    mem: AtomicBuffer,
+    mem_start_offset: usize,
+    mem_end_offset: usize,
     capacity: usize,
     word_count: usize,
 }
 
 impl Bitmap {
-    pub fn new(sab: SAB, sab_start_index: usize, capacity: usize) -> Self {
-        Self::create(sab, sab_start_index, capacity, false)
+    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+        Self::create(mem, mem_start_offset, capacity, false)
     }
 
-    pub fn bind(sab: SAB, sab_start_index: usize, capacity: usize) -> Self {
-        Self::create(sab, sab_start_index, capacity, true)
+    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+        Self::create(mem, mem_start_offset, capacity, true)
     }
 
-    pub fn create(sab: SAB, sab_start_index: usize, capacity: usize, bind: bool) -> Self {
+    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
         debug_assert!(
             capacity > 0,
             "Bitmap::create | capacity {} must be positive",
@@ -31,34 +31,34 @@ impl Bitmap {
             "Bitmap::create | capacity {} must be power of 2",
             capacity
         );
-        let word_count = Self::calculate_size_on_sab(capacity);
-        let sab_end_index = sab_start_index + word_count;
+        let word_count = Self::calculate_size_on_mem(capacity);
+        let mem_end_offset = mem_start_offset + word_count;
 
         if !bind {
-            for i in sab_start_index..sab_end_index {
-                sab[i].store(0, Ordering::Relaxed);
+            for i in mem_start_offset..mem_end_offset {
+                mem[i].store(0, Ordering::Relaxed);
             }
         }
 
         Bitmap {
-            sab,
-            sab_start_index,
-            sab_end_index,
+            mem,
+            mem_start_offset,
+            mem_end_offset,
             capacity,
             word_count,
         }
     }
 
-    pub fn calculate_size_on_sab(capacity: usize) -> usize {
+    pub fn calculate_size_on_mem(capacity: usize) -> usize {
         (capacity + 31) / 32
     }
 
-    pub fn sab_start_index(&self) -> usize {
-        self.sab_start_index
+    pub fn mem_start_offset(&self) -> usize {
+        self.mem_start_offset
     }
 
-    pub fn sab_end_index(&self) -> usize {
-        self.sab_end_index
+    pub fn mem_end_offset(&self) -> usize {
+        self.mem_end_offset
     }
 
     pub fn capacity(&self) -> usize {
@@ -75,7 +75,7 @@ impl Bitmap {
             "Bitmap.is_off | bit_offset {} out of bounds",
             bit_offset
         );
-        let bitmask = self.sab[self.sab_start_index + (bit_offset >> 5)].load(Ordering::Relaxed);
+        let bitmask = self.mem[self.mem_start_offset + (bit_offset >> 5)].load(Ordering::Relaxed);
         bitmask & (1 << (bit_offset & 31)) == 0
     }
 
@@ -94,7 +94,7 @@ impl Bitmap {
             "Bitmap.on | bit_offset {} out of bounds",
             bit_offset
         );
-        self.sab[self.sab_start_index + (bit_offset >> 5)]
+        self.mem[self.mem_start_offset + (bit_offset >> 5)]
             .fetch_or(1 << (bit_offset & 31), Ordering::Relaxed);
     }
 
@@ -104,13 +104,13 @@ impl Bitmap {
             "Bitmap.off | bit_offset {} out of bounds",
             bit_offset
         );
-        self.sab[self.sab_start_index + (bit_offset >> 5)]
+        self.mem[self.mem_start_offset + (bit_offset >> 5)]
             .fetch_and(!(1 << (bit_offset & 31)), Ordering::Relaxed);
     }
 
     pub fn clear(&self) {
-        for i in self.sab_start_index..self.sab_end_index {
-            self.sab[i].store(0, Ordering::Relaxed);
+        for i in self.mem_start_offset..self.mem_end_offset {
+            self.mem[i].store(0, Ordering::Relaxed);
         }
     }
 
@@ -123,8 +123,8 @@ impl Bitmap {
         );
 
         for i in 0..source.word_count {
-            self.sab[self.sab_start_index + i].store(
-                source.sab[source.sab_start_index + i].load(Ordering::Relaxed),
+            self.mem[self.mem_start_offset + i].store(
+                source.mem[source.mem_start_offset + i].load(Ordering::Relaxed),
                 Ordering::Relaxed,
             )
         }

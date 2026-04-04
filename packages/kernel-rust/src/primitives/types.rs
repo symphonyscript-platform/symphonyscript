@@ -1,4 +1,4 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
+use std::sync::Arc;
 
-pub type SAB = Arc<Vec<AtomicI32>>;
+pub type AtomicBuffer = Arc<Vec<AtomicI32>>;

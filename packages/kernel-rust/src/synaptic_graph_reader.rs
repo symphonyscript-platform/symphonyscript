@@ -4,7 +4,7 @@ use crate::constants::{
     NODE_ATTRIBUTES_SLOT_SIZE, SYNAPSE_ATTRIBUTES_SLOT_SIZE,
 };
 use crate::primitives::triple_buffer::{TripleBuffer, TripleBufferReader};
-use crate::primitives::types::SAB;
+use crate::primitives::types::AtomicBuffer;
 use crate::structural_plane::node::node_chain_reader::NodeChainReader;
 use crate::structural_plane::node::node_reader::NodeReader;
 use crate::structural_plane::synapse::synapse_chain_reader::SynapseChainReader;
@@ -23,24 +23,24 @@ pub struct SynapticGraphReader {
 }
 
 impl SynapticGraphReader {
-    pub fn bind(sab: SAB, config: SynapticGraphConfig) -> Self {
-        let sab_start_index = SynapticGraphWriter::HEADERS_SIZE;
+    pub fn bind(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
+        let mem_start_offset = SynapticGraphWriter::HEADERS_SIZE;
         let triple_buffer_start_offset = 0;
 
         let node_attribute_plane = AttributePlaneReader::<NODE_ATTRIBUTES_SLOT_SIZE>::bind(
-            Arc::clone(&sab),
-            sab_start_index,
+            Arc::clone(&mem),
+            mem_start_offset,
             config.node_capacity,
         );
         let synapse_attribute_plane = AttributePlaneReader::<SYNAPSE_ATTRIBUTES_SLOT_SIZE>::bind(
-            Arc::clone(&sab),
-            node_attribute_plane.sab_end_index(),
+            Arc::clone(&mem),
+            node_attribute_plane.mem_end_offset(),
             config.synapse_capacity,
         );
         let triple_buffer_size = SynapticGraphWriter::compute_triple_buffer_size(&config);
         let triple_buffer_reader = TripleBuffer::bind_reader(
-            Arc::clone(&sab),
-            synapse_attribute_plane.sab_end_index(),
+            Arc::clone(&mem),
+            synapse_attribute_plane.mem_end_offset(),
             triple_buffer_size,
         );
         let node_chain_reader = NodeChainReader::bind(

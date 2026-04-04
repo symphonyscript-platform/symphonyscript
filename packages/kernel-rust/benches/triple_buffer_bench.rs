@@ -2,9 +2,9 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion, Benchmark
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -14,13 +14,13 @@ fn create_sab(size: usize) -> SAB {
 
 fn bench_writer_publish(c: &mut Criterion) {
     let buffer_size = 64;
-    let sab = create_sab(4 + buffer_size * 3 + 100);
-    let (mut writer, _reader) = TripleBuffer::new(sab.clone(), 0, buffer_size);
+    let mem = create_mem(4 + buffer_size * 3 + 100);
+    let (mut writer, _reader) = TripleBuffer::new(mem.clone(), 0, buffer_size);
 
     // Pre-write some data
     let base = writer.current_start_index();
     for i in 0..buffer_size {
-        sab[base + i].store(i as i32, Ordering::Relaxed);
+        mem[base + i].store(i as i32, Ordering::Relaxed);
     }
 
     c.bench_function("TripleBuffer/publish_64", |b| {
@@ -32,8 +32,8 @@ fn bench_writer_publish(c: &mut Criterion) {
 
 fn bench_reader_swap_with_data(c: &mut Criterion) {
     let buffer_size = 64;
-    let sab = create_sab(4 + buffer_size * 3 + 100);
-    let (mut writer, mut reader) = TripleBuffer::new(sab.clone(), 0, buffer_size);
+    let mem = create_mem(4 + buffer_size * 3 + 100);
+    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, buffer_size);
 
     c.bench_function("TripleBuffer/reader_swap_with_data", |b| {
         b.iter(|| {
@@ -45,8 +45,8 @@ fn bench_reader_swap_with_data(c: &mut Criterion) {
 
 fn bench_reader_swap_no_data(c: &mut Criterion) {
     let buffer_size = 64;
-    let sab = create_sab(4 + buffer_size * 3 + 100);
-    let (_writer, mut reader) = TripleBuffer::new(sab, 0, buffer_size);
+    let mem = create_mem(4 + buffer_size * 3 + 100);
+    let (_writer, mut reader) = TripleBuffer::new(mem, 0, buffer_size);
 
     c.bench_function("TripleBuffer/reader_swap_no_data", |b| {
         b.iter(|| {
@@ -60,13 +60,13 @@ fn bench_publish_varying_buffer_size(c: &mut Criterion) {
 
     for &size in &[8, 64, 256, 1024, 4096, 26000] {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
-            let sab = create_sab(4 + size * 3 + 100);
-            let (mut writer, _reader) = TripleBuffer::new(sab.clone(), 0, size);
+            let mem = create_mem(4 + size * 3 + 100);
+            let (mut writer, _reader) = TripleBuffer::new(mem.clone(), 0, size);
 
             // Fill the writer buffer
             let base = writer.current_start_index();
             for i in 0..size {
-                sab[base + i].store(i as i32, Ordering::Relaxed);
+                mem[base + i].store(i as i32, Ordering::Relaxed);
             }
 
             b.iter(|| {
@@ -80,19 +80,19 @@ fn bench_publish_varying_buffer_size(c: &mut Criterion) {
 
 fn bench_full_cycle(c: &mut Criterion) {
     let buffer_size = 64;
-    let sab = create_sab(4 + buffer_size * 3 + 100);
-    let (mut writer, mut reader) = TripleBuffer::new(sab.clone(), 0, buffer_size);
+    let mem = create_mem(4 + buffer_size * 3 + 100);
+    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, buffer_size);
 
     c.bench_function("TripleBuffer/full_cycle_64", |b| {
         b.iter(|| {
             // Simulate real usage: write → publish → reader swap → read
             let base = writer.current_start_index();
-            sab[base].store(42, Ordering::Relaxed);
+            mem[base].store(42, Ordering::Relaxed);
             writer.publish();
 
             reader.swap();
             let rbase = reader.current_start_index();
-            black_box(sab[rbase].load(Ordering::Relaxed));
+            black_box(mem[rbase].load(Ordering::Relaxed));
         });
     });
 }
@@ -102,13 +102,13 @@ fn bench_write_then_publish(c: &mut Criterion) {
 
     for &size in &[8, 64, 256, 1024, 4096, 26000] {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
-            let sab = create_sab(4 + size * 3 + 100);
-            let (mut writer, _reader) = TripleBuffer::new(sab.clone(), 0, size);
+            let mem = create_mem(4 + size * 3 + 100);
+            let (mut writer, _reader) = TripleBuffer::new(mem.clone(), 0, size);
 
             b.iter(|| {
                 let base = writer.current_start_index();
                 for i in 0..size {
-                    sab[base + i].store(i as i32, Ordering::Relaxed);
+                    mem[base + i].store(i as i32, Ordering::Relaxed);
                 }
                 black_box(writer.publish());
             });
@@ -120,8 +120,8 @@ fn bench_write_then_publish(c: &mut Criterion) {
 
 fn bench_rapid_publish_no_reader(c: &mut Criterion) {
     let buffer_size = 64;
-    let sab = create_sab(4 + buffer_size * 3 + 100);
-    let (mut writer, _reader) = TripleBuffer::new(sab, 0, buffer_size);
+    let mem = create_mem(4 + buffer_size * 3 + 100);
+    let (mut writer, _reader) = TripleBuffer::new(mem, 0, buffer_size);
 
     c.bench_function("TripleBuffer/rapid_publish_no_reader", |b| {
         b.iter(|| {
@@ -134,8 +134,8 @@ fn bench_rapid_publish_no_reader(c: &mut Criterion) {
 
 fn bench_reader_swap_after_many_publishes(c: &mut Criterion) {
     let buffer_size = 64;
-    let sab = create_sab(4 + buffer_size * 3 + 100);
-    let (mut writer, mut reader) = TripleBuffer::new(sab, 0, buffer_size);
+    let mem = create_mem(4 + buffer_size * 3 + 100);
+    let (mut writer, mut reader) = TripleBuffer::new(mem, 0, buffer_size);
 
     c.bench_function("TripleBuffer/swap_after_10_publishes", |b| {
         b.iter(|| {

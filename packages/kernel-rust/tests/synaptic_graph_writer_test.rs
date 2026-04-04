@@ -20,8 +20,8 @@ fn config() -> SynapticGraphConfig {
 fn create_writer() -> SynapticGraphWriter {
     let cfg = config();
     let size = SynapticGraphWriter::compute_size(&cfg);
-    let sab: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
-    SynapticGraphWriter::new(Arc::new(sab), cfg)
+    let mem: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
+    SynapticGraphWriter::new(Arc::new(mem), cfg)
 }
 
 fn draft(opcode: i32, tick: i32) -> NodeDraft {
@@ -450,10 +450,10 @@ fn self_loop_connect_disconnect() {
     assert_eq!(kernel.get_node(n).get_incoming_synapse_head(), 0);
 }
 
-// ============ compute_sab_size ============
+// ============ compute_mem_size ============
 
 #[test]
-fn compute_sab_size_is_positive() {
+fn compute_mem_size_is_positive() {
     let cfg = config();
     assert!(SynapticGraphWriter::compute_size(&cfg) > 0);
 }
@@ -473,10 +473,10 @@ fn compute_triple_buffer_size_matches_slot_count() {
 #[test]
 fn copy_from_scales_full_topology_graph() {
     let small_cfg = config();
-    let small_sab: Vec<AtomicI32> = (0..SynapticGraphWriter::compute_size(&small_cfg))
+    let small_mem: Vec<AtomicI32> = (0..SynapticGraphWriter::compute_size(&small_cfg))
         .map(|_| AtomicI32::new(0))
         .collect();
-    let mut small_kernel = SynapticGraphWriter::new(Arc::new(small_sab), small_cfg.clone());
+    let mut small_kernel = SynapticGraphWriter::new(Arc::new(small_mem), small_cfg.clone());
 
     let src = small_kernel.insert_head(draft(1, 0)).unwrap();
     let tgt = small_kernel.insert_head(draft(2, 0)).unwrap();
@@ -490,10 +490,10 @@ fn copy_from_scales_full_topology_graph() {
     let mut large_cfg = config();
     large_cfg.node_capacity = 32;
     large_cfg.synapse_capacity = 64;
-    let large_sab: Vec<AtomicI32> = (0..SynapticGraphWriter::compute_size(&large_cfg))
+    let large_mem: Vec<AtomicI32> = (0..SynapticGraphWriter::compute_size(&large_cfg))
         .map(|_| AtomicI32::new(0))
         .collect();
-    let large_kernel = SynapticGraphWriter::new(Arc::new(large_sab), large_cfg);
+    let large_kernel = SynapticGraphWriter::new(Arc::new(large_mem), large_cfg);
 
     large_kernel.copy_from(&small_kernel);
 
@@ -524,17 +524,17 @@ fn copy_from_scales_full_topology_graph() {
 fn copy_from_panics_if_source_larger() {
     let mut small_cfg = config();
     small_cfg.node_capacity = 16;
-    let small_sab: Vec<AtomicI32> = (0..SynapticGraphWriter::compute_size(&small_cfg))
+    let small_mem: Vec<AtomicI32> = (0..SynapticGraphWriter::compute_size(&small_cfg))
         .map(|_| AtomicI32::new(0))
         .collect();
-    let small_kernel = SynapticGraphWriter::new(Arc::new(small_sab), small_cfg);
+    let small_kernel = SynapticGraphWriter::new(Arc::new(small_mem), small_cfg);
 
     let mut large_cfg = config();
     large_cfg.node_capacity = 32;
-    let large_sab: Vec<AtomicI32> = (0..SynapticGraphWriter::compute_size(&large_cfg))
+    let large_mem: Vec<AtomicI32> = (0..SynapticGraphWriter::compute_size(&large_cfg))
         .map(|_| AtomicI32::new(0))
         .collect();
-    let large_kernel = SynapticGraphWriter::new(Arc::new(large_sab), large_cfg);
+    let large_kernel = SynapticGraphWriter::new(Arc::new(large_mem), large_cfg);
 
     small_kernel.copy_from(&large_kernel);
 }

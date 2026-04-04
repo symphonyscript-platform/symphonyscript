@@ -263,7 +263,7 @@ The structural plane is triple-buffered (main thread writes, audio thread reads 
 /// 16 × i32 = 64 bytes per node. Capacity: 4096 nodes.
 pub struct NodeView {
     sab: SAB,
-    sab_start_index: usize,
+    mem_start_offset: usize,
 }
 
 impl NodeView {
@@ -322,14 +322,14 @@ impl NodeView {
 
 ### 6.1 SAB View Types
 
-All kernel data lives in the SAB (`Arc<[AtomicI32]>`). Views are zero-cost typed wrappers — they hold `(sab, sab_start_index)` and provide domain-specific accessors. No values are stored in the view itself.
+All kernel data lives in the SAB (`Arc<[AtomicI32]>`). Views are zero-cost typed wrappers — they hold `(sab, mem_start_offset)` and provide domain-specific accessors. No values are stored in the view itself.
 
 ```rust
 /// Per-parameter view into PARAMETER_TABLE.
 /// 8 × i32 = 32 bytes per slot. Capacity: 1024 slots.
 pub struct ParamView {
     sab: SAB,
-    sab_start_index: usize,
+    mem_start_offset: usize,
 }
 
 impl ParamView {
@@ -383,7 +383,7 @@ impl ParamView {
 /// 8 × i32 = 32 bytes per slot. Capacity: 4096 slots.
 pub struct ModView {
     sab: SAB,
-    sab_start_index: usize,
+    mem_start_offset: usize,
 }
 
 impl ModView {
@@ -555,7 +555,7 @@ pub const SIGNAL_ENTRY_SIZE: usize = 4;     // i32 per entry
 /// Zero-cost view over node attribute slots in the SAB.
 pub struct NodeAttributesView {
     sab: SAB,
-    sab_start_index: usize,
+    mem_start_offset: usize,
 }
 
 impl NodeAttributesView {
@@ -614,7 +614,7 @@ Modulatable synapse fields in shared atomic plane:
 /// Zero-cost view over synapse attribute slots in the SAB.
 pub struct SynapseAttributesView {
     sab: SAB,
-    sab_start_index: usize,
+    mem_start_offset: usize,
 }
 
 impl SynapseAttributesView {
@@ -1599,7 +1599,7 @@ Fire trace is SAB **state**, not a stream. Audio thread overwrites per-synapse f
 /// Zero-cost view over synapse fire trace slots in the SAB.
 pub struct SynapseFireView {
     sab: SAB,
-    sab_start_index: usize,
+    mem_start_offset: usize,
 }
 
 impl SynapseFireView {

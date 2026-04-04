@@ -2,13 +2,13 @@ use crate::errors::free_list_error::FreeListError;
 use crate::primitives::bitmap::Bitmap;
 use crate::primitives::simple_free_list::SimpleFreeList;
 use crate::primitives::staging_buffer::StagingBuffer;
-use crate::primitives::types::SAB;
+use crate::primitives::types::AtomicBuffer;
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct SlotAllocator {
-    sab_start_index: usize,
-    sab_end_index: usize,
+    mem_start_offset: usize,
+    mem_end_offset: usize,
     capacity: usize,
     deferred_bitmap: Bitmap,
     free_list: SimpleFreeList,
@@ -16,32 +16,32 @@ pub struct SlotAllocator {
 }
 
 impl SlotAllocator {
-    pub fn new(sab: SAB, sab_start_index: usize, capacity: usize) -> Self {
-        Self::create(sab, sab_start_index, capacity, false)
+    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+        Self::create(mem, mem_start_offset, capacity, false)
     }
 
-    pub fn bind(sab: SAB, sab_start_index: usize, capacity: usize) -> Self {
-        Self::create(sab, sab_start_index, capacity, true)
+    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+        Self::create(mem, mem_start_offset, capacity, true)
     }
 
-    pub fn create(sab: SAB, sab_start_index: usize, capacity: usize, bind: bool) -> Self {
-        let bitmap = Bitmap::create(Arc::clone(&sab), sab_start_index, capacity, bind);
+    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
+        let bitmap = Bitmap::create(Arc::clone(&mem), mem_start_offset, capacity, bind);
         let free_list =
-            SimpleFreeList::create(Arc::clone(&sab), bitmap.sab_end_index(), capacity, bind);
+            SimpleFreeList::create(Arc::clone(&mem), bitmap.mem_end_offset(), capacity, bind);
         let deferred_frees_list =
-            StagingBuffer::create(Arc::clone(&sab), free_list.sab_end_index(), capacity, bind);
-        let sab_end_index = deferred_frees_list.sab_end_index();
+            StagingBuffer::create(Arc::clone(&mem), free_list.mem_end_offset(), capacity, bind);
+        let mem_end_offset = deferred_frees_list.mem_end_offset();
 
         debug_assert!(
-            sab_end_index <= sab.len(),
-            "SlotAllocator::create | range [{}..{}] exceeds SAB boundaries",
-            sab_start_index,
+            mem_end_offset <= mem.len(),
+            "SlotAllocator::create | range [{}..{}] exceeds MEM boundaries",
+            mem_start_offset,
             capacity,
         );
 
         SlotAllocator {
-            sab_start_index,
-            sab_end_index,
+            mem_start_offset,
+            mem_end_offset,
             capacity,
             deferred_bitmap: bitmap,
             free_list,
@@ -49,10 +49,10 @@ impl SlotAllocator {
         }
     }
 
-    pub fn calculate_size_on_sab(capacity: usize) -> usize {
-        Bitmap::calculate_size_on_sab(capacity)
-            + SimpleFreeList::calculate_size_on_sab(capacity)
-            + StagingBuffer::calculate_size_on_sab(capacity)
+    pub fn calculate_size_on_mem(capacity: usize) -> usize {
+        Bitmap::calculate_size_on_mem(capacity)
+            + SimpleFreeList::calculate_size_on_mem(capacity)
+            + StagingBuffer::calculate_size_on_mem(capacity)
     }
 
     pub fn free_count(&self) -> usize {
@@ -67,12 +67,12 @@ impl SlotAllocator {
         self.free_list.alloc_count()
     }
 
-    pub fn sab_start_index(&self) -> usize {
-        self.sab_start_index
+    pub fn mem_start_offset(&self) -> usize {
+        self.mem_start_offset
     }
 
-    pub fn sab_end_index(&self) -> usize {
-        self.sab_end_index
+    pub fn mem_end_offset(&self) -> usize {
+        self.mem_end_offset
     }
 
     pub fn capacity(&self) -> usize {

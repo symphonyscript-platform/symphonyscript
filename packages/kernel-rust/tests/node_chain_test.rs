@@ -1,12 +1,12 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 use symphonyscript_kernel::structural_plane::node::node_chain_reader::NodeChainReader;
 use symphonyscript_kernel::structural_plane::node::node_chain_writer::NodeChainWriter;
 use symphonyscript_kernel::structural_plane::node::node_data::NodeDraft;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -17,7 +17,7 @@ fn create_sab(size: usize) -> SAB {
 // NODE_SLOT_SIZE = 16 (64 bytes per node)
 // Layout: TB metadata (4) + 3 buffers of BUF_CAP each
 // We need space for the chain head pointer inside the TB buffer too
-const SAB_SIZE: usize = 16384;
+const MEM_SIZE: usize = 16384;
 const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 4096;
 const FL_START: usize = 13000;
@@ -27,7 +27,7 @@ const CAPACITY: usize = 16;
 const NODE_START_OFFSET: usize = 0;
 
 struct TestHarness {
-    _sab: SAB,
+    _mem: AtomicBuffer,
     writer: symphonyscript_kernel::primitives::triple_buffer::TripleBufferWriter,
     reader: symphonyscript_kernel::primitives::triple_buffer::TripleBufferReader,
     chain: NodeChainWriter,
@@ -35,10 +35,10 @@ struct TestHarness {
 }
 
 fn setup() -> TestHarness {
-    let sab = create_sab(SAB_SIZE);
-    let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
+    let mem = create_mem(MEM_SIZE);
+    let (writer, reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
     let chain = NodeChainWriter::new(
-        Arc::clone(&sab),
+        Arc::clone(&mem),
         writer.clone(),
         FL_START,
         NODE_START_OFFSET,
@@ -47,7 +47,7 @@ fn setup() -> TestHarness {
     let chain_r = NodeChainReader::new(reader.clone(), NODE_START_OFFSET, CAPACITY);
 
     TestHarness {
-        _sab: sab,
+        _mem: mem,
         writer,
         reader,
         chain,
@@ -612,9 +612,9 @@ fn copy_from_preserves_topology_and_deep_data() {
     src.remove(b).unwrap(); // b deferred
     
     // create a dst with larger capacity
-    let dst_sab = create_sab(SAB_SIZE);
-    let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_sab), TB_START, TB_BUF_CAP);
-    let mut dst = NodeChainWriter::new(dst_sab, dst_tb, FL_START, NODE_START_OFFSET, CAPACITY * 2);
+    let dst_mem = create_mem(MEM_SIZE);
+    let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
+    let mut dst = NodeChainWriter::new(dst_mem, dst_tb, FL_START, NODE_START_OFFSET, CAPACITY * 2);
     
     dst.copy_from(&src);
     
@@ -635,13 +635,13 @@ fn copy_from_preserves_topology_and_deep_data() {
 #[test]
 #[should_panic]
 fn copy_from_panics_if_source_larger() {
-    let src_sab = create_sab(SAB_SIZE);
-    let (src_tb, _) = TripleBuffer::new(Arc::clone(&src_sab), TB_START, TB_BUF_CAP);
-    let src = NodeChainWriter::new(src_sab, src_tb, FL_START, NODE_START_OFFSET, CAPACITY * 2);
+    let src_mem = create_mem(MEM_SIZE);
+    let (src_tb, _) = TripleBuffer::new(Arc::clone(&src_mem), TB_START, TB_BUF_CAP);
+    let src = NodeChainWriter::new(src_mem, src_tb, FL_START, NODE_START_OFFSET, CAPACITY * 2);
     
-    let dst_sab = create_sab(SAB_SIZE);
-    let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_sab), TB_START, TB_BUF_CAP);
-    let dst = NodeChainWriter::new(dst_sab, dst_tb, FL_START, NODE_START_OFFSET, CAPACITY);
+    let dst_mem = create_mem(MEM_SIZE);
+    let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
+    let dst = NodeChainWriter::new(dst_mem, dst_tb, FL_START, NODE_START_OFFSET, CAPACITY);
     
     dst.copy_from(&src);
 }

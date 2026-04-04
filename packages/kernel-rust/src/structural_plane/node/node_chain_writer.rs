@@ -1,7 +1,7 @@
 use crate::constants::NODE_SLOT_SIZE;
 use crate::errors::free_list_error::FreeListError;
 use crate::primitives::triple_buffer::TripleBufferWriter;
-use crate::primitives::types::SAB;
+use crate::primitives::types::AtomicBuffer;
 use crate::structural_plane::node::node_data::{NodeData, NodeDraft};
 use crate::structural_plane::node::node_writer::NodeWriter;
 use crate::structural_plane::structural_writer::StructuralWriter;
@@ -10,8 +10,8 @@ use crate::structural_plane::structural_writer::StructuralWriter;
 pub struct NodeChainWriter {
     buffer: TripleBufferWriter,
     writer: StructuralWriter<NODE_SLOT_SIZE>,
-    sab_start_index: usize,
-    sab_end_index: usize,
+    mem_start_offset: usize,
+    mem_end_offset: usize,
     triple_buffer_start_offset: usize,
     triple_buffer_end_offset: usize,
     capacity: usize,
@@ -19,16 +19,16 @@ pub struct NodeChainWriter {
 
 impl NodeChainWriter {
     pub fn new(
-        sab: SAB,
+        mem: AtomicBuffer,
         buffer: TripleBufferWriter,
-        sab_start_index: usize,
+        mem_start_offset: usize,
         triple_buffer_start_offset: usize,
         capacity: usize,
     ) -> Self {
         Self::create(
-            sab,
+            mem,
             buffer,
-            sab_start_index,
+            mem_start_offset,
             triple_buffer_start_offset,
             capacity,
             false,
@@ -36,16 +36,16 @@ impl NodeChainWriter {
     }
 
     pub fn bind(
-        sab: SAB,
+        mem: AtomicBuffer,
         buffer: TripleBufferWriter,
-        sab_start_index: usize,
+        mem_start_offset: usize,
         triple_buffer_start_offset: usize,
         capacity: usize,
     ) -> Self {
         Self::create(
-            sab,
+            mem,
             buffer,
-            sab_start_index,
+            mem_start_offset,
             triple_buffer_start_offset,
             capacity,
             true,
@@ -53,9 +53,9 @@ impl NodeChainWriter {
     }
 
     pub fn create(
-        sab: SAB,
+        mem: AtomicBuffer,
         buffer: TripleBufferWriter,
-        sab_start_index: usize,
+        mem_start_offset: usize,
         triple_buffer_start_offset: usize,
         capacity: usize,
         bind: bool,
@@ -67,14 +67,14 @@ impl NodeChainWriter {
         );
 
         let structural_writer = StructuralWriter::<NODE_SLOT_SIZE>::create(
-            sab,
+            mem,
             buffer.clone(),
-            sab_start_index,
+            mem_start_offset,
             triple_buffer_start_offset + 1,
             capacity,
             bind,
         );
-        let sab_end_index = structural_writer.sab_end_index();
+        let mem_end_offset = structural_writer.mem_end_offset();
         let triple_buffer_end_offset = structural_writer.triple_buffer_end_offset();
 
         debug_assert!(
@@ -86,28 +86,28 @@ impl NodeChainWriter {
         NodeChainWriter {
             buffer,
             writer: structural_writer,
-            sab_start_index,
-            sab_end_index,
+            mem_start_offset,
+            mem_end_offset,
             triple_buffer_start_offset,
             triple_buffer_end_offset,
             capacity,
         }
     }
 
-    pub fn compute_size_on_sab(capacity: usize) -> usize {
-        StructuralWriter::<NODE_SLOT_SIZE>::compute_size_on_sab(capacity)
+    pub fn compute_size_on_mem(capacity: usize) -> usize {
+        StructuralWriter::<NODE_SLOT_SIZE>::compute_size_on_mem(capacity)
     }
 
     pub fn compute_size_on_triple_buffer(capacity: usize) -> usize {
         1 + StructuralWriter::<NODE_SLOT_SIZE>::compute_size_on_triple_buffer(capacity)
     }
 
-    pub fn sab_start_index(&self) -> usize {
-        self.sab_start_index
+    pub fn mem_start_offset(&self) -> usize {
+        self.mem_start_offset
     }
 
-    pub fn sab_end_index(&self) -> usize {
-        self.sab_end_index
+    pub fn mem_end_offset(&self) -> usize {
+        self.mem_end_offset
     }
 
     pub fn triple_buffer_start_offset(&self) -> usize {
@@ -134,14 +134,18 @@ impl NodeChainWriter {
         self.writer.is_active_slot(slot)
     }
 
+    pub fn get_head_slot(&self) -> usize {
+        self.buffer.read(self.triple_buffer_start_offset) as usize
+    }
+
     pub fn get_head(&'_ self) -> Option<NodeWriter<'_>> {
-        let head_slot = self.buffer.read(self.triple_buffer_start_offset);
+        let head_slot = self.get_head_slot();
 
         if head_slot == 0 {
             return None;
         }
 
-        Some(self.get(head_slot as usize))
+        Some(self.get(head_slot))
     }
 
     pub fn get(&'_ self, slot: usize) -> NodeWriter<'_> {
@@ -280,14 +284,14 @@ impl NodeChainWriter {
 mod tests {
     use crate::constants::NODE_SLOT_SIZE;
     use crate::primitives::triple_buffer::TripleBuffer;
-    use crate::primitives::types::SAB;
+    use crate::primitives::types::AtomicBuffer;
     use crate::structural_plane::node::node_chain_reader::NodeChainReader;
     use crate::structural_plane::node::node_chain_writer::NodeChainWriter;
     use crate::structural_plane::node::node_data::NodeDraft;
     use std::sync::atomic::AtomicI32;
     use std::sync::Arc;
 
-    fn create_sab(size: usize) -> SAB {
+    fn create_mem(size: usize) -> AtomicBuffer {
         let mut vec = Vec::with_capacity(size);
         for _ in 0..size {
             vec.push(AtomicI32::new(0));
@@ -298,7 +302,7 @@ mod tests {
     // NODE_SLOT_SIZE = 16 (64 bytes per node)
     // Layout: TB metadata (4) + 3 buffers of BUF_CAP each
     // We need space for the chain head pointer inside the TB buffer too
-    const SAB_SIZE: usize = 16384;
+    const MEM_SIZE: usize = 16384;
     const TB_START: usize = 0;
     const TB_BUF_CAP: usize = 4096;
     const FL_START: usize = 13000;
@@ -306,16 +310,16 @@ mod tests {
     const HEAD_OFFSET: usize = CAPACITY * NODE_SLOT_SIZE;
 
     struct TestHarness {
-        sab: SAB,
+        mem: AtomicBuffer,
         writer: crate::primitives::triple_buffer::TripleBufferWriter,
         reader: crate::primitives::triple_buffer::TripleBufferReader,
     }
 
     fn setup() -> TestHarness {
-        let sab = create_sab(SAB_SIZE);
-        let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
+        let mem = create_mem(MEM_SIZE);
+        let (writer, reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
         TestHarness {
-            sab,
+            mem,
             writer,
             reader,
         }
@@ -333,7 +337,7 @@ mod tests {
     #[test]
     fn node_writer_set_get_all_fields() {
         let h = setup();
-        let chain = NodeChainWriter::new(h.sab, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
+        let chain = NodeChainWriter::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
 
         let slot = chain.insert_head(make_draft(5, 999)).unwrap();
         let node = chain.get(slot);
@@ -361,7 +365,7 @@ mod tests {
     #[test]
     fn node_writer_opcode_bitmask_preserves_lower_bits() {
         let h = setup();
-        let chain = NodeChainWriter::new(h.sab, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
+        let chain = NodeChainWriter::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
 
         let slot = chain.insert_head(make_draft(0x7F, 0)).unwrap();
         let node = chain.get(slot);
@@ -382,7 +386,7 @@ mod tests {
 
         let slot = {
             let chain =
-                NodeChainWriter::new(h.sab, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
+                NodeChainWriter::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
             let slot = chain
                 .insert_head(NodeDraft {
                     opcode: 12,
@@ -409,7 +413,7 @@ mod tests {
     #[test]
     fn uninvolved_node_data_survives_sibling_mutations() {
         let h = setup();
-        let chain = NodeChainWriter::new(h.sab, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
+        let chain = NodeChainWriter::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
 
         let a = chain.insert_head(make_draft(1, 100)).unwrap();
         let b = chain.insert_head(make_draft(2, 200)).unwrap();

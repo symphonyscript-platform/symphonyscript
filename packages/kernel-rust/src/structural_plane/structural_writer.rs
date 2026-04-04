@@ -2,7 +2,7 @@ use crate::errors::free_list_error::FreeListError;
 use crate::primitives::into_array::IntoArray;
 use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::triple_buffer::TripleBufferWriter;
-use crate::primitives::types::SAB;
+use crate::primitives::types::AtomicBuffer;
 use crate::structural_plane::slot_writer::SlotWriter;
 use std::sync::Arc;
 
@@ -10,8 +10,8 @@ use std::sync::Arc;
 pub struct StructuralWriter<const SLOT_SIZE: usize> {
     writer: TripleBufferWriter,
     allocator: SlotAllocator,
-    sab_start_index: usize,
-    sab_end_index: usize,
+    mem_start_offset: usize,
+    mem_end_offset: usize,
     triple_buffer_start_offset: usize,
     triple_buffer_end_offset: usize,
     capacity: usize,
@@ -19,16 +19,16 @@ pub struct StructuralWriter<const SLOT_SIZE: usize> {
 
 impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
     pub fn new(
-        sab: SAB,
+        mem: AtomicBuffer,
         writer: TripleBufferWriter,
-        sab_start_index: usize,
+        mem_start_offset: usize,
         triple_buffer_start_offset: usize,
         capacity: usize,
     ) -> Self {
         Self::create(
-            sab,
+            mem,
             writer,
-            sab_start_index,
+            mem_start_offset,
             triple_buffer_start_offset,
             capacity,
             false,
@@ -36,16 +36,16 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
     }
 
     pub fn bind(
-        sab: SAB,
+        mem: AtomicBuffer,
         writer: TripleBufferWriter,
-        sab_start_index: usize,
+        mem_start_offset: usize,
         triple_buffer_start_offset: usize,
         capacity: usize,
     ) -> Self {
         Self::create(
-            sab,
+            mem,
             writer,
-            sab_start_index,
+            mem_start_offset,
             triple_buffer_start_offset,
             capacity,
             true,
@@ -53,9 +53,9 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
     }
 
     pub fn create(
-        sab: SAB,
+        mem: AtomicBuffer,
         writer: TripleBufferWriter,
-        sab_start_index: usize,
+        mem_start_offset: usize,
         triple_buffer_start_offset: usize,
         capacity: usize,
         bind: bool,
@@ -70,34 +70,34 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
             writer.buffer_capacity(),
         );
 
-        let allocator = SlotAllocator::create(Arc::clone(&sab), sab_start_index, capacity, bind);
-        let sab_end_index = allocator.sab_end_index();
+        let allocator = SlotAllocator::create(Arc::clone(&mem), mem_start_offset, capacity, bind);
+        let mem_end_offset = allocator.mem_end_offset();
 
         StructuralWriter {
             writer,
             allocator,
-            sab_start_index,
-            sab_end_index,
+            mem_start_offset,
+            mem_end_offset,
             triple_buffer_start_offset,
             triple_buffer_end_offset,
             capacity,
         }
     }
 
-    pub fn compute_size_on_sab(capacity: usize) -> usize {
-        SlotAllocator::calculate_size_on_sab(capacity)
+    pub fn compute_size_on_mem(capacity: usize) -> usize {
+        SlotAllocator::calculate_size_on_mem(capacity)
     }
 
     pub fn compute_size_on_triple_buffer(capacity: usize) -> usize {
         capacity * SLOT_SIZE
     }
 
-    pub fn sab_start_index(&self) -> usize {
-        self.sab_start_index
+    pub fn mem_start_offset(&self) -> usize {
+        self.mem_start_offset
     }
 
-    pub fn sab_end_index(&self) -> usize {
-        self.sab_end_index
+    pub fn mem_end_offset(&self) -> usize {
+        self.mem_end_offset
     }
 
     pub fn triple_buffer_start_offset(&self) -> usize {
@@ -228,12 +228,12 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
 mod tests {
     use crate::primitives::into_array::IntoArray;
     use crate::primitives::triple_buffer::TripleBuffer;
-    use crate::primitives::types::SAB;
+    use crate::primitives::types::AtomicBuffer;
     use crate::structural_plane::structural_writer::StructuralWriter;
     use std::sync::atomic::AtomicI32;
     use std::sync::Arc;
 
-    fn create_sab(size: usize) -> SAB {
+    fn create_mem(size: usize) -> AtomicBuffer {
         let mut vec = Vec::with_capacity(size);
         for _ in 0..size {
             vec.push(AtomicI32::new(0));
@@ -255,27 +255,27 @@ mod tests {
         }
     }
 
-    const SAB_SIZE: usize = 2048;
+    const MEM_SIZE: usize = 2048;
     const TB_START: usize = 0;
     const TB_BUF_CAP: usize = 256;
     const FL_START: usize = 800;
     const CAPACITY: usize = 8;
 
     fn setup() -> (
-        SAB,
+        AtomicBuffer,
         crate::primitives::triple_buffer::TripleBufferWriter,
         crate::primitives::triple_buffer::TripleBufferReader,
     ) {
-        let sab = create_sab(SAB_SIZE);
-        let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
-        (sab, writer, reader)
+        let mem = create_mem(MEM_SIZE);
+        let (writer, reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
+        (mem, writer, reader)
     }
 
     #[test]
     fn get_write_visible_through_read_field() {
-        let (sab, writer, _reader) = setup();
+        let (mem, writer, _reader) = setup();
         let sw: StructuralWriter<16> =
-            StructuralWriter::new(sab, writer.clone(), FL_START, 0, CAPACITY);
+            StructuralWriter::new(mem, writer.clone(), FL_START, 0, CAPACITY);
 
         let slot = sw.insert(TestPayload { a: 0, b: 0 }).unwrap();
         let view = sw.get(slot);

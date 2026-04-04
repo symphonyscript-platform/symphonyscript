@@ -3,18 +3,18 @@ use std::sync::Arc;
 use symphonyscript_kernel::primitives::staging_buffer::StagingBuffer;
 
 fn create_list(max_slots: usize) -> (StagingBuffer, Arc<Vec<AtomicI32>>) {
-    let size = StagingBuffer::calculate_size_on_sab(max_slots);
-    let sab: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
-    let sab_arc = Arc::new(sab);
+    let size = StagingBuffer::calculate_size_on_mem(max_slots);
+    let mem: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
+    let mem_arc = Arc::new(mem);
     (
-        StagingBuffer::new(Arc::clone(&sab_arc), 0, max_slots),
-        sab_arc,
+        StagingBuffer::new(Arc::clone(&mem_arc), 0, max_slots),
+        mem_arc,
     )
 }
 
 #[test]
 fn push_and_drain_toggles() {
-    let (list, _sab) = create_list(16);
+    let (list, _mem) = create_list(16);
 
     list.push(10);
     list.push(20);
@@ -40,7 +40,7 @@ fn push_and_drain_toggles() {
 
 #[test]
 fn drain_clears_previous_length() {
-    let (list, _sab) = create_list(16);
+    let (list, _mem) = create_list(16);
 
     list.push(5);
     list.drain(); // toggled
@@ -54,13 +54,13 @@ fn drain_clears_previous_length() {
 
 #[test]
 fn copy_from_preserves_state_and_resizes() {
-    let (small, _sab_small) = create_list(16);
+    let (small, _mem_small) = create_list(16);
     small.push(5);
     small.push(10);
     small.drain(); // toggles, 5 and 10 go to backbuffer
     small.push(15);
 
-    let (large, _sab_large) = create_list(32);
+    let (large, _mem_large) = create_list(32);
     large.copy_from(&small);
 
     // Drain large - toggles so it reads backbuffer (5 & 10)
@@ -78,7 +78,7 @@ fn copy_from_preserves_state_and_resizes() {
 #[test]
 #[should_panic]
 fn copy_from_panics_if_source_larger() {
-    let (small, _sab_small) = create_list(16);
-    let (large, _sab_large) = create_list(32);
+    let (small, _mem_small) = create_list(16);
+    let (large, _mem_large) = create_list(32);
     small.copy_from(&large);
 }

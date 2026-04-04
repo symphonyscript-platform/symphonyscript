@@ -3,34 +3,34 @@ use crate::primitives::hash_table::constants::TABLE_SLOT_SIZE;
 use crate::primitives::hash_table::hash_table_trait::HashTable;
 use crate::primitives::hash_table::table_slot::TableSlot;
 use crate::primitives::hash_table::table_slot_view::TableSlotView;
-use crate::primitives::types::SAB;
+use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct ProbeHashTable {
-    sab: SAB,
+    mem: AtomicBuffer,
     slots: TableSlotView,
     capacity: usize,
     mod_mask: usize,
     shift: u32,
     len_index: usize,
-    sab_start_index: usize,
-    sab_end_index: usize,
+    mem_start_offset: usize,
+    mem_end_offset: usize,
     hash: fn(key: i32, shift: u32) -> usize,
 }
 
 impl ProbeHashTable {
     pub fn new(
-        sab: SAB,
-        sab_start_index: usize,
+        mem: AtomicBuffer,
+        mem_start_offset: usize,
         max_entries: u32,
         max_load_factor: f32,
         hash: fn(key: i32, shift: u32) -> usize,
     ) -> Self {
         Self::create(
-            sab,
-            sab_start_index,
+            mem,
+            mem_start_offset,
             max_entries,
             max_load_factor,
             hash,
@@ -39,15 +39,15 @@ impl ProbeHashTable {
     }
 
     pub fn bind(
-        sab: SAB,
-        sab_start_index: usize,
+        mem: AtomicBuffer,
+        mem_start_offset: usize,
         max_entries: u32,
         max_load_factor: f32,
         hash: fn(key: i32, shift: u32) -> usize,
     ) -> Self {
         Self::create(
-            sab,
-            sab_start_index,
+            mem,
+            mem_start_offset,
             max_entries,
             max_load_factor,
             hash,
@@ -56,34 +56,34 @@ impl ProbeHashTable {
     }
 
     pub fn create(
-        sab: SAB,
-        sab_start_index: usize,
+        mem: AtomicBuffer,
+        mem_start_offset: usize,
         max_entries: u32,
         max_load_factor: f32,
         hash: fn(key: i32, shift: u32) -> usize,
         bind: bool,
     ) -> Self {
-        let sab_end_index = Self::compute_end_index(sab_start_index, max_entries, max_load_factor);
+        let mem_end_offset = Self::compute_end_index(mem_start_offset, max_entries, max_load_factor);
 
-        assert!(sab_end_index < sab.len(), "ProbeHashTable out of bounds");
+        assert!(mem_end_offset < mem.len(), "ProbeHashTable out of bounds");
 
         let capacity = Self::compute_capacity(max_entries, max_load_factor);
         let mod_mask = capacity - 1;
         let shift = 32 - capacity.trailing_zeros();
-        let slots = TableSlotView::new(Arc::clone(&sab), sab_start_index + 1, capacity as u32);
+        let slots = TableSlotView::new(Arc::clone(&mem), mem_start_offset + 1, capacity as u32);
 
         if !bind {
-            for i in sab_start_index..sab_end_index {
-                sab[i].store(0, Ordering::Relaxed);
+            for i in mem_start_offset..mem_end_offset {
+                mem[i].store(0, Ordering::Relaxed);
             }
         }
 
         ProbeHashTable {
-            sab: Arc::clone(&sab),
+            mem: Arc::clone(&mem),
             slots,
-            len_index: sab_start_index,
-            sab_start_index,
-            sab_end_index,
+            len_index: mem_start_offset,
+            mem_start_offset,
+            mem_end_offset,
             capacity,
             mod_mask,
             shift,
@@ -134,15 +134,15 @@ impl HashTable for ProbeHashTable {
     }
 
     fn len(&self) -> i32 {
-        self.sab[self.len_index].load(Ordering::Relaxed)
+        self.mem[self.len_index].load(Ordering::Relaxed)
     }
 
-    fn sab_start_index(&self) -> usize {
-        self.sab_start_index
+    fn mem_start_offset(&self) -> usize {
+        self.mem_start_offset
     }
 
-    fn sab_end_index(&self) -> usize {
-        self.sab_end_index
+    fn mem_end_offset(&self) -> usize {
+        self.mem_end_offset
     }
 
     fn get(&self, key: i32) -> Option<i32> {
@@ -183,7 +183,7 @@ impl HashTable for ProbeHashTable {
 
             if slot.is_empty() {
                 self.slots.set(slot_index, slot_context);
-                self.sab[self.len_index].fetch_add(1, Ordering::Relaxed);
+                self.mem[self.len_index].fetch_add(1, Ordering::Relaxed);
                 return Ok(());
             } else if slot.key == key {
                 self.slots.set(slot_index, slot_context);
@@ -222,7 +222,7 @@ impl HashTable for ProbeHashTable {
 
             if slot.key == key {
                 self.slots.remove(slot_index);
-                self.sab[self.len_index].fetch_sub(1, Ordering::Relaxed);
+                self.mem[self.len_index].fetch_sub(1, Ordering::Relaxed);
                 self.backwards_shift(slot_index);
                 return Some(slot.value);
             }

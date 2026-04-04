@@ -1,10 +1,10 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 use symphonyscript_kernel::primitives::simple_free_list::SimpleFreeList;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -13,8 +13,8 @@ fn create_sab(size: usize) -> SAB {
 }
 
 fn bench_alloc(c: &mut Criterion) {
-    let sab = create_sab(1_000_000);
-    let fl = SimpleFreeList::new(sab, 0, 131072);
+    let mem = create_mem(1_000_000);
+    let fl = SimpleFreeList::new(mem, 0, 131072);
 
     c.bench_function("SimpleFreeList/alloc", |b| {
         b.iter(|| black_box(fl.alloc()));
@@ -22,8 +22,8 @@ fn bench_alloc(c: &mut Criterion) {
 }
 
 fn bench_alloc_free_cycle(c: &mut Criterion) {
-    let sab = create_sab(1_000_000);
-    let fl = SimpleFreeList::new(sab, 0, 131072);
+    let mem = create_mem(1_000_000);
+    let fl = SimpleFreeList::new(mem, 0, 131072);
 
     c.bench_function("SimpleFreeList/alloc+free_cycle", |b| {
         b.iter(|| {
@@ -34,8 +34,8 @@ fn bench_alloc_free_cycle(c: &mut Criterion) {
 }
 
 fn bench_alloc_exhausted(c: &mut Criterion) {
-    let sab = create_sab(4096);
-    let fl = SimpleFreeList::new(sab, 0, 4);
+    let mem = create_mem(4096);
+    let fl = SimpleFreeList::new(mem, 0, 4);
 
     // Exhaust the free list
     for _ in 0..4 {
@@ -54,8 +54,8 @@ fn bench_batch_alloc(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(batch), &batch, |b, &batch| {
             b.iter_with_setup(
                 || {
-                    let sab = create_sab(1_000_000);
-                    SimpleFreeList::new(sab, 0, 16384)
+                    let mem = create_mem(1_000_000);
+                    SimpleFreeList::new(mem, 0, 16384)
                 },
                 |fl| {
                     for _ in 0..batch {
@@ -76,8 +76,8 @@ fn bench_batch_free(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(batch), &batch, |b, &batch| {
             b.iter_with_setup(
                 || {
-                    let sab = create_sab(1_000_000);
-                    let fl = SimpleFreeList::new(sab, 0, 16384);
+                    let mem = create_mem(1_000_000);
+                    let fl = SimpleFreeList::new(mem, 0, 16384);
                     let slots: Vec<usize> = (0..batch).map(|_| fl.alloc().unwrap()).collect();
                     (fl, slots)
                 },
@@ -94,8 +94,8 @@ fn bench_batch_free(c: &mut Criterion) {
 }
 
 fn bench_double_free_check(c: &mut Criterion) {
-    let sab = create_sab(1_000_000);
-    let fl = SimpleFreeList::new(sab, 0, 131072);
+    let mem = create_mem(1_000_000);
+    let fl = SimpleFreeList::new(mem, 0, 131072);
 
     // Alloc and free one slot — it's now free
     let slot = fl.alloc().unwrap();
@@ -111,8 +111,8 @@ fn bench_high_fragmentation(c: &mut Criterion) {
     c.bench_function("SimpleFreeList/fragmented_alloc_free", |b| {
         b.iter_with_setup(
             || {
-                let sab = create_sab(1_000_000);
-                let fl = SimpleFreeList::new(sab, 0, 4096);
+                let mem = create_mem(1_000_000);
+                let fl = SimpleFreeList::new(mem, 0, 4096);
                 // Alloc all, free odd slots → 50% fragmented
                 let slots: Vec<usize> = (0..4096).map(|_| fl.alloc().unwrap()).collect();
                 for s in &slots {
@@ -139,8 +139,8 @@ fn bench_vs_old_freelist_comparison(c: &mut Criterion) {
 
     // SimpleFreeList
     group.bench_function("SimpleFreeList", |b| {
-        let sab = create_sab(1_000_000);
-        let fl = SimpleFreeList::new(sab, 0, 131072);
+        let mem = create_mem(1_000_000);
+        let fl = SimpleFreeList::new(mem, 0, 131072);
         b.iter(|| {
             let slot = fl.alloc().unwrap();
             black_box(fl.free(slot).unwrap());
@@ -150,8 +150,8 @@ fn bench_vs_old_freelist_comparison(c: &mut Criterion) {
     // Old FreeList<1> (closest to SimpleFreeList — minimal slot size)
     group.bench_function("FreeList<1>", |b| {
         use symphonyscript_kernel::primitives::free_list::FreeList;
-        let sab = create_sab(1_000_000);
-        let fl: FreeList<1> = FreeList::new(sab, 0, 131072);
+        let mem = create_mem(1_000_000);
+        let fl: FreeList<1> = FreeList::new(mem, 0, 131072);
         b.iter(|| {
             let slot = fl.alloc().unwrap();
             black_box(fl.free(slot).unwrap());

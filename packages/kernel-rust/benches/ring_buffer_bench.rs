@@ -1,10 +1,10 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use symphonyscript_kernel::primitives::types::SAB;
+use symphonyscript_kernel::primitives::types::AtomicBuffer;
 use symphonyscript_kernel::primitives::ring_buffer::RingBuffer;
 
-fn create_sab(size: usize) -> SAB {
+fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
         vec.push(AtomicI32::new(0));
@@ -18,22 +18,22 @@ fn bench_write(c: &mut Criterion) {
     for &slot_size_label in &[1, 4, 16] {
         match slot_size_label {
             1 => {
-                let sab = create_sab(1_000_000);
-                let ring: RingBuffer<1> = RingBuffer::new(sab, 0, 131072);
+                let mem = create_mem(1_000_000);
+                let ring: RingBuffer<1> = RingBuffer::new(mem, 0, 131072);
                 group.bench_function(BenchmarkId::new("SLOT_SIZE", 1), |b| {
                     b.iter(|| black_box(ring.write([0])));
                 });
             }
             4 => {
-                let sab = create_sab(1_000_000);
-                let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 131072);
+                let mem = create_mem(1_000_000);
+                let ring: RingBuffer<4> = RingBuffer::new(mem, 0, 131072);
                 group.bench_function(BenchmarkId::new("SLOT_SIZE", 4), |b| {
                     b.iter(|| black_box(ring.write([0, 1, 2, 3])));
                 });
             }
             16 => {
-                let sab = create_sab(4_000_000);
-                let ring: RingBuffer<16> = RingBuffer::new(sab, 0, 131072);
+                let mem = create_mem(4_000_000);
+                let ring: RingBuffer<16> = RingBuffer::new(mem, 0, 131072);
                 group.bench_function(BenchmarkId::new("SLOT_SIZE", 16), |b| {
                     b.iter(|| black_box(ring.write([0; 16])));
                 });
@@ -52,8 +52,8 @@ fn bench_read(c: &mut Criterion) {
     for &slot_size_label in &[1, 4, 16] {
         match slot_size_label {
             1 => {
-                let sab = create_sab(1_000_000);
-                let ring: RingBuffer<1> = RingBuffer::new(sab, 0, 131072);
+                let mem = create_mem(1_000_000);
+                let ring: RingBuffer<1> = RingBuffer::new(mem, 0, 131072);
                 for i in 0..100_000 {
                     ring.write([i]).unwrap();
                 }
@@ -62,8 +62,8 @@ fn bench_read(c: &mut Criterion) {
                 });
             }
             4 => {
-                let sab = create_sab(1_000_000);
-                let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 131072);
+                let mem = create_mem(1_000_000);
+                let ring: RingBuffer<4> = RingBuffer::new(mem, 0, 131072);
                 for i in 0..100_000 {
                     ring.write([i, 0, 0, 0]).unwrap();
                 }
@@ -72,8 +72,8 @@ fn bench_read(c: &mut Criterion) {
                 });
             }
             16 => {
-                let sab = create_sab(4_000_000);
-                let ring: RingBuffer<16> = RingBuffer::new(sab, 0, 131072);
+                let mem = create_mem(4_000_000);
+                let ring: RingBuffer<16> = RingBuffer::new(mem, 0, 131072);
                 for i in 0..100_000 {
                     ring.write([i; 16]).unwrap();
                 }
@@ -89,8 +89,8 @@ fn bench_read(c: &mut Criterion) {
 }
 
 fn bench_write_read_interleaved(c: &mut Criterion) {
-    let sab = create_sab(4096);
-    let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 64);
+    let mem = create_mem(4096);
+    let ring: RingBuffer<4> = RingBuffer::new(mem, 0, 64);
 
     c.bench_function("RingBuffer/write+read_interleaved", |b| {
         b.iter(|| {
@@ -107,8 +107,8 @@ fn bench_throughput(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("write_batch", batch), &batch, |b, &batch| {
             b.iter_with_setup(
                 || {
-                    let sab = create_sab(1_000_000);
-                    RingBuffer::<4>::new(sab, 0, 131072)
+                    let mem = create_mem(1_000_000);
+                    RingBuffer::<4>::new(mem, 0, 131072)
                 },
                 |ring| {
                     for i in 0..batch {
@@ -123,8 +123,8 @@ fn bench_throughput(c: &mut Criterion) {
 }
 
 fn bench_empty_read(c: &mut Criterion) {
-    let sab = create_sab(4096);
-    let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 64);
+    let mem = create_mem(4096);
+    let ring: RingBuffer<4> = RingBuffer::new(mem, 0, 64);
 
     c.bench_function("RingBuffer/read_empty", |b| {
         b.iter(|| black_box(ring.read()));
@@ -132,8 +132,8 @@ fn bench_empty_read(c: &mut Criterion) {
 }
 
 fn bench_full_write(c: &mut Criterion) {
-    let sab = create_sab(4096);
-    let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 64);
+    let mem = create_mem(4096);
+    let ring: RingBuffer<4> = RingBuffer::new(mem, 0, 64);
 
     // Fill the buffer
     for _ in 0..64 {
