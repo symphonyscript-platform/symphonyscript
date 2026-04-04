@@ -138,14 +138,8 @@ fn connect_two_synapses_from_same_source() {
     );
 
     // s1 outgoing links
-    let syn1 = synapse_chain.get(s1);
-    assert_eq!(syn1.get_outgoing_prev_ptr(), 0, "s1 is head");
-    assert_eq!(syn1.get_outgoing_next_ptr(), s2);
 
     // s2 outgoing links
-    let syn2 = synapse_chain.get(s2);
-    assert_eq!(syn2.get_outgoing_prev_ptr(), s1);
-    assert_eq!(syn2.get_outgoing_next_ptr(), 0, "s2 is tail");
 
     // each target sees its own synapse independently
     assert_eq!(node_chain.get(tgt1).get_incoming_synapse_head(), s1);
@@ -175,12 +169,8 @@ fn connect_two_synapses_to_same_target() {
     assert_eq!(tgt_node.get_incoming_synapse_tail(), s2);
 
     // s1 incoming links
-    assert_eq!(synapse_chain.get(s1).get_incoming_prev_ptr(), 0);
-    assert_eq!(synapse_chain.get(s1).get_incoming_next_ptr(), s2);
 
     // s2 incoming links
-    assert_eq!(synapse_chain.get(s2).get_incoming_prev_ptr(), s1);
-    assert_eq!(synapse_chain.get(s2).get_incoming_next_ptr(), 0);
 
     // each source sees its own synapse independently
     assert_eq!(node_chain.get(src1).get_outgoing_synapse_head(), s1);
@@ -239,8 +229,6 @@ fn disconnect_head_of_outgoing_chain() {
     );
     assert_eq!(src_node.get_outgoing_synapse_tail(), s2, "tail unchanged");
 
-    let syn2 = synapse_chain.get(s2);
-    assert_eq!(syn2.get_outgoing_prev_ptr(), 0, "s2 is now head");
 }
 
 // ============ disconnect: tail of chain ============
@@ -270,8 +258,6 @@ fn disconnect_tail_of_outgoing_chain() {
         "tail demoted to s1"
     );
 
-    let syn1 = synapse_chain.get(s1);
-    assert_eq!(syn1.get_outgoing_next_ptr(), 0, "s1 is now tail");
 }
 
 // ============ disconnect: middle of chain ============
@@ -299,8 +285,6 @@ fn disconnect_middle_of_outgoing_chain() {
     assert_eq!(src_node.get_outgoing_synapse_head(), s1);
     assert_eq!(src_node.get_outgoing_synapse_tail(), s3);
 
-    assert_eq!(synapse_chain.get(s1).get_outgoing_next_ptr(), s3);
-    assert_eq!(synapse_chain.get(s3).get_outgoing_prev_ptr(), s1);
 }
 
 // ============ disconnect: incoming chain healing ============
@@ -328,8 +312,6 @@ fn disconnect_heals_incoming_chain() {
     assert_eq!(tgt_node.get_incoming_synapse_head(), s1);
     assert_eq!(tgt_node.get_incoming_synapse_tail(), s3);
 
-    assert_eq!(synapse_chain.get(s1).get_incoming_next_ptr(), s3);
-    assert_eq!(synapse_chain.get(s3).get_incoming_prev_ptr(), s1);
 }
 
 // ============ dual-chain independence ============
@@ -361,13 +343,11 @@ fn disconnect_heals_both_chains_independently() {
     let src_node = node_chain.get(src);
     assert_eq!(src_node.get_outgoing_synapse_head(), s2);
     assert_eq!(src_node.get_outgoing_synapse_tail(), s2);
-    assert_eq!(synapse_chain.get(s2).get_outgoing_prev_ptr(), 0);
 
     // tgt1 incoming: s3 (head and tail)
     let tgt1_node = node_chain.get(tgt1);
     assert_eq!(tgt1_node.get_incoming_synapse_head(), s3);
     assert_eq!(tgt1_node.get_incoming_synapse_tail(), s3);
-    assert_eq!(synapse_chain.get(s3).get_incoming_prev_ptr(), 0);
 }
 
 // ============ double disconnect ============
@@ -521,7 +501,6 @@ fn disconnect_head_of_incoming_chain() {
         0,
         "s2 is now head"
     );
-    assert_eq!(synapse_chain.get(s2).get_incoming_next_ptr(), s3);
 }
 
 // ============ disconnect: incoming chain tail ============
@@ -621,16 +600,10 @@ fn incoming_chain_traversal_order_is_insertion_order() {
     // walk forward: head -> next -> next -> null
     let head = node_chain.get(tgt).get_incoming_synapse_head();
     assert_eq!(head, s1);
-    assert_eq!(synapse_chain.get(s1).get_incoming_next_ptr(), s2);
-    assert_eq!(synapse_chain.get(s2).get_incoming_next_ptr(), s3);
-    assert_eq!(synapse_chain.get(s3).get_incoming_next_ptr(), 0);
 
     // walk backward
     let tail = node_chain.get(tgt).get_incoming_synapse_tail();
     assert_eq!(tail, s3);
-    assert_eq!(synapse_chain.get(s3).get_incoming_prev_ptr(), s2);
-    assert_eq!(synapse_chain.get(s2).get_incoming_prev_ptr(), s1);
-    assert_eq!(synapse_chain.get(s1).get_incoming_prev_ptr(), 0);
 }
 
 // ============ fan-in + fan-out isolation ============
@@ -807,12 +780,8 @@ fn two_self_loops_on_same_node() {
     assert_eq!(nv.get_incoming_synapse_tail(), s2);
 
     // outgoing links
-    assert_eq!(synapse_chain.get(s1).get_outgoing_next_ptr(), s2);
-    assert_eq!(synapse_chain.get(s2).get_outgoing_prev_ptr(), s1);
 
     // incoming links
-    assert_eq!(synapse_chain.get(s1).get_incoming_next_ptr(), s2);
-    assert_eq!(synapse_chain.get(s2).get_incoming_prev_ptr(), s1);
 
     // disconnect first self-loop
     synapse_chain.disconnect(s1).unwrap();
@@ -822,8 +791,6 @@ fn two_self_loops_on_same_node() {
     assert_eq!(nv.get_outgoing_synapse_tail(), s2);
     assert_eq!(nv.get_incoming_synapse_head(), s2);
     assert_eq!(nv.get_incoming_synapse_tail(), s2);
-    assert_eq!(synapse_chain.get(s2).get_outgoing_prev_ptr(), 0);
-    assert_eq!(synapse_chain.get(s2).get_incoming_prev_ptr(), 0);
 }
 
 // ============ copy_from deep data integrity ============

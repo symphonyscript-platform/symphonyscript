@@ -379,13 +379,11 @@ fn copy_from_preserves_deep_data_chunks() {
     assert_eq!(dst.count(), 2);
     assert_eq!(dst.deferred_count(), 1);
 
-    // Verify root fields
-    assert_eq!(dst.read_field(s1, 0), 111);
+    // Verify root fields for the active slot
     assert_eq!(dst.read_field(s2, 5), 5000);
 
-    // Verify all injected deep fields
+    // Verify all injected deep fields for the active slot
     for i in 2..8 {
-        assert_eq!(dst.read_field(s1, i), (i * 100) as i32);
         assert_eq!(dst.read_field(s2, i), (i * 1000) as i32);
     }
 
@@ -406,4 +404,58 @@ fn copy_from_panics_if_source_larger() {
     let sw_small: symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter<16> = symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter::new(sab2, t_writer2, FL_START, 0, 8);
 
     sw_small.copy_from(&sw_large);
+}
+
+// ============ Use-After-Free Domain Integrity ============
+
+#[test]
+#[should_panic(expected = "attempted to read inactive slot")]
+fn uaf_read_field_panics_on_deferred_slot() {
+    let (_sab, _writer, sw) = setup();
+    let slot = sw.insert(TestPayload { a: 111, b: 222 }).unwrap();
+    
+    // Developer removes the slot but holds the ID
+    sw.defer_free(slot).unwrap();
+    
+    // Attack: attempt to read the dangling slot
+    sw.read_field(slot, 0);
+}
+
+#[test]
+#[should_panic(expected = "attempted to write inactive slot")]
+fn uaf_write_field_panics_on_freed_reallocated_slot() {
+    let (_sab, _writer, mut sw) = setup();
+    let slot = sw.insert(TestPayload { a: 111, b: 222 }).unwrap();
+    
+    sw.defer_free(slot).unwrap();
+    sw.flush_deferred();
+    sw.flush_deferred();
+    
+    // Slot is now completely free and possibly reallocated
+    let new_slot = sw.insert(TestPayload { a: 999, b: 888 }).unwrap();
+    
+    // Sanity check that we recycled the physical slot
+    assert_eq!(slot, new_slot);
+    
+    // We attempt to write using the stale logic (though it happens to match the index, we shouldn't conceptually care, but wait, if it matches the index and IS active again, the assert WILL NOT CATCH IT!). 
+    // Wait, if it's reallocated, `is_active` is true! 
+    // To properly simulate an attack on an INACTIVE slot, we don't reallocate it.
+    
+    // Let's defer it AGAIN so it's inactive
+    sw.defer_free(new_slot).unwrap();
+    
+    // NOW attack the inactive footprint
+    sw.write_field(slot, 0, 101010);
+}
+
+#[test]
+#[should_panic(expected = "attempted to read inactive slot")]
+fn uaf_get_view_panics_on_deleted_slot() {
+    let (_sab, _writer, sw) = setup();
+    let slot = sw.insert(TestPayload { a: 111, b: 222 }).unwrap();
+    
+    sw.defer_free(slot).unwrap();
+    
+    // Attempting to construct a view on a dead slot must fail-fast
+    let _view = sw.get(slot);
 }
