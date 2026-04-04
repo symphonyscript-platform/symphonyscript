@@ -1,5 +1,4 @@
 use symphonyscript_kernel::control_plane::ControlPlane;
-use symphonyscript_kernel::errors::free_list_error::FreeListError;
 use symphonyscript_kernel::errors::kernel_error::KernelError;
 use symphonyscript_kernel::kernel_controller::KernelController;
 use symphonyscript_kernel::structural_plane::node::node_data::NodeDraft;
@@ -150,10 +149,12 @@ fn mutations_invisible_to_audio_thread_before_publish_and_swap() {
 
     assert!(audio.get_head_node().is_none());
 
-    controller.insert_head(NodeDraft {
-        opcode: 42,
-        base_tick: 100,
-    }).unwrap();
+    controller
+        .insert_head(NodeDraft {
+            opcode: 42,
+            base_tick: 100,
+        })
+        .unwrap();
 
     // Not published yet
     assert!(audio.get_head_node().is_none());
@@ -212,7 +213,7 @@ fn double_swap_without_publish_returns_false() {
     controller.insert_head(draft(1)).unwrap();
     controller.publish().unwrap();
 
-    assert!(audio.swap());  // first swap consumes the publish
+    assert!(audio.swap()); // first swap consumes the publish
     assert!(!audio.swap()); // nothing new to swap
 }
 
@@ -277,7 +278,7 @@ fn synapse_capacity_exhaustion_returns_error() {
 fn remove_then_reuse_slot() {
     let controller = KernelController::new(config(2));
     let n1 = controller.insert_head(draft(1)).unwrap();
-    let n2 = controller.insert_head(draft(2)).unwrap();
+    let _n2 = controller.insert_head(draft(2)).unwrap();
 
     // Full
     assert!(controller.insert_head(draft(3)).is_err());
@@ -338,7 +339,7 @@ fn grow_preserves_chain_topology() {
 
     let n1 = controller.insert_head(draft(10)).unwrap();
     let n2 = controller.insert_after(n1, draft(20)).unwrap();
-    let n3 = controller.insert_after(n2, draft(30)).unwrap();
+    let _n3 = controller.insert_after(n2, draft(30)).unwrap();
 
     controller.grow(config(32)).unwrap();
 
