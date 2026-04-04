@@ -150,7 +150,7 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
     pub fn get(&'_ self, slot: usize) -> SlotWriter<'_, SLOT_SIZE> {
         debug_assert!(
             self.allocator.is_active(slot),
-            "StructuralWriter.write_field | attempted to read inactive slot {}",
+            "StructuralWriter.get | attempted to read inactive slot {}",
             slot
         );
         debug_assert!(slot > 0 && slot <= self.capacity(), "slot out of bounds");
@@ -176,7 +176,7 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
     pub fn read_field(&'_ self, slot: usize, offset: usize) -> i32 {
         debug_assert!(
             self.allocator.is_active(slot),
-            "StructuralWriter.write_field | attempted to read inactive slot {}",
+            "StructuralWriter.read_field | attempted to read inactive slot {}",
             slot
         );
         debug_assert!(offset < SLOT_SIZE, "offset out of bounds");
