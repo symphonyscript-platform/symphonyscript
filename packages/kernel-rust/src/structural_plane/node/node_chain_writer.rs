@@ -222,11 +222,11 @@ impl NodeChainWriter {
     }
 
     pub fn remove(&self, slot: usize) -> Result<(), FreeListError> {
-        self.writer.defer_free(slot)?;
-
         let node = self.get(slot);
         let prev_slot = node.get_prev_ptr();
         let next_slot = node.get_next_ptr();
+
+        self.writer.defer_free(slot)?;
 
         if prev_slot != 0 {
             self.get(prev_slot).set_next_ptr(next_slot);
