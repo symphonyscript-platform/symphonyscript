@@ -190,7 +190,7 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
         );
     }
 
-    fn resolve_writer_offset(&self, slot: usize) -> usize {
+    pub fn resolve_writer_offset(&self, slot: usize) -> usize {
         self.triple_buffer_start_offset + (slot - 1) * SLOT_SIZE
     }
 }
