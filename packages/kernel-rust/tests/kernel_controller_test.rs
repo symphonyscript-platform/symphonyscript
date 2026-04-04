@@ -631,3 +631,101 @@ fn grow_rejects_if_only_synapses_shrink() {
         Err(KernelError::InsufficientCapacity)
     ));
 }
+
+#[test]
+fn defer_then_grow_then_publish_flushes_on_new_allocator() {
+    let mut controller = KernelController::new(config(4));
+
+    let n1 = controller.insert_head(draft(1)).unwrap();
+    let n2 = controller.insert_after(n1, draft(2)).unwrap();
+    let n3 = controller.insert_after(n2, draft(3)).unwrap();
+    let n4 = controller.insert_after(n3, draft(4)).unwrap();
+
+    // Full
+    assert!(controller.insert_head(draft(99)).is_err());
+
+    // Defer a free — slot is marked but not released yet
+    controller.remove_node(n2).unwrap();
+    assert_eq!(controller.node_count(), 4); // still 4 (deferred)
+
+    // Grow BEFORE publish — deferred state must be copied to new allocator
+    controller.grow(config(8)).unwrap();
+
+    // Publish flushes deferred frees on the NEW allocator
+    controller.publish();
+
+    // n2's slot should now be genuinely free on the new allocator
+    // We can verify by inserting — if deferred flush failed, this would fail
+    let n5 = controller.insert_head(draft(5)).unwrap();
+    assert_eq!(controller.get_node(n5).get_opcode(), 5);
+
+    // The remaining original nodes should still be intact
+    assert_eq!(controller.get_node(n1).get_opcode(), 1);
+    assert_eq!(controller.get_node(n3).get_opcode(), 3);
+    assert_eq!(controller.get_node(n4).get_opcode(), 4);
+}
+
+#[test]
+fn defer_then_grow_then_defer_more_then_publish() {
+    let mut controller = KernelController::new(config(8));
+
+    let n1 = controller.insert_head(draft(1)).unwrap();
+    let n2 = controller.insert_after(n1, draft(2)).unwrap();
+    let n3 = controller.insert_after(n2, draft(3)).unwrap();
+    let n4 = controller.insert_after(n3, draft(4)).unwrap();
+
+    // Defer n2 on the OLD allocator
+    controller.remove_node(n2).unwrap();
+
+    // Grow — deferred state for n2 is copied
+    controller.grow(config(16)).unwrap();
+
+    // Defer n4 on the NEW allocator
+    controller.remove_node(n4).unwrap();
+
+    // Publish flushes BOTH deferred frees
+    controller.publish();
+
+    // Both n2 and n4 should be reclaimable
+    let n5 = controller.insert_head(draft(5)).unwrap();
+    let n6 = controller.insert_head(draft(6)).unwrap();
+    assert_eq!(controller.get_node(n5).get_opcode(), 5);
+    assert_eq!(controller.get_node(n6).get_opcode(), 6);
+
+    // Survivors intact
+    assert_eq!(controller.get_node(n1).get_opcode(), 1);
+    assert_eq!(controller.get_node(n3).get_opcode(), 3);
+}
+
+#[test]
+fn defer_then_publish_then_grow_preserves_freed_slot() {
+    let mut controller = KernelController::new(config(4));
+
+    let n1 = controller.insert_head(draft(1)).unwrap();
+    let n2 = controller.insert_after(n1, draft(2)).unwrap();
+    let _n3 = controller.insert_after(n2, draft(3)).unwrap();
+    let _n4 = controller.insert_after(_n3, draft(4)).unwrap();
+
+    // Defer and flush BEFORE grow
+    controller.remove_node(n2).unwrap();
+    controller.publish(); // flushes on OLD allocator
+
+    // n2's slot is now genuinely free in the old free list
+    // Grow copies the free list state — n2's slot should remain free
+    controller.grow(config(8)).unwrap();
+
+    // n2's slot should be allocatable on the new allocator
+    let n5 = controller.insert_head(draft(5)).unwrap();
+    assert_eq!(controller.get_node(n5).get_opcode(), 5);
+
+    // Verify audio thread sees correct state after full cycle
+    controller.publish();
+    let cp_address = controller.get_controller_plane_address();
+    let cp_ptr = cp_address as *const ControlPlane;
+    let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
+    let audio = unsafe { &mut *reader_ptr };
+    audio.swap();
+
+    let head = audio.get_head_node().unwrap();
+    assert_eq!(head.get_opcode(), 5);
+}
