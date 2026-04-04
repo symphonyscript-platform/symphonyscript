@@ -1,11 +1,10 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use symphonyscript_kernel::constants::{NODE_SLOT_SIZE, SYNAPSE_SLOT_SIZE};
+use symphonyscript_kernel::constants::NODE_SLOT_SIZE;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
 use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::structural_plane::node::node_chain_writer::NodeChainWriter;
 use symphonyscript_kernel::structural_plane::node::node_data::NodeDraft;
-use symphonyscript_kernel::structural_plane::structural_reader::StructuralReader;
 use symphonyscript_kernel::structural_plane::synapse::synapse_chain_reader::SynapseChainReader;
 use symphonyscript_kernel::structural_plane::synapse::synapse_chain_writer::SynapseChainWriter;
 use symphonyscript_kernel::structural_plane::synapse::synapse_data::SynapseDraft;
@@ -96,11 +95,6 @@ fn reader_sees_all_synapse_fields_after_publish() {
     h.writer.publish();
     h.reader.swap();
 
-    let synapse_sr = StructuralReader::<SYNAPSE_SLOT_SIZE>::new(
-        h.reader.clone(),
-        SYNAPSE_START_OFFSET,
-        SYNAPSE_CAPACITY,
-    );
     let synapse_chain_r = h.synapse_chain_r;
     let s = synapse_chain_r.get(syn);
     assert_eq!(s.get_opcode(), 42);
@@ -263,7 +257,7 @@ fn reader_sees_disconnect_after_publish() {
             .unwrap();
         // outgoing: s1 -> s2
 
-        synapse_chain.disconnect(s1);
+        synapse_chain.disconnect(s1).unwrap();
         // outgoing: s2
         s2
     };

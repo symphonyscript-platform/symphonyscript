@@ -1,7 +1,6 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use symphonyscript_kernel::primitives::into_array::IntoArray;
-use symphonyscript_kernel::primitives::simple_free_list::SimpleFreeList;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
 use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::structural_plane::structural_reader::StructuralReader;
@@ -45,12 +44,6 @@ fn setup_custom(
 ) {
     let sab = create_sab(SAB_SIZE);
     let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
-    let free_list = SimpleFreeList::new(Arc::clone(&sab), FL_START, CAPACITY);
-    let deferred = symphonyscript_kernel::primitives::staging_buffer::StagingBuffer::new(
-        Arc::clone(&sab),
-        FL_START + 500,
-        CAPACITY,
-    );
     let sw: StructuralWriter<16> = StructuralWriter::new(
         sab.clone(),
         writer.clone(),
@@ -302,9 +295,7 @@ fn reader_sees_first_and_last_slot() {
 fn two_reader_views_same_snapshot() {
     let (_sab, mut writer, mut reader, sw, sr) = setup();
 
-    let slot = {
-        sw.insert(TestPayload { a: 77, b: 88 }).unwrap()
-    };
+    let slot = { sw.insert(TestPayload { a: 77, b: 88 }).unwrap() };
     writer.publish();
     reader.swap();
 

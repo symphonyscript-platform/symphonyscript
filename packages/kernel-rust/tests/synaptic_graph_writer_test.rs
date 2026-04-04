@@ -1,5 +1,7 @@
-use symphonyscript_kernel::attribute_plane::writer::note_attributes_writer::{NoteAttributes, NoteAttributesWriter};
-use symphonyscript_kernel::attribute_plane::writer::synapse_attributes_writer::{SynapseAttributes, SynapseAttributesWriter};
+use symphonyscript_kernel::attribute_plane::writer::note_attributes_writer::{
+    NoteAttributes, NoteAttributesWriter,
+};
+use symphonyscript_kernel::attribute_plane::writer::synapse_attributes_writer::SynapseAttributes;
 use symphonyscript_kernel::structural_plane::node::node_data::NodeDraft;
 use symphonyscript_kernel::structural_plane::synapse::synapse_data::SynapseDraft;
 use symphonyscript_kernel::synaptic_graph_config::SynapticGraphConfig;
@@ -67,7 +69,7 @@ fn insert_head_chain_ordering() {
 
     let a = kernel.insert_head(draft(1, 10)).unwrap();
     let b = kernel.insert_head(draft(2, 20)).unwrap();
-    let c = kernel.insert_head(draft(3, 30)).unwrap();
+    let _c = kernel.insert_head(draft(3, 30)).unwrap();
 
     // chain: c -> b -> a
     let head = kernel.get_head_node().unwrap();
@@ -127,7 +129,7 @@ fn remove_node_heals_chain() {
     let c = kernel.insert_head(draft(3, 0)).unwrap();
     // chain: c -> b -> a
 
-    kernel.remove_node(b);
+    kernel.remove_node(b).unwrap();
     // chain: c -> a
 
     assert_eq!(kernel.get_node(c).get_next_ptr(), a);
@@ -146,27 +148,26 @@ fn remove_then_publish_reclaims_slot() {
     assert!(kernel.insert_head(draft(99, 0)).is_none(), "capacity full");
 
     // remove one
-    kernel.remove_node(slots[0]);
+    kernel.remove_node(slots[0]).unwrap();
 
     // slot not yet reclaimed (deferred)
     assert!(kernel.insert_head(draft(99, 0)).is_none(), "still deferred");
 
     // publish #1: shift to previous list
-    kernel.publish().unwrap();
+    kernel.publish();
 
     // publish #2: drains the previous list
-    kernel.publish().unwrap();
+    kernel.publish();
 
     // now the slot is available
     let reclaimed = kernel.insert_head(draft(99, 0));
     assert!(reclaimed.is_some(), "slot reclaimed after publish");
 }
 
-#[test]
 /* fn double_remove_returns_error() {
     let kernel = Kernel::new(config());
     let a = kernel.insert_head(draft(1, 0)).unwrap();
-    kernel.remove_node(a);
+    kernel.remove_node(a).unwrap();
     /* commented err check */
 } */
 // ============ Synapse connect/disconnect ============
@@ -210,7 +211,7 @@ fn disconnect_heals_synapse_chain() {
     let s1 = kernel.connect(src, tgt1, syn_draft(10)).unwrap();
     let s2 = kernel.connect(src, tgt2, syn_draft(20)).unwrap();
 
-    kernel.disconnect(s1);
+    kernel.disconnect(s1).unwrap();
 
     assert_eq!(kernel.get_node(src).get_outgoing_synapse_head(), s2);
     assert_eq!(kernel.get_node(src).get_outgoing_synapse_tail(), s2);
@@ -234,7 +235,7 @@ fn disconnect_then_publish_reclaims_synapse_slot() {
         "synapse capacity full"
     );
 
-    kernel.disconnect(synapses[0]);
+    kernel.disconnect(synapses[0]).unwrap();
 
     // not yet reclaimed
     assert!(
@@ -242,8 +243,8 @@ fn disconnect_then_publish_reclaims_synapse_slot() {
         "still deferred"
     );
 
-    kernel.publish().unwrap();
-    kernel.publish().unwrap(); // Two cycle deferral required to physically reclaim
+    kernel.publish();
+    kernel.publish(); // Two cycle deferral required to physically reclaim
 
     // now reclaimed
     assert!(
@@ -252,14 +253,13 @@ fn disconnect_then_publish_reclaims_synapse_slot() {
     );
 }
 
-#[test]
 /* fn double_disconnect_returns_error() {
     let kernel = Kernel::new(config());
     let src = kernel.insert_head(draft(1, 0)).unwrap();
     let tgt = kernel.insert_head(draft(2, 0)).unwrap();
     let syn = kernel.connect(src, tgt, syn_draft(10)).unwrap();
 
-    kernel.disconnect(syn);
+    kernel.disconnect(syn).unwrap();
     /* commented err check */
 } */
 // ============ Node attributes ============
@@ -372,7 +372,7 @@ fn set_synapse_attributes_bulk() {
 #[test]
 fn publish_succeeds_on_empty_kernel() {
     let mut kernel = create_writer();
-    assert!(kernel.publish().is_ok());
+    kernel.publish();
 }
 
 #[test]
@@ -383,7 +383,7 @@ fn publish_after_mutations_succeeds() {
     let tgt = kernel.insert_head(draft(2, 0)).unwrap();
     kernel.connect(src, tgt, syn_draft(10)).unwrap();
 
-    assert!(kernel.publish().is_ok());
+    kernel.publish();
 }
 
 #[test]
@@ -392,16 +392,16 @@ fn multiple_publish_cycles() {
 
     // cycle 1: insert
     let a = kernel.insert_head(draft(1, 0)).unwrap();
-    kernel.publish().unwrap();
+    kernel.publish();
 
     // cycle 2: insert + remove
-    let b = kernel.insert_head(draft(2, 0)).unwrap();
-    kernel.remove_node(a);
-    kernel.publish().unwrap();
+    let _b = kernel.insert_head(draft(2, 0)).unwrap();
+    kernel.remove_node(a).unwrap();
+    kernel.publish();
 
     // cycle 3: a's slot should be reclaimed now
-    let c = kernel.insert_head(draft(3, 0)).unwrap();
-    kernel.publish().unwrap();
+    let _c = kernel.insert_head(draft(3, 0)).unwrap();
+    kernel.publish();
 
     // chain should have c and b (a was removed)
     let head = kernel.get_head_node().unwrap();
@@ -419,14 +419,14 @@ fn deferred_free_two_cycle_delay() {
     }
 
     // remove in cycle 0 (pushes to current deferred list)
-    kernel.remove_node(slots[0]);
+    kernel.remove_node(slots[0]).unwrap();
 
     // publish #1: drains previous list (empty), toggles.
     // Now slots[0] is in the "previous" list.
-    kernel.publish().unwrap();
+    kernel.publish();
 
     // publish #2: drains previous list (contains slots[0]). Slot reclaimed.
-    kernel.publish().unwrap();
+    kernel.publish();
 
     // slot should be available now
     assert!(kernel.insert_head(draft(99, 0)).is_some());
@@ -444,7 +444,7 @@ fn self_loop_connect_disconnect() {
     assert_eq!(kernel.get_node(n).get_outgoing_synapse_head(), syn);
     assert_eq!(kernel.get_node(n).get_incoming_synapse_head(), syn);
 
-    kernel.disconnect(syn);
+    kernel.disconnect(syn).unwrap();
 
     assert_eq!(kernel.get_node(n).get_outgoing_synapse_head(), 0);
     assert_eq!(kernel.get_node(n).get_incoming_synapse_head(), 0);
@@ -484,8 +484,8 @@ fn copy_from_scales_full_topology_graph() {
 
     let note = NoteAttributesWriter(small_kernel.get_node_attributes(src));
     note.set_pitch(60);
-    
-    small_kernel.publish().unwrap(); 
+
+    small_kernel.publish();
 
     let mut large_cfg = config();
     large_cfg.node_capacity = 32;
@@ -493,27 +493,27 @@ fn copy_from_scales_full_topology_graph() {
     let large_sab: Vec<AtomicI32> = (0..SynapticGraphWriter::compute_size(&large_cfg))
         .map(|_| AtomicI32::new(0))
         .collect();
-    let mut large_kernel = SynapticGraphWriter::new(Arc::new(large_sab), large_cfg);
+    let large_kernel = SynapticGraphWriter::new(Arc::new(large_sab), large_cfg);
 
     large_kernel.copy_from(&small_kernel);
 
     // Validate nodes survived
     let n_src = large_kernel.get_node(src);
     assert_eq!(n_src.get_opcode(), 1);
-    
+
     let n_tgt = large_kernel.get_node(tgt);
     assert_eq!(n_tgt.get_opcode(), 2);
-    
+
     // Validate synapse survived
     let s_syn = large_kernel.get_synapse(syn);
     assert_eq!(s_syn.get_opcode(), 10);
     assert_eq!(s_syn.get_source_ptr(), src);
     assert_eq!(s_syn.get_target_ptr(), tgt);
-    
+
     // Validate structural links
     assert_eq!(n_src.get_outgoing_synapse_head(), syn);
     assert_eq!(n_tgt.get_incoming_synapse_head(), syn);
-    
+
     // Validate attributes survived
     let note_large = NoteAttributesWriter(large_kernel.get_node_attributes(src));
     assert_eq!(note_large.pitch(), 60);
@@ -527,7 +527,7 @@ fn copy_from_panics_if_source_larger() {
     let small_sab: Vec<AtomicI32> = (0..SynapticGraphWriter::compute_size(&small_cfg))
         .map(|_| AtomicI32::new(0))
         .collect();
-    let mut small_kernel = SynapticGraphWriter::new(Arc::new(small_sab), small_cfg);
+    let small_kernel = SynapticGraphWriter::new(Arc::new(small_sab), small_cfg);
 
     let mut large_cfg = config();
     large_cfg.node_capacity = 32;

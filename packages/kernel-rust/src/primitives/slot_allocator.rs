@@ -112,13 +112,15 @@ impl SlotAllocator {
         Ok(())
     }
 
-    pub fn flush_deferred(&self) -> Result<(), FreeListError> {
+    pub fn flush_deferred(&self) {
         for slot in self.deferred_frees_list.drain() {
             self.deferred_bitmap.off(slot - 1);
-            self.free_list.free(slot)?;
+            let result = self.free_list.free(slot);
+            debug_assert!(
+                result.is_ok(),
+                "SlotAllocator.flush_deferred | internal invariant violated: double free during flush"
+            )
         }
-
-        Ok(())
     }
 
     pub fn copy_from(&self, source: &SlotAllocator) {

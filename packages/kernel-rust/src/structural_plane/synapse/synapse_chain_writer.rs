@@ -220,7 +220,7 @@ impl SynapseChainWriter {
         Ok(())
     }
 
-    pub fn flush_deferred(&mut self) -> Result<(), FreeListError> {
+    pub fn flush_deferred(&mut self) {
         self.synapse_writer.flush_deferred()
     }
 

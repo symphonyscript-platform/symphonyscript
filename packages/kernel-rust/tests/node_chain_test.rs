@@ -1,6 +1,5 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use symphonyscript_kernel::constants::NODE_SLOT_SIZE;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
 use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::structural_plane::node::node_chain_reader::NodeChainReader;
@@ -26,7 +25,6 @@ const CAPACITY: usize = 16;
 // buffer_head_offset: offset within the TB buffer where chain head is stored
 // We put it after the node slots: CAPACITY * NODE_SLOT_SIZE = 16 * 16 = 256
 const NODE_START_OFFSET: usize = 0;
-const HEAD_OFFSET: usize = CAPACITY * NODE_SLOT_SIZE;
 
 struct TestHarness {
     _sab: SAB,
@@ -201,7 +199,7 @@ fn remove_only_node_empties_chain() {
     let chain = h.chain;
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
-    chain.remove(a);
+    chain.remove(a).unwrap();
 
     assert!(chain.get_head().is_none(), "chain must be empty");
 }
@@ -211,11 +209,11 @@ fn remove_head_promotes_next() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
+    let _a = chain.insert_head(make_draft(1, 0)).unwrap();
     let b = chain.insert_head(make_draft(2, 0)).unwrap();
     // chain: b -> a
 
-    chain.remove(b);
+    chain.remove(b).unwrap();
     // chain: a
 
     let head = chain.get_head().unwrap();
@@ -233,7 +231,7 @@ fn remove_tail_patches_prev() {
     let b = chain.insert_head(make_draft(2, 0)).unwrap();
     // chain: b -> a
 
-    chain.remove(a);
+    chain.remove(a).unwrap();
     // chain: b
 
     let node_b = chain.get(b);
@@ -251,7 +249,7 @@ fn remove_middle_heals_chain() {
     let c = chain.insert_head(make_draft(3, 0)).unwrap();
     // chain: c -> b -> a
 
-    chain.remove(b);
+    chain.remove(b).unwrap();
     // chain: c -> a
 
     assert_eq!(chain.get(c).get_next_ptr(), a);
@@ -267,14 +265,14 @@ fn remove_all_then_reinsert() {
     let b = chain.insert_head(make_draft(2, 0)).unwrap();
     let c = chain.insert_head(make_draft(3, 0)).unwrap();
 
-    chain.remove(c);
-    chain.remove(b);
-    chain.remove(a);
+    chain.remove(c).unwrap();
+    chain.remove(b).unwrap();
+    chain.remove(a).unwrap();
 
     assert!(chain.get_head().is_none());
 
     // reinsert
-    let d = chain.insert_head(make_draft(99, 0)).unwrap();
+    let _d = chain.insert_head(make_draft(99, 0)).unwrap();
     let head = chain.get_head().unwrap();
     assert_eq!(head.get_opcode(), 99);
     assert_eq!(head.get_next_ptr(), 0);
@@ -287,7 +285,7 @@ fn double_remove_returns_error() {
     let chain = h.chain;
 
     let a = chain.insert_head(make_draft(1, 0)).unwrap();
-    chain.remove(a);
+    chain.remove(a).unwrap();
     /* commented err check */
 }
 
@@ -297,7 +295,7 @@ fn double_remove_returns_error() {
 fn chain_reader_traverses_full_chain() {
     let mut h = setup();
 
-    let (a, b, c) = {
+    let (_a, _b, _c) = {
         let chain = h.chain;
 
         let a = chain.insert_head(make_draft(1, 10)).unwrap();
@@ -341,10 +339,10 @@ fn chain_reader_sees_removal_after_publish() {
     {
         let chain = h.chain;
 
-        let a = chain.insert_head(make_draft(1, 0)).unwrap();
+        let _a = chain.insert_head(make_draft(1, 0)).unwrap();
         let b = chain.insert_head(make_draft(2, 0)).unwrap();
         // chain: b -> a
-        chain.remove(b);
+        chain.remove(b).unwrap();
         // chain: a
     };
     h.writer.publish();
@@ -502,18 +500,18 @@ fn remove_tail_first_then_middle_then_head() {
     // chain: d -> c -> b -> a
 
     // remove tail
-    chain.remove(a);
+    chain.remove(a).unwrap();
     // chain: d -> c -> b
     assert_eq!(chain.get(b).get_next_ptr(), 0);
 
     // remove middle
-    chain.remove(c);
+    chain.remove(c).unwrap();
     // chain: d -> b
     assert_eq!(chain.get(d).get_next_ptr(), b);
     assert_eq!(chain.get(b).get_prev_ptr(), d);
 
     // remove head
-    chain.remove(d);
+    chain.remove(d).unwrap();
     // chain: b
     let head = chain.get_head().unwrap();
     assert_eq!(head.get_opcode(), 2);
@@ -534,25 +532,25 @@ fn remove_arbitrary_order_on_five_node_chain() {
     // chain: e -> d -> c -> b -> a
 
     // remove c (middle)
-    chain.remove(c);
+    chain.remove(c).unwrap();
     // chain: e -> d -> b -> a
     assert_eq!(chain.get(d).get_next_ptr(), b);
     assert_eq!(chain.get(b).get_prev_ptr(), d);
 
     // remove e (head)
-    chain.remove(e);
+    chain.remove(e).unwrap();
     // chain: d -> b -> a
     let head = chain.get_head().unwrap();
     assert_eq!(head.get_opcode(), 4);
     assert_eq!(chain.get(d).get_prev_ptr(), 0);
 
     // remove a (tail)
-    chain.remove(a);
+    chain.remove(a).unwrap();
     // chain: d -> b
     assert_eq!(chain.get(b).get_next_ptr(), 0);
 
     // remove d (head again)
-    chain.remove(d);
+    chain.remove(d).unwrap();
     // chain: b
     let head = chain.get_head().unwrap();
     assert_eq!(head.get_opcode(), 2);
@@ -560,7 +558,7 @@ fn remove_arbitrary_order_on_five_node_chain() {
     assert_eq!(head.get_next_ptr(), 0);
 
     // remove last
-    chain.remove(b);
+    chain.remove(b).unwrap();
     assert!(chain.get_head().is_none());
 }
 
@@ -579,7 +577,7 @@ fn reader_traverses_chain_after_mid_chain_removal() {
         let _d = chain.insert_head(make_draft(4, 40)).unwrap();
         // chain: d -> c -> b -> a
 
-        chain.remove(b);
+        chain.remove(b).unwrap();
         // chain: d -> c -> a
     }
     h.writer.publish();

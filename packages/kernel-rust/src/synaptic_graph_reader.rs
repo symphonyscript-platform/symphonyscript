@@ -74,7 +74,7 @@ impl SynapticGraphReader {
     pub fn get_node_attributes(
         &'_ self,
         slot: usize,
-    ) -> AttributesReader<NODE_ATTRIBUTES_SLOT_SIZE> {
+    ) -> AttributesReader<'_, NODE_ATTRIBUTES_SLOT_SIZE> {
         self.node_attribute_plane.get(slot)
     }
 
@@ -89,7 +89,7 @@ impl SynapticGraphReader {
     pub fn get_synapse_attributes(
         &'_ self,
         slot: usize,
-    ) -> AttributesReader<SYNAPSE_ATTRIBUTES_SLOT_SIZE> {
+    ) -> AttributesReader<'_, SYNAPSE_ATTRIBUTES_SLOT_SIZE> {
         self.synapse_attribute_plane.get(slot)
     }
 

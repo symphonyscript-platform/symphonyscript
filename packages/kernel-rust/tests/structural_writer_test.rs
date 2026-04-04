@@ -136,9 +136,9 @@ fn insert_exhausts_capacity_returns_none() {
 fn free_then_reinsert_reuses_slot() {
     let (_sab, _writer, mut sw) = setup();
     let slot = sw.insert(TestPayload { a: 10, b: 20 }).unwrap();
-    sw.defer_free(slot);
-    sw.free_deferred_slots().unwrap();
-    sw.free_deferred_slots().unwrap();
+    sw.defer_free(slot).unwrap();
+    sw.flush_deferred();
+    sw.flush_deferred();
 
     // Must reclaim the freed slot, not grab a new one
     let slot2 = sw.insert(TestPayload { a: 30, b: 40 }).unwrap();
@@ -318,12 +318,12 @@ fn exhaust_free_all_refill_all() {
 
     // free all 8
     for &slot in &slots {
-        sw.defer_free(slot);
+        sw.defer_free(slot).unwrap();
     }
 
     // refill all 8 with new data
-    sw.free_deferred_slots().unwrap();
-    sw.free_deferred_slots().unwrap();
+    sw.flush_deferred();
+    sw.flush_deferred();
     let mut new_slots = Vec::new();
     for i in 0..CAPACITY {
         let slot = sw

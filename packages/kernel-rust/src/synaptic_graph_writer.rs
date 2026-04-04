@@ -206,7 +206,7 @@ impl SynapticGraphWriter {
     pub fn get_node_attributes(
         &'_ self,
         slot: usize,
-    ) -> AttributesWriter<NODE_ATTRIBUTES_SLOT_SIZE> {
+    ) -> AttributesWriter<'_, NODE_ATTRIBUTES_SLOT_SIZE> {
         self.node_attribute_plane.get(slot)
     }
 
@@ -240,8 +240,8 @@ impl SynapticGraphWriter {
         self.node_chain_writer.insert_before(next_slot, data)
     }
 
-    pub fn remove_node(&self, slot: usize) {
-        self.node_chain_writer.remove(slot);
+    pub fn remove_node(&self, slot: usize) -> Result<(), FreeListError> {
+        self.node_chain_writer.remove(slot)
     }
 
     pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_> {
@@ -251,7 +251,7 @@ impl SynapticGraphWriter {
     pub fn get_synapse_attributes(
         &'_ self,
         slot: usize,
-    ) -> AttributesWriter<SYNAPSE_ATTRIBUTES_SLOT_SIZE> {
+    ) -> AttributesWriter<'_, SYNAPSE_ATTRIBUTES_SLOT_SIZE> {
         self.synapse_attribute_plane.get(slot)
     }
 
@@ -285,15 +285,14 @@ impl SynapticGraphWriter {
             .connect(source_slot, target_slot, data)
     }
 
-    pub fn disconnect(&self, slot: usize) {
-        self.synapse_chain_writer.disconnect(slot);
+    pub fn disconnect(&self, slot: usize) -> Result<(), FreeListError> {
+        self.synapse_chain_writer.disconnect(slot)
     }
 
-    pub fn publish(&mut self) -> Result<(), FreeListError> {
-        self.node_chain_writer.free_deferred_slots()?;
-        self.synapse_chain_writer.free_deferred_slots()?;
+    pub fn publish(&mut self) {
+        self.node_chain_writer.flush_deferred();
+        self.synapse_chain_writer.flush_deferred();
         self.triple_buffer_writer.publish();
-        Ok(())
     }
 
     pub fn get_sab(&self) -> SAB {

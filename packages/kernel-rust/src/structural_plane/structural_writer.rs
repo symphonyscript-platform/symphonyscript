@@ -169,7 +169,7 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
         self.writer.read(start_offset + offset)
     }
 
-    pub fn flush_deferred(&mut self) -> Result<(), FreeListError> {
+    pub fn flush_deferred(&mut self) {
         self.allocator.flush_deferred()
     }
 

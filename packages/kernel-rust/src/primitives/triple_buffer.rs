@@ -7,48 +7,48 @@ pub struct TripleBuffer;
 #[derive(Clone)]
 pub struct TripleBufferWriter {
     sab: SAB,
-    start_index: usize,
+    sab_start_index: usize,
     state_slot_index: usize,
     writer_slot_index: usize,
     published_slot_index: usize,
     buffer_bases: [usize; 3],
     buffer_capacity: usize,
-    end_index: usize,
+    sab_end_index: usize,
 }
 
 #[derive(Clone)]
 pub struct TripleBufferReader {
     sab: SAB,
-    start_index: usize,
+    sab_start_index: usize,
     state_slot_index: usize,
     reader_slot_index: usize,
     buffer_bases: [usize; 3],
     buffer_capacity: usize,
-    end_index: usize,
+    sab_end_index: usize,
 }
 
 // SPSC TripleBuffer - must be allocated PER main+audio_thread_N pair.
 impl TripleBuffer {
     pub fn new(
         sab: SAB,
-        start_index: usize,
+        sab_start_index: usize,
         buffer_capacity: usize,
     ) -> (TripleBufferWriter, TripleBufferReader) {
         debug_assert!(buffer_capacity > 0, "buffer must have positive capacity");
 
-        let state_slot_index = start_index;
-        let writer_slot_index = start_index + 1;
-        let published_slot_index = start_index + 2;
-        let reader_slot_index = start_index + 3;
-        let buffers_start_index = start_index + 4;
+        let state_slot_index = sab_start_index;
+        let writer_slot_index = sab_start_index + 1;
+        let published_slot_index = sab_start_index + 2;
+        let reader_slot_index = sab_start_index + 3;
+        let buffers_start_index = sab_start_index + 4;
         let buffer_bases: [usize; 3] = [
             buffers_start_index,
             buffers_start_index + buffer_capacity,
             buffers_start_index + buffer_capacity * 2,
         ];
-        let end_index = buffers_start_index + buffer_capacity * 3;
+        let sab_end_index = buffers_start_index + buffer_capacity * 3;
 
-        assert!(end_index <= sab.len(), "TripleBuffer out of bounds");
+        assert!(sab_end_index <= sab.len(), "TripleBuffer out of bounds");
 
         sab[writer_slot_index].store(0, Ordering::Relaxed);
         sab[state_slot_index].store(0b001, Ordering::Relaxed);
@@ -57,22 +57,22 @@ impl TripleBuffer {
 
         let writer = TripleBufferWriter {
             sab: Arc::clone(&sab),
-            start_index,
+            sab_start_index: sab_start_index,
             state_slot_index,
             writer_slot_index,
             published_slot_index,
             buffer_bases,
             buffer_capacity,
-            end_index,
+            sab_end_index,
         };
         let reader = TripleBufferReader {
             sab: Arc::clone(&sab),
-            start_index,
+            sab_start_index,
             state_slot_index,
             reader_slot_index,
             buffer_bases,
             buffer_capacity,
-            end_index,
+            sab_end_index,
         };
 
         (writer, reader)
@@ -94,13 +94,13 @@ impl TripleBuffer {
         let end_index = buffers_start_index + buffer_capacity * 3;
         let writer = TripleBufferWriter {
             sab: Arc::clone(&sab),
-            start_index,
+            sab_start_index: start_index,
             state_slot_index,
             writer_slot_index,
             published_slot_index,
             buffer_bases,
             buffer_capacity,
-            end_index,
+            sab_end_index: end_index,
         };
 
         // Synchronize with the last publish() before reading its results.
@@ -113,27 +113,31 @@ impl TripleBuffer {
     }
 
     // SAB must already be initialized via new
-    pub fn bind_reader(sab: SAB, start_index: usize, buffer_capacity: usize) -> TripleBufferReader {
+    pub fn bind_reader(
+        sab: SAB,
+        sab_start_index: usize,
+        buffer_capacity: usize,
+    ) -> TripleBufferReader {
         debug_assert!(buffer_capacity > 0, "buffer must have size");
 
-        let state_slot_index = start_index;
-        let reader_slot_index = start_index + 3;
-        let buffers_start_index = start_index + 4;
+        let state_slot_index = sab_start_index;
+        let reader_slot_index = sab_start_index + 3;
+        let buffers_start_index = sab_start_index + 4;
         let buffer_bases: [usize; 3] = [
             buffers_start_index,
             buffers_start_index + buffer_capacity,
             buffers_start_index + buffer_capacity * 2,
         ];
-        let end_index = buffers_start_index + buffer_capacity * 3;
+        let sab_end_index = buffers_start_index + buffer_capacity * 3;
 
         TripleBufferReader {
             sab: Arc::clone(&sab),
-            start_index,
+            sab_start_index,
             state_slot_index,
             reader_slot_index,
             buffer_bases,
             buffer_capacity,
-            end_index,
+            sab_end_index,
         }
     }
 
@@ -148,8 +152,12 @@ impl TripleBufferWriter {
         self.buffer_capacity
     }
 
+    pub fn sab_start_index(&self) -> usize {
+        self.sab_start_index
+    }
+
     pub fn sab_end_index(&self) -> usize {
-        self.end_index
+        self.sab_end_index
     }
 
     pub fn current_start_index(&self) -> usize {
@@ -225,7 +233,6 @@ impl TripleBufferWriter {
             source.sab[source.published_slot_index + 1].load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
-
     }
 
     pub fn copy_region_from(
@@ -273,8 +280,12 @@ impl TripleBufferReader {
         self.buffer_capacity
     }
 
+    pub fn sab_start_index(&self) -> usize {
+        self.sab_start_index
+    }
+
     pub fn sab_end_index(&self) -> usize {
-        self.end_index
+        self.sab_end_index
     }
 
     pub fn current_start_index(&self) -> usize {

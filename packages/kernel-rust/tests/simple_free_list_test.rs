@@ -440,16 +440,16 @@ fn copy_from_preserves_state_and_adds_capacity() {
     let sab_small = create_sab(4096);
     let small_fl = SimpleFreeList::new(sab_small, 0, 16);
 
-    let a = small_fl.alloc().unwrap();
+    let _a = small_fl.alloc().unwrap();
     let b = small_fl.alloc().unwrap();
-    let c = small_fl.alloc().unwrap();
-    
+    let _c = small_fl.alloc().unwrap();
+
     small_fl.free(b).unwrap(); // b is freed, free_count is 14
 
     assert_eq!(small_fl.free_count(), 14);
 
     let sab_large = create_sab(4096);
-    let mut large_fl = SimpleFreeList::new(sab_large, 0, 32);
+    let large_fl = SimpleFreeList::new(sab_large, 0, 32);
 
     large_fl.copy_from(&small_fl);
 
@@ -463,12 +463,12 @@ fn copy_from_preserves_state_and_adds_capacity() {
 
     let e = large_fl.alloc().unwrap();
     assert_eq!(e, 31);
-    
+
     // If we pop 14 more times to exhaust the new capacity (16 total)
     for _ in 0..14 {
         large_fl.alloc().unwrap();
     }
-    
+
     // The next alloc should be the head of the OLD free list, which was `b` (slot 2)
     let b_again = large_fl.alloc().unwrap();
     assert_eq!(b_again, b);
@@ -478,7 +478,7 @@ fn copy_from_preserves_state_and_adds_capacity() {
 #[should_panic]
 fn copy_from_panics_if_source_larger() {
     let sab_small = create_sab(4096);
-    let mut small_fl = SimpleFreeList::new(sab_small, 0, 16);
+    let small_fl = SimpleFreeList::new(sab_small, 0, 16);
 
     let sab_large = create_sab(4096);
     let large_fl = SimpleFreeList::new(sab_large, 0, 32);

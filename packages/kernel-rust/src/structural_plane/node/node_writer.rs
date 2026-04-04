@@ -8,17 +8,8 @@ impl<'a> NodeWriter<'a> {
         self.0.read(0) >> 24
     }
 
-    pub(crate) fn set_opcode(&self, value: i32) {
-        let bitmask = self.0.read(0) & ((1 << 24) - 1);
-        self.0.write(0, bitmask | value << 24)
-    }
-
     pub fn get_base_tick(&self) -> i32 {
         self.0.read(1)
-    }
-
-    pub(crate) fn set_base_tick(&self, value: i32) {
-        self.0.write(1, value)
     }
 
     pub fn get_next_ptr(&self) -> usize {

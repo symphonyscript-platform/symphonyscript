@@ -89,7 +89,7 @@ impl KernelController {
     pub fn get_node_attributes(
         &'_ self,
         slot: usize,
-    ) -> AttributesWriter<NODE_ATTRIBUTES_SLOT_SIZE> {
+    ) -> AttributesWriter<'_, NODE_ATTRIBUTES_SLOT_SIZE> {
         self.active_writer.get_node_attributes(slot)
     }
 
@@ -132,8 +132,8 @@ impl KernelController {
         }
     }
 
-    pub fn remove_node(&self, slot: usize) {
-        self.active_writer.remove_node(slot);
+    pub fn remove_node(&self, slot: usize) -> Result<(), FreeListError> {
+        self.active_writer.remove_node(slot)
     }
 
     pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_> {
@@ -143,7 +143,7 @@ impl KernelController {
     pub fn get_synapse_attributes(
         &'_ self,
         slot: usize,
-    ) -> AttributesWriter<SYNAPSE_ATTRIBUTES_SLOT_SIZE> {
+    ) -> AttributesWriter<'_, SYNAPSE_ATTRIBUTES_SLOT_SIZE> {
         self.active_writer.get_synapse_attributes(slot)
     }
 
@@ -177,8 +177,8 @@ impl KernelController {
         }
     }
 
-    pub fn disconnect(&self, slot: usize) {
-        self.active_writer.disconnect(slot);
+    pub fn disconnect(&self, slot: usize) -> Result<(), FreeListError> {
+        self.active_writer.disconnect(slot)
     }
 
     pub fn publish(&mut self) -> Result<(), FreeListError> {
@@ -199,7 +199,7 @@ impl KernelController {
         }
 
         let sab = Self::create_sab(SynapticGraphWriter::compute_size(&config));
-        let mut writer = SynapticGraphWriter::bind(Arc::clone(&sab), config.clone());
+        let writer = SynapticGraphWriter::bind(Arc::clone(&sab), config.clone());
 
         writer.copy_from(&self.active_writer);
 

@@ -242,7 +242,7 @@ impl NodeChainWriter {
         Ok(())
     }
 
-    pub fn flush_deferred(&mut self) -> Result<(), FreeListError> {
+    pub fn flush_deferred(&mut self) {
         self.writer.flush_deferred()
     }
 
@@ -270,7 +270,6 @@ mod tests {
     use crate::structural_plane::node::node_chain_reader::NodeChainReader;
     use crate::structural_plane::node::node_chain_writer::NodeChainWriter;
     use crate::structural_plane::node::node_data::NodeDraft;
-    use crate::structural_plane::structural_reader::StructuralReader;
     use std::sync::atomic::AtomicI32;
     use std::sync::Arc;
 
@@ -290,9 +289,6 @@ mod tests {
     const TB_BUF_CAP: usize = 4096;
     const FL_START: usize = 13000;
     const CAPACITY: usize = 16;
-    // buffer_head_offset: offset within the TB buffer where chain head is stored
-    // We put it after the node slots: CAPACITY * NODE_SLOT_SIZE = 16 * 16 = 256
-    const NODE_START_OFFSET: usize = 0;
     const HEAD_OFFSET: usize = CAPACITY * NODE_SLOT_SIZE;
 
     struct TestHarness {
@@ -332,12 +328,6 @@ mod tests {
         assert_eq!(node.get_opcode(), 5);
         assert_eq!(node.get_base_tick(), 999);
 
-        node.set_opcode(42);
-        assert_eq!(node.get_opcode(), 42);
-
-        node.set_base_tick(-100);
-        assert_eq!(node.get_base_tick(), -100);
-
         node.set_outgoing_synapse_head(10);
         assert_eq!(node.get_outgoing_synapse_head(), 10);
 
@@ -359,18 +349,13 @@ mod tests {
         let h = setup();
         let chain = NodeChainWriter::new(h.sab, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
 
-        let slot = chain.insert_head(make_draft(0, 0)).unwrap();
+        let slot = chain.insert_head(make_draft(0x7F, 0)).unwrap();
         let node = chain.get(slot);
 
-        // The opcode occupies the top 8 bits of field 0.
-        // Lower 24 bits should be preserved across set_opcode calls.
-        // Write something to the lower bits via the raw slot view
-        node.0.write(0, 0x00FFFFFF); // lower 24 bits all set
-        node.set_opcode(0x7F); // max 7-bit opcode
-
+        // mutate whatever shares field 0's lower 24 bits
+        node.set_prev_ptr(0x00FFFFFF);
         let raw = node.0.read(0);
-        assert_eq!(raw >> 24, 0x7F, "upper 8 bits = opcode");
-        assert_eq!(raw & 0x00FFFFFF, 0x00FFFFFF, "lower 24 bits preserved");
+        assert_eq!(raw >> 24, 0x7F, "opcode preserved after mutable field write");
     }
 
     #[test]
@@ -393,8 +378,6 @@ mod tests {
         h.writer.publish();
         h.reader.swap();
 
-        let sr =
-            StructuralReader::<NODE_SLOT_SIZE>::new(h.reader.clone(), NODE_START_OFFSET, CAPACITY);
         let chain_reader = NodeChainReader::new(h.reader.clone(), HEAD_OFFSET, CAPACITY);
         let node = chain_reader.get(slot);
 
@@ -422,7 +405,7 @@ mod tests {
 
         // mutate siblings: insert between c and b, then remove b
         let d = chain.insert_after(c, make_draft(4, 400)).unwrap();
-        chain.remove(b);
+        chain.remove(b).unwrap();
         // chain: c -> d -> a
 
         // a's data must be completely intact

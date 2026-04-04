@@ -194,11 +194,6 @@ fn zero_hash(_key: i32, _shift: u32) -> usize {
     0
 }
 
-/// Hash function that always collides to slot 0.
-fn always_slot_zero(_key: i32, _shift: u32) -> usize {
-    1 // after remap, hash=1, mod any power-of-2 with mod_mask → varies
-}
-
 #[test]
 fn value_zero_is_not_confused_with_empty() {
     let sab = create_sab(1024);

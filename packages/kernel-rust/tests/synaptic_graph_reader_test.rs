@@ -65,7 +65,7 @@ fn reader_sees_nodes_after_publish_swap() {
     let (mut kernel, mut reader) = setup();
 
     let _slot = kernel.insert_head(draft(5, 999)).unwrap();
-    kernel.publish().unwrap();
+    kernel.publish();
     reader.swap();
 
     let head = reader.get_head_node().unwrap();
@@ -82,7 +82,7 @@ fn reader_traverses_full_chain() {
     let _c = kernel.insert_head(draft(3, 30)).unwrap();
     // chain: c -> b -> a
 
-    kernel.publish().unwrap();
+    kernel.publish();
     reader.swap();
 
     let head = reader.get_head_node().unwrap();
@@ -102,14 +102,14 @@ fn reader_traverses_full_chain() {
 fn reader_sees_removal_after_publish_swap() {
     let (mut kernel, mut reader) = setup();
 
-    let a = kernel.insert_head(draft(1, 0)).unwrap();
+    let _a = kernel.insert_head(draft(1, 0)).unwrap();
     let b = kernel.insert_head(draft(2, 0)).unwrap();
     // chain: b -> a
 
-    kernel.remove_node(b);
+    kernel.remove_node(b).unwrap();
     // chain: a
 
-    kernel.publish().unwrap();
+    kernel.publish();
     reader.swap();
 
     let head = reader.get_head_node().unwrap();
@@ -124,13 +124,13 @@ fn reader_retains_old_snapshot_without_swap() {
     let (mut kernel, mut reader) = setup();
 
     // cycle 1
-    let a = kernel.insert_head(draft(1, 0)).unwrap();
-    kernel.publish().unwrap();
+    let _a = kernel.insert_head(draft(1, 0)).unwrap();
+    kernel.publish();
     reader.swap();
 
     // cycle 2: mutate but reader does NOT swap
     kernel.insert_head(draft(2, 0)).unwrap();
-    kernel.publish().unwrap();
+    kernel.publish();
 
     // reader still sees cycle 1 snapshot
     let head = reader.get_head_node().unwrap();
@@ -144,13 +144,13 @@ fn reader_sees_updated_snapshot_after_swap() {
 
     // cycle 1
     kernel.insert_head(draft(1, 0)).unwrap();
-    kernel.publish().unwrap();
+    kernel.publish();
     reader.swap();
     assert_eq!(reader.get_head_node().unwrap().get_opcode(), 1);
 
     // cycle 2
     kernel.insert_head(draft(2, 0)).unwrap();
-    kernel.publish().unwrap();
+    kernel.publish();
     reader.swap();
     assert_eq!(reader.get_head_node().unwrap().get_opcode(), 2);
 }
@@ -165,7 +165,7 @@ fn reader_sees_synapse_after_publish_swap() {
     let tgt = kernel.insert_head(draft(2, 0)).unwrap();
     let syn = kernel.connect(src, tgt, syn_draft(42)).unwrap();
 
-    kernel.publish().unwrap();
+    kernel.publish();
     reader.swap();
 
     let s = reader.get_synapse(syn);
@@ -187,7 +187,7 @@ fn reader_traverses_synapse_chain() {
     let s2 = kernel.connect(src, tgt2, syn_draft(20)).unwrap();
     let s3 = kernel.connect(src, tgt3, syn_draft(30)).unwrap();
 
-    kernel.publish().unwrap();
+    kernel.publish();
     reader.swap();
 
     // find src's outgoing head via the node reader
@@ -219,9 +219,9 @@ fn reader_sees_disconnect_after_publish_swap() {
     let s1 = kernel.connect(src, tgt1, syn_draft(10)).unwrap();
     let s2 = kernel.connect(src, tgt2, syn_draft(20)).unwrap();
 
-    kernel.disconnect(s1);
+    kernel.disconnect(s1).unwrap();
 
-    kernel.publish().unwrap();
+    kernel.publish();
     reader.swap();
 
     let src_node = reader.get_node(src);
@@ -326,7 +326,7 @@ fn multi_cycle_insert_remove_connect_disconnect() {
     let b = kernel.insert_head(draft(2, 200)).unwrap();
     let s1 = kernel.connect(a, b, syn_draft(10)).unwrap();
     kernel.set_node_attribute(a, 0, 60); // pitch of A
-    kernel.publish().unwrap();
+    kernel.publish();
     reader.swap();
 
     // verify cycle 1 snapshot
@@ -338,8 +338,8 @@ fn multi_cycle_insert_remove_connect_disconnect() {
     // cycle 2: add C, connect B->C, disconnect A->B
     let c = kernel.insert_head(draft(3, 300)).unwrap();
     let s2 = kernel.connect(b, c, syn_draft(20)).unwrap();
-    kernel.disconnect(s1);
-    kernel.publish().unwrap();
+    kernel.disconnect(s1).unwrap();
+    kernel.publish();
     reader.swap();
 
     // verify cycle 2 snapshot
@@ -365,7 +365,7 @@ fn swap_returns_false_when_no_new_data() {
 fn swap_returns_true_when_new_data() {
     let (mut kernel, mut reader) = setup();
     kernel.insert_head(draft(1, 0)).unwrap();
-    kernel.publish().unwrap();
+    kernel.publish();
     assert!(reader.swap(), "publish happened");
 }
 
@@ -378,10 +378,10 @@ fn reader_sees_empty_chain_after_removing_all() {
     let a = kernel.insert_head(draft(1, 0)).unwrap();
     let b = kernel.insert_head(draft(2, 0)).unwrap();
 
-    kernel.remove_node(a);
-    kernel.remove_node(b);
+    kernel.remove_node(a).unwrap();
+    kernel.remove_node(b).unwrap();
 
-    kernel.publish().unwrap();
+    kernel.publish();
     reader.swap();
 
     assert!(reader.get_head_node().is_none());
@@ -394,7 +394,7 @@ fn attribute_mutation_visible_between_publishes() {
     let (mut kernel, mut reader) = setup();
 
     let slot = kernel.insert_head(draft(1, 0)).unwrap();
-    kernel.publish().unwrap();
+    kernel.publish();
     reader.swap();
 
     // mutate attribute WITHOUT publishing
