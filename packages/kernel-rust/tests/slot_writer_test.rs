@@ -25,7 +25,7 @@ fn new_creates_view() {
 // ============ Read/Write ============
 
 #[test]
-#[should_panic(expected = "SlotWriter out of bounds")]
+#[should_panic(expected = "SlotWriter::new | range")]
 fn panics_if_out_of_bounds() {
     let sab = create_sab(1024);
     let (writer, _reader) = TripleBuffer::new(sab, 0, 16);

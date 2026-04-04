@@ -63,7 +63,7 @@ fn new_with_nonzero_start() {
 }
 
 #[test]
-#[should_panic(expected = "AttributePlaneWriter out of bounds")]
+#[should_panic(expected = "AttributePlaneWriter::new | range")]
 fn new_panics_when_exceeding_sab() {
     let sab = create_sab(50);
     let _plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 100); // 100 * 10 = 1000 > 50

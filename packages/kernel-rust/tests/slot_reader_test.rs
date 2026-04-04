@@ -65,7 +65,7 @@ fn reads_are_isolated_between_slots() {
 }
 
 #[test]
-#[should_panic(expected = "SlotReader out of bounds")]
+#[should_panic(expected = "SlotReader::new | range")]
 fn panics_if_out_of_bounds() {
     let sab = create_sab(1024);
     let (_writer, reader) = TripleBuffer::new(sab, 0, 16);
