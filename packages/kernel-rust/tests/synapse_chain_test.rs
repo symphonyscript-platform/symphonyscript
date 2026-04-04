@@ -228,7 +228,6 @@ fn disconnect_head_of_outgoing_chain() {
         "head promoted to s2"
     );
     assert_eq!(src_node.get_outgoing_synapse_tail(), s2, "tail unchanged");
-
 }
 
 // ============ disconnect: tail of chain ============
@@ -257,7 +256,6 @@ fn disconnect_tail_of_outgoing_chain() {
         s1,
         "tail demoted to s1"
     );
-
 }
 
 // ============ disconnect: middle of chain ============
@@ -284,7 +282,6 @@ fn disconnect_middle_of_outgoing_chain() {
     let src_node = node_chain.get(src);
     assert_eq!(src_node.get_outgoing_synapse_head(), s1);
     assert_eq!(src_node.get_outgoing_synapse_tail(), s3);
-
 }
 
 // ============ disconnect: incoming chain healing ============
@@ -311,7 +308,6 @@ fn disconnect_heals_incoming_chain() {
     let tgt_node = node_chain.get(tgt);
     assert_eq!(tgt_node.get_incoming_synapse_head(), s1);
     assert_eq!(tgt_node.get_incoming_synapse_tail(), s3);
-
 }
 
 // ============ dual-chain independence ============
@@ -594,7 +590,7 @@ fn incoming_chain_traversal_order_is_insertion_order() {
     let tgt = node_chain.insert_head(node(4)).unwrap();
 
     let s1 = synapse_chain.connect(src1, tgt, draft(10)).unwrap();
-    let s2 = synapse_chain.connect(src2, tgt, draft(20)).unwrap();
+    let _s2 = synapse_chain.connect(src2, tgt, draft(20)).unwrap();
     let s3 = synapse_chain.connect(src3, tgt, draft(30)).unwrap();
 
     // walk forward: head -> next -> next -> null
@@ -800,17 +796,15 @@ fn copy_from_preserves_topology_and_deep_data() {
     let src_h = setup();
     let n1 = src_h.node_chain.insert_head(node(1)).unwrap();
     let n2 = src_h.node_chain.insert_head(node(2)).unwrap();
-    
+
     let s1 = src_h.synapse_chain.connect(n1, n2, draft(10)).unwrap();
     let s2 = src_h.synapse_chain.connect(n2, n1, draft(20)).unwrap();
-    
 
-    
     src_h.synapse_chain.disconnect(s2).unwrap(); // defer s2
 
     let dst_sab = create_sab(SAB_SIZE);
-    let (dst_tb, _) = symphonyscript_kernel::primitives::triple_buffer::TripleBuffer::new(Arc::clone(&dst_sab), TB_START, TB_BUF_CAP);
-    let dst_node_chain = symphonyscript_kernel::structural_plane::node::node_chain_writer::NodeChainWriter::new(
+    let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_sab), TB_START, TB_BUF_CAP);
+    let dst_node_chain = NodeChainWriter::new(
         Arc::clone(&dst_sab),
         dst_tb.clone(),
         NODE_FL_START,
@@ -829,12 +823,10 @@ fn copy_from_preserves_topology_and_deep_data() {
     dst_synapse_chain.copy_from(&src_h.synapse_chain);
 
     assert_eq!(dst_synapse_chain.count(), 2);
-    
+
     let syn = dst_synapse_chain.get(s1);
     assert_eq!(syn.get_opcode(), 10);
 
-
-    
     // Test deferred flush behavior on destination shrinks allocated slots natively
     dst_synapse_chain.flush_deferred();
     dst_synapse_chain.flush_deferred();
@@ -847,10 +839,10 @@ fn copy_from_preserves_topology_and_deep_data() {
 #[should_panic]
 fn copy_from_panics_if_source_larger() {
     let src_h = setup();
-    
+
     let dst_sab = create_sab(SAB_SIZE);
-    let (dst_tb, _) = symphonyscript_kernel::primitives::triple_buffer::TripleBuffer::new(Arc::clone(&dst_sab), TB_START, TB_BUF_CAP);
-    let dst_node_chain = symphonyscript_kernel::structural_plane::node::node_chain_writer::NodeChainWriter::new(
+    let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_sab), TB_START, TB_BUF_CAP);
+    let dst_node_chain = NodeChainWriter::new(
         Arc::clone(&dst_sab),
         dst_tb.clone(),
         NODE_FL_START,
