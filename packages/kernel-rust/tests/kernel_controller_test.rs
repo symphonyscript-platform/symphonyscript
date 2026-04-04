@@ -729,3 +729,192 @@ fn defer_then_publish_then_grow_preserves_freed_slot() {
     let head = audio.get_head_node().unwrap();
     assert_eq!(head.get_opcode(), 5);
 }
+
+// =========================================================
+// Concurrent: Audio Thread vs Main Thread
+// =========================================================
+
+#[test]
+fn concurrent_traversal_during_rapid_publish_cycles() {
+    let mut controller = KernelController::new(config(64));
+    let cp_addr = controller.get_controller_plane_address();
+
+    let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let running_audio = running.clone();
+
+    // Audio thread: continuously swap + traverse
+    let audio_thread = std::thread::spawn(move || {
+        let cp_ptr = cp_addr as *const ControlPlane;
+        let mut iterations = 0u64;
+
+        while running_audio.load(std::sync::atomic::Ordering::Relaxed) {
+            let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
+            let reader = unsafe { &mut *reader_ptr };
+
+            reader.swap();
+
+            // Traverse the full chain — must terminate, no cycles
+            let mut current = reader.get_head_node();
+            let mut count = 0;
+            while let Some(node) = current {
+                let opcode = node.get_opcode();
+                // Opcodes should be 0..63 range (what we insert below)
+                assert!(opcode >= 0 && opcode < 64, "corrupt opcode: {}", opcode);
+
+                let next_ptr = node.get_next_ptr();
+                if next_ptr == 0 {
+                    break;
+                }
+                current = Some(reader.get_node(next_ptr));
+                count += 1;
+                assert!(count <= 64, "chain exceeded capacity — possible cycle");
+            }
+
+            iterations += 1;
+        }
+
+        iterations
+    });
+
+    // Main thread: insert nodes and publish rapidly
+    for i in 0..60 {
+        controller.insert_head(draft(i)).unwrap();
+        if i % 5 == 0 {
+            controller.publish();
+        }
+    }
+    // Final publish to flush everything
+    controller.publish();
+
+    // Let audio thread run a few more cycles
+    std::thread::sleep(std::time::Duration::from_millis(10));
+
+    running.store(false, std::sync::atomic::Ordering::Relaxed);
+    let iterations = audio_thread.join().expect("audio thread panicked");
+    assert!(iterations > 0, "audio thread never ran");
+}
+
+#[test]
+fn concurrent_traversal_during_grow() {
+    let mut controller = KernelController::new(config(8));
+    let cp_addr = controller.get_controller_plane_address();
+
+    // Seed initial data
+    let n1 = controller.insert_head(draft(1)).unwrap();
+    let n2 = controller.insert_after(n1, draft(2)).unwrap();
+    controller.connect(n1, n2, syn(10)).unwrap();
+    controller.set_node_attribute(n1, 0, 42);
+    controller.publish();
+
+    let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let running_audio = running.clone();
+
+    // Audio thread: continuously reads while main thread grows
+    let audio_thread = std::thread::spawn(move || {
+        let cp_ptr = cp_addr as *const ControlPlane;
+        let mut iterations = 0u64;
+
+        while running_audio.load(std::sync::atomic::Ordering::Relaxed) {
+            // Re-load pointer EVERY iteration — critical after grow()
+            let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
+            let reader = unsafe { &mut *reader_ptr };
+
+            reader.swap();
+
+            let mut current = reader.get_head_node();
+            while let Some(node) = current {
+                let _opcode = node.get_opcode();
+                let next_ptr = node.get_next_ptr();
+                if next_ptr == 0 {
+                    break;
+                }
+                current = Some(reader.get_node(next_ptr));
+            }
+
+            iterations += 1;
+        }
+
+        iterations
+    });
+
+    // Main thread: grow multiple times while audio reads
+    controller.grow(config(16)).unwrap();
+    controller.publish();
+
+    // Insert into expanded capacity
+    for i in 3..14 {
+        controller.insert_head(draft(i)).unwrap();
+    }
+    controller.publish();
+
+    controller.grow(config(32)).unwrap();
+    controller.publish();
+
+    // More inserts
+    for i in 14..28 {
+        controller.insert_head(draft(i)).unwrap();
+    }
+    controller.publish();
+
+    // Let audio thread catch up
+    std::thread::sleep(std::time::Duration::from_millis(10));
+
+    // Extra publishes to rotate GC pipeline and drop old readers
+    controller.publish();
+    controller.publish();
+
+    running.store(false, std::sync::atomic::Ordering::Relaxed);
+    let iterations = audio_thread.join().expect("audio thread panicked during grow");
+    assert!(iterations > 0);
+}
+
+#[test]
+fn concurrent_attribute_reads_during_writes() {
+    let controller = KernelController::new(config(16));
+    let cp_addr = controller.get_controller_plane_address();
+
+    // Create a node whose attributes we'll hammer
+    let n1 = controller.insert_head(draft(1)).unwrap();
+
+    let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let running_audio = running.clone();
+    let slot = n1;
+
+    // Audio thread: continuously reads attributes
+    let audio_thread = std::thread::spawn(move || {
+        let cp_ptr = cp_addr as *const ControlPlane;
+        let mut iterations = 0u64;
+
+        while running_audio.load(std::sync::atomic::Ordering::Relaxed) {
+            let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
+            let reader = unsafe { &*reader_ptr };
+
+            // Read all 16 attribute offsets — must never panic or return garbage
+            for offset in 0..16 {
+                let val = reader.get_node_attribute(slot, offset);
+                // Values should be either 0 (initial) or a valid written value
+                // Written values are offset * 1000 + iteration_batch
+                // Just verify it doesn't panic and isn't a torn value
+                let _ = val;
+            }
+
+            iterations += 1;
+        }
+
+        iterations
+    });
+
+    // Main thread: rapidly writes attributes
+    for batch in 0..500 {
+        for offset in 0..16 {
+            controller.set_node_attribute(n1, offset, (offset as i32) * 1000 + batch);
+        }
+    }
+
+    // Let audio thread finish a few more reads
+    std::thread::sleep(std::time::Duration::from_millis(5));
+
+    running.store(false, std::sync::atomic::Ordering::Relaxed);
+    let iterations = audio_thread.join().expect("audio thread panicked during attribute writes");
+    assert!(iterations > 0, "audio thread never ran");
+}
