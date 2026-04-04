@@ -711,7 +711,7 @@ struct TripleBufferWriter {
     published_slot_index: usize,   // AtomicI32 slot: last published buffer ID
     buffer_bases: [usize; 3],      // start indices of each buffer region
     buffer_size: usize,            // elements per buffer
-    end_index: usize,              // first index past the TripleBuffer's region
+    sab_end_index: usize,              // first index past the TripleBuffer's region
 }
 
 struct TripleBufferReader {
@@ -720,7 +720,7 @@ struct TripleBufferReader {
     reader_slot_index: usize,      // AtomicI32 slot: current reader buffer ID
     buffer_bases: [usize; 3],
     buffer_size: usize,
-    end_index: usize,
+    sab_end_index: usize,
 }
 
 // Kernel (conceptual — not yet implemented)

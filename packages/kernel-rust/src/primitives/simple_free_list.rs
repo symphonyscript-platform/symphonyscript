@@ -7,25 +7,25 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct SimpleFreeList {
     sab: SAB,
-    start_index: usize,
+    sab_start_index: usize,
     alloc_bitmap: Bitmap,
     slots_start_index: usize,
     sab_head_ptr: usize,
     sab_free_count_ptr: usize,
     capacity: usize,
-    end_index: usize,
+    sab_end_index: usize,
 }
 
 impl SimpleFreeList {
-    pub fn new(sab: SAB, start_index: usize, capacity: usize) -> Self {
-        Self::create(sab, start_index, capacity, false)
+    pub fn new(sab: SAB, sab_start_index: usize, capacity: usize) -> Self {
+        Self::create(sab, sab_start_index, capacity, false)
     }
 
-    pub fn bind(sab: SAB, start_index: usize, capacity: usize) -> Self {
-        Self::create(sab, start_index, capacity, true)
+    pub fn bind(sab: SAB, sab_start_index: usize, capacity: usize) -> Self {
+        Self::create(sab, sab_start_index, capacity, true)
     }
 
-    pub fn create(sab: SAB, start_index: usize, capacity: usize, bind: bool) -> Self {
+    pub fn create(sab: SAB, sab_start_index: usize, capacity: usize, bind: bool) -> Self {
         debug_assert!(
             capacity > 0,
             "SimpleFreeList::create | capacity {} must be positive",
@@ -38,8 +38,8 @@ impl SimpleFreeList {
             capacity
         );
 
-        let free_count_slot_index = start_index + 1;
-        let alloc_bitmap = Bitmap::create(Arc::clone(&sab), start_index + 2, capacity, bind);
+        let free_count_slot_index = sab_start_index + 1;
+        let alloc_bitmap = Bitmap::create(Arc::clone(&sab), sab_start_index + 2, capacity, bind);
         let slots_start_index = alloc_bitmap.sab_end_index();
         let slots_end_index = slots_start_index + capacity;
 
@@ -50,18 +50,18 @@ impl SimpleFreeList {
                 sab[slots_start_index + i].store((i as i32) + 1, Ordering::Relaxed);
             }
 
-            sab[start_index].store(0, Ordering::Relaxed);
+            sab[sab_start_index].store(0, Ordering::Relaxed);
             sab[free_count_slot_index].store(capacity as i32, Ordering::Relaxed);
         }
 
         SimpleFreeList {
             sab: Arc::clone(&sab),
-            start_index,
+            sab_start_index,
             alloc_bitmap,
-            sab_head_ptr: start_index,
+            sab_head_ptr: sab_start_index,
             sab_free_count_ptr: free_count_slot_index,
             slots_start_index,
-            end_index: slots_end_index,
+            sab_end_index: slots_end_index,
             capacity,
         }
     }
@@ -79,11 +79,11 @@ impl SimpleFreeList {
     }
 
     pub fn sab_start_index(&self) -> usize {
-        self.start_index
+        self.sab_start_index
     }
 
     pub fn sab_end_index(&self) -> usize {
-        self.end_index
+        self.sab_end_index
     }
 
     pub fn capacity(&self) -> usize {
@@ -156,10 +156,8 @@ impl SimpleFreeList {
             source.sab[source.sab_head_ptr].load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
-        self.sab[self.sab_free_count_ptr].store(
-            old_free_count + additional_capacity,
-            Ordering::Relaxed,
-        );
+        self.sab[self.sab_free_count_ptr]
+            .store(old_free_count + additional_capacity, Ordering::Relaxed);
 
         self.alloc_bitmap.copy_from(&source.alloc_bitmap);
 

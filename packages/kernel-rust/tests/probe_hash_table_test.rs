@@ -151,12 +151,12 @@ fn compute_capacity_is_power_of_two() {
 }
 
 #[test]
-fn end_index_is_correct() {
+fn sab_end_index_is_correct() {
     let sab = create_sab(4096);
     let table = ProbeHashTable::new(sab, 0, 8, 0.75, fibonacci_hash);
 
     let cap = ProbeHashTable::compute_capacity(8, 0.75);
-    // end_index = start(0) + 1(len header) + capacity * 3(slot size)
+    // sab_end_index = start(0) + 1(len header) + capacity * 3(slot size)
     let expected = 0 + 1 + cap * 3;
     assert_eq!(table.sab_end_index(), expected);
 }

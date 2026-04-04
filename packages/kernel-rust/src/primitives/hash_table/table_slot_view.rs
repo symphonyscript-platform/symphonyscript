@@ -6,21 +6,21 @@ use std::sync::atomic::Ordering;
 #[derive(Clone)]
 pub struct TableSlotView {
     sab: SAB,
-    start_index: usize,
+    sab_start_index: usize,
     slots_count: u32,
 }
 
 impl TableSlotView {
-    pub fn new(sab: SAB, start_index: usize, slots_count: u32) -> Self {
+    pub fn new(sab: SAB, sab_start_index: usize, slots_count: u32) -> Self {
         TableSlotView {
             sab,
-            start_index,
+            sab_start_index,
             slots_count,
         }
     }
 
-    pub fn bind(sab: SAB, start_index: usize, slots_count: u32) -> Self {
-        Self::new(sab, start_index, slots_count)
+    pub fn bind(sab: SAB, sab_start_index: usize, slots_count: u32) -> Self {
+        Self::new(sab, sab_start_index, slots_count)
     }
 
     pub fn get(&self, index: usize) -> TableSlot {
@@ -86,6 +86,6 @@ impl TableSlotView {
     }
 
     fn calculate_index(&self, index: usize) -> usize {
-        self.start_index + index * TABLE_SLOT_SIZE as usize
+        self.sab_start_index + index * TABLE_SLOT_SIZE as usize
     }
 }

@@ -155,7 +155,7 @@ fn full_cycle_writer_reader_writer() {
 }
 
 #[test]
-fn end_index_is_correct() {
+fn sab_end_index_is_correct() {
     let sab = create_sab(4096);
     let (writer, reader) = TripleBuffer::new(sab, 0, 10);
 
@@ -472,7 +472,7 @@ fn writer_and_reader_never_see_same_buffer() {
 #[test]
 fn published_slot_index_tracks_latest_publish() {
     let sab = create_sab(4096);
-    let published_slot = 2; // start_index + 2
+    let published_slot = 2; // sab_start_index + 2
 
     let (mut writer, mut reader) = TripleBuffer::new(sab.clone(), 0, 4);
 
@@ -823,8 +823,8 @@ fn publish_does_not_corrupt_surrounding_sab_memory() {
         sab[i].store(7777, Ordering::Relaxed);
     }
 
-    let start_index = padding;
-    let (mut writer, mut reader) = TripleBuffer::new(sab.clone(), start_index, buffer_size);
+    let sab_start_index = padding;
+    let (mut writer, mut reader) = TripleBuffer::new(sab.clone(), sab_start_index, buffer_size);
 
     // Perform bulk writes and rapid publishes to heavily exercise the memcpy loop
     for round in 0..10_000 {
@@ -848,37 +848,37 @@ fn publish_does_not_corrupt_surrounding_sab_memory() {
         assert_eq!(
             sab[i].load(Ordering::Relaxed),
             7777,
-            "Memory corruption (underflow) before start_index at sab index {i}"
+            "Memory corruption (underflow) before sab_start_index at sab index {i}"
         );
     }
 
     // 2. Verify trailing memory is completely untouched
-    let end_index = writer.sab_end_index();
-    for i in end_index..sab.len() {
+    let sab_end_index = writer.sab_end_index();
+    for i in sab_end_index..sab.len() {
         assert_eq!(
             sab[i].load(Ordering::Relaxed),
             7777,
-            "Memory corruption (overflow) after end_index at sab index {i}"
+            "Memory corruption (overflow) after sab_end_index at sab index {i}"
         );
     }
 
     // 3. Verify metadata slots did not get swept up in an overflowing memcpy
-    let state = sab[start_index].load(Ordering::Relaxed);
+    let state = sab[sab_start_index].load(Ordering::Relaxed);
     assert!((0..=7).contains(&state), "State slot corrupted: {state}");
 
-    let writer_id = sab[start_index + 1].load(Ordering::Relaxed);
+    let writer_id = sab[sab_start_index + 1].load(Ordering::Relaxed);
     assert!(
         (0..=2).contains(&writer_id),
         "Writer ID slot corrupted: {writer_id}"
     );
 
-    let published_id = sab[start_index + 2].load(Ordering::Relaxed);
+    let published_id = sab[sab_start_index + 2].load(Ordering::Relaxed);
     assert!(
         (0..=2).contains(&published_id),
         "Published ID slot corrupted: {published_id}"
     );
 
-    let reader_id = sab[start_index + 3].load(Ordering::Relaxed);
+    let reader_id = sab[sab_start_index + 3].load(Ordering::Relaxed);
     assert!(
         (0..=2).contains(&reader_id),
         "Reader ID slot corrupted: {reader_id}"

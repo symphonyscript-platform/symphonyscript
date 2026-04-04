@@ -6,32 +6,32 @@ use std::sync::atomic::Ordering;
 #[derive(Clone)]
 pub struct AttributePlaneWriter<const SLOT_SIZE: usize> {
     sab: SAB,
-    start_index: usize,
-    end_index: usize,
+    sab_start_index: usize,
+    sab_end_index: usize,
     capacity: usize,
 }
 
 impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
-    pub fn new(sab: SAB, start_index: usize, capacity: usize) -> Self {
-        let end_index = start_index + capacity * SLOT_SIZE;
+    pub fn new(sab: SAB, sab_start_index: usize, capacity: usize) -> Self {
+        let sab_end_index = sab_start_index + capacity * SLOT_SIZE;
 
         debug_assert!(
-            end_index <= sab.len(),
+            sab_end_index <= sab.len(),
             "AttributePlaneWriter::new | range [{}..{}] exceeds SAB boundaries",
-            start_index,
+            sab_start_index,
             capacity * SLOT_SIZE
         );
 
         AttributePlaneWriter {
             sab,
-            start_index,
-            end_index,
+            sab_start_index,
+            sab_end_index,
             capacity,
         }
     }
 
-    pub fn bind(sab: SAB, start_index: usize, capacity: usize) -> Self {
-        Self::new(sab, start_index, capacity)
+    pub fn bind(sab: SAB, sab_start_index: usize, capacity: usize) -> Self {
+        Self::new(sab, sab_start_index, capacity)
     }
 
     pub fn calculate_size(capacity: usize) -> usize {
@@ -39,11 +39,15 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
     }
 
     pub fn resolve_sab_index(&self, offset: usize) -> usize {
-        self.start_index + (offset * SLOT_SIZE)
+        self.sab_start_index + (offset * SLOT_SIZE)
+    }
+
+    pub fn sab_start_index(&self) -> usize {
+        self.sab_start_index
     }
 
     pub fn sab_end_index(&self) -> usize {
-        self.end_index
+        self.sab_end_index
     }
 
     pub fn get(&'_ self, offset: usize) -> AttributesWriter<'_, SLOT_SIZE> {
@@ -53,10 +57,7 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
             offset,
         );
 
-        AttributesWriter {
-            sab: &self.sab,
-            start_index: self.resolve_sab_index(offset),
-        }
+        AttributesWriter::new(&self.sab, self.resolve_sab_index(offset))
     }
 
     pub fn set<T: IntoArray<SLOT_SIZE>>(&self, offset: usize, data: T) {
@@ -83,8 +84,8 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
         );
 
         for i in 0..source.capacity * SLOT_SIZE {
-            self.sab[self.start_index + i].store(
-                source.sab[source.start_index + i].load(Ordering::Relaxed),
+            self.sab[self.sab_start_index + i].store(
+                source.sab[source.sab_start_index + i].load(Ordering::Relaxed),
                 Ordering::Relaxed,
             )
         }

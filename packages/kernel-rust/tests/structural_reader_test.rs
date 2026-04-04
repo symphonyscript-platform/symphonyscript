@@ -76,7 +76,7 @@ fn new_creates_structural_reader() {
 }
 
 #[test]
-fn end_index_correct() {
+fn sab_end_index_correct() {
     let (_sab, _writer, _reader, _sw, sr) = setup();
     assert_eq!(sr.triple_buffer_end_offset(), CAPACITY * 16);
 }

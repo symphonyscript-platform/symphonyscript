@@ -96,22 +96,22 @@ fn free_and_realloc_reuses_slot() {
 }
 
 #[test]
-fn end_index_is_correct() {
+fn sab_end_index_is_correct() {
     let sab = create_sab(4096);
     let fl = SimpleFreeList::new(sab, 0, 8);
 
     // Layout: head(1) + free_count(1) + bitmap(ceil(8/32)=1) + slots(8) = 11
-    // end_index = start of slots + capacity = 3 + 8 = 11
+    // sab_end_index = start of slots + capacity = 3 + 8 = 11
     assert_eq!(fl.sab_end_index(), 3 + 8);
 }
 
 #[test]
-fn end_index_with_larger_capacity() {
+fn sab_end_index_with_larger_capacity() {
     let sab = create_sab(4096);
     let fl = SimpleFreeList::new(sab, 0, 64);
 
     // Layout: head(1) + free_count(1) + bitmap(ceil(64/32)=2) + slots(64)
-    // end_index = 0 + 2 + 2 + 64 = 68
+    // sab_end_index = 0 + 2 + 2 + 64 = 68
     assert_eq!(fl.sab_end_index(), 4 + 64);
 }
 

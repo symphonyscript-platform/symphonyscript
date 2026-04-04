@@ -71,7 +71,7 @@ fn new_panics_when_exceeding_sab() {
 
 #[test]
 fn new_succeeds_at_exact_boundary() {
-    // end_index == sab.len() is valid and should not panic (<=, not <)
+    // sab_end_index == sab.len() is valid and should not panic (<=, not <)
     let size = 10 * SLOT_SIZE;
     let sab = create_sab(size);
     let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 10);
@@ -201,14 +201,14 @@ fn nonzero_start_slot_1_correct_offset() {
 // ============ End Index ============
 
 #[test]
-fn end_index_zero_start() {
+fn sab_end_index_zero_start() {
     let sab = create_sab(1024);
     let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 0, 8);
     assert_eq!(plane.sab_end_index(), 8 * 16);
 }
 
 #[test]
-fn end_index_with_start_offset() {
+fn sab_end_index_with_start_offset() {
     let sab = create_sab(1024);
     let plane = AttributePlaneWriter::<SLOT_SIZE>::new(sab, 50, 8);
     assert_eq!(plane.sab_end_index(), 50 + 8 * 16);

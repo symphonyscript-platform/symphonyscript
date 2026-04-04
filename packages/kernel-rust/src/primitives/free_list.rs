@@ -7,24 +7,24 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct FreeList<const SLOT_SIZE: usize> {
     sab: SAB,
-    start_index: usize,
+    sab_start_index: usize,
     head_slot_index: usize,
     free_count_slot_index: usize,
     bitmap_slot_start_index: usize,
     capacity: i32,
-    end_index: usize,
+    sab_end_index: usize,
 }
 
 impl<const SLOT_SIZE: usize> FreeList<SLOT_SIZE> {
-    pub fn new(sab: SAB, start_index: usize, capacity: i32) -> Self {
-        Self::create(sab, start_index, capacity, false)
+    pub fn new(sab: SAB, sab_start_index: usize, capacity: i32) -> Self {
+        Self::create(sab, sab_start_index, capacity, false)
     }
 
-    pub fn bind(sab: SAB, start_index: usize, capacity: i32) -> Self {
-        Self::create(sab, start_index, capacity, true)
+    pub fn bind(sab: SAB, sab_start_index: usize, capacity: i32) -> Self {
+        Self::create(sab, sab_start_index, capacity, true)
     }
 
-    pub fn create(sab: SAB, start_index: usize, capacity: i32, bind: bool) -> Self {
+    pub fn create(sab: SAB, sab_start_index: usize, capacity: i32, bind: bool) -> Self {
         debug_assert!(
             capacity > 0,
             "FreeList::create | capacity {} must be positive",
@@ -38,11 +38,11 @@ impl<const SLOT_SIZE: usize> FreeList<SLOT_SIZE> {
         );
 
         let bitmap_size = (capacity + 31) / 32;
-        let bitmap_slot_start_index = start_index + 3;
+        let bitmap_slot_start_index = sab_start_index + 3;
         let bitmap_slot_end_index = bitmap_slot_start_index + bitmap_size as usize;
         let slots_start_index = bitmap_slot_end_index;
         let slots_end_index = slots_start_index + (capacity as usize) * SLOT_SIZE;
-        let free_count_slot_index = start_index + 1;
+        let free_count_slot_index = sab_start_index + 1;
 
         if !bind {
             for i in 0..capacity {
@@ -53,17 +53,17 @@ impl<const SLOT_SIZE: usize> FreeList<SLOT_SIZE> {
                 sab[i].store(0, Ordering::Relaxed);
             }
 
-            sab[start_index].store(0, Ordering::Relaxed);
+            sab[sab_start_index].store(0, Ordering::Relaxed);
             sab[free_count_slot_index].store(capacity, Ordering::Relaxed);
         }
 
         FreeList {
             sab: Arc::clone(&sab),
-            head_slot_index: start_index,
+            head_slot_index: sab_start_index,
             free_count_slot_index,
             bitmap_slot_start_index,
-            start_index: slots_start_index,
-            end_index: slots_end_index,
+            sab_start_index: slots_start_index,
+            sab_end_index: slots_end_index,
             capacity,
         }
     }
@@ -76,8 +76,12 @@ impl<const SLOT_SIZE: usize> FreeList<SLOT_SIZE> {
         self.sab[self.free_count_slot_index].load(Ordering::Relaxed)
     }
 
+    pub fn sab_start_index(&self) -> usize {
+        self.sab_start_index
+    }
+
     pub fn sab_end_index(&self) -> usize {
-        self.end_index
+        self.sab_end_index
     }
 
     pub fn alloc(&'_ self) -> Option<SlotHandle<'_, SLOT_SIZE>> {
@@ -89,7 +93,7 @@ impl<const SLOT_SIZE: usize> FreeList<SLOT_SIZE> {
 
         let slot = SlotHandle::<SLOT_SIZE>::new(
             &self.sab,
-            self.start_index + (head_index as usize) * SLOT_SIZE,
+            self.sab_start_index + (head_index as usize) * SLOT_SIZE,
         );
         let next_index = slot.read(0);
         slot.write_all([0; SLOT_SIZE]);
@@ -111,7 +115,7 @@ impl<const SLOT_SIZE: usize> FreeList<SLOT_SIZE> {
         slot.write(0, head_index);
         self.mark_as_free(&slot);
 
-        let new_head_index = (slot.start_index - self.start_index) / SLOT_SIZE;
+        let new_head_index = (slot.sab_start_index - self.sab_start_index) / SLOT_SIZE;
         self.sab[self.head_slot_index].store(new_head_index as i32, Ordering::Relaxed);
         self.sab[self.free_count_slot_index].fetch_add(1, Ordering::Relaxed);
 
@@ -119,20 +123,20 @@ impl<const SLOT_SIZE: usize> FreeList<SLOT_SIZE> {
     }
 
     fn is_free(&self, slot: &SlotHandle<SLOT_SIZE>) -> bool {
-        let slot_index = (slot.start_index - self.start_index) / SLOT_SIZE;
+        let slot_index = (slot.sab_start_index - self.sab_start_index) / SLOT_SIZE;
         let bitmask =
             self.sab[self.bitmap_slot_start_index + (slot_index >> 5)].load(Ordering::Relaxed);
         bitmask & (1 << (slot_index & 31)) == 0
     }
 
     fn mark_as_occupied(&self, slot: &SlotHandle<SLOT_SIZE>) {
-        let slot_index = (slot.start_index - self.start_index) / SLOT_SIZE;
+        let slot_index = (slot.sab_start_index - self.sab_start_index) / SLOT_SIZE;
         self.sab[self.bitmap_slot_start_index + (slot_index >> 5)]
             .fetch_or(1 << (slot_index & 31), Ordering::Relaxed);
     }
 
     fn mark_as_free(&self, slot: &SlotHandle<SLOT_SIZE>) {
-        let slot_index = (slot.start_index - self.start_index) / SLOT_SIZE;
+        let slot_index = (slot.sab_start_index - self.sab_start_index) / SLOT_SIZE;
         self.sab[self.bitmap_slot_start_index + (slot_index >> 5)]
             .fetch_and(!(1 << (slot_index & 31)), Ordering::Relaxed);
     }

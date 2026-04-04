@@ -6,25 +6,25 @@ use std::sync::Arc;
 pub struct StagingBuffer {
     sab: SAB,
     capacity: usize,
-    start_index: usize,
+    sab_start_index: usize,
     len_0_slot_index: usize,
     len_1_slot_index: usize,
     current_list_slot_index: usize,
     list_start_index: usize,
-    end_index: usize,
+    sab_end_index: usize,
 }
 
 pub struct StagingBufferIterator {
     sab: SAB,
     current_index: usize,
-    end_index: usize,
+    sab_end_index: usize,
 }
 
 impl Iterator for StagingBufferIterator {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_index < self.end_index {
+        if self.current_index < self.sab_end_index {
             let slot = self.sab[self.current_index].load(Ordering::Relaxed);
             self.current_index += 1;
             return Some(slot as usize);
@@ -35,15 +35,15 @@ impl Iterator for StagingBufferIterator {
 }
 
 impl StagingBuffer {
-    pub fn new(sab: SAB, start_index: usize, max_slots: usize) -> Self {
-        Self::create(sab, start_index, max_slots, false)
+    pub fn new(sab: SAB, sab_start_index: usize, max_slots: usize) -> Self {
+        Self::create(sab, sab_start_index, max_slots, false)
     }
 
-    pub fn bind(sab: SAB, start_index: usize, max_slots: usize) -> Self {
-        Self::create(sab, start_index, max_slots, true)
+    pub fn bind(sab: SAB, sab_start_index: usize, max_slots: usize) -> Self {
+        Self::create(sab, sab_start_index, max_slots, true)
     }
 
-    pub fn create(sab: SAB, start_index: usize, capacity: usize, bind: bool) -> Self {
+    pub fn create(sab: SAB, sab_start_index: usize, capacity: usize, bind: bool) -> Self {
         debug_assert!(
             capacity > 0,
             "StagingBuffer::create | capacity {} must be positive",
@@ -56,27 +56,27 @@ impl StagingBuffer {
             capacity
         );
 
-        let len_0_slot_index = start_index;
-        let len_1_slot_index = start_index + 1;
-        let current_list_slot_index = start_index + 2;
-        let list_start_index = start_index + 3;
-        let end_index = list_start_index + capacity * 2;
+        let len_0_slot_index = sab_start_index;
+        let len_1_slot_index = sab_start_index + 1;
+        let current_list_slot_index = sab_start_index + 2;
+        let list_start_index = sab_start_index + 3;
+        let sab_end_index = list_start_index + capacity * 2;
 
         if !bind {
             sab[current_list_slot_index].store(0, Ordering::Relaxed);
-            for i in start_index..end_index {
+            for i in sab_start_index..sab_end_index {
                 sab[i].store(0, Ordering::Relaxed);
             }
         }
 
         StagingBuffer {
             sab,
-            start_index,
+            sab_start_index,
             len_0_slot_index,
             len_1_slot_index,
             current_list_slot_index,
             list_start_index,
-            end_index,
+            sab_end_index,
             capacity,
         }
     }
@@ -87,21 +87,25 @@ impl StagingBuffer {
 
     pub fn active_count(&self) -> usize {
         let list_index = self.sab[self.current_list_slot_index].load(Ordering::Relaxed) as usize;
-        self.sab[self.start_index + list_index].load(Ordering::Relaxed) as usize
+        self.sab[self.sab_start_index + list_index].load(Ordering::Relaxed) as usize
     }
 
     pub fn staged_count(&self) -> usize {
         let list_index = self.sab[self.current_list_slot_index].load(Ordering::Relaxed) as usize;
         let prev_index = 1 - list_index;
-        self.sab[self.start_index + prev_index].load(Ordering::Relaxed) as usize
+        self.sab[self.sab_start_index + prev_index].load(Ordering::Relaxed) as usize
     }
 
     pub fn len(&self) -> usize {
         self.active_count() + self.staged_count()
     }
 
+    pub fn sab_start_index(&self) -> usize {
+        self.sab_start_index
+    }
+
     pub fn sab_end_index(&self) -> usize {
-        self.end_index
+        self.sab_end_index
     }
 
     pub fn push(&self, slot: usize) {
@@ -113,7 +117,7 @@ impl StagingBuffer {
         );
 
         let list_index = self.sab[self.current_list_slot_index].load(Ordering::Relaxed) as usize;
-        let len_slot_index = self.start_index + list_index;
+        let len_slot_index = self.sab_start_index + list_index;
 
         self.sab[self.list_start_index + (self.capacity * list_index) + active_count]
             .store(slot as i32, Ordering::Relaxed);
@@ -123,8 +127,8 @@ impl StagingBuffer {
     pub fn drain(&'_ self) -> StagingBufferIterator {
         let list_index = self.sab[self.current_list_slot_index].load(Ordering::Relaxed) as usize;
         let prev_index = 1 - list_index;
-        let start_index = self.list_start_index + (self.capacity * prev_index);
-        let len_slot_index = self.start_index + prev_index;
+        let sab_start_index = self.list_start_index + (self.capacity * prev_index);
+        let len_slot_index = self.sab_start_index + prev_index;
         let len = self.sab[len_slot_index].load(Ordering::Relaxed) as usize;
 
         self.sab[len_slot_index].store(0, Ordering::Relaxed);
@@ -132,8 +136,8 @@ impl StagingBuffer {
 
         StagingBufferIterator {
             sab: Arc::clone(&self.sab),
-            current_index: start_index,
-            end_index: start_index + len,
+            current_index: sab_start_index,
+            sab_end_index: sab_start_index + len,
         }
     }
 

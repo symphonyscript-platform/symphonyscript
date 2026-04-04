@@ -123,11 +123,11 @@ fn interleaved_read_write() {
 }
 
 #[test]
-fn end_index_is_correct() {
+fn sab_end_index_is_correct() {
     let sab = create_sab(4096);
     let ring: RingBuffer<4> = RingBuffer::new(sab, 0, 8);
 
-    // end_index = start(0) + header(3) + capacity(8) * SLOT_SIZE(4) = 35
+    // sab_end_index = start(0) + header(3) + capacity(8) * SLOT_SIZE(4) = 35
     assert_eq!(ring.sab_end_index(), 35);
 }
 

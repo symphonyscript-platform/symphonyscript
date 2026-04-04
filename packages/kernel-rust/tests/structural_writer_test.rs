@@ -71,7 +71,7 @@ fn new_creates_slot_writer() {
 }
 
 #[test]
-fn end_index_correct() {
+fn sab_end_index_correct() {
     let (_sab, _writer, sw) = setup();
     assert_eq!(sw.triple_buffer_end_offset(), CAPACITY * 16);
 }

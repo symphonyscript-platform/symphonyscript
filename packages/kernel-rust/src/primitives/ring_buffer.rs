@@ -13,26 +13,27 @@ pub struct RingBuffer<const SLOT_SIZE: usize> {
     read_slot_index: usize,
     write_slot_index: usize,
     pending_slot_index: usize,
-    end_index: usize,
+    sab_start_index: usize,
+    sab_end_index: usize,
 }
 
 impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
-    pub fn new(sab: SAB, start_index: usize, capacity: i32) -> Self {
-        Self::create(sab, start_index, capacity, false)
+    pub fn new(sab: SAB, sab_start_index: usize, capacity: i32) -> Self {
+        Self::create(sab, sab_start_index, capacity, false)
     }
 
-    pub fn bind(sab: SAB, start_index: usize, capacity: i32) -> Self {
-        Self::create(sab, start_index, capacity, true)
+    pub fn bind(sab: SAB, sab_start_index: usize, capacity: i32) -> Self {
+        Self::create(sab, sab_start_index, capacity, true)
     }
 
-    pub fn create(sab: SAB, start_index: usize, capacity: i32, bind: bool) -> Self {
+    pub fn create(sab: SAB, sab_start_index: usize, capacity: i32, bind: bool) -> Self {
         let len = 3 + (capacity as usize) * SLOT_SIZE;
-        let end_index = start_index + len;
+        let sab_end_index = sab_start_index + len;
 
         debug_assert!(
-            end_index <= sab.len(),
+            sab_end_index <= sab.len(),
             "RingBuffer::create | range [{}..{}] exceeds SAB boundaries",
-            start_index,
+            sab_start_index,
             len
         );
         debug_assert!(
@@ -47,9 +48,9 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
             capacity
         );
 
-        let read_slot_index = start_index;
-        let write_slot_index = start_index + 1;
-        let pending_slot_index = start_index + 2;
+        let read_slot_index = sab_start_index;
+        let write_slot_index = sab_start_index + 1;
+        let pending_slot_index = sab_start_index + 2;
 
         if !bind {
             sab[read_slot_index].store(0, Ordering::Relaxed);
@@ -59,13 +60,14 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
 
         RingBuffer {
             sab: Arc::clone(&sab),
-            slots: SlotView::new(Arc::clone(&sab), start_index + 3, capacity),
+            slots: SlotView::new(Arc::clone(&sab), sab_start_index + 3, capacity),
             capacity,
             mod_mask: capacity - 1,
             read_slot_index,
             write_slot_index,
             pending_slot_index,
-            end_index,
+            sab_start_index,
+            sab_end_index,
         }
     }
 
@@ -73,8 +75,12 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
         self.sab[self.pending_slot_index].load(Ordering::Acquire)
     }
 
+    pub fn sab_start_index(&self) -> usize {
+        self.sab_start_index
+    }
+
     pub fn sab_end_index(&self) -> usize {
-        self.end_index
+        self.sab_end_index
     }
 
     pub fn read(&self) -> Option<[i32; SLOT_SIZE]> {

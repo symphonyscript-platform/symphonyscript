@@ -4,32 +4,32 @@ use crate::primitives::types::SAB;
 #[derive(Clone)]
 pub struct AttributePlaneReader<const SLOT_SIZE: usize> {
     sab: SAB,
-    start_index: usize,
-    end_index: usize,
+    sab_start_index: usize,
+    sab_end_index: usize,
     capacity: usize,
 }
 
 impl<const SLOT_SIZE: usize> AttributePlaneReader<SLOT_SIZE> {
-    pub fn new(sab: SAB, start_index: usize, capacity: usize) -> Self {
-        let end_index = start_index + capacity * SLOT_SIZE;
+    pub fn new(sab: SAB, sab_start_index: usize, capacity: usize) -> Self {
+        let sab_end_index = sab_start_index + capacity * SLOT_SIZE;
 
         debug_assert!(
-            end_index <= sab.len(),
+            sab_end_index <= sab.len(),
             "AttributePlaneReader::new | range [{}..{}] exceeds SAB boundaries",
-            start_index,
+            sab_start_index,
             capacity * SLOT_SIZE,
         );
 
         AttributePlaneReader {
             sab,
-            start_index,
-            end_index,
+            sab_start_index,
+            sab_end_index,
             capacity,
         }
     }
 
-    pub fn bind(sab: SAB, start_index: usize, capacity: usize) -> Self {
-        Self::new(sab, start_index, capacity)
+    pub fn bind(sab: SAB, sab_start_index: usize, capacity: usize) -> Self {
+        Self::new(sab, sab_start_index, capacity)
     }
 
     pub fn calculate_size(capacity: usize) -> usize {
@@ -37,11 +37,15 @@ impl<const SLOT_SIZE: usize> AttributePlaneReader<SLOT_SIZE> {
     }
 
     pub fn resolve_sab_index(&self, offset: usize) -> usize {
-        self.start_index + (offset * SLOT_SIZE)
+        self.sab_start_index + (offset * SLOT_SIZE)
+    }
+
+    pub fn sab_start_index(&self) -> usize {
+        self.sab_start_index
     }
 
     pub fn sab_end_index(&self) -> usize {
-        self.end_index
+        self.sab_end_index
     }
 
     pub fn get(&'_ self, offset: usize) -> AttributesReader<'_, SLOT_SIZE> {
@@ -51,9 +55,6 @@ impl<const SLOT_SIZE: usize> AttributePlaneReader<SLOT_SIZE> {
             offset
         );
 
-        AttributesReader {
-            sab: &self.sab,
-            start_index: self.resolve_sab_index(offset),
-        }
+        AttributesReader::new(&self.sab, self.resolve_sab_index(offset))
     }
 }

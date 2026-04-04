@@ -83,32 +83,32 @@ impl TripleBuffer {
     }
 
     // SAB must already be initialized via new
-    pub fn bind_writer(sab: SAB, start_index: usize, buffer_capacity: usize) -> TripleBufferWriter {
+    pub fn bind_writer(sab: SAB, sab_start_index: usize, buffer_capacity: usize) -> TripleBufferWriter {
         debug_assert!(
             buffer_capacity > 0,
             "TripleBuffer::bind_writer | buffer_capacity {} must be positive",
             buffer_capacity
         );
 
-        let state_slot_index = start_index;
-        let writer_slot_index = start_index + 1;
-        let published_slot_index = start_index + 2;
-        let buffers_start_index = start_index + 4;
+        let state_slot_index = sab_start_index;
+        let writer_slot_index = sab_start_index + 1;
+        let published_slot_index = sab_start_index + 2;
+        let buffers_start_index = sab_start_index + 4;
         let buffer_bases: [usize; 3] = [
             buffers_start_index,
             buffers_start_index + buffer_capacity,
             buffers_start_index + buffer_capacity * 2,
         ];
-        let end_index = buffers_start_index + buffer_capacity * 3;
+        let sab_end_index = buffers_start_index + buffer_capacity * 3;
         let writer = TripleBufferWriter {
             sab: Arc::clone(&sab),
-            sab_start_index: start_index,
+            sab_start_index,
             state_slot_index,
             writer_slot_index,
             published_slot_index,
             buffer_bases,
             buffer_capacity,
-            sab_end_index: end_index,
+            sab_end_index,
         };
 
         // Synchronize with the last publish() before reading its results.

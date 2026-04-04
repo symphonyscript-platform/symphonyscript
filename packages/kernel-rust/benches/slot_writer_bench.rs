@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
-use symphonyscript_kernel::primitives::simple_free_list::SimpleFreeList;
 use symphonyscript_kernel::primitives::into_array::IntoArray;
 use symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter;
 
@@ -31,19 +30,24 @@ const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 16384;
 const FL_START: usize = 50000;
 const CAPACITY: usize = 512;
+const TB_OFFSET: usize = 0;
 
-fn setup() -> (SAB, symphonyscript_kernel::primitives::triple_buffer::TripleBufferWriter, symphonyscript_kernel::primitives::triple_buffer::TripleBufferReader, SimpleFreeList) {
+fn setup() -> (SAB, symphonyscript_kernel::primitives::triple_buffer::TripleBufferWriter, symphonyscript_kernel::primitives::triple_buffer::TripleBufferReader) {
     let sab = create_sab(SAB_SIZE);
     let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
-    let free_list = SimpleFreeList::new(Arc::clone(&sab), FL_START, CAPACITY);
-    (sab, writer, reader, free_list)
+    (sab, writer, reader)
 }
 
 fn bench_slot_writer(c: &mut Criterion) {
-    let (_sab, writer, _reader, free_list) = setup();
+    let (sab, writer, _reader) = setup();
 
-    // Pre-insert a slot for read/write benchmarks
-    let sw: StructuralWriter<16> = StructuralWriter::new(writer.clone(), free_list.clone(), 0, CAPACITY);
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        Arc::clone(&sab),
+        writer.clone(),
+        FL_START,
+        TB_OFFSET,
+        CAPACITY,
+    );
     let slot = sw.insert(TestPayload { a: 42, b: 99 }).unwrap();
 
     c.bench_function("StructuralWriter/write_field", |b| {
@@ -65,12 +69,6 @@ fn bench_slot_writer(c: &mut Criterion) {
         });
     });
 
-    c.bench_function("StructuralWriter/insert+free_cycle", |b| {
-        b.iter(|| {
-            let s = sw.insert(TestPayload { a: black_box(1), b: black_box(2) }).unwrap();
-            sw.defer_free(s).unwrap();
-        });
-    });
 }
 
 criterion_group!(benches, bench_slot_writer);

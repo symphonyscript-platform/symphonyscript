@@ -4,9 +4,6 @@ use std::sync::atomic::AtomicI32;
 use symphonyscript_kernel::constants::{NODE_SLOT_SIZE, SYNAPSE_SLOT_SIZE};
 use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
-use symphonyscript_kernel::primitives::simple_free_list::SimpleFreeList;
-use symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter;
-use symphonyscript_kernel::structural_plane::structural_reader::StructuralReader;
 use symphonyscript_kernel::structural_plane::node::node_chain_writer::NodeChainWriter;
 use symphonyscript_kernel::structural_plane::node::node_chain_reader::NodeChainReader;
 use symphonyscript_kernel::structural_plane::node::node_data::NodeDraft;
@@ -27,42 +24,52 @@ const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 65536;
 const NODE_CAPACITY: usize = 512;
 const SYNAPSE_CAPACITY: usize = 2048;
-const NODE_START_OFFSET: usize = 0;
-const NODE_HEAD_OFFSET: usize = NODE_CAPACITY * NODE_SLOT_SIZE;
-const SYNAPSE_START_OFFSET: usize = NODE_HEAD_OFFSET + 1;
+const NODE_TB_OFFSET: usize = 0;
 const NODE_FL_START: usize = 200000;
 const SYNAPSE_FL_START: usize = 210000;
 
 struct Harness {
-    _sab: SAB,
+    sab: SAB,
     writer: symphonyscript_kernel::primitives::triple_buffer::TripleBufferWriter,
     reader: symphonyscript_kernel::primitives::triple_buffer::TripleBufferReader,
-    node_fl: SimpleFreeList,
-    synapse_fl: SimpleFreeList,
 }
 
 fn setup() -> Harness {
     let sab = create_sab(SAB_SIZE);
     let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
-    let node_fl = SimpleFreeList::new(Arc::clone(&sab), NODE_FL_START, NODE_CAPACITY);
-    let synapse_fl = SimpleFreeList::new(Arc::clone(&sab), SYNAPSE_FL_START, SYNAPSE_CAPACITY);
-    Harness {
-        _sab: sab,
-        writer,
-        reader,
-        node_fl,
-        synapse_fl,
-    }
+    Harness { sab, writer, reader }
+}
+
+fn synapse_tb_offset() -> usize {
+    // synapse triple buffer offset comes after node chain's triple buffer region
+    let node_tb_end = NODE_TB_OFFSET + 1 + NODE_CAPACITY * NODE_SLOT_SIZE;
+    node_tb_end
+}
+
+fn make_chains(h: &Harness) -> (NodeChainWriter, SynapseChainWriter) {
+    let node_chain = NodeChainWriter::new(
+        Arc::clone(&h.sab),
+        h.writer.clone(),
+        NODE_FL_START,
+        NODE_TB_OFFSET,
+        NODE_CAPACITY,
+    );
+    let synapse_chain = SynapseChainWriter::new(
+        Arc::clone(&h.sab),
+        h.writer.clone(),
+        node_chain.clone(),
+        SYNAPSE_FL_START,
+        synapse_tb_offset(),
+        SYNAPSE_CAPACITY,
+    );
+    (node_chain, synapse_chain)
 }
 
 // ============ connect: single synapse (cold) ============
 
 fn bench_connect_single(c: &mut Criterion) {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
-    let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
-    let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
+    let (node_chain, synapse_chain) = make_chains(&h);
 
     let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
     let tgt = node_chain.insert_head(NodeDraft { opcode: 2, base_tick: 0 }).unwrap();
@@ -81,10 +88,7 @@ fn bench_connect_single(c: &mut Criterion) {
 
 fn bench_disconnect_single(c: &mut Criterion) {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
-    let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
-    let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
+    let (node_chain, synapse_chain) = make_chains(&h);
 
     let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
     let tgt = node_chain.insert_head(NodeDraft { opcode: 2, base_tick: 0 }).unwrap();
@@ -108,23 +112,15 @@ fn bench_connect_chain_growth(c: &mut Criterion) {
             &chain_depth,
             |b, &depth| {
                 let h = setup();
-                let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-                let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
-                let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
-                let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
+                let (node_chain, synapse_chain) = make_chains(&h);
 
                 let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
 
-                // pre-build the chain to `depth` targets
-                let mut targets = Vec::with_capacity(depth);
-                let mut synapses = Vec::with_capacity(depth);
                 for i in 0..depth {
                     let tgt = node_chain.insert_head(NodeDraft { opcode: (i + 2) as i32, base_tick: 0 }).unwrap();
-                    targets.push(tgt);
-                    synapses.push(synapse_chain.connect(src, tgt, SynapseDraft { opcode: i as i32 }).unwrap());
+                    synapse_chain.connect(src, tgt, SynapseDraft { opcode: i as i32 }).unwrap();
                 }
 
-                // one more target for the benchmark connect
                 let bench_tgt = node_chain.insert_head(NodeDraft { opcode: 99, base_tick: 0 }).unwrap();
 
                 b.iter(|| {
@@ -151,31 +147,22 @@ fn bench_disconnect_head(c: &mut Criterion) {
             |b, &depth| {
                 b.iter_custom(|iters| {
                     let h = setup();
-                    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-                    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
-                    let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
-                    let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
+                    let (node_chain, synapse_chain) = make_chains(&h);
 
                     let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
 
                     let start = std::time::Instant::now();
                     for _ in 0..iters {
-                        // build chain
                         let mut synapses = Vec::with_capacity(depth);
                         for i in 0..depth {
                             let tgt = node_chain.insert_head(NodeDraft { opcode: (i + 2) as i32, base_tick: 0 }).unwrap();
                             synapses.push(synapse_chain.connect(src, tgt, SynapseDraft { opcode: i as i32 }).unwrap());
                         }
-                        // disconnect head (timed operation)
                         synapse_chain.disconnect(black_box(synapses[0])).unwrap();
-                        // teardown: disconnect rest
                         for s in &synapses[1..] {
                             synapse_chain.disconnect(*s).unwrap();
                         }
-                        // free target nodes
-                        // (nodes allocated in this iter get freed for next iter)
                         for _ in 0..depth {
-                            // remove nodes from chain to free slots
                             if let Some(head) = node_chain.get_head() {
                                 let head_next = head.get_next_ptr();
                                 if head_next != src {
@@ -196,10 +183,7 @@ fn bench_disconnect_head(c: &mut Criterion) {
 
 fn bench_connect_disconnect_throughput(c: &mut Criterion) {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
-    let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
-    let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
+    let (node_chain, synapse_chain) = make_chains(&h);
 
     let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
     let tgt = node_chain.insert_head(NodeDraft { opcode: 2, base_tick: 0 }).unwrap();
@@ -218,10 +202,7 @@ fn bench_connect_disconnect_throughput(c: &mut Criterion) {
 
 fn bench_synapse_read_all_fields(c: &mut Criterion) {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
-    let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
-    let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
+    let (node_chain, synapse_chain) = make_chains(&h);
 
     let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
     let tgt = node_chain.insert_head(NodeDraft { opcode: 2, base_tick: 0 }).unwrap();
@@ -252,12 +233,8 @@ fn bench_reader_traversal(c: &mut Criterion) {
             &chain_size,
             |b, &size| {
                 let mut h = setup();
-
                 {
-                    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-                    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
-                    let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
-                    let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
+                    let (node_chain, synapse_chain) = make_chains(&h);
 
                     let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
 
@@ -269,16 +246,17 @@ fn bench_reader_traversal(c: &mut Criterion) {
                 h.writer.publish();
                 h.reader.swap();
 
-                let node_sr = StructuralReader::<NODE_SLOT_SIZE>::new(h.reader.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-                let synapse_sr = StructuralReader::<SYNAPSE_SLOT_SIZE>::new(h.reader.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
-                let node_chain_r = NodeChainReader::new(h.reader.clone(), node_sr.clone(), NODE_HEAD_OFFSET);
-                let synapse_chain_r = SynapseChainReader::new(synapse_sr.clone());
+                let node_chain_r = NodeChainReader::bind(
+                    h.reader.clone(),
+                    NODE_TB_OFFSET,
+                    NODE_CAPACITY,
+                );
+                let synapse_chain_r = SynapseChainReader::bind(
+                    h.reader.clone(),
+                    synapse_tb_offset(),
+                    SYNAPSE_CAPACITY,
+                );
 
-                // find the source node (it was inserted first, so it's somewhere in the node chain)
-                // We know its outgoing head is the first synapse
-                // For the bench, we pre-find the outgoing head and traverse from there
-                let head_node = node_chain_r.get_head().unwrap();
-                // Walk to find a node with outgoing synapses
                 let mut cursor_slot = 0;
                 let mut cur = node_chain_r.get_head();
                 while let Some(n) = &cur {
@@ -312,10 +290,7 @@ fn bench_reader_traversal(c: &mut Criterion) {
 
 fn bench_self_loop_cycle(c: &mut Criterion) {
     let h = setup();
-    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
-    let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
-    let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
+    let (node_chain, synapse_chain) = make_chains(&h);
 
     let n = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
 
@@ -338,10 +313,7 @@ fn bench_publish_after_mutations(c: &mut Criterion) {
             for _ in 0..iters {
                 let mut h = setup();
                 {
-                    let node_sw = StructuralWriter::<NODE_SLOT_SIZE>::new(h.writer.clone(), h.node_fl.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-                    let synapse_sw = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(h.writer.clone(), h.synapse_fl.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
-                    let node_chain = NodeChainWriter::new(h.writer.clone(), node_sw.clone(), NODE_HEAD_OFFSET);
-                    let synapse_chain = SynapseChainWriter::new(node_chain.clone(), synapse_sw.clone());
+                    let (node_chain, synapse_chain) = make_chains(&h);
 
                     let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
                     for i in 0..32 {

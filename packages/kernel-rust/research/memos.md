@@ -13,7 +13,7 @@ The following decisions are fully specified in `docs/rfcs/modulation-v2/RFC-070-
 - **Jitter**: tick_offset + SOURCE=CONTEXT modulation. No separate jitter field
 - **SynapseAttributePlane**: weight + tick_offset in shared atomic plane, modulatable same as node attributes
 - **Deterministic synapses**: All-fire model. Weight = velocity multiplier (integer: `velocity * weight / 1000`). No PRNG
-- **View pattern**: All kernel data in SAB. Views hold `(sab, start_index)`, provide typed accessors. No `#[repr(C)]` structs
+- **View pattern**: All kernel data in SAB. Views hold `(sab, sab_start_index)`, provide typed accessors. No `#[repr(C)]` structs
 - **Zero floats in kernel**: All values Q16.16. `compute_phase_increment` runs on bridge only
 - **LFO**: Internal parameter source. Audio engine generates RAW_VALUE per block via `generate_waveform()`
 - **Expr DSL**: Data structures, not closures. Kernel-compilable. Derived parameters via two-pass evaluation

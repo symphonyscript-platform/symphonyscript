@@ -3,22 +3,32 @@ use std::sync::atomic::Ordering;
 
 pub struct AttributesReader<'a, const SLOT_SIZE: usize> {
     pub(crate) sab: &'a SAB,
-    pub(crate) start_index: usize,
+    pub(crate) sab_start_index: usize,
+    pub(crate) sab_end_index: usize,
 }
 
 impl<'a, const SLOT_SIZE: usize> AttributesReader<'a, SLOT_SIZE> {
-    pub fn new(sab: &'a SAB, start_index: usize) -> Self {
-        let end_index = start_index + SLOT_SIZE;
+    pub fn new(sab: &'a SAB, sab_start_index: usize) -> Self {
+        let sab_end_index = sab_start_index + SLOT_SIZE;
         debug_assert!(
-            end_index <= sab.len(),
+            sab_end_index <= sab.len(),
             "AttributesReader::new | range [{}..{}] exceeds SAB boundaries",
-            start_index,
+            sab_start_index,
             SLOT_SIZE
         );
         AttributesReader {
             sab: &sab,
-            start_index,
+            sab_start_index,
+            sab_end_index,
         }
+    }
+
+    pub fn sab_start_index(&self) -> usize {
+        self.sab_start_index
+    }
+
+    pub fn sab_end_index(&self) -> usize {
+        self.sab_end_index
     }
 
     pub fn read(&self, offset: usize) -> i32 {
@@ -27,6 +37,6 @@ impl<'a, const SLOT_SIZE: usize> AttributesReader<'a, SLOT_SIZE> {
             "AttributesReader.read | offset {} out of bounds",
             offset
         );
-        self.sab[self.start_index + offset].load(Ordering::Relaxed)
+        self.sab[self.sab_start_index + offset].load(Ordering::Relaxed)
     }
 }
