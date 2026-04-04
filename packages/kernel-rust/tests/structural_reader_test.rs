@@ -33,14 +33,15 @@ const SAB_SIZE: usize = 2048;
 const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 256;
 const FL_START: usize = 800;
-const CAPACITY: usize = 8;
 
-fn setup() -> (
+fn setup_custom(
+    start_offset: usize,
+) -> (
     SAB,
     symphonyscript_kernel::primitives::triple_buffer::TripleBufferWriter,
     symphonyscript_kernel::primitives::triple_buffer::TripleBufferReader,
-    SimpleFreeList,
-    symphonyscript_kernel::primitives::deferred_frees_list::DeferredFreesList,
+    StructuralWriter<16>,
+    StructuralReader<16>,
 ) {
     let sab = create_sab(SAB_SIZE);
     let (writer, reader) = TripleBuffer::new(Arc::clone(&sab), TB_START, TB_BUF_CAP);
@@ -50,29 +51,46 @@ fn setup() -> (
         FL_START + 500,
         CAPACITY,
     );
-    (sab, writer, reader, free_list, deferred)
+    let sw: StructuralWriter<16> = StructuralWriter::new(
+        sab.clone(),
+        writer.clone(),
+        FL_START,
+        start_offset,
+        CAPACITY,
+    );
+    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), start_offset, CAPACITY);
+    (sab, writer, reader, sw, sr)
 }
+
+fn setup() -> (
+    SAB,
+    symphonyscript_kernel::primitives::triple_buffer::TripleBufferWriter,
+    symphonyscript_kernel::primitives::triple_buffer::TripleBufferReader,
+    StructuralWriter<16>,
+    StructuralReader<16>,
+) {
+    setup_custom(0)
+}
+
+const CAPACITY: usize = 8;
 
 // ============ Construction ============
 
 #[test]
 fn new_creates_structural_reader() {
-    let (_sab, _writer, reader, _free_list, deferred) = setup();
-    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
+    let (_sab, _writer, _reader, _sw, sr) = setup();
     assert_eq!(sr.capacity(), CAPACITY);
 }
 
 #[test]
 fn end_index_correct() {
-    let (_sab, _writer, reader, _free_list, deferred) = setup();
-    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
+    let (_sab, _writer, _reader, _sw, sr) = setup();
     assert_eq!(sr.triple_buffer_end_offset(), CAPACITY * 16);
 }
 
 #[test]
 fn resolve_reader_offset() {
-    let (_sab, _writer, reader, _free_list, deferred) = setup();
-    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
+    let (_sab, _writer, _reader, _sw, sr) = setup();
     // slot 1 (1-based) -> index 0 -> offset 0
     assert_eq!(sr.resolve_reader_offset(1), 0);
     // slot 2 -> index 1 -> offset 16
@@ -83,8 +101,7 @@ fn resolve_reader_offset() {
 
 #[test]
 fn resolve_reader_offset_with_start_offset() {
-    let (_sab, _writer, reader, _free_list, deferred) = setup();
-    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 50, CAPACITY);
+    let (_sab, _writer, _reader, _sw, sr) = setup_custom(50);
     // slot 1 -> index 0 -> 50 + 0 = 50
     assert_eq!(sr.resolve_reader_offset(1), 50);
     // slot 2 -> index 1 -> 50 + 16 = 66
@@ -95,14 +112,7 @@ fn resolve_reader_offset_with_start_offset() {
 
 #[test]
 fn reads_published_data_via_writer_round_trip() {
-    let (_sab, mut writer, mut reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(
-        writer.clone(),
-        free_list.clone(),
-        deferred.clone(),
-        0,
-        CAPACITY,
-    );
+    let (_sab, mut writer, mut reader, sw, _sr) = setup();
 
     let slot = sw.insert(TestPayload { a: 777, b: 888 }).unwrap();
     writer.publish();
@@ -115,15 +125,7 @@ fn reads_published_data_via_writer_round_trip() {
 
 #[test]
 fn reads_published_data_via_view() {
-    let (_sab, mut writer, mut reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(
-        writer.clone(),
-        free_list.clone(),
-        deferred.clone(),
-        0,
-        CAPACITY,
-    );
-
+    let (_sab, mut writer, mut reader, sw, _sr) = setup();
     let slot1 = sw.insert(TestPayload { a: 111, b: 0 }).unwrap();
     let slot2 = sw.insert(TestPayload { a: 222, b: 0 }).unwrap();
     writer.publish();
@@ -139,15 +141,7 @@ fn reads_published_data_via_view() {
 
 #[test]
 fn slots_are_independent() {
-    let (_sab, mut writer, mut reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(
-        writer.clone(),
-        free_list.clone(),
-        deferred.clone(),
-        0,
-        CAPACITY,
-    );
-
+    let (_sab, mut writer, mut reader, sw, _sr) = setup();
     let slot1 = sw.insert(TestPayload { a: 100, b: 0 }).unwrap();
     let slot2 = sw.insert(TestPayload { a: 0, b: 0 }).unwrap(); // untouched
     let slot3 = sw.insert(TestPayload { a: 300, b: 0 }).unwrap();
@@ -162,15 +156,7 @@ fn slots_are_independent() {
 
 #[test]
 fn does_not_see_unpublished_writes() {
-    let (_sab, writer, reader, free_list, deferred) = setup();
-    let sw: StructuralWriter<16> = StructuralWriter::new(
-        writer.clone(),
-        free_list.clone(),
-        deferred.clone(),
-        0,
-        CAPACITY,
-    );
-
+    let (_sab, _writer, reader, sw, _sr) = setup();
     let slot = sw.insert(TestPayload { a: 999, b: 0 }).unwrap();
     // no publish, no swap
 
@@ -180,7 +166,7 @@ fn does_not_see_unpublished_writes() {
 
 #[test]
 fn get_returns_view_with_zero_defaults() {
-    let (_sab, _writer, reader, _free_list, deferred) = setup();
+    let (_sab, _writer, reader, _sw, _sr) = setup();
     let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
 
     let view = sr.get(1); // 1-based: first real slot
@@ -193,18 +179,11 @@ fn get_returns_view_with_zero_defaults() {
 
 #[test]
 fn reader_sees_updated_data_after_second_publish_swap() {
-    let (_sab, mut writer, mut reader, free_list, deferred) = setup();
+    let (_sab, mut writer, mut reader, sw, _sr) = setup();
 
     // cycle 1: insert and publish
     let slot = {
-        let sw: StructuralWriter<16> = StructuralWriter::new(
-            writer.clone(),
-            free_list.clone(),
-            deferred.clone(),
-            0,
-            CAPACITY,
-        );
-        let slot = sw.insert(TestPayload { a: 100, b: 200 }).unwrap();
+        let slot = sw.clone().insert(TestPayload { a: 100, b: 200 }).unwrap();
         slot
     };
     writer.publish();
@@ -217,14 +196,7 @@ fn reader_sees_updated_data_after_second_publish_swap() {
 
     // cycle 2: mutate the same slot, publish again
     {
-        let sw: StructuralWriter<16> = StructuralWriter::new(
-            writer.clone(),
-            free_list.clone(),
-            deferred.clone(),
-            0,
-            CAPACITY,
-        );
-        sw.write_field(slot, 0, 999);
+        sw.clone().write_field(slot, 0, 999);
     }
     writer.publish();
     reader.swap();
@@ -237,37 +209,20 @@ fn reader_sees_updated_data_after_second_publish_swap() {
 
 #[test]
 fn reader_retains_old_data_without_swap() {
-    let (_sab, mut writer, mut reader, free_list, deferred) = setup();
+    let (_sab, mut writer, mut reader, sw, sr) = setup();
 
-    let slot = {
-        let sw: StructuralWriter<16> = StructuralWriter::new(
-            writer.clone(),
-            free_list.clone(),
-            deferred.clone(),
-            0,
-            CAPACITY,
-        );
-        sw.insert(TestPayload { a: 42, b: 0 }).unwrap()
-    };
+    let slot = { sw.clone().insert(TestPayload { a: 42, b: 0 }).unwrap() };
     writer.publish();
     reader.swap();
 
     // writer updates + publishes, but reader does NOT swap
     {
-        let sw: StructuralWriter<16> = StructuralWriter::new(
-            writer.clone(),
-            free_list.clone(),
-            deferred.clone(),
-            0,
-            CAPACITY,
-        );
-        sw.write_field(slot, 0, 999);
+        sw.clone().write_field(slot, 0, 999);
     }
     writer.publish();
 
     // reader still sees old value (no swap)
     {
-        let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
         assert_eq!(sr.read_field(slot, 0), 42);
     }
 }
@@ -276,17 +231,10 @@ fn reader_retains_old_data_without_swap() {
 
 #[test]
 fn nonzero_start_offset_full_round_trip() {
-    let (_sab, mut writer, mut reader, free_list, deferred) = setup();
     let start_offset = 48;
+    let (_sab, mut writer, mut reader, sw, sr) = setup_custom(start_offset);
 
     let slot = {
-        let sw: StructuralWriter<16> = StructuralWriter::new(
-            writer.clone(),
-            free_list.clone(),
-            deferred.clone(),
-            start_offset,
-            CAPACITY,
-        );
         sw.insert(TestPayload {
             a: 0xABCD,
             b: 0x1234,
@@ -296,7 +244,6 @@ fn nonzero_start_offset_full_round_trip() {
     writer.publish();
     reader.swap();
 
-    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), start_offset, CAPACITY);
     assert_eq!(sr.read_field(slot, 0), 0xABCD);
     assert_eq!(sr.read_field(slot, 1), 0x1234);
 }
@@ -305,16 +252,9 @@ fn nonzero_start_offset_full_round_trip() {
 
 #[test]
 fn reader_reads_from_correct_sab_offset() {
-    let (sab, mut writer, mut reader, free_list, deferred) = setup();
+    let (sab, mut writer, mut reader, sw, _sr) = setup();
 
     let slot = {
-        let sw: StructuralWriter<16> = StructuralWriter::new(
-            writer.clone(),
-            free_list.clone(),
-            deferred.clone(),
-            0,
-            CAPACITY,
-        );
         sw.insert(TestPayload {
             a: 0xFACE,
             b: 0xFEED,
@@ -337,16 +277,9 @@ fn reader_reads_from_correct_sab_offset() {
 
 #[test]
 fn reader_sees_first_and_last_slot() {
-    let (_sab, mut writer, mut reader, free_list, deferred) = setup();
+    let (_sab, mut writer, mut reader, sw, sr) = setup();
 
     let first = {
-        let sw: StructuralWriter<16> = StructuralWriter::new(
-            writer.clone(),
-            free_list.clone(),
-            deferred.clone(),
-            0,
-            CAPACITY,
-        );
         let first = sw.insert(TestPayload { a: 111, b: 0 }).unwrap();
         // fill remaining
         for _ in 1..CAPACITY {
@@ -359,7 +292,6 @@ fn reader_sees_first_and_last_slot() {
     writer.publish();
     reader.swap();
 
-    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
     assert_eq!(sr.read_field(first, 0), 111, "first slot");
     assert_eq!(sr.read_field(CAPACITY, 0), 888, "last slot");
 }
@@ -368,22 +300,14 @@ fn reader_sees_first_and_last_slot() {
 
 #[test]
 fn two_reader_views_same_snapshot() {
-    let (_sab, mut writer, mut reader, free_list, deferred) = setup();
+    let (_sab, mut writer, mut reader, sw, sr) = setup();
 
     let slot = {
-        let sw: StructuralWriter<16> = StructuralWriter::new(
-            writer.clone(),
-            free_list.clone(),
-            deferred.clone(),
-            0,
-            CAPACITY,
-        );
         sw.insert(TestPayload { a: 77, b: 88 }).unwrap()
     };
     writer.publish();
     reader.swap();
 
-    let sr: StructuralReader<16> = StructuralReader::new(reader.clone(), 0, CAPACITY);
     let v1 = sr.get(slot);
     let v2 = sr.get(slot);
 
