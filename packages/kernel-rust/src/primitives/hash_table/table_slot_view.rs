@@ -26,7 +26,8 @@ impl TableSlotView {
     pub fn get(&self, index: usize) -> TableSlot {
         debug_assert!(
             index < self.slots_count as usize,
-            "slot index out of bounds"
+            "TableSlotView.get | index {} out of bounds",
+            index,
         );
 
         let sab_index = self.calculate_index(index);
@@ -46,7 +47,8 @@ impl TableSlotView {
     pub fn set(&self, index: usize, slot: TableSlot) {
         debug_assert!(
             index < self.slots_count as usize,
-            "slot index out of bounds"
+            "TableSlotView.set | index {} out of bounds",
+            index,
         );
 
         let sab_index = self.calculate_index(index);
@@ -59,7 +61,8 @@ impl TableSlotView {
     pub fn remove(&self, index: usize) -> TableSlot {
         debug_assert!(
             index < self.slots_count as usize,
-            "slot index out of bounds"
+            "TableSlotView.remove | index {} out of bounds",
+            index,
         );
 
         let sab_index = self.calculate_index(index);

@@ -127,6 +127,10 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
         self.allocator.utilization()
     }
 
+    pub fn is_active_slot(&self, slot: usize) -> bool {
+        self.allocator.is_active(slot)
+    }
+
     pub fn insert<T: IntoArray<SLOT_SIZE>>(&self, data: T) -> Option<usize> {
         match self.allocator.alloc() {
             Some(slot) => {
@@ -191,7 +195,9 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
     pub fn copy_from(&self, source: &StructuralWriter<SLOT_SIZE>) {
         debug_assert!(
             source.capacity <= self.capacity,
-            "StructuralWriter.copy_from | source cannot be greater than destination"
+            "StructuralWriter.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
+            source.capacity,
+            self.capacity,
         );
 
         self.allocator.copy_from(&source.allocator);

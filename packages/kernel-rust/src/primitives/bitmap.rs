@@ -61,13 +61,19 @@ impl Bitmap {
     }
 
     pub fn is_off(&self, bit_offset: usize) -> bool {
-        debug_assert!(bit_offset < self.capacity, "is_off: bit_offset out of bounds");
+        debug_assert!(
+            bit_offset < self.capacity,
+            "is_off: bit_offset out of bounds"
+        );
         let bitmask = self.sab[self.sab_start_index + (bit_offset >> 5)].load(Ordering::Relaxed);
         bitmask & (1 << (bit_offset & 31)) == 0
     }
 
     pub fn is_on(&self, bit_offset: usize) -> bool {
-        debug_assert!(bit_offset < self.capacity, "is_on: bit_offset out of bounds");
+        debug_assert!(
+            bit_offset < self.capacity,
+            "is_on: bit_offset out of bounds"
+        );
         !self.is_off(bit_offset)
     }
 
@@ -92,7 +98,9 @@ impl Bitmap {
     pub fn copy_from(&self, source: &Bitmap) {
         debug_assert!(
             source.capacity <= self.capacity,
-            "Bitmap.copy_from | source cannot be greater than destination"
+            "Bitmap.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
+            source.capacity,
+            self.capacity,
         );
 
         for i in 0..source.word_count {

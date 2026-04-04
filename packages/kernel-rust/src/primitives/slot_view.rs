@@ -10,7 +10,11 @@ pub struct SlotView<const SLOT_SIZE: usize> {
 
 impl<const SLOT_SIZE: usize> SlotView<SLOT_SIZE> {
     pub fn new(sab: SAB, start_index: usize, capacity: i32) -> Self {
-        debug_assert!(capacity > 0, "capacity cannot be negative");
+        debug_assert!(
+            capacity > 0,
+            "SlotView::new | capacity {} cannot be negative",
+            capacity
+        );
         SlotView {
             sab,
             start_index,
@@ -29,9 +33,14 @@ impl<const SLOT_SIZE: usize> SlotView<SLOT_SIZE> {
     pub fn get_at(&self, slot_index: usize, slot_item_index: usize) -> i32 {
         debug_assert!(
             slot_index < self.capacity as usize,
-            "slot index out of bounds"
+            "SlotView.get_at | slot_index {} out of bounds",
+            slot_index,
         );
-        debug_assert!(slot_item_index < SLOT_SIZE, "slot item index out of bounds");
+        debug_assert!(
+            slot_item_index < SLOT_SIZE,
+            "SlotView.get_at | slot_item_index {} out of bounds",
+            slot_item_index
+        );
 
         let sab_index = self.start_index + slot_index * SLOT_SIZE + slot_item_index;
 
@@ -41,9 +50,14 @@ impl<const SLOT_SIZE: usize> SlotView<SLOT_SIZE> {
     pub fn set_at(&self, slot_index: usize, slot_item_index: usize, value: i32) {
         debug_assert!(
             slot_index < self.capacity as usize,
-            "slot index out of bounds"
+            "SlotView.set_at | slot_index {} out of bounds",
+            slot_index,
         );
-        debug_assert!(slot_item_index < SLOT_SIZE, "slot item index out of bounds");
+        debug_assert!(
+            slot_item_index < SLOT_SIZE,
+            "SlotView.set_at | slot_item_index {} out of bounds",
+            slot_item_index
+        );
 
         let sab_index = self.start_index + slot_index * SLOT_SIZE + slot_item_index;
 
@@ -51,7 +65,11 @@ impl<const SLOT_SIZE: usize> SlotView<SLOT_SIZE> {
     }
 
     pub fn get(&self, index: usize) -> [i32; SLOT_SIZE] {
-        debug_assert!(index < self.capacity as usize, "slot index out of bounds");
+        debug_assert!(
+            index < self.capacity as usize,
+            "SlotView.get | index {} out of bounds",
+            index,
+        );
 
         let mut data: [i32; SLOT_SIZE] = [0; SLOT_SIZE];
         let slot_index = self.start_index + index * SLOT_SIZE;
@@ -64,7 +82,11 @@ impl<const SLOT_SIZE: usize> SlotView<SLOT_SIZE> {
     }
 
     pub fn set(&self, index: usize, data: [i32; SLOT_SIZE]) {
-        debug_assert!(index < self.capacity as usize, "slot index out of bounds");
+        debug_assert!(
+            index < self.capacity as usize,
+            "SlotView.set | index {} out of bounds",
+            index,
+        );
 
         let slot_index = self.start_index + index * SLOT_SIZE;
 

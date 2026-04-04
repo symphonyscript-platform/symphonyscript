@@ -13,7 +13,12 @@ impl<const SLOT_SIZE: usize> AttributePlaneReader<SLOT_SIZE> {
     pub fn new(sab: SAB, start_index: usize, capacity: usize) -> Self {
         let end_index = start_index + capacity * SLOT_SIZE;
 
-        debug_assert!(end_index <= sab.len(), "AttributePlaneReader out of bounds");
+        debug_assert!(
+            end_index <= sab.len(),
+            "AttributePlaneReader::new | range [{}..{}] exceeds SAB boundaries",
+            start_index,
+            capacity * SLOT_SIZE,
+        );
 
         AttributePlaneReader {
             sab,

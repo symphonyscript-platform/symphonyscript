@@ -9,7 +9,12 @@ pub struct AttributesWriter<'a, const SLOT_SIZE: usize> {
 impl<'a, const SLOT_SIZE: usize> AttributesWriter<'a, SLOT_SIZE> {
     pub fn new(sab: &'a SAB, start_index: usize) -> Self {
         let end_index = start_index + SLOT_SIZE;
-        debug_assert!(end_index <= sab.len(), "AttributesWriter out of bounds");
+        debug_assert!(
+            end_index <= sab.len(),
+            "AttributesWriter::new | range [{}..{}] exceeds SAB boundaries",
+            start_index,
+            SLOT_SIZE
+        );
         AttributesWriter {
             sab: &sab,
             start_index,
@@ -17,10 +22,20 @@ impl<'a, const SLOT_SIZE: usize> AttributesWriter<'a, SLOT_SIZE> {
     }
 
     pub fn read(&self, offset: usize) -> i32 {
+        debug_assert!(
+            offset < SLOT_SIZE,
+            "AttributesWriter.read | offset {} out of bounds",
+            offset
+        );
         self.sab[self.start_index + offset].load(Ordering::Relaxed)
     }
 
     pub fn write(&self, offset: usize, value: i32) {
+        debug_assert!(
+            offset < SLOT_SIZE,
+            "AttributesWriter.write | offset {} out of bounds",
+            offset
+        );
         self.sab[self.start_index + offset].store(value, Ordering::Relaxed)
     }
 }

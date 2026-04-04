@@ -34,7 +34,11 @@ impl TripleBuffer {
         sab_start_index: usize,
         buffer_capacity: usize,
     ) -> (TripleBufferWriter, TripleBufferReader) {
-        debug_assert!(buffer_capacity > 0, "buffer must have positive capacity");
+        debug_assert!(
+            buffer_capacity > 0,
+            "TripleBuffer::new | buffer_capacity {} must be positive",
+            buffer_capacity
+        );
 
         let state_slot_index = sab_start_index;
         let writer_slot_index = sab_start_index + 1;
@@ -57,7 +61,7 @@ impl TripleBuffer {
 
         let writer = TripleBufferWriter {
             sab: Arc::clone(&sab),
-            sab_start_index: sab_start_index,
+            sab_start_index,
             state_slot_index,
             writer_slot_index,
             published_slot_index,
@@ -244,18 +248,18 @@ impl TripleBufferWriter {
     ) {
         debug_assert!(
             source.buffer_capacity <= self.buffer_capacity,
-            "copy_region_from source cannot be greater than destination"
+            "TripleBufferWriter.copy_region_from | source cannot be greater than destination"
         );
         debug_assert!(
             destination_offset + count <= self.buffer_capacity,
-            "copy_region: destination range [{}..{}] exceeds buffer_capacity {}",
+            "TripleBufferWriter.copy_region_from | destination range [{}..{}] exceeds buffer_capacity {}",
             destination_offset,
             count,
             self.buffer_capacity,
         );
         debug_assert!(
             source_offset + count <= source.buffer_capacity,
-            "copy_region: source range [{}..{}] exceeds buffer_capacity {}",
+            "TripleBufferWriter.copy_region | source range [{}..{}] exceeds buffer_capacity {}",
             source_offset,
             count,
             source.buffer_capacity,

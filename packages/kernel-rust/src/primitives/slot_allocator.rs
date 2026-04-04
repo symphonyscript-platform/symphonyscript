@@ -34,7 +34,7 @@ impl SlotAllocator {
 
         debug_assert!(
             sab_end_index <= sab.len(),
-            "SlotAllocator: slot range [{}..{}] exceeds SAB boundaries",
+            "SlotAllocator::create | range [{}..{}] exceeds SAB boundaries",
             sab_start_index,
             capacity,
         );
@@ -132,6 +132,12 @@ impl SlotAllocator {
     }
 
     pub fn copy_from(&self, source: &SlotAllocator) {
+        debug_assert!(
+            source.capacity <= self.capacity,
+            "SlotAllocator.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
+            source.capacity,
+            self.capacity,
+        );
         self.deferred_bitmap.copy_from(&source.deferred_bitmap);
         self.free_list.copy_from(&source.free_list);
         self.deferred_frees_list

@@ -25,8 +25,17 @@ impl<const SLOT_SIZE: usize> FreeList<SLOT_SIZE> {
     }
 
     pub fn create(sab: SAB, start_index: usize, capacity: i32, bind: bool) -> Self {
-        debug_assert!(capacity > 0, "capacity cannot be negative");
-        debug_assert_eq!(capacity & (capacity - 1), 0, "capacity must be power of 2");
+        debug_assert!(
+            capacity > 0,
+            "FreeList::create | capacity {} must be positive",
+            capacity
+        );
+        debug_assert_eq!(
+            capacity & (capacity - 1),
+            0,
+            "FreeList::create | capacity {} must be power of 2",
+            capacity
+        );
 
         let bitmap_size = (capacity + 31) / 32;
         let bitmap_slot_start_index = start_index + 3;

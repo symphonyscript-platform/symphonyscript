@@ -207,10 +207,20 @@ impl SynapticGraphWriter {
         &'_ self,
         slot: usize,
     ) -> AttributesWriter<'_, NODE_ATTRIBUTES_SLOT_SIZE> {
+        debug_assert!(
+            self.node_chain_writer.is_active_slot(slot),
+            "SynapticGraphWriter.get_node_attributes | attempted to read inactive slot {}",
+            slot
+        );
         self.node_attribute_plane.get(slot)
     }
 
     pub fn get_node_attribute(&'_ self, slot: usize, attribute_offset: usize) -> i32 {
+        debug_assert!(
+            self.node_chain_writer.is_active_slot(slot),
+            "SynapticGraphWriter.get_node_attribute | attempted to read inactive slot {}",
+            slot
+        );
         self.node_attribute_plane.get(slot).read(attribute_offset)
     }
 
@@ -219,10 +229,20 @@ impl SynapticGraphWriter {
         slot: usize,
         data: T,
     ) {
+        debug_assert!(
+            self.node_chain_writer.is_active_slot(slot),
+            "SynapticGraphWriter.set_node_attributes | attempted to read inactive slot {}",
+            slot
+        );
         self.node_attribute_plane.set(slot, data)
     }
 
     pub fn set_node_attribute(&'_ self, slot: usize, attribute_offset: usize, value: i32) {
+        debug_assert!(
+            self.node_chain_writer.is_active_slot(slot),
+            "SynapticGraphWriter.set_node_attribute | attempted to read inactive slot {}",
+            slot
+        );
         self.node_attribute_plane
             .get(slot)
             .write(attribute_offset, value)

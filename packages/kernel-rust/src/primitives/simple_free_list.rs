@@ -128,7 +128,9 @@ impl SimpleFreeList {
     pub fn copy_from(&self, source: &SimpleFreeList) {
         debug_assert!(
             source.capacity <= self.capacity,
-            "SimpleFreeList.copy_from | source cannot be greater than destination"
+            "SimpleFreeList.copy_from | source.capacity {} cannot be greater than destination.capacity {}"
+            source.capacity,
+            self.capacity,
         );
 
         self.sab[self.sab_head_ptr].store(

@@ -125,6 +125,10 @@ impl SynapseChainWriter {
         self.synapse_writer.utilization()
     }
 
+    pub fn is_active_slot(&self, slot: usize) -> bool {
+        self.synapse_writer.is_active_slot(slot)
+    }
+
     pub fn get(&'_ self, slot: usize) -> SynapseWriter<'_> {
         SynapseWriter(self.synapse_writer.get(slot))
     }
@@ -225,6 +229,12 @@ impl SynapseChainWriter {
     }
 
     pub fn copy_from(&self, source: &SynapseChainWriter) {
+        debug_assert!(
+            source.capacity <= self.capacity,
+            "SynapseChainWriter.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
+            source.capacity,
+            self.capacity,
+        );
         self.synapse_writer.copy_from(&source.synapse_writer);
     }
 }
