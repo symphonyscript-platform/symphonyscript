@@ -64,8 +64,9 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
 
         debug_assert!(
             triple_buffer_end_offset <= writer.buffer_capacity(),
-            "node region ({}) exceeds writer buffer capacity ({})",
-            triple_buffer_end_offset,
+            "StructuralWriter::create | range [{}..{}] exceeds buffer capacity {}",
+            triple_buffer_start_offset,
+            capacity * SLOT_SIZE,
             writer.buffer_capacity(),
         );
 
@@ -157,13 +158,14 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
             "StructuralWriter.get | attempted to read inactive slot {}",
             slot
         );
-        debug_assert!(slot > 0 && slot <= self.capacity(), "slot out of bounds");
+        debug_assert!(
+            slot > 0 && slot <= self.capacity(),
+            "StructuralWriter.get | slot {} out of bounds",
+            slot
+        );
         let start_offset = self.resolve_writer_offset(slot);
 
-        SlotWriter {
-            writer: &self.writer,
-            start_offset,
-        }
+        SlotWriter::new(&self.writer, start_offset)
     }
 
     pub fn write_field(&'_ self, slot: usize, offset: usize, value: i32) {
@@ -172,7 +174,11 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
             "StructuralWriter.write_field | attempted to write inactive slot {}",
             slot
         );
-        debug_assert!(offset < SLOT_SIZE, "offset out of bounds");
+        debug_assert!(
+            offset < SLOT_SIZE,
+            "StructuralWriter.write_field | slot {} out of bounds",
+            offset
+        );
         let start_offset = self.resolve_writer_offset(slot);
         self.writer.write(start_offset + offset, value)
     }
@@ -183,7 +189,11 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
             "StructuralWriter.read_field | attempted to read inactive slot {}",
             slot
         );
-        debug_assert!(offset < SLOT_SIZE, "offset out of bounds");
+        debug_assert!(
+            offset < SLOT_SIZE,
+            "StructuralWriter.read_field | slot {} out of bounds",
+            offset
+        );
         let start_offset = self.resolve_writer_offset(slot);
         self.writer.read(start_offset + offset)
     }

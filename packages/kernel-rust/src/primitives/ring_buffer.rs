@@ -26,11 +26,26 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
     }
 
     pub fn create(sab: SAB, start_index: usize, capacity: i32, bind: bool) -> Self {
-        let end_index = start_index + 3 + (capacity as usize) * SLOT_SIZE;
+        let len = 3 + (capacity as usize) * SLOT_SIZE;
+        let end_index = start_index + len;
 
-        assert!(end_index < sab.len(), "RingBuffer out of bounds");
-        debug_assert!(capacity > 0, "capacity cannot be negative");
-        debug_assert_eq!(capacity & (capacity - 1), 0, "capacity must be power of 2");
+        debug_assert!(
+            end_index <= sab.len(),
+            "RingBuffer::create | range [{}..{}] exceeds SAB boundaries",
+            start_index,
+            len
+        );
+        debug_assert!(
+            capacity > 0,
+            "RingBuffer::create | capacity {} must be positive",
+            capacity
+        );
+        debug_assert_eq!(
+            capacity & (capacity - 1),
+            0,
+            "RingBuffer::create | capacity {} must be power of 2",
+            capacity
+        );
 
         let read_slot_index = start_index;
         let write_slot_index = start_index + 1;

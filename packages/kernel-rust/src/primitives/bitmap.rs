@@ -20,8 +20,17 @@ impl Bitmap {
     }
 
     pub fn create(sab: SAB, sab_start_index: usize, capacity: usize, bind: bool) -> Self {
-        debug_assert!(capacity > 0, "capacity must be positive");
-        debug_assert_eq!(capacity & (capacity - 1), 0, "capacity must be power of 2");
+        debug_assert!(
+            capacity > 0,
+            "Bitmap::create | capacity {} must be positive",
+            capacity
+        );
+        debug_assert_eq!(
+            capacity & (capacity - 1),
+            0,
+            "Bitmap::create | capacity {} must be power of 2",
+            capacity
+        );
         let word_count = Self::calculate_size_on_sab(capacity);
         let sab_end_index = sab_start_index + word_count;
 
@@ -63,7 +72,8 @@ impl Bitmap {
     pub fn is_off(&self, bit_offset: usize) -> bool {
         debug_assert!(
             bit_offset < self.capacity,
-            "is_off: bit_offset out of bounds"
+            "Bitmap.is_off | bit_offset {} out of bounds",
+            bit_offset
         );
         let bitmask = self.sab[self.sab_start_index + (bit_offset >> 5)].load(Ordering::Relaxed);
         bitmask & (1 << (bit_offset & 31)) == 0
@@ -72,19 +82,28 @@ impl Bitmap {
     pub fn is_on(&self, bit_offset: usize) -> bool {
         debug_assert!(
             bit_offset < self.capacity,
-            "is_on: bit_offset out of bounds"
+            "Bitmap.is_on | bit_offset {} out of bounds",
+            bit_offset
         );
         !self.is_off(bit_offset)
     }
 
     pub fn on(&self, bit_offset: usize) {
-        debug_assert!(bit_offset < self.capacity, "on: bit_offset out of bounds");
+        debug_assert!(
+            bit_offset < self.capacity,
+            "Bitmap.on | bit_offset {} out of bounds",
+            bit_offset
+        );
         self.sab[self.sab_start_index + (bit_offset >> 5)]
             .fetch_or(1 << (bit_offset & 31), Ordering::Relaxed);
     }
 
     pub fn off(&self, bit_offset: usize) {
-        debug_assert!(bit_offset < self.capacity, "off: bit_offset out of bounds");
+        debug_assert!(
+            bit_offset < self.capacity,
+            "Bitmap.off | bit_offset {} out of bounds",
+            bit_offset
+        );
         self.sab[self.sab_start_index + (bit_offset >> 5)]
             .fetch_and(!(1 << (bit_offset & 31)), Ordering::Relaxed);
     }

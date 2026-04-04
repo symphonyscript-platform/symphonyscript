@@ -25,31 +25,14 @@ impl NodeChainWriter {
         triple_buffer_start_offset: usize,
         capacity: usize,
     ) -> Self {
-        debug_assert!(
-            triple_buffer_start_offset < buffer.buffer_capacity(),
-            "NodeChainWriter::new | triple_buffer_start_offset {} out of bounds",
-            triple_buffer_start_offset,
-        );
-
-        let structural_writer = StructuralWriter::<NODE_SLOT_SIZE>::new(
+        Self::create(
             sab,
-            buffer.clone(),
-            sab_start_index,
-            triple_buffer_start_offset + 1,
-            capacity,
-        );
-        let sab_end_index = structural_writer.sab_end_index();
-        let triple_buffer_end_offset = structural_writer.triple_buffer_end_offset();
-
-        NodeChainWriter {
             buffer,
-            writer: structural_writer,
             sab_start_index,
-            sab_end_index,
             triple_buffer_start_offset,
-            triple_buffer_end_offset,
             capacity,
-        }
+            false,
+        )
     }
 
     pub fn bind(
@@ -59,21 +42,46 @@ impl NodeChainWriter {
         triple_buffer_start_offset: usize,
         capacity: usize,
     ) -> Self {
+        Self::create(
+            sab,
+            buffer,
+            sab_start_index,
+            triple_buffer_start_offset,
+            capacity,
+            true,
+        )
+    }
+
+    pub fn create(
+        sab: SAB,
+        buffer: TripleBufferWriter,
+        sab_start_index: usize,
+        triple_buffer_start_offset: usize,
+        capacity: usize,
+        bind: bool,
+    ) -> Self {
         debug_assert!(
             triple_buffer_start_offset < buffer.buffer_capacity(),
-            "NodeChainWriter::bind | triple_buffer_start_offset {} out of bounds",
+            "NodeChainWriter::create | triple_buffer_start_offset {} out of bounds",
             triple_buffer_start_offset,
         );
 
-        let structural_writer = StructuralWriter::<NODE_SLOT_SIZE>::bind(
+        let structural_writer = StructuralWriter::<NODE_SLOT_SIZE>::create(
             sab,
             buffer.clone(),
             sab_start_index,
             triple_buffer_start_offset + 1,
             capacity,
+            bind,
         );
         let sab_end_index = structural_writer.sab_end_index();
         let triple_buffer_end_offset = structural_writer.triple_buffer_end_offset();
+
+        debug_assert!(
+            triple_buffer_end_offset <= buffer.buffer_capacity(),
+            "NodeChainWriter::create | triple_buffer_end_offset {} out of bounds",
+            triple_buffer_end_offset,
+        );
 
         NodeChainWriter {
             buffer,

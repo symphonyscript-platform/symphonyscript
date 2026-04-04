@@ -45,7 +45,11 @@ impl<const SLOT_SIZE: usize> AttributePlaneReader<SLOT_SIZE> {
     }
 
     pub fn get(&'_ self, offset: usize) -> AttributesReader<'_, SLOT_SIZE> {
-        debug_assert!(offset < self.capacity, "offset out of bounds");
+        debug_assert!(
+            offset < self.capacity,
+            "AttributePlaneReader.get | offset {} out of bounds",
+            offset
+        );
 
         AttributesReader {
             sab: &self.sab,

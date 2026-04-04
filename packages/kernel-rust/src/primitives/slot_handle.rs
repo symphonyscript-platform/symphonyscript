@@ -16,7 +16,11 @@ impl<'a, const SLOT_SIZE: usize> SlotHandle<'a, SLOT_SIZE> {
     }
 
     pub fn read(&self, index: usize) -> i32 {
-        debug_assert!(index < SLOT_SIZE, "slot handle index out of bounds");
+        debug_assert!(
+            index < SLOT_SIZE,
+            "SlotHandle.read | index {} out of bounds",
+            index
+        );
         self.sab[self.start_index + index].load(Ordering::Relaxed)
     }
 
@@ -30,7 +34,11 @@ impl<'a, const SLOT_SIZE: usize> SlotHandle<'a, SLOT_SIZE> {
         data
     }
     pub fn write(&self, index: usize, value: i32) {
-        debug_assert!(index < SLOT_SIZE, "slot handle index out of bounds");
+        debug_assert!(
+            index < SLOT_SIZE,
+            "SlotHandle.write | index {} out of bounds",
+            index
+        );
         self.sab[self.start_index + index].store(value, Ordering::Relaxed);
     }
 

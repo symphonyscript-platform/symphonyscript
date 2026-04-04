@@ -12,7 +12,7 @@ impl<const SLOT_SIZE: usize> SlotView<SLOT_SIZE> {
     pub fn new(sab: SAB, start_index: usize, capacity: i32) -> Self {
         debug_assert!(
             capacity > 0,
-            "SlotView::new | capacity {} cannot be negative",
+            "SlotView::new | capacity {} must be positive",
             capacity
         );
         SlotView {

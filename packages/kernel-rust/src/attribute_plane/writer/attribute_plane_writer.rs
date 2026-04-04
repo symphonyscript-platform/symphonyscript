@@ -15,7 +15,12 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
     pub fn new(sab: SAB, start_index: usize, capacity: usize) -> Self {
         let end_index = start_index + capacity * SLOT_SIZE;
 
-        debug_assert!(end_index <= sab.len(), "AttributePlaneWriter out of bounds");
+        debug_assert!(
+            end_index <= sab.len(),
+            "AttributePlaneWriter::new | range [{}..{}] exceeds SAB boundaries",
+            start_index,
+            capacity * SLOT_SIZE
+        );
 
         AttributePlaneWriter {
             sab,
@@ -42,7 +47,11 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
     }
 
     pub fn get(&'_ self, offset: usize) -> AttributesWriter<'_, SLOT_SIZE> {
-        debug_assert!(offset < self.capacity, "offset out of bounds");
+        debug_assert!(
+            offset <= self.capacity,
+            "AttributePlaneWriter.get | offset {} out of bounds",
+            offset,
+        );
 
         AttributesWriter {
             sab: &self.sab,
@@ -51,7 +60,11 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
     }
 
     pub fn set<T: IntoArray<SLOT_SIZE>>(&self, offset: usize, data: T) {
-        debug_assert!(offset < self.capacity, "offset out of bounds");
+        debug_assert!(
+            offset <= self.capacity,
+            "AttributePlaneWriter.set | offset {} out of bounds",
+            offset,
+        );
 
         let data = data.to_array();
         let base = self.resolve_sab_index(offset);
@@ -64,7 +77,7 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
     pub fn copy_from(&self, source: &AttributePlaneWriter<SLOT_SIZE>) {
         debug_assert!(
             source.capacity <= self.capacity,
-            "AttributePlaneWriter.copy_from | ource.capacity {} cannot be greater than destination.capacity {}",
+            "AttributePlaneWriter.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
             source.capacity,
             self.capacity,
         );

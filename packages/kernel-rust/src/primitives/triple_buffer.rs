@@ -84,7 +84,11 @@ impl TripleBuffer {
 
     // SAB must already be initialized via new
     pub fn bind_writer(sab: SAB, start_index: usize, buffer_capacity: usize) -> TripleBufferWriter {
-        debug_assert!(buffer_capacity > 0, "buffer must have size");
+        debug_assert!(
+            buffer_capacity > 0,
+            "TripleBuffer::bind_writer | buffer_capacity {} must be positive",
+            buffer_capacity
+        );
 
         let state_slot_index = start_index;
         let writer_slot_index = start_index + 1;
@@ -122,7 +126,11 @@ impl TripleBuffer {
         sab_start_index: usize,
         buffer_capacity: usize,
     ) -> TripleBufferReader {
-        debug_assert!(buffer_capacity > 0, "buffer must have size");
+        debug_assert!(
+            buffer_capacity > 0,
+            "TripleBuffer::bind_reader | buffer_capacity {} must be positive",
+            buffer_capacity
+        );
 
         let state_slot_index = sab_start_index;
         let reader_slot_index = sab_start_index + 3;
@@ -204,13 +212,21 @@ impl TripleBufferWriter {
     }
 
     pub fn write(&self, offset: usize, value: i32) {
-        debug_assert!(offset < self.buffer_capacity, "offset out of bounds");
+        debug_assert!(
+            offset < self.buffer_capacity,
+            "TripleBufferWriter.write | offset {} out of bounds",
+            offset
+        );
         let base = self.current_start_index();
         self.sab[base + offset].store(value, Ordering::Relaxed)
     }
 
     pub fn read(&self, offset: usize) -> i32 {
-        debug_assert!(offset < self.buffer_capacity, "offset out of bounds");
+        debug_assert!(
+            offset < self.buffer_capacity,
+            "TripleBufferWriter.read | offset {} out of bounds",
+            offset
+        );
         let base = self.current_start_index();
         self.sab[base + offset].load(Ordering::Relaxed)
     }
@@ -218,7 +234,9 @@ impl TripleBufferWriter {
     pub fn copy_metadata_from(&self, source: &TripleBufferWriter) {
         debug_assert!(
             source.buffer_capacity <= self.buffer_capacity,
-            "copy_region_from source cannot be greater than destination"
+            "StagingBuffer.copy_metadata_from | source.buffer_capacity {} cannot be greater than destination.buffer_capacity {}",
+            source.buffer_capacity,
+            self.buffer_capacity,
         );
 
         self.sab[self.state_slot_index].store(
@@ -248,7 +266,9 @@ impl TripleBufferWriter {
     ) {
         debug_assert!(
             source.buffer_capacity <= self.buffer_capacity,
-            "TripleBufferWriter.copy_region_from | source cannot be greater than destination"
+            "StagingBuffer.copy_region_from | source.buffer_capacity {} cannot be greater than destination.buffer_capacity {}",
+            source.buffer_capacity,
+            self.buffer_capacity,
         );
         debug_assert!(
             destination_offset + count <= self.buffer_capacity,
@@ -259,7 +279,7 @@ impl TripleBufferWriter {
         );
         debug_assert!(
             source_offset + count <= source.buffer_capacity,
-            "TripleBufferWriter.copy_region | source range [{}..{}] exceeds buffer_capacity {}",
+            "TripleBufferWriter.copy_region_from | source range [{}..{}] exceeds buffer_capacity {}",
             source_offset,
             count,
             source.buffer_capacity,
@@ -321,7 +341,11 @@ impl TripleBufferReader {
     }
 
     pub fn read(&self, offset: usize) -> i32 {
-        debug_assert!(offset < self.buffer_capacity, "offset out of bounds");
+        debug_assert!(
+            offset < self.buffer_capacity,
+            "TripleBufferReader.read | offset {} out of bounds",
+            offset
+        );
         let base = self.current_start_index();
         self.sab[base + offset].load(Ordering::Relaxed)
     }

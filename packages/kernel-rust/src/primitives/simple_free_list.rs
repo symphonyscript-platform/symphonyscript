@@ -26,8 +26,17 @@ impl SimpleFreeList {
     }
 
     pub fn create(sab: SAB, start_index: usize, capacity: usize, bind: bool) -> Self {
-        debug_assert!(capacity > 0, "capacity must be positive");
-        debug_assert_eq!(capacity & (capacity - 1), 0, "capacity must be power of 2");
+        debug_assert!(
+            capacity > 0,
+            "SimpleFreeList::create | capacity {} must be positive",
+            capacity
+        );
+        debug_assert_eq!(
+            capacity & (capacity - 1),
+            0,
+            "SimpleFreeList::create | capacity {} must be power of 2",
+            capacity
+        );
 
         let free_count_slot_index = start_index + 1;
         let alloc_bitmap = Bitmap::create(Arc::clone(&sab), start_index + 2, capacity, bind);
@@ -113,7 +122,11 @@ impl SimpleFreeList {
 
     pub fn free(&self, slot_number: usize) -> Result<(), FreeListError> {
         let slot_index = slot_number - 1;
-        debug_assert!(slot_index < self.capacity, "slot_number out of bounds");
+        debug_assert!(
+            slot_index < self.capacity,
+            "SimpleFreeList.free | slot_number {} out of bounds",
+            slot_number
+        );
 
         if self.alloc_bitmap.is_off(slot_index) {
             return Err(FreeListError::DoubleFree);
@@ -128,7 +141,7 @@ impl SimpleFreeList {
     pub fn copy_from(&self, source: &SimpleFreeList) {
         debug_assert!(
             source.capacity <= self.capacity,
-            "SimpleFreeList.copy_from | source.capacity {} cannot be greater than destination.capacity {}"
+            "SimpleFreeList.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
             source.capacity,
             self.capacity,
         );
@@ -159,7 +172,11 @@ impl SimpleFreeList {
     }
 
     fn trust_free(&self, slot_index: usize) {
-        debug_assert!(slot_index < self.capacity, "slot_index out of bounds");
+        debug_assert!(
+            slot_index < self.capacity,
+            "SimpleFreeList.trust_free | slot_index {} out of bounds",
+            slot_index
+        );
         let head_index = self.sab[self.sab_head_ptr].load(Ordering::Relaxed);
         self.sab[self.slots_start_index + slot_index].store(head_index, Ordering::Relaxed);
         self.sab[self.sab_head_ptr].store(slot_index as i32, Ordering::Relaxed);

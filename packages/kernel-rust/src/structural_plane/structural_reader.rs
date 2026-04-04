@@ -4,26 +4,27 @@ use crate::structural_plane::slot_reader::SlotReader;
 #[derive(Clone)]
 pub struct StructuralReader<const SLOT_SIZE: usize> {
     reader: TripleBufferReader,
-    start_offset: usize,
-    end_offset: usize,
+    triple_buffer_start_offset: usize,
+    triple_buffer_end_offset: usize,
     capacity: usize,
 }
 
 impl<const SLOT_SIZE: usize> StructuralReader<SLOT_SIZE> {
-    pub fn new(reader: TripleBufferReader, start_offset: usize, capacity: usize) -> Self {
-        let end_offset = start_offset + capacity * SLOT_SIZE;
+    pub fn new(reader: TripleBufferReader, triple_buffer_start_offset: usize, capacity: usize) -> Self {
+        let triple_buffer_end_offset = triple_buffer_start_offset + capacity * SLOT_SIZE;
 
         debug_assert!(
-            end_offset <= reader.buffer_capacity(),
-            "node region ({}) exceeds reader buffer capacity ({})",
-            end_offset,
+            triple_buffer_end_offset <= reader.buffer_capacity(),
+            "StructuralReader::new | range [{}..{}] exceeds buffer capacity {}",
+            triple_buffer_start_offset,
+            capacity * SLOT_SIZE,
             reader.buffer_capacity(),
         );
 
         StructuralReader {
             reader,
-            start_offset,
-            end_offset,
+            triple_buffer_start_offset,
+            triple_buffer_end_offset,
             capacity,
         }
     }
@@ -33,15 +34,15 @@ impl<const SLOT_SIZE: usize> StructuralReader<SLOT_SIZE> {
     }
 
     pub fn resolve_reader_offset(&self, slot: usize) -> usize {
-        self.start_offset + (slot - 1) * SLOT_SIZE
+        self.triple_buffer_start_offset + (slot - 1) * SLOT_SIZE
     }
 
     pub fn triple_buffer_start_offset(&self) -> usize {
-        self.start_offset
+        self.triple_buffer_start_offset
     }
 
     pub fn triple_buffer_end_offset(&self) -> usize {
-        self.end_offset
+        self.triple_buffer_end_offset
     }
 
     pub fn capacity(&self) -> usize {
@@ -50,19 +51,26 @@ impl<const SLOT_SIZE: usize> StructuralReader<SLOT_SIZE> {
 
     pub fn get(&'_ self, slot: usize) -> SlotReader<'_, SLOT_SIZE> {
         debug_assert!(
-            slot > 0 && slot <= self.capacity() as usize,
-            "slot out of bounds"
+            slot > 0 && slot <= self.capacity(),
+            "StructuralReader.get | slot {} out of bounds",
+            slot
         );
         let start_offset = self.resolve_reader_offset(slot);
 
-        SlotReader {
-            reader: &self.reader,
-            start_offset,
-        }
+        SlotReader::new(&self.reader, start_offset)
     }
 
     pub fn read_field(&'_ self, slot: usize, offset: usize) -> i32 {
-        debug_assert!(offset < SLOT_SIZE, "offset out of bounds");
+        debug_assert!(
+            slot > 0 && slot <= self.capacity(),
+            "StructuralReader.read_field | slot {} out of bounds",
+            slot
+        );
+        debug_assert!(
+            offset < SLOT_SIZE,
+            "StructuralReader.read_field | offset {} out of bounds",
+            offset
+        );
         let start_offset = self.resolve_reader_offset(slot);
         self.reader.read(start_offset + offset)
     }

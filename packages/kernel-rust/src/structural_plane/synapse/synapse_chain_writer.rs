@@ -27,31 +27,15 @@ impl SynapseChainWriter {
         triple_buffer_start_offset: usize,
         capacity: usize,
     ) -> Self {
-        debug_assert!(
-            triple_buffer_start_offset < buffer.buffer_capacity(),
-            "triple_buffer_start_offset ({}) out of bounds",
-            triple_buffer_start_offset,
-        );
-
-        let synapse_writer = StructuralWriter::<SYNAPSE_SLOT_SIZE>::new(
+        Self::create(
             sab,
-            buffer.clone(),
-            sab_start_index,
-            triple_buffer_start_offset,
-            capacity,
-        );
-        let sab_end_index = synapse_writer.sab_end_index();
-        let triple_buffer_end_offset = synapse_writer.triple_buffer_end_offset();
-
-        SynapseChainWriter {
+            buffer,
             node_chain,
-            synapse_writer,
             sab_start_index,
-            sab_end_index,
             triple_buffer_start_offset,
-            triple_buffer_end_offset,
             capacity,
-        }
+            false,
+        )
     }
 
     pub fn bind(
@@ -62,21 +46,48 @@ impl SynapseChainWriter {
         triple_buffer_start_offset: usize,
         capacity: usize,
     ) -> Self {
+        Self::create(
+            sab,
+            buffer,
+            node_chain,
+            sab_start_index,
+            triple_buffer_start_offset,
+            capacity,
+            true,
+        )
+    }
+
+    pub fn create(
+        sab: SAB,
+        buffer: TripleBufferWriter,
+        node_chain: NodeChainWriter,
+        sab_start_index: usize,
+        triple_buffer_start_offset: usize,
+        capacity: usize,
+        bind: bool,
+    ) -> Self {
         debug_assert!(
             triple_buffer_start_offset < buffer.buffer_capacity(),
-            "triple_buffer_start_offset ({}) out of bounds",
+            "SynapseChainWriter::create | triple_buffer_start_offset {} out of bounds",
             triple_buffer_start_offset,
         );
 
-        let synapse_writer = StructuralWriter::<SYNAPSE_SLOT_SIZE>::bind(
+        let synapse_writer = StructuralWriter::<SYNAPSE_SLOT_SIZE>::create(
             sab,
             buffer.clone(),
             sab_start_index,
             triple_buffer_start_offset,
             capacity,
+            bind,
         );
         let sab_end_index = synapse_writer.sab_end_index();
         let triple_buffer_end_offset = synapse_writer.triple_buffer_end_offset();
+
+        debug_assert!(
+            triple_buffer_end_offset <= buffer.buffer_capacity(),
+            "SynapseChainWriter::create | triple_buffer_end_offset {} out of bounds",
+            triple_buffer_end_offset,
+        );
 
         SynapseChainWriter {
             node_chain,

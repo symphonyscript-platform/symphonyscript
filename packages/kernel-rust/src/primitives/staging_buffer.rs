@@ -44,8 +44,17 @@ impl StagingBuffer {
     }
 
     pub fn create(sab: SAB, start_index: usize, capacity: usize, bind: bool) -> Self {
-        debug_assert!(capacity > 0, "capacity must be positive");
-        debug_assert_eq!(capacity & (capacity - 1), 0, "capacity must be power of 2");
+        debug_assert!(
+            capacity > 0,
+            "StagingBuffer::create | capacity {} must be positive",
+            capacity
+        );
+        debug_assert_eq!(
+            capacity & (capacity - 1),
+            0,
+            "StagingBuffer::create | capacity {} must be power of 2",
+            capacity
+        );
 
         let len_0_slot_index = start_index;
         let len_1_slot_index = start_index + 1;
@@ -96,16 +105,19 @@ impl StagingBuffer {
     }
 
     pub fn push(&self, slot: usize) {
-        let len = self.active_count();
+        let active_count = self.active_count();
 
-        debug_assert!(len < self.capacity, "StagingBuffer overflow");
+        debug_assert!(
+            active_count < self.capacity,
+            "StagingBuffer.push | buffer overflow",
+        );
 
         let list_index = self.sab[self.current_list_slot_index].load(Ordering::Relaxed) as usize;
         let len_slot_index = self.start_index + list_index;
 
-        self.sab[self.list_start_index + (self.capacity * list_index) + len]
+        self.sab[self.list_start_index + (self.capacity * list_index) + active_count]
             .store(slot as i32, Ordering::Relaxed);
-        self.sab[len_slot_index].store((len as i32) + 1, Ordering::Relaxed);
+        self.sab[len_slot_index].store((active_count as i32) + 1, Ordering::Relaxed);
     }
 
     pub fn drain(&'_ self) -> StagingBufferIterator {
