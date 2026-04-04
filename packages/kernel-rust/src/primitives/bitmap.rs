@@ -90,6 +90,11 @@ impl Bitmap {
     }
 
     pub fn copy_from(&self, source: &Bitmap) {
+        debug_assert!(
+            source.capacity <= self.capacity,
+            "Bitmap.copy_from | source cannot be greater than destination"
+        );
+
         for i in 0..source.word_count {
             self.sab[self.sab_start_index + i].store(
                 source.sab[source.sab_start_index + i].load(Ordering::Relaxed),

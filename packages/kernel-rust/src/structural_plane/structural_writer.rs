@@ -176,7 +176,7 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
     pub fn copy_from(&self, source: &StructuralWriter<SLOT_SIZE>) {
         debug_assert!(
             source.capacity <= self.capacity,
-            "copy_from source cannot be greater than destination"
+            "StructuralWriter.copy_from | source cannot be greater than destination"
         );
 
         self.allocator.copy_from(&source.allocator);

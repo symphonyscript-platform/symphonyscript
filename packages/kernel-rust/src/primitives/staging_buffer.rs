@@ -128,7 +128,7 @@ impl StagingBuffer {
     pub fn copy_from(&self, source: &StagingBuffer) {
         debug_assert!(
             source.capacity <= self.capacity,
-            "copy_from source cannot be greater than destination"
+            "StagingBuffer.copy_from | source cannot be greater than destination"
         );
 
         let len_0 = source.sab[source.len_0_slot_index].load(Ordering::Relaxed);

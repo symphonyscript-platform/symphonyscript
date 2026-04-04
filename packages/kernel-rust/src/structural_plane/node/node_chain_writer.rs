@@ -249,7 +249,7 @@ impl NodeChainWriter {
     pub fn copy_from(&self, source: &NodeChainWriter) {
         debug_assert!(
             source.capacity <= self.capacity,
-            "copy_from source cannot be greater than destination"
+            "NodeChainWriter.copy_from | source cannot be greater than destination"
         );
 
         self.buffer.copy_region_from(

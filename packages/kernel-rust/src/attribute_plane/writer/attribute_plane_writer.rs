@@ -64,7 +64,7 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
     pub fn copy_from(&self, source: &AttributePlaneWriter<SLOT_SIZE>) {
         debug_assert!(
             source.capacity <= self.capacity,
-            "copy_from source cannot be greater than destination"
+            "AttributePlaneWriter.copy_from | source cannot be greater than destination"
         );
 
         for i in 0..source.capacity * SLOT_SIZE {
