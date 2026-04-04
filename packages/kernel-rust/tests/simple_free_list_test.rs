@@ -456,22 +456,26 @@ fn copy_from_preserves_state_and_adds_capacity() {
     // Initial 16 had 14 free. 16 new slots added. Total free: 30.
     assert_eq!(large_fl.free_count(), 30);
 
-    // We can alloc the new capacity slots. Since they were trust_free'd from 16 to 31,
-    // they are prepended to the free list, so they pop in reverse order: 32, 31, ...
+    // With the splice fix, the old chain naturally flows into the expanded region.
+    // The old free list head was slot b (freed), so that pops first.
     let d = large_fl.alloc().unwrap();
-    assert_eq!(d, 32);
+    assert_eq!(d, b);
 
-    let e = large_fl.alloc().unwrap();
-    assert_eq!(e, 31);
-
-    // If we pop 14 more times to exhaust the new capacity (16 total)
-    for _ in 0..14 {
-        large_fl.alloc().unwrap();
+    // Then the remaining old chain drains: slots 4..16 (13 slots)
+    for expected in 4..=16 {
+        let got = large_fl.alloc().unwrap();
+        assert_eq!(got, expected);
     }
 
-    // The next alloc should be the head of the OLD free list, which was `b` (slot 2)
-    let b_again = large_fl.alloc().unwrap();
-    assert_eq!(b_again, b);
+    // Then the expanded region follows sequentially: slots 17..32
+    for expected in 17..=32 {
+        let got = large_fl.alloc().unwrap();
+        assert_eq!(got, expected);
+    }
+
+    // All 30 free slots consumed
+    assert_eq!(large_fl.free_count(), 0);
+    assert!(large_fl.alloc().is_none());
 }
 
 #[test]
