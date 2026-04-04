@@ -27,6 +27,7 @@ const SYNAPSE_CAPACITY: usize = 2048;
 const NODE_TB_OFFSET: usize = 0;
 const NODE_FL_START: usize = 200000;
 const SYNAPSE_FL_START: usize = 210000;
+const FLUSH_INTERVAL: u64 = 512;
 
 struct Harness {
     sab: SAB,
@@ -41,9 +42,7 @@ fn setup() -> Harness {
 }
 
 fn synapse_tb_offset() -> usize {
-    // synapse triple buffer offset comes after node chain's triple buffer region
-    let node_tb_end = NODE_TB_OFFSET + 1 + NODE_CAPACITY * NODE_SLOT_SIZE;
-    node_tb_end
+    NODE_TB_OFFSET + 1 + NODE_CAPACITY * NODE_SLOT_SIZE
 }
 
 fn make_chains(h: &Harness) -> (NodeChainWriter, SynapseChainWriter) {
@@ -65,38 +64,50 @@ fn make_chains(h: &Harness) -> (NodeChainWriter, SynapseChainWriter) {
     (node_chain, synapse_chain)
 }
 
-// ============ connect: single synapse (cold) ============
+// ============ connect: single synapse ============
 
 fn bench_connect_single(c: &mut Criterion) {
-    let h = setup();
-    let (node_chain, synapse_chain) = make_chains(&h);
-
-    let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
-    let tgt = node_chain.insert_head(NodeDraft { opcode: 2, base_tick: 0 }).unwrap();
-
     c.bench_function("SynapseChain/connect_single", |b| {
-        b.iter(|| {
-            let syn = synapse_chain.connect(
-                black_box(src), black_box(tgt), SynapseDraft { opcode: black_box(10) }
-            ).unwrap();
-            synapse_chain.disconnect(syn).unwrap();
+        b.iter_custom(|iters| {
+            let h = setup();
+            let (node_chain, mut synapse_chain) = make_chains(&h);
+            let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
+            let tgt = node_chain.insert_head(NodeDraft { opcode: 2, base_tick: 0 }).unwrap();
+
+            let start = std::time::Instant::now();
+            for i in 0..iters {
+                let syn = synapse_chain.connect(
+                    black_box(src), black_box(tgt), SynapseDraft { opcode: black_box(10) }
+                ).unwrap();
+                synapse_chain.disconnect(syn).unwrap();
+                if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
+                    synapse_chain.flush_deferred();
+                }
+            }
+            start.elapsed()
         });
     });
 }
 
-// ============ disconnect: single synapse (cold) ============
+// ============ disconnect: single synapse ============
 
 fn bench_disconnect_single(c: &mut Criterion) {
-    let h = setup();
-    let (node_chain, synapse_chain) = make_chains(&h);
-
-    let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
-    let tgt = node_chain.insert_head(NodeDraft { opcode: 2, base_tick: 0 }).unwrap();
-
     c.bench_function("SynapseChain/disconnect_single", |b| {
-        b.iter(|| {
-            let syn = synapse_chain.connect(src, tgt, SynapseDraft { opcode: 10 }).unwrap();
-            synapse_chain.disconnect(black_box(syn)).unwrap();
+        b.iter_custom(|iters| {
+            let h = setup();
+            let (node_chain, mut synapse_chain) = make_chains(&h);
+            let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
+            let tgt = node_chain.insert_head(NodeDraft { opcode: 2, base_tick: 0 }).unwrap();
+
+            let start = std::time::Instant::now();
+            for i in 0..iters {
+                let syn = synapse_chain.connect(src, tgt, SynapseDraft { opcode: 10 }).unwrap();
+                synapse_chain.disconnect(black_box(syn)).unwrap();
+                if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
+                    synapse_chain.flush_deferred();
+                }
+            }
+            start.elapsed()
         });
     });
 }
@@ -111,23 +122,29 @@ fn bench_connect_chain_growth(c: &mut Criterion) {
             BenchmarkId::from_parameter(chain_depth),
             &chain_depth,
             |b, &depth| {
-                let h = setup();
-                let (node_chain, synapse_chain) = make_chains(&h);
+                b.iter_custom(|iters| {
+                    let h = setup();
+                    let (node_chain, mut synapse_chain) = make_chains(&h);
+                    let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
 
-                let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
+                    for i in 0..depth {
+                        let tgt = node_chain.insert_head(NodeDraft { opcode: (i + 2) as i32, base_tick: 0 }).unwrap();
+                        synapse_chain.connect(src, tgt, SynapseDraft { opcode: i as i32 }).unwrap();
+                    }
 
-                for i in 0..depth {
-                    let tgt = node_chain.insert_head(NodeDraft { opcode: (i + 2) as i32, base_tick: 0 }).unwrap();
-                    synapse_chain.connect(src, tgt, SynapseDraft { opcode: i as i32 }).unwrap();
-                }
+                    let bench_tgt = node_chain.insert_head(NodeDraft { opcode: 99, base_tick: 0 }).unwrap();
 
-                let bench_tgt = node_chain.insert_head(NodeDraft { opcode: 99, base_tick: 0 }).unwrap();
-
-                b.iter(|| {
-                    let syn = synapse_chain.connect(
-                        black_box(src), black_box(bench_tgt), SynapseDraft { opcode: black_box(99) }
-                    ).unwrap();
-                    synapse_chain.disconnect(syn).unwrap();
+                    let start = std::time::Instant::now();
+                    for i in 0..iters {
+                        let syn = synapse_chain.connect(
+                            black_box(src), black_box(bench_tgt), SynapseDraft { opcode: black_box(99) }
+                        ).unwrap();
+                        synapse_chain.disconnect(syn).unwrap();
+                        if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
+                            synapse_chain.flush_deferred();
+                        }
+                    }
+                    start.elapsed()
                 });
             },
         );
@@ -147,8 +164,7 @@ fn bench_disconnect_head(c: &mut Criterion) {
             |b, &depth| {
                 b.iter_custom(|iters| {
                     let h = setup();
-                    let (node_chain, synapse_chain) = make_chains(&h);
-
+                    let (mut node_chain, mut synapse_chain) = make_chains(&h);
                     let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
 
                     let start = std::time::Instant::now();
@@ -162,6 +178,7 @@ fn bench_disconnect_head(c: &mut Criterion) {
                         for s in &synapses[1..] {
                             synapse_chain.disconnect(*s).unwrap();
                         }
+                        synapse_chain.flush_deferred();
                         for _ in 0..depth {
                             if let Some(head) = node_chain.get_head() {
                                 let head_next = head.get_next_ptr();
@@ -170,6 +187,7 @@ fn bench_disconnect_head(c: &mut Criterion) {
                                 }
                             }
                         }
+                        node_chain.flush_deferred();
                     }
                     start.elapsed()
                 });
@@ -182,18 +200,24 @@ fn bench_disconnect_head(c: &mut Criterion) {
 // ============ connect + disconnect cycle (throughput) ============
 
 fn bench_connect_disconnect_throughput(c: &mut Criterion) {
-    let h = setup();
-    let (node_chain, synapse_chain) = make_chains(&h);
-
-    let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
-    let tgt = node_chain.insert_head(NodeDraft { opcode: 2, base_tick: 0 }).unwrap();
-
     c.bench_function("SynapseChain/connect_disconnect_cycle", |b| {
-        b.iter(|| {
-            let s = synapse_chain.connect(
-                black_box(src), black_box(tgt), SynapseDraft { opcode: black_box(7) }
-            ).unwrap();
-            synapse_chain.disconnect(black_box(s)).unwrap();
+        b.iter_custom(|iters| {
+            let h = setup();
+            let (node_chain, mut synapse_chain) = make_chains(&h);
+            let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
+            let tgt = node_chain.insert_head(NodeDraft { opcode: 2, base_tick: 0 }).unwrap();
+
+            let start = std::time::Instant::now();
+            for i in 0..iters {
+                let s = synapse_chain.connect(
+                    black_box(src), black_box(tgt), SynapseDraft { opcode: black_box(7) }
+                ).unwrap();
+                synapse_chain.disconnect(black_box(s)).unwrap();
+                if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
+                    synapse_chain.flush_deferred();
+                }
+            }
+            start.elapsed()
         });
     });
 }
@@ -235,7 +259,6 @@ fn bench_reader_traversal(c: &mut Criterion) {
                 let mut h = setup();
                 {
                     let (node_chain, synapse_chain) = make_chains(&h);
-
                     let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
 
                     for i in 0..size {
@@ -289,17 +312,23 @@ fn bench_reader_traversal(c: &mut Criterion) {
 // ============ self-loop connect + disconnect ============
 
 fn bench_self_loop_cycle(c: &mut Criterion) {
-    let h = setup();
-    let (node_chain, synapse_chain) = make_chains(&h);
-
-    let n = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
-
     c.bench_function("SynapseChain/self_loop_cycle", |b| {
-        b.iter(|| {
-            let s = synapse_chain.connect(
-                black_box(n), black_box(n), SynapseDraft { opcode: black_box(99) }
-            ).unwrap();
-            synapse_chain.disconnect(black_box(s)).unwrap();
+        b.iter_custom(|iters| {
+            let h = setup();
+            let (node_chain, mut synapse_chain) = make_chains(&h);
+            let n = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
+
+            let start = std::time::Instant::now();
+            for i in 0..iters {
+                let s = synapse_chain.connect(
+                    black_box(n), black_box(n), SynapseDraft { opcode: black_box(99) }
+                ).unwrap();
+                synapse_chain.disconnect(black_box(s)).unwrap();
+                if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
+                    synapse_chain.flush_deferred();
+                }
+            }
+            start.elapsed()
         });
     });
 }
@@ -314,7 +343,6 @@ fn bench_publish_after_mutations(c: &mut Criterion) {
                 let mut h = setup();
                 {
                     let (node_chain, synapse_chain) = make_chains(&h);
-
                     let src = node_chain.insert_head(NodeDraft { opcode: 1, base_tick: 0 }).unwrap();
                     for i in 0..32 {
                         let tgt = node_chain.insert_head(NodeDraft { opcode: (i + 2) as i32, base_tick: 0 }).unwrap();

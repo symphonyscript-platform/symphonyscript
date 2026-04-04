@@ -43,3 +43,7 @@ harness = false
 [[bench]]
 name = "synapse_chain_bench"
 harness = false
+
+[[bench]]
+name = "kernel_controller_bench"
+harness = false
