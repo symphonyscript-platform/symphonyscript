@@ -1,8 +1,7 @@
 use crate::attribute_plane::writer::attribute_plane_writer::AttributePlaneWriter;
 use crate::attribute_plane::writer::attributes_writer::AttributesWriter;
 use crate::constants::{
-    GRAPH_MAGIC, KERNEL_VERSION, NODE_ATTRIBUTES_SLOT_SIZE,
-    SYNAPSE_ATTRIBUTES_SLOT_SIZE,
+    GRAPH_MAGIC, KERNEL_VERSION, NODE_ATTRIBUTES_SLOT_SIZE, SYNAPSE_ATTRIBUTES_SLOT_SIZE,
 };
 use crate::errors::free_list_error::FreeListError;
 use crate::primitives::into_array::IntoArray;
@@ -301,18 +300,15 @@ impl SynapticGraphWriter {
         Arc::clone(&self.sab)
     }
 
-    pub fn copy_from(&mut self, source: &SynapticGraphWriter) {
-        // self.node_free_list.copy_from(&source.node_free_list);
-        // self.synapse_free_list.copy_from(&source.synapse_free_list);
-        // self.node_deferred_frees_list
-        //     .copy_from(&source.node_deferred_frees_list);
-        // self.synapse_deferred_frees_list
-        //     .copy_from(&source.synapse_deferred_frees_list);
-        // self.node_attribute_plane
-        //     .copy_from(&source.node_attribute_plane);
-        // self.synapse_attribute_plane
-        //     .copy_from(&source.synapse_attribute_plane);
-        // self.triple_buffer_writer
-        //     .copy_from(&source.triple_buffer_writer);
+    pub fn copy_from(&self, source: &SynapticGraphWriter) {
+        self.node_attribute_plane
+            .copy_from(&source.node_attribute_plane);
+        self.synapse_attribute_plane
+            .copy_from(&source.synapse_attribute_plane);
+        self.triple_buffer_writer
+            .copy_metadata_from(&source.triple_buffer_writer);
+        self.node_chain_writer.copy_from(&source.node_chain_writer);
+        self.synapse_chain_writer
+            .copy_from(&source.synapse_chain_writer);
     }
 }

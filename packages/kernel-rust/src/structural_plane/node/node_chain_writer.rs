@@ -243,6 +243,21 @@ impl NodeChainWriter {
     pub fn free_deferred_slots(&mut self) -> Result<(), FreeListError> {
         self.writer.free_deferred_slots()
     }
+
+    pub fn copy_from(&self, source: &NodeChainWriter) {
+        debug_assert!(
+            source.capacity <= self.capacity,
+            "copy_from source cannot be greater than destination"
+        );
+
+        self.buffer.copy_region_from(
+            &source.buffer,
+            source.triple_buffer_start_offset,
+            self.triple_buffer_start_offset,
+            1,
+        );
+        self.writer.copy_from(&source.writer);
+    }
 }
 
 #[cfg(test)]

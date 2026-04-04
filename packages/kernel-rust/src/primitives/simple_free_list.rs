@@ -124,7 +124,7 @@ impl SimpleFreeList {
         Ok(())
     }
 
-    pub fn copy_from(&mut self, source: &SimpleFreeList) {
+    pub fn copy_from(&self, source: &SimpleFreeList) {
         debug_assert!(
             source.capacity <= self.capacity,
             "copy_from source cannot be greater than destination"

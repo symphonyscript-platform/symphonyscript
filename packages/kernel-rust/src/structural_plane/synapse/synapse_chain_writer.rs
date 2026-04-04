@@ -221,4 +221,8 @@ impl SynapseChainWriter {
     pub fn free_deferred_slots(&mut self) -> Result<(), FreeListError> {
         self.synapse_writer.free_deferred_slots()
     }
+
+    pub fn copy_from(&self, source: &SynapseChainWriter) {
+        self.synapse_writer.copy_from(&source.synapse_writer);
+    }
 }

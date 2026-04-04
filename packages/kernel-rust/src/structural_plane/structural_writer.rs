@@ -1,4 +1,3 @@
-use crate::constants::NODE_SLOT_SIZE;
 use crate::errors::free_list_error::FreeListError;
 use crate::primitives::deferred_frees_list::DeferredFreesList;
 use crate::primitives::into_array::IntoArray;
@@ -172,6 +171,23 @@ impl<const SLOT_SIZE: usize> StructuralWriter<SLOT_SIZE> {
     pub fn free_deferred_slots(&mut self) -> Result<(), FreeListError> {
         self.deferred_frees_list
             .free_deferred_slots(&self.free_list)
+    }
+
+    pub fn copy_from(&self, source: &StructuralWriter<SLOT_SIZE>) {
+        debug_assert!(
+            source.capacity <= self.capacity,
+            "copy_from source cannot be greater than destination"
+        );
+
+        self.free_list.copy_from(&source.free_list);
+        self.deferred_frees_list
+            .copy_from(&source.deferred_frees_list);
+        self.writer.copy_region_from(
+            &source.writer,
+            source.triple_buffer_start_offset,
+            self.triple_buffer_start_offset,
+            Self::compute_size_on_triple_buffer(source.capacity),
+        );
     }
 
     fn resolve_writer_offset(&self, slot: usize) -> usize {
