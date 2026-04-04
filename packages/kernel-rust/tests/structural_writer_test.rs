@@ -355,3 +355,55 @@ fn negative_values_roundtrip_through_insert() {
     assert_eq!(view.read(0), i32::MIN);
     assert_eq!(view.read(1), -1);
 }
+// ============ copy_from deep data integrity ============
+
+#[test]
+fn copy_from_preserves_deep_data_chunks() {
+    let (_sab_src, _w_src, src) = setup_custom(0);
+    let s1 = src.insert(TestPayload { a: 111, b: 222 }).unwrap();
+    let s2 = src.insert(TestPayload { a: 333, b: 444 }).unwrap();
+    
+    // Manually pollute deeper fields to simulate complex structures
+    for i in 2..8 {
+        src.write_field(s1, i, (i * 100) as i32);
+        src.write_field(s2, i, (i * 1000) as i32);
+    }
+    
+    // Defer one slot to verify staged queue transposes correctly
+    src.defer_free(s1).unwrap();
+
+    let (_sab_dst, _w_dst, mut dst) = setup_custom(100);
+    dst.copy_from(&src);
+
+    // active slots count includes deferred until flushed
+    assert_eq!(dst.count(), 2);
+    assert_eq!(dst.deferred_count(), 1);
+
+    // Verify root fields
+    assert_eq!(dst.read_field(s1, 0), 111);
+    assert_eq!(dst.read_field(s2, 5), 5000);
+
+    // Verify all injected deep fields
+    for i in 2..8 {
+        assert_eq!(dst.read_field(s1, i), (i * 100) as i32);
+        assert_eq!(dst.read_field(s2, i), (i * 1000) as i32);
+    }
+
+    dst.flush_deferred();
+    dst.flush_deferred();
+    assert_eq!(dst.free_count(), 7); // s1 freed from destination independently
+}
+
+#[test]
+#[should_panic]
+fn copy_from_panics_if_source_larger() {
+    let sab1 = create_sab(SAB_SIZE);
+    let (t_writer1, _) = symphonyscript_kernel::primitives::triple_buffer::TripleBuffer::new(std::sync::Arc::clone(&sab1), TB_START, TB_BUF_CAP);
+    let sw_large: symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter<16> = symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter::new(sab1, t_writer1, FL_START, 0, 16);
+
+    let sab2 = create_sab(SAB_SIZE);
+    let (t_writer2, _) = symphonyscript_kernel::primitives::triple_buffer::TripleBuffer::new(std::sync::Arc::clone(&sab2), TB_START, TB_BUF_CAP);
+    let sw_small: symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter<16> = symphonyscript_kernel::structural_plane::structural_writer::StructuralWriter::new(sab2, t_writer2, FL_START, 0, 8);
+
+    sw_small.copy_from(&sw_large);
+}

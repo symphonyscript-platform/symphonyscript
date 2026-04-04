@@ -825,3 +825,80 @@ fn two_self_loops_on_same_node() {
     assert_eq!(synapse_chain.get(s2).get_outgoing_prev_ptr(), 0);
     assert_eq!(synapse_chain.get(s2).get_incoming_prev_ptr(), 0);
 }
+
+// ============ copy_from deep data integrity ============
+
+#[test]
+fn copy_from_preserves_topology_and_deep_data() {
+    let src_h = setup();
+    let n1 = src_h.node_chain.insert_head(node(1)).unwrap();
+    let n2 = src_h.node_chain.insert_head(node(2)).unwrap();
+    
+    let s1 = src_h.synapse_chain.connect(n1, n2, draft(10)).unwrap();
+    let s2 = src_h.synapse_chain.connect(n2, n1, draft(20)).unwrap();
+    
+
+    
+    src_h.synapse_chain.disconnect(s2).unwrap(); // defer s2
+
+    let dst_sab = create_sab(SAB_SIZE);
+    let (dst_tb, _) = symphonyscript_kernel::primitives::triple_buffer::TripleBuffer::new(Arc::clone(&dst_sab), TB_START, TB_BUF_CAP);
+    let dst_node_chain = symphonyscript_kernel::structural_plane::node::node_chain_writer::NodeChainWriter::new(
+        Arc::clone(&dst_sab),
+        dst_tb.clone(),
+        NODE_FL_START,
+        NODE_HEAD_OFFSET,
+        NODE_CAPACITY,
+    );
+    let mut dst_synapse_chain = SynapseChainWriter::new(
+        dst_sab,
+        dst_tb,
+        dst_node_chain.clone(),
+        dst_node_chain.sab_end_index(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY * 2,
+    );
+
+    dst_synapse_chain.copy_from(&src_h.synapse_chain);
+
+    assert_eq!(dst_synapse_chain.count(), 2);
+    
+    let syn = dst_synapse_chain.get(s1);
+    assert_eq!(syn.get_opcode(), 10);
+
+
+    
+    // Test deferred flush behavior on destination shrinks allocated slots natively
+    dst_synapse_chain.flush_deferred();
+    dst_synapse_chain.flush_deferred();
+
+    assert_eq!(dst_synapse_chain.count(), 1);
+    assert_eq!(dst_synapse_chain.capacity(), SYNAPSE_CAPACITY * 2);
+}
+
+#[test]
+#[should_panic]
+fn copy_from_panics_if_source_larger() {
+    let src_h = setup();
+    
+    let dst_sab = create_sab(SAB_SIZE);
+    let (dst_tb, _) = symphonyscript_kernel::primitives::triple_buffer::TripleBuffer::new(Arc::clone(&dst_sab), TB_START, TB_BUF_CAP);
+    let dst_node_chain = symphonyscript_kernel::structural_plane::node::node_chain_writer::NodeChainWriter::new(
+        Arc::clone(&dst_sab),
+        dst_tb.clone(),
+        NODE_FL_START,
+        NODE_HEAD_OFFSET,
+        NODE_CAPACITY,
+    );
+    // Create destination with half capacity
+    let dst_synapse_chain = SynapseChainWriter::new(
+        dst_sab,
+        dst_tb,
+        dst_node_chain.clone(),
+        dst_node_chain.sab_end_index(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY / 2,
+    );
+
+    dst_synapse_chain.copy_from(&src_h.synapse_chain);
+}

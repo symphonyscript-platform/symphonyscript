@@ -597,3 +597,51 @@ fn reader_traverses_chain_after_mid_chain_removal() {
     assert_eq!(n2.get_opcode(), 1);
     assert_eq!(n2.get_next_ptr(), 0, "end of chain");
 }
+
+// ============ copy_from ============
+
+#[test]
+fn copy_from_preserves_topology_and_deep_data() {
+    let src_h = setup();
+    let src = src_h.chain;
+    
+    let _a = src.insert_head(make_draft(1, 10)).unwrap();
+    let b = src.insert_head(make_draft(2, 20)).unwrap();
+    
+    
+    src.remove(b).unwrap(); // b deferred
+    
+    // create a dst with larger capacity
+    let dst_sab = create_sab(SAB_SIZE);
+    let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_sab), TB_START, TB_BUF_CAP);
+    let mut dst = NodeChainWriter::new(dst_sab, dst_tb, FL_START, NODE_START_OFFSET, CAPACITY * 2);
+    
+    dst.copy_from(&src);
+    
+    assert_eq!(dst.count(), 2);
+    let head = dst.get_head().unwrap();
+    assert_eq!(head.get_opcode(), 1);
+    assert_eq!(head.get_base_tick(), 10);
+    assert_eq!(head.get_next_ptr(), 0);
+    
+    
+    dst.flush_deferred();
+    dst.flush_deferred();
+    
+    assert_eq!(dst.count(), 1);
+    assert_eq!(dst.capacity(), CAPACITY * 2);
+}
+
+#[test]
+#[should_panic]
+fn copy_from_panics_if_source_larger() {
+    let src_sab = create_sab(SAB_SIZE);
+    let (src_tb, _) = TripleBuffer::new(Arc::clone(&src_sab), TB_START, TB_BUF_CAP);
+    let src = NodeChainWriter::new(src_sab, src_tb, FL_START, NODE_START_OFFSET, CAPACITY * 2);
+    
+    let dst_sab = create_sab(SAB_SIZE);
+    let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_sab), TB_START, TB_BUF_CAP);
+    let dst = NodeChainWriter::new(dst_sab, dst_tb, FL_START, NODE_START_OFFSET, CAPACITY);
+    
+    dst.copy_from(&src);
+}
