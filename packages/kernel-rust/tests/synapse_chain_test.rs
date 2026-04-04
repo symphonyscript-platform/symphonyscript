@@ -1,8 +1,6 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use symphonyscript_kernel::constants::NODE_SLOT_SIZE;
-use symphonyscript_kernel::primitives::deferred_frees_list::DeferredFreesList;
-use symphonyscript_kernel::primitives::simple_free_list::SimpleFreeList;
 use symphonyscript_kernel::primitives::triple_buffer::TripleBuffer;
 use symphonyscript_kernel::primitives::types::SAB;
 use symphonyscript_kernel::structural_plane::node::node_chain_reader::NodeChainReader;
