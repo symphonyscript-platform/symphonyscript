@@ -282,7 +282,7 @@ impl<
             "SynapticGraphWriter.get_node_attribute | attempted to read inactive slot {}",
             slot
         );
-        self.node_attribute_plane.get(slot).read(attribute_offset)
+        self.node_attribute_plane.get(slot).get(attribute_offset)
     }
 
     pub fn set_node_attributes<T: IntoArray<NODE_ATTRIBUTES_SIZE>>(&'_ self, slot: usize, data: T) {
@@ -302,19 +302,37 @@ impl<
         );
         self.node_attribute_plane
             .get(slot)
-            .write(attribute_offset, value)
+            .set(attribute_offset, value)
     }
 
     pub fn insert_head(&self, kind: i32) -> Option<usize> {
-        self.node_chain_writer.insert_head(kind)
+        match self.node_chain_writer.insert_head(kind) {
+            Some(new_slot) => {
+                self.node_attribute_plane.clear(new_slot);
+                Some(new_slot)
+            }
+            None => None,
+        }
     }
 
     pub fn insert_after(&self, prev_slot: usize, kind: i32) -> Option<usize> {
-        self.node_chain_writer.insert_after(prev_slot, kind)
+        match self.node_chain_writer.insert_after(prev_slot, kind) {
+            Some(new_slot) => {
+                self.node_attribute_plane.clear(new_slot);
+                Some(new_slot)
+            }
+            None => None,
+        }
     }
 
     pub fn insert_before(&self, next_slot: usize, kind: i32) -> Option<usize> {
-        self.node_chain_writer.insert_before(next_slot, kind)
+        match self.node_chain_writer.insert_before(next_slot, kind) {
+            Some(new_slot) => {
+                self.node_attribute_plane.clear(new_slot);
+                Some(new_slot)
+            }
+            None => None,
+        }
     }
 
     pub fn remove_node(&self, slot: usize) -> Result<(), FreeListError> {
@@ -343,9 +361,7 @@ impl<
             "SynapticGraphWriter.get_synapse_attribute | attempted to read inactive slot {}",
             slot
         );
-        self.synapse_attribute_plane
-            .get(slot)
-            .read(attribute_offset)
+        self.synapse_attribute_plane.get(slot).get(attribute_offset)
     }
 
     pub fn set_synapse_attributes<T: IntoArray<SYNAPSE_ATTRIBUTES_SIZE>>(
@@ -369,12 +385,21 @@ impl<
         );
         self.synapse_attribute_plane
             .get(slot)
-            .write(attribute_offset, value)
+            .set(attribute_offset, value)
     }
 
     pub fn connect(&self, source_slot: usize, target_slot: usize, kind: i32) -> Option<usize> {
-        self.synapse_chain_writer
-            .connect(source_slot, target_slot, kind)
+        let result = self
+            .synapse_chain_writer
+            .connect(source_slot, target_slot, kind);
+
+        match result {
+            Some(new_slot) => {
+                self.synapse_attribute_plane.clear(new_slot);
+                Some(new_slot)
+            }
+            None => None,
+        }
     }
 
     pub fn disconnect(&self, slot: usize) -> Result<(), FreeListError> {

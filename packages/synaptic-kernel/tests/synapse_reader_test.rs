@@ -1,11 +1,14 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::constants::NODE_SLOT_SIZE;
+use synaptic_kernel::constants::NODE_SIZE;
 use synaptic_kernel::primitives::triple_buffer::TripleBuffer;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
 use synaptic_kernel::topology::synapse::synapse_chain_reader::SynapseChainReader;
 use synaptic_kernel::topology::synapse::synapse_chain_writer::SynapseChainWriter;
+
+const NODE_META: usize = 8;
+const SYNAPSE_META: usize = 8;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
@@ -21,8 +24,7 @@ const TB_BUF_CAP: usize = 16384;
 const NODE_CAPACITY: usize = 16;
 const SYNAPSE_CAPACITY: usize = 32;
 const NODE_START_OFFSET: usize = 0;
-const NODE_HEAD_OFFSET: usize = NODE_CAPACITY * NODE_SLOT_SIZE;
-const SYNAPSE_START_OFFSET: usize = NODE_HEAD_OFFSET + 1;
+const SYNAPSE_START_OFFSET: usize = 1 + NODE_CAPACITY * (NODE_SIZE + NODE_META);
 const NODE_FL_START: usize = 50000;
 const SYNAPSE_FL_START: usize = 51000;
 
@@ -30,22 +32,22 @@ struct TestHarness {
     _mem: AtomicBuffer,
     writer: synaptic_kernel::primitives::triple_buffer::TripleBufferWriter,
     reader: synaptic_kernel::primitives::triple_buffer::TripleBufferReader,
-    node_chain: NodeChainWriter,
-    synapse_chain: SynapseChainWriter,
-    synapse_chain_r: SynapseChainReader,
+    node_chain: NodeChainWriter<NODE_META>,
+    synapse_chain: SynapseChainWriter<NODE_META, SYNAPSE_META>,
+    synapse_chain_r: SynapseChainReader<NODE_META, SYNAPSE_META>,
 }
 
 fn setup() -> TestHarness {
     let mem = create_mem(MEM_SIZE);
     let (writer, reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
-    let node_chain = NodeChainWriter::new(
+    let node_chain = NodeChainWriter::<NODE_META>::new(
         Arc::clone(&mem),
         writer.clone(),
         NODE_FL_START,
         NODE_START_OFFSET,
         NODE_CAPACITY,
     );
-    let synapse_chain = SynapseChainWriter::new(
+    let synapse_chain = SynapseChainWriter::<NODE_META, SYNAPSE_META>::new(
         Arc::clone(&mem),
         writer.clone(),
         node_chain.clone(),
@@ -53,8 +55,11 @@ fn setup() -> TestHarness {
         SYNAPSE_START_OFFSET,
         SYNAPSE_CAPACITY,
     );
-    let synapse_chain_r =
-        SynapseChainReader::new(reader.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let synapse_chain_r = SynapseChainReader::<NODE_META, SYNAPSE_META>::bind(
+        reader.clone(),
+        SYNAPSE_START_OFFSET,
+        SYNAPSE_CAPACITY,
+    );
     TestHarness {
         _mem: mem,
         writer,
@@ -73,21 +78,9 @@ fn reader_sees_all_synapse_fields_after_publish() {
         let node_chain = h.node_chain;
         let synapse_chain = h.synapse_chain;
 
-        let src = node_chain
-            .insert_head(NodeDraft {
-                kind: 1,
-                base_tick: 0,
-            })
-            .unwrap();
-        let tgt = node_chain
-            .insert_head(NodeDraft {
-                kind: 2,
-                base_tick: 0,
-            })
-            .unwrap();
-        let syn = synapse_chain
-            .connect(src, tgt, SynapseDraft { opcode: 42 })
-            .unwrap();
+        let src = node_chain.insert_head(1).unwrap();
+        let tgt = node_chain.insert_head(2).unwrap();
+        let syn = synapse_chain.connect(src, tgt, 42).unwrap();
         (src, tgt, syn)
     };
     h.writer.publish();
@@ -112,40 +105,14 @@ fn reader_sees_chain_pointers_with_multiple_synapses() {
         let node_chain = h.node_chain;
         let synapse_chain = h.synapse_chain;
 
-        let src = node_chain
-            .insert_head(NodeDraft {
-                kind: 1,
-                base_tick: 0,
-            })
-            .unwrap();
-        let tgt1 = node_chain
-            .insert_head(NodeDraft {
-                kind: 2,
-                base_tick: 0,
-            })
-            .unwrap();
-        let tgt2 = node_chain
-            .insert_head(NodeDraft {
-                kind: 3,
-                base_tick: 0,
-            })
-            .unwrap();
-        let tgt3 = node_chain
-            .insert_head(NodeDraft {
-                kind: 4,
-                base_tick: 0,
-            })
-            .unwrap();
+        let src = node_chain.insert_head(1).unwrap();
+        let tgt1 = node_chain.insert_head(2).unwrap();
+        let tgt2 = node_chain.insert_head(3).unwrap();
+        let tgt3 = node_chain.insert_head(4).unwrap();
 
-        let s1 = synapse_chain
-            .connect(src, tgt1, SynapseDraft { opcode: 10 })
-            .unwrap();
-        let s2 = synapse_chain
-            .connect(src, tgt2, SynapseDraft { opcode: 20 })
-            .unwrap();
-        let s3 = synapse_chain
-            .connect(src, tgt3, SynapseDraft { opcode: 30 })
-            .unwrap();
+        let s1 = synapse_chain.connect(src, tgt1, 10).unwrap();
+        let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();
+        let s3 = synapse_chain.connect(src, tgt3, 30).unwrap();
         (src, s1, s2, s3)
     };
     h.writer.publish();
@@ -180,21 +147,9 @@ fn reader_does_not_see_unpublished_changes() {
         let node_chain = h.node_chain;
         let synapse_chain = h.synapse_chain.clone();
 
-        let src = node_chain
-            .insert_head(NodeDraft {
-                kind: 1,
-                base_tick: 0,
-            })
-            .unwrap();
-        let tgt = node_chain
-            .insert_head(NodeDraft {
-                kind: 2,
-                base_tick: 0,
-            })
-            .unwrap();
-        let s1 = synapse_chain
-            .connect(src, tgt, SynapseDraft { opcode: 10 })
-            .unwrap();
+        let src = node_chain.insert_head(1).unwrap();
+        let tgt = node_chain.insert_head(2).unwrap();
+        let s1 = synapse_chain.connect(src, tgt, 10).unwrap();
         (src, tgt, s1)
     };
     h.writer.publish();
@@ -203,9 +158,7 @@ fn reader_does_not_see_unpublished_changes() {
     // add second synapse but DON'T publish
     {
         let synapse_chain = h.synapse_chain.clone();
-        synapse_chain
-            .connect(src, tgt, SynapseDraft { opcode: 20 })
-            .unwrap();
+        synapse_chain.connect(src, tgt, 20).unwrap();
     }
     // no publish, no swap
 
@@ -228,31 +181,12 @@ fn reader_sees_disconnect_after_publish() {
         let node_chain = h.node_chain;
         let synapse_chain = h.synapse_chain;
 
-        let src = node_chain
-            .insert_head(NodeDraft {
-                kind: 1,
-                base_tick: 0,
-            })
-            .unwrap();
-        let tgt1 = node_chain
-            .insert_head(NodeDraft {
-                kind: 2,
-                base_tick: 0,
-            })
-            .unwrap();
-        let tgt2 = node_chain
-            .insert_head(NodeDraft {
-                kind: 3,
-                base_tick: 0,
-            })
-            .unwrap();
+        let src = node_chain.insert_head(1).unwrap();
+        let tgt1 = node_chain.insert_head(2).unwrap();
+        let tgt2 = node_chain.insert_head(3).unwrap();
 
-        let s1 = synapse_chain
-            .connect(src, tgt1, SynapseDraft { opcode: 10 })
-            .unwrap();
-        let s2 = synapse_chain
-            .connect(src, tgt2, SynapseDraft { opcode: 20 })
-            .unwrap();
+        let s1 = synapse_chain.connect(src, tgt1, 10).unwrap();
+        let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();
         // outgoing: s1 -> s2
 
         synapse_chain.disconnect(s1).unwrap();

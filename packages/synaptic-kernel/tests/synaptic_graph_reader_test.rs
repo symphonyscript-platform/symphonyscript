@@ -1,5 +1,3 @@
-use synaptic_kernel::attribute_plane::writer::note_attributes_writer::NoteAttributes;
-use synaptic_kernel::attribute_plane::writer::synapse_attributes_writer::SynapseAttributes;
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
 use synaptic_kernel::synaptic_graph_reader::SynapticGraphReader;
 use synaptic_kernel::synaptic_graph_writer::SynapticGraphWriter;
@@ -7,33 +5,38 @@ use synaptic_kernel::synaptic_graph_writer::SynapticGraphWriter;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 
+const NODE_META: usize = 8;
+const NODE_ATTR: usize = 16;
+const SYNAPSE_META: usize = 8;
+const SYNAPSE_ATTR: usize = 16;
+
+type Gw = SynapticGraphWriter<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type Gr = SynapticGraphReader<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+
 fn config() -> SynapticGraphConfig {
     SynapticGraphConfig {
         node_capacity: 16,
         synapse_capacity: 32,
+        mem_metadata_size: 1,
+        tb_metadata_size: 1,
     }
 }
 
-fn setup() -> (SynapticGraphWriter, SynapticGraphReader) {
+fn setup() -> (Gw, Gr) {
     let cfg = config();
-    let size = SynapticGraphWriter::compute_size(&cfg);
+    let size = Gw::calculate_size_on_mem(&cfg);
     let mem: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
     let mem_arc = Arc::new(mem);
-    
-    let kernel = SynapticGraphWriter::new(Arc::clone(&mem_arc), cfg.clone());
-    let reader = SynapticGraphReader::bind(Arc::clone(&mem_arc), cfg);
+
+    let kernel = Gw::new(Arc::clone(&mem_arc), cfg.clone());
+    let reader = Gr::bind(Arc::clone(&mem_arc), cfg);
     (kernel, reader)
 }
 
-fn draft(opcode: i32, tick: i32) -> NodeDraft {
-    NodeDraft {
-        kind: opcode,
-        base_tick: tick,
-    }
-}
-
-fn syn_draft(opcode: i32) -> SynapseDraft {
-    SynapseDraft { opcode }
+fn insert_head_with_tick(kernel: &Gw, kind: i32, tick: i32) -> usize {
+    let slot = kernel.insert_head(kind).unwrap();
+    kernel.get_node(slot).set_meta(0, tick);
+    slot
 }
 
 // ============ Construction ============
@@ -50,7 +53,7 @@ fn reader_bind_creates_empty_chain() {
 fn reader_does_not_see_unpublished_nodes() {
     let (kernel, reader) = setup();
 
-    kernel.insert_head(draft(1, 0)).unwrap();
+    kernel.insert_head(1).unwrap();
 
     // no publish, no swap
     assert!(reader.get_head_node().is_none());
@@ -62,22 +65,22 @@ fn reader_does_not_see_unpublished_nodes() {
 fn reader_sees_nodes_after_publish_swap() {
     let (mut kernel, mut reader) = setup();
 
-    let _slot = kernel.insert_head(draft(5, 999)).unwrap();
+    let _slot = insert_head_with_tick(&kernel, 5, 999);
     kernel.publish();
     reader.swap();
 
     let head = reader.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 5);
-    assert_eq!(head.get_base_tick(), 999);
+    assert_eq!(head.get_meta(0), 999);
 }
 
 #[test]
 fn reader_traverses_full_chain() {
     let (mut kernel, mut reader) = setup();
 
-    let _a = kernel.insert_head(draft(1, 10)).unwrap();
-    let _b = kernel.insert_head(draft(2, 20)).unwrap();
-    let _c = kernel.insert_head(draft(3, 30)).unwrap();
+    let _a = insert_head_with_tick(&kernel, 1, 10);
+    let _b = insert_head_with_tick(&kernel, 2, 20);
+    let _c = insert_head_with_tick(&kernel, 3, 30);
     // chain: c -> b -> a
 
     kernel.publish();
@@ -100,8 +103,8 @@ fn reader_traverses_full_chain() {
 fn reader_sees_removal_after_publish_swap() {
     let (mut kernel, mut reader) = setup();
 
-    let _a = kernel.insert_head(draft(1, 0)).unwrap();
-    let b = kernel.insert_head(draft(2, 0)).unwrap();
+    let _a = kernel.insert_head(1).unwrap();
+    let b = kernel.insert_head(2).unwrap();
     // chain: b -> a
 
     kernel.remove_node(b).unwrap();
@@ -122,12 +125,12 @@ fn reader_retains_old_snapshot_without_swap() {
     let (mut kernel, mut reader) = setup();
 
     // cycle 1
-    let _a = kernel.insert_head(draft(1, 0)).unwrap();
+    let _a = kernel.insert_head(1).unwrap();
     kernel.publish();
     reader.swap();
 
     // cycle 2: mutate but reader does NOT swap
-    kernel.insert_head(draft(2, 0)).unwrap();
+    kernel.insert_head(2).unwrap();
     kernel.publish();
 
     // reader still sees cycle 1 snapshot
@@ -141,13 +144,13 @@ fn reader_sees_updated_snapshot_after_swap() {
     let (mut kernel, mut reader) = setup();
 
     // cycle 1
-    kernel.insert_head(draft(1, 0)).unwrap();
+    kernel.insert_head(1).unwrap();
     kernel.publish();
     reader.swap();
     assert_eq!(reader.get_head_node().unwrap().get_kind(), 1);
 
     // cycle 2
-    kernel.insert_head(draft(2, 0)).unwrap();
+    kernel.insert_head(2).unwrap();
     kernel.publish();
     reader.swap();
     assert_eq!(reader.get_head_node().unwrap().get_kind(), 2);
@@ -159,9 +162,9 @@ fn reader_sees_updated_snapshot_after_swap() {
 fn reader_sees_synapse_after_publish_swap() {
     let (mut kernel, mut reader) = setup();
 
-    let src = kernel.insert_head(draft(1, 0)).unwrap();
-    let tgt = kernel.insert_head(draft(2, 0)).unwrap();
-    let syn = kernel.connect(src, tgt, syn_draft(42)).unwrap();
+    let src = kernel.insert_head(1).unwrap();
+    let tgt = kernel.insert_head(2).unwrap();
+    let syn = kernel.connect(src, tgt, 42).unwrap();
 
     kernel.publish();
     reader.swap();
@@ -176,14 +179,14 @@ fn reader_sees_synapse_after_publish_swap() {
 fn reader_traverses_synapse_chain() {
     let (mut kernel, mut reader) = setup();
 
-    let src = kernel.insert_head(draft(1, 0)).unwrap();
-    let tgt1 = kernel.insert_head(draft(2, 0)).unwrap();
-    let tgt2 = kernel.insert_head(draft(3, 0)).unwrap();
-    let tgt3 = kernel.insert_head(draft(4, 0)).unwrap();
+    let src = kernel.insert_head(1).unwrap();
+    let tgt1 = kernel.insert_head(2).unwrap();
+    let tgt2 = kernel.insert_head(3).unwrap();
+    let tgt3 = kernel.insert_head(4).unwrap();
 
-    let s1 = kernel.connect(src, tgt1, syn_draft(10)).unwrap();
-    let s2 = kernel.connect(src, tgt2, syn_draft(20)).unwrap();
-    let s3 = kernel.connect(src, tgt3, syn_draft(30)).unwrap();
+    let s1 = kernel.connect(src, tgt1, 10).unwrap();
+    let s2 = kernel.connect(src, tgt2, 20).unwrap();
+    let s3 = kernel.connect(src, tgt3, 30).unwrap();
 
     kernel.publish();
     reader.swap();
@@ -210,12 +213,12 @@ fn reader_traverses_synapse_chain() {
 fn reader_sees_disconnect_after_publish_swap() {
     let (mut kernel, mut reader) = setup();
 
-    let src = kernel.insert_head(draft(1, 0)).unwrap();
-    let tgt1 = kernel.insert_head(draft(2, 0)).unwrap();
-    let tgt2 = kernel.insert_head(draft(3, 0)).unwrap();
+    let src = kernel.insert_head(1).unwrap();
+    let tgt1 = kernel.insert_head(2).unwrap();
+    let tgt2 = kernel.insert_head(3).unwrap();
 
-    let s1 = kernel.connect(src, tgt1, syn_draft(10)).unwrap();
-    let s2 = kernel.connect(src, tgt2, syn_draft(20)).unwrap();
+    let s1 = kernel.connect(src, tgt1, 10).unwrap();
+    let s2 = kernel.connect(src, tgt2, 20).unwrap();
 
     kernel.disconnect(s1).unwrap();
 
@@ -236,7 +239,7 @@ fn reader_sees_disconnect_after_publish_swap() {
 fn reader_sees_node_attributes_immediately() {
     let (kernel, reader) = setup();
 
-    let slot = kernel.insert_head(draft(1, 0)).unwrap();
+    let slot = kernel.insert_head(1).unwrap();
 
     // attributes are on shared plane — visible without publish
     kernel.set_node_attribute(slot, 0, 60); // pitch
@@ -250,50 +253,40 @@ fn reader_sees_node_attributes_immediately() {
 fn reader_sees_bulk_node_attributes() {
     let (kernel, reader) = setup();
 
-    let slot = kernel.insert_head(draft(1, 0)).unwrap();
+    let slot = kernel.insert_head(1).unwrap();
 
-    kernel.set_node_attributes(
-        slot,
-        NoteAttributes {
-            pitch: 72,
-            velocity: 90,
-            duration: 960,
-            volume: 64,
-            spatial_x: 10,
-            spatial_y: 20,
-            spatial_z: 30,
-            detune: -3,
-            tick_offset: 7,
-            flags: 0,
-        },
-    );
+    kernel.set_node_attribute(slot, 0, 72);
+    kernel.set_node_attribute(slot, 1, 90);
+    kernel.set_node_attribute(slot, 2, 960);
+    kernel.set_node_attribute(slot, 3, 64);
+    kernel.set_node_attribute(slot, 4, 10);
+    kernel.set_node_attribute(slot, 5, 20);
+    kernel.set_node_attribute(slot, 6, 30);
+    kernel.set_node_attribute(slot, 7, -3);
+    kernel.set_node_attribute(slot, 8, 7);
+    kernel.set_node_attribute(slot, 9, 0);
 
     let view = reader.get_node_attributes(slot);
-    assert_eq!(view.read(0), 72);
-    assert_eq!(view.read(1), 90);
-    assert_eq!(view.read(2), 960);
-    assert_eq!(view.read(3), 64);
+    assert_eq!(view.get(0), 72);
+    assert_eq!(view.get(1), 90);
+    assert_eq!(view.get(2), 960);
+    assert_eq!(view.get(3), 64);
 }
 
 #[test]
 fn reader_sees_synapse_attributes_immediately() {
     let (kernel, reader) = setup();
 
-    let src = kernel.insert_head(draft(1, 0)).unwrap();
-    let tgt = kernel.insert_head(draft(2, 0)).unwrap();
-    let syn = kernel.connect(src, tgt, syn_draft(10)).unwrap();
+    let src = kernel.insert_head(1).unwrap();
+    let tgt = kernel.insert_head(2).unwrap();
+    let syn = kernel.connect(src, tgt, 10).unwrap();
 
-    kernel.set_synapse_attributes(
-        syn,
-        SynapseAttributes {
-            weight: 500,
-            tick_offset: 3,
-            transpose: -7,
-            volume_scale: 100,
-            duration_scale: 200,
-            tempo_scale: 50,
-        },
-    );
+    kernel.set_synapse_attribute(syn, 0, 500);
+    kernel.set_synapse_attribute(syn, 1, 3);
+    kernel.set_synapse_attribute(syn, 2, -7);
+    kernel.set_synapse_attribute(syn, 3, 100);
+    kernel.set_synapse_attribute(syn, 4, 200);
+    kernel.set_synapse_attribute(syn, 5, 50);
 
     assert_eq!(reader.get_synapse_attribute(syn, 0), 500);
     assert_eq!(reader.get_synapse_attribute(syn, 1), 3);
@@ -304,13 +297,13 @@ fn reader_sees_synapse_attributes_immediately() {
 fn reader_attributes_view_matches_individual_reads() {
     let (kernel, reader) = setup();
 
-    let slot = kernel.insert_head(draft(1, 0)).unwrap();
+    let slot = kernel.insert_head(1).unwrap();
     kernel.set_node_attribute(slot, 0, 42);
     kernel.set_node_attribute(slot, 5, 99);
 
     let view = reader.get_node_attributes(slot);
-    assert_eq!(view.read(0), reader.get_node_attribute(slot, 0));
-    assert_eq!(view.read(5), reader.get_node_attribute(slot, 5));
+    assert_eq!(view.get(0), reader.get_node_attribute(slot, 0));
+    assert_eq!(view.get(5), reader.get_node_attribute(slot, 5));
 }
 
 // ============ Multi-cycle with reader ============
@@ -320,9 +313,9 @@ fn multi_cycle_insert_remove_connect_disconnect() {
     let (mut kernel, mut reader) = setup();
 
     // cycle 1: build graph A->B with synapse
-    let a = kernel.insert_head(draft(1, 100)).unwrap();
-    let b = kernel.insert_head(draft(2, 200)).unwrap();
-    let s1 = kernel.connect(a, b, syn_draft(10)).unwrap();
+    let a = insert_head_with_tick(&kernel, 1, 100);
+    let b = insert_head_with_tick(&kernel, 2, 200);
+    let s1 = kernel.connect(a, b, 10).unwrap();
     kernel.set_node_attribute(a, 0, 60); // pitch of A
     kernel.publish();
     reader.swap();
@@ -334,8 +327,8 @@ fn multi_cycle_insert_remove_connect_disconnect() {
     assert_eq!(reader.get_node_attribute(a, 0), 60);
 
     // cycle 2: add C, connect B->C, disconnect A->B
-    let c = kernel.insert_head(draft(3, 300)).unwrap();
-    let s2 = kernel.connect(b, c, syn_draft(20)).unwrap();
+    let c = insert_head_with_tick(&kernel, 3, 300);
+    let s2 = kernel.connect(b, c, 20).unwrap();
     kernel.disconnect(s1).unwrap();
     kernel.publish();
     reader.swap();
@@ -362,7 +355,7 @@ fn swap_returns_false_when_no_new_data() {
 #[test]
 fn swap_returns_true_when_new_data() {
     let (mut kernel, mut reader) = setup();
-    kernel.insert_head(draft(1, 0)).unwrap();
+    kernel.insert_head(1).unwrap();
     kernel.publish();
     assert!(reader.swap(), "publish happened");
 }
@@ -373,8 +366,8 @@ fn swap_returns_true_when_new_data() {
 fn reader_sees_empty_chain_after_removing_all() {
     let (mut kernel, mut reader) = setup();
 
-    let a = kernel.insert_head(draft(1, 0)).unwrap();
-    let b = kernel.insert_head(draft(2, 0)).unwrap();
+    let a = kernel.insert_head(1).unwrap();
+    let b = kernel.insert_head(2).unwrap();
 
     kernel.remove_node(a).unwrap();
     kernel.remove_node(b).unwrap();
@@ -391,7 +384,7 @@ fn reader_sees_empty_chain_after_removing_all() {
 fn attribute_mutation_visible_between_publishes() {
     let (mut kernel, mut reader) = setup();
 
-    let slot = kernel.insert_head(draft(1, 0)).unwrap();
+    let slot = kernel.insert_head(1).unwrap();
     kernel.publish();
     reader.swap();
 

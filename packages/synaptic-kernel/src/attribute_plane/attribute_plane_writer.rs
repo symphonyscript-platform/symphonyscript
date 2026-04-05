@@ -1,7 +1,7 @@
+use crate::attribute_plane::attributes_writer::AttributesWriter;
 use crate::primitives::into_array::IntoArray;
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
-use crate::attribute_plane::attributes_writer::AttributesWriter;
 
 #[derive(Clone)]
 pub struct AttributePlaneWriter<const SLOT_SIZE: usize> {
@@ -34,12 +34,12 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
         Self::new(mem, mem_start_offset, capacity)
     }
 
-    pub fn calculate_size(capacity: usize) -> usize {
-        capacity * SLOT_SIZE
+    pub fn resolve_mem_offset(mem_start_offset: usize, slot: usize) -> usize {
+        mem_start_offset + ((slot - 1) * SLOT_SIZE)
     }
 
-    pub fn resolve_mem_offset(&self, offset: usize) -> usize {
-        self.mem_start_offset + (offset * SLOT_SIZE)
+    pub fn calculate_size(capacity: usize) -> usize {
+        capacity * SLOT_SIZE
     }
 
     pub fn mem_start_offset(&self) -> usize {
@@ -50,28 +50,32 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
         self.mem_end_offset
     }
 
-    pub fn get(&'_ self, offset: usize) -> AttributesWriter<'_, SLOT_SIZE> {
+    pub fn get(&'_ self, slot: usize) -> AttributesWriter<'_, SLOT_SIZE> {
+        let mem_offset = Self::resolve_mem_offset(self.mem_start_offset, slot);
+
         debug_assert!(
-            offset <= self.capacity,
-            "AttributePlaneWriter.get | offset {} out of bounds",
-            offset,
+            mem_offset + SLOT_SIZE <= self.mem_end_offset,
+            "AttributePlaneWriter.get | slot {} out of bounds",
+            slot,
         );
 
-        AttributesWriter::new(&self.mem, self.resolve_mem_offset(offset))
+        AttributesWriter::new(&self.mem, mem_offset)
     }
 
-    pub fn set<T: IntoArray<SLOT_SIZE>>(&self, offset: usize, data: T) {
-        debug_assert!(
-            offset <= self.capacity,
-            "AttributePlaneWriter.set | offset {} out of bounds",
-            offset,
-        );
-
+    pub fn set<T: IntoArray<SLOT_SIZE>>(&self, slot: usize, data: T) {
+        let attrs = self.get(slot);
         let data = data.to_array();
-        let base = self.resolve_mem_offset(offset);
 
         for i in 0..SLOT_SIZE {
-            self.mem[base + i].store(data[i], Ordering::Relaxed);
+            attrs.set(i, data[i]);
+        }
+    }
+
+    pub fn clear(&self, slot: usize) {
+        let attrs = self.get(slot);
+
+        for i in 0..SLOT_SIZE {
+            attrs.set(i, 0);
         }
     }
 

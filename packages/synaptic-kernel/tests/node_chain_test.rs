@@ -5,6 +5,8 @@ use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::node::node_chain_reader::NodeChainReader;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
 
+const NODE_META: usize = 8;
+
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
@@ -13,37 +15,33 @@ fn create_mem(size: usize) -> AtomicBuffer {
     Arc::new(vec)
 }
 
-// NODE_SLOT_SIZE = 16 (64 bytes per node)
-// Layout: TB metadata (4) + 3 buffers of BUF_CAP each
-// We need space for the chain head pointer inside the TB buffer too
+// Node TB: head word at NODE_START_OFFSET, then interleaved core+meta per slot.
 const MEM_SIZE: usize = 16384;
 const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 4096;
 const FL_START: usize = 13000;
 const CAPACITY: usize = 16;
-// buffer_head_offset: offset within the TB buffer where chain head is stored
-// We put it after the node slots: CAPACITY * NODE_SLOT_SIZE = 16 * 16 = 256
 const NODE_START_OFFSET: usize = 0;
 
 struct TestHarness {
     _mem: AtomicBuffer,
     writer: synaptic_kernel::primitives::triple_buffer::TripleBufferWriter,
     reader: synaptic_kernel::primitives::triple_buffer::TripleBufferReader,
-    chain: NodeChainWriter,
-    chain_r: NodeChainReader,
+    chain: NodeChainWriter<NODE_META>,
+    chain_r: NodeChainReader<NODE_META>,
 }
 
 fn setup() -> TestHarness {
     let mem = create_mem(MEM_SIZE);
     let (writer, reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
-    let chain = NodeChainWriter::new(
+    let chain = NodeChainWriter::<NODE_META>::new(
         Arc::clone(&mem),
         writer.clone(),
         FL_START,
         NODE_START_OFFSET,
         CAPACITY,
     );
-    let chain_r = NodeChainReader::new(reader.clone(), NODE_START_OFFSET, CAPACITY);
+    let chain_r = NodeChainReader::<NODE_META>::bind(reader.clone(), NODE_START_OFFSET, CAPACITY);
 
     TestHarness {
         _mem: mem,
@@ -54,11 +52,10 @@ fn setup() -> TestHarness {
     }
 }
 
-fn make_draft(opcode: i32, tick: i32) -> NodeDraft {
-    NodeDraft {
-        kind: opcode,
-        base_tick: tick,
-    }
+fn insert_head_with_tick(chain: &NodeChainWriter<NODE_META>, kind: i32, tick: i32) -> usize {
+    let slot = chain.insert_head(kind).unwrap();
+    chain.get_node(slot).set_meta(0, tick);
+    slot
 }
 
 // ============ NodeChainWriter: insert_head ============
@@ -70,7 +67,7 @@ fn insert_head_into_empty_chain() {
 
     assert!(chain.get_head().is_none());
 
-    let slot = chain.insert_head(make_draft(1, 0)).unwrap();
+    let slot = chain.insert_head(1).unwrap();
     let head = chain.get_head().unwrap();
 
     assert_eq!(head.get_kind(), 1);
@@ -84,8 +81,8 @@ fn insert_head_pushes_existing_head() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
-    let b = chain.insert_head(make_draft(2, 0)).unwrap();
+    let a = chain.insert_head(1).unwrap();
+    let b = chain.insert_head(2).unwrap();
 
     // chain: b -> a
     let head = chain.get_head().unwrap();
@@ -105,9 +102,9 @@ fn insert_head_three_nodes_links_correct() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 10)).unwrap();
-    let b = chain.insert_head(make_draft(2, 20)).unwrap();
-    let c = chain.insert_head(make_draft(3, 30)).unwrap();
+    let a = insert_head_with_tick(&chain, 1, 10);
+    let b = insert_head_with_tick(&chain, 2, 20);
+    let c = insert_head_with_tick(&chain, 3, 30);
 
     // chain: c -> b -> a
     assert_eq!(chain.get_node(c).get_prev_ptr(), 0);
@@ -127,8 +124,8 @@ fn insert_after_tail() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
-    let b = chain.insert_after(a, make_draft(2, 0)).unwrap();
+    let a = chain.insert_head(1).unwrap();
+    let b = chain.insert_after(a, 2).unwrap();
 
     // chain: a -> b
     assert_eq!(chain.get_node(a).get_next_ptr(), b);
@@ -141,10 +138,10 @@ fn insert_after_middle() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
-    let c = chain.insert_after(a, make_draft(3, 0)).unwrap();
+    let a = chain.insert_head(1).unwrap();
+    let c = chain.insert_after(a, 3).unwrap();
     // chain: a -> c
-    let b = chain.insert_after(a, make_draft(2, 0)).unwrap();
+    let b = chain.insert_after(a, 2).unwrap();
     // chain: a -> b -> c
 
     assert_eq!(chain.get_node(a).get_next_ptr(), b);
@@ -161,8 +158,8 @@ fn insert_before_head_does_not_update_chain_head() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
-    let b = chain.insert_before(a, make_draft(2, 0)).unwrap();
+    let a = chain.insert_head(1).unwrap();
+    let b = chain.insert_before(a, 2).unwrap();
 
     // chain head is still a (insert_before does NOT update head ptr)
     // This is by design: insert_before only patches node pointers
@@ -178,10 +175,10 @@ fn insert_before_middle_node() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
-    let c = chain.insert_after(a, make_draft(3, 0)).unwrap();
+    let a = chain.insert_head(1).unwrap();
+    let c = chain.insert_after(a, 3).unwrap();
     // chain: a -> c
-    let b = chain.insert_before(c, make_draft(2, 0)).unwrap();
+    let b = chain.insert_before(c, 2).unwrap();
     // chain: a -> b -> c
 
     assert_eq!(chain.get_node(a).get_next_ptr(), b);
@@ -197,7 +194,7 @@ fn remove_only_node_empties_chain() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
+    let a = chain.insert_head(1).unwrap();
     chain.remove(a).unwrap();
 
     assert!(chain.get_head().is_none(), "chain must be empty");
@@ -208,8 +205,8 @@ fn remove_head_promotes_next() {
     let h = setup();
     let chain = h.chain;
 
-    let _a = chain.insert_head(make_draft(1, 0)).unwrap();
-    let b = chain.insert_head(make_draft(2, 0)).unwrap();
+    let _a = chain.insert_head(1).unwrap();
+    let b = chain.insert_head(2).unwrap();
     // chain: b -> a
 
     chain.remove(b).unwrap();
@@ -226,8 +223,8 @@ fn remove_tail_patches_prev() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
-    let b = chain.insert_head(make_draft(2, 0)).unwrap();
+    let a = chain.insert_head(1).unwrap();
+    let b = chain.insert_head(2).unwrap();
     // chain: b -> a
 
     chain.remove(a).unwrap();
@@ -243,9 +240,9 @@ fn remove_middle_heals_chain() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
-    let b = chain.insert_head(make_draft(2, 0)).unwrap();
-    let c = chain.insert_head(make_draft(3, 0)).unwrap();
+    let a = chain.insert_head(1).unwrap();
+    let b = chain.insert_head(2).unwrap();
+    let c = chain.insert_head(3).unwrap();
     // chain: c -> b -> a
 
     chain.remove(b).unwrap();
@@ -260,9 +257,9 @@ fn remove_all_then_reinsert() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
-    let b = chain.insert_head(make_draft(2, 0)).unwrap();
-    let c = chain.insert_head(make_draft(3, 0)).unwrap();
+    let a = chain.insert_head(1).unwrap();
+    let b = chain.insert_head(2).unwrap();
+    let c = chain.insert_head(3).unwrap();
 
     chain.remove(c).unwrap();
     chain.remove(b).unwrap();
@@ -271,7 +268,7 @@ fn remove_all_then_reinsert() {
     assert!(chain.get_head().is_none());
 
     // reinsert
-    let _d = chain.insert_head(make_draft(99, 0)).unwrap();
+    let _d = chain.insert_head(99).unwrap();
     let head = chain.get_head().unwrap();
     assert_eq!(head.get_kind(), 99);
     assert_eq!(head.get_next_ptr(), 0);
@@ -283,7 +280,7 @@ fn double_remove_returns_error() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
+    let a = chain.insert_head(1).unwrap();
     chain.remove(a).unwrap();
     /* commented err check */
 }
@@ -297,9 +294,9 @@ fn chain_reader_traverses_full_chain() {
     let (_a, _b, _c) = {
         let chain = h.chain;
 
-        let a = chain.insert_head(make_draft(1, 10)).unwrap();
-        let b = chain.insert_head(make_draft(2, 20)).unwrap();
-        let c = chain.insert_head(make_draft(3, 30)).unwrap();
+        let a = insert_head_with_tick(&chain, 1, 10);
+        let b = insert_head_with_tick(&chain, 2, 20);
+        let c = insert_head_with_tick(&chain, 3, 30);
         (a, b, c)
     };
     h.writer.publish();
@@ -310,12 +307,12 @@ fn chain_reader_traverses_full_chain() {
     // chain: c -> b -> a
     let head = chain_r.get_head().unwrap();
     assert_eq!(head.get_kind(), 3);
-    assert_eq!(head.get_base_tick(), 30);
+    assert_eq!(head.get_meta(0), 30);
 
-    let node_b = chain_r.get(head.get_next_ptr());
+    let node_b = chain_r.get_node(head.get_next_ptr());
     assert_eq!(node_b.get_kind(), 2);
 
-    let node_a = chain_r.get(node_b.get_next_ptr());
+    let node_a = chain_r.get_node(node_b.get_next_ptr());
     assert_eq!(node_a.get_kind(), 1);
     assert_eq!(node_a.get_next_ptr(), 0, "end of chain");
 }
@@ -338,8 +335,8 @@ fn chain_reader_sees_removal_after_publish() {
     {
         let chain = h.chain;
 
-        let _a = chain.insert_head(make_draft(1, 0)).unwrap();
-        let b = chain.insert_head(make_draft(2, 0)).unwrap();
+        let _a = chain.insert_head(1).unwrap();
+        let b = chain.insert_head(2).unwrap();
         // chain: b -> a
         chain.remove(b).unwrap();
         // chain: a
@@ -362,10 +359,10 @@ fn insert_head_exhausts_capacity() {
     let chain = h.chain;
 
     for i in 0..CAPACITY {
-        assert!(chain.insert_head(make_draft(i as i32, 0)).is_some());
+        assert!(chain.insert_head(i as i32).is_some());
     }
     assert!(
-        chain.insert_head(make_draft(99, 0)).is_none(),
+        chain.insert_head(99).is_none(),
         "capacity exhausted"
     );
 }
@@ -377,13 +374,13 @@ fn insert_after_does_not_mutate_unrelated_nodes() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
-    let b = chain.insert_after(a, make_draft(2, 0)).unwrap();
-    let c = chain.insert_after(b, make_draft(3, 0)).unwrap();
+    let a = chain.insert_head(1).unwrap();
+    let b = chain.insert_after(a, 2).unwrap();
+    let c = chain.insert_after(b, 3).unwrap();
     // chain: a -> b -> c
 
     // Insert d after a (between a and b)
-    let d = chain.insert_after(a, make_draft(4, 0)).unwrap();
+    let d = chain.insert_after(a, 4).unwrap();
     // chain: a -> d -> b -> c
 
     // c must not be touched
@@ -404,10 +401,10 @@ fn four_node_chain_traversal_forward_and_backward() {
     let chain = h.chain;
 
     // build chain via insert_head: d(head) -> c -> b -> a(tail)
-    let a = chain.insert_head(make_draft(1, 10)).unwrap();
-    let b = chain.insert_head(make_draft(2, 20)).unwrap();
-    let c = chain.insert_head(make_draft(3, 30)).unwrap();
-    let d = chain.insert_head(make_draft(4, 40)).unwrap();
+    let a = insert_head_with_tick(&chain, 1, 10);
+    let b = insert_head_with_tick(&chain, 2, 20);
+    let c = insert_head_with_tick(&chain, 3, 30);
+    let d = insert_head_with_tick(&chain, 4, 40);
 
     // forward: d -> c -> b -> a -> 0
     let h0 = chain.get_head().unwrap();
@@ -434,14 +431,14 @@ fn insert_after_returns_none_on_exhaustion() {
     let h = setup();
     let chain = h.chain;
 
-    let head = chain.insert_head(make_draft(0, 0)).unwrap();
+    let head = chain.insert_head(0).unwrap();
     // fill remaining capacity via insert_after
     let mut last = head;
     for i in 1..CAPACITY {
-        last = chain.insert_after(last, make_draft(i as i32, 0)).unwrap();
+        last = chain.insert_after(last, i as i32).unwrap();
     }
     assert!(
-        chain.insert_after(last, make_draft(99, 0)).is_none(),
+        chain.insert_after(last, 99).is_none(),
         "insert_after must return None when exhausted"
     );
 }
@@ -451,13 +448,13 @@ fn insert_before_returns_none_on_exhaustion() {
     let h = setup();
     let chain = h.chain;
 
-    let head = chain.insert_head(make_draft(0, 0)).unwrap();
+    let head = chain.insert_head(0).unwrap();
     // fill remaining capacity via insert_before
     for i in 1..CAPACITY {
-        chain.insert_before(head, make_draft(i as i32, 0)).unwrap();
+        chain.insert_before(head, i as i32).unwrap();
     }
     assert!(
-        chain.insert_before(head, make_draft(99, 0)).is_none(),
+        chain.insert_before(head, 99).is_none(),
         "insert_before must return None when exhausted"
     );
 }
@@ -469,13 +466,13 @@ fn insert_before_tail_in_three_node_chain() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
-    let c = chain.insert_after(a, make_draft(3, 0)).unwrap();
-    let d = chain.insert_after(c, make_draft(4, 0)).unwrap();
+    let a = chain.insert_head(1).unwrap();
+    let c = chain.insert_after(a, 3).unwrap();
+    let d = chain.insert_after(c, 4).unwrap();
     // chain: a -> c -> d
 
     // insert before tail (d)
-    let e = chain.insert_before(d, make_draft(5, 0)).unwrap();
+    let e = chain.insert_before(d, 5).unwrap();
     // chain: a -> c -> e -> d
 
     assert_eq!(chain.get_node(c).get_next_ptr(), e);
@@ -492,10 +489,10 @@ fn remove_tail_first_then_middle_then_head() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
-    let b = chain.insert_head(make_draft(2, 0)).unwrap();
-    let c = chain.insert_head(make_draft(3, 0)).unwrap();
-    let d = chain.insert_head(make_draft(4, 0)).unwrap();
+    let a = chain.insert_head(1).unwrap();
+    let b = chain.insert_head(2).unwrap();
+    let c = chain.insert_head(3).unwrap();
+    let d = chain.insert_head(4).unwrap();
     // chain: d -> c -> b -> a
 
     // remove tail
@@ -523,11 +520,11 @@ fn remove_arbitrary_order_on_five_node_chain() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head(make_draft(1, 0)).unwrap();
-    let b = chain.insert_head(make_draft(2, 0)).unwrap();
-    let c = chain.insert_head(make_draft(3, 0)).unwrap();
-    let d = chain.insert_head(make_draft(4, 0)).unwrap();
-    let e = chain.insert_head(make_draft(5, 0)).unwrap();
+    let a = chain.insert_head(1).unwrap();
+    let b = chain.insert_head(2).unwrap();
+    let c = chain.insert_head(3).unwrap();
+    let d = chain.insert_head(4).unwrap();
+    let e = chain.insert_head(5).unwrap();
     // chain: e -> d -> c -> b -> a
 
     // remove c (middle)
@@ -570,10 +567,10 @@ fn reader_traverses_chain_after_mid_chain_removal() {
     {
         let chain = h.chain;
 
-        let _a = chain.insert_head(make_draft(1, 10)).unwrap();
-        let b = chain.insert_head(make_draft(2, 20)).unwrap();
-        let _c = chain.insert_head(make_draft(3, 30)).unwrap();
-        let _d = chain.insert_head(make_draft(4, 40)).unwrap();
+        let _a = insert_head_with_tick(&chain, 1, 10);
+        let b = insert_head_with_tick(&chain, 2, 20);
+        let _c = insert_head_with_tick(&chain, 3, 30);
+        let _d = insert_head_with_tick(&chain, 4, 40);
         // chain: d -> c -> b -> a
 
         chain.remove(b).unwrap();
@@ -587,12 +584,12 @@ fn reader_traverses_chain_after_mid_chain_removal() {
     // forward traversal: d -> c -> a -> 0
     let head = chain_r.get_head().unwrap();
     assert_eq!(head.get_kind(), 4);
-    assert_eq!(head.get_base_tick(), 40);
+    assert_eq!(head.get_meta(0), 40);
 
-    let n1 = chain_r.get(head.get_next_ptr());
+    let n1 = chain_r.get_node(head.get_next_ptr());
     assert_eq!(n1.get_kind(), 3);
 
-    let n2 = chain_r.get(n1.get_next_ptr());
+    let n2 = chain_r.get_node(n1.get_next_ptr());
     assert_eq!(n2.get_kind(), 1);
     assert_eq!(n2.get_next_ptr(), 0, "end of chain");
 }
@@ -604,8 +601,8 @@ fn copy_from_preserves_topology_and_deep_data() {
     let src_h = setup();
     let src = src_h.chain;
     
-    let _a = src.insert_head(make_draft(1, 10)).unwrap();
-    let b = src.insert_head(make_draft(2, 20)).unwrap();
+    let _a = insert_head_with_tick(&src, 1, 10);
+    let b = insert_head_with_tick(&src, 2, 20);
     
     
     src.remove(b).unwrap(); // b deferred
@@ -613,21 +610,21 @@ fn copy_from_preserves_topology_and_deep_data() {
     // create a dst with larger capacity
     let dst_mem = create_mem(MEM_SIZE);
     let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
-    let mut dst = NodeChainWriter::new(dst_mem, dst_tb, FL_START, NODE_START_OFFSET, CAPACITY * 2);
+    let dst = NodeChainWriter::<NODE_META>::new(dst_mem, dst_tb, FL_START, NODE_START_OFFSET, CAPACITY * 2);
     
     dst.copy_from(&src);
     
-    assert_eq!(dst.count(), 2);
+    assert_eq!(dst.len(), 2);
     let head = dst.get_head().unwrap();
     assert_eq!(head.get_kind(), 1);
-    assert_eq!(head.get_base_tick(), 10);
+    assert_eq!(head.get_meta(0), 10);
     assert_eq!(head.get_next_ptr(), 0);
     
     
     dst.flush_deferred();
     dst.flush_deferred();
     
-    assert_eq!(dst.count(), 1);
+    assert_eq!(dst.len(), 1);
     assert_eq!(dst.capacity(), CAPACITY * 2);
 }
 
@@ -636,11 +633,11 @@ fn copy_from_preserves_topology_and_deep_data() {
 fn copy_from_panics_if_source_larger() {
     let src_mem = create_mem(MEM_SIZE);
     let (src_tb, _) = TripleBuffer::new(Arc::clone(&src_mem), TB_START, TB_BUF_CAP);
-    let src = NodeChainWriter::new(src_mem, src_tb, FL_START, NODE_START_OFFSET, CAPACITY * 2);
+    let src = NodeChainWriter::<NODE_META>::new(src_mem, src_tb, FL_START, NODE_START_OFFSET, CAPACITY * 2);
     
     let dst_mem = create_mem(MEM_SIZE);
     let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
-    let dst = NodeChainWriter::new(dst_mem, dst_tb, FL_START, NODE_START_OFFSET, CAPACITY);
+    let dst = NodeChainWriter::<NODE_META>::new(dst_mem, dst_tb, FL_START, NODE_START_OFFSET, CAPACITY);
     
     dst.copy_from(&src);
 }

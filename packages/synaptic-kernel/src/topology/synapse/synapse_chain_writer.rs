@@ -163,6 +163,12 @@ impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
         }
 
         let new_slot = result.unwrap();
+        let start_offset = Self::calculate_synapse_start_offset(self.tb_start_offset, new_slot);
+
+        for i in 0..SYNAPSE_SIZE + SYNAPSE_META_SIZE {
+            self.triple_buffer.write(start_offset + i, 0)
+        }
+
         let synapse = self.get_synapse(new_slot);
 
         synapse.set_kind(kind);

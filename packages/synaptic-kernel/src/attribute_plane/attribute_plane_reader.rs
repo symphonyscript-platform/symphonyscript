@@ -1,3 +1,4 @@
+use crate::attribute_plane::attribute_plane_writer::AttributePlaneWriter;
 use crate::attribute_plane::attributes_reader::AttributesReader;
 use crate::primitives::types::AtomicBuffer;
 
@@ -36,10 +37,6 @@ impl<const SLOT_SIZE: usize> AttributePlaneReader<SLOT_SIZE> {
         capacity * SLOT_SIZE
     }
 
-    pub fn resolve_mem_offset(&self, offset: usize) -> usize {
-        self.mem_start_offset + (offset * SLOT_SIZE)
-    }
-
     pub fn mem_start_offset(&self) -> usize {
         self.mem_start_offset
     }
@@ -48,13 +45,16 @@ impl<const SLOT_SIZE: usize> AttributePlaneReader<SLOT_SIZE> {
         self.mem_end_offset
     }
 
-    pub fn get(&'_ self, offset: usize) -> AttributesReader<'_, SLOT_SIZE> {
+    pub fn get(&'_ self, slot: usize) -> AttributesReader<'_, SLOT_SIZE> {
+        let mem_offset =
+            AttributePlaneWriter::<SLOT_SIZE>::resolve_mem_offset(self.mem_start_offset, slot);
+
         debug_assert!(
-            offset < self.capacity,
-            "AttributePlaneReader.get | offset {} out of bounds",
-            offset
+            mem_offset + SLOT_SIZE <= self.mem_end_offset,
+            "AttributePlaneReader.get | slot {} out of bounds",
+            slot,
         );
 
-        AttributesReader::new(&self.mem, self.resolve_mem_offset(offset))
+        AttributesReader::new(&self.mem, mem_offset)
     }
 }

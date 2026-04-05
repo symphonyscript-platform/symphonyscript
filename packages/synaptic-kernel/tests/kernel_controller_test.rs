@@ -2,11 +2,26 @@ use synaptic_kernel::control_plane::ControlPlane;
 use synaptic_kernel::errors::kernel_error::KernelError;
 use synaptic_kernel::kernel_controller::KernelController;
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
+use synaptic_kernel::synaptic_graph_reader::SynapticGraphReader;
+
+const NODE_META: usize = 8;
+const NODE_ATTR: usize = 16;
+const SYNAPSE_META: usize = 8;
+const SYNAPSE_ATTR: usize = 16;
+
+type TestKernel = KernelController<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestReader = SynapticGraphReader<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+
+fn new_controller(cfg: SynapticGraphConfig) -> TestKernel {
+    KernelController::new(cfg)
+}
 
 fn create_config(nodes: usize, synapses: usize) -> SynapticGraphConfig {
     SynapticGraphConfig {
         node_capacity: nodes,
         synapse_capacity: synapses,
+        mem_metadata_size: 1,
+        tb_metadata_size: 1,
     }
 }
 
@@ -14,26 +29,15 @@ fn config(capacity: usize) -> SynapticGraphConfig {
     create_config(capacity, capacity)
 }
 
-fn draft(opcode: i32) -> NodeDraft {
-    NodeDraft {
-        kind: opcode,
-        base_tick: 0,
-    }
-}
-
-fn syn(opcode: i32) -> SynapseDraft {
-    SynapseDraft { opcode }
-}
-
 /// Extract audio-thread reader from controller via raw ControlPlane pointer.
 /// This simulates the exact path the audio thread takes in production.
-unsafe fn mock_audio_reader(
-    controller: &KernelController,
-) -> &mut synaptic_kernel::synaptic_graph_reader::SynapticGraphReader {
+unsafe fn mock_audio_reader(controller: &TestKernel) -> &mut TestReader {
     let cp_address = controller.get_controller_plane_address();
-    let cp_ptr = cp_address as *const ControlPlane;
-    let reader_ptr = (*cp_ptr).get_shared_graph_ptr();
-    &mut *reader_ptr
+    let cp_ptr = cp_address as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+    unsafe {
+        let reader_ptr = (*cp_ptr).get_shared_graph_ptr();
+        &mut *reader_ptr
+    }
 }
 
 // =========================================================
@@ -42,7 +46,7 @@ unsafe fn mock_audio_reader(
 
 #[test]
 fn fresh_controller_reports_zero_counts() {
-    let controller = KernelController::new(config(16));
+    let controller = new_controller(config(16));
     assert_eq!(controller.node_count(), 0);
     assert_eq!(controller.synapse_count(), 0);
     assert_eq!(controller.node_capacity(), 16);
@@ -54,8 +58,8 @@ fn fresh_controller_reports_zero_counts() {
 
 #[test]
 fn insert_head_returns_slot_and_head_visible() {
-    let controller = KernelController::new(config(16));
-    let slot = controller.insert_head(draft(1)).unwrap();
+    let controller = new_controller(config(16));
+    let slot = controller.insert_head(1).unwrap();
     assert!(slot > 0);
     let head = controller.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 1);
@@ -63,10 +67,10 @@ fn insert_head_returns_slot_and_head_visible() {
 
 #[test]
 fn insert_after_and_before_form_correct_chain() {
-    let controller = KernelController::new(config(16));
-    let n1 = controller.insert_head(draft(10)).unwrap();
-    let n3 = controller.insert_after(n1, draft(30)).unwrap();
-    let n2 = controller.insert_before(n3, draft(20)).unwrap();
+    let controller = new_controller(config(16));
+    let n1 = controller.insert_head(10).unwrap();
+    let n3 = controller.insert_after(n1, 30).unwrap();
+    let n2 = controller.insert_before(n3, 20).unwrap();
 
     // Chain: n1 -> n2 -> n3
     let w1 = controller.get_node(n1);
@@ -80,11 +84,11 @@ fn insert_after_and_before_form_correct_chain() {
 
 #[test]
 fn connect_and_disconnect_lifecycle() {
-    let controller = KernelController::new(config(16));
-    let n1 = controller.insert_head(draft(1)).unwrap();
-    let n2 = controller.insert_after(n1, draft(2)).unwrap();
+    let controller = new_controller(config(16));
+    let n1 = controller.insert_head(1).unwrap();
+    let n2 = controller.insert_after(n1, 2).unwrap();
 
-    let s1 = controller.connect(n1, n2, syn(5)).unwrap();
+    let s1 = controller.connect(n1, n2, 5).unwrap();
     let synapse = controller.get_synapse(s1);
     assert_eq!(synapse.get_kind(), 5);
 
@@ -93,10 +97,10 @@ fn connect_and_disconnect_lifecycle() {
 
 #[test]
 fn node_and_synapse_attribute_round_trip() {
-    let controller = KernelController::new(config(16));
-    let n1 = controller.insert_head(draft(1)).unwrap();
-    let n2 = controller.insert_after(n1, draft(2)).unwrap();
-    let s1 = controller.connect(n1, n2, syn(1)).unwrap();
+    let controller = new_controller(config(16));
+    let n1 = controller.insert_head(1).unwrap();
+    let n2 = controller.insert_after(n1, 2).unwrap();
+    let s1 = controller.connect(n1, n2, 1).unwrap();
 
     // Node attributes: write every offset, read back
     for offset in 0..16 {
@@ -123,8 +127,8 @@ fn node_and_synapse_attribute_round_trip() {
 
 #[test]
 fn negative_attribute_values_preserved() {
-    let controller = KernelController::new(config(16));
-    let n = controller.insert_head(draft(1)).unwrap();
+    let controller = new_controller(config(16));
+    let n = controller.insert_head(1).unwrap();
     controller.set_node_attribute(n, 0, i32::MIN);
     controller.set_node_attribute(n, 1, -1);
     assert_eq!(controller.get_node_attribute(n, 0), i32::MIN);
@@ -137,22 +141,18 @@ fn negative_attribute_values_preserved() {
 
 #[test]
 fn mutations_invisible_to_audio_thread_before_publish_and_swap() {
-    let mut controller = KernelController::new(config(16));
+    let mut controller = new_controller(config(16));
 
     // Extract raw pointer to decouple borrows
     let cp_address = controller.get_controller_plane_address();
-    let cp_ptr = cp_address as *const ControlPlane;
+    let cp_ptr = cp_address as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
     let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
     let audio = unsafe { &mut *reader_ptr };
 
     assert!(audio.get_head_node().is_none());
 
-    controller
-        .insert_head(NodeDraft {
-            kind: 42,
-            base_tick: 100,
-        })
-        .unwrap();
+    let slot = controller.insert_head(42).unwrap();
+    controller.get_node(slot).set_meta(0, 100);
 
     // Not published yet
     assert!(audio.get_head_node().is_none());
@@ -165,23 +165,23 @@ fn mutations_invisible_to_audio_thread_before_publish_and_swap() {
     assert!(audio.swap());
     let head = audio.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 42);
-    assert_eq!(head.get_base_tick(), 100);
+    assert_eq!(head.get_meta(0), 100);
 }
 
 #[test]
 fn multiple_mutations_batch_into_single_publish() {
-    let mut controller = KernelController::new(config(16));
+    let mut controller = new_controller(config(16));
 
     let cp_address = controller.get_controller_plane_address();
-    let cp_ptr = cp_address as *const ControlPlane;
+    let cp_ptr = cp_address as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
     let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
     let audio = unsafe { &mut *reader_ptr };
 
-    let n1 = controller.insert_head(draft(1)).unwrap();
-    let n2 = controller.insert_after(n1, draft(2)).unwrap();
-    let n3 = controller.insert_after(n2, draft(3)).unwrap();
-    controller.connect(n1, n2, syn(10)).unwrap();
-    controller.connect(n2, n3, syn(20)).unwrap();
+    let n1 = controller.insert_head(1).unwrap();
+    let n2 = controller.insert_after(n1, 2).unwrap();
+    let n3 = controller.insert_after(n2, 3).unwrap();
+    controller.connect(n1, n2, 10).unwrap();
+    controller.connect(n2, n3, 20).unwrap();
     controller.set_node_attribute(n1, 0, 999);
 
     // Everything invisible
@@ -201,14 +201,14 @@ fn multiple_mutations_batch_into_single_publish() {
 
 #[test]
 fn double_swap_without_publish_returns_false() {
-    let mut controller = KernelController::new(config(16));
+    let mut controller = new_controller(config(16));
 
     let cp_address = controller.get_controller_plane_address();
-    let cp_ptr = cp_address as *const ControlPlane;
+    let cp_ptr = cp_address as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
     let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
     let audio = unsafe { &mut *reader_ptr };
 
-    controller.insert_head(draft(1)).unwrap();
+    controller.insert_head(1).unwrap();
     controller.publish();
 
     assert!(audio.swap()); // first swap consumes the publish
@@ -218,14 +218,14 @@ fn double_swap_without_publish_returns_false() {
 #[test]
 fn attributes_visible_immediately_without_publish() {
     // Attribute plane is shared (not triple-buffered), so writes are instant
-    let controller = KernelController::new(config(16));
+    let controller = new_controller(config(16));
 
     let cp_address = controller.get_controller_plane_address();
-    let cp_ptr = cp_address as *const ControlPlane;
+    let cp_ptr = cp_address as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
     let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
     let audio = unsafe { &mut *reader_ptr };
 
-    let n = controller.insert_head(draft(1)).unwrap();
+    let n = controller.insert_head(1).unwrap();
     controller.set_node_attribute(n, 3, 42);
 
     // Attribute is visible to audio immediately (shared plane)
@@ -238,48 +238,48 @@ fn attributes_visible_immediately_without_publish() {
 
 #[test]
 fn node_capacity_exhaustion_returns_error() {
-    let controller = KernelController::new(config(2));
-    controller.insert_head(draft(1)).unwrap();
-    controller.insert_head(draft(2)).unwrap();
+    let controller = new_controller(config(2));
+    controller.insert_head(1).unwrap();
+    controller.insert_head(2).unwrap();
 
     assert!(matches!(
-        controller.insert_head(draft(3)),
+        controller.insert_head(3),
         Err(KernelError::CapacityExhausted)
     ));
     assert!(matches!(
-        controller.insert_after(1, draft(3)),
+        controller.insert_after(1, 3),
         Err(KernelError::CapacityExhausted)
     ));
     assert!(matches!(
-        controller.insert_before(1, draft(3)),
+        controller.insert_before(1, 3),
         Err(KernelError::CapacityExhausted)
     ));
 }
 
 #[test]
 fn synapse_capacity_exhaustion_returns_error() {
-    let controller = KernelController::new(create_config(16, 2));
-    let n1 = controller.insert_head(draft(1)).unwrap();
-    let n2 = controller.insert_after(n1, draft(2)).unwrap();
-    let n3 = controller.insert_after(n2, draft(3)).unwrap();
+    let controller = new_controller(create_config(16, 2));
+    let n1 = controller.insert_head(1).unwrap();
+    let n2 = controller.insert_after(n1, 2).unwrap();
+    let n3 = controller.insert_after(n2, 3).unwrap();
 
-    controller.connect(n1, n2, syn(1)).unwrap();
-    controller.connect(n2, n3, syn(2)).unwrap();
+    controller.connect(n1, n2, 1).unwrap();
+    controller.connect(n2, n3, 2).unwrap();
 
     assert!(matches!(
-        controller.connect(n3, n1, syn(3)),
+        controller.connect(n3, n1, 3),
         Err(KernelError::CapacityExhausted)
     ));
 }
 
 #[test]
 fn remove_then_reuse_slot() {
-    let controller = KernelController::new(config(2));
-    let n1 = controller.insert_head(draft(1)).unwrap();
-    let _n2 = controller.insert_head(draft(2)).unwrap();
+    let controller = new_controller(config(2));
+    let n1 = controller.insert_head(1).unwrap();
+    let _n2 = controller.insert_head(2).unwrap();
 
     // Full
-    assert!(controller.insert_head(draft(3)).is_err());
+    assert!(controller.insert_head(3).is_err());
 
     // Remove opens a slot — but deferred, so needs publish+flush
     controller.remove_node(n1).unwrap();
@@ -291,8 +291,8 @@ fn remove_then_reuse_slot() {
 #[test]
 #[should_panic(expected = "attempted to read inactive slot")]
 fn double_remove_same_node_panics_uaf_guard() {
-    let controller = KernelController::new(config(16));
-    let n1 = controller.insert_head(draft(1)).unwrap();
+    let controller = new_controller(config(16));
+    let n1 = controller.insert_head(1).unwrap();
     controller.remove_node(n1).unwrap();
     // Second remove hits the UAF guard before reaching DoubleFree
     let _ = controller.remove_node(n1);
@@ -301,10 +301,10 @@ fn double_remove_same_node_panics_uaf_guard() {
 #[test]
 #[should_panic(expected = "attempted to read inactive slot")]
 fn double_disconnect_same_synapse_panics_uaf_guard() {
-    let controller = KernelController::new(config(16));
-    let n1 = controller.insert_head(draft(1)).unwrap();
-    let n2 = controller.insert_after(n1, draft(2)).unwrap();
-    let s1 = controller.connect(n1, n2, syn(1)).unwrap();
+    let controller = new_controller(config(16));
+    let n1 = controller.insert_head(1).unwrap();
+    let n2 = controller.insert_after(n1, 2).unwrap();
+    let s1 = controller.connect(n1, n2, 1).unwrap();
     controller.disconnect(s1).unwrap();
     // Second disconnect hits the UAF guard
     let _ = controller.disconnect(s1);
@@ -316,7 +316,7 @@ fn double_disconnect_same_synapse_panics_uaf_guard() {
 
 #[test]
 fn grow_rejects_smaller_capacity() {
-    let mut controller = KernelController::new(config(16));
+    let mut controller = new_controller(config(16));
     assert!(matches!(
         controller.grow(config(8)),
         Err(KernelError::InsufficientCapacity)
@@ -325,7 +325,7 @@ fn grow_rejects_smaller_capacity() {
 
 #[test]
 fn grow_rejects_same_capacity() {
-    let mut controller = KernelController::new(config(16));
+    let mut controller = new_controller(config(16));
     // Same capacity — node_capacity < old is false, but not strictly >
     // This should succeed since it's not *less* than current
     assert!(controller.grow(config(16)).is_ok());
@@ -333,11 +333,11 @@ fn grow_rejects_same_capacity() {
 
 #[test]
 fn grow_preserves_chain_topology() {
-    let mut controller = KernelController::new(config(8));
+    let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head(draft(10)).unwrap();
-    let n2 = controller.insert_after(n1, draft(20)).unwrap();
-    let _n3 = controller.insert_after(n2, draft(30)).unwrap();
+    let n1 = controller.insert_head(10).unwrap();
+    let n2 = controller.insert_after(n1, 20).unwrap();
+    let _n3 = controller.insert_after(n2, 30).unwrap();
 
     controller.grow(config(32)).unwrap();
 
@@ -352,11 +352,11 @@ fn grow_preserves_chain_topology() {
 
 #[test]
 fn grow_preserves_node_and_synapse_attributes() {
-    let mut controller = KernelController::new(config(8));
+    let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head(draft(1)).unwrap();
-    let n2 = controller.insert_after(n1, draft(2)).unwrap();
-    let s1 = controller.connect(n1, n2, syn(5)).unwrap();
+    let n1 = controller.insert_head(1).unwrap();
+    let n2 = controller.insert_after(n1, 2).unwrap();
+    let s1 = controller.connect(n1, n2, 5).unwrap();
 
     controller.set_node_attribute(n1, 0, 1000);
     controller.set_node_attribute(n1, 15, -999);
@@ -373,15 +373,15 @@ fn grow_preserves_node_and_synapse_attributes() {
 
 #[test]
 fn grow_preserves_synapse_connectivity() {
-    let mut controller = KernelController::new(config(8));
+    let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head(draft(1)).unwrap();
-    let n2 = controller.insert_after(n1, draft(2)).unwrap();
-    let n3 = controller.insert_after(n2, draft(3)).unwrap();
+    let n1 = controller.insert_head(1).unwrap();
+    let n2 = controller.insert_after(n1, 2).unwrap();
+    let n3 = controller.insert_after(n2, 3).unwrap();
 
-    let s12 = controller.connect(n1, n2, syn(10)).unwrap();
-    let s13 = controller.connect(n1, n3, syn(20)).unwrap();
-    let s23 = controller.connect(n2, n3, syn(30)).unwrap();
+    let s12 = controller.connect(n1, n2, 10).unwrap();
+    let s13 = controller.connect(n1, n3, 20).unwrap();
+    let s23 = controller.connect(n2, n3, 30).unwrap();
 
     controller.grow(config(32)).unwrap();
 
@@ -393,33 +393,33 @@ fn grow_preserves_synapse_connectivity() {
 
 #[test]
 fn grow_expanded_capacity_is_allocatable() {
-    let mut controller = KernelController::new(config(4));
+    let mut controller = new_controller(config(4));
 
     // Fill old capacity
-    controller.insert_head(draft(1)).unwrap();
-    controller.insert_head(draft(2)).unwrap();
-    controller.insert_head(draft(3)).unwrap();
-    controller.insert_head(draft(4)).unwrap();
-    assert!(controller.insert_head(draft(5)).is_err());
+    controller.insert_head(1).unwrap();
+    controller.insert_head(2).unwrap();
+    controller.insert_head(3).unwrap();
+    controller.insert_head(4).unwrap();
+    assert!(controller.insert_head(5).is_err());
 
     controller.grow(config(8)).unwrap();
 
     // New capacity is usable
-    controller.insert_head(draft(5)).unwrap();
-    controller.insert_head(draft(6)).unwrap();
-    controller.insert_head(draft(7)).unwrap();
-    controller.insert_head(draft(8)).unwrap();
-    assert!(controller.insert_head(draft(9)).is_err());
+    controller.insert_head(5).unwrap();
+    controller.insert_head(6).unwrap();
+    controller.insert_head(7).unwrap();
+    controller.insert_head(8).unwrap();
+    assert!(controller.insert_head(9).is_err());
     assert_eq!(controller.node_count(), 8);
 }
 
 #[test]
 fn grow_audio_thread_sees_migrated_data_after_publish_swap() {
-    let mut controller = KernelController::new(config(8));
+    let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head(draft(10)).unwrap();
-    let n2 = controller.insert_after(n1, draft(20)).unwrap();
-    let s1 = controller.connect(n1, n2, syn(99)).unwrap();
+    let n1 = controller.insert_head(10).unwrap();
+    let n2 = controller.insert_after(n1, 20).unwrap();
+    let s1 = controller.connect(n1, n2, 99).unwrap();
     controller.set_node_attribute(n1, 0, 1000);
     controller.set_synapse_attribute(s1, 0, 5000);
 
@@ -443,12 +443,12 @@ fn grow_audio_thread_sees_migrated_data_after_publish_swap() {
 
 #[test]
 fn grow_after_heavy_fragmentation() {
-    let mut controller = KernelController::new(config(8));
+    let mut controller = new_controller(config(8));
 
     // Create 8 nodes
     let mut slots = Vec::new();
     for i in 0..8 {
-        slots.push(controller.insert_head(draft(i)).unwrap());
+        slots.push(controller.insert_head(i).unwrap());
     }
 
     // Remove every other node (creates fragmentation in free list)
@@ -470,7 +470,7 @@ fn grow_after_heavy_fragmentation() {
     assert_eq!(controller.get_node(slots[6]).get_kind(), 6);
 
     // Verify we can allocate into the expanded region
-    let new_node = controller.insert_head(draft(100)).unwrap();
+    let new_node = controller.insert_head(100).unwrap();
     assert_eq!(controller.get_node(new_node).get_kind(), 100);
 }
 
@@ -480,10 +480,10 @@ fn grow_after_heavy_fragmentation() {
 
 #[test]
 fn gc_pipeline_rotates_through_publish_cycles() {
-    let mut controller = KernelController::new(config(8));
+    let mut controller = new_controller(config(8));
 
     for i in 0..7 {
-        controller.insert_head(draft(i)).unwrap();
+        controller.insert_head(i).unwrap();
     }
     assert!(controller.should_grow(0.70));
 
@@ -504,8 +504,8 @@ fn gc_pipeline_rotates_through_publish_cycles() {
 
 #[test]
 fn consecutive_grows_without_crash() {
-    let mut controller = KernelController::new(config(4));
-    controller.insert_head(draft(1)).unwrap();
+    let mut controller = new_controller(config(4));
+    controller.insert_head(1).unwrap();
 
     controller.grow(config(8)).unwrap();
     controller.publish();
@@ -523,13 +523,13 @@ fn consecutive_grows_without_crash() {
 
 #[test]
 fn grow_then_mutate_then_publish() {
-    let mut controller = KernelController::new(config(4));
-    let n1 = controller.insert_head(draft(1)).unwrap();
+    let mut controller = new_controller(config(4));
+    let n1 = controller.insert_head(1).unwrap();
 
     controller.grow(config(16)).unwrap();
 
     // Mutate AFTER grow, BEFORE publish
-    let n2 = controller.insert_after(n1, draft(2)).unwrap();
+    let n2 = controller.insert_after(n1, 2).unwrap();
     controller.set_node_attribute(n2, 0, 777);
 
     controller.publish();
@@ -550,17 +550,17 @@ fn grow_then_mutate_then_publish() {
 
 #[test]
 fn should_grow_respects_threshold_boundary() {
-    let controller = KernelController::new(config(4));
+    let controller = new_controller(config(4));
     assert!(!controller.should_grow(0.75));
 
-    controller.insert_head(draft(1)).unwrap();
-    controller.insert_head(draft(2)).unwrap();
-    controller.insert_head(draft(3)).unwrap();
+    controller.insert_head(1).unwrap();
+    controller.insert_head(2).unwrap();
+    controller.insert_head(3).unwrap();
 
     // 3/4 = 0.75, should_grow uses > not >=
     assert!(!controller.should_grow(0.75));
 
-    controller.insert_head(draft(4)).unwrap();
+    controller.insert_head(4).unwrap();
     // 4/4 = 1.0 > 0.75
     assert!(controller.should_grow(0.75));
 }
@@ -571,7 +571,7 @@ fn should_grow_respects_threshold_boundary() {
 
 #[test]
 fn control_plane_address_is_stable_across_grow() {
-    let mut controller = KernelController::new(config(4));
+    let mut controller = new_controller(config(4));
     let addr_before = controller.get_controller_plane_address();
 
     controller.grow(config(8)).unwrap();
@@ -584,7 +584,7 @@ fn control_plane_address_is_stable_across_grow() {
 
 #[test]
 fn control_plane_address_nonzero() {
-    let controller = KernelController::new(config(4));
+    let controller = new_controller(config(4));
     assert_ne!(controller.get_controller_plane_address(), 0);
 }
 
@@ -594,27 +594,27 @@ fn control_plane_address_nonzero() {
 
 #[test]
 fn asymmetric_capacity_works() {
-    let controller = KernelController::new(create_config(16, 4));
+    let controller = new_controller(create_config(16, 4));
     assert_eq!(controller.node_capacity(), 16);
     assert_eq!(controller.synapse_capacity(), 4);
 
-    let n1 = controller.insert_head(draft(1)).unwrap();
-    let n2 = controller.insert_after(n1, draft(2)).unwrap();
+    let n1 = controller.insert_head(1).unwrap();
+    let n2 = controller.insert_after(n1, 2).unwrap();
 
-    controller.connect(n1, n2, syn(1)).unwrap();
-    controller.connect(n1, n2, syn(2)).unwrap();
-    controller.connect(n1, n2, syn(3)).unwrap();
-    controller.connect(n1, n2, syn(4)).unwrap();
+    controller.connect(n1, n2, 1).unwrap();
+    controller.connect(n1, n2, 2).unwrap();
+    controller.connect(n1, n2, 3).unwrap();
+    controller.connect(n1, n2, 4).unwrap();
 
     assert!(matches!(
-        controller.connect(n1, n2, syn(5)),
+        controller.connect(n1, n2, 5),
         Err(KernelError::CapacityExhausted)
     ));
 }
 
 #[test]
 fn grow_rejects_if_only_nodes_shrink() {
-    let mut controller = KernelController::new(create_config(16, 16));
+    let mut controller = new_controller(create_config(16, 16));
     assert!(matches!(
         controller.grow(create_config(8, 32)),
         Err(KernelError::InsufficientCapacity)
@@ -623,7 +623,7 @@ fn grow_rejects_if_only_nodes_shrink() {
 
 #[test]
 fn grow_rejects_if_only_synapses_shrink() {
-    let mut controller = KernelController::new(create_config(16, 16));
+    let mut controller = new_controller(create_config(16, 16));
     assert!(matches!(
         controller.grow(create_config(32, 8)),
         Err(KernelError::InsufficientCapacity)
@@ -632,15 +632,15 @@ fn grow_rejects_if_only_synapses_shrink() {
 
 #[test]
 fn defer_then_grow_then_publish_flushes_on_new_allocator() {
-    let mut controller = KernelController::new(config(4));
+    let mut controller = new_controller(config(4));
 
-    let n1 = controller.insert_head(draft(1)).unwrap();
-    let n2 = controller.insert_after(n1, draft(2)).unwrap();
-    let n3 = controller.insert_after(n2, draft(3)).unwrap();
-    let n4 = controller.insert_after(n3, draft(4)).unwrap();
+    let n1 = controller.insert_head(1).unwrap();
+    let n2 = controller.insert_after(n1, 2).unwrap();
+    let n3 = controller.insert_after(n2, 3).unwrap();
+    let n4 = controller.insert_after(n3, 4).unwrap();
 
     // Full
-    assert!(controller.insert_head(draft(99)).is_err());
+    assert!(controller.insert_head(99).is_err());
 
     // Defer a free — slot is marked but not released yet
     controller.remove_node(n2).unwrap();
@@ -654,7 +654,7 @@ fn defer_then_grow_then_publish_flushes_on_new_allocator() {
 
     // n2's slot should now be genuinely free on the new allocator
     // We can verify by inserting — if deferred flush failed, this would fail
-    let n5 = controller.insert_head(draft(5)).unwrap();
+    let n5 = controller.insert_head(5).unwrap();
     assert_eq!(controller.get_node(n5).get_kind(), 5);
 
     // The remaining original nodes should still be intact
@@ -665,12 +665,12 @@ fn defer_then_grow_then_publish_flushes_on_new_allocator() {
 
 #[test]
 fn defer_then_grow_then_defer_more_then_publish() {
-    let mut controller = KernelController::new(config(8));
+    let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head(draft(1)).unwrap();
-    let n2 = controller.insert_after(n1, draft(2)).unwrap();
-    let n3 = controller.insert_after(n2, draft(3)).unwrap();
-    let n4 = controller.insert_after(n3, draft(4)).unwrap();
+    let n1 = controller.insert_head(1).unwrap();
+    let n2 = controller.insert_after(n1, 2).unwrap();
+    let n3 = controller.insert_after(n2, 3).unwrap();
+    let n4 = controller.insert_after(n3, 4).unwrap();
 
     // Defer n2 on the OLD allocator
     controller.remove_node(n2).unwrap();
@@ -685,8 +685,8 @@ fn defer_then_grow_then_defer_more_then_publish() {
     controller.publish();
 
     // Both n2 and n4 should be reclaimable
-    let n5 = controller.insert_head(draft(5)).unwrap();
-    let n6 = controller.insert_head(draft(6)).unwrap();
+    let n5 = controller.insert_head(5).unwrap();
+    let n6 = controller.insert_head(6).unwrap();
     assert_eq!(controller.get_node(n5).get_kind(), 5);
     assert_eq!(controller.get_node(n6).get_kind(), 6);
 
@@ -697,12 +697,12 @@ fn defer_then_grow_then_defer_more_then_publish() {
 
 #[test]
 fn defer_then_publish_then_grow_preserves_freed_slot() {
-    let mut controller = KernelController::new(config(4));
+    let mut controller = new_controller(config(4));
 
-    let n1 = controller.insert_head(draft(1)).unwrap();
-    let n2 = controller.insert_after(n1, draft(2)).unwrap();
-    let _n3 = controller.insert_after(n2, draft(3)).unwrap();
-    let _n4 = controller.insert_after(_n3, draft(4)).unwrap();
+    let n1 = controller.insert_head(1).unwrap();
+    let n2 = controller.insert_after(n1, 2).unwrap();
+    let _n3 = controller.insert_after(n2, 3).unwrap();
+    let _n4 = controller.insert_after(_n3, 4).unwrap();
 
     // Defer and flush BEFORE grow
     controller.remove_node(n2).unwrap();
@@ -713,13 +713,13 @@ fn defer_then_publish_then_grow_preserves_freed_slot() {
     controller.grow(config(8)).unwrap();
 
     // n2's slot should be allocatable on the new allocator
-    let n5 = controller.insert_head(draft(5)).unwrap();
+    let n5 = controller.insert_head(5).unwrap();
     assert_eq!(controller.get_node(n5).get_kind(), 5);
 
     // Verify audio thread sees correct state after full cycle
     controller.publish();
     let cp_address = controller.get_controller_plane_address();
-    let cp_ptr = cp_address as *const ControlPlane;
+    let cp_ptr = cp_address as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
     let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
     let audio = unsafe { &mut *reader_ptr };
     audio.swap();
@@ -734,7 +734,7 @@ fn defer_then_publish_then_grow_preserves_freed_slot() {
 
 #[test]
 fn concurrent_traversal_during_rapid_publish_cycles() {
-    let mut controller = KernelController::new(config(64));
+    let mut controller = new_controller(config(64));
     let cp_addr = controller.get_controller_plane_address();
 
     let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
@@ -742,7 +742,7 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
 
     // Audio thread: continuously swap + traverse
     let audio_thread = std::thread::spawn(move || {
-        let cp_ptr = cp_addr as *const ControlPlane;
+        let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
         let mut iterations = 0u64;
 
         while running_audio.load(std::sync::atomic::Ordering::Relaxed) {
@@ -776,7 +776,7 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
 
     // Main thread: insert nodes and publish rapidly
     for i in 0..60 {
-        controller.insert_head(draft(i)).unwrap();
+        controller.insert_head(i).unwrap();
         if i % 5 == 0 {
             controller.publish();
         }
@@ -794,13 +794,13 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
 
 #[test]
 fn concurrent_traversal_during_grow() {
-    let mut controller = KernelController::new(config(8));
+    let mut controller = new_controller(config(8));
     let cp_addr = controller.get_controller_plane_address();
 
     // Seed initial data
-    let n1 = controller.insert_head(draft(1)).unwrap();
-    let n2 = controller.insert_after(n1, draft(2)).unwrap();
-    controller.connect(n1, n2, syn(10)).unwrap();
+    let n1 = controller.insert_head(1).unwrap();
+    let n2 = controller.insert_after(n1, 2).unwrap();
+    controller.connect(n1, n2, 10).unwrap();
     controller.set_node_attribute(n1, 0, 42);
     controller.publish();
 
@@ -809,7 +809,7 @@ fn concurrent_traversal_during_grow() {
 
     // Audio thread: continuously reads while main thread grows
     let audio_thread = std::thread::spawn(move || {
-        let cp_ptr = cp_addr as *const ControlPlane;
+        let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
         let mut iterations = 0u64;
 
         while running_audio.load(std::sync::atomic::Ordering::Relaxed) {
@@ -841,7 +841,7 @@ fn concurrent_traversal_during_grow() {
 
     // Insert into expanded capacity
     for i in 3..14 {
-        controller.insert_head(draft(i)).unwrap();
+        controller.insert_head(i).unwrap();
     }
     controller.publish();
 
@@ -850,7 +850,7 @@ fn concurrent_traversal_during_grow() {
 
     // More inserts
     for i in 14..28 {
-        controller.insert_head(draft(i)).unwrap();
+        controller.insert_head(i).unwrap();
     }
     controller.publish();
 
@@ -868,11 +868,11 @@ fn concurrent_traversal_during_grow() {
 
 #[test]
 fn concurrent_attribute_reads_during_writes() {
-    let controller = KernelController::new(config(16));
+    let controller = new_controller(config(16));
     let cp_addr = controller.get_controller_plane_address();
 
     // Create a node whose attributes we'll hammer
-    let n1 = controller.insert_head(draft(1)).unwrap();
+    let n1 = controller.insert_head(1).unwrap();
 
     let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let running_audio = running.clone();
@@ -880,7 +880,7 @@ fn concurrent_attribute_reads_during_writes() {
 
     // Audio thread: continuously reads attributes
     let audio_thread = std::thread::spawn(move || {
-        let cp_ptr = cp_addr as *const ControlPlane;
+        let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
         let mut iterations = 0u64;
 
         while running_audio.load(std::sync::atomic::Ordering::Relaxed) {

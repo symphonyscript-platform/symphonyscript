@@ -31,7 +31,7 @@ impl<'a, const SLOT_SIZE: usize> AttributesWriter<'a, SLOT_SIZE> {
         self.mem_end_offset
     }
 
-    pub fn read(&self, offset: usize) -> i32 {
+    pub fn get(&self, offset: usize) -> i32 {
         debug_assert!(
             offset < SLOT_SIZE,
             "AttributesWriter.read | offset {} out of bounds",
@@ -40,7 +40,7 @@ impl<'a, const SLOT_SIZE: usize> AttributesWriter<'a, SLOT_SIZE> {
         self.mem[self.mem_start_offset + offset].load(Ordering::Relaxed)
     }
 
-    pub fn write(&self, offset: usize, value: i32) {
+    pub fn set(&self, offset: usize, value: i32) {
         debug_assert!(
             offset < SLOT_SIZE,
             "AttributesWriter.write | offset {} out of bounds",
