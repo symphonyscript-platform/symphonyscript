@@ -55,7 +55,6 @@ mod tests {
     use crate::primitives::triple_buffer::TripleBuffer;
     use crate::primitives::types::AtomicBuffer;
     use crate::topology::node::node_chain_writer::NodeChainWriter;
-    use crate::topology::node::node_data::NodeDraft;
     use crate::topology::synapse::synapse_chain_writer::SynapseChainWriter;
     use crate::topology::synapse::synapse_data::SynapseDraft;
     use std::sync::atomic::AtomicI32;
@@ -114,8 +113,8 @@ mod tests {
             SYNAPSE_CAPACITY,
         );
 
-        let src = node_chain.insert_head(NodeDraft { kind: 1 }).unwrap();
-        let tgt = node_chain.insert_head(NodeDraft { kind: 2 }).unwrap();
+        let src = node_chain.insert_head(1).unwrap();
+        let tgt = node_chain.insert_head(2).unwrap();
         let syn = synapse_chain
             .connect(src, tgt, SynapseDraft { kind: 5 })
             .unwrap();
@@ -159,8 +158,8 @@ mod tests {
             SYNAPSE_CAPACITY,
         );
 
-        let src = node_chain.insert_head(NodeDraft { kind: 1 }).unwrap();
-        let tgt = node_chain.insert_head(NodeDraft { kind: 2 }).unwrap();
+        let src = node_chain.insert_head(1).unwrap();
+        let tgt = node_chain.insert_head(2).unwrap();
         let syn = synapse_chain
             .connect(src, tgt, SynapseDraft { kind: 0 })
             .unwrap();

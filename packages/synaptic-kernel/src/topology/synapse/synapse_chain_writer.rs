@@ -150,8 +150,8 @@ impl SynapseChainWriter {
         target_slot: usize,
         data: SynapseDraft,
     ) -> Option<usize> {
-        let source = self.node_chain.get(source_slot);
-        let target = self.node_chain.get(target_slot);
+        let source = self.node_chain.get_node(source_slot);
+        let target = self.node_chain.get_node(target_slot);
         let source_current_tail_ptr = source.get_outgoing_synapse_tail();
         let target_current_tail_ptr = target.get_incoming_synapse_tail();
         let result = self.synapse_writer.insert(SynapseData {
@@ -195,8 +195,8 @@ impl SynapseChainWriter {
 
     pub fn disconnect(&self, slot: usize) -> Result<(), FreeListError> {
         let synapse = self.get(slot);
-        let source = self.node_chain.get(synapse.get_source_ptr());
-        let target = self.node_chain.get(synapse.get_target_ptr());
+        let source = self.node_chain.get_node(synapse.get_source_ptr());
+        let target = self.node_chain.get_node(synapse.get_target_ptr());
         let synapse_outgoing_next_ptr = synapse.get_outgoing_next_ptr();
         let synapse_outgoing_prev_ptr = synapse.get_outgoing_prev_ptr();
         let synapse_incoming_next_ptr = synapse.get_incoming_next_ptr();

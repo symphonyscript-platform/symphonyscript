@@ -3,29 +3,29 @@ use crate::control_plane::ControlPlane;
 use crate::synaptic_graph_reader::SynapticGraphReader;
 
 pub struct KernelProcessor<
-    const NODE_FRAME_SIZE: usize,
+    const NODE_META_SIZE: usize,
     const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_FRAME_SIZE: usize,
+    const SYNAPSE_META_SIZE: usize,
     const SYNAPSE_ATTRIBUTES_SIZE: usize,
 > {
     control_plane_ptr: *const ControlPlane<
-        NODE_FRAME_SIZE,
+        NODE_META_SIZE,
         NODE_ATTRIBUTES_SIZE,
-        SYNAPSE_FRAME_SIZE,
+        SYNAPSE_META_SIZE,
         SYNAPSE_ATTRIBUTES_SIZE,
     >,
 }
 
 impl<
-    const NODE_FRAME_SIZE: usize,
+    const NODE_META_SIZE: usize,
     const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_FRAME_SIZE: usize,
+    const SYNAPSE_META_SIZE: usize,
     const SYNAPSE_ATTRIBUTES_SIZE: usize,
 >
     KernelProcessor<
-        NODE_FRAME_SIZE,
+        NODE_META_SIZE,
         NODE_ATTRIBUTES_SIZE,
-        SYNAPSE_FRAME_SIZE,
+        SYNAPSE_META_SIZE,
         SYNAPSE_ATTRIBUTES_SIZE,
     >
 {
@@ -39,9 +39,9 @@ impl<
         KernelProcessor {
             control_plane_ptr: control_plane_address
                 as *const ControlPlane<
-                    NODE_FRAME_SIZE,
+                    NODE_META_SIZE,
                     NODE_ATTRIBUTES_SIZE,
-                    SYNAPSE_FRAME_SIZE,
+                    SYNAPSE_META_SIZE,
                     SYNAPSE_ATTRIBUTES_SIZE,
                 >,
         }
@@ -50,9 +50,9 @@ impl<
     pub fn acquire_graph(
         &mut self,
     ) -> &SynapticGraphReader<
-        NODE_FRAME_SIZE,
+        NODE_META_SIZE,
         NODE_ATTRIBUTES_SIZE,
-        SYNAPSE_FRAME_SIZE,
+        SYNAPSE_META_SIZE,
         SYNAPSE_ATTRIBUTES_SIZE,
     > {
         let control_plane = unsafe { &*self.control_plane_ptr };

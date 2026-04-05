@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct TopologyWriter<const SLOT_SIZE: usize> {
-    writer: TripleBufferWriter,
+    triple_buffer: TripleBufferWriter,
     allocator: SlotAllocator,
     mem_start_offset: usize,
     mem_end_offset: usize,
@@ -74,7 +74,7 @@ impl<const SLOT_SIZE: usize> TopologyWriter<SLOT_SIZE> {
         let mem_end_offset = allocator.mem_end_offset();
 
         TopologyWriter {
-            writer,
+            triple_buffer: writer,
             allocator,
             mem_start_offset,
             mem_end_offset,
@@ -92,65 +92,65 @@ impl<const SLOT_SIZE: usize> TopologyWriter<SLOT_SIZE> {
         capacity * SLOT_SIZE
     }
 
-    pub fn mem_start_offset(&self) -> usize {
-        self.mem_start_offset
-    }
+    // pub fn mem_start_offset(&self) -> usize {
+    //     self.mem_start_offset
+    // }
 
     pub fn mem_end_offset(&self) -> usize {
         self.mem_end_offset
     }
 
-    pub fn tb_start_offset(&self) -> usize {
-        self.tb_start_offset
-    }
+    // pub fn tb_start_offset(&self) -> usize {
+    //     self.tb_start_offset
+    // }
+    // 
+    // pub fn tb_end_offset(&self) -> usize {
+    //     self.tb_end_offset
+    // }
+    // 
+    // pub fn capacity(&self) -> usize {
+    //     self.capacity
+    // }
+    // 
+    // pub fn free_count(&self) -> usize {
+    //     self.allocator.free_count()
+    // }
+    // 
+    // pub fn deferred_count(&self) -> usize {
+    //     self.allocator.deferred_count()
+    // }
+    // 
+    // pub fn count(&self) -> usize {
+    //     self.allocator.alloc_count()
+    // }
+    // 
+    // pub fn utilization(&self) -> f32 {
+    //     self.allocator.utilization()
+    // }
 
-    pub fn tb_end_offset(&self) -> usize {
-        self.tb_end_offset
-    }
+    // pub fn is_active_slot(&self, slot: usize) -> bool {
+    //     self.allocator.is_active(slot)
+    // }
 
-    pub fn capacity(&self) -> usize {
-        self.capacity
-    }
-
-    pub fn free_count(&self) -> usize {
-        self.allocator.free_count()
-    }
-
-    pub fn deferred_count(&self) -> usize {
-        self.allocator.deferred_count()
-    }
-
-    pub fn count(&self) -> usize {
-        self.allocator.alloc_count()
-    }
-
-    pub fn utilization(&self) -> f32 {
-        self.allocator.utilization()
-    }
-
-    pub fn is_active_slot(&self, slot: usize) -> bool {
-        self.allocator.is_active(slot)
-    }
-
-    pub fn insert<T: IntoArray<SLOT_SIZE>>(&self, data: T) -> Option<usize> {
-        match self.allocator.alloc() {
-            Some(slot) => {
-                let data = data.to_array();
-                let base = self.resolve_writer_offset(slot);
-
-                for i in 0..SLOT_SIZE {
-                    self.writer.write(base + i, data[i])
-                }
-
-                Some(slot)
-            }
-            None => None,
-        }
-    }
-
-    pub fn defer_free(&self, slot: usize) -> Result<(), FreeListError> {
-        self.allocator.defer_free(slot)
-    }
+    // pub fn insert<T: IntoArray<SLOT_SIZE>>(&self, data: T) -> Option<usize> {
+    //     match self.allocator.alloc() {
+    //         Some(slot) => {
+    //             let data = data.to_array();
+    //             let base = self.resolve_writer_offset(slot);
+    // 
+    //             for i in 0..SLOT_SIZE {
+    //                 self.triple_buffer.write(base + i, data[i])
+    //             }
+    // 
+    //             Some(slot)
+    //         }
+    //         None => None,
+    //     }
+    // }
+    // 
+    // pub fn defer_free(&self, slot: usize) -> Result<(), FreeListError> {
+    //     self.allocator.defer_free(slot)
+    // }
 
     pub fn get(&'_ self, slot: usize) -> SlotWriter<'_, SLOT_SIZE> {
         debug_assert!(
@@ -165,7 +165,7 @@ impl<const SLOT_SIZE: usize> TopologyWriter<SLOT_SIZE> {
         );
         let start_offset = self.resolve_writer_offset(slot);
 
-        SlotWriter::new(&self.writer, start_offset)
+        SlotWriter::new(&self.triple_buffer, start_offset)
     }
 
     pub fn write_field(&'_ self, slot: usize, offset: usize, value: i32) {
@@ -180,7 +180,7 @@ impl<const SLOT_SIZE: usize> TopologyWriter<SLOT_SIZE> {
             offset
         );
         let start_offset = self.resolve_writer_offset(slot);
-        self.writer.write(start_offset + offset, value)
+        self.triple_buffer.write(start_offset + offset, value)
     }
 
     pub fn read_field(&'_ self, slot: usize, offset: usize) -> i32 {
@@ -195,7 +195,7 @@ impl<const SLOT_SIZE: usize> TopologyWriter<SLOT_SIZE> {
             offset
         );
         let start_offset = self.resolve_writer_offset(slot);
-        self.writer.read(start_offset + offset)
+        self.triple_buffer.read(start_offset + offset)
     }
 
     pub fn flush_deferred(&mut self) {
@@ -211,8 +211,8 @@ impl<const SLOT_SIZE: usize> TopologyWriter<SLOT_SIZE> {
         );
 
         self.allocator.copy_from(&source.allocator);
-        self.writer.copy_region_from(
-            &source.writer,
+        self.triple_buffer.copy_region_from(
+            &source.triple_buffer,
             source.tb_start_offset,
             self.tb_start_offset,
             Self::calculate_size_on_tb(source.capacity),

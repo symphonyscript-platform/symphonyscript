@@ -9,7 +9,6 @@ use crate::primitives::triple_buffer::{TripleBuffer, TripleBufferWriter};
 use crate::primitives::types::AtomicBuffer;
 use crate::synaptic_graph_config::SynapticGraphConfig;
 use crate::topology::node::node_chain_writer::NodeChainWriter;
-use crate::topology::node::node_data::NodeDraft;
 use crate::topology::node::node_writer::NodeWriter;
 use crate::topology::synapse::synapse_chain_writer::SynapseChainWriter;
 use crate::topology::synapse::synapse_data::SynapseDraft;
@@ -19,9 +18,9 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct SynapticGraphWriter<
-    const NODE_FRAME_SIZE: usize,
+    const NODE_META_SIZE: usize,
     const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_FRAME_SIZE: usize,
+    const SYNAPSE_META_SIZE: usize,
     const SYNAPSE_ATTRIBUTES_SIZE: usize,
 > {
     mem: AtomicBuffer,
@@ -30,16 +29,22 @@ pub struct SynapticGraphWriter<
     node_attribute_plane: AttributePlaneWriter<NODE_ATTRIBUTES_SIZE>,
     synapse_attribute_plane: AttributePlaneWriter<SYNAPSE_ATTRIBUTES_SIZE>,
     tb_writer: TripleBufferWriter,
-    node_chain_writer: NodeChainWriter,
+    node_chain_writer: NodeChainWriter<NODE_META_SIZE>,
     synapse_chain_writer: SynapseChainWriter,
 }
 
 impl<
-    const NODE_SIZE: usize,
-    const SYNAPSE_SIZE: usize,
+    const NODE_META_SIZE: usize,
     const NODE_ATTRIBUTES_SIZE: usize,
+    const SYNAPSE_META_SIZE: usize,
     const SYNAPSE_ATTRIBUTES_SIZE: usize,
-> SynapticGraphWriter<NODE_SIZE, NODE_ATTRIBUTES_SIZE, SYNAPSE_SIZE, SYNAPSE_ATTRIBUTES_SIZE>
+>
+    SynapticGraphWriter<
+        NODE_META_SIZE,
+        NODE_ATTRIBUTES_SIZE,
+        SYNAPSE_META_SIZE,
+        SYNAPSE_ATTRIBUTES_SIZE,
+    >
 {
     pub const HEADERS_SIZE: usize = 2;
 
@@ -248,12 +253,12 @@ impl<
         self.node_chain_writer.get_head_slot()
     }
 
-    pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_>> {
+    pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_, NODE_META_SIZE>> {
         self.node_chain_writer.get_head()
     }
 
-    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_> {
-        self.node_chain_writer.get(slot)
+    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_, NODE_META_SIZE> {
+        self.node_chain_writer.get_node(slot)
     }
 
     pub fn get_node_attributes(
@@ -297,16 +302,16 @@ impl<
             .write(attribute_offset, value)
     }
 
-    pub fn insert_head(&self, data: NodeDraft) -> Option<usize> {
-        self.node_chain_writer.insert_head(data)
+    pub fn insert_head(&self, kind: i32) -> Option<usize> {
+        self.node_chain_writer.insert_head(kind)
     }
 
-    pub fn insert_after(&self, prev_slot: usize, data: NodeDraft) -> Option<usize> {
-        self.node_chain_writer.insert_after(prev_slot, data)
+    pub fn insert_after(&self, prev_slot: usize, kind: i32) -> Option<usize> {
+        self.node_chain_writer.insert_after(prev_slot, kind)
     }
 
-    pub fn insert_before(&self, next_slot: usize, data: NodeDraft) -> Option<usize> {
-        self.node_chain_writer.insert_before(next_slot, data)
+    pub fn insert_before(&self, next_slot: usize, kind: i32) -> Option<usize> {
+        self.node_chain_writer.insert_before(next_slot, kind)
     }
 
     pub fn remove_node(&self, slot: usize) -> Result<(), FreeListError> {

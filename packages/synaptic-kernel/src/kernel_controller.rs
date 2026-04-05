@@ -7,7 +7,6 @@ use crate::primitives::types::AtomicBuffer;
 use crate::synaptic_graph_config::SynapticGraphConfig;
 use crate::synaptic_graph_reader::SynapticGraphReader;
 use crate::synaptic_graph_writer::SynapticGraphWriter;
-use crate::topology::node::node_data::NodeDraft;
 use crate::topology::node::node_writer::NodeWriter;
 use crate::topology::synapse::synapse_data::SynapseDraft;
 use crate::topology::synapse::synapse_writer::SynapseWriter;
@@ -15,39 +14,39 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 
 pub struct KernelController<
-    const NODE_FRAME_SIZE: usize,
+    const NODE_META_SIZE: usize,
     const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_FRAME_SIZE: usize,
+    const SYNAPSE_META_SIZE: usize,
     const SYNAPSE_ATTRIBUTES_SIZE: usize,
 > {
     control_plane: Box<
         ControlPlane<
-            NODE_FRAME_SIZE,
+            NODE_META_SIZE,
             NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_FRAME_SIZE,
+            SYNAPSE_META_SIZE,
             SYNAPSE_ATTRIBUTES_SIZE,
         >,
     >,
     active_writer: SynapticGraphWriter<
-        NODE_FRAME_SIZE,
+        NODE_META_SIZE,
         NODE_ATTRIBUTES_SIZE,
-        SYNAPSE_FRAME_SIZE,
+        SYNAPSE_META_SIZE,
         SYNAPSE_ATTRIBUTES_SIZE,
     >,
     active_reader: Box<
         SynapticGraphReader<
-            NODE_FRAME_SIZE,
+            NODE_META_SIZE,
             NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_FRAME_SIZE,
+            SYNAPSE_META_SIZE,
             SYNAPSE_ATTRIBUTES_SIZE,
         >,
     >,
     backlog: Option<
         Box<
             SynapticGraphReader<
-                NODE_FRAME_SIZE,
+                NODE_META_SIZE,
                 NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_FRAME_SIZE,
+                SYNAPSE_META_SIZE,
                 SYNAPSE_ATTRIBUTES_SIZE,
             >,
         >,
@@ -55,9 +54,9 @@ pub struct KernelController<
     pending_deletion: Option<
         Box<
             SynapticGraphReader<
-                NODE_FRAME_SIZE,
+                NODE_META_SIZE,
                 NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_FRAME_SIZE,
+                SYNAPSE_META_SIZE,
                 SYNAPSE_ATTRIBUTES_SIZE,
             >,
         >,
@@ -65,23 +64,23 @@ pub struct KernelController<
 }
 
 impl<
-    const NODE_FRAME_SIZE: usize,
+    const NODE_META_SIZE: usize,
     const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_FRAME_SIZE: usize,
+    const SYNAPSE_META_SIZE: usize,
     const SYNAPSE_ATTRIBUTES_SIZE: usize,
 >
     KernelController<
-        NODE_FRAME_SIZE,
+        NODE_META_SIZE,
         NODE_ATTRIBUTES_SIZE,
-        SYNAPSE_FRAME_SIZE,
+        SYNAPSE_META_SIZE,
         SYNAPSE_ATTRIBUTES_SIZE,
     >
 {
     pub fn new(config: SynapticGraphConfig) -> Self {
         let mem = Self::create_mem(SynapticGraphWriter::<
-            NODE_FRAME_SIZE,
+            NODE_META_SIZE,
             NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_FRAME_SIZE,
+            SYNAPSE_META_SIZE,
             SYNAPSE_ATTRIBUTES_SIZE,
         >::calculate_size_on_mem(&config));
         Self::new_from_mem(mem, config)
@@ -93,15 +92,15 @@ impl<
         let reader_box = Box::new(reader);
         let reader_ptr = reader_box.as_ref()
             as *const SynapticGraphReader<
-                NODE_FRAME_SIZE,
+                NODE_META_SIZE,
                 NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_FRAME_SIZE,
+                SYNAPSE_META_SIZE,
                 SYNAPSE_ATTRIBUTES_SIZE,
             >
             as *mut SynapticGraphReader<
-                NODE_FRAME_SIZE,
+                NODE_META_SIZE,
                 NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_FRAME_SIZE,
+                SYNAPSE_META_SIZE,
                 SYNAPSE_ATTRIBUTES_SIZE,
             >;
         let control_plane = Box::new(ControlPlane::new(reader_ptr));
@@ -118,9 +117,9 @@ impl<
     pub fn get_controller_plane_address(&self) -> usize {
         self.control_plane.as_ref()
             as *const ControlPlane<
-                NODE_FRAME_SIZE,
+                NODE_META_SIZE,
                 NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_FRAME_SIZE,
+                SYNAPSE_META_SIZE,
                 SYNAPSE_ATTRIBUTES_SIZE,
             > as usize
     }
@@ -181,11 +180,11 @@ impl<
         self.active_writer.get_head_node_slot()
     }
 
-    pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_>> {
+    pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_, NODE_META_SIZE>> {
         self.active_writer.get_head_node()
     }
 
-    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_> {
+    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_, SYNAPSE_META_SIZE> {
         self.active_writer.get_node(slot)
     }
 
@@ -210,22 +209,22 @@ impl<
             .set_node_attribute(slot, attribute_offset, value)
     }
 
-    pub fn insert_head(&self, data: NodeDraft) -> Result<usize, KernelError> {
-        match self.active_writer.insert_head(data) {
+    pub fn insert_head(&self, kind: i32) -> Result<usize, KernelError> {
+        match self.active_writer.insert_head(kind) {
             Some(slot) => Ok(slot),
             None => Err(KernelError::CapacityExhausted),
         }
     }
 
-    pub fn insert_after(&self, prev_slot: usize, data: NodeDraft) -> Result<usize, KernelError> {
-        match self.active_writer.insert_after(prev_slot, data) {
+    pub fn insert_after(&self, prev_slot: usize, kind: i32) -> Result<usize, KernelError> {
+        match self.active_writer.insert_after(prev_slot, kind) {
             Some(slot) => Ok(slot),
             None => Err(KernelError::CapacityExhausted),
         }
     }
 
-    pub fn insert_before(&self, next_slot: usize, data: NodeDraft) -> Result<usize, KernelError> {
-        match self.active_writer.insert_before(next_slot, data) {
+    pub fn insert_before(&self, next_slot: usize, kind: i32) -> Result<usize, KernelError> {
+        match self.active_writer.insert_before(next_slot, kind) {
             Some(slot) => Ok(slot),
             None => Err(KernelError::CapacityExhausted),
         }
@@ -297,9 +296,9 @@ impl<
         }
 
         let mem = Self::create_mem(SynapticGraphWriter::<
-            NODE_FRAME_SIZE,
+            NODE_META_SIZE,
             NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_FRAME_SIZE,
+            SYNAPSE_META_SIZE,
             SYNAPSE_ATTRIBUTES_SIZE,
         >::calculate_size_on_mem(&config));
         let writer = SynapticGraphWriter::new(Arc::clone(&mem), config.clone());
@@ -318,31 +317,31 @@ impl<
         &mut self,
         new_reader: Box<
             SynapticGraphReader<
-                NODE_FRAME_SIZE,
+                NODE_META_SIZE,
                 NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_FRAME_SIZE,
+                SYNAPSE_META_SIZE,
                 SYNAPSE_ATTRIBUTES_SIZE,
             >,
         >,
     ) -> Box<
         SynapticGraphReader<
-            NODE_FRAME_SIZE,
+            NODE_META_SIZE,
             NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_FRAME_SIZE,
+            SYNAPSE_META_SIZE,
             SYNAPSE_ATTRIBUTES_SIZE,
         >,
     > {
         let new_reader_ptr = new_reader.as_ref()
             as *const SynapticGraphReader<
-                NODE_FRAME_SIZE,
+                NODE_META_SIZE,
                 NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_FRAME_SIZE,
+                SYNAPSE_META_SIZE,
                 SYNAPSE_ATTRIBUTES_SIZE,
             >
             as *mut SynapticGraphReader<
-                NODE_FRAME_SIZE,
+                NODE_META_SIZE,
                 NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_FRAME_SIZE,
+                SYNAPSE_META_SIZE,
                 SYNAPSE_ATTRIBUTES_SIZE,
             >;
         let old_reader = std::mem::replace(&mut self.active_reader, new_reader);

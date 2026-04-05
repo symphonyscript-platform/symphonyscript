@@ -15,7 +15,7 @@ impl<const SLOT_SIZE: usize> TopologyReader<SLOT_SIZE> {
 
         debug_assert!(
             tb_end_offset <= reader.buffer_capacity(),
-            "StructuralReader::new | range [{}..{}] exceeds buffer capacity {}",
+            "TopologyReader::new | range [{}..{}] exceeds buffer capacity {}",
             tb_start_offset,
             capacity * SLOT_SIZE,
             reader.buffer_capacity(),
@@ -52,7 +52,7 @@ impl<const SLOT_SIZE: usize> TopologyReader<SLOT_SIZE> {
     pub fn get(&'_ self, slot: usize) -> SlotReader<'_, SLOT_SIZE> {
         debug_assert!(
             slot > 0 && slot <= self.capacity(),
-            "StructuralReader.get | slot {} out of bounds",
+            "TopologyReader.get | slot {} out of bounds",
             slot
         );
         let start_offset = self.resolve_reader_offset(slot);
@@ -63,12 +63,12 @@ impl<const SLOT_SIZE: usize> TopologyReader<SLOT_SIZE> {
     pub fn read_field(&'_ self, slot: usize, offset: usize) -> i32 {
         debug_assert!(
             slot > 0 && slot <= self.capacity(),
-            "StructuralReader.read_field | slot {} out of bounds",
+            "TopologyReader.read_field | slot {} out of bounds",
             slot
         );
         debug_assert!(
             offset < SLOT_SIZE,
-            "StructuralReader.read_field | offset {} out of bounds",
+            "TopologyReader.read_field | offset {} out of bounds",
             offset
         );
         let start_offset = self.resolve_reader_offset(slot);

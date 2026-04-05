@@ -1,15 +1,15 @@
 use crate::constants::NODE_SIZE;
 use crate::errors::free_list_error::FreeListError;
+use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::triple_buffer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
-use crate::topology::node::node_data::{NodeData, NodeDraft};
 use crate::topology::node::node_writer::NodeWriter;
-use crate::topology::topology_writer::TopologyWriter;
+use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct NodeChainWriter {
+pub struct NodeChainWriter<const META_SIZE: usize> {
     triple_buffer: TripleBufferWriter,
-    topology: TopologyWriter<NODE_SIZE>,
+    allocator: SlotAllocator,
     mem_start_offset: usize,
     mem_end_offset: usize,
     tb_start_offset: usize,
@@ -17,7 +17,7 @@ pub struct NodeChainWriter {
     capacity: usize,
 }
 
-impl NodeChainWriter {
+impl<const META_SIZE: usize> NodeChainWriter<META_SIZE> {
     pub fn new(
         mem: AtomicBuffer,
         buffer: TripleBufferWriter,
@@ -66,16 +66,9 @@ impl NodeChainWriter {
             tb_start_offset,
         );
 
-        let topology = TopologyWriter::<NODE_SIZE>::create(
-            mem,
-            triple_buffer.clone(),
-            mem_start_offset,
-            tb_start_offset + 1,
-            capacity,
-            bind,
-        );
-        let mem_end_offset = topology.mem_end_offset();
-        let tb_end_offset = topology.tb_end_offset();
+        let allocator = SlotAllocator::create(Arc::clone(&mem), mem_start_offset, capacity, bind);
+        let mem_end_offset = allocator.mem_end_offset();
+        let tb_end_offset = tb_start_offset + Self::calculate_size_on_tb(capacity);
 
         debug_assert!(
             tb_end_offset <= triple_buffer.buffer_capacity(),
@@ -85,7 +78,7 @@ impl NodeChainWriter {
 
         NodeChainWriter {
             triple_buffer,
-            topology,
+            allocator,
             mem_start_offset,
             mem_end_offset,
             tb_start_offset,
@@ -95,11 +88,15 @@ impl NodeChainWriter {
     }
 
     pub fn calculate_size_on_mem(capacity: usize) -> usize {
-        TopologyWriter::<NODE_SIZE>::calculate_size_on_mem(capacity)
+        SlotAllocator::calculate_size_on_mem(capacity)
     }
 
     pub fn calculate_size_on_tb(capacity: usize) -> usize {
-        1 + TopologyWriter::<NODE_SIZE>::calculate_size_on_tb(capacity)
+        1 + capacity * (NODE_SIZE + META_SIZE)
+    }
+
+    pub fn len(&self) -> usize {
+        self.allocator.alloc_count()
     }
 
     pub fn mem_start_offset(&self) -> usize {
@@ -122,139 +119,125 @@ impl NodeChainWriter {
         self.capacity
     }
 
-    pub fn count(&self) -> usize {
-        self.topology.count()
-    }
-
     pub fn utilization(&self) -> f32 {
-        self.topology.utilization()
+        self.allocator.utilization()
     }
 
     pub fn is_active_slot(&self, slot: usize) -> bool {
-        self.topology.is_active_slot(slot)
+        self.allocator.is_active(slot)
     }
 
     pub fn get_head_slot(&self) -> usize {
         self.triple_buffer.read(self.tb_start_offset) as usize
     }
 
-    pub fn get_head(&'_ self) -> Option<NodeWriter<'_>> {
+    pub fn get_head(&'_ self) -> Option<NodeWriter<'_, META_SIZE>> {
         let head_slot = self.get_head_slot();
 
         if head_slot == 0 {
             return None;
         }
 
-        Some(self.get(head_slot))
+        Some(self.get_node(head_slot))
     }
 
-    pub fn get(&'_ self, slot: usize) -> NodeWriter<'_> {
-        NodeWriter(self.topology.get(slot))
+    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_, META_SIZE> {
+        debug_assert!(
+            self.allocator.is_active(slot),
+            "NodeChainWriter.get | attempted to read inactive slot {}",
+            slot
+        );
+        let start_offset = self.resolve_node_start_offset(slot);
+        NodeWriter::new(&self.triple_buffer, start_offset)
     }
 
-    pub fn insert_head(&self, data: NodeDraft) -> Option<usize> {
+    pub fn insert_head(&self, kind: i32) -> Option<usize> {
         let current_head_slot = self.triple_buffer.read(self.tb_start_offset);
-        let result = self.topology.insert(NodeData {
-            kind: data.kind,
-            prev_ptr: 0,
-            next_ptr: current_head_slot as usize,
-            outgoing_synapse_head: 0,
-            outgoing_synapse_tail: 0,
-            incoming_synapse_head: 0,
-            incoming_synapse_tail: 0,
-        });
+        let result = self.insert_orphaned(kind, current_head_slot as usize, 0);
 
-        match result {
-            Some(slot) => {
-                if current_head_slot != 0 {
-                    let current_head = self.get(current_head_slot as usize);
-                    current_head.set_prev_ptr(slot);
-                }
-
-                self.triple_buffer.write(self.tb_start_offset, slot as i32);
-                Some(slot)
-            }
-            None => None,
+        if result.is_none() {
+            return None;
         }
+
+        let new_slot = result.unwrap();
+
+        if current_head_slot != 0 {
+            self.get_node(current_head_slot as usize)
+                .set_prev_ptr(new_slot);
+        }
+
+        self.triple_buffer
+            .write(self.tb_start_offset, new_slot as i32);
+
+        Some(new_slot)
     }
 
-    pub fn insert_after(&self, prev_slot: usize, data: NodeDraft) -> Option<usize> {
-        let prev = self.get(prev_slot);
+    pub fn insert_after(&self, prev_slot: usize, kind: i32) -> Option<usize> {
+        let prev = self.get_node(prev_slot);
         let prev_next_slot = prev.get_next_ptr();
-        let result = self.topology.insert(NodeData {
-            kind: data.kind,
-            prev_ptr: prev_slot,
-            next_ptr: prev_next_slot,
-            outgoing_synapse_head: 0,
-            outgoing_synapse_tail: 0,
-            incoming_synapse_head: 0,
-            incoming_synapse_tail: 0,
-        });
+        let result = self.insert_orphaned(kind, prev_next_slot, prev_slot);
 
-        match result {
-            Some(new_slot) => {
-                prev.set_next_ptr(new_slot);
-                if prev_next_slot != 0 {
-                    let prev_next = self.get(prev_next_slot);
-                    prev_next.set_prev_ptr(new_slot);
-                }
-                Some(new_slot)
-            }
-            None => None,
+        if result.is_none() {
+            return None;
         }
+
+        let new_slot = result.unwrap();
+
+        prev.set_next_ptr(new_slot);
+
+        if prev_next_slot != 0 {
+            self.get_node(prev_next_slot).set_prev_ptr(new_slot);
+        }
+
+        Some(new_slot)
     }
 
-    pub fn insert_before(&self, next_slot: usize, data: NodeDraft) -> Option<usize> {
-        let next = self.get(next_slot);
+    pub fn insert_before(&self, next_slot: usize, kind: i32) -> Option<usize> {
+        let next = self.get_node(next_slot);
         let next_prev_slot = next.get_prev_ptr();
-        let result = self.topology.insert(NodeData {
-            kind: data.kind,
-            prev_ptr: next_prev_slot,
-            next_ptr: next_slot,
-            outgoing_synapse_head: 0,
-            outgoing_synapse_tail: 0,
-            incoming_synapse_head: 0,
-            incoming_synapse_tail: 0,
-        });
+        let result = self.insert_orphaned(kind, next_slot, next_prev_slot);
 
-        match result {
-            Some(new_slot) => {
-                next.set_prev_ptr(new_slot);
-                if next_prev_slot != 0 {
-                    let next_prev = self.get(next_prev_slot);
-                    next_prev.set_next_ptr(new_slot);
-                }
-                Some(new_slot)
-            }
-            None => None,
+        if result.is_none() {
+            return None;
         }
+
+        let new_slot = result.unwrap();
+
+        next.set_prev_ptr(new_slot);
+
+        if next_prev_slot != 0 {
+            self.get_node(next_prev_slot).set_next_ptr(new_slot);
+        }
+
+        Some(new_slot)
     }
 
     pub fn remove(&self, slot: usize) -> Result<(), FreeListError> {
-        let node = self.get(slot);
+        let node = self.get_node(slot);
         let prev_slot = node.get_prev_ptr();
         let next_slot = node.get_next_ptr();
 
-        self.topology.defer_free(slot)?;
+        self.allocator.defer_free(slot)?;
 
         if prev_slot != 0 {
-            self.get(prev_slot).set_next_ptr(next_slot);
+            self.get_node(prev_slot).set_next_ptr(next_slot);
         } else {
-            self.triple_buffer.write(self.tb_start_offset, next_slot as i32)
+            self.triple_buffer
+                .write(self.tb_start_offset, next_slot as i32)
         }
 
         if next_slot != 0 {
-            self.get(next_slot).set_prev_ptr(prev_slot);
+            self.get_node(next_slot).set_prev_ptr(prev_slot);
         }
 
         Ok(())
     }
 
-    pub fn flush_deferred(&mut self) {
-        self.topology.flush_deferred()
+    pub fn flush_deferred(&self) {
+        self.allocator.flush_deferred()
     }
 
-    pub fn copy_from(&self, source: &NodeChainWriter) {
+    pub fn copy_from(&self, source: &Self) {
         debug_assert!(
             source.capacity <= self.capacity,
             "NodeChainWriter.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
@@ -262,13 +245,38 @@ impl NodeChainWriter {
             self.capacity,
         );
 
+        self.allocator.copy_from(&source.allocator);
         self.triple_buffer.copy_region_from(
             &source.triple_buffer,
             source.tb_start_offset,
             self.tb_start_offset,
-            1,
+            Self::calculate_size_on_tb(source.capacity),
         );
-        self.topology.copy_from(&source.topology);
+    }
+
+    fn insert_orphaned(&self, kind: i32, next_ptr: usize, prev_ptr: usize) -> Option<usize> {
+        let result = self.allocator.alloc();
+
+        if result.is_none() {
+            return None;
+        }
+
+        let slot = result.unwrap();
+        let node = self.get_node(slot);
+
+        node.set_kind(kind);
+        node.set_next_ptr(next_ptr);
+        node.set_prev_ptr(prev_ptr);
+        node.set_outgoing_synapse_head(0);
+        node.set_outgoing_synapse_tail(0);
+        node.set_incoming_synapse_head(0);
+        node.set_incoming_synapse_tail(0);
+
+        Some(slot)
+    }
+
+    fn resolve_node_start_offset(&self, slot: usize) -> usize {
+        self.tb_start_offset + 1 + (slot - 1) * (NODE_SIZE + META_SIZE)
     }
 }
 
@@ -279,7 +287,6 @@ mod tests {
     use crate::primitives::types::AtomicBuffer;
     use crate::topology::node::node_chain_reader::NodeChainReader;
     use crate::topology::node::node_chain_writer::NodeChainWriter;
-    use crate::topology::node::node_data::NodeDraft;
     use std::sync::atomic::AtomicI32;
     use std::sync::Arc;
 
@@ -317,10 +324,6 @@ mod tests {
         }
     }
 
-    fn make_draft(opcode: i32) -> NodeDraft {
-        NodeDraft { kind: opcode }
-    }
-
     // ============ NodeWriter / NodeReader: field accessors ============
 
     #[test]
@@ -328,10 +331,10 @@ mod tests {
         let h = setup();
         let chain = NodeChainWriter::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
 
-        let slot = chain.insert_head(make_draft(5)).unwrap();
-        let node = chain.get(slot);
+        let slot = chain.insert_head(5).unwrap();
+        let node = chain.get_node(slot);
 
-        // opcode is bit-packed: upper 8 bits of field 0
+        // kind is bit-packed: upper 8 bits of field 0
         assert_eq!(node.get_kind(), 5);
 
         node.set_outgoing_synapse_head(10);
@@ -348,21 +351,17 @@ mod tests {
     }
 
     #[test]
-    fn node_writer_opcode_bitmask_preserves_lower_bits() {
+    fn node_writer_kind_bitmask_preserves_lower_bits() {
         let h = setup();
         let chain = NodeChainWriter::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
 
-        let slot = chain.insert_head(make_draft(0x7F)).unwrap();
-        let node = chain.get(slot);
+        let slot = chain.insert_head(0x7F).unwrap();
+        let node = chain.get_node(slot);
 
         // mutate whatever shares field 0's lower 24 bits
         node.set_prev_ptr(0x00FFFFFF);
-        let raw = node.0.read(0);
-        assert_eq!(
-            raw >> 24,
-            0x7F,
-            "opcode preserved after mutable field write"
-        );
+        let raw = node.get_kind();
+        assert_eq!(raw, 0x7F, "kind preserved after mutable field write");
     }
 
     #[test]
@@ -372,8 +371,8 @@ mod tests {
         let slot = {
             let chain =
                 NodeChainWriter::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
-            let slot = chain.insert_head(NodeDraft { kind: 12 }).unwrap();
-            let node = chain.get(slot);
+            let slot = chain.insert_head(12).unwrap();
+            let node = chain.get_node(slot);
             node.set_outgoing_synapse_head(99);
             slot
         };
@@ -394,22 +393,22 @@ mod tests {
         let h = setup();
         let chain = NodeChainWriter::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
 
-        let a = chain.insert_head(make_draft(1)).unwrap();
-        let b = chain.insert_head(make_draft(2)).unwrap();
-        let c = chain.insert_head(make_draft(3)).unwrap();
+        let a = chain.insert_head(1).unwrap();
+        let b = chain.insert_head(2).unwrap();
+        let c = chain.insert_head(3).unwrap();
         // chain: c -> b -> a
 
         // set custom fields on a
-        let node_a = chain.get(a);
+        let node_a = chain.get_node(a);
         node_a.set_outgoing_synapse_head(88);
 
         // mutate siblings: insert between c and b, then remove b
-        let d = chain.insert_after(c, make_draft(4)).unwrap();
+        let d = chain.insert_after(c, 4).unwrap();
         chain.remove(b).unwrap();
         // chain: c -> d -> a
 
         // a's data must be completely intact
-        let node_a = chain.get(a);
+        let node_a = chain.get_node(a);
         assert_eq!(node_a.get_kind(), 1);
         assert_eq!(node_a.get_outgoing_synapse_head(), 88);
         // a's prev updated from b to d (that's structural, expected)

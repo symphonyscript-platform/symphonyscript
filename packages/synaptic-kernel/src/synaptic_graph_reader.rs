@@ -14,9 +14,9 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct SynapticGraphReader<
-    const NODE_FRAME_SIZE: usize,
+    const NODE_META_SIZE: usize,
     const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_FRAME_SIZE: usize,
+    const SYNAPSE_META_SIZE: usize,
     const SYNAPSE_ATTRIBUTES_SIZE: usize,
 > {
     mem_metadata_plane: MemMetadataReader,
@@ -29,23 +29,23 @@ pub struct SynapticGraphReader<
 }
 
 impl<
-    const NODE_FRAME_SIZE: usize,
+    const NODE_META_SIZE: usize,
     const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_FRAME_SIZE: usize,
+    const SYNAPSE_META_SIZE: usize,
     const SYNAPSE_ATTRIBUTES_SIZE: usize,
 >
     SynapticGraphReader<
-        NODE_FRAME_SIZE,
+        NODE_META_SIZE,
         NODE_ATTRIBUTES_SIZE,
-        SYNAPSE_FRAME_SIZE,
+        SYNAPSE_META_SIZE,
         SYNAPSE_ATTRIBUTES_SIZE,
     >
 {
     pub fn bind(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
         let mem_start_offset = SynapticGraphWriter::<
-            NODE_FRAME_SIZE,
+            NODE_META_SIZE,
             NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_FRAME_SIZE,
+            SYNAPSE_META_SIZE,
             SYNAPSE_ATTRIBUTES_SIZE,
         >::HEADERS_SIZE;
         let tb_start_offset = 0;
@@ -63,9 +63,9 @@ impl<
             config.synapse_capacity,
         );
         let tb_size = SynapticGraphWriter::<
-            NODE_FRAME_SIZE,
+            NODE_META_SIZE,
             NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_FRAME_SIZE,
+            SYNAPSE_META_SIZE,
             SYNAPSE_ATTRIBUTES_SIZE,
         >::calculate_size_on_tb(&config);
         let tb_reader = TripleBuffer::bind_reader(
