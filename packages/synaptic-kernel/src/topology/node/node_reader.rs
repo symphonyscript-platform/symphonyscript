@@ -26,7 +26,7 @@ impl<'a, const META_SIZE: usize> NodeReader<'a, META_SIZE> {
     }
 
     pub fn get_kind(&self) -> i32 {
-        self.core.read(0) >> 24
+        (self.core.read(0) as u32 >> 24) as i32
     }
 
     pub fn get_next_ptr(&self) -> usize {
