@@ -24,8 +24,8 @@ pub struct SynapticGraphReader<
     node_attribute_plane: AttributePlaneReader<NODE_ATTRIBUTES_SIZE>,
     synapse_attribute_plane: AttributePlaneReader<SYNAPSE_ATTRIBUTES_SIZE>,
     tb_reader: TripleBufferReader,
-    node_chain_reader: NodeChainReader,
-    synapse_chain_reader: SynapseChainReader,
+    node_chain_reader: NodeChainReader<NODE_META_SIZE>,
+    synapse_chain_reader: SynapseChainReader<NODE_META_SIZE, SYNAPSE_META_SIZE>,
 }
 
 impl<
@@ -113,12 +113,12 @@ impl<
         self.tb_metadata_plane.read(offset)
     }
 
-    pub fn get_head_node(&'_ self) -> Option<NodeReader<'_>> {
+    pub fn get_head_node(&'_ self) -> Option<NodeReader<'_, NODE_META_SIZE>> {
         self.node_chain_reader.get_head()
     }
 
-    pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_> {
-        self.node_chain_reader.get(slot)
+    pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_, NODE_META_SIZE> {
+        self.node_chain_reader.get_node(slot)
     }
 
     pub fn get_node_attributes(
@@ -132,7 +132,7 @@ impl<
         self.node_attribute_plane.get(slot).read(attribute_offset)
     }
 
-    pub fn get_synapse(&'_ self, slot: usize) -> SynapseReader<'_> {
+    pub fn get_synapse(&'_ self, slot: usize) -> SynapseReader<'_, SYNAPSE_META_SIZE> {
         self.synapse_chain_reader.get(slot)
     }
 
