@@ -56,7 +56,7 @@ fn bench_alloc_free_cycle(c: &mut Criterion) {
                 group.bench_function(BenchmarkId::new("SLOT_SIZE", 1), |b| {
                     b.iter(|| {
                         let slot = fl.alloc().unwrap();
-                        black_box(fl.free(slot));
+                        let _ = black_box(fl.free(slot));
                     });
                 });
             }
@@ -66,7 +66,7 @@ fn bench_alloc_free_cycle(c: &mut Criterion) {
                 group.bench_function(BenchmarkId::new("SLOT_SIZE", 4), |b| {
                     b.iter(|| {
                         let slot = fl.alloc().unwrap();
-                        black_box(fl.free(slot));
+                        let _ = black_box(fl.free(slot));
                     });
                 });
             }
@@ -76,7 +76,7 @@ fn bench_alloc_free_cycle(c: &mut Criterion) {
                 group.bench_function(BenchmarkId::new("SLOT_SIZE", 16), |b| {
                     b.iter(|| {
                         let slot = fl.alloc().unwrap();
-                        black_box(fl.free(slot));
+                        let _ = black_box(fl.free(slot));
                     });
                 });
             }
@@ -95,7 +95,7 @@ fn bench_alloc_write_free(c: &mut Criterion) {
         b.iter(|| {
             let slot = fl.alloc().unwrap();
             slot.write_all(black_box([1, 2, 3, 4]));
-            black_box(fl.free(slot));
+            let _ = black_box(fl.free(slot));
         });
     });
 }

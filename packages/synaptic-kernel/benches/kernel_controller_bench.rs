@@ -2,23 +2,23 @@ use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criteri
 use synaptic_kernel::control_plane::ControlPlane;
 use synaptic_kernel::kernel_controller::KernelController;
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
+const NODE_META: usize = 8;
+const NODE_ATTR: usize = 16;
+const SYNAPSE_META: usize = 8;
+const SYNAPSE_ATTR: usize = 16;
 
+type TestKernel = KernelController<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 fn config(cap: usize) -> SynapticGraphConfig {
     SynapticGraphConfig {
         node_capacity: cap,
         synapse_capacity: cap,
+        mem_metadata_size: 1,
+        tb_metadata_size: 1,
     }
 }
 
-fn draft(opcode: i32) -> NodeDraft {
-    NodeDraft {
-        kind: opcode,
-        base_tick: 0,
-    }
-}
-
-fn syn(opcode: i32) -> SynapseDraft {
-    SynapseDraft { opcode }
+fn new_controller(cfg: SynapticGraphConfig) -> TestKernel {
+    KernelController::new(cfg)
 }
 
 // ============ insert_head latency ============
@@ -26,10 +26,10 @@ fn syn(opcode: i32) -> SynapseDraft {
 fn bench_insert_head(c: &mut Criterion) {
     c.bench_function("Kernel/insert_head", |b| {
         b.iter_custom(|iters| {
-            let mut controller = KernelController::new(config(iters as usize + 16));
+            let mut controller = new_controller(config(iters as usize + 16));
             let start = std::time::Instant::now();
             for i in 0..iters {
-                controller.insert_head(draft(black_box(i as i32))).unwrap();
+                controller.insert_head(black_box(i as i32)).unwrap();
             }
             start.elapsed()
         });
@@ -41,12 +41,12 @@ fn bench_insert_head(c: &mut Criterion) {
 fn bench_insert_after(c: &mut Criterion) {
     c.bench_function("Kernel/insert_after", |b| {
         b.iter_custom(|iters| {
-            let mut controller = KernelController::new(config(iters as usize + 16));
-            let anchor = controller.insert_head(draft(0)).unwrap();
+            let mut controller = new_controller(config(iters as usize + 16));
+            let anchor = controller.insert_head(0).unwrap();
             let start = std::time::Instant::now();
             for i in 0..iters {
                 controller
-                    .insert_after(anchor, draft(black_box(i as i32)))
+                    .insert_after(anchor, black_box(i as i32))
                     .unwrap();
             }
             start.elapsed()
@@ -59,13 +59,13 @@ fn bench_insert_after(c: &mut Criterion) {
 fn bench_connect_disconnect(c: &mut Criterion) {
     c.bench_function("Kernel/connect_disconnect_cycle", |b| {
         b.iter_custom(|iters| {
-            let mut controller = KernelController::new(config(1024));
-            let n1 = controller.insert_head(draft(1)).unwrap();
-            let n2 = controller.insert_after(n1, draft(2)).unwrap();
+            let mut controller = new_controller(config(1024));
+            let n1 = controller.insert_head(1).unwrap();
+            let n2 = controller.insert_after(n1, 2).unwrap();
 
             let start = std::time::Instant::now();
             for i in 0..iters {
-                let s = controller.connect(n1, n2, syn(1)).unwrap();
+                let s = controller.connect(n1, n2, 1).unwrap();
                 controller.disconnect(s).unwrap();
                 if i % 512 == 511 {
                     controller.publish(); // flushes deferred frees
@@ -79,7 +79,7 @@ fn bench_connect_disconnect(c: &mut Criterion) {
 // ============ publish latency (empty) ============
 
 fn bench_publish_empty(c: &mut Criterion) {
-    let mut controller = KernelController::new(config(16));
+    let mut controller = new_controller(config(16));
     c.bench_function("Kernel/publish_empty", |b| {
         b.iter(|| {
             controller.publish();
@@ -100,10 +100,10 @@ fn bench_publish_after_mutations(c: &mut Criterion) {
                 b.iter_custom(|iters| {
                     let mut total = std::time::Duration::ZERO;
                     for _ in 0..iters {
-                        let mut controller = KernelController::new(config(n + 16));
-                        let head = controller.insert_head(draft(0)).unwrap();
+                        let mut controller = new_controller(config(n + 16));
+                        let head = controller.insert_head(0).unwrap();
                         for i in 1..n {
-                            controller.insert_after(head, draft(i as i32)).unwrap();
+                            controller.insert_after(head, i as i32).unwrap();
                         }
                         let start = std::time::Instant::now();
                         controller.publish();
@@ -122,21 +122,23 @@ fn bench_publish_after_mutations(c: &mut Criterion) {
 fn bench_publish_swap_cycle(c: &mut Criterion) {
     c.bench_function("Kernel/publish_swap_cycle", |b| {
         b.iter_custom(|iters| {
-            let mut controller = KernelController::new(config(64));
+            let mut controller = new_controller(config(64));
             let cp_addr = controller.get_controller_plane_address();
-            let cp_ptr = cp_addr as *const ControlPlane;
+            let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
             // Seed data
-            let n1 = controller.insert_head(draft(1)).unwrap();
-            controller.insert_after(n1, draft(2)).unwrap();
+            let n1 = controller.insert_head(1).unwrap();
+            controller.insert_after(n1, 2).unwrap();
             controller.publish();
 
             let start = std::time::Instant::now();
             for i in 0..iters {
                 controller.set_node_attribute(n1, 0, black_box(i as i32));
                 controller.publish();
-                let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
-                let reader = unsafe { &mut *reader_ptr };
+                let reader = unsafe {
+                    let reader_ptr = (*cp_ptr).get_shared_graph_ptr();
+                    &mut *reader_ptr
+                };
                 reader.swap();
             }
             start.elapsed()
@@ -147,8 +149,8 @@ fn bench_publish_swap_cycle(c: &mut Criterion) {
 // ============ node attribute write latency ============
 
 fn bench_set_node_attribute(c: &mut Criterion) {
-    let controller = KernelController::new(config(16));
-    let n1 = controller.insert_head(draft(1)).unwrap();
+    let mut controller = new_controller(config(16));
+    let n1 = controller.insert_head(1).unwrap();
 
     c.bench_function("Kernel/set_node_attribute", |b| {
         b.iter(|| {
@@ -160,8 +162,8 @@ fn bench_set_node_attribute(c: &mut Criterion) {
 // ============ node attribute read latency ============
 
 fn bench_get_node_attribute(c: &mut Criterion) {
-    let controller = KernelController::new(config(16));
-    let n1 = controller.insert_head(draft(1)).unwrap();
+    let mut controller = new_controller(config(16));
+    let n1 = controller.insert_head(1).unwrap();
     controller.set_node_attribute(n1, 0, 42);
 
     c.bench_function("Kernel/get_node_attribute", |b| {
@@ -181,18 +183,20 @@ fn bench_audio_traversal(c: &mut Criterion) {
             BenchmarkId::from_parameter(chain_size),
             &chain_size,
             |b, &size| {
-                let mut controller = KernelController::new(config(size + 16));
+                let mut controller = new_controller(config(size + 16));
                 let cp_addr = controller.get_controller_plane_address();
-                let cp_ptr = cp_addr as *const ControlPlane;
+                let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
-                let mut prev = controller.insert_head(draft(0)).unwrap();
+                let mut prev = controller.insert_head(0).unwrap();
                 for i in 1..size {
-                    prev = controller.insert_after(prev, draft(i as i32)).unwrap();
+                    prev = controller.insert_after(prev, i as i32).unwrap();
                 }
                 controller.publish();
 
-                let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
-                let reader = unsafe { &mut *reader_ptr };
+                let reader = unsafe {
+                    let reader_ptr = (*cp_ptr).get_shared_graph_ptr();
+                    &mut *reader_ptr
+                };
                 reader.swap();
 
                 b.iter(|| {
@@ -228,7 +232,7 @@ fn bench_grow_empty(c: &mut Criterion) {
                 b.iter_custom(|iters| {
                     let mut total = std::time::Duration::ZERO;
                     for _ in 0..iters {
-                        let mut controller = KernelController::new(config(from_cap));
+                        let mut controller = new_controller(config(from_cap));
                         let start = std::time::Instant::now();
                         controller.grow(config(to_cap)).unwrap();
                         total += start.elapsed();
@@ -254,17 +258,17 @@ fn bench_grow_loaded(c: &mut Criterion) {
                 b.iter_custom(|iters| {
                     let mut total = std::time::Duration::ZERO;
                     for _ in 0..iters {
-                        let mut controller = KernelController::new(config(from_cap));
-                        let head = controller.insert_head(draft(0)).unwrap();
+                        let mut controller = new_controller(config(from_cap));
+                        let head = controller.insert_head(0).unwrap();
                         let mut prev = head;
                         for i in 1..fill_count {
-                            prev = controller.insert_after(prev, draft(i as i32)).unwrap();
+                            prev = controller.insert_after(prev, i as i32).unwrap();
                         }
                         // Connect some synapses from head to next
                         let next_slot = controller.get_node(head).get_next_ptr();
                         if next_slot != 0 {
                             for i in 0..fill_count.min(from_cap - fill_count - 1) {
-                                controller.connect(head, next_slot, syn(i as i32)).unwrap();
+                                controller.connect(head, next_slot, i as i32).unwrap();
                             }
                         }
                         controller.publish();
@@ -288,24 +292,28 @@ fn bench_grow_publish_swap(c: &mut Criterion) {
         b.iter_custom(|iters| {
             let mut total = std::time::Duration::ZERO;
             for _ in 0..iters {
-                let mut controller = KernelController::new(config(32));
+                let mut controller = new_controller(config(32));
                 let cp_addr = controller.get_controller_plane_address();
-                let cp_ptr = cp_addr as *const ControlPlane;
+                let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
-                let n1 = controller.insert_head(draft(1)).unwrap();
-                controller.insert_after(n1, draft(2)).unwrap();
+                let n1 = controller.insert_head(1).unwrap();
+                controller.insert_after(n1, 2).unwrap();
                 controller.publish();
 
-                let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
-                let reader = unsafe { &mut *reader_ptr };
+                let reader = unsafe {
+                    let reader_ptr = (*cp_ptr).get_shared_graph_ptr();
+                    &mut *reader_ptr
+                };
                 reader.swap();
 
                 let start = std::time::Instant::now();
                 controller.grow(config(64)).unwrap();
                 controller.publish();
                 // Re-load pointer after grow
-                let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
-                let reader = unsafe { &mut *reader_ptr };
+                let reader = unsafe {
+                    let reader_ptr = (*cp_ptr).get_shared_graph_ptr();
+                    &mut *reader_ptr
+                };
                 reader.swap();
                 // Traverse to verify
                 let mut current = reader.get_head_node();
@@ -331,8 +339,8 @@ fn bench_consecutive_grows(c: &mut Criterion) {
         b.iter_custom(|iters| {
             let mut total = std::time::Duration::ZERO;
             for _ in 0..iters {
-                let mut controller = KernelController::new(config(16));
-                controller.insert_head(draft(1)).unwrap();
+                let mut controller = new_controller(config(16));
+                controller.insert_head(1).unwrap();
 
                 let start = std::time::Instant::now();
                 controller.grow(config(32)).unwrap();
@@ -355,22 +363,23 @@ fn bench_consecutive_grows(c: &mut Criterion) {
 fn bench_full_mutation_cycle(c: &mut Criterion) {
     c.bench_function("Kernel/full_cycle_insert_connect_publish_swap", |b| {
         b.iter_custom(|iters| {
-            let mut controller = KernelController::new(config(iters as usize * 2 + 16));
+            let mut controller = new_controller(config(iters as usize * 2 + 16));
             let cp_addr = controller.get_controller_plane_address();
-            let cp_ptr = cp_addr as *const ControlPlane;
+            let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
             let start = std::time::Instant::now();
             for i in 0..iters {
-                let n1 = controller.insert_head(draft(i as i32)).unwrap();
-                let n2 = controller.insert_head(draft((i + 1000) as i32)).unwrap();
-                controller.connect(n1, n2, syn(i as i32)).unwrap();
+                let n1 = controller.insert_head(i as i32).unwrap();
+                let n2 = controller.insert_head((i + 1000) as i32).unwrap();
+                controller.connect(n1, n2, i as i32).unwrap();
                 controller.set_node_attribute(n1, 0, i as i32);
 
                 if i % 64 == 63 {
                     controller.publish();
-                    let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
-                    let reader = unsafe { &mut *reader_ptr };
-                    reader.swap();
+                    unsafe {
+                        let reader_ptr = (*cp_ptr).get_shared_graph_ptr();
+                        (&mut *reader_ptr).swap();
+                    }
                 }
             }
             controller.publish();

@@ -1,7 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use synaptic_kernel::constants::{NODE_SLOT_SIZE, SYNAPSE_SIZE};
+use synaptic_kernel::constants::NODE_SIZE;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::primitives::triple_buffer::TripleBuffer;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
@@ -39,19 +39,27 @@ fn setup() -> Harness {
     Harness { mem, writer, reader }
 }
 
+const NODE_META: usize = 8;
+const SYNAPSE_META: usize = 8;
+
 fn synapse_tb_offset() -> usize {
-    NODE_TB_OFFSET + 1 + NODE_CAPACITY * NODE_SLOT_SIZE
+    NODE_TB_OFFSET + 1 + NODE_CAPACITY * (NODE_SIZE + NODE_META)
 }
 
-fn make_chains(h: &Harness) -> (NodeChainWriter, SynapseChainWriter) {
-    let node_chain = NodeChainWriter::new(
+fn make_chains(
+    h: &Harness,
+) -> (
+    NodeChainWriter<NODE_META>,
+    SynapseChainWriter<NODE_META, SYNAPSE_META>,
+) {
+    let node_chain = NodeChainWriter::<NODE_META>::new(
         Arc::clone(&h.mem),
         h.writer.clone(),
         NODE_FL_START,
         NODE_TB_OFFSET,
         NODE_CAPACITY,
     );
-    let synapse_chain = SynapseChainWriter::new(
+    let synapse_chain = SynapseChainWriter::<NODE_META, SYNAPSE_META>::new(
         Arc::clone(&h.mem),
         h.writer.clone(),
         node_chain.clone(),
@@ -69,13 +77,13 @@ fn bench_connect_single(c: &mut Criterion) {
         b.iter_custom(|iters| {
             let h = setup();
             let (node_chain, mut synapse_chain) = make_chains(&h);
-            let src = node_chain.insert_head(NodeDraft { kind: 1, base_tick: 0 }).unwrap();
-            let tgt = node_chain.insert_head(NodeDraft { kind: 2, base_tick: 0 }).unwrap();
+            let src = node_chain.insert_head(1).unwrap();
+            let tgt = node_chain.insert_head(2).unwrap();
 
             let start = std::time::Instant::now();
             for i in 0..iters {
                 let syn = synapse_chain.connect(
-                    black_box(src), black_box(tgt), SynapseDraft { opcode: black_box(10) }
+                    black_box(src), black_box(tgt), black_box(10)
                 ).unwrap();
                 synapse_chain.disconnect(syn).unwrap();
                 if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
@@ -94,12 +102,12 @@ fn bench_disconnect_single(c: &mut Criterion) {
         b.iter_custom(|iters| {
             let h = setup();
             let (node_chain, mut synapse_chain) = make_chains(&h);
-            let src = node_chain.insert_head(NodeDraft { kind: 1, base_tick: 0 }).unwrap();
-            let tgt = node_chain.insert_head(NodeDraft { kind: 2, base_tick: 0 }).unwrap();
+            let src = node_chain.insert_head(1).unwrap();
+            let tgt = node_chain.insert_head(2).unwrap();
 
             let start = std::time::Instant::now();
             for i in 0..iters {
-                let syn = synapse_chain.connect(src, tgt, SynapseDraft { opcode: 10 }).unwrap();
+                let syn = synapse_chain.connect(src, tgt, 10).unwrap();
                 synapse_chain.disconnect(black_box(syn)).unwrap();
                 if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
                     synapse_chain.flush_deferred();
@@ -123,19 +131,19 @@ fn bench_connect_chain_growth(c: &mut Criterion) {
                 b.iter_custom(|iters| {
                     let h = setup();
                     let (node_chain, mut synapse_chain) = make_chains(&h);
-                    let src = node_chain.insert_head(NodeDraft { kind: 1, base_tick: 0 }).unwrap();
+                    let src = node_chain.insert_head(1).unwrap();
 
                     for i in 0..depth {
-                        let tgt = node_chain.insert_head(NodeDraft { kind: (i + 2) as i32, base_tick: 0 }).unwrap();
-                        synapse_chain.connect(src, tgt, SynapseDraft { opcode: i as i32 }).unwrap();
+                        let tgt = node_chain.insert_head((i + 2) as i32).unwrap();
+                        synapse_chain.connect(src, tgt, i as i32).unwrap();
                     }
 
-                    let bench_tgt = node_chain.insert_head(NodeDraft { kind: 99, base_tick: 0 }).unwrap();
+                    let bench_tgt = node_chain.insert_head(99).unwrap();
 
                     let start = std::time::Instant::now();
                     for i in 0..iters {
                         let syn = synapse_chain.connect(
-                            black_box(src), black_box(bench_tgt), SynapseDraft { opcode: black_box(99) }
+                            black_box(src), black_box(bench_tgt), black_box(99)
                         ).unwrap();
                         synapse_chain.disconnect(syn).unwrap();
                         if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
@@ -162,15 +170,15 @@ fn bench_disconnect_head(c: &mut Criterion) {
             |b, &depth| {
                 b.iter_custom(|iters| {
                     let h = setup();
-                    let (mut node_chain, mut synapse_chain) = make_chains(&h);
-                    let src = node_chain.insert_head(NodeDraft { kind: 1, base_tick: 0 }).unwrap();
+                    let (node_chain, mut synapse_chain) = make_chains(&h);
+                    let src = node_chain.insert_head(1).unwrap();
 
                     let start = std::time::Instant::now();
                     for _ in 0..iters {
                         let mut synapses = Vec::with_capacity(depth);
                         for i in 0..depth {
-                            let tgt = node_chain.insert_head(NodeDraft { kind: (i + 2) as i32, base_tick: 0 }).unwrap();
-                            synapses.push(synapse_chain.connect(src, tgt, SynapseDraft { opcode: i as i32 }).unwrap());
+                            let tgt = node_chain.insert_head((i + 2) as i32).unwrap();
+                            synapses.push(synapse_chain.connect(src, tgt, i as i32).unwrap());
                         }
                         synapse_chain.disconnect(black_box(synapses[0])).unwrap();
                         for s in &synapses[1..] {
@@ -202,13 +210,13 @@ fn bench_connect_disconnect_throughput(c: &mut Criterion) {
         b.iter_custom(|iters| {
             let h = setup();
             let (node_chain, mut synapse_chain) = make_chains(&h);
-            let src = node_chain.insert_head(NodeDraft { kind: 1, base_tick: 0 }).unwrap();
-            let tgt = node_chain.insert_head(NodeDraft { kind: 2, base_tick: 0 }).unwrap();
+            let src = node_chain.insert_head(1).unwrap();
+            let tgt = node_chain.insert_head(2).unwrap();
 
             let start = std::time::Instant::now();
             for i in 0..iters {
                 let s = synapse_chain.connect(
-                    black_box(src), black_box(tgt), SynapseDraft { opcode: black_box(7) }
+                    black_box(src), black_box(tgt), black_box(7)
                 ).unwrap();
                 synapse_chain.disconnect(black_box(s)).unwrap();
                 if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
@@ -226,9 +234,9 @@ fn bench_synapse_read_all_fields(c: &mut Criterion) {
     let h = setup();
     let (node_chain, synapse_chain) = make_chains(&h);
 
-    let src = node_chain.insert_head(NodeDraft { kind: 1, base_tick: 0 }).unwrap();
-    let tgt = node_chain.insert_head(NodeDraft { kind: 2, base_tick: 0 }).unwrap();
-    let syn = synapse_chain.connect(src, tgt, SynapseDraft { opcode: 42 }).unwrap();
+    let src = node_chain.insert_head(1).unwrap();
+    let tgt = node_chain.insert_head(2).unwrap();
+    let syn = synapse_chain.connect(src, tgt, 42).unwrap();
 
     c.bench_function("SynapseChain/get_read_all_fields", |b| {
         b.iter(|| {
@@ -257,22 +265,22 @@ fn bench_reader_traversal(c: &mut Criterion) {
                 let mut h = setup();
                 {
                     let (node_chain, synapse_chain) = make_chains(&h);
-                    let src = node_chain.insert_head(NodeDraft { kind: 1, base_tick: 0 }).unwrap();
+                    let src = node_chain.insert_head(1).unwrap();
 
                     for i in 0..size {
-                        let tgt = node_chain.insert_head(NodeDraft { kind: (i + 2) as i32, base_tick: 0 }).unwrap();
-                        synapse_chain.connect(src, tgt, SynapseDraft { opcode: i as i32 }).unwrap();
+                        let tgt = node_chain.insert_head((i + 2) as i32).unwrap();
+                        synapse_chain.connect(src, tgt, i as i32).unwrap();
                     }
                 }
                 h.writer.publish();
                 h.reader.swap();
 
-                let node_chain_r = NodeChainReader::bind(
+                let node_chain_r = NodeChainReader::<NODE_META>::bind(
                     h.reader.clone(),
                     NODE_TB_OFFSET,
                     NODE_CAPACITY,
                 );
-                let synapse_chain_r = SynapseChainReader::bind(
+                let synapse_chain_r = SynapseChainReader::<NODE_META, SYNAPSE_META>::bind(
                     h.reader.clone(),
                     synapse_tb_offset(),
                     SYNAPSE_CAPACITY,
@@ -287,7 +295,7 @@ fn bench_reader_traversal(c: &mut Criterion) {
                     }
                     let next = n.get_next_ptr();
                     if next == 0 { break; }
-                    cur = Some(node_chain_r.get(next));
+                    cur = Some(node_chain_r.get_node(next));
                 }
 
                 b.iter(|| {
@@ -314,12 +322,12 @@ fn bench_self_loop_cycle(c: &mut Criterion) {
         b.iter_custom(|iters| {
             let h = setup();
             let (node_chain, mut synapse_chain) = make_chains(&h);
-            let n = node_chain.insert_head(NodeDraft { kind: 1, base_tick: 0 }).unwrap();
+            let n = node_chain.insert_head(1).unwrap();
 
             let start = std::time::Instant::now();
             for i in 0..iters {
                 let s = synapse_chain.connect(
-                    black_box(n), black_box(n), SynapseDraft { opcode: black_box(99) }
+                    black_box(n), black_box(n), black_box(99)
                 ).unwrap();
                 synapse_chain.disconnect(black_box(s)).unwrap();
                 if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
@@ -341,10 +349,10 @@ fn bench_publish_after_mutations(c: &mut Criterion) {
                 let mut h = setup();
                 {
                     let (node_chain, synapse_chain) = make_chains(&h);
-                    let src = node_chain.insert_head(NodeDraft { kind: 1, base_tick: 0 }).unwrap();
+                    let src = node_chain.insert_head(1).unwrap();
                     for i in 0..32 {
-                        let tgt = node_chain.insert_head(NodeDraft { kind: (i + 2) as i32, base_tick: 0 }).unwrap();
-                        synapse_chain.connect(src, tgt, SynapseDraft { opcode: i }).unwrap();
+                        let tgt = node_chain.insert_head((i + 2) as i32).unwrap();
+                        synapse_chain.connect(src, tgt, i as i32).unwrap();
                     }
                 }
                 let start = std::time::Instant::now();
