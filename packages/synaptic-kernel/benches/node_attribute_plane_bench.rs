@@ -149,7 +149,7 @@ fn bench_plane_set(c: &mut Criterion) {
 
     c.bench_function("AttributePlane/set", |b| {
         b.iter(|| {
-            plane.set(black_box(0), sample_data());
+            plane.set(black_box(1), sample_data());
         });
     });
 }
@@ -157,11 +157,11 @@ fn bench_plane_set(c: &mut Criterion) {
 fn bench_plane_get(c: &mut Criterion) {
     let mem = create_mem(65538);
     let plane = AttributePlaneWriter::<SLOT>::new(mem, 0, 4096);
-    plane.set(0, sample_data());
+    plane.set(1, sample_data());
 
     c.bench_function("AttributePlane/get_read_word0", |b| {
         b.iter(|| {
-            let w = plane.get(black_box(0));
+            let w = plane.get(black_box(1));
             black_box(w.get(0));
         });
     });
@@ -190,7 +190,7 @@ fn bench_plane_sequential_read(c: &mut Criterion) {
 
         for i in 0..count {
             plane.set(
-                i,
+                i + 1,
                 BenchAttrs {
                     pitch: i as i32 * 1000,
                     velocity: i as i32,
@@ -209,7 +209,7 @@ fn bench_plane_sequential_read(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
             b.iter(|| {
                 for i in 0..count {
-                    let w = plane.get(i);
+                    let w = plane.get(i + 1);
                     black_box(w.get(0));
                     black_box(w.get(1));
                 }
@@ -231,7 +231,7 @@ fn bench_plane_sequential_write(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
             b.iter(|| {
                 for i in 0..count {
-                    plane.set(i, sample_data());
+                    plane.set(i + 1, sample_data());
                 }
             });
         });
@@ -247,10 +247,12 @@ fn bench_plane_random_access(c: &mut Criterion) {
     let plane = AttributePlaneWriter::<SLOT>::new(mem, 0, capacity);
 
     for i in 0..capacity {
-        plane.set(i, sample_data());
+        plane.set(i + 1, sample_data());
     }
 
-    let indices: Vec<usize> = (0..1000).map(|i| (i * 2654435761) % capacity).collect();
+    let indices: Vec<usize> = (0..1000)
+        .map(|i| 1 + ((i * 2654435761) % capacity))
+        .collect();
 
     c.bench_function("AttributePlane/random_access_1000", |b| {
         b.iter(|| {

@@ -211,6 +211,9 @@ impl<const META_SIZE: usize> NodeChainWriter<META_SIZE> {
 
         if next_prev_slot != 0 {
             self.get_node(next_prev_slot).set_next_ptr(new_slot);
+        } else {
+            self.triple_buffer
+                .write(self.tb_start_offset, new_slot as i32);
         }
 
         Some(new_slot)
