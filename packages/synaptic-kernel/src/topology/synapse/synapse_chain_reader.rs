@@ -51,7 +51,7 @@ impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
 
     pub fn get(&'_ self, slot: usize) -> SynapseReader<'_, SYNAPSE_META_SIZE> {
         let start_offset =
-            SynapseChainWriter::<NODE_META_SIZE, SYNAPSE_META_SIZE>::calculate_node_start_offset(
+            SynapseChainWriter::<NODE_META_SIZE, SYNAPSE_META_SIZE>::calculate_synapse_start_offset(
                 self.tb_start_offset,
                 slot,
             );

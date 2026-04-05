@@ -52,4 +52,8 @@ impl<'a, const META_SIZE: usize> SynapseReader<'a, META_SIZE> {
     pub fn get_incoming_prev_ptr(&self) -> usize {
         self.core.read(6) as usize
     }
+
+    pub fn get_meta(&self, offset: usize) -> i32 {
+        self.meta.read(offset)
+    }
 }

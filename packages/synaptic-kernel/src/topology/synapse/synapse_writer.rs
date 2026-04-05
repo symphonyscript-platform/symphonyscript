@@ -81,6 +81,14 @@ impl<'a, const META_SIZE: usize> SynapseWriter<'a, META_SIZE> {
     pub(crate) fn set_incoming_prev_ptr(&self, value: usize) {
         self.core.write(6, value as i32)
     }
+
+    pub fn get_meta(&self, offset: usize) -> i32 {
+        self.meta.read(offset)
+    }
+
+    pub fn set_meta(&self, offset: usize, value: i32) {
+        self.meta.write(offset, value)
+    }
 }
 
 #[cfg(test)]

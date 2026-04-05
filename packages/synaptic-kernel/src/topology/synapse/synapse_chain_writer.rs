@@ -105,7 +105,7 @@ impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
         capacity * (SYNAPSE_SIZE + SYNAPSE_META_SIZE)
     }
 
-    pub(crate) fn calculate_node_start_offset(tb_start_offset: usize, slot: usize) -> usize {
+    pub(crate) fn calculate_synapse_start_offset(tb_start_offset: usize, slot: usize) -> usize {
         tb_start_offset + (slot - 1) * (SYNAPSE_SIZE + SYNAPSE_META_SIZE)
     }
 
@@ -147,7 +147,7 @@ impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
             "SynapseChainWriter.get | attempted to read inactive slot {}",
             slot
         );
-        let start_offset = Self::calculate_node_start_offset(self.tb_start_offset, slot);
+        let start_offset = Self::calculate_synapse_start_offset(self.tb_start_offset, slot);
         SynapseWriter::new(&self.triple_buffer, start_offset)
     }
 
