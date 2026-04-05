@@ -229,7 +229,7 @@ dependencies = [
 name = "kernel-wasm"
 version = "0.1.0"
 dependencies = [
- "symphonyscript-kernel",
+ "synaptic-kernel",
  "wasm-bindgen",
 ]
 
@@ -423,14 +423,7 @@ dependencies = [
 name = "symphony-engine"
 version = "0.1.0"
 dependencies = [
- "symphonyscript-kernel",
-]
-
-[[package]]
-name = "symphonyscript-kernel"
-version = "0.1.0"
-dependencies = [
- "criterion",
+ "synaptic-kernel",
 ]
 
 [[package]]
@@ -442,6 +435,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "synaptic-kernel"
+version = "0.1.0"
+dependencies = [
+ "criterion",
 ]
 
 [[package]]

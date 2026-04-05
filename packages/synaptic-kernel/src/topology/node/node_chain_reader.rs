@@ -60,7 +60,8 @@ impl<const META_SIZE: usize> NodeChainReader<META_SIZE> {
     }
 
     pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_, META_SIZE> {
-        let start_offset = self.resolve_node_start_offset(slot);
+        let start_offset =
+            NodeChainWriter::<META_SIZE>::calculate_node_start_offset(self.tb_start_offset, slot);
         NodeReader::new(&self.triple_buffer, start_offset)
     }
 }

@@ -1,14 +1,14 @@
 use crate::constants::NODE_SIZE;
-use crate::primitives::triple_buffer::TripleBufferWriter;
-use crate::topology::slot_writer::SlotWriter;
+use crate::primitives::triple_buffer::TripleBufferReader;
+use crate::topology::slot_reader::SlotReader;
 
 pub struct NodeReader<'a, const META_SIZE: usize> {
-    core: SlotWriter<'a, NODE_SIZE>,
-    meta: SlotWriter<'a, META_SIZE>,
+    core: SlotReader<'a, NODE_SIZE>,
+    meta: SlotReader<'a, META_SIZE>,
 }
 
 impl<'a, const META_SIZE: usize> NodeReader<'a, META_SIZE> {
-    pub fn new(triple_buffer: &'a TripleBufferWriter, tb_start_offset: usize) -> Self {
+    pub fn new(triple_buffer: &'a TripleBufferReader, tb_start_offset: usize) -> Self {
         let tb_end_offset = tb_start_offset + NODE_SIZE + META_SIZE;
 
         debug_assert!(
@@ -20,8 +20,8 @@ impl<'a, const META_SIZE: usize> NodeReader<'a, META_SIZE> {
         );
 
         NodeReader {
-            core: SlotWriter::new(&triple_buffer, tb_start_offset),
-            meta: SlotWriter::new(&triple_buffer, tb_start_offset + NODE_SIZE),
+            core: SlotReader::new(&triple_buffer, tb_start_offset),
+            meta: SlotReader::new(&triple_buffer, tb_start_offset + NODE_SIZE),
         }
     }
 

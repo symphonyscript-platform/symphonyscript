@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-symphonyscript-kernel = { version = "0.1.0", path= "../synaptic-kernel" }
+synaptic-kernel = { version = "0.1.0", path= "../synaptic-kernel" }

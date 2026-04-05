@@ -95,6 +95,10 @@ impl<const META_SIZE: usize> NodeChainWriter<META_SIZE> {
         1 + capacity * (NODE_SIZE + META_SIZE)
     }
 
+    pub(crate) fn calculate_node_start_offset(tb_start_offset: usize, slot: usize) -> usize {
+        tb_start_offset + 1 + (slot - 1) * (NODE_SIZE + META_SIZE)
+    }
+
     pub fn len(&self) -> usize {
         self.allocator.alloc_count()
     }
@@ -147,7 +151,7 @@ impl<const META_SIZE: usize> NodeChainWriter<META_SIZE> {
             "NodeChainWriter.get | attempted to read inactive slot {}",
             slot
         );
-        let start_offset = self.resolve_node_start_offset(slot);
+        let start_offset = Self::calculate_node_start_offset(self.tb_start_offset, slot);
         NodeWriter::new(&self.triple_buffer, start_offset)
     }
 
@@ -274,10 +278,6 @@ impl<const META_SIZE: usize> NodeChainWriter<META_SIZE> {
 
         Some(slot)
     }
-
-    fn resolve_node_start_offset(&self, slot: usize) -> usize {
-        self.tb_start_offset + 1 + (slot - 1) * (NODE_SIZE + META_SIZE)
-    }
 }
 
 #[cfg(test)]
@@ -329,7 +329,8 @@ mod tests {
     #[test]
     fn node_writer_set_get_all_fields() {
         let h = setup();
-        let chain = NodeChainWriter::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
+        let chain =
+            NodeChainWriter::<8>::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
 
         let slot = chain.insert_head(5).unwrap();
         let node = chain.get_node(slot);
@@ -353,7 +354,8 @@ mod tests {
     #[test]
     fn node_writer_kind_bitmask_preserves_lower_bits() {
         let h = setup();
-        let chain = NodeChainWriter::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
+        let chain =
+            NodeChainWriter::<8>::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
 
         let slot = chain.insert_head(0x7F).unwrap();
         let node = chain.get_node(slot);
@@ -370,7 +372,7 @@ mod tests {
 
         let slot = {
             let chain =
-                NodeChainWriter::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
+                NodeChainWriter::<8>::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
             let slot = chain.insert_head(12).unwrap();
             let node = chain.get_node(slot);
             node.set_outgoing_synapse_head(99);
@@ -379,8 +381,8 @@ mod tests {
         h.writer.publish();
         h.reader.swap();
 
-        let chain_reader = NodeChainReader::new(h.reader.clone(), HEAD_OFFSET, CAPACITY);
-        let node = chain_reader.get(slot);
+        let chain_reader = NodeChainReader::<8>::bind(h.reader.clone(), HEAD_OFFSET, CAPACITY);
+        let node = chain_reader.get_node(slot);
 
         assert_eq!(node.get_kind(), 12);
         assert_eq!(node.get_outgoing_synapse_head(), 99);
@@ -391,7 +393,8 @@ mod tests {
     #[test]
     fn uninvolved_node_data_survives_sibling_mutations() {
         let h = setup();
-        let chain = NodeChainWriter::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
+        let chain =
+            NodeChainWriter::<8>::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
 
         let a = chain.insert_head(1).unwrap();
         let b = chain.insert_head(2).unwrap();
