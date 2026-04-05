@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use crate::attribute_plane::attributes_writer::AttributesWriter;
 use crate::control_plane::ControlPlane;
 use crate::errors::free_list_error::FreeListError;
@@ -40,7 +41,7 @@ pub struct KernelController<
             SYNAPSE_ATTRIBUTES_SIZE,
         >,
     >,
-    backlog: Option<
+    readers_pending_deletion: VecDeque<(
         Box<
             SynapticGraphReader<
                 NODE_META_SIZE,
@@ -49,17 +50,8 @@ pub struct KernelController<
                 SYNAPSE_ATTRIBUTES_SIZE,
             >,
         >,
-    >,
-    pending_deletion: Option<
-        Box<
-            SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
-            >,
-        >,
-    >,
+        i32,
+    )>,
 }
 
 impl<
@@ -108,8 +100,7 @@ impl<
             control_plane,
             active_writer: writer,
             active_reader: reader_box,
-            backlog: None,
-            pending_deletion: None,
+            readers_pending_deletion: VecDeque::new(),
         }
     }
 
@@ -280,7 +271,15 @@ impl<
 
     pub fn publish(&mut self) {
         self.active_writer.publish();
-        self.pending_deletion = self.backlog.take();
+        let ack = self.control_plane.get_reader_ack_generation();
+
+        while let Some((_, generation)) = self.readers_pending_deletion.front() {
+            if *generation > ack {
+                break
+            }
+
+            self.readers_pending_deletion.pop_front();
+        }
     }
 
     pub fn should_grow(&self, target_resize_threshold: f32) -> bool {
@@ -307,7 +306,9 @@ impl<
         let new_reader = Box::new(SynapticGraphReader::bind(Arc::clone(&mem), config.clone()));
 
         self.active_writer = writer;
-        self.backlog = Some(self.replace_reader(new_reader));
+        let old_reader = self.replace_reader(new_reader);
+        self.readers_pending_deletion
+            .push_back(old_reader);
 
         Ok(())
     }
@@ -322,14 +323,18 @@ impl<
                 SYNAPSE_ATTRIBUTES_SIZE,
             >,
         >,
-    ) -> Box<
-        SynapticGraphReader<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+    ) -> (
+        Box<
+            SynapticGraphReader<
+                NODE_META_SIZE,
+                NODE_ATTRIBUTES_SIZE,
+                SYNAPSE_META_SIZE,
+                SYNAPSE_ATTRIBUTES_SIZE,
+            >,
         >,
-    > {
+        i32,
+    ) {
+        let prev_gen = self.control_plane.inc_writer_generation();
         let new_reader_ptr = new_reader.as_ref()
             as *const SynapticGraphReader<
                 NODE_META_SIZE,
@@ -345,8 +350,7 @@ impl<
             >;
         let old_reader = std::mem::replace(&mut self.active_reader, new_reader);
         self.control_plane.set_shared_graph_ptr(new_reader_ptr);
-
-        old_reader
+        (old_reader, prev_gen + 1)
     }
 
     fn create_mem(size: usize) -> AtomicBuffer {

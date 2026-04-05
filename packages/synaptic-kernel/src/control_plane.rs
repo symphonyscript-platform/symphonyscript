@@ -1,6 +1,6 @@
 use crate::constants::CONTROLLER_MAGIC;
 use crate::synaptic_graph_reader::SynapticGraphReader;
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 
 #[repr(C)]
 pub struct ControlPlane<
@@ -18,6 +18,8 @@ pub struct ControlPlane<
             SYNAPSE_ATTRIBUTES_SIZE,
         >,
     >,
+    writer_generation: AtomicI32,
+    reader_ack_generation: AtomicI32,
 }
 
 impl<
@@ -38,6 +40,8 @@ impl<
         ControlPlane {
             signature: CONTROLLER_MAGIC,
             shared_graph_ptr: AtomicPtr::new(shared_graph_ptr),
+            writer_generation: AtomicI32::new(0),
+            reader_ack_generation: AtomicI32::new(0),
         }
     }
 
@@ -62,5 +66,22 @@ impl<
         >,
     ) {
         self.shared_graph_ptr.store(ptr, Ordering::Release)
+    }
+
+    pub fn get_writer_generation(&self) -> i32 {
+        self.writer_generation.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_writer_generation(&self) -> i32 {
+        self.writer_generation.fetch_add(1, Ordering::Relaxed)
+    }
+
+    pub fn get_reader_ack_generation(&self) -> i32 {
+        self.reader_ack_generation.load(Ordering::Acquire)
+    }
+
+    pub fn ack(&self, writer_generation: i32) {
+        self.reader_ack_generation
+            .store(writer_generation, Ordering::Release)
     }
 }
