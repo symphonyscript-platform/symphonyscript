@@ -336,6 +336,32 @@ impl<
     }
 
     pub fn remove_node(&self, slot: usize) -> Result<(), FreeListError> {
+        loop {
+            let head = self
+                .node_chain_writer
+                .get_node(slot)
+                .get_outgoing_synapse_head();
+
+            if head == 0 {
+                break;
+            }
+
+            self.synapse_chain_writer.disconnect(head)?;
+        }
+
+        loop {
+            let head = self
+                .node_chain_writer
+                .get_node(slot)
+                .get_incoming_synapse_head();
+
+            if head == 0 {
+                break;
+            }
+
+            self.synapse_chain_writer.disconnect(head)?;
+        }
+
         self.node_chain_writer.remove(slot)
     }
 
