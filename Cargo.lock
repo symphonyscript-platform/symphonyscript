@@ -420,6 +420,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "symphony-engine"
+version = "0.1.0"
+dependencies = [
+ "symphonyscript-kernel",
+]
+
+[[package]]
 name = "symphonyscript-kernel"
 version = "0.1.0"
 dependencies = [

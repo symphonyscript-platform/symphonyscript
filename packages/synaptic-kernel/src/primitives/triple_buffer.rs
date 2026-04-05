@@ -1,0 +1,352 @@
+use crate::primitives::types::AtomicBuffer;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+
+pub struct TripleBuffer;
+
+#[derive(Clone)]
+pub struct TripleBufferWriter {
+    mem: AtomicBuffer,
+    mem_start_offset: usize,
+    state_slot_index: usize,
+    writer_slot_index: usize,
+    published_slot_index: usize,
+    buffer_bases: [usize; 3],
+    buffer_capacity: usize,
+    mem_end_offset: usize,
+}
+
+#[derive(Clone)]
+pub struct TripleBufferReader {
+    mem: AtomicBuffer,
+    mem_start_offset: usize,
+    state_slot_index: usize,
+    reader_slot_index: usize,
+    buffer_bases: [usize; 3],
+    buffer_capacity: usize,
+    mem_end_offset: usize,
+}
+
+// SPSC TripleBuffer - must be allocated PER main+audio_thread_N pair.
+impl TripleBuffer {
+    pub fn new(
+        mem: AtomicBuffer,
+        mem_start_offset: usize,
+        buffer_capacity: usize,
+    ) -> (TripleBufferWriter, TripleBufferReader) {
+        debug_assert!(
+            buffer_capacity > 0,
+            "TripleBuffer::new | buffer_capacity {} must be positive",
+            buffer_capacity
+        );
+
+        let state_slot_index = mem_start_offset;
+        let writer_slot_index = mem_start_offset + 1;
+        let published_slot_index = mem_start_offset + 2;
+        let reader_slot_index = mem_start_offset + 3;
+        let buffers_start_index = mem_start_offset + 4;
+        let buffer_bases: [usize; 3] = [
+            buffers_start_index,
+            buffers_start_index + buffer_capacity,
+            buffers_start_index + buffer_capacity * 2,
+        ];
+        let mem_end_offset = buffers_start_index + buffer_capacity * 3;
+
+        assert!(mem_end_offset <= mem.len(), "TripleBuffer out of bounds");
+
+        mem[writer_slot_index].store(0, Ordering::Relaxed);
+        mem[state_slot_index].store(0b001, Ordering::Relaxed);
+        mem[published_slot_index].store(0, Ordering::Relaxed);
+        mem[reader_slot_index].store(2, Ordering::Relaxed);
+
+        let writer = TripleBufferWriter {
+            mem: Arc::clone(&mem),
+            mem_start_offset,
+            state_slot_index,
+            writer_slot_index,
+            published_slot_index,
+            buffer_bases,
+            buffer_capacity,
+            mem_end_offset,
+        };
+        let reader = TripleBufferReader {
+            mem: Arc::clone(&mem),
+            mem_start_offset,
+            state_slot_index,
+            reader_slot_index,
+            buffer_bases,
+            buffer_capacity,
+            mem_end_offset,
+        };
+
+        (writer, reader)
+    }
+
+    // AtomicBuffer must already be initialized via new
+    pub fn bind_writer(mem: AtomicBuffer, mem_start_offset: usize, buffer_capacity: usize) -> TripleBufferWriter {
+        debug_assert!(
+            buffer_capacity > 0,
+            "TripleBuffer::bind_writer | buffer_capacity {} must be positive",
+            buffer_capacity
+        );
+
+        let state_slot_index = mem_start_offset;
+        let writer_slot_index = mem_start_offset + 1;
+        let published_slot_index = mem_start_offset + 2;
+        let buffers_start_index = mem_start_offset + 4;
+        let buffer_bases: [usize; 3] = [
+            buffers_start_index,
+            buffers_start_index + buffer_capacity,
+            buffers_start_index + buffer_capacity * 2,
+        ];
+        let mem_end_offset = buffers_start_index + buffer_capacity * 3;
+        let writer = TripleBufferWriter {
+            mem: Arc::clone(&mem),
+            mem_start_offset,
+            state_slot_index,
+            writer_slot_index,
+            published_slot_index,
+            buffer_bases,
+            buffer_capacity,
+            mem_end_offset,
+        };
+
+        // Synchronize with the last publish() before reading its results.
+        mem[state_slot_index].load(Ordering::Acquire);
+        let published_index = mem[published_slot_index].load(Ordering::Relaxed);
+        let writer_index = mem[writer_slot_index].load(Ordering::Relaxed);
+        writer.sync(published_index as usize, writer_index as usize);
+
+        writer
+    }
+
+    // AtomicBuffer must already be initialized via new
+    pub fn bind_reader(
+        mem: AtomicBuffer,
+        mem_start_offset: usize,
+        buffer_capacity: usize,
+    ) -> TripleBufferReader {
+        debug_assert!(
+            buffer_capacity > 0,
+            "TripleBuffer::bind_reader | buffer_capacity {} must be positive",
+            buffer_capacity
+        );
+
+        let state_slot_index = mem_start_offset;
+        let reader_slot_index = mem_start_offset + 3;
+        let buffers_start_index = mem_start_offset + 4;
+        let buffer_bases: [usize; 3] = [
+            buffers_start_index,
+            buffers_start_index + buffer_capacity,
+            buffers_start_index + buffer_capacity * 2,
+        ];
+        let mem_end_offset = buffers_start_index + buffer_capacity * 3;
+
+        TripleBufferReader {
+            mem: Arc::clone(&mem),
+            mem_start_offset,
+            state_slot_index,
+            reader_slot_index,
+            buffer_bases,
+            buffer_capacity,
+            mem_end_offset,
+        }
+    }
+
+    pub fn calculate_size(frame_capacity: usize) -> usize {
+        4 + frame_capacity * 3
+    }
+}
+
+// Writer - main thread
+impl TripleBufferWriter {
+    pub fn buffer_capacity(&self) -> usize {
+        self.buffer_capacity
+    }
+
+    pub fn mem_start_offset(&self) -> usize {
+        self.mem_start_offset
+    }
+
+    pub fn mem_end_offset(&self) -> usize {
+        self.mem_end_offset
+    }
+
+    pub fn current_start_index(&self) -> usize {
+        let buffer_id = self.mem[self.writer_slot_index].load(Ordering::Relaxed) as usize;
+        self.buffer_bases[buffer_id]
+    }
+
+    pub fn publish(&mut self) {
+        let current_id = self.mem[self.writer_slot_index].load(Ordering::Relaxed);
+        let new_state = (current_id & 0b011) | 0b100;
+
+        // We use swap instead of CAS because of the following two reasons:
+        // 1. the writer's new state is independent of the current shared state
+        // - we unconditionally publish our buffer and set NEW_DATA.
+        // 2. In SPSC, no competing writers exist, so swap is safe and retry-free.
+        let old_state = self.mem[self.state_slot_index].swap(new_state, Ordering::Release);
+        let writer_new_buffer_id = old_state & 0b011;
+
+        self.mem[self.writer_slot_index].store(writer_new_buffer_id, Ordering::Relaxed);
+        self.mem[self.published_slot_index].store(current_id, Ordering::Relaxed);
+        self.sync(current_id as usize, writer_new_buffer_id as usize);
+    }
+
+    fn sync(&self, published_index: usize, writer_index: usize) {
+        if published_index == writer_index {
+            return;
+        }
+
+        let published_buffer_index = self.buffer_bases[published_index];
+        let writer_buffer_index = self.buffer_bases[writer_index];
+        let source_ptr = self.mem[published_buffer_index..].as_ptr() as *const i32;
+        let destination_ptr = self.mem[writer_buffer_index..].as_ptr() as *mut i32;
+
+        // SAFE: The writer has exclusive ownership of the stale buffer after the swap,
+        // and the bounds are validated upon instantiation.
+        //
+        unsafe {
+            std::ptr::copy_nonoverlapping(source_ptr, destination_ptr, self.buffer_capacity);
+        }
+    }
+
+    pub fn write(&self, offset: usize, value: i32) {
+        debug_assert!(
+            offset < self.buffer_capacity,
+            "TripleBufferWriter.write | offset {} out of bounds",
+            offset
+        );
+        let base = self.current_start_index();
+        self.mem[base + offset].store(value, Ordering::Relaxed)
+    }
+
+    pub fn read(&self, offset: usize) -> i32 {
+        debug_assert!(
+            offset < self.buffer_capacity,
+            "TripleBufferWriter.read | offset {} out of bounds",
+            offset
+        );
+        let base = self.current_start_index();
+        self.mem[base + offset].load(Ordering::Relaxed)
+    }
+
+    pub fn copy_metadata_from(&self, source: &TripleBufferWriter) {
+        debug_assert!(
+            source.buffer_capacity <= self.buffer_capacity,
+            "StagingBuffer.copy_metadata_from | source.buffer_capacity {} cannot be greater than destination.buffer_capacity {}",
+            source.buffer_capacity,
+            self.buffer_capacity,
+        );
+
+        self.mem[self.state_slot_index].store(
+            source.mem[source.state_slot_index].load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.mem[self.writer_slot_index].store(
+            source.mem[source.writer_slot_index].load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.mem[self.published_slot_index].store(
+            source.mem[source.published_slot_index].load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.mem[self.published_slot_index + 1].store(
+            source.mem[source.published_slot_index + 1].load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+    }
+
+    pub fn copy_region_from(
+        &self,
+        source: &TripleBufferWriter,
+        source_offset: usize,
+        destination_offset: usize,
+        count: usize,
+    ) {
+        debug_assert!(
+            source.buffer_capacity <= self.buffer_capacity,
+            "StagingBuffer.copy_region_from | source.buffer_capacity {} cannot be greater than destination.buffer_capacity {}",
+            source.buffer_capacity,
+            self.buffer_capacity,
+        );
+        debug_assert!(
+            destination_offset + count <= self.buffer_capacity,
+            "TripleBufferWriter.copy_region_from | destination range [{}..{}] exceeds buffer_capacity {}",
+            destination_offset,
+            count,
+            self.buffer_capacity,
+        );
+        debug_assert!(
+            source_offset + count <= source.buffer_capacity,
+            "TripleBufferWriter.copy_region_from | source range [{}..{}] exceeds buffer_capacity {}",
+            source_offset,
+            count,
+            source.buffer_capacity,
+        );
+
+        for i in 0..3 {
+            let self_base = self.buffer_bases[i] + destination_offset;
+            let source_base = source.buffer_bases[i] + source_offset;
+            for k in 0..count {
+                self.mem[self_base + k].store(
+                    source.mem[source_base + k].load(Ordering::Relaxed),
+                    Ordering::Relaxed,
+                );
+            }
+        }
+    }
+}
+
+// Reader - Audio thread
+impl TripleBufferReader {
+    pub fn buffer_capacity(&self) -> usize {
+        self.buffer_capacity
+    }
+
+    pub fn mem_start_offset(&self) -> usize {
+        self.mem_start_offset
+    }
+
+    pub fn mem_end_offset(&self) -> usize {
+        self.mem_end_offset
+    }
+
+    pub fn current_start_index(&self) -> usize {
+        let buffer_id = self.mem[self.reader_slot_index].load(Ordering::Relaxed) as usize;
+        self.buffer_bases[buffer_id]
+    }
+
+    pub fn swap(&mut self) -> bool {
+        let state = self.mem[self.state_slot_index].load(Ordering::Acquire);
+
+        if state & 0b100 == 0 {
+            return false;
+        }
+
+        let current_id = self.mem[self.reader_slot_index].load(Ordering::Relaxed);
+        let new_state = current_id & 0b011;
+
+        // We use swap instead of CAS because of the following two reasons:
+        // 1. the reader's new state is independent of the current shared state.
+        // 2. In SPSC, only the reader clears NEW_DATA, so it cannot go 1->0 between
+        // the load() above and this swap().
+        // The old_state is used to determine which buffer was acquired, since
+        // state loaded by the initial load() might be stale by the time we reach this point.
+        let old_state = self.mem[self.state_slot_index].swap(new_state, Ordering::Acquire);
+
+        self.mem[self.reader_slot_index].store(old_state & 0b011, Ordering::Relaxed);
+
+        true
+    }
+
+    pub fn read(&self, offset: usize) -> i32 {
+        debug_assert!(
+            offset < self.buffer_capacity,
+            "TripleBufferReader.read | offset {} out of bounds",
+            offset
+        );
+        let base = self.current_start_index();
+        self.mem[base + offset].load(Ordering::Relaxed)
+    }
+}
