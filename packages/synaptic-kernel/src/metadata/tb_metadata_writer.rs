@@ -2,19 +2,23 @@ use crate::primitives::triple_buffer::TripleBufferWriter;
 
 #[derive(Clone)]
 pub struct TbMetadataWriter {
-    buffer: TripleBufferWriter,
+    triple_buffer: TripleBufferWriter,
     tb_start_offset: usize,
     tb_end_offset: usize,
     capacity: usize,
 }
 
 impl TbMetadataWriter {
-    pub fn new(buffer: TripleBufferWriter, tb_start_offset: usize, capacity: usize) -> Self {
-        Self::create(buffer, tb_start_offset, capacity, false)
+    pub fn new(triple_buffer: TripleBufferWriter, tb_start_offset: usize, capacity: usize) -> Self {
+        Self::create(triple_buffer, tb_start_offset, capacity, false)
     }
 
-    pub fn bind(buffer: TripleBufferWriter, tb_start_offset: usize, capacity: usize) -> Self {
-        Self::create(buffer, tb_start_offset, capacity, true)
+    pub fn bind(
+        triple_buffer: TripleBufferWriter,
+        tb_start_offset: usize,
+        capacity: usize,
+    ) -> Self {
+        Self::create(triple_buffer, tb_start_offset, capacity, true)
     }
 
     pub fn create(
@@ -51,7 +55,7 @@ impl TbMetadataWriter {
         }
 
         TbMetadataWriter {
-            buffer,
+            triple_buffer: buffer,
             tb_start_offset,
             tb_end_offset,
             capacity,
@@ -80,7 +84,8 @@ impl TbMetadataWriter {
             "TbMetadataWriter.write | offset {} out of bounds",
             offset
         );
-        self.buffer.write(self.tb_start_offset + offset, value);
+        self.triple_buffer
+            .write(self.tb_start_offset + offset, value);
     }
 
     pub fn read(&self, offset: usize) -> i32 {
@@ -89,6 +94,22 @@ impl TbMetadataWriter {
             "TbMetadataWriter.read | offset {} out of bounds",
             offset
         );
-        self.buffer.read(self.tb_start_offset + offset)
+        self.triple_buffer.read(self.tb_start_offset + offset)
+    }
+
+    pub fn copy_from(&self, source: &TbMetadataWriter) {
+        debug_assert!(
+            source.capacity <= self.capacity,
+            "TbMetadataWriter.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
+            source.capacity,
+            self.capacity,
+        );
+
+        self.triple_buffer.copy_region_from(
+            &source.triple_buffer,
+            source.tb_start_offset,
+            self.tb_start_offset,
+            Self::calculate_size_on_tb(source.capacity),
+        );
     }
 }

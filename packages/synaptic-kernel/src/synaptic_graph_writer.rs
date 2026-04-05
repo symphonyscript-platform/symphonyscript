@@ -443,6 +443,8 @@ impl<
     }
 
     pub fn copy_from(&self, source: &Self) {
+        self.mem_metadata_plane.copy_from(&source.mem_metadata_plane);
+        self.tb_metadata_plane.copy_from(&source.tb_metadata_plane);
         self.node_attribute_plane
             .copy_from(&source.node_attribute_plane);
         self.synapse_attribute_plane

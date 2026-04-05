@@ -87,4 +87,17 @@ impl MemMetadataWriter {
         );
         self.mem[self.mem_start_offset + offset].load(Ordering::Relaxed)
     }
+
+    pub fn copy_from(&self, source: &MemMetadataWriter) {
+        debug_assert!(
+            source.capacity <= self.capacity,
+            "MemMetadataWriter.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
+            source.capacity,
+            self.capacity,
+        );
+
+        for i in 0..source.capacity {
+            self.write(i, source.read(i));
+        }
+    }
 }
