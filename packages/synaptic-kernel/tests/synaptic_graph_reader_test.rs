@@ -1,7 +1,5 @@
 use synaptic_kernel::attribute_plane::writer::note_attributes_writer::NoteAttributes;
 use synaptic_kernel::attribute_plane::writer::synapse_attributes_writer::SynapseAttributes;
-use synaptic_kernel::topology::node::node_data::NodeDraft;
-use synaptic_kernel::topology::synapse::synapse_data::SynapseDraft;
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
 use synaptic_kernel::synaptic_graph_reader::SynapticGraphReader;
 use synaptic_kernel::synaptic_graph_writer::SynapticGraphWriter;

@@ -4,7 +4,6 @@ use std::sync::atomic::AtomicI32;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::primitives::triple_buffer::TripleBuffer;
 use synaptic_kernel::primitives::into_array::IntoArray;
-use synaptic_kernel::topology::topology_writer::TopologyWriter;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);

@@ -265,8 +265,8 @@ impl<const META_SIZE: usize> NodeChainWriter<META_SIZE> {
             return None;
         }
 
-        let slot = result.unwrap();
-        let node = self.get_node(slot);
+        let new_slot = result.unwrap();
+        let node = self.get_node(new_slot);
 
         node.set_kind(kind);
         node.set_next_ptr(next_ptr);
@@ -276,7 +276,7 @@ impl<const META_SIZE: usize> NodeChainWriter<META_SIZE> {
         node.set_incoming_synapse_head(0);
         node.set_incoming_synapse_tail(0);
 
-        Some(slot)
+        Some(new_slot)
     }
 }
 

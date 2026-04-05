@@ -11,7 +11,6 @@ use crate::synaptic_graph_config::SynapticGraphConfig;
 use crate::topology::node::node_chain_writer::NodeChainWriter;
 use crate::topology::node::node_writer::NodeWriter;
 use crate::topology::synapse::synapse_chain_writer::SynapseChainWriter;
-use crate::topology::synapse::synapse_data::SynapseDraft;
 use crate::topology::synapse::synapse_writer::SynapseWriter;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -30,7 +29,7 @@ pub struct SynapticGraphWriter<
     synapse_attribute_plane: AttributePlaneWriter<SYNAPSE_ATTRIBUTES_SIZE>,
     tb_writer: TripleBufferWriter,
     node_chain_writer: NodeChainWriter<NODE_META_SIZE>,
-    synapse_chain_writer: SynapseChainWriter,
+    synapse_chain_writer: SynapseChainWriter<NODE_META_SIZE, SYNAPSE_META_SIZE>,
 }
 
 impl<
@@ -181,15 +180,19 @@ impl<
 
     pub fn calculate_size_on_tb(config: &SynapticGraphConfig) -> usize {
         TbMetadataWriter::calculate_size_on_tb(config.tb_metadata_size)
-            + NodeChainWriter::calculate_size_on_tb(config.node_capacity)
-            + SynapseChainWriter::calculate_size_on_tb(config.synapse_capacity)
+            + NodeChainWriter::<NODE_META_SIZE>::calculate_size_on_tb(config.node_capacity)
+            + SynapseChainWriter::<NODE_META_SIZE, SYNAPSE_META_SIZE>::calculate_size_on_tb(
+                config.synapse_capacity,
+            )
     }
 
     pub fn calculate_size_on_mem(config: &SynapticGraphConfig) -> usize {
         Self::HEADERS_SIZE
             + MemMetadataWriter::calculate_size_on_mem(config.mem_metadata_size)
-            + NodeChainWriter::calculate_size_on_mem(config.node_capacity)
-            + SynapseChainWriter::calculate_size_on_mem(config.synapse_capacity)
+            + NodeChainWriter::<NODE_META_SIZE>::calculate_size_on_mem(config.node_capacity)
+            + SynapseChainWriter::<NODE_META_SIZE, SYNAPSE_META_SIZE>::calculate_size_on_mem(
+                config.synapse_capacity,
+            )
             + AttributePlaneWriter::<NODE_ATTRIBUTES_SIZE>::calculate_size(config.node_capacity)
             + AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SIZE>::calculate_size(
                 config.synapse_capacity,
@@ -226,7 +229,7 @@ impl<
     }
 
     pub fn node_count(&self) -> usize {
-        self.node_chain_writer.count()
+        self.node_chain_writer.len()
     }
 
     pub fn node_utilization(&self) -> f32 {
@@ -238,7 +241,7 @@ impl<
     }
 
     pub fn synapse_count(&self) -> usize {
-        self.synapse_chain_writer.count()
+        self.synapse_chain_writer.len()
     }
 
     pub fn synapse_utilization(&self) -> f32 {
@@ -318,8 +321,8 @@ impl<
         self.node_chain_writer.remove(slot)
     }
 
-    pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_> {
-        self.synapse_chain_writer.get(slot)
+    pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_, SYNAPSE_META_SIZE> {
+        self.synapse_chain_writer.get_synapse(slot)
     }
 
     pub fn get_synapse_attributes(
@@ -369,14 +372,9 @@ impl<
             .write(attribute_offset, value)
     }
 
-    pub fn connect(
-        &self,
-        source_slot: usize,
-        target_slot: usize,
-        data: SynapseDraft,
-    ) -> Option<usize> {
+    pub fn connect(&self, source_slot: usize, target_slot: usize, kind: i32) -> Option<usize> {
         self.synapse_chain_writer
-            .connect(source_slot, target_slot, data)
+            .connect(source_slot, target_slot, kind)
     }
 
     pub fn disconnect(&self, slot: usize) -> Result<(), FreeListError> {

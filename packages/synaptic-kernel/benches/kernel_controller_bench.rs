@@ -1,8 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use synaptic_kernel::control_plane::ControlPlane;
 use synaptic_kernel::kernel_controller::KernelController;
-use synaptic_kernel::topology::node::node_data::NodeDraft;
-use synaptic_kernel::topology::synapse::synapse_data::SynapseDraft;
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
 
 fn config(cap: usize) -> SynapticGraphConfig {

@@ -6,10 +6,8 @@ use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::primitives::triple_buffer::TripleBuffer;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
 use synaptic_kernel::topology::node::node_chain_reader::NodeChainReader;
-use synaptic_kernel::topology::node::node_data::NodeDraft;
 use synaptic_kernel::topology::synapse::synapse_chain_writer::SynapseChainWriter;
 use synaptic_kernel::topology::synapse::synapse_chain_reader::SynapseChainReader;
-use synaptic_kernel::topology::synapse::synapse_data::SynapseDraft;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
@@ -234,7 +232,7 @@ fn bench_synapse_read_all_fields(c: &mut Criterion) {
 
     c.bench_function("SynapseChain/get_read_all_fields", |b| {
         b.iter(|| {
-            let s = synapse_chain.get(black_box(syn));
+            let s = synapse_chain.get_synapse(black_box(syn));
             black_box(s.get_kind());
             black_box(s.get_source_ptr());
             black_box(s.get_target_ptr());

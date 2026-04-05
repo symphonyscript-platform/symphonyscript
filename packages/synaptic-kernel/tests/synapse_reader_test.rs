@@ -4,10 +4,8 @@ use synaptic_kernel::constants::NODE_SLOT_SIZE;
 use synaptic_kernel::primitives::triple_buffer::TripleBuffer;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
-use synaptic_kernel::topology::node::node_data::NodeDraft;
 use synaptic_kernel::topology::synapse::synapse_chain_reader::SynapseChainReader;
 use synaptic_kernel::topology::synapse::synapse_chain_writer::SynapseChainWriter;
-use synaptic_kernel::topology::synapse::synapse_data::SynapseDraft;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);

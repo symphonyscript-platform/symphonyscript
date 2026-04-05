@@ -8,7 +8,6 @@ use crate::synaptic_graph_config::SynapticGraphConfig;
 use crate::synaptic_graph_reader::SynapticGraphReader;
 use crate::synaptic_graph_writer::SynapticGraphWriter;
 use crate::topology::node::node_writer::NodeWriter;
-use crate::topology::synapse::synapse_data::SynapseDraft;
 use crate::topology::synapse::synapse_writer::SynapseWriter;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
@@ -184,7 +183,7 @@ impl<
         self.active_writer.get_head_node()
     }
 
-    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_, SYNAPSE_META_SIZE> {
+    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_, NODE_META_SIZE> {
         self.active_writer.get_node(slot)
     }
 
@@ -234,7 +233,7 @@ impl<
         self.active_writer.remove_node(slot)
     }
 
-    pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_> {
+    pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_, SYNAPSE_META_SIZE> {
         self.active_writer.get_synapse(slot)
     }
 
@@ -267,9 +266,9 @@ impl<
         &self,
         source_slot: usize,
         target_slot: usize,
-        data: SynapseDraft,
+        kind: i32,
     ) -> Result<usize, KernelError> {
-        match self.active_writer.connect(source_slot, target_slot, data) {
+        match self.active_writer.connect(source_slot, target_slot, kind) {
             Some(slot) => Ok(slot),
             None => Err(KernelError::CapacityExhausted),
         }

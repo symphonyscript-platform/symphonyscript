@@ -4,7 +4,6 @@ use synaptic_kernel::primitives::triple_buffer::TripleBuffer;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::node::node_chain_reader::NodeChainReader;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
-use synaptic_kernel::topology::node::node_data::NodeDraft;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
@@ -92,11 +91,11 @@ fn insert_head_pushes_existing_head() {
     let head = chain.get_head().unwrap();
     assert_eq!(head.get_kind(), 2, "head is b");
 
-    let node_b = chain.get(b);
+    let node_b = chain.get_node(b);
     assert_eq!(node_b.get_next_ptr(), a);
     assert_eq!(node_b.get_prev_ptr(), 0, "head has no prev");
 
-    let node_a = chain.get(a);
+    let node_a = chain.get_node(a);
     assert_eq!(node_a.get_prev_ptr(), b);
     assert_eq!(node_a.get_next_ptr(), 0, "tail has no next");
 }
@@ -111,14 +110,14 @@ fn insert_head_three_nodes_links_correct() {
     let c = chain.insert_head(make_draft(3, 30)).unwrap();
 
     // chain: c -> b -> a
-    assert_eq!(chain.get(c).get_prev_ptr(), 0);
-    assert_eq!(chain.get(c).get_next_ptr(), b);
+    assert_eq!(chain.get_node(c).get_prev_ptr(), 0);
+    assert_eq!(chain.get_node(c).get_next_ptr(), b);
 
-    assert_eq!(chain.get(b).get_prev_ptr(), c);
-    assert_eq!(chain.get(b).get_next_ptr(), a);
+    assert_eq!(chain.get_node(b).get_prev_ptr(), c);
+    assert_eq!(chain.get_node(b).get_next_ptr(), a);
 
-    assert_eq!(chain.get(a).get_prev_ptr(), b);
-    assert_eq!(chain.get(a).get_next_ptr(), 0);
+    assert_eq!(chain.get_node(a).get_prev_ptr(), b);
+    assert_eq!(chain.get_node(a).get_next_ptr(), 0);
 }
 
 // ============ NodeChainWriter: insert_after ============
@@ -132,9 +131,9 @@ fn insert_after_tail() {
     let b = chain.insert_after(a, make_draft(2, 0)).unwrap();
 
     // chain: a -> b
-    assert_eq!(chain.get(a).get_next_ptr(), b);
-    assert_eq!(chain.get(b).get_prev_ptr(), a);
-    assert_eq!(chain.get(b).get_next_ptr(), 0, "b is tail");
+    assert_eq!(chain.get_node(a).get_next_ptr(), b);
+    assert_eq!(chain.get_node(b).get_prev_ptr(), a);
+    assert_eq!(chain.get_node(b).get_next_ptr(), 0, "b is tail");
 }
 
 #[test]
@@ -148,11 +147,11 @@ fn insert_after_middle() {
     let b = chain.insert_after(a, make_draft(2, 0)).unwrap();
     // chain: a -> b -> c
 
-    assert_eq!(chain.get(a).get_next_ptr(), b);
-    assert_eq!(chain.get(b).get_prev_ptr(), a);
-    assert_eq!(chain.get(b).get_next_ptr(), c);
-    assert_eq!(chain.get(c).get_prev_ptr(), b);
-    assert_eq!(chain.get(c).get_next_ptr(), 0);
+    assert_eq!(chain.get_node(a).get_next_ptr(), b);
+    assert_eq!(chain.get_node(b).get_prev_ptr(), a);
+    assert_eq!(chain.get_node(b).get_next_ptr(), c);
+    assert_eq!(chain.get_node(c).get_prev_ptr(), b);
+    assert_eq!(chain.get_node(c).get_next_ptr(), 0);
 }
 
 // ============ NodeChainWriter: insert_before ============
@@ -169,9 +168,9 @@ fn insert_before_head_does_not_update_chain_head() {
     // This is by design: insert_before only patches node pointers
     // b -> a is the link, but chain head is still stored as a
 
-    assert_eq!(chain.get(b).get_next_ptr(), a);
-    assert_eq!(chain.get(a).get_prev_ptr(), b);
-    assert_eq!(chain.get(b).get_prev_ptr(), 0);
+    assert_eq!(chain.get_node(b).get_next_ptr(), a);
+    assert_eq!(chain.get_node(a).get_prev_ptr(), b);
+    assert_eq!(chain.get_node(b).get_prev_ptr(), 0);
 }
 
 #[test]
@@ -185,10 +184,10 @@ fn insert_before_middle_node() {
     let b = chain.insert_before(c, make_draft(2, 0)).unwrap();
     // chain: a -> b -> c
 
-    assert_eq!(chain.get(a).get_next_ptr(), b);
-    assert_eq!(chain.get(b).get_prev_ptr(), a);
-    assert_eq!(chain.get(b).get_next_ptr(), c);
-    assert_eq!(chain.get(c).get_prev_ptr(), b);
+    assert_eq!(chain.get_node(a).get_next_ptr(), b);
+    assert_eq!(chain.get_node(b).get_prev_ptr(), a);
+    assert_eq!(chain.get_node(b).get_next_ptr(), c);
+    assert_eq!(chain.get_node(c).get_prev_ptr(), b);
 }
 
 // ============ NodeChainWriter: remove ============
@@ -234,7 +233,7 @@ fn remove_tail_patches_prev() {
     chain.remove(a).unwrap();
     // chain: b
 
-    let node_b = chain.get(b);
+    let node_b = chain.get_node(b);
     assert_eq!(node_b.get_next_ptr(), 0, "b is now tail");
     assert_eq!(node_b.get_prev_ptr(), 0, "b is also head");
 }
@@ -252,8 +251,8 @@ fn remove_middle_heals_chain() {
     chain.remove(b).unwrap();
     // chain: c -> a
 
-    assert_eq!(chain.get(c).get_next_ptr(), a);
-    assert_eq!(chain.get(a).get_prev_ptr(), c);
+    assert_eq!(chain.get_node(c).get_next_ptr(), a);
+    assert_eq!(chain.get_node(a).get_prev_ptr(), c);
 }
 
 #[test]
@@ -388,13 +387,13 @@ fn insert_after_does_not_mutate_unrelated_nodes() {
     // chain: a -> d -> b -> c
 
     // c must not be touched
-    assert_eq!(chain.get(c).get_prev_ptr(), b, "c's prev unchanged");
-    assert_eq!(chain.get(c).get_next_ptr(), 0, "c's next unchanged");
+    assert_eq!(chain.get_node(c).get_prev_ptr(), b, "c's prev unchanged");
+    assert_eq!(chain.get_node(c).get_next_ptr(), 0, "c's next unchanged");
 
     // b's prev updated to d
-    assert_eq!(chain.get(b).get_prev_ptr(), d);
+    assert_eq!(chain.get_node(b).get_prev_ptr(), d);
     // b's next unchanged
-    assert_eq!(chain.get(b).get_next_ptr(), c);
+    assert_eq!(chain.get_node(b).get_next_ptr(), c);
 }
 
 // ============ Forward + backward traversal ============
@@ -413,19 +412,19 @@ fn four_node_chain_traversal_forward_and_backward() {
     // forward: d -> c -> b -> a -> 0
     let h0 = chain.get_head().unwrap();
     assert_eq!(h0.get_kind(), 4);
-    let n1 = chain.get(h0.get_next_ptr());
+    let n1 = chain.get_node(h0.get_next_ptr());
     assert_eq!(n1.get_kind(), 3);
-    let n2 = chain.get(n1.get_next_ptr());
+    let n2 = chain.get_node(n1.get_next_ptr());
     assert_eq!(n2.get_kind(), 2);
-    let n3 = chain.get(n2.get_next_ptr());
+    let n3 = chain.get_node(n2.get_next_ptr());
     assert_eq!(n3.get_kind(), 1);
     assert_eq!(n3.get_next_ptr(), 0, "end of chain");
 
     // backward: a -> b -> c -> d -> 0
-    assert_eq!(chain.get(a).get_prev_ptr(), b);
-    assert_eq!(chain.get(b).get_prev_ptr(), c);
-    assert_eq!(chain.get(c).get_prev_ptr(), d);
-    assert_eq!(chain.get(d).get_prev_ptr(), 0, "start of chain");
+    assert_eq!(chain.get_node(a).get_prev_ptr(), b);
+    assert_eq!(chain.get_node(b).get_prev_ptr(), c);
+    assert_eq!(chain.get_node(c).get_prev_ptr(), d);
+    assert_eq!(chain.get_node(d).get_prev_ptr(), 0, "start of chain");
 }
 
 // ============ insert_after / insert_before exhaustion ============
@@ -479,11 +478,11 @@ fn insert_before_tail_in_three_node_chain() {
     let e = chain.insert_before(d, make_draft(5, 0)).unwrap();
     // chain: a -> c -> e -> d
 
-    assert_eq!(chain.get(c).get_next_ptr(), e);
-    assert_eq!(chain.get(e).get_prev_ptr(), c);
-    assert_eq!(chain.get(e).get_next_ptr(), d);
-    assert_eq!(chain.get(d).get_prev_ptr(), e);
-    assert_eq!(chain.get(d).get_next_ptr(), 0, "d is still tail");
+    assert_eq!(chain.get_node(c).get_next_ptr(), e);
+    assert_eq!(chain.get_node(e).get_prev_ptr(), c);
+    assert_eq!(chain.get_node(e).get_next_ptr(), d);
+    assert_eq!(chain.get_node(d).get_prev_ptr(), e);
+    assert_eq!(chain.get_node(d).get_next_ptr(), 0, "d is still tail");
 }
 
 // ============ Multi-order removal ============
@@ -502,13 +501,13 @@ fn remove_tail_first_then_middle_then_head() {
     // remove tail
     chain.remove(a).unwrap();
     // chain: d -> c -> b
-    assert_eq!(chain.get(b).get_next_ptr(), 0);
+    assert_eq!(chain.get_node(b).get_next_ptr(), 0);
 
     // remove middle
     chain.remove(c).unwrap();
     // chain: d -> b
-    assert_eq!(chain.get(d).get_next_ptr(), b);
-    assert_eq!(chain.get(b).get_prev_ptr(), d);
+    assert_eq!(chain.get_node(d).get_next_ptr(), b);
+    assert_eq!(chain.get_node(b).get_prev_ptr(), d);
 
     // remove head
     chain.remove(d).unwrap();
@@ -534,20 +533,20 @@ fn remove_arbitrary_order_on_five_node_chain() {
     // remove c (middle)
     chain.remove(c).unwrap();
     // chain: e -> d -> b -> a
-    assert_eq!(chain.get(d).get_next_ptr(), b);
-    assert_eq!(chain.get(b).get_prev_ptr(), d);
+    assert_eq!(chain.get_node(d).get_next_ptr(), b);
+    assert_eq!(chain.get_node(b).get_prev_ptr(), d);
 
     // remove e (head)
     chain.remove(e).unwrap();
     // chain: d -> b -> a
     let head = chain.get_head().unwrap();
     assert_eq!(head.get_kind(), 4);
-    assert_eq!(chain.get(d).get_prev_ptr(), 0);
+    assert_eq!(chain.get_node(d).get_prev_ptr(), 0);
 
     // remove a (tail)
     chain.remove(a).unwrap();
     // chain: d -> b
-    assert_eq!(chain.get(b).get_next_ptr(), 0);
+    assert_eq!(chain.get_node(b).get_next_ptr(), 0);
 
     // remove d (head again)
     chain.remove(d).unwrap();
