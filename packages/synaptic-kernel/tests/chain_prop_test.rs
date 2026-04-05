@@ -51,39 +51,35 @@ fn chain_op_strategy() -> impl Strategy<Value = ChainOp> {
 }
 
 /// Verify that a chain is a valid doubly-linked list:
+/// - get_head() returns the actual first node (prev == 0)
 /// - Forward traversal from head visits every active node exactly once
 /// - Backward links are consistent (node.next.prev == node)
 /// - Head's prev == 0, tail's next == 0
 fn verify_chain_integrity(chain: &NodeChainWriter<NODE_META>, active_slots: &[usize]) {
     if active_slots.is_empty() {
-        // get_head may or may not return None depending on head pointer state,
-        // but there should be no active nodes
+        assert!(chain.get_head().is_none(), "empty active set but chain has head");
         return;
     }
 
-    // Find the actual first node: the one with prev_ptr == 0.
-    // Note: insert_before on the head does NOT update the head pointer (by design),
-    // so get_head() may not return the actual first node. We find it from active_slots.
-    let first_slot = active_slots.iter()
-        .find(|&&s| chain.get_node(s).get_prev_ptr() == 0)
-        .copied();
+    // get_head() must return a valid node
+    let head = chain.get_head();
+    assert!(head.is_some(), "non-empty active set but chain has no head");
+    let head = head.unwrap();
 
-    // There must be exactly one node with prev == 0
-    assert!(first_slot.is_some(), "no node with prev_ptr == 0 found in active slots");
-    let first_slot = first_slot.unwrap();
+    // Head's prev must be 0
+    assert_eq!(head.get_prev_ptr(), 0, "head's prev must be 0");
 
-    let nodes_with_prev_zero: Vec<_> = active_slots.iter()
-        .filter(|&&s| chain.get_node(s).get_prev_ptr() == 0)
-        .collect();
-    assert_eq!(
-        nodes_with_prev_zero.len(), 1,
-        "expected exactly 1 node with prev==0, found {}",
-        nodes_with_prev_zero.len()
+    // Find the head slot from active_slots
+    let head_slot = chain.get_head_slot();
+    assert!(
+        active_slots.contains(&head_slot),
+        "head slot {} not in active slots {:?}",
+        head_slot, active_slots
     );
 
-    // Forward traversal from the actual first node
+    // Forward traversal from head
     let mut visited = Vec::new();
-    let mut current_slot = first_slot;
+    let mut current_slot = head_slot;
     let mut guard = 0;
     loop {
         visited.push(current_slot);
@@ -131,6 +127,87 @@ fn verify_chain_integrity(chain: &NodeChainWriter<NODE_META>, active_slots: &[us
     }
 }
 
+// ============ Explicit insert_before on head tests ============
+
+#[test]
+fn insert_before_head_updates_head_pointer() {
+    let chain = setup_chain();
+
+    let a = chain.insert_head(1).unwrap();
+    assert_eq!(chain.get_head_slot(), a);
+
+    let b = chain.insert_before(a, 2).unwrap();
+
+    // Head pointer must now point to b
+    assert_eq!(chain.get_head_slot(), b, "insert_before head must update head pointer");
+    assert_eq!(chain.get_head().unwrap().get_kind(), 2);
+
+    // Chain: b -> a
+    assert_eq!(chain.get_node(b).get_prev_ptr(), 0, "new head's prev must be 0");
+    assert_eq!(chain.get_node(b).get_next_ptr(), a);
+    assert_eq!(chain.get_node(a).get_prev_ptr(), b);
+    assert_eq!(chain.get_node(a).get_next_ptr(), 0);
+}
+
+#[test]
+fn insert_before_head_twice_builds_correct_chain() {
+    let chain = setup_chain();
+
+    let a = chain.insert_head(1).unwrap();
+    let b = chain.insert_before(a, 2).unwrap();
+    let c = chain.insert_before(b, 3).unwrap();
+
+    // Chain: c -> b -> a
+    assert_eq!(chain.get_head_slot(), c);
+    assert_eq!(chain.get_node(c).get_prev_ptr(), 0);
+    assert_eq!(chain.get_node(c).get_next_ptr(), b);
+    assert_eq!(chain.get_node(b).get_prev_ptr(), c);
+    assert_eq!(chain.get_node(b).get_next_ptr(), a);
+    assert_eq!(chain.get_node(a).get_prev_ptr(), b);
+    assert_eq!(chain.get_node(a).get_next_ptr(), 0);
+
+    verify_chain_integrity(&chain, &[a, b, c]);
+}
+
+#[test]
+fn insert_before_head_then_insert_head_interleaved() {
+    let chain = setup_chain();
+
+    let a = chain.insert_head(1).unwrap();
+    let b = chain.insert_before(a, 2).unwrap();
+    // chain: b -> a
+    let c = chain.insert_head(3).unwrap();
+    // chain: c -> b -> a
+
+    assert_eq!(chain.get_head_slot(), c);
+    assert_eq!(chain.get_node(c).get_prev_ptr(), 0);
+    assert_eq!(chain.get_node(c).get_next_ptr(), b);
+    assert_eq!(chain.get_node(b).get_prev_ptr(), c);
+    assert_eq!(chain.get_node(b).get_next_ptr(), a);
+
+    verify_chain_integrity(&chain, &[a, b, c]);
+}
+
+#[test]
+fn remove_node_inserted_before_head() {
+    let chain = setup_chain();
+
+    let a = chain.insert_head(1).unwrap();
+    let b = chain.insert_before(a, 2).unwrap();
+    // chain: b -> a
+
+    chain.remove(b).unwrap();
+    // chain: a (head should revert to a)
+
+    assert_eq!(chain.get_head_slot(), a);
+    assert_eq!(chain.get_node(a).get_prev_ptr(), 0);
+    assert_eq!(chain.get_node(a).get_next_ptr(), 0);
+
+    verify_chain_integrity(&chain, &[a]);
+}
+
+// ============ Property-based tests ============
+
 proptest! {
     #[test]
     fn node_chain_random_ops_preserve_doubly_linked_invariants(
@@ -139,8 +216,6 @@ proptest! {
         let chain = setup_chain();
         let mut active_slots: Vec<usize> = Vec::new();
         let mut kind_counter = 0i32;
-        // Track the head slot as reported by get_head_slot()
-        // insert_before on head is NOT supported at the raw NodeChainWriter level
 
         for op in ops {
             match op {
@@ -164,13 +239,9 @@ proptest! {
                 ChainOp::InsertBefore(idx) => {
                     if !active_slots.is_empty() && active_slots.len() < CAPACITY {
                         let target = active_slots[idx % active_slots.len()];
-                        // Skip insert_before on the head — not supported at this API level
-                        let head_slot = chain.get_head_slot();
-                        if target != head_slot {
-                            kind_counter += 1;
-                            if let Some(slot) = chain.insert_before(target, kind_counter) {
-                                active_slots.push(slot);
-                            }
+                        kind_counter += 1;
+                        if let Some(slot) = chain.insert_before(target, kind_counter) {
+                            active_slots.push(slot);
                         }
                     }
                 }

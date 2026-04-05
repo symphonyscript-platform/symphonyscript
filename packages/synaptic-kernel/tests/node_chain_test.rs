@@ -154,17 +154,15 @@ fn insert_after_middle() {
 // ============ NodeChainWriter: insert_before ============
 
 #[test]
-fn insert_before_head_does_not_update_chain_head() {
+fn insert_before_head_updates_chain_head() {
     let h = setup();
     let chain = h.chain;
 
     let a = chain.insert_head(1).unwrap();
     let b = chain.insert_before(a, 2).unwrap();
 
-    // chain head is still a (insert_before does NOT update head ptr)
-    // This is by design: insert_before only patches node pointers
-    // b -> a is the link, but chain head is still stored as a
-
+    // insert_before on head must update head pointer to new node
+    assert_eq!(chain.get_head_slot(), b);
     assert_eq!(chain.get_node(b).get_next_ptr(), a);
     assert_eq!(chain.get_node(a).get_prev_ptr(), b);
     assert_eq!(chain.get_node(b).get_prev_ptr(), 0);
