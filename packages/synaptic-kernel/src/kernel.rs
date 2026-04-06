@@ -1,7 +1,7 @@
 use crate::attribute_plane::attributes_writer::AttributesWriter;
 use crate::control_plane::ControlPlane;
-use crate::errors::free_list_error::FreeListError;
 use crate::errors::kernel_error::KernelError;
+use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::into_array::IntoArray;
 use crate::primitives::types::AtomicBuffer;
 use crate::synaptic_graph_config::SynapticGraphConfig;
@@ -214,7 +214,7 @@ impl<
         }
     }
 
-    pub fn remove_node(&self, slot: usize) -> Result<(), FreeListError> {
+    pub fn remove_node(&self, slot: usize) -> Result<(), SlotAllocatorError> {
         self.active_writer.remove_node(slot)
     }
 
@@ -259,7 +259,7 @@ impl<
         }
     }
 
-    pub fn disconnect(&self, slot: usize) -> Result<(), FreeListError> {
+    pub fn disconnect(&self, slot: usize) -> Result<(), SlotAllocatorError> {
         self.active_writer.disconnect(slot)
     }
 

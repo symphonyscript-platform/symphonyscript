@@ -1,5 +1,5 @@
 use crate::constants::SYNAPSE_SIZE;
-use crate::errors::free_list_error::FreeListError;
+use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::triple_buffer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
@@ -207,7 +207,7 @@ impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
         Some(new_slot)
     }
 
-    pub fn disconnect(&self, slot: usize) -> Result<(), FreeListError> {
+    pub fn disconnect(&self, slot: usize) -> Result<(), SlotAllocatorError> {
         let synapse = self.get_synapse(slot);
         let source = self.node_chain.get_node(synapse.get_source_ptr());
         let target = self.node_chain.get_node(synapse.get_target_ptr());

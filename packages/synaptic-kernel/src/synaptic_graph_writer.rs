@@ -1,7 +1,7 @@
 use crate::attribute_plane::attribute_plane_writer::AttributePlaneWriter;
 use crate::attribute_plane::attributes_writer::AttributesWriter;
 use crate::constants::{GRAPH_MAGIC, KERNEL_VERSION};
-use crate::errors::free_list_error::FreeListError;
+use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::metadata::mem_metadata_writer::MemMetadataWriter;
 use crate::metadata::tb_metadata_writer::TbMetadataWriter;
 use crate::primitives::into_array::IntoArray;
@@ -375,7 +375,7 @@ impl<
         }
     }
 
-    pub fn remove_node(&self, slot: usize) -> Result<(), FreeListError> {
+    pub fn remove_node(&self, slot: usize) -> Result<(), SlotAllocatorError> {
         loop {
             let head = self
                 .node_chain_writer
@@ -468,7 +468,7 @@ impl<
         }
     }
 
-    pub fn disconnect(&self, slot: usize) -> Result<(), FreeListError> {
+    pub fn disconnect(&self, slot: usize) -> Result<(), SlotAllocatorError> {
         self.synapse_chain_writer.disconnect(slot)
     }
 

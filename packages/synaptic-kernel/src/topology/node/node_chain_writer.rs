@@ -1,5 +1,5 @@
 use crate::constants::NODE_SIZE;
-use crate::errors::free_list_error::FreeListError;
+use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::triple_buffer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
@@ -223,7 +223,7 @@ impl<const META_SIZE: usize> NodeChainWriter<META_SIZE> {
         Some(new_slot)
     }
 
-    pub fn remove(&self, slot: usize) -> Result<(), FreeListError> {
+    pub fn remove(&self, slot: usize) -> Result<(), SlotAllocatorError> {
         let node = self.get_node(slot);
         let prev_slot = node.get_prev_ptr();
         let next_slot = node.get_next_ptr();
