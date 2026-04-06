@@ -605,10 +605,9 @@ fn copy_from_preserves_topology_and_deep_data() {
     
     src.remove(b).unwrap(); // b deferred
     
-    // create a dst with larger capacity
     let dst_mem = create_mem(MEM_SIZE);
     let (dst_tb, _) = TripleBuffer::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
-    let dst = NodeChainWriter::<NODE_META>::new(dst_mem, dst_tb, FL_START, NODE_START_OFFSET, CAPACITY * 2);
+    let dst = NodeChainWriter::<NODE_META>::new(Arc::clone(&dst_mem), dst_tb, FL_START, NODE_START_OFFSET, CAPACITY * 2);
     
     dst.copy_from(&src);
     
@@ -620,6 +619,15 @@ fn copy_from_preserves_topology_and_deep_data() {
     
     
     dst.publish();
+    
+    // Simulate reader acknowledging the publish
+    let dst_reader = synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader::bind(
+        Arc::clone(&dst_mem), 
+        dst.mem_staging_buffer_start_offset(), 
+        CAPACITY * 2
+    );
+    dst_reader.ack();
+    
     dst.publish();
     
     assert_eq!(dst.len(), 1);

@@ -17,7 +17,12 @@ fn create_allocator(capacity: usize) -> (SlotAllocator, AtomicBuffer) {
 
 #[test]
 fn alloc_defer_flush_lifecycle() {
-    let (alloc, _mem) = create_allocator(4);
+    let (alloc, mem) = create_allocator(4);
+    let reader = synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader::bind(
+        mem,
+        alloc.mem_staging_buffer_start_offset(),
+        4,
+    );
 
     let s1 = alloc.alloc().unwrap();
     assert_eq!(alloc.free_count(), 3);
@@ -29,7 +34,8 @@ fn alloc_defer_flush_lifecycle() {
     assert_eq!(alloc.alloc_count(), 1);
     assert_eq!(alloc.deferred_count(), 1);
 
-    alloc.publish();     // now in staged queue
+    alloc.publish();     // advances generation, staged queue requires an ack
+    reader.ack();        // simulates reader sync
     alloc.publish();     // now freed
 
     assert_eq!(alloc.free_count(), 4);
@@ -43,7 +49,7 @@ fn unallocated_deferral_timebomb_is_disarmed() {
     
     // Attempting to defer slot 1 which has NOT been allocated
     let res = alloc.defer_free(1);
-    assert!(matches!(res, Err(FreeListError::InvalidSlot)));
+    assert!(matches!(res, Err(synaptic_kernel::errors::slot_allocator_error::SlotAllocatorError::InvalidSlot)));
     
     // Nothing should be deferred
     assert_eq!(alloc.deferred_count(), 0);
@@ -57,7 +63,7 @@ fn double_defer_returns_error() {
     alloc.defer_free(s1).unwrap();
     let res = alloc.defer_free(s1);
     
-    assert!(matches!(res, Err(FreeListError::DoubleFree)));
+    assert!(matches!(res, Err(synaptic_kernel::errors::slot_allocator_error::SlotAllocatorError::DoubleFree)));
 }
 
 #[test]

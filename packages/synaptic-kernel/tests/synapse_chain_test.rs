@@ -372,6 +372,15 @@ fn full_connect_disconnect_reconnect_cycle() {
     assert_eq!(node_chain.get_node(tgt).get_incoming_synapse_head(), 0);
 
     synapse_chain.publish();
+    
+    // Explicitly acknowledge the publish to free the disconnected synapse
+    let reader = synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader::bind(
+        Arc::clone(&h._mem),
+        synapse_chain.mem_staging_buffer_start_offset(),
+        SYNAPSE_CAPACITY,
+    );
+    reader.ack();
+    
     synapse_chain.publish();
 
     // reconnect (slot should be reused)
@@ -801,7 +810,7 @@ fn copy_from_preserves_topology_and_deep_data() {
         NODE_CAPACITY,
     );
     let mut dst_synapse_chain = SynapseChainWriter::<NODE_META, SYNAPSE_META>::new(
-        dst_mem,
+        Arc::clone(&dst_mem),
         dst_tb,
         dst_node_chain.clone(),
         dst_node_chain.mem_end_offset(),
@@ -818,6 +827,15 @@ fn copy_from_preserves_topology_and_deep_data() {
 
     // Test deferred flush behavior on destination shrinks allocated slots natively
     dst_synapse_chain.publish();
+    
+    // Explicitly acknowledge the publish 
+    let dst_reader = synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader::bind(
+        Arc::clone(&dst_mem),
+        dst_synapse_chain.mem_staging_buffer_start_offset(),
+        SYNAPSE_CAPACITY * 2,
+    );
+    dst_reader.ack();
+    
     dst_synapse_chain.publish();
 
     assert_eq!(dst_synapse_chain.len(), 1);

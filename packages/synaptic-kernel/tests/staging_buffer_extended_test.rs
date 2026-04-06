@@ -1,206 +1,222 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use synaptic_kernel::primitives::staging_buffer::StagingBuffer;
+use synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
-fn create_list(capacity: usize) -> (StagingBuffer, AtomicBuffer) {
+fn create_staging(capacity: usize) -> (StagingBuffer, StagingBufferReader, AtomicBuffer) {
     let size = StagingBuffer::calculate_size_on_mem(capacity);
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    let mem = Arc::new(vec);
-    let list = StagingBuffer::new(Arc::clone(&mem), 0, capacity);
-    (list, mem)
+    let mem: AtomicBuffer = Arc::new((0..size).map(|_| AtomicI32::new(0)).collect());
+    let buffer = StagingBuffer::new(Arc::clone(&mem), 0, capacity);
+    let reader = StagingBufferReader::bind(Arc::clone(&mem), 0, capacity);
+    (buffer, reader, mem)
 }
 
-// ============ copy_from: happy path ============
+// ============ copy_from: generation-aware ============
 
 #[test]
-fn copy_from_preserves_active_items() {
-    let (src, _) = create_list(4);
-    src.push(10);
-    src.push(20);
-    assert_eq!(src.active_count(), 2);
+fn copy_from_preserves_pending_entries_and_generations() {
+    let (src, _, _) = create_staging(4);
 
-    let (dst, _) = create_list(8);
+    // Push A, B with gen 1
+    src.push(10).unwrap();
+    src.push(20).unwrap();
+    src.publish(); // gen → 2
+
+    // Push C with gen 2
+    src.push(30).unwrap();
+
+    let (dst, reader, _) = create_staging(8);
     dst.copy_from(&src);
 
-    assert_eq!(dst.active_count(), 2);
-    assert_eq!(dst.staged_count(), 0);
-    assert_eq!(dst.len(), 2);
-}
-
-#[test]
-fn copy_from_preserves_staged_items() {
-    let (src, _) = create_list(4);
-    src.push(10);
-    src.push(20);
-
-    // First drain: moves items from active to staged, swaps lists
-    let empty: Vec<usize> = src.drain().collect();
-    assert!(empty.is_empty());
-    assert_eq!(src.staged_count(), 2);
-    assert_eq!(src.active_count(), 0);
-
-    let (dst, _) = create_list(8);
-    dst.copy_from(&src);
-
-    assert_eq!(dst.staged_count(), 2);
-    assert_eq!(dst.active_count(), 0);
-    assert_eq!(dst.len(), 2);
-
-    // Drain from dst should yield the copied staged items
-    let drained: Vec<usize> = dst.drain().collect();
-    assert_eq!(drained, vec![10, 20]);
-}
-
-#[test]
-fn copy_from_preserves_both_active_and_staged() {
-    let (src, _) = create_list(4);
-
-    // Push 2 items, drain (moves to staged), push 1 more (active)
-    src.push(10);
-    src.push(20);
-    let _: Vec<usize> = src.drain().collect(); // toggle: staged = [10, 20]
-    src.push(30); // active = [30]
-
-    assert_eq!(src.active_count(), 1);
-    assert_eq!(src.staged_count(), 2);
-
-    let (dst, _) = create_list(8);
-    dst.copy_from(&src);
-
-    assert_eq!(dst.active_count(), 1);
-    assert_eq!(dst.staged_count(), 2);
     assert_eq!(dst.len(), 3);
+    assert_eq!(dst.writer_generation(), 2); // copied from src
 
-    // Drain should yield the staged items [10, 20]
-    let drained: Vec<usize> = dst.drain().collect();
-    assert_eq!(drained, vec![10, 20]);
+    // Ack gen 1 → drain A, B
+    reader.ack(); // acks writer_gen-1 = 1
+    let d1: Vec<usize> = dst.drain().collect();
+    assert_eq!(d1, vec![10, 20]);
 
-    // Active item [30] is now staged after drain
-    assert_eq!(dst.staged_count(), 1);
-
-    // Second drain yields [30]
-    let drained2: Vec<usize> = dst.drain().collect();
-    assert_eq!(drained2, vec![30]);
-
-    assert_eq!(dst.len(), 0);
-}
-
-// ============ Multi-cycle drain ordering ============
-
-#[test]
-fn drain_preserves_insertion_order() {
-    let (list, _) = create_list(8);
-
-    list.push(1);
-    list.push(2);
-    list.push(3);
-    list.push(4);
-
-    // First drain: toggles active -> staged, returns nothing (previous list was empty)
-    let empty: Vec<usize> = list.drain().collect();
-    assert!(empty.is_empty());
-
-    // Second drain: returns items in insertion order
-    let drained: Vec<usize> = list.drain().collect();
-    assert_eq!(drained, vec![1, 2, 3, 4]);
+    // C (gen 2) still in buffer
+    assert_eq!(dst.len(), 1);
 }
 
 #[test]
-fn three_cycle_push_drain_interleaving() {
-    let (list, _) = create_list(4);
+fn copy_from_to_larger_capacity() {
+    let (src, src_reader, _) = create_staging(4);
 
-    // Cycle 1: push A, B
-    list.push(10);
-    list.push(20);
-    let d1: Vec<usize> = list.drain().collect(); // toggles, returns empty
-    assert!(d1.is_empty());
+    src.push(1).unwrap();
+    src.push(2).unwrap();
+    src.publish(); // gen → 2
+    src_reader.ack(); // acks 1
 
-    // Cycle 2: push C, drain returns [A, B]
-    list.push(30);
-    let d2: Vec<usize> = list.drain().collect();
-    assert_eq!(d2, vec![10, 20]);
+    // Drain gen 1
+    let d: Vec<usize> = src.drain().collect();
+    assert_eq!(d, vec![1, 2]);
 
-    // Cycle 3: push D, drain returns [C]
-    list.push(40);
-    let d3: Vec<usize> = list.drain().collect();
-    assert_eq!(d3, vec![30]);
+    // Push more
+    src.push(3).unwrap();
+    src.push(4).unwrap();
+    src.publish(); // gen → 3
 
-    // Cycle 4: drain returns [D]
-    let d4: Vec<usize> = list.drain().collect();
-    assert_eq!(d4, vec![40]);
+    let (dst, dst_reader, _) = create_staging(8);
+    dst.copy_from(&src);
 
-    assert_eq!(list.len(), 0);
+    assert_eq!(dst.len(), 2); // 3, 4
+    assert_eq!(dst.writer_generation(), 3);
+    assert_eq!(dst.reader_ack_generation(), 1); // copied ack
+
+    // Ack up to gen 2
+    dst_reader.ack(); // acks writer_gen-1 = 2
+    let d2: Vec<usize> = dst.drain().collect();
+    assert_eq!(d2, vec![3, 4]);
 }
 
-// ============ Bind ============
+// ============ Multi-cycle ordering ============
 
 #[test]
-fn bind_reads_existing_state() {
+fn drain_preserves_insertion_order_across_generations() {
+    let (buf, reader, _) = create_staging(16);
+
+    buf.push(1).unwrap();
+    buf.push(2).unwrap();
+    buf.publish(); // gen → 2
+
+    buf.push(3).unwrap();
+    buf.push(4).unwrap();
+    buf.publish(); // gen → 3
+
+    // Ack all
+    reader.ack(); // acks 2
+
+    let drained: Vec<usize> = buf.drain().collect();
+    assert_eq!(drained, vec![1, 2, 3, 4]); // FIFO order preserved
+}
+
+#[test]
+fn interleaved_push_publish_ack_drain() {
+    let (buf, reader, _) = create_staging(8);
+
+    // Cycle 1
+    buf.push(10).unwrap();
+    buf.publish(); // gen → 2
+
+    // Ack gen 1, drain
+    reader.ack(); // acks 1
+    let d1: Vec<usize> = buf.drain().collect();
+    assert_eq!(d1, vec![10]);
+
+    // Cycle 2
+    buf.push(20).unwrap();
+    buf.push(30).unwrap();
+    buf.publish(); // gen → 3
+
+    // Ack gen 2, drain
+    reader.ack(); // acks 2
+    let d2: Vec<usize> = buf.drain().collect();
+    assert_eq!(d2, vec![20, 30]);
+
+    // Cycle 3: empty publish
+    buf.publish(); // gen → 4
+    reader.ack(); // acks 3
+    let d3: Vec<usize> = buf.drain().collect();
+    assert!(d3.is_empty());
+
+    assert_eq!(buf.len(), 0);
+}
+
+// ============ Bind preserves generation state ============
+
+#[test]
+fn bind_preserves_generation_state() {
     let size = StagingBuffer::calculate_size_on_mem(4);
-    let mem: AtomicBuffer = Arc::new(
-        (0..size).map(|_| AtomicI32::new(0)).collect(),
-    );
+    let mem: AtomicBuffer = Arc::new((0..size).map(|_| AtomicI32::new(0)).collect());
 
-    let list1 = StagingBuffer::new(Arc::clone(&mem), 0, 4);
-    list1.push(42);
-    list1.push(99);
+    let buf1 = StagingBuffer::new(Arc::clone(&mem), 0, 4);
+    buf1.push(42).unwrap();
+    buf1.publish();
+    buf1.push(99).unwrap();
+    buf1.publish();
 
-    // Bind to same memory — should see existing state
-    let list2 = StagingBuffer::bind(Arc::clone(&mem), 0, 4);
-    assert_eq!(list2.active_count(), 2);
-    assert_eq!(list2.len(), 2);
+    let buf2 = StagingBuffer::bind(Arc::clone(&mem), 0, 4);
+    assert_eq!(buf2.len(), 2);
+    assert_eq!(buf2.writer_generation(), 3);
 }
 
-// ============ Capacity boundary ============
+// ============ Stress: many cycles ============
 
 #[test]
-fn push_exactly_to_capacity_succeeds() {
-    let (list, _) = create_list(4);
-    list.push(1);
-    list.push(2);
-    list.push(3);
-    list.push(4);
-    assert_eq!(list.active_count(), 4);
+fn many_push_publish_ack_drain_cycles() {
+    let (buf, reader, _) = create_staging(16);
+
+    for i in 0..50 {
+        buf.push(i).unwrap();
+        buf.publish();
+        reader.ack();
+        let drained: Vec<usize> = buf.drain().collect();
+        assert_eq!(drained, vec![i], "cycle {}", i);
+    }
+
+    assert_eq!(buf.len(), 0);
+    assert_eq!(buf.writer_generation(), 51);
 }
 
 #[test]
-fn drain_resets_count_allowing_reuse() {
-    let (list, _) = create_list(2);
-    list.push(1);
-    list.push(2);
-    assert_eq!(list.active_count(), 2);
+fn batch_push_then_batch_drain() {
+    let (buf, reader, _) = create_staging(16);
 
-    let _: Vec<usize> = list.drain().collect(); // toggle
-    assert_eq!(list.active_count(), 0);
+    // Push 8 items across 4 publish cycles
+    for i in 0..4 {
+        buf.push(i * 2).unwrap();
+        buf.push(i * 2 + 1).unwrap();
+        buf.publish();
+    }
 
-    // Can push again to the now-current list
-    list.push(3);
-    list.push(4);
-    assert_eq!(list.active_count(), 2);
+    assert_eq!(buf.len(), 8);
 
-    // Drain the staged items from first batch
-    let drained: Vec<usize> = list.drain().collect();
-    assert_eq!(drained, vec![1, 2]);
+    // Ack up to gen 4 (all published)
+    reader.ack(); // acks writer_gen-1 = 4
+
+    let drained: Vec<usize> = buf.drain().collect();
+    assert_eq!(drained, vec![0, 1, 2, 3, 4, 5, 6, 7]);
+    assert_eq!(buf.len(), 0);
 }
 
-// ============ Nonzero start offset ============
+// ============ Edge: ack before any publish ============
 
 #[test]
-fn nonzero_start_offset_works() {
-    let size = StagingBuffer::calculate_size_on_mem(4) + 100;
-    let mem: AtomicBuffer = Arc::new(
-        (0..size).map(|_| AtomicI32::new(0)).collect(),
-    );
+fn ack_before_any_publish_is_noop() {
+    let (buf, reader, _) = create_staging(4);
 
-    let list = StagingBuffer::new(Arc::clone(&mem), 100, 4);
-    list.push(42);
-    assert_eq!(list.active_count(), 1);
+    buf.push(10).unwrap();
 
-    let _: Vec<usize> = list.drain().collect();
-    let drained: Vec<usize> = list.drain().collect();
-    assert_eq!(drained, vec![42]);
+    // Writer gen is 1, reader.ack() → acks 0. Gen 1 > Gen 0 -> noop
+    reader.ack();
+
+    // Drain yields nothing
+    let drained: Vec<usize> = buf.drain().collect();
+    assert!(drained.is_empty());
+}
+
+// ============ Edge: publish without push between acks ============
+
+#[test]
+fn empty_publish_cycles_dont_break_generation_tracking() {
+    let (buf, reader, _) = create_staging(8);
+
+    buf.push(1).unwrap();
+    buf.publish(); // gen → 2
+
+    // Empty publishes
+    buf.publish(); // gen → 3
+    buf.publish(); // gen → 4
+
+    buf.push(2).unwrap(); // stamped gen 4
+    buf.publish(); // gen → 5
+
+    // Ack gen 4
+    reader.ack(); // acks writer_gen-1 = 4
+
+    let drained: Vec<usize> = buf.drain().collect();
+    assert_eq!(drained, vec![1, 2]); // both acked (gen 1 <= 4, gen 4 <= 4)
 }

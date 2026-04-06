@@ -29,7 +29,7 @@ fn setup() -> (Gw, Gr) {
     let mem_arc = Arc::new(mem);
 
     let kernel = Gw::new(Arc::clone(&mem_arc), cfg.clone());
-    let reader = Gr::bind(Arc::clone(&mem_arc), cfg);
+    let reader = kernel.to_reader();
     (kernel, reader)
 }
 

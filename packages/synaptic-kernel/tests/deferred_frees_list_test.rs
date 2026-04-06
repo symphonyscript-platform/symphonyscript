@@ -1,84 +1,81 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use synaptic_kernel::primitives::staging_buffer::StagingBuffer;
+use synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader;
 
-fn create_list(max_slots: usize) -> (StagingBuffer, Arc<Vec<AtomicI32>>) {
-    let size = StagingBuffer::calculate_size_on_mem(max_slots);
+fn create_list(capacity: usize) -> (StagingBuffer, StagingBufferReader, Arc<Vec<AtomicI32>>) {
+    let size = StagingBuffer::calculate_size_on_mem(capacity);
     let mem: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
     let mem_arc = Arc::new(mem);
     (
-        StagingBuffer::new(Arc::clone(&mem_arc), 0, max_slots),
+        StagingBuffer::new(Arc::clone(&mem_arc), 0, capacity),
+        StagingBufferReader::bind(Arc::clone(&mem_arc), 0, capacity),
         mem_arc,
     )
 }
 
 #[test]
-fn push_and_drain_toggles() {
-    let (list, _mem) = create_list(16);
+fn push_and_generation_gated_drain() {
+    let (list, reader, _mem) = create_list(16);
 
-    list.push(10);
-    list.push(20);
+    list.push(10).unwrap();
+    list.push(20).unwrap();
+    list.publish(); // gen → 2
 
-    // Initial drain toggles the active list and returns the old (empty) list
-    let mut empty_iter = list.drain();
-    assert!(empty_iter.next().is_none());
+    // Default ack=0, entries stamped gen=1. Drain yields gen <= 0, so nothing drains.
+    let drained: Vec<usize> = list.drain().collect();
+    assert!(drained.is_empty());
 
-    // Pushing now goes to the new active list
-    list.push(30);
+    // Push more, publish
+    list.push(30).unwrap();
+    list.publish(); // gen → 3
 
-    // Draining toggles again, and returns the previous list (holding 10 and 20)
-    let mut iter2 = list.drain();
-    assert_eq!(iter2.next(), Some(10));
-    assert_eq!(iter2.next(), Some(20));
-    assert!(iter2.next().is_none());
-
-    // Draining a third time without pushing gives the 30
-    let mut iter3 = list.drain();
-    assert_eq!(iter3.next(), Some(30));
-    assert!(iter3.next().is_none());
+    // Ack gen 2 (reader sees writer_gen=3, acks 2)
+    reader.ack();
+    let drained2: Vec<usize> = list.drain().collect();
+    assert_eq!(drained2, vec![10, 20, 30]);
 }
 
 #[test]
-fn drain_clears_previous_length() {
-    let (list, _mem) = create_list(16);
+fn drain_clears_entries() {
+    let (list, reader, _mem) = create_list(16);
 
-    list.push(5);
-    list.drain(); // toggled
+    list.push(5).unwrap();
+    list.publish();
+    reader.ack();
+    list.drain().for_each(drop);
 
-    list.drain(); // toggled and swept the '5'
-
-    // Now if we drain again, it should be empty
+    // Should be empty
     let mut iter = list.drain();
     assert!(iter.next().is_none());
 }
 
 #[test]
 fn copy_from_preserves_state_and_resizes() {
-    let (small, _mem_small) = create_list(16);
-    small.push(5);
-    small.push(10);
-    small.drain(); // toggles, 5 and 10 go to backbuffer
-    small.push(15);
+    let (small, small_reader, _mem_small) = create_list(16);
+    small.push(5).unwrap();
+    small.push(10).unwrap();
+    small.publish(); // gen → 1
+    small_reader.ack(); // acks 0
+    small.drain().for_each(drop); // drain gen <= 0
 
-    let (large, _mem_large) = create_list(32);
+    small.push(15).unwrap();
+    small.publish(); // gen → 2
+
+    let (large, large_reader, _mem_large) = create_list(32);
     large.copy_from(&small);
 
-    // Drain large - toggles so it reads backbuffer (5 & 10)
-    let mut prev_iter = large.drain();
-    assert_eq!(prev_iter.next(), Some(5));
-    assert_eq!(prev_iter.next(), Some(10));
-    assert!(prev_iter.next().is_none());
-
-    // Drain large again - toggles so it reads the other buffer (15)
-    let mut cur_iter = large.drain();
-    assert_eq!(cur_iter.next(), Some(15));
-    assert!(cur_iter.next().is_none());
+    // Ack gen 1 on destination
+    large_reader.ack(); // acks writer_gen-1 = 1
+    let drained: Vec<usize> = large.drain().collect();
+    assert_eq!(drained, vec![15]);
+    assert_eq!(large.len(), 0);
 }
 
 #[test]
 #[should_panic]
 fn copy_from_panics_if_source_larger() {
-    let (small, _mem_small) = create_list(16);
-    let (large, _mem_large) = create_list(32);
+    let (small, _, _mem_small) = create_list(16);
+    let (large, _, _mem_large) = create_list(32);
     small.copy_from(&large);
 }

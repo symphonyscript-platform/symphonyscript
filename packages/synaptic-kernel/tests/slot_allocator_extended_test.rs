@@ -1,9 +1,10 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use synaptic_kernel::primitives::slot_allocator::SlotAllocator;
+use synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
-fn create_allocator(capacity: usize) -> (SlotAllocator, AtomicBuffer) {
+fn create_allocator(capacity: usize) -> (SlotAllocator, StagingBufferReader, AtomicBuffer) {
     let size = SlotAllocator::calculate_size_on_mem(capacity);
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
@@ -11,14 +12,21 @@ fn create_allocator(capacity: usize) -> (SlotAllocator, AtomicBuffer) {
     }
     let mem = Arc::new(vec);
     let alloc = SlotAllocator::new(Arc::clone(&mem), 0, capacity);
-    (alloc, mem)
+    
+    // We need a StagingBufferReader to simulate the reader acking generations
+    let reader = StagingBufferReader::bind(
+        Arc::clone(&mem),
+        alloc.mem_staging_buffer_start_offset(),
+        capacity,
+    );
+    (alloc, reader, mem)
 }
 
 // ============ State transitions: is_active / is_deferred / is_free ============
 
 #[test]
 fn fresh_allocator_all_slots_free() {
-    let (alloc, _) = create_allocator(4);
+    let (alloc, _, _) = create_allocator(4);
     // Slots are 1-based
     for i in 1..=4 {
         assert!(alloc.is_free(i), "slot {} should be free", i);
@@ -28,7 +36,7 @@ fn fresh_allocator_all_slots_free() {
 
 #[test]
 fn after_alloc_slot_is_active() {
-    let (alloc, _) = create_allocator(4);
+    let (alloc, _, _) = create_allocator(4);
     let s = alloc.alloc().unwrap();
 
     assert!(alloc.is_allocated(s));
@@ -39,7 +47,7 @@ fn after_alloc_slot_is_active() {
 
 #[test]
 fn after_defer_slot_is_deferred_not_active() {
-    let (alloc, _) = create_allocator(4);
+    let (alloc, _, _) = create_allocator(4);
     let s = alloc.alloc().unwrap();
 
     alloc.defer_free(s).unwrap();
@@ -51,28 +59,35 @@ fn after_defer_slot_is_deferred_not_active() {
 }
 
 #[test]
-fn after_single_flush_slot_still_deferred() {
-    let (alloc, _) = create_allocator(4);
+fn after_publish_without_ack_slot_still_deferred() {
+    let (alloc, _, _) = create_allocator(4);
     let s = alloc.alloc().unwrap();
     alloc.defer_free(s).unwrap();
 
-    // First flush: moves deferred from active list to staged list
+    // Publish (increments generation), but no reader ack yet.
     alloc.publish();
 
-    // Slot is still allocated — staging buffer hasn't drained the staged items yet
+    // Slot is still allocated (in use) and still deferred
     assert!(alloc.is_allocated(s));
+    assert!(alloc.is_deferred(s));
 }
 
 #[test]
-fn after_two_flushes_slot_is_fully_free() {
-    let (alloc, _) = create_allocator(4);
+fn after_publish_and_ack_next_publish_frees_slot() {
+    let (alloc, reader, _) = create_allocator(4);
     let s = alloc.alloc().unwrap();
     alloc.defer_free(s).unwrap();
 
-    alloc.publish(); // toggle: deferred -> staged
-    alloc.publish(); // drain staged, free the slots
+    // Cycle 1: push and publish
+    alloc.publish();
 
-    assert!(alloc.is_free(s), "slot should be fully free after 2 flushes");
+    // Reader acks the published generation
+    reader.ack();
+
+    // Cycle 2: next publish drains the acked items and returns them to free list
+    alloc.publish();
+
+    assert!(alloc.is_free(s), "slot should be fully free");
     assert!(!alloc.is_allocated(s));
     assert!(!alloc.is_deferred(s));
 }
@@ -81,7 +96,7 @@ fn after_two_flushes_slot_is_fully_free() {
 
 #[test]
 fn copy_from_preserves_state_and_adds_capacity() {
-    let (small, _) = create_allocator(4);
+    let (small, _, _) = create_allocator(4);
 
     let s1 = small.alloc().unwrap();
     let s2 = small.alloc().unwrap();
@@ -100,27 +115,27 @@ fn copy_from_preserves_state_and_adds_capacity() {
     let large = SlotAllocator::new(Arc::clone(&large_mem), 0, 8);
     large.copy_from(&small);
 
-    // Verify: alloc count should be same, free count should include new capacity
-    assert_eq!(large.alloc_count(), 3);
-    assert_eq!(large.capacity(), 8);
+    // State should be exactly reproduced
+    assert_eq!(large.alloc_count(), 3, "allocations preserved");
+    assert_eq!(large.deferred_count(), 1, "deferred count preserved");
+    assert_eq!(large.capacity(), 8, "capacity is new");
 
-    // Verify the deferred state was copied
-    assert_eq!(large.deferred_count(), 1);
+    assert!(large.is_active(s1), "s1 is active");
+    assert!(large.is_deferred(s2), "s2 is deferred");
+    assert!(!large.is_free(s1));
+    assert!(!large.is_free(s2));
 
-    // s1 should still be active
-    assert!(large.is_active(s1));
-
-    // s2 should still be deferred
-    assert!(large.is_deferred(s2));
-
-    // New slots (5-8) should be allocatable
-    let s5 = large.alloc().unwrap();
-    assert!(s5 >= 1 && s5 <= 8);
+    // Can allocate from remainder up to 8
+    for _ in 0..5 {
+        assert!(large.alloc().is_some());
+    }
+    // Now full
+    assert!(large.alloc().is_none());
 }
 
 #[test]
 fn copy_from_deferred_items_flush_correctly_on_destination() {
-    let (small, _) = create_allocator(4);
+    let (small, _, _) = create_allocator(4);
 
     let s1 = small.alloc().unwrap();
     let s2 = small.alloc().unwrap();
@@ -132,10 +147,23 @@ fn copy_from_deferred_items_flush_correctly_on_destination() {
         (0..large_size).map(|_| AtomicI32::new(0)).collect(),
     );
     let large = SlotAllocator::new(Arc::clone(&large_mem), 0, 8);
+    
+    // Also bind a reader to the large
+    let large_reader = StagingBufferReader::bind(
+        Arc::clone(&large_mem),
+        large.mem_staging_buffer_start_offset(),
+        8,
+    );
+
     large.copy_from(&small);
 
-    // Flush on destination should work correctly
+    // Publish to advance generation on destination
     large.publish();
+
+    // Reader acks
+    large_reader.ack();
+
+    // Next publish drains and frees
     large.publish();
 
     assert_eq!(large.deferred_count(), 0);
@@ -146,8 +174,8 @@ fn copy_from_deferred_items_flush_correctly_on_destination() {
 #[test]
 #[should_panic]
 fn copy_from_panics_if_source_larger() {
-    let (large, _) = create_allocator(8);
-    let (small, _) = create_allocator(4);
+    let (large, _, _) = create_allocator(8);
+    let (small, _, _) = create_allocator(4);
     small.copy_from(&large);
 }
 
@@ -155,7 +183,7 @@ fn copy_from_panics_if_source_larger() {
 
 #[test]
 fn stress_alloc_defer_flush_cycles() {
-    let (alloc, _) = create_allocator(64);
+    let (alloc, reader, _) = create_allocator(64);
 
     for _cycle in 0..50 {
         // Alloc some slots
@@ -171,11 +199,17 @@ fn stress_alloc_defer_flush_cycles() {
             alloc.defer_free(*s).unwrap();
         }
 
-        // Flush (2x for full reclamation)
+        // Cycle 1: publish and ack
         alloc.publish();
+        reader.ack();
+        
+        // Cycle 2: next publish un-defers and reclaims
         alloc.publish();
 
         // Invariant: free_count + alloc_count == capacity
+        // Note: alloc_count inside the allocator includes deferred items.
+        // Because we deferred and then fully reclaimed, the slots returned 
+        // to the free list are no longer counted as allocated.
         assert_eq!(
             alloc.free_count() + alloc.alloc_count(),
             64,
@@ -183,12 +217,14 @@ fn stress_alloc_defer_flush_cycles() {
             _cycle
         );
 
-        // Free the non-deferred slots directly via defer+flush
+        // Free the remaining non-deferred slots
         for s in slots.iter().skip(slots.len() / 2) {
             alloc.defer_free(*s).unwrap();
         }
+        
         alloc.publish();
-        alloc.publish();
+        reader.ack();
+        alloc.publish(); // Reclaims the remaining
     }
 
     // At the end, everything should be free
@@ -199,7 +235,7 @@ fn stress_alloc_defer_flush_cycles() {
 
 #[test]
 fn stress_interleaved_alloc_defer_with_partial_flush() {
-    let (alloc, _) = create_allocator(32);
+    let (alloc, reader, _) = create_allocator(32);
 
     let mut active: Vec<usize> = Vec::new();
 
@@ -213,9 +249,12 @@ fn stress_interleaved_alloc_defer_with_partial_flush() {
             alloc.defer_free(s).unwrap();
         }
 
-        // Flush every 5th iteration (partial drains)
-        if i % 5 == 0 {
+        // Periodically sequence a complete cycle
+        if i % 3 == 0 {
             alloc.publish();
+        }
+        if i % 4 == 0 {
+            reader.ack();
         }
     }
 
@@ -223,7 +262,10 @@ fn stress_interleaved_alloc_defer_with_partial_flush() {
     for s in active {
         alloc.defer_free(s).unwrap();
     }
+    
+    // We need up to 2 publish cycles with an ack to guarantee everything drains
     alloc.publish();
+    reader.ack();
     alloc.publish();
 
     assert_eq!(alloc.free_count(), 32);
@@ -234,7 +276,7 @@ fn stress_interleaved_alloc_defer_with_partial_flush() {
 
 #[test]
 fn utilization_tracks_allocation_ratio() {
-    let (alloc, _) = create_allocator(4);
+    let (alloc, _, _) = create_allocator(4);
     assert_eq!(alloc.utilization(), 0.0);
 
     alloc.alloc().unwrap();
