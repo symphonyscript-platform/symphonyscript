@@ -1,4 +1,4 @@
-use crate::errors::free_list_error::FreeListError;
+use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::bitmap::Bitmap;
 use crate::primitives::simple_free_list::SimpleFreeList;
 use crate::primitives::staging_buffer::StagingBuffer;
@@ -110,18 +110,18 @@ impl SlotAllocator {
         self.free_list.alloc()
     }
 
-    pub fn defer_free(&self, slot_number: usize) -> Result<(), FreeListError> {
+    pub fn defer_free(&self, slot_number: usize) -> Result<(), SlotAllocatorError> {
         if !self.is_allocated(slot_number) {
-            return Err(FreeListError::InvalidSlot);
+            return Err(SlotAllocatorError::InvalidSlot);
         }
 
         let slot_index = slot_number - 1;
 
         if self.staging_bitmap.is_on(slot_index) {
-            return Err(FreeListError::DoubleFree);
+            return Err(SlotAllocatorError::DoubleFree);
         }
 
-        self.staging_buffer.push(slot_number);
+        self.staging_buffer.push(slot_number)?;
         self.staging_bitmap.on(slot_index);
 
         Ok(())
