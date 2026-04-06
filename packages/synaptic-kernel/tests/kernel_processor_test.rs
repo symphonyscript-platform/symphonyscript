@@ -1,6 +1,6 @@
 use synaptic_kernel::control_plane::ControlPlane;
-use synaptic_kernel::kernel_controller::KernelController;
-use synaptic_kernel::kernel_processor::KernelProcessor;
+use synaptic_kernel::kernel::Kernel;
+use synaptic_kernel::graph_consumer::GraphConsumer;
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
 
 const NODE_META: usize = 8;
@@ -8,8 +8,8 @@ const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type TestKernel = KernelController<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-type TestProcessor = KernelProcessor<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestProcessor = GraphConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
 fn config(capacity: usize) -> SynapticGraphConfig {
     SynapticGraphConfig {
@@ -21,9 +21,9 @@ fn config(capacity: usize) -> SynapticGraphConfig {
 }
 
 fn setup(capacity: usize) -> (TestKernel, TestProcessor) {
-    let controller = KernelController::new(config(capacity));
+    let controller = Kernel::new(config(capacity));
     let addr = controller.get_controller_plane_address();
-    let processor = TestProcessor::new(addr);
+    let processor = TestProcessor::bind(addr);
     (controller, processor)
 }
 
@@ -31,9 +31,9 @@ fn setup(capacity: usize) -> (TestKernel, TestProcessor) {
 
 #[test]
 fn processor_new_with_valid_address_succeeds() {
-    let controller = KernelController::<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>::new(config(8));
+    let controller = Kernel::<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>::new(config(8));
     let addr = controller.get_controller_plane_address();
-    let _processor = TestProcessor::new(addr);
+    let _processor = TestProcessor::bind(addr);
 }
 
 #[test]
@@ -42,7 +42,7 @@ fn processor_new_with_invalid_address_panics() {
     // Allocate zeroed memory — signature will be 0, not CONTROLLER_MAGIC
     let fake_mem = vec![0u8; 64];
     let addr = fake_mem.as_ptr() as usize;
-    let _processor = TestProcessor::new(addr);
+    let _processor = TestProcessor::bind(addr);
 }
 
 // ============ acquire_graph + ack lifecycle ============

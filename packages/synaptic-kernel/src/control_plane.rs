@@ -40,7 +40,7 @@ impl<
         ControlPlane {
             signature: CONTROLLER_MAGIC,
             shared_graph_ptr: AtomicPtr::new(shared_graph_ptr),
-            writer_generation: AtomicI32::new(0),
+            writer_generation: AtomicI32::new(1),
             reader_ack_generation: AtomicI32::new(0),
         }
     }
@@ -80,8 +80,8 @@ impl<
         self.reader_ack_generation.load(Ordering::Acquire)
     }
 
-    pub fn ack(&self, writer_generation: i32) {
+    pub fn ack(&self, generation: i32) {
         self.reader_ack_generation
-            .store(writer_generation, Ordering::Release)
+            .store(generation, Ordering::Release)
     }
 }

@@ -1,6 +1,6 @@
 use synaptic_kernel::control_plane::ControlPlane;
 use synaptic_kernel::errors::kernel_error::KernelError;
-use synaptic_kernel::kernel_controller::KernelController;
+use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
 use synaptic_kernel::synaptic_graph_reader::SynapticGraphReader;
 
@@ -9,11 +9,11 @@ const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type TestKernel = KernelController<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 type TestReader = SynapticGraphReader<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
 fn new_controller(cfg: SynapticGraphConfig) -> TestKernel {
-    KernelController::new(cfg)
+    Kernel::new(cfg)
 }
 
 fn create_config(nodes: usize, synapses: usize) -> SynapticGraphConfig {

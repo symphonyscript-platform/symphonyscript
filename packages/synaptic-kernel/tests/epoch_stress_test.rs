@@ -4,8 +4,8 @@ use std::thread;
 use std::time::Duration;
 
 
-use synaptic_kernel::kernel_controller::KernelController;
-use synaptic_kernel::kernel_processor::KernelProcessor;
+use synaptic_kernel::kernel::Kernel;
+use synaptic_kernel::graph_consumer::GraphConsumer;
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
 
 const NODE_META: usize = 8;
@@ -13,8 +13,8 @@ const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type TestKernel = KernelController<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-type TestProcessor = KernelProcessor<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestProcessor = GraphConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
 fn config(n: usize, s: usize) -> SynapticGraphConfig {
     SynapticGraphConfig {
@@ -47,7 +47,7 @@ fn epoch_stress_grow_under_audio_load_with_ack() {
 
     // Audio thread: uses KernelProcessor (acquire_graph + ack)
     let audio_thread = thread::spawn(move || {
-        let mut processor = TestProcessor::new(cp_addr);
+        let mut processor = TestProcessor::bind(cp_addr);
         let mut iterations = 0u64;
         let mut max_chain_len = 0usize;
 
@@ -154,7 +154,7 @@ fn epoch_stress_random_mutations_under_audio_load() {
 
     // Audio thread with KernelProcessor
     let audio_thread = thread::spawn(move || {
-        let mut processor = TestProcessor::new(cp_addr);
+        let mut processor = TestProcessor::bind(cp_addr);
         let mut iterations = 0u64;
 
         while running_audio.load(Ordering::Relaxed) {
@@ -276,7 +276,7 @@ fn epoch_stress_slow_ack_does_not_crash() {
 
     // Slow audio thread: acks infrequently
     let audio_thread = thread::spawn(move || {
-        let mut processor = TestProcessor::new(cp_addr);
+        let mut processor = TestProcessor::bind(cp_addr);
         let mut iterations = 0u64;
 
         while running_audio.load(Ordering::Relaxed) {
@@ -352,7 +352,7 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
 
     // Audio thread: reads attributes via KernelProcessor
     let audio_thread = thread::spawn(move || {
-        let mut processor = TestProcessor::new(cp_addr);
+        let mut processor = TestProcessor::bind(cp_addr);
         let mut iterations = 0u64;
 
         while running_audio.load(Ordering::Relaxed) {
@@ -414,7 +414,7 @@ fn epoch_stress_grows_accumulate_without_ack() {
 
     // Now create a processor and ack
     let cp_addr = controller.get_controller_plane_address();
-    let mut processor = TestProcessor::new(cp_addr);
+    let mut processor = TestProcessor::bind(cp_addr);
 
     let (graph, wgen) = processor.acquire_graph();
     let head = graph.get_head_node();

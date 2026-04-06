@@ -1,5 +1,5 @@
-use synaptic_kernel::kernel_controller::KernelController;
-use synaptic_kernel::kernel_processor::KernelProcessor;
+use synaptic_kernel::kernel::Kernel;
+use synaptic_kernel::graph_consumer::GraphConsumer;
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
 
 const NODE_META: usize = 8;
@@ -7,8 +7,8 @@ const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type TestKernel = KernelController<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-type TestProcessor = KernelProcessor<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestProcessor = GraphConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
 fn config() -> SynapticGraphConfig {
     SynapticGraphConfig {
@@ -124,7 +124,7 @@ fn mem_metadata_visible_to_reader_without_publish() {
     // so writes should be visible immediately (Relaxed atomics, same-thread)
     controller.publish();
 
-    let mut processor = TestProcessor::new(cp_addr);
+    let mut processor = TestProcessor::bind(cp_addr);
     let (graph, generation) = processor.acquire_graph();
 
     assert_eq!(graph.mem_read_meta(0), 42);
@@ -139,7 +139,7 @@ fn mem_metadata_update_between_reads() {
     let cp_addr = controller.get_controller_plane_address();
     controller.publish();
 
-    let mut processor = TestProcessor::new(cp_addr);
+    let mut processor = TestProcessor::bind(cp_addr);
 
     // First read
     let (graph, generation) = processor.acquire_graph();
@@ -166,7 +166,7 @@ fn tb_metadata_visible_after_publish_and_swap() {
     controller.tb_write_meta(3, 456);
     controller.publish();
 
-    let mut processor = TestProcessor::new(cp_addr);
+    let mut processor = TestProcessor::bind(cp_addr);
     let (graph, generation) = processor.acquire_graph();
 
     assert_eq!(graph.tb_read_meta(0), 123);
@@ -183,7 +183,7 @@ fn tb_metadata_not_visible_without_publish() {
     // Initial publish to get clean state
     controller.publish();
 
-    let mut processor = TestProcessor::new(cp_addr);
+    let mut processor = TestProcessor::bind(cp_addr);
     let (graph, generation) = processor.acquire_graph();
     assert_eq!(graph.tb_read_meta(0), 0);
     processor.ack(generation);

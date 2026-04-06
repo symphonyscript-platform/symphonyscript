@@ -13,7 +13,7 @@ use crate::topology::synapse::synapse_writer::SynapseWriter;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 
-pub struct KernelController<
+pub struct Kernel<
     const NODE_META_SIZE: usize,
     const NODE_ATTRIBUTES_SIZE: usize,
     const SYNAPSE_META_SIZE: usize,
@@ -60,7 +60,7 @@ impl<
     const SYNAPSE_META_SIZE: usize,
     const SYNAPSE_ATTRIBUTES_SIZE: usize,
 >
-    KernelController<
+    Kernel<
         NODE_META_SIZE,
         NODE_ATTRIBUTES_SIZE,
         SYNAPSE_META_SIZE,
@@ -96,7 +96,7 @@ impl<
             >;
         let control_plane = Box::new(ControlPlane::new(reader_ptr));
 
-        KernelController {
+        Kernel {
             control_plane,
             active_writer: writer,
             active_reader: reader_box,
