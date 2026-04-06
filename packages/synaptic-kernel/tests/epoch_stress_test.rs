@@ -52,13 +52,13 @@ fn epoch_stress_grow_under_audio_load_with_ack() {
         let mut max_chain_len = 0usize;
 
         while running_audio.load(Ordering::Relaxed) {
-            let (graph, generation) = processor.acquire_graph();
+            let graph = processor.acquire_graph();
 
             // Traverse the full chain
             let mut current = graph.get_head_node();
             let mut count = 0;
             while let Some(node) = current {
-                let kind = node.get_kind();
+                let kind: i32 = node.get_kind();
                 // Kind values should be in expected range
                 assert!(
                     kind >= 0 && kind < 200,
@@ -82,9 +82,6 @@ fn epoch_stress_grow_under_audio_load_with_ack() {
             if count > max_chain_len {
                 max_chain_len = count;
             }
-
-            // ACK the generation — THIS IS THE CRITICAL PART
-            processor.ack(generation);
 
             iterations += 1;
             thread::yield_now();
@@ -158,13 +155,13 @@ fn epoch_stress_random_mutations_under_audio_load() {
         let mut iterations = 0u64;
 
         while running_audio.load(Ordering::Relaxed) {
-            let (graph, generation) = processor.acquire_graph();
+            let graph = processor.acquire_graph();
 
             // Full graph traversal: nodes + synapses
             let mut current = graph.get_head_node();
             let mut node_count = 0;
             while let Some(node) = current {
-                let kind = node.get_kind();
+                let kind: i32 = node.get_kind();
                 assert!(kind >= 0, "negative kind: {}", kind);
 
                 // Traverse outgoing synapses for each node
@@ -189,8 +186,6 @@ fn epoch_stress_random_mutations_under_audio_load() {
                 node_count += 1;
                 assert!(node_count <= 128, "node chain too long");
             }
-
-            processor.ack(generation);
             iterations += 1;
         }
 
@@ -280,7 +275,7 @@ fn epoch_stress_slow_ack_does_not_crash() {
         let mut iterations = 0u64;
 
         while running_audio.load(Ordering::Relaxed) {
-            let (graph, generation) = processor.acquire_graph();
+            let graph = processor.acquire_graph();
 
             // Simulate slow processing
             let mut current = graph.get_head_node();
@@ -292,8 +287,6 @@ fn epoch_stress_slow_ack_does_not_crash() {
 
             // Sleep to simulate slow audio processing
             thread::sleep(Duration::from_millis(5));
-
-            processor.ack(generation);
             iterations += 1;
         }
 
@@ -356,7 +349,7 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
         let mut iterations = 0u64;
 
         while running_audio.load(Ordering::Relaxed) {
-            let (graph, generation) = processor.acquire_graph();
+            let graph = processor.acquire_graph();
 
             // Read all attributes for all slots
             for &slot in &slots_clone {
@@ -366,8 +359,6 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
                     let _ = val;
                 }
             }
-
-            processor.ack(generation);
             iterations += 1;
         }
 
@@ -416,11 +407,10 @@ fn epoch_stress_grows_accumulate_without_ack() {
     let cp_addr = controller.get_controller_plane_address();
     let mut processor = TestProcessor::bind(cp_addr);
 
-    let (graph, wgen) = processor.acquire_graph();
+    let graph = processor.acquire_graph();
     let head = graph.get_head_node();
     assert!(head.is_some());
     assert_eq!(head.unwrap().get_kind(), 1);
-    processor.ack(wgen);
 
     // Publish to drain all accumulated pending readers
     controller.publish();

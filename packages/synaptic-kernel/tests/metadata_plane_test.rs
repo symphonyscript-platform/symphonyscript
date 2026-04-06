@@ -125,12 +125,10 @@ fn mem_metadata_visible_to_reader_without_publish() {
     controller.publish();
 
     let mut processor = TestProcessor::bind(cp_addr);
-    let (graph, generation) = processor.acquire_graph();
+    let graph = processor.acquire_graph();
 
     assert_eq!(graph.mem_read_meta(0), 42);
     assert_eq!(graph.mem_read_meta(1), 99);
-
-    processor.ack(generation);
 }
 
 #[test]
@@ -142,17 +140,15 @@ fn mem_metadata_update_between_reads() {
     let mut processor = TestProcessor::bind(cp_addr);
 
     // First read
-    let (graph, generation) = processor.acquire_graph();
+    let graph = processor.acquire_graph();
     assert_eq!(graph.mem_read_meta(0), 0);
-    processor.ack(generation);
 
     // Writer updates
     controller.mem_write_meta(0, 777);
 
     // Reader sees update immediately (shared atomics)
-    let (graph, generation) = processor.acquire_graph();
+    let graph = processor.acquire_graph();
     assert_eq!(graph.mem_read_meta(0), 777);
-    processor.ack(generation);
 }
 
 // ============ tb_metadata: visible to reader after publish + swap ============
@@ -167,12 +163,10 @@ fn tb_metadata_visible_after_publish_and_swap() {
     controller.publish();
 
     let mut processor = TestProcessor::bind(cp_addr);
-    let (graph, generation) = processor.acquire_graph();
+    let graph = processor.acquire_graph();
 
     assert_eq!(graph.tb_read_meta(0), 123);
     assert_eq!(graph.tb_read_meta(3), 456);
-
-    processor.ack(generation);
 }
 
 #[test]
@@ -184,24 +178,21 @@ fn tb_metadata_not_visible_without_publish() {
     controller.publish();
 
     let mut processor = TestProcessor::bind(cp_addr);
-    let (graph, generation) = processor.acquire_graph();
+    let graph = processor.acquire_graph();
     assert_eq!(graph.tb_read_meta(0), 0);
-    processor.ack(generation);
 
     // Write without publish
     controller.tb_write_meta(0, 999);
 
     // Reader won't see it until publish + swap
-    let (graph, generation) = processor.acquire_graph();
+    let graph = processor.acquire_graph();
     // tb_metadata lives on the triple buffer — not visible without publish
     assert_eq!(graph.tb_read_meta(0), 0, "should not see tb_metadata before publish");
-    processor.ack(generation);
 
     // Now publish
     controller.publish();
-    let (graph, generation) = processor.acquire_graph();
+    let graph = processor.acquire_graph();
     assert_eq!(graph.tb_read_meta(0), 999, "should see tb_metadata after publish");
-    processor.ack(generation);
 }
 
 // ============ Capacity ============
