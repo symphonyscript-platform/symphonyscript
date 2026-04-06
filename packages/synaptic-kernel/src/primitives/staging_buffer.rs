@@ -77,7 +77,7 @@ impl StagingBuffer {
         );
 
         if !bind {
-            mem[mem_writer_generation_offset].store(0, Ordering::Relaxed);
+            mem[mem_writer_generation_offset].store(1, Ordering::Relaxed);
             mem[mem_reader_ack_generation_offset].store(0, Ordering::Relaxed);
         }
 

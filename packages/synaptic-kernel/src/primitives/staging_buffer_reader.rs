@@ -67,11 +67,7 @@ impl StagingBufferReader {
     }
 
     pub fn ack(&self) {
-        let writer_generation = self.writer_generation();
-
-        if writer_generation > 0 {
-            self.mem[self.mem_reader_ack_generation_offset]
-                .store(writer_generation as i32 - 1, Ordering::Release);
-        }
+        self.mem[self.mem_reader_ack_generation_offset]
+            .store(self.writer_generation() as i32 - 1, Ordering::Release);
     }
 }
