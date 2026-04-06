@@ -57,7 +57,7 @@ fn after_single_flush_slot_still_deferred() {
     alloc.defer_free(s).unwrap();
 
     // First flush: moves deferred from active list to staged list
-    alloc.flush_deferred();
+    alloc.publish();
 
     // Slot is still allocated — staging buffer hasn't drained the staged items yet
     assert!(alloc.is_allocated(s));
@@ -69,8 +69,8 @@ fn after_two_flushes_slot_is_fully_free() {
     let s = alloc.alloc().unwrap();
     alloc.defer_free(s).unwrap();
 
-    alloc.flush_deferred(); // toggle: deferred -> staged
-    alloc.flush_deferred(); // drain staged, free the slots
+    alloc.publish(); // toggle: deferred -> staged
+    alloc.publish(); // drain staged, free the slots
 
     assert!(alloc.is_free(s), "slot should be fully free after 2 flushes");
     assert!(!alloc.is_allocated(s));
@@ -135,8 +135,8 @@ fn copy_from_deferred_items_flush_correctly_on_destination() {
     large.copy_from(&small);
 
     // Flush on destination should work correctly
-    large.flush_deferred();
-    large.flush_deferred();
+    large.publish();
+    large.publish();
 
     assert_eq!(large.deferred_count(), 0);
     assert!(large.is_free(s1));
@@ -172,8 +172,8 @@ fn stress_alloc_defer_flush_cycles() {
         }
 
         // Flush (2x for full reclamation)
-        alloc.flush_deferred();
-        alloc.flush_deferred();
+        alloc.publish();
+        alloc.publish();
 
         // Invariant: free_count + alloc_count == capacity
         assert_eq!(
@@ -187,8 +187,8 @@ fn stress_alloc_defer_flush_cycles() {
         for s in slots.iter().skip(slots.len() / 2) {
             alloc.defer_free(*s).unwrap();
         }
-        alloc.flush_deferred();
-        alloc.flush_deferred();
+        alloc.publish();
+        alloc.publish();
     }
 
     // At the end, everything should be free
@@ -215,7 +215,7 @@ fn stress_interleaved_alloc_defer_with_partial_flush() {
 
         // Flush every 5th iteration (partial drains)
         if i % 5 == 0 {
-            alloc.flush_deferred();
+            alloc.publish();
         }
     }
 
@@ -223,8 +223,8 @@ fn stress_interleaved_alloc_defer_with_partial_flush() {
     for s in active {
         alloc.defer_free(s).unwrap();
     }
-    alloc.flush_deferred();
-    alloc.flush_deferred();
+    alloc.publish();
+    alloc.publish();
 
     assert_eq!(alloc.free_count(), 32);
     assert_eq!(alloc.deferred_count(), 0);

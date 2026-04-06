@@ -371,8 +371,8 @@ fn full_connect_disconnect_reconnect_cycle() {
     assert_eq!(node_chain.get_node(src).get_outgoing_synapse_head(), 0);
     assert_eq!(node_chain.get_node(tgt).get_incoming_synapse_head(), 0);
 
-    synapse_chain.flush_deferred();
-    synapse_chain.flush_deferred();
+    synapse_chain.publish();
+    synapse_chain.publish();
 
     // reconnect (slot should be reused)
     let s2 = synapse_chain.connect(src, tgt, 20).unwrap();
@@ -817,8 +817,8 @@ fn copy_from_preserves_topology_and_deep_data() {
     assert_eq!(syn.get_kind(), 10);
 
     // Test deferred flush behavior on destination shrinks allocated slots natively
-    dst_synapse_chain.flush_deferred();
-    dst_synapse_chain.flush_deferred();
+    dst_synapse_chain.publish();
+    dst_synapse_chain.publish();
 
     assert_eq!(dst_synapse_chain.len(), 1);
     assert_eq!(dst_synapse_chain.capacity(), SYNAPSE_CAPACITY * 2);

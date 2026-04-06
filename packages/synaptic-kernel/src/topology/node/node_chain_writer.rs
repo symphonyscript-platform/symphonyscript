@@ -111,6 +111,10 @@ impl<const META_SIZE: usize> NodeChainWriter<META_SIZE> {
         self.mem_end_offset
     }
 
+    pub fn mem_staging_buffer_start_offset(&self) -> usize {
+        self.allocator.mem_staging_buffer_start_offset()
+    }
+
     pub fn tb_start_offset(&self) -> usize {
         self.tb_start_offset
     }
@@ -240,8 +244,8 @@ impl<const META_SIZE: usize> NodeChainWriter<META_SIZE> {
         Ok(())
     }
 
-    pub fn flush_deferred(&self) {
-        self.allocator.flush_deferred()
+    pub fn publish(&self) {
+        self.allocator.publish()
     }
 
     pub fn copy_from(&self, source: &Self) {

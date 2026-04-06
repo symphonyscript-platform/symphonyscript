@@ -54,10 +54,9 @@ impl<
         let control_plane = unsafe { &*self.control_plane_ptr };
         let graph_ptr = control_plane.get_shared_graph_ptr();
         let graph = unsafe { &mut *graph_ptr };
-        let writer_generation = control_plane.get_writer_generation();
 
-        control_plane.ack(writer_generation - 1);
         graph.swap();
+        control_plane.ack();
 
         graph
     }

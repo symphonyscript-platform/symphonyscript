@@ -169,7 +169,7 @@ proptest! {
                     }
                 }
                 AllocatorOp::Flush => {
-                    alloc.flush_deferred();
+                    alloc.publish();
                 }
             }
 
@@ -213,7 +213,7 @@ proptest! {
                     }
                 }
                 AllocatorOp::Flush => {
-                    alloc.flush_deferred();
+                    alloc.publish();
                 }
             }
         }

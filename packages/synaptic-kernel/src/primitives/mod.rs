@@ -10,3 +10,4 @@ pub mod into_array;
 pub mod staging_buffer;
 pub mod slot_allocator;
 pub mod bitmap;
+pub mod staging_buffer_reader;

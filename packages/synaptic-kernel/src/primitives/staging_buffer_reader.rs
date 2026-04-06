@@ -1,0 +1,77 @@
+use crate::primitives::staging_buffer::StagingBuffer;
+use crate::primitives::types::AtomicBuffer;
+use std::sync::atomic::Ordering;
+
+#[derive(Clone)]
+pub struct StagingBufferReader {
+    mem: AtomicBuffer,
+    capacity: usize,
+    mem_start_offset: usize,
+    mem_writer_generation_offset: usize,
+    mem_reader_ack_generation_offset: usize,
+    mem_end_offset: usize,
+}
+
+/**
+ * SPSC Staging Buffer
+ */
+impl StagingBufferReader {
+    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+        debug_assert!(
+            capacity > 0,
+            "StagingBufferReader::bind | capacity {} must be positive",
+            capacity
+        );
+        debug_assert_eq!(
+            capacity & (capacity - 1),
+            0,
+            "StagingBufferReader::bind | capacity {} must be power of 2",
+            capacity
+        );
+
+        let mem_writer_generation_offset = mem_start_offset;
+        let mem_reader_ack_generation_offset = mem_start_offset + 1;
+        let mem_end_offset = mem_start_offset + StagingBuffer::calculate_size_on_mem(capacity);
+
+        debug_assert!(
+            mem_end_offset <= mem.len(),
+            "StagingBufferReader::bind | range [{}..{}] exceeds AtomicBuffer boundaries",
+            mem_start_offset,
+            mem.len()
+        );
+
+        StagingBufferReader {
+            mem,
+            mem_start_offset,
+            mem_writer_generation_offset,
+            mem_reader_ack_generation_offset,
+            mem_end_offset,
+            capacity,
+        }
+    }
+
+    pub fn mem_start_offset(&self) -> usize {
+        self.mem_start_offset
+    }
+
+    pub fn mem_end_offset(&self) -> usize {
+        self.mem_end_offset
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    pub fn writer_generation(&self) -> usize {
+        self.mem[self.mem_writer_generation_offset].load(Ordering::Relaxed) as usize
+    }
+
+    pub fn ack(&self) {
+        let writer_generation = self.writer_generation();
+
+        if writer_generation > 0 {
+            self.mem[self.mem_reader_ack_generation_offset]
+                .store(writer_generation as i32 - 1, Ordering::Release);
+        }
+    }
+}

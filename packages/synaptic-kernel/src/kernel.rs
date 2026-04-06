@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use crate::attribute_plane::attributes_writer::AttributesWriter;
 use crate::control_plane::ControlPlane;
 use crate::errors::free_list_error::FreeListError;
@@ -10,6 +9,7 @@ use crate::synaptic_graph_reader::SynapticGraphReader;
 use crate::synaptic_graph_writer::SynapticGraphWriter;
 use crate::topology::node::node_writer::NodeWriter;
 use crate::topology::synapse::synapse_writer::SynapseWriter;
+use std::collections::VecDeque;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 
@@ -59,13 +59,7 @@ impl<
     const NODE_ATTRIBUTES_SIZE: usize,
     const SYNAPSE_META_SIZE: usize,
     const SYNAPSE_ATTRIBUTES_SIZE: usize,
->
-    Kernel<
-        NODE_META_SIZE,
-        NODE_ATTRIBUTES_SIZE,
-        SYNAPSE_META_SIZE,
-        SYNAPSE_ATTRIBUTES_SIZE,
-    >
+> Kernel<NODE_META_SIZE, NODE_ATTRIBUTES_SIZE, SYNAPSE_META_SIZE, SYNAPSE_ATTRIBUTES_SIZE>
 {
     pub fn new(config: SynapticGraphConfig) -> Self {
         let mem = Self::create_mem(SynapticGraphWriter::<
@@ -79,7 +73,7 @@ impl<
 
     pub fn new_from_mem(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
         let writer = SynapticGraphWriter::new(Arc::clone(&mem), config.clone());
-        let reader = SynapticGraphReader::bind(Arc::clone(&mem), config.clone());
+        let reader = writer.to_reader();
         let reader_box = Box::new(reader);
         let reader_ptr = reader_box.as_ref()
             as *const SynapticGraphReader<
@@ -275,7 +269,7 @@ impl<
 
         while let Some((_, generation)) = self.readers_pending_deletion.front() {
             if *generation > ack {
-                break
+                break;
             }
 
             self.readers_pending_deletion.pop_front();
@@ -299,16 +293,15 @@ impl<
             SYNAPSE_META_SIZE,
             SYNAPSE_ATTRIBUTES_SIZE,
         >::calculate_size_on_mem(&config));
-        let writer = SynapticGraphWriter::new(Arc::clone(&mem), config.clone());
+        let new_writer = SynapticGraphWriter::new(Arc::clone(&mem), config.clone());
 
-        writer.copy_from(&self.active_writer);
+        new_writer.copy_from(&self.active_writer);
 
-        let new_reader = Box::new(SynapticGraphReader::bind(Arc::clone(&mem), config.clone()));
+        let new_reader = Box::new(new_writer.to_reader());
 
-        self.active_writer = writer;
+        self.active_writer = new_writer;
         let old_reader = self.replace_reader(new_reader);
-        self.readers_pending_deletion
-            .push_back(old_reader);
+        self.readers_pending_deletion.push_back(old_reader);
 
         Ok(())
     }

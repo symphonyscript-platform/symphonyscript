@@ -80,8 +80,9 @@ impl<
         self.reader_ack_generation.load(Ordering::Acquire)
     }
 
-    pub fn ack(&self, generation: i32) {
+    pub fn ack(&self) {
+        let writer_generation = self.get_writer_generation();
         self.reader_ack_generation
-            .store(generation, Ordering::Release)
+            .store(writer_generation - 1, Ordering::Release)
     }
 }

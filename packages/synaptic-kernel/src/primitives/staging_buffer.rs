@@ -1,3 +1,5 @@
+use crate::errors::ring_buffer_error::RingBufferError;
+use crate::primitives::ring_buffer::RingBuffer;
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -5,42 +7,47 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct StagingBuffer {
     mem: AtomicBuffer,
+    buffer: RingBuffer<2>,
     capacity: usize,
     mem_start_offset: usize,
-    len_0_slot_index: usize,
-    len_1_slot_index: usize,
-    current_list_slot_index: usize,
-    list_start_index: usize,
+    mem_writer_generation_offset: usize,
+    mem_reader_ack_generation_offset: usize,
     mem_end_offset: usize,
 }
 
-pub struct StagingBufferIterator {
-    mem: AtomicBuffer,
-    current_index: usize,
-    mem_end_offset: usize,
+pub struct StagingBufferIterator<'a> {
+    buffer: &'a RingBuffer<2>,
+    ack_generation: usize,
 }
 
-impl Iterator for StagingBufferIterator {
+impl<'a> Iterator for StagingBufferIterator<'a> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_index < self.mem_end_offset {
-            let slot = self.mem[self.current_index].load(Ordering::Relaxed);
-            self.current_index += 1;
-            return Some(slot as usize);
-        }
+        match self.buffer.peek() {
+            Some([data, generation]) => {
+                if generation as usize > self.ack_generation {
+                    return None;
+                }
 
-        None
+                self.buffer.read();
+                Some(data as usize)
+            }
+            None => None,
+        }
     }
 }
 
+/**
+ * SPSC Staging Buffer
+ */
 impl StagingBuffer {
-    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, max_slots: usize) -> Self {
-        Self::create(mem, mem_start_offset, max_slots, false)
+    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+        Self::create(mem, mem_start_offset, capacity, false)
     }
 
-    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, max_slots: usize) -> Self {
-        Self::create(mem, mem_start_offset, max_slots, true)
+    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+        Self::create(mem, mem_start_offset, capacity, true)
     }
 
     pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
@@ -56,11 +63,11 @@ impl StagingBuffer {
             capacity
         );
 
-        let len_0_slot_index = mem_start_offset;
-        let len_1_slot_index = mem_start_offset + 1;
-        let current_list_slot_index = mem_start_offset + 2;
-        let list_start_index = mem_start_offset + 3;
-        let mem_end_offset = list_start_index + capacity * 2;
+        let mem_writer_generation_offset = mem_start_offset;
+        let mem_reader_ack_generation_offset = mem_start_offset + 1;
+        let mem_list_start_offset = mem_start_offset + 2;
+        let mem_end_offset =
+            mem_list_start_offset + RingBuffer::<2>::calculate_size_on_mem(capacity);
 
         debug_assert!(
             mem_end_offset <= mem.len(),
@@ -70,41 +77,30 @@ impl StagingBuffer {
         );
 
         if !bind {
-            mem[current_list_slot_index].store(0, Ordering::Relaxed);
-            for i in mem_start_offset..mem_end_offset {
-                mem[i].store(0, Ordering::Relaxed);
-            }
+            mem[mem_writer_generation_offset].store(0, Ordering::Relaxed);
+            mem[mem_reader_ack_generation_offset].store(0, Ordering::Relaxed);
         }
+
+        let buffer =
+            RingBuffer::<2>::create(Arc::clone(&mem), mem_list_start_offset, capacity, bind);
 
         StagingBuffer {
             mem,
+            buffer,
             mem_start_offset,
-            len_0_slot_index,
-            len_1_slot_index,
-            current_list_slot_index,
-            list_start_index,
+            mem_writer_generation_offset,
+            mem_reader_ack_generation_offset,
             mem_end_offset,
             capacity,
         }
     }
 
-    pub fn calculate_size_on_mem(max_slots: usize) -> usize {
-        3 + max_slots * 2
-    }
-
-    pub fn active_count(&self) -> usize {
-        let list_index = self.mem[self.current_list_slot_index].load(Ordering::Relaxed) as usize;
-        self.mem[self.mem_start_offset + list_index].load(Ordering::Relaxed) as usize
-    }
-
-    pub fn staged_count(&self) -> usize {
-        let list_index = self.mem[self.current_list_slot_index].load(Ordering::Relaxed) as usize;
-        let prev_index = 1 - list_index;
-        self.mem[self.mem_start_offset + prev_index].load(Ordering::Relaxed) as usize
+    pub fn calculate_size_on_mem(capacity: usize) -> usize {
+        2 + RingBuffer::<2>::calculate_size_on_mem(capacity)
     }
 
     pub fn len(&self) -> usize {
-        self.active_count() + self.staged_count()
+        self.buffer.pending_count()
     }
 
     pub fn mem_start_offset(&self) -> usize {
@@ -115,40 +111,42 @@ impl StagingBuffer {
         self.mem_end_offset
     }
 
-    pub fn push(&self, slot: usize) {
-        let active_count = self.active_count();
-
-        debug_assert!(
-            active_count < self.capacity,
-            "StagingBuffer.push | buffer overflow",
-        );
-
-        let list_index = self.mem[self.current_list_slot_index].load(Ordering::Relaxed) as usize;
-        let len_slot_index = self.mem_start_offset + list_index;
-
-        self.mem[self.list_start_index + (self.capacity * list_index) + active_count]
-            .store(slot as i32, Ordering::Relaxed);
-        self.mem[len_slot_index].store((active_count as i32) + 1, Ordering::Relaxed);
+    pub fn capacity(&self) -> usize {
+        self.capacity
     }
 
-    pub fn drain(&'_ self) -> StagingBufferIterator {
-        let list_index = self.mem[self.current_list_slot_index].load(Ordering::Relaxed) as usize;
-        let prev_index = 1 - list_index;
-        let mem_start_offset = self.list_start_index + (self.capacity * prev_index);
-        let len_slot_index = self.mem_start_offset + prev_index;
-        let len = self.mem[len_slot_index].load(Ordering::Relaxed) as usize;
+    pub fn writer_generation(&self) -> usize {
+        self.mem[self.mem_writer_generation_offset].load(Ordering::Relaxed) as usize
+    }
 
-        self.mem[len_slot_index].store(0, Ordering::Relaxed);
-        self.mem[self.current_list_slot_index].store(prev_index as i32, Ordering::Relaxed);
+    pub fn reader_ack_generation(&self) -> usize {
+        self.mem[self.mem_reader_ack_generation_offset].load(Ordering::Acquire) as usize
+    }
 
+    pub fn push(&self, slot: usize) -> Result<(), RingBufferError> {
+        let len = self.len();
+
+        debug_assert!(len < self.capacity, "StagingBuffer.push | buffer overflow",);
+
+        let generation_id = self.mem[self.mem_writer_generation_offset].load(Ordering::Relaxed);
+
+        self.buffer.write([slot as i32, generation_id])?;
+
+        Ok(())
+    }
+
+    pub fn publish(&self) {
+        self.mem[self.mem_writer_generation_offset].fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn drain(&'_ self) -> StagingBufferIterator<'_> {
         StagingBufferIterator {
-            mem: Arc::clone(&self.mem),
-            current_index: mem_start_offset,
-            mem_end_offset: mem_start_offset + len,
+            buffer: &self.buffer,
+            ack_generation: self.reader_ack_generation(),
         }
     }
 
-    pub fn copy_from(&self, source: &StagingBuffer) {
+    pub fn copy_from(&self, source: &Self) {
         debug_assert!(
             source.capacity <= self.capacity,
             "StagingBuffer.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
@@ -156,30 +154,14 @@ impl StagingBuffer {
             self.capacity,
         );
 
-        let len_0 = source.mem[source.len_0_slot_index].load(Ordering::Relaxed);
-        let len_1 = source.mem[source.len_1_slot_index].load(Ordering::Relaxed);
-
-        self.mem[self.len_0_slot_index].store(len_0, Ordering::Relaxed);
-        self.mem[self.len_1_slot_index].store(len_1, Ordering::Relaxed);
-        self.mem[self.current_list_slot_index].store(
-            source.mem[source.current_list_slot_index].load(Ordering::Relaxed),
+        self.mem[self.mem_writer_generation_offset].store(
+            source.mem[source.mem_writer_generation_offset].load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
-
-        for i in 0..2 {
-            let self_base = self.list_start_index + self.capacity * i;
-            let source_base = source.list_start_index + source.capacity * i;
-            let len = if i == 0 {
-                len_0 as usize
-            } else {
-                len_1 as usize
-            };
-            for k in 0..len {
-                self.mem[self_base + k].store(
-                    source.mem[source_base + k].load(Ordering::Relaxed),
-                    Ordering::Relaxed,
-                )
-            }
-        }
+        self.mem[self.mem_reader_ack_generation_offset].store(
+            source.mem[source.mem_reader_ack_generation_offset].load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.buffer.copy_from(&source.buffer);
     }
 }

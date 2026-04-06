@@ -2,6 +2,7 @@ use crate::attribute_plane::attribute_plane_reader::AttributePlaneReader;
 use crate::attribute_plane::attributes_reader::AttributesReader;
 use crate::metadata::mem_metadata_reader::MemMetadataReader;
 use crate::metadata::tb_metadata_reader::TbMetadataReader;
+use crate::primitives::staging_buffer_reader::StagingBufferReader;
 use crate::primitives::triple_buffer::{TripleBuffer, TripleBufferReader};
 use crate::primitives::types::AtomicBuffer;
 use crate::synaptic_graph_config::SynapticGraphConfig;
@@ -11,6 +12,16 @@ use crate::topology::node::node_reader::NodeReader;
 use crate::topology::synapse::synapse_chain_reader::SynapseChainReader;
 use crate::topology::synapse::synapse_reader::SynapseReader;
 use std::sync::Arc;
+
+pub struct SynapticGraphReaderConfig {
+    pub mem: AtomicBuffer,
+    pub node_capacity: usize,
+    pub synapse_capacity: usize,
+    pub mem_metadata_size: usize,
+    pub tb_metadata_size: usize,
+    pub node_staging_buffer_start_offset: usize,
+    pub synapse_staging_buffer_start_offset: usize,
+}
 
 #[derive(Clone)]
 pub struct SynapticGraphReader<
@@ -26,6 +37,8 @@ pub struct SynapticGraphReader<
     tb_reader: TripleBufferReader,
     node_chain_reader: NodeChainReader<NODE_META_SIZE>,
     synapse_chain_reader: SynapseChainReader<NODE_META_SIZE, SYNAPSE_META_SIZE>,
+    node_staging_buffer_reader: StagingBufferReader,
+    synapse_staging_buffer_reader: StagingBufferReader,
 }
 
 impl<
@@ -41,7 +54,7 @@ impl<
         SYNAPSE_ATTRIBUTES_SIZE,
     >
 {
-    pub fn bind(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
+    pub fn bind(config: SynapticGraphReaderConfig) -> Self {
         let mem_start_offset = SynapticGraphWriter::<
             NODE_META_SIZE,
             NODE_ATTRIBUTES_SIZE,
@@ -50,6 +63,7 @@ impl<
         >::HEADERS_SIZE;
         let tb_start_offset = 0;
 
+        let mem = config.mem;
         let mem_metadata_plane =
             MemMetadataReader::bind(Arc::clone(&mem), mem_start_offset, config.mem_metadata_size);
         let node_attribute_plane = AttributePlaneReader::<NODE_ATTRIBUTES_SIZE>::bind(
@@ -67,7 +81,12 @@ impl<
             NODE_ATTRIBUTES_SIZE,
             SYNAPSE_META_SIZE,
             SYNAPSE_ATTRIBUTES_SIZE,
-        >::calculate_size_on_tb(&config);
+        >::calculate_size_on_tb(&SynapticGraphConfig {
+            node_capacity: config.node_capacity,
+            synapse_capacity: config.synapse_capacity,
+            mem_metadata_size: config.mem_metadata_size,
+            tb_metadata_size: config.tb_metadata_size,
+        });
         let tb_reader = TripleBuffer::bind_reader(
             Arc::clone(&mem),
             synapse_attribute_plane.mem_end_offset(),
@@ -85,6 +104,16 @@ impl<
             node_chain_reader.tb_end_offset(),
             config.synapse_capacity,
         );
+        let node_staging_buffer_reader = StagingBufferReader::bind(
+            Arc::clone(&mem),
+            config.node_staging_buffer_start_offset,
+            config.node_capacity,
+        );
+        let synapse_staging_buffer_reader = StagingBufferReader::bind(
+            Arc::clone(&mem),
+            config.synapse_staging_buffer_start_offset,
+            config.synapse_capacity,
+        );
 
         SynapticGraphReader {
             mem_metadata_plane,
@@ -94,6 +123,8 @@ impl<
             tb_reader,
             node_chain_reader,
             synapse_chain_reader,
+            node_staging_buffer_reader,
+            synapse_staging_buffer_reader,
         }
     }
 
@@ -144,12 +175,21 @@ impl<
     }
 
     pub fn get_synapse_attribute(&'_ self, slot: usize, attribute_offset: usize) -> i32 {
-        self.synapse_attribute_plane
-            .get(slot)
-            .get(attribute_offset)
+        self.synapse_attribute_plane.get(slot).get(attribute_offset)
     }
 
     pub fn swap(&mut self) -> bool {
-        self.tb_reader.swap()
+        let swapped = self.tb_reader.swap();
+        self.ack_node_generation();
+        self.ack_synapse_generation();
+        swapped
+    }
+
+    fn ack_node_generation(&self) {
+        self.node_staging_buffer_reader.ack();
+    }
+
+    fn ack_synapse_generation(&self) {
+        self.synapse_staging_buffer_reader.ack();
     }
 }

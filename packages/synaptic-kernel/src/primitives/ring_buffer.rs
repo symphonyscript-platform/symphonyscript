@@ -1,5 +1,4 @@
 use crate::errors::ring_buffer_error::RingBufferError;
-use crate::primitives::slot_view::SlotView;
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -7,27 +6,26 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct RingBuffer<const SLOT_SIZE: usize> {
     mem: AtomicBuffer,
-    slots: SlotView<SLOT_SIZE>,
-    capacity: i32,
     mod_mask: i32,
-    read_slot_index: usize,
-    write_slot_index: usize,
-    pending_slot_index: usize,
+    capacity: usize,
     mem_start_offset: usize,
+    mem_read_offset: usize,
+    mem_write_offset: usize,
+    mem_pending_offset: usize,
     mem_end_offset: usize,
 }
 
 impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
-    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: i32) -> Self {
+    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
         Self::create(mem, mem_start_offset, capacity, false)
     }
 
-    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: i32) -> Self {
+    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
         Self::create(mem, mem_start_offset, capacity, true)
     }
 
-    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: i32, bind: bool) -> Self {
-        let len = 3 + (capacity as usize) * SLOT_SIZE;
+    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
+        let len = 3 + capacity * SLOT_SIZE;
         let mem_end_offset = mem_start_offset + len;
 
         debug_assert!(
@@ -48,31 +46,34 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
             capacity
         );
 
-        let read_slot_index = mem_start_offset;
-        let write_slot_index = mem_start_offset + 1;
-        let pending_slot_index = mem_start_offset + 2;
+        let mem_read_offset = mem_start_offset;
+        let mem_write_offset = mem_start_offset + 1;
+        let mem_pending_offset = mem_start_offset + 2;
 
         if !bind {
-            mem[read_slot_index].store(0, Ordering::Relaxed);
-            mem[write_slot_index].store(0, Ordering::Relaxed);
-            mem[pending_slot_index].store(0, Ordering::Relaxed);
+            for i in mem_start_offset..mem_end_offset {
+                mem[i].store(0, Ordering::Relaxed);
+            }
         }
 
         RingBuffer {
             mem: Arc::clone(&mem),
-            slots: SlotView::new(Arc::clone(&mem), mem_start_offset + 3, capacity),
             capacity,
-            mod_mask: capacity - 1,
-            read_slot_index,
-            write_slot_index,
-            pending_slot_index,
+            mod_mask: (capacity as i32) - 1,
+            mem_read_offset,
+            mem_write_offset,
+            mem_pending_offset,
             mem_start_offset,
             mem_end_offset,
         }
     }
 
-    pub fn pending_count(&self) -> i32 {
-        self.mem[self.pending_slot_index].load(Ordering::Acquire)
+    pub fn calculate_size_on_mem(capacity: usize) -> usize {
+        3 + capacity * SLOT_SIZE
+    }
+
+    pub fn pending_count(&self) -> usize {
+        self.mem[self.mem_pending_offset].load(Ordering::Acquire) as usize
     }
 
     pub fn mem_start_offset(&self) -> usize {
@@ -83,35 +84,82 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
         self.mem_end_offset
     }
 
-    pub fn read(&self) -> Option<[i32; SLOT_SIZE]> {
-        let pending_count = self.mem[self.pending_slot_index].load(Ordering::Acquire);
-
-        if pending_count == 0 {
-            return None;
-        }
-
-        let read_index = self.mem[self.read_slot_index].load(Ordering::Relaxed);
-        let entry = self.slots.get(read_index as usize);
-
-        self.mem[self.read_slot_index].store((read_index + 1) & self.mod_mask, Ordering::Relaxed);
-        self.mem[self.pending_slot_index].fetch_sub(1, Ordering::Release);
-
-        Some(entry)
+    pub fn capacity(&self) -> usize {
+        self.capacity
     }
 
-    pub fn write(&self, entry: [i32; SLOT_SIZE]) -> Result<(), RingBufferError> {
-        let pending_count = self.mem[self.pending_slot_index].load(Ordering::Acquire);
+    pub fn peek(&self) -> Option<[i32; SLOT_SIZE]> {
+        match self.retrieve() {
+            Some((data, _)) => Some(data),
+            None => None,
+        }
+    }
+
+    pub fn read(&self) -> Option<[i32; SLOT_SIZE]> {
+        match self.retrieve() {
+            Some((data, read_offset)) => {
+                self.mem[self.mem_read_offset]
+                    .store((read_offset + 1) & self.mod_mask, Ordering::Relaxed);
+                self.mem[self.mem_pending_offset].fetch_sub(1, Ordering::Release);
+                Some(data)
+            }
+            None => None,
+        }
+    }
+
+    pub fn write(&self, data: [i32; SLOT_SIZE]) -> Result<(), RingBufferError> {
+        let pending_count = self.mem[self.mem_pending_offset].load(Ordering::Acquire) as usize;
 
         if pending_count >= self.capacity {
             return Err(RingBufferError::Full);
         }
 
-        let write_index = self.mem[self.write_slot_index].load(Ordering::Relaxed);
+        let write_index = self.mem[self.mem_write_offset].load(Ordering::Relaxed) as usize;
+        let mem_slot_base = self.mem_start_offset + 3 + write_index * SLOT_SIZE;
 
-        self.slots.set(write_index as usize, entry);
-        self.mem[self.write_slot_index].store((write_index + 1) & self.mod_mask, Ordering::Relaxed);
-        self.mem[self.pending_slot_index].fetch_add(1, Ordering::Release);
+        for i in 0..SLOT_SIZE {
+            self.mem[mem_slot_base + i].store(data[i], Ordering::Relaxed)
+        }
+
+        self.mem[self.mem_write_offset]
+            .store((write_index as i32 + 1) & self.mod_mask, Ordering::Relaxed);
+        self.mem[self.mem_pending_offset].fetch_add(1, Ordering::Release);
 
         Ok(())
+    }
+
+    pub fn copy_from(&self, source: &Self) {
+        debug_assert!(
+            source.capacity <= self.capacity,
+            "RingBuffer.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
+            source.capacity,
+            self.capacity,
+        );
+
+        for i in 0..Self::calculate_size_on_mem(source.capacity) {
+            self.mem[self.mem_start_offset + i].store(
+                source.mem[source.mem_start_offset + i].load(Ordering::Relaxed),
+                Ordering::Relaxed,
+            );
+        }
+    }
+
+    fn retrieve(&self) -> Option<([i32; SLOT_SIZE], i32)> {
+        let pending_count = self.mem[self.mem_pending_offset].load(Ordering::Acquire);
+
+        if pending_count == 0 {
+            return None;
+        }
+
+        let read_index = self.mem[self.mem_read_offset].load(Ordering::Relaxed) as usize;
+
+        let mut entry: [i32; SLOT_SIZE] = [0; SLOT_SIZE];
+        let mem_slot_base = self.mem_start_offset + 3 + read_index * SLOT_SIZE;
+
+        for i in 0..SLOT_SIZE {
+            entry[i] = self.mem[mem_slot_base + i].load(Ordering::Relaxed)
+        }
+
+        Some((entry, read_index as i32))
     }
 }

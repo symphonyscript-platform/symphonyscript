@@ -177,7 +177,7 @@ impl TripleBufferWriter {
         self.buffer_bases[buffer_id]
     }
 
-    pub fn publish(&mut self) {
+    pub fn publish(&self) {
         let current_id = self.mem[self.writer_slot_index].load(Ordering::Relaxed);
         let new_state = (current_id & 0b011) | 0b100;
 

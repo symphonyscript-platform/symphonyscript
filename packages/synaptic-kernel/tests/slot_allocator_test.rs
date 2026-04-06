@@ -29,8 +29,8 @@ fn alloc_defer_flush_lifecycle() {
     assert_eq!(alloc.alloc_count(), 1);
     assert_eq!(alloc.deferred_count(), 1);
 
-    alloc.flush_deferred();     // now in staged queue
-    alloc.flush_deferred();     // now freed
+    alloc.publish();     // now in staged queue
+    alloc.publish();     // now freed
 
     assert_eq!(alloc.free_count(), 4);
     assert_eq!(alloc.alloc_count(), 0);

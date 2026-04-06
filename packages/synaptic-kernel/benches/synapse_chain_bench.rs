@@ -87,7 +87,7 @@ fn bench_connect_single(c: &mut Criterion) {
                 ).unwrap();
                 synapse_chain.disconnect(syn).unwrap();
                 if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
-                    synapse_chain.flush_deferred();
+                    synapse_chain.publish();
                 }
             }
             start.elapsed()
@@ -110,7 +110,7 @@ fn bench_disconnect_single(c: &mut Criterion) {
                 let syn = synapse_chain.connect(src, tgt, 10).unwrap();
                 synapse_chain.disconnect(black_box(syn)).unwrap();
                 if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
-                    synapse_chain.flush_deferred();
+                    synapse_chain.publish();
                 }
             }
             start.elapsed()
@@ -147,7 +147,7 @@ fn bench_connect_chain_growth(c: &mut Criterion) {
                         ).unwrap();
                         synapse_chain.disconnect(syn).unwrap();
                         if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
-                            synapse_chain.flush_deferred();
+                            synapse_chain.publish();
                         }
                     }
                     start.elapsed()
@@ -184,7 +184,7 @@ fn bench_disconnect_head(c: &mut Criterion) {
                         for s in &synapses[1..] {
                             synapse_chain.disconnect(*s).unwrap();
                         }
-                        synapse_chain.flush_deferred();
+                        synapse_chain.publish();
                         for _ in 0..depth {
                             if let Some(head) = node_chain.get_head() {
                                 let head_next = head.get_next_ptr();
@@ -193,7 +193,7 @@ fn bench_disconnect_head(c: &mut Criterion) {
                                 }
                             }
                         }
-                        node_chain.flush_deferred();
+                        node_chain.publish();
                     }
                     start.elapsed()
                 });
@@ -220,7 +220,7 @@ fn bench_connect_disconnect_throughput(c: &mut Criterion) {
                 ).unwrap();
                 synapse_chain.disconnect(black_box(s)).unwrap();
                 if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
-                    synapse_chain.flush_deferred();
+                    synapse_chain.publish();
                 }
             }
             start.elapsed()
@@ -331,7 +331,7 @@ fn bench_self_loop_cycle(c: &mut Criterion) {
                 ).unwrap();
                 synapse_chain.disconnect(black_box(s)).unwrap();
                 if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
-                    synapse_chain.flush_deferred();
+                    synapse_chain.publish();
                 }
             }
             start.elapsed()

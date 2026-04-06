@@ -619,8 +619,8 @@ fn copy_from_preserves_topology_and_deep_data() {
     assert_eq!(head.get_next_ptr(), 0);
     
     
-    dst.flush_deferred();
-    dst.flush_deferred();
+    dst.publish();
+    dst.publish();
     
     assert_eq!(dst.len(), 1);
     assert_eq!(dst.capacity(), CAPACITY * 2);

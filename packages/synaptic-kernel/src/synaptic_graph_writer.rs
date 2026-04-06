@@ -8,6 +8,7 @@ use crate::primitives::into_array::IntoArray;
 use crate::primitives::triple_buffer::{TripleBuffer, TripleBufferWriter};
 use crate::primitives::types::AtomicBuffer;
 use crate::synaptic_graph_config::SynapticGraphConfig;
+use crate::synaptic_graph_reader::{SynapticGraphReader, SynapticGraphReaderConfig};
 use crate::topology::node::node_chain_writer::NodeChainWriter;
 use crate::topology::node::node_writer::NodeWriter;
 use crate::topology::synapse::synapse_chain_writer::SynapseChainWriter;
@@ -30,6 +31,10 @@ pub struct SynapticGraphWriter<
     tb_writer: TripleBufferWriter,
     node_chain_writer: NodeChainWriter<NODE_META_SIZE>,
     synapse_chain_writer: SynapseChainWriter<NODE_META_SIZE, SYNAPSE_META_SIZE>,
+    node_capacity: usize,
+    synapse_capacity: usize,
+    mem_metadata_size: usize,
+    tb_metadata_size: usize,
 }
 
 impl<
@@ -108,6 +113,10 @@ impl<
             tb_writer,
             node_chain_writer,
             synapse_chain_writer,
+            node_capacity: config.node_capacity,
+            synapse_capacity: config.synapse_capacity,
+            mem_metadata_size: config.mem_metadata_size,
+            tb_metadata_size: config.tb_metadata_size,
         }
     }
 
@@ -175,6 +184,10 @@ impl<
             tb_writer,
             node_chain_writer,
             synapse_chain_writer,
+            node_capacity: config.node_capacity,
+            synapse_capacity: config.synapse_capacity,
+            mem_metadata_size: config.mem_metadata_size,
+            tb_metadata_size: config.tb_metadata_size,
         }
     }
 
@@ -198,6 +211,33 @@ impl<
                 config.synapse_capacity,
             )
             + TripleBuffer::calculate_size(Self::calculate_size_on_tb(config))
+    }
+
+    pub fn to_reader(
+        &self,
+    ) -> SynapticGraphReader<
+        NODE_META_SIZE,
+        NODE_ATTRIBUTES_SIZE,
+        SYNAPSE_META_SIZE,
+        SYNAPSE_ATTRIBUTES_SIZE,
+    > {
+        SynapticGraphReader::bind(SynapticGraphReaderConfig {
+            mem: Arc::clone(&self.mem),
+            node_capacity: self.node_capacity,
+            synapse_capacity: self.synapse_capacity,
+            mem_metadata_size: self.mem_metadata_size,
+            tb_metadata_size: self.tb_metadata_size,
+            node_staging_buffer_start_offset: self.mem_node_staging_buffer_start_offset(),
+            synapse_staging_buffer_start_offset: self.mem_synapse_staging_buffer_start_offset(),
+        })
+    }
+
+    pub fn mem_node_staging_buffer_start_offset(&self) -> usize {
+        self.node_chain_writer.mem_staging_buffer_start_offset()
+    }
+
+    pub fn mem_synapse_staging_buffer_start_offset(&self) -> usize {
+        self.synapse_chain_writer.mem_staging_buffer_start_offset()
     }
 
     pub fn mem_metadata_capacity(&self) -> usize {
@@ -432,9 +472,9 @@ impl<
         self.synapse_chain_writer.disconnect(slot)
     }
 
-    pub fn publish(&mut self) {
-        self.node_chain_writer.flush_deferred();
-        self.synapse_chain_writer.flush_deferred();
+    pub fn publish(&self) {
+        self.node_chain_writer.publish();
+        self.synapse_chain_writer.publish();
         self.tb_writer.publish();
     }
 
@@ -443,7 +483,8 @@ impl<
     }
 
     pub fn copy_from(&self, source: &Self) {
-        self.mem_metadata_plane.copy_from(&source.mem_metadata_plane);
+        self.mem_metadata_plane
+            .copy_from(&source.mem_metadata_plane);
         self.tb_metadata_plane.copy_from(&source.tb_metadata_plane);
         self.node_attribute_plane
             .copy_from(&source.node_attribute_plane);
