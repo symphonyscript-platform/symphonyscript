@@ -2,6 +2,19 @@ use crate::constants::NODE_SIZE;
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::topology::slot_reader::SlotReader;
 
+/// Reader side structural facade for a graph node on the triple buffer.
+///
+/// Wraps two `SlotWriter`s (core structural pointers and custom metadata)
+/// to provide a strict read-only interface over the raw atomic memory block.
+///
+/// # Threading
+/// Consumer thread only. Delegates back to the underlying `SlotReader`s.
+///
+/// # Core Layout (8x i32)
+/// Shares backing region with `NodeWriter`. See its layout.
+///
+/// # Encapsulation
+/// - Read-only: structural mutation is strictly prohibited on the reading plane.
 pub struct NodeReader<'a, const META_SIZE: usize> {
     core: SlotReader<'a, NODE_SIZE>,
     meta: SlotReader<'a, META_SIZE>,

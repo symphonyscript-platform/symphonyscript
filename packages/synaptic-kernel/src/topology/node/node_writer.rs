@@ -2,6 +2,29 @@ use crate::constants::NODE_SIZE;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::topology::slot_writer::SlotWriter;
 
+/// Writer side structural facade for a graph node on the triple buffer.
+///
+/// Wraps two `SlotWriter`s (core structural pointers and custom metadata)
+/// to provide a strict interface over the raw atomic memory block.
+///
+/// # Threading
+/// Producer thread only. Delegates back to the underlying `SlotWriter`s.
+///
+/// # Core Layout (8x i32)
+/// - `0`: `kind` (shifted by 24 bits) combined with internal flags (lower 24 bits).
+/// - `1`: `next_ptr`
+/// - `2`: `prev_ptr`
+/// - `3`: `outgoing_synapse_head`
+/// - `4`: `outgoing_synapse_tail`
+/// - `5`: `incoming_synapse_head`
+/// - `6`: `incoming_synapse_tail`
+/// - `7`: (Reserved for future use)
+///
+/// Followed by `META_SIZE` `i32` slots for custom topology metadata.
+///
+/// # Encapsulation
+/// - All mutation methods (`set_*`) are `pub(crate)`. Only the kernel can mutate
+///   active topology, enforcing structural graph invariants.
 pub struct NodeWriter<'a, const META_SIZE: usize> {
     core: SlotWriter<'a, NODE_SIZE>,
     meta: SlotWriter<'a, META_SIZE>,
