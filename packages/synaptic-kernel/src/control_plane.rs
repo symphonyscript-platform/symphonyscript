@@ -2,6 +2,26 @@ use crate::constants::CONTROLLER_MAGIC;
 use crate::synaptic_graph_reader::SynapticGraphReader;
 use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 
+/// Lock-free control plane for initial delivery and later hot-swapping of
+/// the active graph.
+///
+/// Acts as the sole source of truth indicating which `SynapticGraphReader` instance the
+/// consumer thread should traverse. Orchestrates the safe delivery of the initial graph, as well
+/// as hot-swapping to new graph instances when the kernel reallocates due to `grow()`.
+///
+/// Additionally, provides a stable, `#[repr(C)]` memory layout for exposing the kernel to FFI.
+///
+/// # Mechanism
+/// The host initializes this with a valid graph pointer. When `grow()` occurs, the host stores
+/// the new pointer and increments `writer_generation`. The consumer thread detects this change,
+/// adopts the new points, and writes back to `reader_ack_generation`.
+/// This cyclic acknowledgement ensures the writer never drops the old memory while the consumer
+/// is still traversing it.
+///
+/// # Threading
+/// Wait-free SPSC synchronization.
+/// - Pointer exchange uses `Acquire`/`Release` ordering.
+/// - Generation sync uses `Acquire` on read, `Release` on ack.
 #[repr(C)]
 pub struct ControlPlane<
     const NODE_META_SIZE: usize,
