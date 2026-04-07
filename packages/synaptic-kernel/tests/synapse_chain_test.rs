@@ -3,9 +3,7 @@ use std::sync::Arc;
 use synaptic_kernel::constants::NODE_SIZE;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
-use synaptic_kernel::topology::node::node_chain_reader::NodeChainReader;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
-use synaptic_kernel::topology::synapse::synapse_chain_reader::SynapseChainReader;
 use synaptic_kernel::topology::synapse::synapse_chain_writer::SynapseChainWriter;
 
 const NODE_META: usize = 8;
@@ -39,7 +37,8 @@ struct TestHarness {
 
 fn setup() -> TestHarness {
     let mem = create_mem(MEM_SIZE);
-    let (writer, reader) = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
+    let writer = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
+    let reader = writer.to_reader();
     let node_chain = NodeChainWriter::<NODE_META>::new(
         Arc::clone(&mem),
         writer.clone(),
@@ -374,12 +373,7 @@ fn full_connect_disconnect_reconnect_cycle() {
     synapse_chain.publish();
     
     // Explicitly acknowledge the publish to free the disconnected synapse
-    let reader = synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader::bind(
-        Arc::clone(&h._mem),
-        synapse_chain.mem_staging_buffer_start_offset(),
-        SYNAPSE_CAPACITY,
-    );
-    reader.ack();
+    synapse_chain.to_staging_buffer_reader().ack();
     
     synapse_chain.publish();
 
@@ -435,21 +429,15 @@ fn disconnect_self_loop_clears_both_chains() {
 fn synapse_chain_reader_sees_connections_after_publish() {
     let mut h = setup();
 
-    let (src, tgt, syn) = {
-        let node_chain = h.node_chain;
-        let synapse_chain = h.synapse_chain;
+    let src = h.node_chain.insert_head(1).unwrap();
+    let tgt = h.node_chain.insert_head(2).unwrap();
+    let syn = h.synapse_chain.connect(src, tgt, 42).unwrap();
 
-        let src = node_chain.insert_head(1).unwrap();
-        let tgt = node_chain.insert_head(2).unwrap();
-        let syn = synapse_chain.connect(src, tgt, 42).unwrap();
-        (src, tgt, syn)
-    };
     h.writer.publish();
     h.reader.swap();
 
-    let node_chain_r = NodeChainReader::<NODE_META>::bind(h.reader.clone(), NODE_START_OFFSET, NODE_CAPACITY);
-    let synapse_chain_r =
-        SynapseChainReader::<NODE_META, SYNAPSE_META>::bind(h.reader.clone(), SYNAPSE_START_OFFSET, SYNAPSE_CAPACITY);
+    let node_chain_r = h.node_chain.to_reader();
+    let synapse_chain_r = h.synapse_chain.to_reader();
 
     let s = synapse_chain_r.get(syn);
     assert_eq!(s.get_kind(), 42);
@@ -801,7 +789,7 @@ fn copy_from_preserves_topology_and_deep_data() {
     src_h.synapse_chain.disconnect(s2).unwrap(); // defer s2
 
     let dst_mem = create_mem(MEM_SIZE);
-    let (dst_tb, _) = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
+    let dst_tb = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
     let dst_node_chain = NodeChainWriter::<NODE_META>::new(
         Arc::clone(&dst_mem),
         dst_tb.clone(),
@@ -829,12 +817,7 @@ fn copy_from_preserves_topology_and_deep_data() {
     dst_synapse_chain.publish();
     
     // Explicitly acknowledge the publish 
-    let dst_reader = synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader::bind(
-        Arc::clone(&dst_mem),
-        dst_synapse_chain.mem_staging_buffer_start_offset(),
-        SYNAPSE_CAPACITY * 2,
-    );
-    dst_reader.ack();
+    dst_synapse_chain.to_staging_buffer_reader().ack();
     
     dst_synapse_chain.publish();
 
@@ -848,7 +831,7 @@ fn copy_from_panics_if_source_larger() {
     let src_h = setup();
 
     let dst_mem = create_mem(MEM_SIZE);
-    let (dst_tb, _) = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
+    let dst_tb = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
     let dst_node_chain = NodeChainWriter::<NODE_META>::new(
         Arc::clone(&dst_mem),
         dst_tb.clone(),

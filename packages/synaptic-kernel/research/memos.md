@@ -8,7 +8,7 @@ The following decisions are fully specified in `docs/rfcs/modulation-v2/RFC-070-
 - **SOURCE_MODE**: PARAM (global) vs CONTEXT (per-node via hash+LUT)
 - **Hash function**: MurmurHash3 finalizer → `% 256` → LUT index (always through LUT, never direct). Hash-based (not sequential PRNG) because: if you use sequential `prng.next()`, adding a note at the beginning shifts the entire PRNG sequence — every subsequent note gets a different random value. Hash-based `hash(seed, tick, slot)` gives each note a deterministic value based on its identity, not traversal order. Stable under composition edits.
 - **Gating**: No threshold/gate attribute fields. GATE modulators with per-instance BASE_VALUE. Additive AND via -1000 deltas
-- **Boundaries**: BOUNDARY opcode in node chain. Signal-based (SIGNAL_RING), not callbacks. Kernel emits, engine drains. Per-node callbacks rejected due to WASM↔JS crossing cost: 200 nodes × ~150ns per crossing = 30µs per block (~1% of audio budget wasted on no-op round trips). Boundary-only signaling: 2-4 yields per clip = ~600ns. 50× cheaper.
+- **Boundaries**: BOUNDARY kind in node chain. Signal-based (SIGNAL_RING), not callbacks. Kernel emits, engine drains. Per-node callbacks rejected due to WASM↔JS crossing cost: 200 nodes × ~150ns per crossing = 30µs per block (~1% of audio budget wasted on no-op round trips). Boundary-only signaling: 2-4 yields per clip = ~600ns. 50× cheaper.
 - **Resolvers**: `registerParamResolver` (→ PARAMETER_TABLE), `registerContextResolver` (→ LUT_POOL)
 - **Jitter**: tick_offset + SOURCE=CONTEXT modulation. No separate jitter field
 - **SynapseAttributePlane**: weight + tick_offset in shared atomic plane, modulatable same as node attributes

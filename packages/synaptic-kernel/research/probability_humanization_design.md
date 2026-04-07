@@ -89,7 +89,7 @@ Clip.pipe(
 )
 ```
 
-**Scoping**: No push/pop opcodes. The sequencer's clip traversal context naturally saves/restores the seed when entering/leaving a clip chain. Clips without a `seed()` node inherit the parent's seed (or global default at root).
+**Scoping**: No push/pop kinds. The sequencer's clip traversal context naturally saves/restores the seed when entering/leaving a clip chain. Clips without a `seed()` node inherit the parent's seed (or global default at root).
 
 **Non-deterministic seeds**: Main thread writes to `PARAM.Entropy` via `setParam()`, timer, sensor input, etc. `seed(PARAM.Entropy)` reads the current value when the clip starts. Timing imprecision from main thread is irrelevant — entropy doesn't need precision.
 
@@ -134,7 +134,7 @@ All instantly patchable via atomic stores. No [publish()](file:///Users/torniket
 | **Composition-time humanize** | Redundant — NOISE_HASH covers both static and dynamic cases. |
 | **Separate jitter field** | `tick_offset` + modulation = jitter. One field, two behaviors. |
 | **Stochastic self-evolving weights** | Non-reproducible, non-debuggable. Deterministic weights + external learning loop is strictly more general. |
-| **SEED_PUSH/SEED_POP opcodes** | Clip traversal context handles scoping naturally. No explicit stack management. |
+| **SEED_PUSH/SEED_POP kinds** | Clip traversal context handles scoping naturally. No explicit stack management. |
 
 ---
 

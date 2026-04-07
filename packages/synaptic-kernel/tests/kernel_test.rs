@@ -385,7 +385,7 @@ fn grow_preserves_synapse_connectivity() {
 
     controller.grow(config(32)).unwrap();
 
-    // Verify synapse opcodes survived
+    // Verify synapse kinds survived
     assert_eq!(controller.get_synapse(s12).get_kind(), 10);
     assert_eq!(controller.get_synapse(s13).get_kind(), 20);
     assert_eq!(controller.get_synapse(s23).get_kind(), 30);
@@ -755,9 +755,9 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
             let mut current = reader.get_head_node();
             let mut count = 0;
             while let Some(node) = current {
-                let opcode = node.get_kind();
-                // Opcodes should be 0..63 range (what we insert below)
-                assert!(opcode >= 0 && opcode < 64, "corrupt opcode: {}", opcode);
+                let kind = node.get_kind();
+                // Kinds should be 0..63 range (what we insert below)
+                assert!(kind >= 0 && kind < 64, "corrupt kind: {}", kind);
 
                 let next_ptr = node.get_next_ptr();
                 if next_ptr == 0 {
@@ -821,7 +821,7 @@ fn concurrent_traversal_during_grow() {
 
             let mut current = reader.get_head_node();
             while let Some(node) = current {
-                let _opcode = node.get_kind();
+                let _kind = node.get_kind();
                 let next_ptr = node.get_next_ptr();
                 if next_ptr == 0 {
                     break;

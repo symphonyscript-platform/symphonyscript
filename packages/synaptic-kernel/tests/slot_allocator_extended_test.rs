@@ -14,11 +14,7 @@ fn create_allocator(capacity: usize) -> (SlotAllocator, StagingBufferReader, Ato
     let alloc = SlotAllocator::new(Arc::clone(&mem), 0, capacity);
     
     // We need a StagingBufferReader to simulate the reader acking generations
-    let reader = StagingBufferReader::bind(
-        Arc::clone(&mem),
-        alloc.mem_staging_buffer_start_offset(),
-        capacity,
-    );
+    let reader = alloc.to_staging_buffer_reader();
     (alloc, reader, mem)
 }
 
@@ -149,11 +145,7 @@ fn copy_from_deferred_items_flush_correctly_on_destination() {
     let large = SlotAllocator::new(Arc::clone(&large_mem), 0, 8);
     
     // Also bind a reader to the large
-    let large_reader = StagingBufferReader::bind(
-        Arc::clone(&large_mem),
-        large.mem_staging_buffer_start_offset(),
-        8,
-    );
+    let large_reader = large.to_staging_buffer_reader();
 
     large.copy_from(&small);
 

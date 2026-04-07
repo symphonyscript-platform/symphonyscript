@@ -39,7 +39,8 @@ struct TestHarness {
 
 fn setup() -> TestHarness {
     let mem = create_mem(MEM_SIZE);
-    let (writer, reader) = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
+    let writer = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
+    let reader = writer.to_reader();
     let node_chain = NodeChainWriter::<NODE_META>::new(
         Arc::clone(&mem),
         writer.clone(),
@@ -55,11 +56,7 @@ fn setup() -> TestHarness {
         SYNAPSE_START_OFFSET,
         SYNAPSE_CAPACITY,
     );
-    let synapse_chain_r = SynapseChainReader::<NODE_META, SYNAPSE_META>::bind(
-        reader.clone(),
-        SYNAPSE_START_OFFSET,
-        SYNAPSE_CAPACITY,
-    );
+    let synapse_chain_r = synapse_chain.to_reader();
     TestHarness {
         _mem: mem,
         writer,

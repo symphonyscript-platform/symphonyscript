@@ -23,7 +23,7 @@ fn create_mem(size: usize) -> AtomicBuffer {
 
 fn setup_chain() -> NodeChainWriter<NODE_META> {
     let mem = create_mem(MEM_SIZE);
-    let (writer, _reader) = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
+    let writer = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
     NodeChainWriter::<NODE_META>::new(
         mem,
         writer,

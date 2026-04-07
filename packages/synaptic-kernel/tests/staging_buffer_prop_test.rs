@@ -11,7 +11,7 @@ fn create_staging(capacity: usize) -> (StagingBufferWriter, StagingBufferReader,
     let size = StagingBufferWriter::calculate_size_on_mem(capacity);
     let mem: AtomicBuffer = Arc::new((0..size).map(|_| AtomicI32::new(0)).collect());
     let buffer = StagingBufferWriter::new(Arc::clone(&mem), 0, capacity);
-    let reader = StagingBufferReader::bind(Arc::clone(&mem), 0, capacity);
+    let reader = buffer.to_reader();
     (buffer, reader, mem)
 }
 

@@ -8,7 +8,7 @@ fn create_staging(capacity: usize) -> (StagingBufferWriter, StagingBufferReader,
     let size = StagingBufferWriter::calculate_size_on_mem(capacity);
     let mem: AtomicBuffer = Arc::new((0..size).map(|_| AtomicI32::new(0)).collect());
     let buffer = StagingBufferWriter::new(Arc::clone(&mem), 0, capacity);
-    let reader = StagingBufferReader::bind(Arc::clone(&mem), 0, capacity);
+    let reader = buffer.to_reader();
     (buffer, reader, mem)
 }
 
@@ -309,7 +309,7 @@ fn nonzero_start_offset_works() {
     mem[offset].store(1, std::sync::atomic::Ordering::Relaxed);
 
     let buf = StagingBufferWriter::new(Arc::clone(&mem), offset, 4);
-    let reader = StagingBufferReader::bind(Arc::clone(&mem), offset, 4);
+    let reader = buf.to_reader();
 
     buf.push(42).unwrap();
     buf.publish();

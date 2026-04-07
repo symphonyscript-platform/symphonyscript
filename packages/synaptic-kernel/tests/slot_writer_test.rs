@@ -17,7 +17,7 @@ fn create_mem(size: usize) -> AtomicBuffer {
 #[test]
 fn new_creates_view() {
     let mem = create_mem(1024);
-    let (writer, _reader) = TripleBufferWriter::new(mem, 0, 256);
+    let writer = TripleBufferWriter::new(mem, 0, 256);
     let view: SlotWriter<'_, 16> = SlotWriter::new(&writer, 0);
     assert_eq!(view.read(0), 0);
 }
@@ -28,6 +28,6 @@ fn new_creates_view() {
 #[should_panic(expected = "SlotWriter::create | range")]
 fn panics_if_out_of_bounds() {
     let mem = create_mem(1024);
-    let (writer, _reader) = TripleBufferWriter::new(mem, 0, 16);
+    let writer = TripleBufferWriter::new(mem, 0, 16);
     let _view: SlotWriter<'_, 16> = SlotWriter::new(&writer, 8);
 }

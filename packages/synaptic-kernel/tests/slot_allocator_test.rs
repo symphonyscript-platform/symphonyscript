@@ -1,6 +1,5 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::errors::free_list_error::FreeListError;
 use synaptic_kernel::primitives::slot_allocator::SlotAllocator;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
@@ -17,12 +16,8 @@ fn create_allocator(capacity: usize) -> (SlotAllocator, AtomicBuffer) {
 
 #[test]
 fn alloc_defer_flush_lifecycle() {
-    let (alloc, mem) = create_allocator(4);
-    let reader = synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader::bind(
-        mem,
-        alloc.mem_staging_buffer_start_offset(),
-        4,
-    );
+    let (alloc, _mem) = create_allocator(4);
+    let reader = alloc.to_staging_buffer_reader();
 
     let s1 = alloc.alloc().unwrap();
     assert_eq!(alloc.free_count(), 3);

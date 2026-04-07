@@ -113,5 +113,5 @@ fn synapse_writer_kind_bitmask_preserves_lower_bits() {
     // mutate whatever mutable field occupies the lower 24 bits of field 0
     s.set_kind(0x7F); // simulate lower bits being set
     let raw = s.get_kind();
-    assert_eq!(raw, 0x7F, "opcode preserved");
+    assert_eq!(raw, 0x7F, "kind preserved");
 }

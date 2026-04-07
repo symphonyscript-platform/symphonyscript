@@ -53,7 +53,7 @@ fn insert_head_returns_slot() {
 }
 
 #[test]
-fn insert_head_writes_opcode_and_tick() {
+fn insert_head_writes_kind_and_tick() {
     let kernel = create_writer();
     let slot = insert_head_with_tick(&kernel, 5, 999);
 

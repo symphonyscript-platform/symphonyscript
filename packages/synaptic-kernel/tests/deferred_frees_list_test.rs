@@ -7,11 +7,9 @@ fn create_list(capacity: usize) -> (StagingBufferWriter, StagingBufferReader, Ar
     let size = StagingBufferWriter::calculate_size_on_mem(capacity);
     let mem: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
     let mem_arc = Arc::new(mem);
-    (
-        StagingBufferWriter::new(Arc::clone(&mem_arc), 0, capacity),
-        StagingBufferReader::bind(Arc::clone(&mem_arc), 0, capacity),
-        mem_arc,
-    )
+    let list = StagingBufferWriter::new(Arc::clone(&mem_arc), 0, capacity);
+    let reader = list.to_reader();
+    (list, reader, mem_arc)
 }
 
 #[test]
