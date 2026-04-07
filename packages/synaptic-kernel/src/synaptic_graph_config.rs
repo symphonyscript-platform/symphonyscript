@@ -6,9 +6,9 @@
 /// # Fields
 /// - `node_capacity`: Maximum number of graph nodes.
 /// - `synapse_capacity`: Maximum number of graph synapses (connections).
-/// - `mem_metadata_size`: Power-of-2 size of the global metadata memory residing
+/// - `mem_metadata_size`: Power-of-2 size of the global metadata region residing
 ///    on the `mem` (direct) plane.
-/// - `tb_metadata_size`: Power-of-2 size of the global metadata memory residing
+/// - `tb_metadata_size`: Power-of-2 size of the global metadata region residing
 ///    on the `tb` (triple-buffer) plane.
 #[derive(Clone)]
 pub struct SynapticGraphConfig {
