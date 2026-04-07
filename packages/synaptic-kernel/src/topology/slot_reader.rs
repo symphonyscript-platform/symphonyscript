@@ -1,9 +1,19 @@
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
 
+/// Reader side view into a fixed-size structural block on the triple buffer.
+///
+/// Provides safe, offset-based read-only access to a specific `[i32; SLOT_SIZE]` sequence.
+///
+/// # Threading
+/// Consumer thread only. Delegates back to the underlying `TripleBufferWriter`.
+///
+/// # Encapsulation
+/// - Read-only: structural mutation is strictly prohibited on the reading plane.
+/// - Typically instantiated on-the-fly and short-lived.
 pub struct SlotReader<'a, const SLOT_SIZE: usize> {
-    pub(crate) triple_buffer: &'a TripleBufferReader,
-    pub(crate) tb_start_offset: usize,
-    pub(crate) tb_end_offset: usize,
+    triple_buffer: &'a TripleBufferReader,
+    tb_start_offset: usize,
+    tb_end_offset: usize,
 }
 
 impl<'a, const SLOT_SIZE: usize> SlotReader<'a, SLOT_SIZE> {
