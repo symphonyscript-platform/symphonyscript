@@ -2,6 +2,29 @@ use crate::constants::SYNAPSE_SIZE;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::topology::slot_writer::SlotWriter;
 
+/// Writer side structural facade for a graph synapse on the triple buffer.
+///
+/// Wraps two `SlotWriter`s (core structural pointers and custom metadata)
+/// to provide a strict interface over the raw atomic memory block.
+///
+/// # Threading
+/// Producer thread only. Delegates back to the underlying `SlotWriter`s.
+///
+/// # Core Layout (8x i32)
+/// - `0`: `kind` (shifted by 24 bits) combined with internal flags (lower 24 bits).
+/// - `1`: `source_ptr`
+/// - `2`: `target_ptr
+/// - `3`: `outgoing_next_ptr`
+/// - `4`: `outgoing_prev_ptr`
+/// - `5`: `incoming_next_ptr`
+/// - `6`: `incoming_prev-ptr`
+/// - `7`: (Reserved for future use)
+///
+/// Followed by `META_SIZE` `i32` slots for custom topology metadata.
+///
+/// # Encapsulation
+/// - All mutation methods (`set_*`) are `pub(crate)`. Only the kernel can mutate
+///   active topology, enforcing structural graph invariants.
 pub struct SynapseWriter<'a, const META_SIZE: usize> {
     core: SlotWriter<'a, SYNAPSE_SIZE>,
     meta: SlotWriter<'a, META_SIZE>,
