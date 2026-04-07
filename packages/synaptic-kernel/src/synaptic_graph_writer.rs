@@ -19,7 +19,7 @@ use std::sync::Arc;
 /// Writer side graph and topology orchestrator.
 ///
 /// Provides the unified API for mutating the lock-free graph topology and attributes.
-/// It encapsulates the underling memory hierarchy and handles deploying structural updates
+/// It encapsulates the underlying memory hierarchy and handles deploying structural updates
 /// to the consumer via the `publish()`.
 ///
 /// # Threading
