@@ -185,7 +185,7 @@ impl TripleBufferWriter {
         // 1. the writer's new state is independent of the current shared state
         // - we unconditionally publish our buffer and set NEW_DATA.
         // 2. In SPSC, no competing writers exist, so swap is safe and retry-free.
-        let old_state = self.mem[self.state_slot_index].swap(new_state, Ordering::Release);
+        let old_state = self.mem[self.state_slot_index].swap(new_state, Ordering::AcqRel);
         let writer_new_buffer_id = old_state & 0b011;
 
         self.mem[self.writer_slot_index].store(writer_new_buffer_id, Ordering::Relaxed);
@@ -333,7 +333,7 @@ impl TripleBufferReader {
         // the load() above and this swap().
         // The old_state is used to determine which buffer was acquired, since
         // state loaded by the initial load() might be stale by the time we reach this point.
-        let old_state = self.mem[self.state_slot_index].swap(new_state, Ordering::Acquire);
+        let old_state = self.mem[self.state_slot_index].swap(new_state, Ordering::AcqRel);
 
         self.mem[self.reader_slot_index].store(old_state & 0b011, Ordering::Relaxed);
 
