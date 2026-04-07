@@ -10,7 +10,7 @@ pub struct MemMetadataReader {
 }
 
 impl MemMetadataReader {
-    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub(crate) fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
         debug_assert!(
             capacity > 0,
             "MemMetadataReader::create | capacity {} must be positive",

@@ -1,5 +1,5 @@
 use crate::constants::SYNAPSE_SIZE;
-use crate::primitives::triple_buffer::TripleBufferWriter;
+use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::topology::slot_writer::SlotWriter;
 
 pub struct SynapseWriter<'a, const META_SIZE: usize> {

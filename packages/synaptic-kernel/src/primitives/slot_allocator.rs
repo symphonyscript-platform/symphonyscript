@@ -1,18 +1,52 @@
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::bitmap::Bitmap;
 use crate::primitives::simple_free_list::SimpleFreeList;
-use crate::primitives::staging_buffer::StagingBuffer;
+use crate::primitives::staging_buffer_reader::StagingBufferReader;
+use crate::primitives::staging_buffer_writer::StagingBufferWriter;
 use crate::primitives::types::AtomicBuffer;
 use std::sync::Arc;
 
+/// 1-based slot allocator with generation-gated deferred freeing.
+///
+/// Combines a `SimpleFreeList` for immediate allocation, a `StagingBuffer` for
+/// deferred free() requests, and a `Bitmap` to track which slots are pending reclamation (retired).
+/// Slots are not returned to the free list until `publish()` drains acknowledged entries from the
+/// staging buffer.
+///
+/// # Threading
+/// Writer side only (Producer Thread).
+/// Cross-thread coordination is handled by the underlying `StagingBuffer`'s generation protocol.
+///
+/// # Memory Layout
+/// ```text
+/// Offset              Size        Field
+/// ------------------------------------
+/// 0                   free(N)     staging_bitmap
+/// bitmask(N)          free(N)     free_list
+/// bitmask(N)+free(N)  staging(N)  staging_buffer
+///
+/// N           = capacity (power of 2)
+/// bitmask(N)  = ceil(N/32)
+/// free(N)     = 2 + ceil(N/32) + N
+/// staging(N)  = 2 + 3 + 2N
+/// ```
+///
+/// # Slot Lifecycle
+/// `alloc()` -> active -> `defer_free()` -> deferred -> `publish()` -> free -> `alloc()`
+///
+/// # Constraints
+/// - `capacity` must be a power of 2.
+/// - 1-based slot API (same as `SimpleFreeList`).
+/// - `defer_free()` on an unallocated or already-deferred slot returns an error.
 #[derive(Clone)]
 pub struct SlotAllocator {
+    mem: AtomicBuffer,
     mem_start_offset: usize,
     mem_end_offset: usize,
     capacity: usize,
     staging_bitmap: Bitmap,
     free_list: SimpleFreeList,
-    staging_buffer: StagingBuffer,
+    staging_buffer: StagingBufferWriter,
 }
 
 /**
@@ -31,8 +65,12 @@ impl SlotAllocator {
         let bitmap = Bitmap::create(Arc::clone(&mem), mem_start_offset, capacity, bind);
         let free_list =
             SimpleFreeList::create(Arc::clone(&mem), bitmap.mem_end_offset(), capacity, bind);
-        let deferred_frees_list =
-            StagingBuffer::create(Arc::clone(&mem), free_list.mem_end_offset(), capacity, bind);
+        let deferred_frees_list = StagingBufferWriter::create(
+            Arc::clone(&mem),
+            free_list.mem_end_offset(),
+            capacity,
+            bind,
+        );
         let mem_end_offset = deferred_frees_list.mem_end_offset();
 
         debug_assert!(
@@ -43,6 +81,7 @@ impl SlotAllocator {
         );
 
         SlotAllocator {
+            mem,
             mem_start_offset,
             mem_end_offset,
             capacity,
@@ -55,7 +94,15 @@ impl SlotAllocator {
     pub fn calculate_size_on_mem(capacity: usize) -> usize {
         Bitmap::calculate_size_on_mem(capacity)
             + SimpleFreeList::calculate_size_on_mem(capacity)
-            + StagingBuffer::calculate_size_on_mem(capacity)
+            + StagingBufferWriter::calculate_size_on_mem(capacity)
+    }
+
+    pub fn to_staging_buffer_reader(&self) -> StagingBufferReader {
+        StagingBufferReader::bind(
+            Arc::clone(&self.mem),
+            self.staging_buffer.mem_start_offset(),
+            self.capacity,
+        )
     }
 
     pub fn free_count(&self) -> usize {

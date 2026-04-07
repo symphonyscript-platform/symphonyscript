@@ -1,8 +1,10 @@
 use crate::constants::NODE_SIZE;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::slot_allocator::SlotAllocator;
-use crate::primitives::triple_buffer::TripleBufferWriter;
+use crate::primitives::staging_buffer_reader::StagingBufferReader;
+use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
+use crate::topology::node::node_chain_reader::NodeChainReader;
 use crate::topology::node::node_writer::NodeWriter;
 use std::sync::Arc;
 
@@ -97,6 +99,18 @@ impl<const META_SIZE: usize> NodeChainWriter<META_SIZE> {
 
     pub(crate) fn calculate_node_start_offset(tb_start_offset: usize, slot: usize) -> usize {
         tb_start_offset + 1 + (slot - 1) * (NODE_SIZE + META_SIZE)
+    }
+
+    pub fn to_reader(&self) -> NodeChainReader<META_SIZE> {
+        NodeChainReader::bind(
+            self.triple_buffer.to_reader(),
+            self.tb_start_offset,
+            self.capacity,
+        )
+    }
+
+    pub fn to_staging_buffer_reader(&self) -> StagingBufferReader {
+        self.allocator.to_staging_buffer_reader()
     }
 
     pub fn len(&self) -> usize {

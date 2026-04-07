@@ -1,5 +1,5 @@
 use crate::constants::SYNAPSE_SIZE;
-use crate::primitives::triple_buffer::TripleBuffer;
+use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
 use crate::topology::node::node_chain_writer::NodeChainWriter;
 use crate::topology::synapse::synapse_chain_writer::SynapseChainWriter;
@@ -25,13 +25,13 @@ const NODE_FL_START: usize = 50000;
 
 struct TestHarness {
     mem: AtomicBuffer,
-    writer: crate::primitives::triple_buffer::TripleBufferWriter,
-    _reader: crate::primitives::triple_buffer::TripleBufferReader,
+    writer: crate::primitives::triple_buffer_writer::TripleBufferWriter,
+    _reader: crate::primitives::triple_buffer_reader::TripleBufferReader,
 }
 
 fn setup() -> TestHarness {
     let mem = create_mem(MEM_SIZE);
-    let (writer, reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
+    let (writer, reader) = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
 
     TestHarness {
         mem,

@@ -1,11 +1,41 @@
 use crate::errors::ring_buffer_error::RingBufferError;
 use crate::primitives::ring_buffer::RingBuffer;
+use crate::primitives::staging_buffer_reader::StagingBufferReader;
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+/// Generation-gated SPSC staging buffer for deferred slot reclamation.
+///
+/// The writer pushes retired slot numbers into a ring buffer,
+/// each stamped with the current `writer_generation`. On `publish()`, the generation advances.
+/// `drain()` only yields entries whose generation has been acknowledged by the reader
+/// via `StagingBufferReader::ack()`.
+///
+/// # Threading
+/// Writer side only (Producer Thread).
+/// Reads `reader_ack_generation` with `Acquire`
+/// to synchronize against the reader's `Release` in `ack()`.
+/// All other atomics use `Relaxed`.
+///
+/// # Memory Layout
+/// ```text
+/// Offset          Size            Field
+/// -----------------------------------------------------
+/// 0               1               writer_generation
+/// 1               1               reader_ack_generation
+/// 2               ring_size(N)    ring_buffer
+///
+/// N = capacity (power of 2)
+/// ring_size(N) = 3+2N (= `RingBuffer::<2>::calculate_size_on_mem(N)`)
+/// ```
+///
+/// # Constraints
+/// - `capacity` must be a power of 2.
+/// - `writer_generation` starts at 1, `reader_ack_generation` starts at 0.
+///   This initial differential prevents premature draining of pre-publish entries.
 #[derive(Clone)]
-pub struct StagingBuffer {
+pub struct StagingBufferWriter {
     mem: AtomicBuffer,
     buffer: RingBuffer<2>,
     capacity: usize,
@@ -15,12 +45,12 @@ pub struct StagingBuffer {
     mem_end_offset: usize,
 }
 
-pub struct StagingBufferIterator<'a> {
+pub struct StagingBufferWriterIterator<'a> {
     buffer: &'a RingBuffer<2>,
     ack_generation: usize,
 }
 
-impl<'a> Iterator for StagingBufferIterator<'a> {
+impl<'a> Iterator for StagingBufferWriterIterator<'a> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -38,10 +68,7 @@ impl<'a> Iterator for StagingBufferIterator<'a> {
     }
 }
 
-/**
- * SPSC Staging Buffer
- */
-impl StagingBuffer {
+impl StagingBufferWriter {
     pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
         Self::create(mem, mem_start_offset, capacity, false)
     }
@@ -53,13 +80,13 @@ impl StagingBuffer {
     pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
         debug_assert!(
             capacity > 0,
-            "StagingBuffer::create | capacity {} must be positive",
+            "StagingBufferWriter::create | capacity {} must be positive",
             capacity
         );
         debug_assert_eq!(
             capacity & (capacity - 1),
             0,
-            "StagingBuffer::create | capacity {} must be power of 2",
+            "StagingBufferWriter::create | capacity {} must be power of 2",
             capacity
         );
 
@@ -71,7 +98,7 @@ impl StagingBuffer {
 
         debug_assert!(
             mem_end_offset <= mem.len(),
-            "StagingBuffer::create | range [{}..{}] exceeds AtomicBuffer boundaries",
+            "StagingBufferWriter::create | range [{}..{}] exceeds AtomicBuffer boundaries",
             mem_start_offset,
             mem.len()
         );
@@ -84,7 +111,7 @@ impl StagingBuffer {
         let buffer =
             RingBuffer::<2>::create(Arc::clone(&mem), mem_list_start_offset, capacity, bind);
 
-        StagingBuffer {
+        StagingBufferWriter {
             mem,
             buffer,
             mem_start_offset,
@@ -97,6 +124,10 @@ impl StagingBuffer {
 
     pub fn calculate_size_on_mem(capacity: usize) -> usize {
         2 + RingBuffer::<2>::calculate_size_on_mem(capacity)
+    }
+
+    pub fn to_reader(&self) -> StagingBufferReader {
+        StagingBufferReader::bind(Arc::clone(&self.mem), self.mem_start_offset, self.capacity)
     }
 
     pub fn len(&self) -> usize {
@@ -126,7 +157,7 @@ impl StagingBuffer {
     pub fn push(&self, slot: usize) -> Result<(), RingBufferError> {
         let len = self.len();
 
-        debug_assert!(len < self.capacity, "StagingBuffer.push | buffer overflow",);
+        debug_assert!(len < self.capacity, "StagingBufferWriter.push | buffer overflow",);
 
         let generation_id = self.mem[self.mem_writer_generation_offset].load(Ordering::Relaxed);
 
@@ -139,8 +170,8 @@ impl StagingBuffer {
         self.mem[self.mem_writer_generation_offset].fetch_add(1, Ordering::Relaxed);
     }
 
-    pub fn drain(&'_ self) -> StagingBufferIterator<'_> {
-        StagingBufferIterator {
+    pub fn drain(&'_ self) -> StagingBufferWriterIterator<'_> {
+        StagingBufferWriterIterator {
             buffer: &self.buffer,
             ack_generation: self.reader_ack_generation(),
         }
@@ -149,7 +180,7 @@ impl StagingBuffer {
     pub fn copy_from(&self, source: &Self) {
         debug_assert!(
             source.capacity <= self.capacity,
-            "StagingBuffer.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
+            "StagingBufferWriter.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
             source.capacity,
             self.capacity,
         );

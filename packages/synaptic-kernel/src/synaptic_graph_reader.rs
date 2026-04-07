@@ -3,25 +3,11 @@ use crate::attribute_plane::attributes_reader::AttributesReader;
 use crate::metadata::mem_metadata_reader::MemMetadataReader;
 use crate::metadata::tb_metadata_reader::TbMetadataReader;
 use crate::primitives::staging_buffer_reader::StagingBufferReader;
-use crate::primitives::triple_buffer::{TripleBuffer, TripleBufferReader};
-use crate::primitives::types::AtomicBuffer;
-use crate::synaptic_graph_config::SynapticGraphConfig;
-use crate::synaptic_graph_writer::SynapticGraphWriter;
+use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::topology::node::node_chain_reader::NodeChainReader;
 use crate::topology::node::node_reader::NodeReader;
 use crate::topology::synapse::synapse_chain_reader::SynapseChainReader;
 use crate::topology::synapse::synapse_reader::SynapseReader;
-use std::sync::Arc;
-
-pub struct SynapticGraphReaderConfig {
-    pub mem: AtomicBuffer,
-    pub node_capacity: usize,
-    pub synapse_capacity: usize,
-    pub mem_metadata_size: usize,
-    pub tb_metadata_size: usize,
-    pub node_staging_buffer_start_offset: usize,
-    pub synapse_staging_buffer_start_offset: usize,
-}
 
 #[derive(Clone)]
 pub struct SynapticGraphReader<
@@ -54,67 +40,17 @@ impl<
         SYNAPSE_ATTRIBUTES_SIZE,
     >
 {
-    pub fn bind(config: SynapticGraphReaderConfig) -> Self {
-        let mem_start_offset = SynapticGraphWriter::<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
-        >::HEADERS_SIZE;
-        let tb_start_offset = 0;
-
-        let mem = config.mem;
-        let mem_metadata_plane =
-            MemMetadataReader::bind(Arc::clone(&mem), mem_start_offset, config.mem_metadata_size);
-        let node_attribute_plane = AttributePlaneReader::<NODE_ATTRIBUTES_SIZE>::bind(
-            Arc::clone(&mem),
-            mem_metadata_plane.mem_end_offset(),
-            config.node_capacity,
-        );
-        let synapse_attribute_plane = AttributePlaneReader::<SYNAPSE_ATTRIBUTES_SIZE>::bind(
-            Arc::clone(&mem),
-            node_attribute_plane.mem_end_offset(),
-            config.synapse_capacity,
-        );
-        let tb_size = SynapticGraphWriter::<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
-        >::calculate_size_on_tb(&SynapticGraphConfig {
-            node_capacity: config.node_capacity,
-            synapse_capacity: config.synapse_capacity,
-            mem_metadata_size: config.mem_metadata_size,
-            tb_metadata_size: config.tb_metadata_size,
-        });
-        let tb_reader = TripleBuffer::bind_reader(
-            Arc::clone(&mem),
-            synapse_attribute_plane.mem_end_offset(),
-            tb_size,
-        );
-        let tb_metadata_plane =
-            TbMetadataReader::bind(tb_reader.clone(), tb_start_offset, config.tb_metadata_size);
-        let node_chain_reader = NodeChainReader::bind(
-            tb_reader.clone(),
-            tb_metadata_plane.tb_end_offset(),
-            config.node_capacity,
-        );
-        let synapse_chain_reader = SynapseChainReader::bind(
-            tb_reader.clone(),
-            node_chain_reader.tb_end_offset(),
-            config.synapse_capacity,
-        );
-        let node_staging_buffer_reader = StagingBufferReader::bind(
-            Arc::clone(&mem),
-            config.node_staging_buffer_start_offset,
-            config.node_capacity,
-        );
-        let synapse_staging_buffer_reader = StagingBufferReader::bind(
-            Arc::clone(&mem),
-            config.synapse_staging_buffer_start_offset,
-            config.synapse_capacity,
-        );
-
+    pub(crate) fn bind(
+        mem_metadata_plane: MemMetadataReader,
+        node_attribute_plane: AttributePlaneReader<NODE_ATTRIBUTES_SIZE>,
+        synapse_attribute_plane: AttributePlaneReader<SYNAPSE_ATTRIBUTES_SIZE>,
+        tb_reader: TripleBufferReader,
+        tb_metadata_plane: TbMetadataReader,
+        node_chain_reader: NodeChainReader<NODE_META_SIZE>,
+        synapse_chain_reader: SynapseChainReader<NODE_META_SIZE, SYNAPSE_META_SIZE>,
+        node_staging_buffer_reader: StagingBufferReader,
+        synapse_staging_buffer_reader: StagingBufferReader,
+    ) -> Self {
         SynapticGraphReader {
             mem_metadata_plane,
             tb_metadata_plane,

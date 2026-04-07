@@ -5,10 +5,10 @@ use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::metadata::mem_metadata_writer::MemMetadataWriter;
 use crate::metadata::tb_metadata_writer::TbMetadataWriter;
 use crate::primitives::into_array::IntoArray;
-use crate::primitives::triple_buffer::{TripleBuffer, TripleBufferWriter};
+use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
 use crate::synaptic_graph_config::SynapticGraphConfig;
-use crate::synaptic_graph_reader::{SynapticGraphReader, SynapticGraphReaderConfig};
+use crate::synaptic_graph_reader::SynapticGraphReader;
 use crate::topology::node::node_chain_writer::NodeChainWriter;
 use crate::topology::node::node_writer::NodeWriter;
 use crate::topology::synapse::synapse_chain_writer::SynapseChainWriter;
@@ -53,55 +53,94 @@ impl<
     pub const HEADERS_SIZE: usize = 2;
 
     pub fn new(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
-        assert!(
-            mem[0].load(Ordering::Acquire) == 0 && mem[1].load(Ordering::Acquire) == 0,
-            "Attempted to initialize SynapticGraphWriter on already allocated memory"
-        );
+        Self::create(mem, config, false)
+    }
 
-        assert!(
-            mem.len() >= Self::calculate_size_on_mem(&config),
-            "Provided AtomicBuffer is too small for this configuration"
-        );
+    pub fn bind(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
+        Self::create(mem, config, true)
+    }
 
-        mem[0].store(GRAPH_MAGIC, Ordering::Release);
-        mem[1].store(KERNEL_VERSION, Ordering::Release);
+    pub fn create(mem: AtomicBuffer, config: SynapticGraphConfig, bind: bool) -> Self {
+        if !bind {
+            assert!(
+                mem[0].load(Ordering::Acquire) == 0 && mem[1].load(Ordering::Acquire) == 0,
+                "Attempted to initialize SynapticGraphWriter on already allocated memory"
+            );
+
+            assert!(
+                mem.len() >= Self::calculate_size_on_mem(&config),
+                "Provided AtomicBuffer is too small for this configuration"
+            );
+
+            mem[0].store(GRAPH_MAGIC, Ordering::Release);
+            mem[1].store(KERNEL_VERSION, Ordering::Release);
+        } else {
+            assert_eq!(
+                mem[0].load(Ordering::Acquire),
+                GRAPH_MAGIC,
+                "Attempted to initialize SynapticGraphWriter on foreign memory"
+            );
+            assert_eq!(
+                mem[1].load(Ordering::Acquire),
+                KERNEL_VERSION,
+                "Attempted to initialize SynapticGraphWriter on mismatched AtomicBuffer version"
+            );
+
+            assert!(
+                mem.len() >= Self::calculate_size_on_mem(&config),
+                "Provided AtomicBuffer is too small for this configuration"
+            );
+        }
 
         let mem_start_offset = 2;
         let tb_start_offset = 0;
 
-        let mem_metadata_plane =
-            MemMetadataWriter::new(Arc::clone(&mem), mem_start_offset, config.mem_metadata_size);
-        let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SIZE>::new(
+        let mem_metadata_plane = MemMetadataWriter::create(
+            Arc::clone(&mem),
+            mem_start_offset,
+            config.mem_metadata_size,
+            bind,
+        );
+        let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SIZE>::create(
             Arc::clone(&mem),
             mem_metadata_plane.mem_end_offset(),
             config.node_capacity,
+            bind,
         );
-        let synapse_attribute_plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SIZE>::new(
+        let synapse_attribute_plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SIZE>::create(
             Arc::clone(&mem),
             node_attribute_plane.mem_end_offset(),
             config.synapse_capacity,
+            bind,
         );
-        let (tb_writer, _) = TripleBuffer::new(
+        let tb_writer = TripleBufferWriter::create(
             Arc::clone(&mem),
             synapse_attribute_plane.mem_end_offset(),
             Self::calculate_size_on_tb(&config),
+            bind,
         );
-        let tb_metadata_plane =
-            TbMetadataWriter::new(tb_writer.clone(), tb_start_offset, config.tb_metadata_size);
-        let node_chain_writer = NodeChainWriter::new(
+        let tb_metadata_plane = TbMetadataWriter::create(
+            tb_writer.clone(),
+            tb_start_offset,
+            config.tb_metadata_size,
+            bind,
+        );
+        let node_chain_writer = NodeChainWriter::create(
             Arc::clone(&mem),
             tb_writer.clone(),
             tb_writer.mem_end_offset(),
             tb_metadata_plane.tb_end_offset(),
             config.node_capacity,
+            bind,
         );
-        let synapse_chain_writer = SynapseChainWriter::new(
+        let synapse_chain_writer = SynapseChainWriter::create(
             Arc::clone(&mem),
             tb_writer.clone(),
             node_chain_writer.clone(),
             node_chain_writer.mem_end_offset(),
             node_chain_writer.tb_end_offset(),
             config.synapse_capacity,
+            bind,
         );
 
         SynapticGraphWriter {
@@ -120,75 +159,20 @@ impl<
         }
     }
 
-    pub fn bind(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
-        assert_eq!(
-            mem[0].load(Ordering::Acquire),
-            GRAPH_MAGIC,
-            "Attempted to initialize SynapticGraphWriter on foreign memory"
-        );
-        assert_eq!(
-            mem[1].load(Ordering::Acquire),
-            KERNEL_VERSION,
-            "Attempted to initialize SynapticGraphWriter on mismatched AtomicBuffer version"
-        );
-
-        assert!(
-            mem.len() >= Self::calculate_size_on_mem(&config),
-            "Provided AtomicBuffer is too small for this configuration"
-        );
-
-        let mem_start_offset = 2;
-        let tb_start_offset = 0;
-
-        let mem_metadata_plane =
-            MemMetadataWriter::bind(Arc::clone(&mem), mem_start_offset, config.mem_metadata_size);
-        let node_attribute_plane = AttributePlaneWriter::<NODE_ATTRIBUTES_SIZE>::bind(
-            Arc::clone(&mem),
-            mem_metadata_plane.mem_end_offset(),
-            config.node_capacity,
-        );
-        let synapse_attribute_plane = AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SIZE>::bind(
-            Arc::clone(&mem),
-            node_attribute_plane.mem_end_offset(),
-            config.synapse_capacity,
-        );
-        let tb_writer = TripleBuffer::bind_writer(
-            Arc::clone(&mem),
-            synapse_attribute_plane.mem_end_offset(),
-            Self::calculate_size_on_tb(&config),
-        );
-        let tb_metadata_plane =
-            TbMetadataWriter::bind(tb_writer.clone(), tb_start_offset, config.tb_metadata_size);
-        let node_chain_writer = NodeChainWriter::bind(
-            Arc::clone(&mem),
-            tb_writer.clone(),
-            tb_writer.mem_end_offset(),
-            tb_metadata_plane.tb_end_offset(),
-            config.node_capacity,
-        );
-        let synapse_chain_writer = SynapseChainWriter::bind(
-            Arc::clone(&mem),
-            tb_writer.clone(),
-            node_chain_writer.clone(),
-            node_chain_writer.mem_end_offset(),
-            node_chain_writer.tb_end_offset(),
-            config.synapse_capacity,
-        );
-
-        SynapticGraphWriter {
-            mem,
-            mem_metadata_plane,
-            tb_metadata_plane,
-            node_attribute_plane,
-            synapse_attribute_plane,
-            tb_writer,
-            node_chain_writer,
-            synapse_chain_writer,
-            node_capacity: config.node_capacity,
-            synapse_capacity: config.synapse_capacity,
-            mem_metadata_size: config.mem_metadata_size,
-            tb_metadata_size: config.tb_metadata_size,
-        }
+    pub fn calculate_size_on_mem(config: &SynapticGraphConfig) -> usize {
+        Self::HEADERS_SIZE
+            + MemMetadataWriter::calculate_size_on_mem(config.mem_metadata_size)
+            + NodeChainWriter::<NODE_META_SIZE>::calculate_size_on_mem(config.node_capacity)
+            + SynapseChainWriter::<NODE_META_SIZE, SYNAPSE_META_SIZE>::calculate_size_on_mem(
+                config.synapse_capacity,
+            )
+            + AttributePlaneWriter::<NODE_ATTRIBUTES_SIZE>::calculate_size_on_mem(
+                config.node_capacity,
+            )
+            + AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SIZE>::calculate_size_on_mem(
+                config.synapse_capacity,
+            )
+            + TripleBufferWriter::calculate_size_on_mem(Self::calculate_size_on_tb(config))
     }
 
     pub fn calculate_size_on_tb(config: &SynapticGraphConfig) -> usize {
@@ -199,20 +183,6 @@ impl<
             )
     }
 
-    pub fn calculate_size_on_mem(config: &SynapticGraphConfig) -> usize {
-        Self::HEADERS_SIZE
-            + MemMetadataWriter::calculate_size_on_mem(config.mem_metadata_size)
-            + NodeChainWriter::<NODE_META_SIZE>::calculate_size_on_mem(config.node_capacity)
-            + SynapseChainWriter::<NODE_META_SIZE, SYNAPSE_META_SIZE>::calculate_size_on_mem(
-                config.synapse_capacity,
-            )
-            + AttributePlaneWriter::<NODE_ATTRIBUTES_SIZE>::calculate_size(config.node_capacity)
-            + AttributePlaneWriter::<SYNAPSE_ATTRIBUTES_SIZE>::calculate_size(
-                config.synapse_capacity,
-            )
-            + TripleBuffer::calculate_size(Self::calculate_size_on_tb(config))
-    }
-
     pub fn to_reader(
         &self,
     ) -> SynapticGraphReader<
@@ -221,15 +191,17 @@ impl<
         SYNAPSE_META_SIZE,
         SYNAPSE_ATTRIBUTES_SIZE,
     > {
-        SynapticGraphReader::bind(SynapticGraphReaderConfig {
-            mem: Arc::clone(&self.mem),
-            node_capacity: self.node_capacity,
-            synapse_capacity: self.synapse_capacity,
-            mem_metadata_size: self.mem_metadata_size,
-            tb_metadata_size: self.tb_metadata_size,
-            node_staging_buffer_start_offset: self.mem_node_staging_buffer_start_offset(),
-            synapse_staging_buffer_start_offset: self.mem_synapse_staging_buffer_start_offset(),
-        })
+        SynapticGraphReader::bind(
+            self.mem_metadata_plane.to_reader(),
+            self.node_attribute_plane.to_reader(),
+            self.synapse_attribute_plane.to_reader(),
+            self.tb_writer.to_reader(),
+            self.tb_metadata_plane.to_reader(),
+            self.node_chain_writer.to_reader(),
+            self.synapse_chain_writer.to_reader(),
+            self.node_chain_writer.to_staging_buffer_reader(),
+            self.synapse_chain_writer.to_staging_buffer_reader(),
+        )
     }
 
     pub fn mem_node_staging_buffer_start_offset(&self) -> usize {

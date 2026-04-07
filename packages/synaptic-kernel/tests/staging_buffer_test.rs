@@ -1,13 +1,13 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::primitives::staging_buffer::StagingBuffer;
+use synaptic_kernel::primitives::staging_buffer_writer::StagingBufferWriter;
 use synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
-fn create_staging(capacity: usize) -> (StagingBuffer, StagingBufferReader, AtomicBuffer) {
-    let size = StagingBuffer::calculate_size_on_mem(capacity);
+fn create_staging(capacity: usize) -> (StagingBufferWriter, StagingBufferReader, AtomicBuffer) {
+    let size = StagingBufferWriter::calculate_size_on_mem(capacity);
     let mem: AtomicBuffer = Arc::new((0..size).map(|_| AtomicI32::new(0)).collect());
-    let buffer = StagingBuffer::new(Arc::clone(&mem), 0, capacity);
+    let buffer = StagingBufferWriter::new(Arc::clone(&mem), 0, capacity);
     let reader = StagingBufferReader::bind(Arc::clone(&mem), 0, capacity);
     (buffer, reader, mem)
 }
@@ -302,13 +302,13 @@ fn push_beyond_capacity_returns_error() {
 #[test]
 fn nonzero_start_offset_works() {
     let offset = 100;
-    let size = StagingBuffer::calculate_size_on_mem(4) + offset;
+    let size = StagingBufferWriter::calculate_size_on_mem(4) + offset;
     let mem: AtomicBuffer = Arc::new((0..size).map(|_| AtomicI32::new(0)).collect());
     
     // Explicitly initialize writer_generation for the raw instantiated mem
     mem[offset].store(1, std::sync::atomic::Ordering::Relaxed);
 
-    let buf = StagingBuffer::new(Arc::clone(&mem), offset, 4);
+    let buf = StagingBufferWriter::new(Arc::clone(&mem), offset, 4);
     let reader = StagingBufferReader::bind(Arc::clone(&mem), offset, 4);
 
     buf.push(42).unwrap();
@@ -323,16 +323,16 @@ fn nonzero_start_offset_works() {
 
 #[test]
 fn bind_reads_existing_state() {
-    let size = StagingBuffer::calculate_size_on_mem(4);
+    let size = StagingBufferWriter::calculate_size_on_mem(4);
     let mem: AtomicBuffer = Arc::new((0..size).map(|_| AtomicI32::new(0)).collect());
     
     mem[0].store(1, std::sync::atomic::Ordering::Relaxed);
 
-    let buf1 = StagingBuffer::new(Arc::clone(&mem), 0, 4);
+    let buf1 = StagingBufferWriter::new(Arc::clone(&mem), 0, 4);
     buf1.push(42).unwrap();
     buf1.push(99).unwrap();
 
-    let buf2 = StagingBuffer::bind(Arc::clone(&mem), 0, 4);
+    let buf2 = StagingBufferWriter::bind(Arc::clone(&mem), 0, 4);
     assert_eq!(buf2.len(), 2);
 }
 

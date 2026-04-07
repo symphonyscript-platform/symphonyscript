@@ -1,5 +1,5 @@
 use crate::constants::SYNAPSE_SIZE;
-use crate::primitives::triple_buffer::TripleBufferReader;
+use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::topology::slot_reader::SlotReader;
 
 pub struct SynapseReader<'a, const META_SIZE: usize> {

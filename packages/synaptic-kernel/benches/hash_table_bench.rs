@@ -2,8 +2,8 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion, Benchmark
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use synaptic_kernel::primitives::types::AtomicBuffer;
-use synaptic_kernel::primitives::hash_table::probe_hash_table::ProbeHashTable;
-use synaptic_kernel::primitives::hash_table::hash_table_trait::HashTable;
+use kernel_wasm::hash_table::probe_hash_table::ProbeHashTable;
+use kernel_wasm::hash_table::hash_table_trait::HashTable;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);

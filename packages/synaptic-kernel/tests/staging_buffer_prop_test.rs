@@ -1,16 +1,16 @@
 use proptest::prelude::*;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::primitives::staging_buffer::StagingBuffer;
+use synaptic_kernel::primitives::staging_buffer_writer::StagingBufferWriter;
 use synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 const STAGING_CAPACITY: usize = 1024;
 
-fn create_staging(capacity: usize) -> (StagingBuffer, StagingBufferReader, AtomicBuffer) {
-    let size = StagingBuffer::calculate_size_on_mem(capacity);
+fn create_staging(capacity: usize) -> (StagingBufferWriter, StagingBufferReader, AtomicBuffer) {
+    let size = StagingBufferWriter::calculate_size_on_mem(capacity);
     let mem: AtomicBuffer = Arc::new((0..size).map(|_| AtomicI32::new(0)).collect());
-    let buffer = StagingBuffer::new(Arc::clone(&mem), 0, capacity);
+    let buffer = StagingBufferWriter::new(Arc::clone(&mem), 0, capacity);
     let reader = StagingBufferReader::bind(Arc::clone(&mem), 0, capacity);
     (buffer, reader, mem)
 }

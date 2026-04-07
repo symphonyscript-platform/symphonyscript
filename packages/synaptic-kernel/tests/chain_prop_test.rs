@@ -1,7 +1,7 @@
 use proptest::prelude::*;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::primitives::triple_buffer::TripleBuffer;
+use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
 
@@ -23,7 +23,7 @@ fn create_mem(size: usize) -> AtomicBuffer {
 
 fn setup_chain() -> NodeChainWriter<NODE_META> {
     let mem = create_mem(MEM_SIZE);
-    let (writer, _reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
+    let (writer, _reader) = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
     NodeChainWriter::<NODE_META>::new(
         mem,
         writer,

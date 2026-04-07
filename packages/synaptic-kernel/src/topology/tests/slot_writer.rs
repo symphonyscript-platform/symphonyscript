@@ -1,4 +1,4 @@
-use crate::primitives::triple_buffer::TripleBuffer;
+use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
 use crate::topology::slot_writer::SlotWriter;
 use std::sync::atomic::AtomicI32;
@@ -15,7 +15,7 @@ fn create_mem(size: usize) -> AtomicBuffer {
 #[test]
 fn write_then_read_round_trip() {
     let mem = create_mem(1024);
-    let (writer, _reader) = TripleBuffer::new(mem, 0, 256);
+    let (writer, _reader) = TripleBufferWriter::new(mem, 0, 256);
     let view: SlotWriter<'_, 16> = SlotWriter::new(&writer, 0);
 
     view.write(0, 42);
@@ -25,7 +25,7 @@ fn write_then_read_round_trip() {
 #[test]
 fn write_all_slots() {
     let mem = create_mem(1024);
-    let (writer, _reader) = TripleBuffer::new(mem, 0, 256);
+    let (writer, _reader) = TripleBufferWriter::new(mem, 0, 256);
     let view: SlotWriter<'_, 16> = SlotWriter::new(&writer, 0);
 
     for i in 0..16 {
@@ -40,7 +40,7 @@ fn write_all_slots() {
 #[test]
 fn fields_do_not_bleed() {
     let mem = create_mem(1024);
-    let (writer, _reader) = TripleBuffer::new(mem, 0, 256);
+    let (writer, _reader) = TripleBufferWriter::new(mem, 0, 256);
     let view: SlotWriter<'_, 16> = SlotWriter::new(&writer, 0);
 
     view.write(0, i32::MAX);
@@ -51,7 +51,7 @@ fn fields_do_not_bleed() {
 #[test]
 fn overwrite_replaces_value() {
     let mem = create_mem(1024);
-    let (writer, _reader) = TripleBuffer::new(mem, 0, 256);
+    let (writer, _reader) = TripleBufferWriter::new(mem, 0, 256);
     let view: SlotWriter<'_, 16> = SlotWriter::new(&writer, 0);
 
     view.write(0, 100);
@@ -62,7 +62,7 @@ fn overwrite_replaces_value() {
 #[test]
 fn two_views_different_offsets_are_independent() {
     let mem = create_mem(1024);
-    let (writer, _reader) = TripleBuffer::new(mem, 0, 256);
+    let (writer, _reader) = TripleBufferWriter::new(mem, 0, 256);
     let view_a: SlotWriter<'_, 16> = SlotWriter::new(&writer, 0);
     let view_b: SlotWriter<'_, 16> = SlotWriter::new(&writer, 16);
 
@@ -76,7 +76,7 @@ fn two_views_different_offsets_are_independent() {
 #[test]
 fn negative_values_preserved() {
     let mem = create_mem(1024);
-    let (writer, _reader) = TripleBuffer::new(mem, 0, 256);
+    let (writer, _reader) = TripleBufferWriter::new(mem, 0, 256);
     let view: SlotWriter<'_, 16> = SlotWriter::new(&writer, 0);
 
     view.write(0, -999);

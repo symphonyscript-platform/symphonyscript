@@ -1,4 +1,4 @@
-use crate::primitives::triple_buffer::TripleBufferReader;
+use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::topology::node::node_chain_writer::NodeChainWriter;
 use crate::topology::node::node_reader::NodeReader;
 
@@ -11,7 +11,7 @@ pub struct NodeChainReader<const META_SIZE: usize> {
 }
 
 impl<const META_SIZE: usize> NodeChainReader<META_SIZE> {
-    pub fn bind(
+    pub(crate) fn bind(
         triple_buffer: TripleBufferReader,
         tb_start_offset: usize,
         capacity: usize,

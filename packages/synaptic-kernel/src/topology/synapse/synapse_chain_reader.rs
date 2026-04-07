@@ -1,4 +1,4 @@
-use crate::primitives::triple_buffer::TripleBufferReader;
+use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::topology::synapse::synapse_chain_writer::SynapseChainWriter;
 use crate::topology::synapse::synapse_reader::SynapseReader;
 
@@ -13,7 +13,7 @@ pub struct SynapseChainReader<const NODE_META_SIZE: usize, const SYNAPSE_META_SI
 impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
     SynapseChainReader<NODE_META_SIZE, SYNAPSE_META_SIZE>
 {
-    pub fn bind(
+    pub(crate) fn bind(
         triple_buffer: TripleBufferReader,
         tb_start_offset: usize,
         capacity: usize,

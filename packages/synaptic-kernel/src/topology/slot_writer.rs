@@ -1,4 +1,4 @@
-use crate::primitives::triple_buffer::TripleBufferWriter;
+use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 
 pub struct SlotWriter<'a, const SLOT_SIZE: usize> {
     pub(crate) triple_buffer: &'a TripleBufferWriter,

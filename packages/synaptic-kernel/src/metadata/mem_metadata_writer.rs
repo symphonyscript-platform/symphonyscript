@@ -1,5 +1,7 @@
+use crate::metadata::mem_metadata_reader::MemMetadataReader;
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct MemMetadataWriter {
@@ -56,6 +58,10 @@ impl MemMetadataWriter {
 
     pub fn calculate_size_on_mem(capacity: usize) -> usize {
         capacity
+    }
+
+    pub fn to_reader(&self) -> MemMetadataReader {
+        MemMetadataReader::bind(Arc::clone(&self.mem), self.mem_start_offset, self.capacity)
     }
 
     pub fn mem_start_offset(&self) -> usize {

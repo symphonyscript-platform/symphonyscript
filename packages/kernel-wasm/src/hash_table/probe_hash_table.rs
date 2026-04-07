@@ -1,9 +1,9 @@
-use crate::errors::table_error::TableError;
-use crate::primitives::hash_table::constants::TABLE_SLOT_SIZE;
-use crate::primitives::hash_table::hash_table_trait::HashTable;
-use crate::primitives::hash_table::table_slot::TableSlot;
-use crate::primitives::hash_table::table_slot_view::TableSlotView;
-use crate::primitives::types::AtomicBuffer;
+use synaptic_kernel::errors::table_error::TableError;
+use kernel_wasm::hash_table::constants::TABLE_SLOT_SIZE;
+use kernel_wasm::hash_table::hash_table_trait::HashTable;
+use kernel_wasm::hash_table::table_slot::TableSlot;
+use kernel_wasm::hash_table::table_slot_view::TableSlotView;
+use synaptic_kernel::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 

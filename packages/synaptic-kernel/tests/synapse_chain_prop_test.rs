@@ -2,7 +2,7 @@ use proptest::prelude::*;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use synaptic_kernel::constants::NODE_SIZE;
-use synaptic_kernel::primitives::triple_buffer::TripleBuffer;
+use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
 use synaptic_kernel::topology::synapse::synapse_chain_writer::SynapseChainWriter;
@@ -34,7 +34,7 @@ struct TestHarness {
 
 fn setup() -> TestHarness {
     let mem = create_mem(MEM_SIZE);
-    let (writer, _reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
+    let (writer, _reader) = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
     let node_chain = NodeChainWriter::<NODE_META>::new(
         Arc::clone(&mem),
         writer.clone(),

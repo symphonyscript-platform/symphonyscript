@@ -1,9 +1,9 @@
-use crate::primitives::types::AtomicBuffer;
+use synaptic_kernel::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 
 pub struct SlotHandle<'a, const SLOT_SIZE: usize> {
     mem: &'a AtomicBuffer,
-    pub(crate) mem_start_offset: usize,
+    pub mem_start_offset: usize,
 }
 
 impl<'a, const SLOT_SIZE: usize> SlotHandle<'a, SLOT_SIZE> {

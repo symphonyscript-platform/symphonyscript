@@ -1,4 +1,4 @@
-use crate::primitives::triple_buffer::TripleBufferReader;
+use crate::primitives::triple_buffer_reader::TripleBufferReader;
 
 pub struct SlotReader<'a, const SLOT_SIZE: usize> {
     pub(crate) triple_buffer: &'a TripleBufferReader,

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use synaptic_kernel::constants::NODE_SIZE;
 use synaptic_kernel::primitives::types::AtomicBuffer;
-use synaptic_kernel::primitives::triple_buffer::TripleBuffer;
+use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
 use synaptic_kernel::topology::node::node_chain_reader::NodeChainReader;
 use synaptic_kernel::topology::synapse::synapse_chain_writer::SynapseChainWriter;
@@ -29,13 +29,13 @@ const FLUSH_INTERVAL: u64 = 512;
 
 struct Harness {
     mem: AtomicBuffer,
-    writer: synaptic_kernel::primitives::triple_buffer::TripleBufferWriter,
-    reader: synaptic_kernel::primitives::triple_buffer::TripleBufferReader,
+    writer: synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter,
+    reader: synaptic_kernel::primitives::triple_buffer_reader::TripleBufferReader,
 }
 
 fn setup() -> Harness {
     let mem = create_mem(MEM_SIZE);
-    let (writer, reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
+    let (writer, reader) = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
     Harness { mem, writer, reader }
 }
 

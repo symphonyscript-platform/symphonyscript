@@ -33,7 +33,7 @@ impl<const SLOT_SIZE: usize> AttributePlaneReader<SLOT_SIZE> {
         Self::new(mem, mem_start_offset, capacity)
     }
 
-    pub fn calculate_size(capacity: usize) -> usize {
+    pub fn calculate_size_on_mem(capacity: usize) -> usize {
         capacity * SLOT_SIZE
     }
 

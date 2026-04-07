@@ -2,7 +2,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use synaptic_kernel::primitives::types::AtomicBuffer;
-use synaptic_kernel::primitives::triple_buffer::TripleBuffer;
+use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::topology::slot_writer::SlotWriter;
 
 fn create_mem(size: usize) -> AtomicBuffer {
@@ -19,9 +19,9 @@ const TB_BUF_CAP: usize = 16384;
 const TB_OFFSET: usize = 0;
 const SLOT_WORDS: usize = 16;
 
-fn setup() -> synaptic_kernel::primitives::triple_buffer::TripleBufferWriter {
+fn setup() -> synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter {
     let mem = create_mem(MEM_SIZE);
-    let (writer, _reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
+    let (writer, _reader) = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
     writer
 }
 

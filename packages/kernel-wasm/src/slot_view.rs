@@ -1,4 +1,4 @@
-use crate::primitives::types::AtomicBuffer;
+use synaptic_kernel::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 
 #[derive(Clone)]

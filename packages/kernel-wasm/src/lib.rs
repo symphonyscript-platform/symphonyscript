@@ -1,4 +1,8 @@
 pub mod wasm_kernel_controller;
+pub mod hash_table;
+pub mod slot_view;
+pub mod free_list;
+pub mod slot_handle;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right

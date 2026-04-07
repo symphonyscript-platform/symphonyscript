@@ -1,4 +1,5 @@
-use crate::primitives::triple_buffer::TripleBufferWriter;
+use crate::metadata::tb_metadata_reader::TbMetadataReader;
+use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 
 #[derive(Clone)]
 pub struct TbMetadataWriter {
@@ -64,6 +65,14 @@ impl TbMetadataWriter {
 
     pub fn calculate_size_on_tb(capacity: usize) -> usize {
         capacity
+    }
+
+    pub fn to_reader(&self) -> TbMetadataReader {
+        TbMetadataReader::bind(
+            self.triple_buffer.to_reader(),
+            self.tb_start_offset,
+            self.capacity,
+        )
     }
 
     pub fn tb_start_offset(&self) -> usize {

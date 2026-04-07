@@ -1,4 +1,4 @@
-use crate::primitives::hash_table::constants::EMPTY_HASH;
+use kernel_wasm::hash_table::constants::EMPTY_HASH;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TableSlot {

@@ -3,6 +3,33 @@ use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+/// Fixed-capacity SPSC ring buffer with const-generic slot width.
+///
+/// Each entry is a `[i32; SLOT_SIZE]` array stored inline in the backing `AtomicBuffer`.
+/// Uses a bitmask instead of index wrapping instead of modulo.
+///
+/// # Threading
+/// SPSC. One writer, one reader. `pending_count` uses `Acquire`/`Release` to synchronize
+/// visibility between `write()` and `read()`/`peek()`.
+/// All other atomics use `Relaxed`.
+///
+/// # Memory Layout
+/// ```text
+/// Offset          Size            Field
+/// ---------------------------------------------
+/// 0               1               read_index
+/// 1               1               write_index
+/// 2               1               pending_count
+/// 3               N * S           slots
+///
+/// N = capacity (power of 2)
+/// S = SLOT_SIZE (const generic)
+/// ```
+///
+/// # Constraints
+/// - `capacity` must be a power of 2.
+/// - `peek()` reads without advancing the read cursor.
+/// - `read()` reads and advances.
 #[derive(Clone)]
 pub struct RingBuffer<const SLOT_SIZE: usize> {
     mem: AtomicBuffer,

@@ -1,15 +1,19 @@
-use crate::primitives::triple_buffer::TripleBufferReader;
+use crate::primitives::triple_buffer_reader::TripleBufferReader;
 
 #[derive(Clone)]
 pub struct TbMetadataReader {
-    buffer: TripleBufferReader,
+    triple_buffer: TripleBufferReader,
     tb_start_offset: usize,
     tb_end_offset: usize,
     capacity: usize,
 }
 
 impl TbMetadataReader {
-    pub fn bind(buffer: TripleBufferReader, tb_start_offset: usize, capacity: usize) -> Self {
+    pub fn bind(
+        triple_buffer: TripleBufferReader,
+        tb_start_offset: usize,
+        capacity: usize,
+    ) -> Self {
         debug_assert!(
             capacity > 0,
             "TbMetadataReader::create | capacity {} must be positive",
@@ -25,14 +29,14 @@ impl TbMetadataReader {
         let tb_end_offset = tb_start_offset + capacity;
 
         debug_assert!(
-            tb_end_offset <= buffer.buffer_capacity(),
+            tb_end_offset <= triple_buffer.buffer_capacity(),
             "TbMetadataReader::create | range [{}..{}] exceeds buffer boundaries",
             tb_start_offset,
-            buffer.buffer_capacity()
+            triple_buffer.buffer_capacity()
         );
 
         TbMetadataReader {
-            buffer,
+            triple_buffer: triple_buffer,
             tb_start_offset,
             tb_end_offset,
             capacity,
@@ -57,6 +61,6 @@ impl TbMetadataReader {
             "TbMetadataReader.read | offset {} out of bounds",
             offset
         );
-        self.buffer.read(self.tb_start_offset + offset)
+        self.triple_buffer.read(self.tb_start_offset + offset)
     }
 }

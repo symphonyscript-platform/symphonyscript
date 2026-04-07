@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::primitives::free_list::FreeList;
+use kernel_wasm::free_list::FreeList;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 const SLOT_SIZE: usize = 16;

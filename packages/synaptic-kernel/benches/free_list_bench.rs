@@ -2,7 +2,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion, Benchmark
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use synaptic_kernel::primitives::types::AtomicBuffer;
-use synaptic_kernel::primitives::free_list::FreeList;
+use kernel_wasm::free_list::FreeList;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);

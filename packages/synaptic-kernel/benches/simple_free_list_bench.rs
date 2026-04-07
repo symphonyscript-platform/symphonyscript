@@ -149,7 +149,7 @@ fn bench_vs_old_freelist_comparison(c: &mut Criterion) {
 
     // Old FreeList<1> (closest to SimpleFreeList — minimal slot size)
     group.bench_function("FreeList<1>", |b| {
-        use synaptic_kernel::primitives::free_list::FreeList;
+        use kernel_wasm::free_list::FreeList;
         let mem = create_mem(1_000_000);
         let fl: FreeList<1> = FreeList::new(mem, 0, 131072);
         b.iter(|| {

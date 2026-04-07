@@ -1,6 +1,26 @@
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 
+/// Bit-packed boolean array backed by a shared `AtomicBUffer`.
+///
+/// Packs 32 flags per `i32` word. Uses bitwise shifts and masks for (1) access
+/// to individual bits.
+///
+/// # Threading
+/// Single-threaded only. All atomic operations use `Relaxed` ordering.
+///
+/// # Memory Layout
+/// ```text
+/// Offset      Size            Field
+/// ---------------------------------
+/// 0           ceil(N/32)      words
+///
+/// N = capacity (power of 2)
+/// ```
+///
+/// # Constraints
+/// - `capacity` must be a power of 2.
+/// - 0-based bit indexing.
 #[derive(Clone)]
 pub struct Bitmap {
     mem: AtomicBuffer,

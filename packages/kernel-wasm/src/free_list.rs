@@ -1,6 +1,6 @@
-use crate::errors::free_list_error::FreeListError;
-use crate::primitives::slot_handle::SlotHandle;
-use crate::primitives::types::AtomicBuffer;
+use synaptic_kernel::errors::free_list_error::FreeListError;
+use kernel_wasm::slot_handle::SlotHandle;
+use synaptic_kernel::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 

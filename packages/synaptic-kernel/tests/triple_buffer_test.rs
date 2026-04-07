@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
 use std::thread;
-use synaptic_kernel::primitives::triple_buffer::TripleBuffer;
+use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_mem(size: usize) -> AtomicBuffer {
@@ -17,7 +17,7 @@ fn create_mem(size: usize) -> AtomicBuffer {
 #[test]
 fn new_creates_writer_and_reader() {
     let mem = create_mem(4096);
-    let (writer, reader) = TripleBuffer::new(mem, 0, 10);
+    let (writer, reader) = TripleBufferWriter::new(mem, 0, 10);
     assert_eq!(writer.buffer_capacity(), 10);
     assert_eq!(reader.buffer_capacity(), 10);
 }
@@ -25,7 +25,7 @@ fn new_creates_writer_and_reader() {
 #[test]
 fn writer_can_write_and_publish() {
     let mem = create_mem(4096);
-    let (mut writer, _reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, _reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     let base = writer.current_start_index();
     mem[base].store(42, Ordering::Relaxed);
@@ -36,7 +36,7 @@ fn writer_can_write_and_publish() {
 #[test]
 fn reader_sees_published_data() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Write data to writer buffer
     let base = writer.current_start_index();
@@ -60,7 +60,7 @@ fn reader_sees_published_data() {
 #[test]
 fn reader_swap_returns_false_when_no_new_data() {
     let mem = create_mem(4096);
-    let (_writer, mut reader) = TripleBuffer::new(mem, 0, 4);
+    let (_writer, mut reader) = TripleBufferWriter::new(mem, 0, 4);
 
     // No publish happened — reader should get false
     assert!(!reader.swap());
@@ -69,7 +69,7 @@ fn reader_swap_returns_false_when_no_new_data() {
 #[test]
 fn reader_swap_returns_true_when_new_data() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem, 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem, 0, 4);
 
     writer.publish();
     assert!(reader.swap());
@@ -78,7 +78,7 @@ fn reader_swap_returns_true_when_new_data() {
 #[test]
 fn multiple_publish_reader_gets_latest() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Write #1
     let base1 = writer.current_start_index();
@@ -99,7 +99,7 @@ fn multiple_publish_reader_gets_latest() {
 #[test]
 fn reader_keeps_old_data_when_no_new_publish() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Publish once
     let base = writer.current_start_index();
@@ -121,7 +121,7 @@ fn reader_keeps_old_data_when_no_new_publish() {
 #[test]
 fn full_cycle_writer_reader_writer() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Cycle 1
     let b1 = writer.current_start_index();
@@ -157,7 +157,7 @@ fn full_cycle_writer_reader_writer() {
 #[test]
 fn mem_end_offset_is_correct() {
     let mem = create_mem(4096);
-    let (writer, reader) = TripleBuffer::new(mem, 0, 10);
+    let (writer, reader) = TripleBufferWriter::new(mem, 0, 10);
 
     // Layout: 4 metadata slots + 3 × 10 buffer slots = 34
     assert_eq!(writer.mem_end_offset(), 4 + 3 * 10);
@@ -167,7 +167,7 @@ fn mem_end_offset_is_correct() {
 #[test]
 fn nonzero_start_index() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 100, 8);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 100, 8);
 
     assert_eq!(writer.mem_end_offset(), 100 + 4 + 3 * 8);
     assert_eq!(reader.mem_end_offset(), 100 + 4 + 3 * 8);
@@ -187,7 +187,7 @@ fn nonzero_start_index() {
 #[test]
 fn buffer_size_of_one() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 1);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 1);
 
     let base = writer.current_start_index();
     mem[base].store(777, Ordering::Relaxed);
@@ -201,7 +201,7 @@ fn buffer_size_of_one() {
 #[test]
 fn writer_publishes_many_times_without_reader_consuming() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Writer publishes 10 times without reader ever swapping
     for i in 0..10 {
@@ -219,7 +219,7 @@ fn writer_publishes_many_times_without_reader_consuming() {
 #[test]
 fn reader_swaps_many_times_without_new_publishes() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Publish once
     let base = writer.current_start_index();
@@ -238,7 +238,7 @@ fn reader_swaps_many_times_without_new_publishes() {
 #[test]
 fn writer_reader_alternating_rapidly() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 2);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 2);
 
     for i in 0..100 {
         let base = writer.current_start_index();
@@ -256,7 +256,7 @@ fn writer_reader_alternating_rapidly() {
 #[test]
 fn all_three_buffers_are_distinct() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     let mut seen_bases = std::collections::HashSet::new();
 
@@ -288,7 +288,7 @@ fn all_three_buffers_are_distinct() {
 #[test]
 fn writer_buffer_sync_after_publish() {
     let mem = create_mem(4096);
-    let (mut writer, _reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, _reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Write data to writer buffer
     let base1 = writer.current_start_index();
@@ -313,7 +313,7 @@ fn writer_buffer_sync_after_publish() {
 #[test]
 fn sync_correctness_across_multiple_publishes() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Write field 0 = 10
     let base = writer.current_start_index();
@@ -343,7 +343,7 @@ fn sync_correctness_across_multiple_publishes() {
 #[test]
 fn incremental_writes_dont_lose_prior_data() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 8);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 8);
 
     // Write all 8 fields
     let base = writer.current_start_index();
@@ -382,7 +382,7 @@ fn incremental_writes_dont_lose_prior_data() {
 #[test]
 fn bind_reconnects_to_existing_state() {
     let mem = create_mem(4096);
-    let (mut writer, _reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, _reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Write and publish
     let base = writer.current_start_index();
@@ -390,7 +390,7 @@ fn bind_reconnects_to_existing_state() {
     writer.publish();
 
     // Bind new reader to same AtomicBuffer region
-    let mut reader2 = TripleBuffer::bind_reader(mem.clone(), 0, 4);
+    let mut reader2 = TripleBufferWriter::bind_reader(mem.clone(), 0, 4);
 
     // Reader2 should see the published data
     assert!(reader2.swap());
@@ -404,7 +404,7 @@ fn bind_does_not_reinitialize_state() {
     let state_slot = 0;
 
     // Initialize
-    let (mut writer, _reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, _reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
     let base = writer.current_start_index();
     mem[base].store(99, Ordering::Relaxed);
     writer.publish();
@@ -413,8 +413,8 @@ fn bind_does_not_reinitialize_state() {
     let state_before = mem[state_slot].load(Ordering::Relaxed);
 
     // Bind — should NOT overwrite state
-    let _writer2 = TripleBuffer::bind_writer(mem.clone(), 0, 4);
-    let _reader2 = TripleBuffer::bind_reader(mem.clone(), 0, 4);
+    let _writer2 = TripleBufferWriter::bind_writer(mem.clone(), 0, 4);
+    let _reader2 = TripleBufferWriter::bind_reader(mem.clone(), 0, 4);
     let state_after = mem[state_slot].load(Ordering::Relaxed);
 
     assert_eq!(state_before, state_after);
@@ -425,7 +425,7 @@ fn bind_does_not_reinitialize_state() {
 #[test]
 fn dropped_frames_preserve_cumulative_state() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Frame 1: set field 0 = 10
     let base = writer.current_start_index();
@@ -453,7 +453,7 @@ fn dropped_frames_preserve_cumulative_state() {
 #[test]
 fn writer_and_reader_never_see_same_buffer() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     for _ in 0..50 {
         // Writer writes and publishes
@@ -474,7 +474,7 @@ fn published_slot_index_tracks_latest_publish() {
     let mem = create_mem(4096);
     let published_slot = 2; // mem_start_offset + 2
 
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Initially 0
     assert_eq!(
@@ -519,7 +519,7 @@ fn state_encoding_new_data_flag() {
     let mem = create_mem(4096);
     let state_slot = 0;
 
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Initial state: NEW_DATA bit should be set (0b100) because initial state is 0b001
     // Actually initial state: state = 0b001 (shared=1, no new data — wait, the init sets 0b001)
@@ -542,7 +542,7 @@ fn state_encoding_new_data_flag() {
 fn large_buffer_data_integrity() {
     let buffer_size = 1024;
     let mem = create_mem(4 + buffer_size * 3 + 100);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, buffer_size);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, buffer_size);
 
     // Write a pattern to all slots
     let base = writer.current_start_index();
@@ -566,7 +566,7 @@ fn large_buffer_data_integrity() {
 #[test]
 fn sync_preserves_data_through_all_three_buffers() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Write data, publish, reader consumes — exercising all 3 buffers
     let mut expected = [0i32; 4];
@@ -600,7 +600,7 @@ fn concurrent_writer_reader_stress() {
     let buffer_size = 64;
     let mem = create_mem(4 + buffer_size * 3 + 100);
 
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, buffer_size);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, buffer_size);
 
     let mem_writer = mem.clone();
     let mem_reader = mem.clone();
@@ -668,7 +668,7 @@ fn concurrent_writer_reader_stress() {
 fn concurrent_high_frequency_publish() {
     let buffer_size = 8;
     let mem = create_mem(4 + buffer_size * 3 + 100);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, buffer_size);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, buffer_size);
 
     let mem_w = mem.clone();
     let mem_r = mem.clone();
@@ -705,7 +705,7 @@ fn concurrent_high_frequency_publish() {
 #[test]
 fn writer_gets_back_coherent_buffer_after_reader_consumes() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Round 1: writer writes [1, 2, 3, 4], publishes, reader consumes
     let base = writer.current_start_index();
@@ -737,10 +737,10 @@ fn two_triple_buffers_on_same_mem() {
     let mem = create_mem(8192);
 
     // First triple buffer at offset 0, size 10
-    let (mut w1, mut r1) = TripleBuffer::new(mem.clone(), 0, 10);
+    let (mut w1, mut r1) = TripleBufferWriter::new(mem.clone(), 0, 10);
     // Second triple buffer at offset after first one ends
     let offset2 = w1.mem_end_offset();
-    let (mut w2, mut r2) = TripleBuffer::new(mem.clone(), offset2, 8);
+    let (mut w2, mut r2) = TripleBufferWriter::new(mem.clone(), offset2, 8);
 
     // Write different data to each
     let b1 = w1.current_start_index();
@@ -764,7 +764,7 @@ fn two_triple_buffers_on_same_mem() {
 #[test]
 fn reader_stability_during_no_publishes() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     // Publish once
     let base = writer.current_start_index();
@@ -785,7 +785,7 @@ fn reader_stability_during_no_publishes() {
 #[test]
 fn publish_swap_publish_swap_never_corrupts() {
     let mem = create_mem(4096);
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), 0, 4);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), 0, 4);
 
     let mut accumulated = [0i32; 4];
 
@@ -824,7 +824,7 @@ fn publish_does_not_corrupt_surrounding_mem_memory() {
     }
 
     let mem_start_offset = padding;
-    let (mut writer, mut reader) = TripleBuffer::new(mem.clone(), mem_start_offset, buffer_size);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem.clone(), mem_start_offset, buffer_size);
 
     // Perform bulk writes and rapid publishes to heavily exercise the memcpy loop
     for round in 0..10_000 {

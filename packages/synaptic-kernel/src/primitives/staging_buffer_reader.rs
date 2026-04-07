@@ -1,7 +1,22 @@
-use crate::primitives::staging_buffer::StagingBuffer;
+use crate::primitives::staging_buffer_writer::StagingBufferWriter;
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 
+/// Reader-side handle for the generation-gated staging buffer.
+///
+/// Does not read entries from the ring buffer directly. Its sole purpose is to call `ack()`,
+/// which advances `reader_ack_generation` so the writer's `drain()` knows which entries are
+/// safe to reclaim.
+///
+/// # Threading
+/// Consumer thread only. `ack()` stores with `Release` ordering to synchronize
+/// against the writer's `Acquire` read in `StagingBufferWriter::drain()`.
+///
+/// # Memory Layout
+/// Shares the same backing region as `StagingBuffer`. See its layout.
+///
+/// # Constraints
+/// - Created exclusively via `StagingBufferWriter::to_reader()`.
 #[derive(Clone)]
 pub struct StagingBufferReader {
     mem: AtomicBuffer,
@@ -12,11 +27,8 @@ pub struct StagingBufferReader {
     mem_end_offset: usize,
 }
 
-/**
- * SPSC Staging Buffer
- */
 impl StagingBufferReader {
-    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub(crate) fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
         debug_assert!(
             capacity > 0,
             "StagingBufferReader::bind | capacity {} must be positive",
@@ -31,7 +43,7 @@ impl StagingBufferReader {
 
         let mem_writer_generation_offset = mem_start_offset;
         let mem_reader_ack_generation_offset = mem_start_offset + 1;
-        let mem_end_offset = mem_start_offset + StagingBuffer::calculate_size_on_mem(capacity);
+        let mem_end_offset = mem_start_offset + StagingBufferWriter::calculate_size_on_mem(capacity);
 
         debug_assert!(
             mem_end_offset <= mem.len(),

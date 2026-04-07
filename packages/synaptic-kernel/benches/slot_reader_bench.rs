@@ -2,7 +2,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use synaptic_kernel::primitives::types::AtomicBuffer;
-use synaptic_kernel::primitives::triple_buffer::TripleBuffer;
+use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::topology::slot_reader::SlotReader;
 
 fn create_mem(size: usize) -> AtomicBuffer {
@@ -20,7 +20,7 @@ const SLOT_STRIDE: usize = 16;
 
 fn bench_slot_reader(c: &mut Criterion) {
     let mem = create_mem(MEM_SIZE);
-    let (mut writer, mut reader) = TripleBuffer::new(mem, TB_START, TB_BUF_CAP);
+    let (mut writer, mut reader) = TripleBufferWriter::new(mem, TB_START, TB_BUF_CAP);
 
     writer.write(0, 42);
     writer.write(1, 99);

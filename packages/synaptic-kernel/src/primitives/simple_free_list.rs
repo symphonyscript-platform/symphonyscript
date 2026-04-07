@@ -4,6 +4,30 @@ use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+/// 1-based free list backed by a shared `AtomicBuffer`.
+///
+/// Manages a fixed pool of reusable slot numbers using a singly-linked list embedded in the buffer.
+/// Uses Bitmap to guard against double-frees.
+///
+/// # Threading
+/// Single-threaded only. All atomic operations use `Relaxed` ordering
+///
+/// # Memory Layout
+/// ```text
+/// Offset          Size            Field
+/// ------------------------------------------
+/// 0               1               head
+/// 1               1               free_count
+/// 2               ceil(N/32)      bitmap
+/// 2+ceil(N/32)    N               slots
+///
+/// N = capacity (power of 2)
+/// ```
+///
+/// # Constraints
+/// - `capacity` must be a power of 2.
+/// - The API is 1-based: `alloc()` returns slots starting at 1,
+///   `free()` accepts the same. Internally 0-based.
 #[derive(Clone)]
 pub struct SimpleFreeList {
     mem: AtomicBuffer,

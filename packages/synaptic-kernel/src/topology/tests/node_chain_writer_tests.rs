@@ -1,5 +1,5 @@
 use crate::constants::NODE_SIZE;
-use crate::primitives::triple_buffer::TripleBuffer;
+use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
 use crate::topology::node::node_chain_reader::NodeChainReader;
 use crate::topology::node::node_chain_writer::NodeChainWriter;
@@ -26,13 +26,13 @@ const HEAD_OFFSET: usize = CAPACITY * NODE_SIZE;
 
 struct TestHarness {
     mem: AtomicBuffer,
-    writer: crate::primitives::triple_buffer::TripleBufferWriter,
-    reader: crate::primitives::triple_buffer::TripleBufferReader,
+    writer: crate::primitives::triple_buffer_writer::TripleBufferWriter,
+    reader: crate::primitives::triple_buffer_reader::TripleBufferReader,
 }
 
 fn setup() -> TestHarness {
     let mem = create_mem(MEM_SIZE);
-    let (writer, reader) = TripleBuffer::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
+    let (writer, reader) = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
     TestHarness {
         mem,
         writer,

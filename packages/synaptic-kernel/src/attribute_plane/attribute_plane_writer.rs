@@ -1,7 +1,9 @@
+use crate::attribute_plane::attribute_plane_reader::AttributePlaneReader;
 use crate::attribute_plane::attributes_writer::AttributesWriter;
 use crate::primitives::into_array::IntoArray;
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AttributePlaneWriter<const SLOT_SIZE: usize> {
@@ -13,6 +15,14 @@ pub struct AttributePlaneWriter<const SLOT_SIZE: usize> {
 
 impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
     pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+        Self::create(mem, mem_start_offset, capacity, false)
+    }
+
+    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+        Self::create(mem, mem_start_offset, capacity, true)
+    }
+
+    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
         let mem_end_offset = mem_start_offset + capacity * SLOT_SIZE;
 
         debug_assert!(
@@ -30,16 +40,16 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
         }
     }
 
-    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
-        Self::new(mem, mem_start_offset, capacity)
-    }
-
     pub fn resolve_mem_offset(mem_start_offset: usize, slot: usize) -> usize {
         mem_start_offset + ((slot - 1) * SLOT_SIZE)
     }
 
-    pub fn calculate_size(capacity: usize) -> usize {
+    pub fn calculate_size_on_mem(capacity: usize) -> usize {
         capacity * SLOT_SIZE
+    }
+
+    pub fn to_reader(&self) -> AttributePlaneReader<SLOT_SIZE> {
+        AttributePlaneReader::bind(Arc::clone(&self.mem), self.mem_start_offset, self.capacity)
     }
 
     pub fn mem_start_offset(&self) -> usize {

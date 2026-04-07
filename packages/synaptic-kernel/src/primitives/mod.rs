@@ -1,13 +1,10 @@
-pub mod hash_table;
 pub mod ring_buffer;
 pub mod types;
-pub mod slot_view;
-pub mod free_list;
-pub mod slot_handle;
 pub mod simple_free_list;
-pub mod triple_buffer;
+pub mod triple_buffer_writer;
 pub mod into_array;
-pub mod staging_buffer;
+pub mod staging_buffer_writer;
 pub mod slot_allocator;
 pub mod bitmap;
 pub mod staging_buffer_reader;
+pub mod triple_buffer_reader;

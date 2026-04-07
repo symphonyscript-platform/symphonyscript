@@ -1,6 +1,6 @@
-use crate::primitives::hash_table::constants::{EMPTY_HASH, TABLE_SLOT_SIZE};
-use crate::primitives::hash_table::table_slot::TableSlot;
-use crate::primitives::types::AtomicBuffer;
+use kernel_wasm::hash_table::constants::{EMPTY_HASH, TABLE_SLOT_SIZE};
+use kernel_wasm::hash_table::table_slot::TableSlot;
+use synaptic_kernel::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 
 #[derive(Clone)]

@@ -1,4 +1,4 @@
-use crate::errors::table_error::TableError;
+use synaptic_kernel::errors::table_error::TableError;
 
 pub trait HashTable {
     fn compute_capacity(max_entries: u32, max_load_factor: f32) -> usize

@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::primitives::hash_table::hash_table_trait::HashTable;
-use synaptic_kernel::primitives::hash_table::probe_hash_table::ProbeHashTable;
+use kernel_wasm::hash_table::hash_table_trait::HashTable;
+use kernel_wasm::hash_table::probe_hash_table::ProbeHashTable;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 /// Fibonacci hash function for testing.
