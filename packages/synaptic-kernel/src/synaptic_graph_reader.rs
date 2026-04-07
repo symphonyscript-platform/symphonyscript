@@ -9,6 +9,25 @@ use crate::topology::node::node_reader::NodeReader;
 use crate::topology::synapse::synapse_chain_reader::SynapseChainReader;
 use crate::topology::synapse::synapse_reader::SynapseReader;
 
+/// Writer side graph and topology orchestrator.
+///
+/// Provides the unified API for traversing the lock-free and wait-free graph
+/// topology and attributes.
+/// It encapsulates the underlying memory hierarchy and processes incoming structural updates
+/// by the producer via `swap()`.
+///
+/// # Threading
+/// Consumer thread only.
+///
+/// # Deployment
+/// 1. `swap()` consumes any pending structural updates (node, synapses, tb_metadata) published
+///    by the producer. Returns `true` if a new buffer was available, `false` otherwise.
+/// 2. Non-structural updates (e.g. node/synapse attributes) and mem_metadata read directly
+///    from the `mem` plane.
+///
+/// # Traits
+/// - Memory sizing is defined at compile time via const generics.
+/// - Created exclusively via `SynapticGraphWriter::to_reader()`.
 #[derive(Clone)]
 pub struct SynapticGraphReader<
     const NODE_META_SIZE: usize,
