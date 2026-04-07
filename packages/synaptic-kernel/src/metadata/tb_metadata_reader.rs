@@ -1,5 +1,19 @@
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
 
+/// Reader side triple-buffered metadata storage backed by a shared `AtomicBuffer`.
+///
+/// Provides a flat, power-of-2 sized array of `i32` slots for graph-level configuration
+/// and/or statistics. Lives on the `tb` (triple-buffered) plane, meaning
+/// writes only become visible after the reader executes a `swap()`.
+///
+/// # Threading
+/// Consumer thread only. Delegates back to the underlying `TripleBufferReader`.
+///
+/// # Memory Layout
+/// Shares backing region with `TbMetadataWriter`. See its layout.
+///
+/// # Constraints
+/// - Created exclusively via `TbMetadataWriter::to_reader()`.
 #[derive(Clone)]
 pub struct TbMetadataReader {
     triple_buffer: TripleBufferReader,
