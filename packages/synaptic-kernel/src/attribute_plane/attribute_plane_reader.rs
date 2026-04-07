@@ -11,12 +11,12 @@ pub struct AttributePlaneReader<const SLOT_SIZE: usize> {
 }
 
 impl<const SLOT_SIZE: usize> AttributePlaneReader<SLOT_SIZE> {
-    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub(crate) fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
         let mem_end_offset = mem_start_offset + capacity * SLOT_SIZE;
 
         debug_assert!(
             mem_end_offset <= mem.len(),
-            "AttributePlaneReader::new | range [{}..{}] exceeds AtomicBuffer boundaries",
+            "AttributePlaneReader::bind | range [{}..{}] exceeds AtomicBuffer boundaries",
             mem_start_offset,
             capacity * SLOT_SIZE,
         );
@@ -27,10 +27,6 @@ impl<const SLOT_SIZE: usize> AttributePlaneReader<SLOT_SIZE> {
             mem_end_offset,
             capacity,
         }
-    }
-
-    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
-        Self::new(mem, mem_start_offset, capacity)
     }
 
     pub fn calculate_size_on_mem(capacity: usize) -> usize {

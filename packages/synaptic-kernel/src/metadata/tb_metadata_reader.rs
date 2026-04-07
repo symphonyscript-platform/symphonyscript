@@ -9,7 +9,7 @@ pub struct TbMetadataReader {
 }
 
 impl TbMetadataReader {
-    pub fn bind(
+    pub(crate) fn bind(
         triple_buffer: TripleBufferReader,
         tb_start_offset: usize,
         capacity: usize,
