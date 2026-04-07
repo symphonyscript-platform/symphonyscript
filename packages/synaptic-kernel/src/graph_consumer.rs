@@ -2,6 +2,22 @@ use crate::constants::CONTROLLER_MAGIC;
 use crate::control_plane::ControlPlane;
 use crate::synaptic_graph_reader::SynapticGraphReader;
 
+/// Provides consumer side entry point to the graph reader.
+///
+/// Binds to the `ControlPlane` via a raw memory address and provides access
+/// to the most recent graph reader.
+///
+/// # Threading
+/// Consumer thread only.
+///
+/// # Usage
+/// Call `acquire_graph()` at the start of every processing cycle.
+/// It:
+/// 1. Retrieves the currently active graph pointer from the `ControlPlane`.
+/// 2. Calls `swap()` to apply any pending triple-buffer updates.
+/// 3. Calls `ack()` to signal the safe release of any older graph instances,
+///    allowing the producer to safely free their memory.
+/// 4. Returns the ready-to-read `SynapticGraphReader`.
 pub struct GraphConsumer<
     const NODE_META_SIZE: usize,
     const NODE_ATTRIBUTES_SIZE: usize,
