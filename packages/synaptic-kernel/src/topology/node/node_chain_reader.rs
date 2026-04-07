@@ -2,6 +2,20 @@ use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::topology::node::node_chain_writer::NodeChainWriter;
 use crate::topology::node::node_reader::NodeReader;
 
+/// Reader side triple-buffered doubly-linked list for graph nodes.
+///
+/// Provides read-only structural traversal of the node topology.
+///
+/// # Threading
+/// Consumer thread only.
+///
+/// # Memory Layout (Triple Buffer Plane)
+/// Shares backing region with `NodeChainWriter`. See its layout.
+///
+/// # Constraints
+/// - Read-only: structural mutation is strictly prohibited on the reading plane.
+/// - Slots are 1-based. 0 indicates an undefined state.
+/// - Created exclusively via `NodeChainWriter::to_reader()`.
 #[derive(Clone)]
 pub struct NodeChainReader<const META_SIZE: usize> {
     triple_buffer: TripleBufferReader,

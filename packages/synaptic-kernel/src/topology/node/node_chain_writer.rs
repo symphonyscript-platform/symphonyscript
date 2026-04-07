@@ -8,7 +8,7 @@ use crate::topology::node::node_chain_reader::NodeChainReader;
 use crate::topology::node::node_writer::NodeWriter;
 use std::sync::Arc;
 
-/// Writer side triple-buffered doubly-linked list for topology nodes.
+/// Writer side triple-buffered doubly-linked list for graph nodes.
 ///
 /// Orchestrates allocation, lifecycle, and structural linkage of nodes.
 ///
@@ -28,7 +28,7 @@ use std::sync::Arc;
 /// ```
 ///
 /// # Constraints
-/// - Slots are 1-based. 0 indicates an empty slot.
+/// - Slots are 1-based. 0 indicates an undefined state.
 /// - Built-in lifecycle safety: `remove()` marks the slot for deferred freeing,
 ///   preventing reallocation until the consumer has advanced pas the pending `publish()`.
 /// - Use `to_reader()` to create the paired `NodeChainReader`.
