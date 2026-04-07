@@ -2,7 +2,6 @@ use crate::constants::NODE_SIZE;
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
-use crate::topology::node::node_chain_reader::NodeChainReader;
 use crate::topology::node::node_chain_writer::NodeChainWriter;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
@@ -86,9 +85,9 @@ fn node_writer_kind_bitmask_preserves_lower_bits() {
 fn node_reader_sees_writer_data_after_publish() {
     let mut h = setup();
 
+    let chain =
+        NodeChainWriter::<8>::new(h.mem.clone(), h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
     let slot = {
-        let chain =
-            NodeChainWriter::<8>::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
         let slot = chain.insert_head(12).unwrap();
         let node = chain.get_node(slot);
         node.set_outgoing_synapse_head(99);
@@ -97,7 +96,7 @@ fn node_reader_sees_writer_data_after_publish() {
     h.writer.publish();
     h.reader.swap();
 
-    let chain_reader = NodeChainReader::<8>::bind(h.reader.clone(), HEAD_OFFSET, CAPACITY);
+    let chain_reader = chain.to_reader();
     let node = chain_reader.get_node(slot);
 
     assert_eq!(node.get_kind(), 12);
