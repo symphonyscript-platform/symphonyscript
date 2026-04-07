@@ -16,6 +16,26 @@ use crate::topology::synapse::synapse_writer::SynapseWriter;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+/// Writer side graph and topology orchestrator.
+///
+/// Provides the unified API for mutating the lock-free graph topology and attributes.
+/// It encapsulates the underling memory hierarchy and handles deploying structural updates
+/// to the consumer via the `publish()`.
+///
+/// # Threading
+/// Producer thread only.
+///
+/// # Deployment
+/// 1. Structural updates (e.g. `add_node`, `connect`) and tb_metadata are written to the active
+///    triple-buffer segment.
+/// 2. Non-structural updates (e.g. node/synapse attributes) and mem_metadata are written
+///    directly to `mem` (direct) plane, making such writes immediately visible to the consumer.
+///3. `publish()` flushes deferred frees and performs triple-buffer swap, exposing the new state
+///   to the consumer.
+///
+/// # Traits
+/// - Memory sizing is defined at compile time via const generics.
+/// - Use `to_reader()` to create the paired `SynapticGraphReader`.
 #[derive(Clone)]
 pub struct SynapticGraphWriter<
     const NODE_META_SIZE: usize,
