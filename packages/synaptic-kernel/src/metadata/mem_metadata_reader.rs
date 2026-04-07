@@ -1,6 +1,21 @@
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 
+/// Reader side global metadata storage backed by a shared `AtomicBuffer`.
+///
+/// Provides read-only access to a flat, power-of-2 sized array of `i32` slots
+/// for graph-level configuration and/or statistics.
+/// Lives on the `mem` (direct) plane (non-triple-buffered), meaning
+/// writer updates are immediately visible without requiring a `swap()`.
+///
+/// # Threading
+/// Consumer thread only. All atomic operations use `Relaxed` ordering.
+///
+/// # Memory Layout
+/// Shares backing region with `MemMetadataWriter`. See its layout.
+///
+/// # Constraints
+/// - Created exclusively via `MemMetadataWriter::to_reader()`.
 #[derive(Clone)]
 pub struct MemMetadataReader {
     mem: AtomicBuffer,

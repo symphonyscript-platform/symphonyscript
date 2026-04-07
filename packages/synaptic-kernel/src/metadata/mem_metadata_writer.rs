@@ -3,6 +3,27 @@ use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+/// Writer side global metadata storage backed by a shared `AtomicBuffer`.
+///
+/// Provides a flat, power-of-2 sized array of `i32` slots for graph-level configuration
+/// and/or statistics. Lives on the `mem` (direct) plane (non-triple-buffered), meaning
+/// writes are immediately visible to the reader without requiring a `publish()`.
+///
+/// # Threading
+/// Producer thread only. All atomic operations use `Relaxed` ordering.
+///
+/// # Memory Layout
+/// ```text
+/// Offset      Size        Field
+/// -------------------------------------
+/// 0           N           slots
+///
+/// N = capacity (power of 2)
+/// ```
+///
+/// # Constraints
+/// - 1-based slot indexing.
+/// - Use `to_reader()` to create the paired `MemMetadataReader`.
 #[derive(Clone)]
 pub struct MemMetadataWriter {
     mem: AtomicBuffer,
