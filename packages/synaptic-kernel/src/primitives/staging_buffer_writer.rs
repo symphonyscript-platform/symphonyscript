@@ -34,6 +34,7 @@ use std::sync::Arc;
 /// - `capacity` must be a power of 2.
 /// - `writer_generation` starts at 1, `reader_ack_generation` starts at 0.
 ///   This initial differential prevents premature draining of pre-publish entries.
+/// - Use `to_reader()` to create the paired `StagingBufferReader`.
 #[derive(Clone)]
 pub struct StagingBufferWriter {
     mem: AtomicBuffer,

@@ -5,6 +5,29 @@ use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+/// Writers side of flat attribute storage backed by a shared `AtomicBuffer`.
+///
+/// Each slot holds a fixed `[i32; SLOT_SIZE]` attribute block.
+/// Slots are 1-based (indexed same as the `SlotAllocator`).
+/// Lives on the `mem` (direct) plane - not triple-buffered.
+/// Attribute writes are immediately visible to the reader.
+///
+/// # Threading
+/// Producer thread only. All atomic operations use `Relaxed` ordering.
+///
+/// # Memory Layout
+/// ```text
+/// Offset          Size            Field
+/// -------------------------------------
+/// 0               N * S           slots
+///
+/// N = capacity
+/// S = SLOT_SIZE (const generic)
+/// ```
+///
+/// # Constraints
+/// - 1-based slot indexing.
+/// - Use `to_reader()` to create the paired `AttributePlaneReader`.
 #[derive(Clone)]
 pub struct AttributePlaneWriter<const SLOT_SIZE: usize> {
     mem: AtomicBuffer,

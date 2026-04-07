@@ -2,6 +2,18 @@ use crate::attribute_plane::attribute_plane_writer::AttributePlaneWriter;
 use crate::attribute_plane::attributes_reader::AttributesReader;
 use crate::primitives::types::AtomicBuffer;
 
+/// Readers side of flat attribute storage backed by a shared `AtomicBuffer`.
+///
+/// Provides independent read access to fixed-size attribute blocks.
+///
+/// # Threading
+/// Consumer thread only. All atomic operations use `Relaxed` ordering.
+///
+/// # Memory Layout
+/// Shares backing region with `AttributePlaneWriter`. See its layout.
+///
+/// # Constraints
+/// - Created exclusively via `AttributePlaneWriter::to_reader()`.
 #[derive(Clone)]
 pub struct AttributePlaneReader<const SLOT_SIZE: usize> {
     mem: AtomicBuffer,
