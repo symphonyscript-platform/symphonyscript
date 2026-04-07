@@ -1,10 +1,17 @@
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 
+/// Writer side view into a single, fixed-size attribute block on a shared `AtomicBuffer`.
+///
+/// Provides 0-based read and write access to `SLOT__SIZE` elements for
+/// a specific slot, backing an `AttributePlaneWriter`.
+///
+/// # Threading
+/// Producer thread only. All atomic operations use `Relaxed` ordering.
 pub struct AttributesWriter<'a, const SLOT_SIZE: usize> {
-    pub mem: &'a AtomicBuffer,
-    pub mem_start_offset: usize,
-    pub mem_end_offset: usize,
+    mem: &'a AtomicBuffer,
+    mem_start_offset: usize,
+    mem_end_offset: usize,
 }
 
 impl<'a, const SLOT_SIZE: usize> AttributesWriter<'a, SLOT_SIZE> {
