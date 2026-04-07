@@ -9,6 +9,40 @@ use crate::topology::synapse::synapse_chain_reader::SynapseChainReader;
 use crate::topology::synapse::synapse_writer::SynapseWriter;
 use std::sync::Arc;
 
+/// Writer side triple-buffered multi-linked list for graph synapses.
+///
+/// Orchestrates allocation, lifecycle, and structural linkage of synapses.
+/// Every active synaps maintains two separate doubly-linked lists concurrently:
+/// One anchoring it to the source node's `outgoing` list, and another to
+/// the target node's `incoming` list.
+///
+/// Uses `SlotAllocator` to manage synapse slot lifecycles.
+///
+/// # Threading
+/// Producer thread only.
+///
+/// # Memory Layout (Triple Buffer Plane)
+/// ```text
+/// Offset          Size        Field
+/// -------------------------------------
+/// 0               1           head_slot
+/// N * (S + M)     S + M       synapses
+///
+/// N = capacity
+/// S = SYNAPSE_SIZE (8)
+/// M = SYNAPSE_META_SIZE (const generic)
+/// ```
+///
+/// Note: There is no global `head_slot` parameter on the synapse plane.
+/// Synapses are accessed by traversing from a specific node.
+///
+/// # Constraints
+/// - Slots are 1-based. 0 indicates an undefined state.
+/// - Requires access to the `NodeChainWriter` because connecting/disconnecting
+///   automatically updates the head/tail pointers of the affected nodes.
+/// - Built-in lifecycle safety: `disconnect()` marks the slot for deferred freeing,
+///   preventing reallocation until the consumer has advanced pas the pending `publish()`.
+/// - Use `to_reader()` to create the paired `SynapseChainReader`.
 #[derive(Clone)]
 pub struct SynapseChainWriter<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize> {
     triple_buffer: TripleBufferWriter,

@@ -12,6 +12,8 @@ use std::sync::Arc;
 ///
 /// Orchestrates allocation, lifecycle, and structural linkage of nodes.
 ///
+/// Uses `SlotAllocator` to manage node slot lifecycles.
+///
 /// # Threading
 /// Producer thread only.
 ///

@@ -2,6 +2,20 @@ use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::topology::synapse::synapse_chain_writer::SynapseChainWriter;
 use crate::topology::synapse::synapse_reader::SynapseReader;
 
+/// Reader side triple-buffered multi-linked list for graph synapses.
+///
+/// Provides read-only structural traversal of the synapse topology.
+///
+/// # Threading
+/// Consumer thread only.
+///
+/// # Memory Layout (Triple Buffer Plane)
+/// Shares backing region with `SynapseChainWriter`. See its layout.
+///
+/// # Constraints
+/// - Read-only: structural mutation is strictly prohibited on the reading plane.
+/// - Slots are 1-based. 0 indicates an undefined state.
+/// - Created exclusively via `SynapseChainWriter::to_reader()`.
 #[derive(Clone)]
 pub struct SynapseChainReader<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize> {
     triple_buffer: TripleBufferReader,
