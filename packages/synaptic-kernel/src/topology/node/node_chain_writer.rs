@@ -8,6 +8,30 @@ use crate::topology::node::node_chain_reader::NodeChainReader;
 use crate::topology::node::node_writer::NodeWriter;
 use std::sync::Arc;
 
+/// Writer side triple-buffered doubly-linked list for topology nodes.
+///
+/// Orchestrates allocation, lifecycle, and structural linkage of nodes.
+///
+/// # Threading
+/// Producer thread only.
+///
+/// # Memory Layout (Triple Buffer Plane)
+/// ```text
+/// Offset          Size        Field
+/// -------------------------------------
+/// 0               1           head_slot
+/// N * (S + M)     S + M       nodes
+///
+/// N = capacity
+/// S = NODE_SIZE (8)
+/// M = META_SIZE (const generic)
+/// ```
+///
+/// # Constraints
+/// - Slots are 1-based. 0 indicates an empty slot.
+/// - Built-in lifecycle safety: `remove()` marks the slot for deferred freeing,
+///   preventing reallocation until the consumer has advanced pas the pending `publish()`.
+/// - Use `to_reader()` to create the paired `NodeChainReader`.
 #[derive(Clone)]
 pub struct NodeChainWriter<const META_SIZE: usize> {
     triple_buffer: TripleBufferWriter,
