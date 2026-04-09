@@ -21,12 +21,12 @@ use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 /// and returns the old `Box<SynapticGraphReader>` for deferred deletion.
 /// The kernel stamps the old reader with the next generation, holds the (old_reader, gen)
 /// in a deletion queue until the consumer has acknowledged the new generation via `ack()`,
-/// ensuring the old memory is never freed while the consuimer is still traversing it.
+/// ensuring the old memory is never freed while the consumer is still traversing it.
 ///
 /// # Threading
 /// Wait-free SPSC synchronization.
 /// - `set_graph()` / `get_graph()`: `Acquire`/`Release` on the internal `AtomicPtr`.
-/// - `inc_writer_generation()`: `Relaxed` (called only be producer thread).
+/// - `inc_writer_generation()`: `Relaxed` (called only by producer thread).
 /// - `get_reader_ack_generation()`: `Acquire` (synchronizes against
 ///   consumer's `Release` in `ack()`).
 ///

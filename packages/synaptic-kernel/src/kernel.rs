@@ -65,7 +65,7 @@ impl<
     }
 
     pub fn new_from_mem(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
-        let writer = SynapticGraphWriter::new(Arc::clone(&mem), config.clone());
+        let writer = SynapticGraphWriter::new(Arc::clone(&mem), config);
         let reader = Box::new(writer.to_reader());
         let control_plane = Box::new(ControlPlane::new(reader));
 
@@ -75,6 +75,17 @@ impl<
             active_writer: writer,
             readers_pending_deletion: VecDeque::new(),
         }
+    }
+
+    pub fn get_control_plane(
+        &self,
+    ) -> &ControlPlane<
+        NODE_META_SIZE,
+        NODE_ATTRIBUTES_SIZE,
+        SYNAPSE_META_SIZE,
+        SYNAPSE_ATTRIBUTES_SIZE,
+    > {
+        &self.control_plane
     }
 
     pub fn mem_metadata_capacity(&self) -> usize {
