@@ -24,10 +24,10 @@ use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 ///
 /// # Threading
 /// Wait-free SPSC synchronization.
-/// - `swap_graph()`: `AcqRel` on the `AtomicPtr` swap; `Relaxed` on the writer generation
+/// - `swap_graph()`: `AcqRel` on the `AtomicPtr` swap; `Release` on the writer generation
 ///   increment (producer-only, follows the `swap()`).
 /// - `acquire_graph()`: `Release` on the ack store; `Acquire` on the `AtomicPtr` load.
-///   The internal writer generation read uses `Relaxed`; A stale value yields a
+///   The internal writer generation read uses `Acquire`; A stale value yields a
 ///   conservative (lower) ack, never premature freeing.
 /// - `get_reader_ack_generation()`: `Acquire` (synchronizes against
 ///   consumer's `Release` in `acquire_graph()`).
@@ -91,7 +91,7 @@ impl<
 
         let graph_ptr = self.shared_graph_ptr.load(Ordering::Acquire);
 
-        // SAFETY: The point    er is always valid, because it's managed by Kernel's Box lifecycle
+        // SAFETY: The pointer is always valid, because it's managed by Kernel's Box lifecycle
         // and generation-gated deferred deletion.
         unsafe { &*graph_ptr }
     }
@@ -136,7 +136,7 @@ impl<
     fn ack(&self) {
         let writer_generation = self.writer_generation.load(Ordering::Acquire);
         self.reader_ack_generation
-            .store(writer_generation - 1, Ordering::Release)
+            .store(writer_generation, Ordering::Release)
     }
 }
 
