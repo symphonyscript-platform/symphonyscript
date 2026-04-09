@@ -5,7 +5,8 @@ use std::sync::Arc;
 /// Consumer-side entry point to the graph reader.
 ///
 /// Wraps a `ControlPlane` reference and provides `acquire_graph()`,
-/// which bundles the swap and acknowledgement protocol into a single call.
+/// which combines graph acquisition with triple-buffer consumption into
+/// a single call.
 ///
 /// # Threading
 /// Consumer thread only.
@@ -13,10 +14,10 @@ use std::sync::Arc;
 /// # Usage
 /// Call `acquire_graph()` at the start of every processing cycle.
 /// It:
-/// 1. Retrieves the currently active `SynapticGraphReader` from the `ControlPlane`.
-/// 2. Calls `swap()` to apply any pending triple-buffer updates.
-/// 3. Calls `ack()` to signal the safe release of prior graph generations.
-/// 4. Returns the ready-to-read `SynapticGraphReader`.
+/// 1. Acquires the current `SynapticGraphReader` from the `ControlPlane` - while also
+///    internally acknowledging the current generation before loading the pointer.
+/// 2. Calls `swap()` to consume any pending triple-buffer updates.
+/// 3. Returns the ready-to-read `SynapticGraphReader`.
 ///
 /// The returned reference is valid for the entire cycle - no re-acquisition needed.
 ///

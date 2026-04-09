@@ -85,7 +85,7 @@ impl<
     /// this `Kernel`.
     ///
     /// # Safety Contract
-    /// The consumer thread **must** be fully quiesced before the `Kernel` is dropeed.
+    /// The consumer thread **must** be fully quiesced before the `Kernel` is dropped.
     /// Dropping the kernel unconditionally frees the deferred-deletion queue.
     /// If the consumer is still traversing a hot-swapped graph, the result is
     /// undefined behavior.

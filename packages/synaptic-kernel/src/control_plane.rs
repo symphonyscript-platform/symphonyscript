@@ -5,7 +5,6 @@ use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 /// the active graph.
 ///
 /// Owns the current `Box<SynapticGraphReader>` and provides atomic access to it.
-
 /// Acts as the sole source of truth indicating which `SynapticGraphReader` instance the
 /// consumer thread should traverse. Orchestrates the safe delivery of the initial graph, as well
 /// as hot-swapping to new graph instances when the kernel reallocates due to `grow()`.
@@ -75,7 +74,7 @@ impl<
     ) -> Self {
         ControlPlane {
             shared_graph_ptr: AtomicPtr::new(Box::into_raw(synaptic_graph_reader)),
-            writer_generation: AtomicI32::new(1),
+            writer_generation: AtomicI32::new(0),
             reader_ack_generation: AtomicI32::new(0),
         }
     }
@@ -120,7 +119,7 @@ impl<
     ) {
         let new_graph_ptr = Box::into_raw(new_graph);
         let old_graph_ptr = self.shared_graph_ptr.swap(new_graph_ptr, Ordering::AcqRel);
-        let prev_gen = self.inc_writer_generation();
+        let prev_gen = self.writer_generation.fetch_add(1, Ordering::Release);
 
         // SAFETY: old_graph_ptr was originally created by Box::into_raw() in a prior
         // swap_graph() or ControlPlane::new(). The atomic swap guarantees exclusive access -
@@ -130,20 +129,12 @@ impl<
         (old_graph, prev_gen + 1)
     }
 
-    pub fn get_writer_generation(&self) -> i32 {
-        self.writer_generation.load(Ordering::Relaxed)
-    }
-
     pub fn get_reader_ack_generation(&self) -> i32 {
         self.reader_ack_generation.load(Ordering::Acquire)
     }
 
-    fn inc_writer_generation(&self) -> i32 {
-        self.writer_generation.fetch_add(1, Ordering::Relaxed)
-    }
-
     fn ack(&self) {
-        let writer_generation = self.get_writer_generation();
+        let writer_generation = self.writer_generation.load(Ordering::Acquire);
         self.reader_ack_generation
             .store(writer_generation - 1, Ordering::Release)
     }
