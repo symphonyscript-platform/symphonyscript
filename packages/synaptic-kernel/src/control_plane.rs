@@ -27,8 +27,8 @@ use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 /// - `swap_graph()`: `AcqRel` on the `AtomicPtr` swap; `Release` on the writer generation
 ///   increment (producer-only, follows the `swap()`).
 /// - `acquire_graph()`: `Release` on the ack store; `Acquire` on the `AtomicPtr` load.
-///   The internal writer generation read uses `Acquire`; A stale value yields a
-///   conservative (lower) ack, never premature freeing.
+///   The internal writer generation read uses `Acquire` (synchronizes against producer's
+///   `Release` in `swap_graph()`).
 /// - `get_reader_ack_generation()`: `Acquire` (synchronizes against
 ///   consumer's `Release` in `acquire_graph()`).
 ///
