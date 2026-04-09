@@ -80,7 +80,7 @@ impl<
     /// Returns a shared handle to the `ControlPlane` for constructing a `GraphConsumer` on
     /// the consumer thread.
     ///
-    /// The `Arc` is cross-thread transport mechanism, not a lifetime extension.
+    /// The `Arc` is a cross-thread transport mechanism, not a lifetime extension.
     /// The `ControlPlane` has no independent lifecycle - it is logically owned by
     /// this `Kernel`.
     ///
