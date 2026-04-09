@@ -19,6 +19,7 @@ pub struct Kernel<
     const SYNAPSE_META_SIZE: usize,
     const SYNAPSE_ATTRIBUTES_SIZE: usize,
 > {
+    mem: AtomicBuffer,
     control_plane: Box<
         ControlPlane<
             NODE_META_SIZE,
@@ -91,6 +92,7 @@ impl<
         let control_plane = Box::new(ControlPlane::new(reader_ptr));
 
         Kernel {
+            mem,
             control_plane,
             active_writer: writer,
             active_reader: reader_box,
@@ -304,6 +306,16 @@ impl<
         self.readers_pending_deletion.push_back(old_reader);
 
         Ok(())
+    }
+
+    /// Returns a raw handle to the backing `AtomicBuffer`.
+    ///
+    /// # Safety
+    /// The caller assumes full responsibility for memory correctness.
+    /// Writing to structural or lifecycle regions will corrupt the graph.
+    /// Intended exclusively for read-only telemetry and debugging.
+    pub fn get_mem(&self) -> AtomicBuffer {
+        Arc::clone(&self.mem)
     }
 
     fn replace_reader(

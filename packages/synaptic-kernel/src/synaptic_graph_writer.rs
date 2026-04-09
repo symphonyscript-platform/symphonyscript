@@ -496,10 +496,6 @@ impl<
         self.tb_writer.publish();
     }
 
-    pub fn get_mem(&self) -> AtomicBuffer {
-        Arc::clone(&self.mem)
-    }
-
     pub fn copy_from(&self, source: &Self) {
         self.mem_metadata_plane
             .copy_from(&source.mem_metadata_plane);
