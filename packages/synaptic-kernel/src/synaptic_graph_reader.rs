@@ -19,6 +19,10 @@ use crate::topology::synapse::synapse_reader::SynapseReader;
 /// # Threading
 /// Consumer thread only.
 ///
+/// # Memory Layout
+/// Shares backing MEM (direct plane) and TB (triple-buffered plane) regions
+/// with `SynapticGraphWriter`. See its layout.
+///
 /// # Deployment
 /// 1. `swap()` consumes any pending structural updates (node, synapses, tb_metadata) published
 ///    by the producer. Returns `true` if a new buffer was available, `false` otherwise.
