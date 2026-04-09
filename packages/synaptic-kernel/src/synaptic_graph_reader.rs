@@ -9,7 +9,7 @@ use crate::topology::node::node_reader::NodeReader;
 use crate::topology::synapse::synapse_chain_reader::SynapseChainReader;
 use crate::topology::synapse::synapse_reader::SynapseReader;
 
-/// Reader side graph and topology orchestrator.
+/// Consumer-side graph and topology orchestrator.
 ///
 /// Provides the unified API for traversing the lock-free and wait-free graph
 /// topology and attributes.
@@ -137,7 +137,7 @@ impl<
         self.synapse_attribute_plane.get(slot).get(attribute_offset)
     }
 
-    pub fn swap(&mut self) -> bool {
+    pub fn swap(&self) -> bool {
         let swapped = self.tb_reader.swap();
         self.ack_node_generation();
         self.ack_synapse_generation();

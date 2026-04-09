@@ -14,7 +14,7 @@ use std::sync::Arc;
 /// staging buffer.
 ///
 /// # Threading
-/// Writer side only (Producer Thread).
+/// Producer-side only (Producer Thread).
 /// Cross-thread coordination is handled by the underlying `StagingBuffer`'s generation protocol.
 ///
 /// # Memory Layout

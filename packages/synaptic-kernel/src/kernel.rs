@@ -34,14 +34,6 @@ pub struct Kernel<
         SYNAPSE_META_SIZE,
         SYNAPSE_ATTRIBUTES_SIZE,
     >,
-    active_reader: Box<
-        SynapticGraphReader<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
-        >,
-    >,
     readers_pending_deletion: VecDeque<(
         Box<
             SynapticGraphReader<
@@ -74,40 +66,15 @@ impl<
 
     pub fn new_from_mem(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
         let writer = SynapticGraphWriter::new(Arc::clone(&mem), config.clone());
-        let reader = writer.to_reader();
-        let reader_box = Box::new(reader);
-        let reader_ptr = reader_box.as_ref()
-            as *const SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
-            >
-            as *mut SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
-            >;
-        let control_plane = Box::new(ControlPlane::new(reader_ptr));
+        let reader = Box::new(writer.to_reader());
+        let control_plane = Box::new(ControlPlane::new(reader));
 
         Kernel {
             mem,
             control_plane,
             active_writer: writer,
-            active_reader: reader_box,
             readers_pending_deletion: VecDeque::new(),
         }
-    }
-
-    pub fn get_controller_plane_address(&self) -> usize {
-        self.control_plane.as_ref()
-            as *const ControlPlane<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
-            > as usize
     }
 
     pub fn mem_metadata_capacity(&self) -> usize {
@@ -295,7 +262,7 @@ impl<
             SYNAPSE_META_SIZE,
             SYNAPSE_ATTRIBUTES_SIZE,
         >::calculate_size_on_mem(&config));
-        let new_writer = SynapticGraphWriter::new(Arc::clone(&mem), config.clone());
+        let new_writer = SynapticGraphWriter::new(Arc::clone(&mem), config);
 
         new_writer.copy_from(&self.active_writer);
 
@@ -319,7 +286,7 @@ impl<
     }
 
     fn replace_reader(
-        &mut self,
+        &self,
         new_reader: Box<
             SynapticGraphReader<
                 NODE_META_SIZE,
@@ -340,21 +307,7 @@ impl<
         i32,
     ) {
         let prev_gen = self.control_plane.inc_writer_generation();
-        let new_reader_ptr = new_reader.as_ref()
-            as *const SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
-            >
-            as *mut SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
-            >;
-        let old_reader = std::mem::replace(&mut self.active_reader, new_reader);
-        self.control_plane.set_shared_graph_ptr(new_reader_ptr);
+        let old_reader = self.control_plane.set_graph(new_reader);
         (old_reader, prev_gen + 1)
     }
 

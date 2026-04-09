@@ -2,7 +2,7 @@ use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-/// Reader side of an SPSC triple buffer backed by shared `AtomicBuffer`.
+/// Consumer-side of an SPSC triple buffer backed by shared `AtomicBuffer`.
 ///
 /// Calls `swap()` to atomically acquire the latest published buffer.
 /// Returns `false` if no new data is available (NEW_DATA flag is 0).
@@ -76,7 +76,7 @@ impl TripleBufferReader {
         self.buffer_bases[buffer_id]
     }
 
-    pub fn swap(&mut self) -> bool {
+    pub fn swap(&self) -> bool {
         let state = self.mem[self.mem_state_offset].load(Ordering::Acquire);
 
         if state & 0b100 == 0 {

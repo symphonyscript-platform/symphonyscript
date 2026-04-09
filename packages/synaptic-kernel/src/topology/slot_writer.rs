@@ -1,6 +1,6 @@
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 
-/// Writer side view into a fixed-size structural block on the triple buffer.
+/// Producer-side view into a fixed-size structural block on the triple buffer.
 ///
 /// Provides safe, offset-based read and write access to a specific `[i32; SLOT_SIZE]` sequence.
 ///

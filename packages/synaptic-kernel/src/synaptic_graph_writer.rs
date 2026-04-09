@@ -16,7 +16,7 @@ use crate::topology::synapse::synapse_writer::SynapseWriter;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-/// Writer side graph and topology orchestrator.
+/// Producer-side graph and topology orchestrator.
 ///
 /// Provides the unified API for mutating the lock-free graph topology and attributes.
 /// It encapsulates the underlying memory hierarchy and handles deploying structural updates

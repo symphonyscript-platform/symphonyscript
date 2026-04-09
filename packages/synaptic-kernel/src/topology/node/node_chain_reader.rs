@@ -2,7 +2,7 @@ use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::topology::node::node_chain_writer::NodeChainWriter;
 use crate::topology::node::node_reader::NodeReader;
 
-/// Reader side triple-buffered doubly-linked list for graph nodes.
+/// Consumer-side triple-buffered doubly-linked list for graph nodes.
 ///
 /// Provides read-only structural traversal of the node topology.
 ///

@@ -2,7 +2,7 @@ use crate::constants::NODE_SIZE;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::topology::slot_writer::SlotWriter;
 
-/// Writer side structural facade for a graph node on the triple buffer.
+/// Producer-side structural facade for a graph node on the triple buffer.
 ///
 /// Wraps two `SlotWriter`s (core structural pointers and custom metadata)
 /// to provide a strict interface over the raw atomic memory block.

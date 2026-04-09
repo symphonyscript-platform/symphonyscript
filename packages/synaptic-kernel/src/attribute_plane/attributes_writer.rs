@@ -1,7 +1,7 @@
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 
-/// Writer side view into a single, fixed-size attribute block on a shared `AtomicBuffer`.
+/// Producer-side view into a single, fixed-size attribute block on a shared `AtomicBuffer`.
 ///
 /// Provides 0-based read and write access to `SLOT_SIZE` elements for
 /// a specific slot, backing an `AttributePlaneWriter`.

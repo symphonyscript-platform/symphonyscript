@@ -3,18 +3,18 @@ use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-/// Writer side of an SPSC triple buffer backed by shared `AtomicBuffer`.
+/// Producer-side of an SPSC triple buffer backed by shared `AtomicBuffer`.
 ///
-/// Three buffers rotate between writer, reader and shared handoff.
-/// The writer writes into a private buffer, then calls `publish()` to
-/// atomically hand it off. AFter publish, the writer receives a stale buffer back and syncs
+/// Three buffers rotate between producer, consumer and shared handoff.
+/// The producer writes into a private buffer, then calls `publish()` to
+/// atomically hand it off. AFter publish, the producer receives a stale buffer back and syncs
 /// it via `copy_nonoverlapping` - safe because the `AcqRel` fence guarantees exclusive
 /// ownership of the recycled buffer.
 ///
 /// # Threading
 /// Producer thread only. `publish()` uses `AcqRel` on the state swap:
 /// - `Release`: all buffer writes are visible before handoff.
-/// - `Acquire`: the recycled buffer is fully released by the reader before
+/// - `Acquire`: the recycled buffer is fully released by the consumer before
 ///   the writer's `sync()` memcopy.
 ///
 /// All other atomics use `Relaxed`.
@@ -38,7 +38,7 @@ use std::sync::Arc;
 /// - bit 2: NEW_DATA flag (1 = unread data available)
 ///
 /// # Initial State
-/// - writer owns buffer 0, reader owns buffer 2, shared holds buffer 1
+/// - Producer owns buffer 0, consumer owns buffer 2, shared holds buffer 1
 /// - `state` = `0b001` (buffer 1, no new data).
 ///
 /// # Constraints
@@ -181,7 +181,7 @@ impl TripleBufferWriter {
         let source_ptr = self.mem[published_buffer_index..].as_ptr() as *const i32;
         let destination_ptr = self.mem[writer_buffer_index..].as_ptr() as *mut i32;
 
-        // SAFE: The writer has exclusive ownership of the stale buffer after the swap,
+        // SAFE: The producer has exclusive ownership of the stale buffer after the swap,
         // and the bounds are validated upon instantiation.
         //
         unsafe {

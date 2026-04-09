@@ -9,7 +9,7 @@ use std::sync::Arc;
 /// Uses bitmask (& (capacity-1)) for index wrapping instead of modulo.
 ///
 /// # Threading
-/// SPSC. One writer, one reader. `pending_count` uses `Acquire`/`Release` to synchronize
+/// SPSC. One producer, one consumer. `pending_count` uses `Acquire`/`Release` to synchronize
 /// visibility between `write()` and `read()`/`peek()`.
 /// All other atomics use `Relaxed`.
 ///

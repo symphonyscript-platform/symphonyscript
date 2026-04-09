@@ -2,7 +2,7 @@ use crate::primitives::staging_buffer_writer::StagingBufferWriter;
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 
-/// Reader-side handle for the generation-gated staging buffer.
+/// Consumer-side handle for the generation-gated staging buffer.
 ///
 /// Does not read entries from the ring buffer directly. Its sole purpose is to call `ack()`,
 /// which advances `reader_ack_generation` so the writer's `drain()` knows which entries are

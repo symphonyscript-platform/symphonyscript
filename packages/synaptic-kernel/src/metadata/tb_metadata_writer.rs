@@ -1,7 +1,7 @@
 use crate::metadata::tb_metadata_reader::TbMetadataReader;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 
-/// Writer side triple-buffered metadata storage backed by a shared `AtomicBuffer`.
+/// Producer-side triple-buffered metadata storage backed by a shared `AtomicBuffer`.
 ///
 /// Provides a flat, power-of-2 sized array of `i32` slots for graph-level configuration
 /// and/or statistics. Lives on the `tb` (triple-buffered) plane, meaning

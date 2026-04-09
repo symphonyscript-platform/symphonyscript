@@ -9,7 +9,7 @@ use crate::topology::synapse::synapse_chain_reader::SynapseChainReader;
 use crate::topology::synapse::synapse_writer::SynapseWriter;
 use std::sync::Arc;
 
-/// Writer side triple-buffered multi-linked list for graph synapses.
+/// Producer-side triple-buffered multi-linked list for graph synapses.
 ///
 /// Orchestrates allocation, lifecycle, and structural linkage of synapses.
 /// Every active synapse maintains two separate doubly-linked lists concurrently:

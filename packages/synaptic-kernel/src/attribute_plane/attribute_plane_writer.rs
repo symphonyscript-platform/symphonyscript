@@ -5,12 +5,12 @@ use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-/// Writer side of flat attribute storage backed by a shared `AtomicBuffer`.
+/// Producer-side of flat attribute storage backed by a shared `AtomicBuffer`.
 ///
 /// Each slot holds a fixed `[i32; SLOT_SIZE]` attribute block.
 /// Slots are 1-based (indexed same as the `SlotAllocator`).
 /// Lives on the `mem` (direct) plane - not triple-buffered.
-/// Attribute writes are immediately visible to the reader.
+/// Attribute writes are immediately visible to the consumer.
 ///
 /// # Threading
 /// Producer thread only. All atomic operations use `Relaxed` ordering.

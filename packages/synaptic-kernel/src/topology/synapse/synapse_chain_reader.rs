@@ -2,7 +2,7 @@ use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::topology::synapse::synapse_chain_writer::SynapseChainWriter;
 use crate::topology::synapse::synapse_reader::SynapseReader;
 
-/// Reader side triple-buffered multi-linked list for graph synapses.
+/// Consumer-side triple-buffered multi-linked list for graph synapses.
 ///
 /// Provides read-only structural traversal of the synapse topology.
 ///

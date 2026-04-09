@@ -2,7 +2,7 @@ use crate::constants::NODE_SIZE;
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::topology::slot_reader::SlotReader;
 
-/// Reader side structural facade for a graph node on the triple buffer.
+/// Consumer-side structural facade for a graph node on the triple buffer.
 ///
 /// Wraps two `SlotReader`s (core structural pointers and custom metadata)
 /// to provide a strict read-only interface over the raw atomic memory block.

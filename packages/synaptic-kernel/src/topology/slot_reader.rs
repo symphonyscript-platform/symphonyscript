@@ -1,6 +1,6 @@
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
 
-/// Reader side view into a fixed-size structural block on the triple buffer.
+/// Consumer-side view into a fixed-size structural block on the triple buffer.
 ///
 /// Provides safe, offset-based read-only access to a specific `[i32; SLOT_SIZE]` sequence.
 ///

@@ -8,7 +8,7 @@ use crate::topology::node::node_chain_reader::NodeChainReader;
 use crate::topology::node::node_writer::NodeWriter;
 use std::sync::Arc;
 
-/// Writer side triple-buffered doubly-linked list for graph nodes.
+/// Producer-side triple-buffered doubly-linked list for graph nodes.
 ///
 /// Orchestrates allocation, lifecycle, and structural linkage of nodes.
 ///

@@ -1,11 +1,10 @@
-use crate::constants::CONTROLLER_MAGIC;
 use crate::control_plane::ControlPlane;
 use crate::synaptic_graph_reader::SynapticGraphReader;
 
-/// Provides consumer side entry point to the graph reader.
+/// Consumer-side entry point to the graph reader.
 ///
-/// Binds to the `ControlPlane` via a raw memory address and provides access
-/// to the most recent graph reader.
+/// Wraps a `ControlPlane` reference and provides `acquire_graph()`,
+/// which bundles the swap and acknowledgement protocol into a single call.
 ///
 /// # Threading
 /// Consumer thread only.
@@ -13,18 +12,23 @@ use crate::synaptic_graph_reader::SynapticGraphReader;
 /// # Usage
 /// Call `acquire_graph()` at the start of every processing cycle.
 /// It:
-/// 1. Retrieves the currently active graph pointer from the `ControlPlane`.
+/// 1. Retrieves the currently active `SynapticGraphReader` from the `ControlPlane`.
 /// 2. Calls `swap()` to apply any pending triple-buffer updates.
-/// 3. Calls `ack()` to signal the safe release of any older graph instances,
-///    allowing the producer to safely free their memory.
+/// 3. Calls `ack()` to signal the safe release of prior graph generations.
 /// 4. Returns the ready-to-read `SynapticGraphReader`.
+///
+/// The returned reference is valid for the entire cycle - no re-acquisition needed.
+///
+/// # Constraints
+/// - Created by passing `&ControlPlane` to `new()`.
 pub struct GraphConsumer<
+    'a,
     const NODE_META_SIZE: usize,
     const NODE_ATTRIBUTES_SIZE: usize,
     const SYNAPSE_META_SIZE: usize,
     const SYNAPSE_ATTRIBUTES_SIZE: usize,
 > {
-    control_plane_ptr: *const ControlPlane<
+    control_plane: &'a ControlPlane<
         NODE_META_SIZE,
         NODE_ATTRIBUTES_SIZE,
         SYNAPSE_META_SIZE,
@@ -33,46 +37,43 @@ pub struct GraphConsumer<
 }
 
 impl<
+    'a,
     const NODE_META_SIZE: usize,
     const NODE_ATTRIBUTES_SIZE: usize,
     const SYNAPSE_META_SIZE: usize,
     const SYNAPSE_ATTRIBUTES_SIZE: usize,
-> GraphConsumer<NODE_META_SIZE, NODE_ATTRIBUTES_SIZE, SYNAPSE_META_SIZE, SYNAPSE_ATTRIBUTES_SIZE>
+>
+    GraphConsumer<
+        'a,
+        NODE_META_SIZE,
+        NODE_ATTRIBUTES_SIZE,
+        SYNAPSE_META_SIZE,
+        SYNAPSE_ATTRIBUTES_SIZE,
+    >
 {
-    pub fn bind(control_plane_address: usize) -> Self {
-        let signature = unsafe { std::ptr::read(control_plane_address as *const u32) };
-
-        if signature != CONTROLLER_MAGIC {
-            panic!(
-                "GraphConsumer::new | invalid control_plane_address provided to the GraphConsumer"
-            )
-        }
-
-        GraphConsumer {
-            control_plane_ptr: control_plane_address
-                as *const ControlPlane<
-                    NODE_META_SIZE,
-                    NODE_ATTRIBUTES_SIZE,
-                    SYNAPSE_META_SIZE,
-                    SYNAPSE_ATTRIBUTES_SIZE,
-                >,
-        }
+    pub fn new(
+        control_plane: &'a ControlPlane<
+            NODE_META_SIZE,
+            NODE_ATTRIBUTES_SIZE,
+            SYNAPSE_META_SIZE,
+            SYNAPSE_ATTRIBUTES_SIZE,
+        >,
+    ) -> Self {
+        GraphConsumer { control_plane }
     }
 
     pub fn acquire_graph(
-        &mut self,
+        &self,
     ) -> &SynapticGraphReader<
         NODE_META_SIZE,
         NODE_ATTRIBUTES_SIZE,
         SYNAPSE_META_SIZE,
         SYNAPSE_ATTRIBUTES_SIZE,
     > {
-        let control_plane = unsafe { &*self.control_plane_ptr };
-        let graph_ptr = control_plane.get_shared_graph_ptr();
-        let graph = unsafe { &mut *graph_ptr };
+        let graph = self.control_plane.get_graph();
 
         graph.swap();
-        control_plane.ack();
+        self.control_plane.ack();
 
         graph
     }

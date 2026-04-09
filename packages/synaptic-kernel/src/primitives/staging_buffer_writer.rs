@@ -7,13 +7,13 @@ use std::sync::Arc;
 
 /// Generation-gated SPSC staging buffer for deferred slot reclamation.
 ///
-/// The writer pushes retired slot numbers into a ring buffer,
+/// The producer pushes retired slot numbers into a ring buffer,
 /// each stamped with the current `writer_generation`. On `publish()`, the generation advances.
 /// `drain()` only yields entries whose generation has been acknowledged by the reader
 /// via `StagingBufferReader::ack()`.
 ///
 /// # Threading
-/// Writer side only (Producer Thread).
+/// Producer-side only (Producer Thread).
 /// Reads `reader_ack_generation` with `Acquire`
 /// to synchronize against the reader's `Release` in `ack()`.
 /// All other atomics use `Relaxed`.
