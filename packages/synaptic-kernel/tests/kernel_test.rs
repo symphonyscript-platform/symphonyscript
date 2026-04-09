@@ -3,6 +3,7 @@ use synaptic_kernel::errors::kernel_error::KernelError;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
 use synaptic_kernel::synaptic_graph_reader::SynapticGraphReader;
+use std::sync::Arc;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
@@ -31,13 +32,10 @@ fn config(capacity: usize) -> SynapticGraphConfig {
 
 /// Extract audio-thread reader from controller via raw ControlPlane pointer.
 /// This simulates the exact path the audio thread takes in production.
-unsafe fn mock_audio_reader(controller: &TestKernel) -> &mut TestReader {
-    let cp_address = controller.get_controller_plane_address();
-    let cp_ptr = cp_address as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-    unsafe {
-        let reader_ptr = (*cp_ptr).get_shared_graph_ptr();
-        &mut *reader_ptr
-    }
+unsafe fn mock_audio_reader(controller: &TestKernel) -> &'static TestReader {
+    let arc = controller.get_control_plane();
+    let cp = Arc::as_ptr(&arc);
+    unsafe { std::mem::transmute((*cp).acquire_graph()) }
 }
 
 // =========================================================
@@ -144,10 +142,7 @@ fn mutations_invisible_to_audio_thread_before_publish_and_swap() {
     let mut controller = new_controller(config(16));
 
     // Extract raw pointer to decouple borrows
-    let cp_address = controller.get_controller_plane_address();
-    let cp_ptr = cp_address as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-    let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
-    let audio = unsafe { &mut *reader_ptr };
+    let audio = unsafe { mock_audio_reader(&controller) };
 
     assert!(audio.get_head_node().is_none());
 
@@ -172,10 +167,7 @@ fn mutations_invisible_to_audio_thread_before_publish_and_swap() {
 fn multiple_mutations_batch_into_single_publish() {
     let mut controller = new_controller(config(16));
 
-    let cp_address = controller.get_controller_plane_address();
-    let cp_ptr = cp_address as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-    let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
-    let audio = unsafe { &mut *reader_ptr };
+    let audio = unsafe { mock_audio_reader(&controller) };
 
     let n1 = controller.insert_head(1).unwrap();
     let n2 = controller.insert_after(n1, 2).unwrap();
@@ -203,10 +195,7 @@ fn multiple_mutations_batch_into_single_publish() {
 fn double_swap_without_publish_returns_false() {
     let mut controller = new_controller(config(16));
 
-    let cp_address = controller.get_controller_plane_address();
-    let cp_ptr = cp_address as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-    let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
-    let audio = unsafe { &mut *reader_ptr };
+    let audio = unsafe { mock_audio_reader(&controller) };
 
     controller.insert_head(1).unwrap();
     controller.publish();
@@ -220,10 +209,7 @@ fn attributes_visible_immediately_without_publish() {
     // Attribute plane is shared (not triple-buffered), so writes are instant
     let controller = new_controller(config(16));
 
-    let cp_address = controller.get_controller_plane_address();
-    let cp_ptr = cp_address as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-    let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
-    let audio = unsafe { &mut *reader_ptr };
+    let audio = unsafe { mock_audio_reader(&controller) };
 
     let n = controller.insert_head(1).unwrap();
     controller.set_node_attribute(n, 3, 42);
@@ -572,10 +558,10 @@ fn should_grow_respects_threshold_boundary() {
 #[test]
 fn control_plane_address_is_stable_across_grow() {
     let mut controller = new_controller(config(4));
-    let addr_before = controller.get_controller_plane_address();
+    let addr_before = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
     controller.grow(config(8)).unwrap();
-    let addr_after = controller.get_controller_plane_address();
+    let addr_after = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
     // The ControlPlane is boxed and its address must not move.
     // Audio thread holds this pointer — if it moves, segfault.
@@ -585,7 +571,7 @@ fn control_plane_address_is_stable_across_grow() {
 #[test]
 fn control_plane_address_nonzero() {
     let controller = new_controller(config(4));
-    assert_ne!(controller.get_controller_plane_address(), 0);
+    assert_ne!(Arc::as_ptr(&controller.get_control_plane()) as usize, 0);
 }
 
 // =========================================================
@@ -718,10 +704,7 @@ fn defer_then_publish_then_grow_preserves_freed_slot() {
 
     // Verify audio thread sees correct state after full cycle
     controller.publish();
-    let cp_address = controller.get_controller_plane_address();
-    let cp_ptr = cp_address as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-    let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
-    let audio = unsafe { &mut *reader_ptr };
+    let audio = unsafe { mock_audio_reader(&controller) };
     audio.swap();
 
     let head = audio.get_head_node().unwrap();
@@ -735,7 +718,7 @@ fn defer_then_publish_then_grow_preserves_freed_slot() {
 #[test]
 fn concurrent_traversal_during_rapid_publish_cycles() {
     let mut controller = new_controller(config(64));
-    let cp_addr = controller.get_controller_plane_address();
+    let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
     let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let running_audio = running.clone();
@@ -746,8 +729,7 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
         let mut iterations = 0u64;
 
         while running_audio.load(std::sync::atomic::Ordering::Relaxed) {
-            let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
-            let reader = unsafe { &mut *reader_ptr };
+            let reader = unsafe { (*cp_ptr).acquire_graph() };
 
             reader.swap();
 
@@ -755,7 +737,7 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
             let mut current = reader.get_head_node();
             let mut count = 0;
             while let Some(node) = current {
-                let kind = node.get_kind();
+                let kind: i32 = node.get_kind();
                 // Kinds should be 0..63 range (what we insert below)
                 assert!(kind >= 0 && kind < 64, "corrupt kind: {}", kind);
 
@@ -795,7 +777,7 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
 #[test]
 fn concurrent_traversal_during_grow() {
     let mut controller = new_controller(config(8));
-    let cp_addr = controller.get_controller_plane_address();
+    let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
     // Seed initial data
     let n1 = controller.insert_head(1).unwrap();
@@ -814,14 +796,13 @@ fn concurrent_traversal_during_grow() {
 
         while running_audio.load(std::sync::atomic::Ordering::Relaxed) {
             // Re-load pointer EVERY iteration — critical after grow()
-            let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
-            let reader = unsafe { &mut *reader_ptr };
+            let reader = unsafe { (*cp_ptr).acquire_graph() };
 
             reader.swap();
 
             let mut current = reader.get_head_node();
             while let Some(node) = current {
-                let _kind = node.get_kind();
+                let _kind: i32 = node.get_kind();
                 let next_ptr = node.get_next_ptr();
                 if next_ptr == 0 {
                     break;
@@ -869,7 +850,7 @@ fn concurrent_traversal_during_grow() {
 #[test]
 fn concurrent_attribute_reads_during_writes() {
     let controller = new_controller(config(16));
-    let cp_addr = controller.get_controller_plane_address();
+    let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
     // Create a node whose attributes we'll hammer
     let n1 = controller.insert_head(1).unwrap();
@@ -884,7 +865,7 @@ fn concurrent_attribute_reads_during_writes() {
         let mut iterations = 0u64;
 
         while running_audio.load(std::sync::atomic::Ordering::Relaxed) {
-            let reader_ptr = unsafe { (*cp_ptr).get_shared_graph_ptr() };
+            let reader_ptr: *const TestReader = unsafe { (*cp_ptr).acquire_graph() as *const _ };
             let reader = unsafe { &*reader_ptr };
 
             // Read all 16 attribute offsets — must never panic or return garbage

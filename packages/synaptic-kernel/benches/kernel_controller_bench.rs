@@ -123,7 +123,7 @@ fn bench_publish_swap_cycle(c: &mut Criterion) {
     c.bench_function("Kernel/publish_swap_cycle", |b| {
         b.iter_custom(|iters| {
             let mut controller = new_controller(config(64));
-            let cp_addr = controller.get_controller_plane_address();
+            let cp_addr = controller.get_control_plane() as *const _ as usize;
             let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
             // Seed data
@@ -184,7 +184,7 @@ fn bench_audio_traversal(c: &mut Criterion) {
             &chain_size,
             |b, &size| {
                 let mut controller = new_controller(config(size + 16));
-                let cp_addr = controller.get_controller_plane_address();
+                let cp_addr = controller.get_control_plane() as *const _ as usize;
                 let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
                 let mut prev = controller.insert_head(0).unwrap();
@@ -204,7 +204,7 @@ fn bench_audio_traversal(c: &mut Criterion) {
                     let mut count = 0u32;
                     while let Some(node) = current {
                         black_box(node.get_kind());
-                        let next = node.get_next_ptr();
+                        let next: usize = node.get_next_ptr();
                         if next == 0 {
                             break;
                         }
@@ -293,7 +293,7 @@ fn bench_grow_publish_swap(c: &mut Criterion) {
             let mut total = std::time::Duration::ZERO;
             for _ in 0..iters {
                 let mut controller = new_controller(config(32));
-                let cp_addr = controller.get_controller_plane_address();
+                let cp_addr = controller.get_control_plane() as *const _ as usize;
                 let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
                 let n1 = controller.insert_head(1).unwrap();
@@ -319,7 +319,7 @@ fn bench_grow_publish_swap(c: &mut Criterion) {
                 let mut current = reader.get_head_node();
                 while let Some(node) = current {
                     black_box(node.get_kind());
-                    let next = node.get_next_ptr();
+                    let next: usize = node.get_next_ptr();
                     if next == 0 {
                         break;
                     }
@@ -364,7 +364,7 @@ fn bench_full_mutation_cycle(c: &mut Criterion) {
     c.bench_function("Kernel/full_cycle_insert_connect_publish_swap", |b| {
         b.iter_custom(|iters| {
             let mut controller = new_controller(config(iters as usize * 2 + 16));
-            let cp_addr = controller.get_controller_plane_address();
+            let cp_addr = controller.get_control_plane() as *const _ as usize;
             let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
             let start = std::time::Instant::now();

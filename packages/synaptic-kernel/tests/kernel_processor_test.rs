@@ -19,36 +19,26 @@ fn config(capacity: usize) -> SynapticGraphConfig {
     }
 }
 
-fn setup(capacity: usize) -> (TestKernel, TestConsumer) {
-    let controller = Kernel::new(config(capacity));
-    let addr = controller.get_controller_plane_address();
-    let consumer = TestConsumer::bind(addr);
-    (controller, consumer)
+fn setup(capacity: usize) -> TestKernel {
+    Kernel::new(config(capacity))
+}
+
+fn get_consumer(controller: &TestKernel) -> TestConsumer {
+    TestConsumer::new(controller.get_control_plane())
 }
 
 // ============ Construction / Magic Validation ============
 
-#[test]
-fn bind_with_valid_address_succeeds() {
-    let controller = Kernel::<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>::new(config(8));
-    let addr = controller.get_controller_plane_address();
-    let _consumer = TestConsumer::bind(addr);
-}
 
-#[test]
-#[should_panic(expected = "invalid control_plane_address")]
-fn bind_with_invalid_address_panics() {
-    // Allocate zeroed memory — signature will be 0, not CONTROLLER_MAGIC
-    let fake_mem = vec![0u8; 64];
-    let addr = fake_mem.as_ptr() as usize;
-    let _consumer = TestConsumer::bind(addr);
-}
+
+
 
 // ============ acquire_graph basics ============
 
 #[test]
 fn acquire_graph_returns_reader() {
-    let (mut controller, mut consumer) = setup(8);
+    let mut controller = setup(8);
+    let mut consumer = get_consumer(&controller);
 
     controller.insert_head(42).unwrap();
     controller.publish();
@@ -61,7 +51,8 @@ fn acquire_graph_returns_reader() {
 
 #[test]
 fn acquire_graph_sees_published_mutations() {
-    let (mut controller, mut consumer) = setup(8);
+    let mut controller = setup(8);
+    let mut consumer = get_consumer(&controller);
 
     controller.insert_head(1).unwrap();
     controller.publish();
@@ -79,7 +70,8 @@ fn acquire_graph_sees_published_mutations() {
 
 #[test]
 fn acquire_graph_does_not_see_unpublished_mutations() {
-    let (mut controller, mut consumer) = setup(8);
+    let mut controller = setup(8);
+    let mut consumer = get_consumer(&controller);
 
     controller.insert_head(1).unwrap();
     controller.publish();
@@ -96,7 +88,8 @@ fn acquire_graph_does_not_see_unpublished_mutations() {
 
 #[test]
 fn acquire_graph_acks_previous_generation_enabling_drain() {
-    let (mut controller, mut consumer) = setup(4);
+    let mut controller = setup(4);
+    let mut consumer = get_consumer(&controller);
 
     controller.insert_head(1).unwrap();
 
@@ -119,7 +112,8 @@ fn acquire_graph_acks_previous_generation_enabling_drain() {
 
 #[test]
 fn multiple_grow_then_acquire_drains_all() {
-    let (mut controller, mut consumer) = setup(4);
+    let mut controller = setup(4);
+    let mut consumer = get_consumer(&controller);
 
     controller.insert_head(1).unwrap();
 
@@ -143,7 +137,8 @@ fn multiple_grow_then_acquire_drains_all() {
 
 #[test]
 fn publish_does_not_drain_without_acquire() {
-    let (mut controller, _consumer) = setup(4);
+    let mut controller = setup(4);
+    let  consumer = get_consumer(&controller);
 
     controller.insert_head(1).unwrap();
 
@@ -164,7 +159,8 @@ fn publish_does_not_drain_without_acquire() {
 
 #[test]
 fn full_traversal_nodes_and_synapses() {
-    let (mut controller, mut consumer) = setup(16);
+    let mut controller = setup(16);
+    let mut consumer = get_consumer(&controller);
 
     let n1 = controller.insert_head(10).unwrap();
     let n2 = controller.insert_after(n1, 20).unwrap();
@@ -179,8 +175,8 @@ fn full_traversal_nodes_and_synapses() {
     let mut kinds = vec![];
     let mut current = graph.get_head_node();
     while let Some(node) = current {
-        kinds.push(node.get_kind());
-        let next = node.get_next_ptr();
+        kinds.push(node.get_kind() as i32);
+        let next: usize = node.get_next_ptr();
         if next == 0 { break; }
         current = Some(graph.get_node(next));
     }
@@ -201,7 +197,8 @@ fn full_traversal_nodes_and_synapses() {
 
 #[test]
 fn consumer_sees_new_graph_after_grow() {
-    let (mut controller, mut consumer) = setup(4);
+    let mut controller = setup(4);
+    let mut consumer = get_consumer(&controller);
 
     controller.insert_head(1).unwrap();
     controller.publish();

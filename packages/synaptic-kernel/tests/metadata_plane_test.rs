@@ -115,7 +115,6 @@ fn tb_metadata_default_zero() {
 #[test]
 fn mem_metadata_visible_to_reader_without_publish() {
     let mut controller = TestKernel::new(config());
-    let cp_addr = controller.get_controller_plane_address();
 
     controller.mem_write_meta(0, 42);
     controller.mem_write_meta(1, 99);
@@ -124,7 +123,7 @@ fn mem_metadata_visible_to_reader_without_publish() {
     // so writes should be visible immediately (Relaxed atomics, same-thread)
     controller.publish();
 
-    let mut processor = TestProcessor::bind(cp_addr);
+    let processor = TestProcessor::new(controller.get_control_plane());
     let graph = processor.acquire_graph();
 
     assert_eq!(graph.mem_read_meta(0), 42);
@@ -134,10 +133,9 @@ fn mem_metadata_visible_to_reader_without_publish() {
 #[test]
 fn mem_metadata_update_between_reads() {
     let mut controller = TestKernel::new(config());
-    let cp_addr = controller.get_controller_plane_address();
     controller.publish();
 
-    let mut processor = TestProcessor::bind(cp_addr);
+    let processor = TestProcessor::new(controller.get_control_plane());
 
     // First read
     let graph = processor.acquire_graph();
@@ -156,13 +154,12 @@ fn mem_metadata_update_between_reads() {
 #[test]
 fn tb_metadata_visible_after_publish_and_swap() {
     let mut controller = TestKernel::new(config());
-    let cp_addr = controller.get_controller_plane_address();
 
     controller.tb_write_meta(0, 123);
     controller.tb_write_meta(3, 456);
     controller.publish();
 
-    let mut processor = TestProcessor::bind(cp_addr);
+    let processor = TestProcessor::new(controller.get_control_plane());
     let graph = processor.acquire_graph();
 
     assert_eq!(graph.tb_read_meta(0), 123);
@@ -172,12 +169,11 @@ fn tb_metadata_visible_after_publish_and_swap() {
 #[test]
 fn tb_metadata_not_visible_without_publish() {
     let mut controller = TestKernel::new(config());
-    let cp_addr = controller.get_controller_plane_address();
 
     // Initial publish to get clean state
     controller.publish();
 
-    let mut processor = TestProcessor::bind(cp_addr);
+    let processor = TestProcessor::new(controller.get_control_plane());
     let graph = processor.acquire_graph();
     assert_eq!(graph.tb_read_meta(0), 0);
 

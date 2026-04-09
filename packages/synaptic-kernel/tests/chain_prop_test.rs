@@ -84,7 +84,7 @@ fn verify_chain_integrity(chain: &NodeChainWriter<NODE_META>, active_slots: &[us
     loop {
         visited.push(current_slot);
         let node = chain.get_node(current_slot);
-        let next = node.get_next_ptr();
+        let next: usize = node.get_next_ptr();
 
         if next == 0 {
             break;
