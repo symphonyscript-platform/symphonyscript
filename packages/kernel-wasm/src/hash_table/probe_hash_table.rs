@@ -1,4 +1,4 @@
-use synaptic_kernel::errors::table_error::TableError;
+use crate::table_error::TableError;
 use kernel_wasm::hash_table::constants::TABLE_SLOT_SIZE;
 use kernel_wasm::hash_table::hash_table_trait::HashTable;
 use kernel_wasm::hash_table::table_slot::TableSlot;
