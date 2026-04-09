@@ -77,6 +77,18 @@ impl<
         }
     }
 
+    /// Returns a shared handle to the `ControlPlane` for constructing a `GraphConsumer` on
+    /// the consumer thread.
+    ///
+    /// The `Arc` is cross-thread transport mechanism, not a lifetime extension.
+    /// The `ControlPlane` has no independent lifecycle - it is logically owned by
+    /// this `Kernel`.
+    ///
+    /// # Safety Contract
+    /// The consumer thread **must** be fully quiesced before the `Kernel` is dropeed.
+    /// Dropping the kernel unconditionally frees the deferred-deletion queue.
+    /// If the consumer is still traversing a hot-swapped graph, the result is
+    /// undefined behavior.
     pub fn get_control_plane(
         &self,
     ) -> Arc<
@@ -282,7 +294,7 @@ impl<
         let new_reader = Box::new(new_writer.to_reader());
 
         self.active_writer = new_writer;
-        let old_reader = self.replace_reader(new_reader);
+        let old_reader = self.control_plane.swap_graph(new_reader);
         self.readers_pending_deletion.push_back(old_reader);
 
         Ok(())
@@ -296,32 +308,6 @@ impl<
     /// Intended exclusively for read-only telemetry and debugging.
     pub fn get_mem(&self) -> AtomicBuffer {
         Arc::clone(&self.mem)
-    }
-
-    fn replace_reader(
-        &self,
-        new_reader: Box<
-            SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
-            >,
-        >,
-    ) -> (
-        Box<
-            SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
-            >,
-        >,
-        i32,
-    ) {
-        let prev_gen = self.control_plane.inc_writer_generation();
-        let old_reader = self.control_plane.set_graph(new_reader);
-        (old_reader, prev_gen + 1)
     }
 
     fn create_mem(size: usize) -> AtomicBuffer {

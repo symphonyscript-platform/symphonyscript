@@ -5,34 +5,37 @@ use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 /// the active graph.
 ///
 /// Owns the current `Box<SynapticGraphReader>` and provides atomic access to it.
-///
-/// Acts as the sole source of truth for which graph instance the consumer thread should traverse.
-///
+
 /// Acts as the sole source of truth indicating which `SynapticGraphReader` instance the
 /// consumer thread should traverse. Orchestrates the safe delivery of the initial graph, as well
 /// as hot-swapping to new graph instances when the kernel reallocates due to `grow()`.
 ///
-/// Additionally, provides a stable, `#[repr(C)]` memory layout for exposing the kernel to FFI.
-///
 /// # Mechanism
 /// The kernel initializes this with a `Box<SynapticGraphReader>` via `new()`.
-/// When `grow()` occurs, the kernel calls `set_graph()` with the new reader.
-/// `set_graph()` atomically swaps the internal pointer
-/// and returns the old `Box<SynapticGraphReader>` for deferred deletion.
-/// The kernel stamps the old reader with the next generation, holds the (old_reader, gen)
-/// in a deletion queue until the consumer has acknowledged the new generation via `ack()`,
-/// ensuring the old memory is never freed while the consumer is still traversing it.
+/// When `grow()` occurs, the kernel calls `swap_graph()` with the new reader.
+/// `swap_graph()` atomically swaps the internal pointer, advances the writer generation,
+/// and returns the old `(old_reader, deletion_gen)` - the old reader paired with its
+/// generation stamp for deferred deletion.
+/// The kernel holds the pair in a deletion queue and frees it only once the consumer's
+/// acknowledged generation reaches the stamp.
+///
+/// On the consumer side, `acquire_graph()` acknowledges the current generation **before**
+/// loading the graph pointer, ensuring the consumer's ack never exceeds the generation
+/// of the graph it actually receives.
 ///
 /// # Threading
 /// Wait-free SPSC synchronization.
-/// - `set_graph()` / `get_graph()`: `Acquire`/`Release` on the internal `AtomicPtr`.
-/// - `inc_writer_generation()`: `Relaxed` (called only by producer thread).
+/// - `swap_graph()`: `AcqRel` on the `AtomicPtr` swap; `Relaxed` on the writer generation
+///   increment (producer-only, follows the `swap()`).
+/// - `acquire_graph()`: `Release` on the ack store; `Acquire` on the `AtomicPtr` load.
+///   The internal writer generation read uses `Relaxed`; A stale value yields a
+///   conservative (lower) ack, never premature freeing.
 /// - `get_reader_ack_generation()`: `Acquire` (synchronizes against
-///   consumer's `Release` in `ack()`).
+///   consumer's `Release` in `acquire_graph()`).
 ///
 /// # Constraints
-/// - `get_graph()` / `ack()`: Consumer thread only.
-/// - `set_graph()` / `inc_writer_generation()`: Producer thread only.
+/// - `acquire_graph()`: Consumer thread only.
+/// - `swap_graph()`: Producer thread only.
 /// - `get_reader_ack_generation()`: Producer thread only (Reads consumer's ack).
 #[repr(C)]
 pub struct ControlPlane<
@@ -77,7 +80,7 @@ impl<
         }
     }
 
-    pub fn get_graph(
+    pub fn acquire_graph(
         &self,
     ) -> &SynapticGraphReader<
         NODE_META_SIZE,
@@ -85,6 +88,8 @@ impl<
         SYNAPSE_META_SIZE,
         SYNAPSE_ATTRIBUTES_SIZE,
     > {
+        self.ack();
+
         let graph_ptr = self.shared_graph_ptr.load(Ordering::Acquire);
 
         // SAFETY: The point    er is always valid, because it's managed by Kernel's Box lifecycle
@@ -92,9 +97,9 @@ impl<
         unsafe { &*graph_ptr }
     }
 
-    pub fn set_graph(
+    pub fn swap_graph(
         &self,
-        synaptic_graph_reader: Box<
+        new_graph: Box<
             SynapticGraphReader<
                 NODE_META_SIZE,
                 NODE_ATTRIBUTES_SIZE,
@@ -102,38 +107,67 @@ impl<
                 SYNAPSE_ATTRIBUTES_SIZE,
             >,
         >,
-    ) -> Box<
-        SynapticGraphReader<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+    ) -> (
+        Box<
+            SynapticGraphReader<
+                NODE_META_SIZE,
+                NODE_ATTRIBUTES_SIZE,
+                SYNAPSE_META_SIZE,
+                SYNAPSE_ATTRIBUTES_SIZE,
+            >,
         >,
-    > {
-        let new_graph_ptr = Box::into_raw(synaptic_graph_reader);
+        i32,
+    ) {
+        let new_graph_ptr = Box::into_raw(new_graph);
         let old_graph_ptr = self.shared_graph_ptr.swap(new_graph_ptr, Ordering::AcqRel);
+        let prev_gen = self.inc_writer_generation();
 
         // SAFETY: old_graph_ptr was originally created by Box::into_raw() in a prior
-        // set_graph() or ControlPlane::new(). The atomic swap guarantees exclusive access -
-        // no other thread holds this pointer after the swap().
-        unsafe { Box::from_raw(old_graph_ptr) }
+        // swap_graph() or ControlPlane::new(). The atomic swap guarantees exclusive access -
+        // no other thread holds this graph after the swap().
+        let old_graph = unsafe { Box::from_raw(old_graph_ptr) };
+
+        (old_graph, prev_gen + 1)
     }
 
     pub fn get_writer_generation(&self) -> i32 {
         self.writer_generation.load(Ordering::Relaxed)
     }
 
-    pub fn inc_writer_generation(&self) -> i32 {
-        self.writer_generation.fetch_add(1, Ordering::Relaxed)
-    }
-
     pub fn get_reader_ack_generation(&self) -> i32 {
         self.reader_ack_generation.load(Ordering::Acquire)
     }
 
-    pub fn ack(&self) {
+    fn inc_writer_generation(&self) -> i32 {
+        self.writer_generation.fetch_add(1, Ordering::Relaxed)
+    }
+
+    fn ack(&self) {
         let writer_generation = self.get_writer_generation();
         self.reader_ack_generation
             .store(writer_generation - 1, Ordering::Release)
+    }
+}
+
+impl<
+    const NODE_META_SIZE: usize,
+    const NODE_ATTRIBUTES_SIZE: usize,
+    const SYNAPSE_META_SIZE: usize,
+    const SYNAPSE_ATTRIBUTES_SIZE: usize,
+> Drop
+    for ControlPlane<
+        NODE_META_SIZE,
+        NODE_ATTRIBUTES_SIZE,
+        SYNAPSE_META_SIZE,
+        SYNAPSE_ATTRIBUTES_SIZE,
+    >
+{
+    fn drop(&mut self) {
+        // SAFETY: The pointer was created by Box::into_raw() in a prior
+        // swap_graph() or ControlPlane::new(). `&mut self` guarantees exclusive access.
+        // No concurrent load is possible.
+        unsafe {
+            drop(Box::from_raw(self.shared_graph_ptr.load(Ordering::Relaxed)));
+        }
     }
 }

@@ -66,10 +66,9 @@ impl<
         SYNAPSE_META_SIZE,
         SYNAPSE_ATTRIBUTES_SIZE,
     > {
-        let graph = self.control_plane.get_graph();
+        let graph = self.control_plane.acquire_graph();
 
         graph.swap();
-        self.control_plane.ack();
 
         graph
     }
