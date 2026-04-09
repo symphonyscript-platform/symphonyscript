@@ -25,6 +25,32 @@ use std::sync::Arc;
 /// # Threading
 /// Producer thread only.
 ///
+/// # MEM Memory Layout (direct plane)
+/// Segments are packed sequentially in a single AtomicBuffer
+///
+/// ```text
+/// Order       Segment                     Size
+/// -------------------------------------------------------------------------------------------
+/// 1           Headers                     HEADERS_SIZE (2)
+/// 2           Mem Metadata                MemMetadataWriter::calculate_size_on_mem()
+/// 3           Node Attributes             AttributePlaneWriter::<NA>::calculate_size_on_mem()
+/// 4           Synapse Attributes          AttributePlaneWriter::<SA>::calculate_size_on_mem()
+/// 5           Triple Buffer               TripleBufferWriter::calculate_size_on_mem()
+/// 6           Node Slot Allocator         NodeChainWriter::calculate_size_on_mem()
+/// 7           Synapse Slot Allocator      SynapseChainWriter::calculate_size_on_mem()
+/// ```
+///
+/// # TB Memory Layout (triple-buffered plane)
+/// Segments are packed sequentially within the TripleBufferWriter.
+///
+/// ```text
+/// Order       Segment             Size
+/// -------------------------------------------------------------------------------------------
+/// 1           Tb Metadata         TbMetadataWriter::calculate_size_on_tb()
+/// 2           Node Chain          NodeChainWriter::calculate_size_on_tb()
+/// 3           Synapse Chain       SynapseChainWriter::calculate_size_on_tb()
+/// ```
+///
 /// # Deployment
 /// 1. Structural updates (e.g. `add_node`, `connect`) and tb_metadata are written to the active
 ///    triple-buffer segment.
