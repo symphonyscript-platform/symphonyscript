@@ -79,13 +79,15 @@ impl<
 
     pub fn get_control_plane(
         &self,
-    ) -> &ControlPlane<
-        NODE_META_SIZE,
-        NODE_ATTRIBUTES_SIZE,
-        SYNAPSE_META_SIZE,
-        SYNAPSE_ATTRIBUTES_SIZE,
+    ) -> Arc<
+        &ControlPlane<
+            NODE_META_SIZE,
+            NODE_ATTRIBUTES_SIZE,
+            SYNAPSE_META_SIZE,
+            SYNAPSE_ATTRIBUTES_SIZE,
+        >,
     > {
-        &self.control_plane
+        Arc::new(&self.control_plane)
     }
 
     pub fn mem_metadata_capacity(&self) -> usize {
