@@ -45,7 +45,7 @@ use std::sync::Arc;
 ///
 /// ```text
 /// Order       Segment             Size
-/// -------------------------------------------------------------------------------------------
+/// --------------------------------------------------------------------------
 /// 1           Tb Metadata         TbMetadataWriter::calculate_size_on_tb()
 /// 2           Node Chain          NodeChainWriter::calculate_size_on_tb()
 /// 3           Synapse Chain       SynapseChainWriter::calculate_size_on_tb()
