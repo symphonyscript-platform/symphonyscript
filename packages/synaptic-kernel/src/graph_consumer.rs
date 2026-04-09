@@ -22,7 +22,7 @@ use std::sync::Arc;
 /// The returned reference is valid for the entire cycle - no re-acquisition needed.
 ///
 /// # Constraints
-/// - Created by passing `&ControlPlane` to `new()`.
+/// - Created by passing `Arc<ControlPlane>` to `new()`.
 pub struct GraphConsumer<
     const NODE_META_SIZE: usize,
     const NODE_ATTRIBUTES_SIZE: usize,
