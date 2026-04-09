@@ -1,7 +1,7 @@
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 
-/// Bit-packed boolean array backed by a shared `AtomicBUffer`.
+/// Bit-packed boolean array backed by a shared `AtomicBuffer`.
 ///
 /// Packs 32 flags per `i32` word. Uses bitwise shifts and masks for (1) access
 /// to individual bits.

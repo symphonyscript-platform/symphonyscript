@@ -13,7 +13,7 @@ use std::sync::atomic::Ordering;
 /// against the writer's `Acquire` read in `StagingBufferWriter::drain()`.
 ///
 /// # Memory Layout
-/// Shares the same backing region as `StagingBuffer`. See its layout.
+/// Shares the same backing region as `StagingBufferWriter`. See its layout.
 ///
 /// # Constraints
 /// - Created exclusively via `StagingBufferWriter::to_reader()`.
