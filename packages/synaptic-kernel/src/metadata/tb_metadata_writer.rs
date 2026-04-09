@@ -14,13 +14,13 @@ use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 /// ```text
 /// Offset      Size        Field
 /// -------------------------------------
-/// 0           N           slots
+/// 0           N           metadat_region
 ///
 /// N = capacity (power of 2)
 /// ```
 ///
 /// # Constraints
-/// - 1-based slot indexing.
+/// - 0-based offset indexing.
 /// - Use `to_reader()` to create the paired `TbMetadataReader`.
 #[derive(Clone)]
 pub struct TbMetadataWriter {

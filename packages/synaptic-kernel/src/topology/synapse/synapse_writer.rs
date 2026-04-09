@@ -13,11 +13,11 @@ use crate::topology::slot_writer::SlotWriter;
 /// # Core Layout (8x i32)
 /// - `0`: `kind` (shifted by 24 bits) combined with internal flags (lower 24 bits).
 /// - `1`: `source_ptr`
-/// - `2`: `target_ptr
+/// - `2`: `target_ptr`
 /// - `3`: `outgoing_next_ptr`
 /// - `4`: `outgoing_prev_ptr`
 /// - `5`: `incoming_next_ptr`
-/// - `6`: `incoming_prev-ptr`
+/// - `6`: `incoming_prev_ptr`
 /// - `7`: (Reserved for future use)
 ///
 /// Followed by `META_SIZE` `i32` slots for custom topology metadata.

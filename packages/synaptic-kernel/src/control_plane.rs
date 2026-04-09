@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 /// # Mechanism
 /// The host initializes this with a valid graph pointer. When `grow()` occurs, the host stores
 /// the new pointer and increments `writer_generation`. The consumer thread detects this change,
-/// adopts the new points, and writes back to `reader_ack_generation`.
+/// adopts the new pointer, and writes back to `reader_ack_generation`.
 /// This cyclic acknowledgement ensures the writer never drops the old memory while the consumer
 /// is still traversing it.
 ///

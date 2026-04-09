@@ -16,13 +16,13 @@ use std::sync::Arc;
 /// ```text
 /// Offset      Size        Field
 /// -------------------------------------
-/// 0           N           slots
+/// 0           N           metadat_region
 ///
 /// N = capacity (power of 2)
 /// ```
 ///
 /// # Constraints
-/// - 1-based slot indexing.
+/// - 0-based offset indexing.
 /// - Use `to_reader()` to create the paired `MemMetadataReader`.
 #[derive(Clone)]
 pub struct MemMetadataWriter {

@@ -3,8 +3,8 @@ use std::sync::atomic::Ordering;
 
 /// Reader side view into a single, fixed-size attribute block on a shared `AtomicBuffer`.
 ///
-/// Provides 0-based read and write access to `SLOT__SIZE` elements for
-/// a specific slot, backing an `AttributePlaneWriter`.
+/// Provides 0-based read-only access to `SLOT__SIZE` elements for
+/// a specific slot, backing an `AttributePlaneReader`.
 ///
 /// # Threading
 /// Consumer thread only. All atomic operations use `Relaxed` ordering.

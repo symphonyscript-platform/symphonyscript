@@ -12,7 +12,7 @@ use std::sync::Arc;
 /// Writer side triple-buffered multi-linked list for graph synapses.
 ///
 /// Orchestrates allocation, lifecycle, and structural linkage of synapses.
-/// Every active synaps maintains two separate doubly-linked lists concurrently:
+/// Every active synapse maintains two separate doubly-linked lists concurrently:
 /// One anchoring it to the source node's `outgoing` list, and another to
 /// the target node's `incoming` list.
 ///
@@ -23,10 +23,9 @@ use std::sync::Arc;
 ///
 /// # Memory Layout (Triple Buffer Plane)
 /// ```text
-/// Offset          Size        Field
+/// Offset      Size        Field
 /// -------------------------------------
-/// 0               1           head_slot
-/// N * (S + M)     S + M       synapses
+/// 0           N*(S+M)     synapses
 ///
 /// N = capacity
 /// S = SYNAPSE_SIZE (8)

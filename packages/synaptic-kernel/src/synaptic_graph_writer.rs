@@ -30,7 +30,7 @@ use std::sync::Arc;
 ///    triple-buffer segment.
 /// 2. Non-structural updates (e.g. node/synapse attributes) and mem_metadata are written
 ///    directly to `mem` (direct) plane, making such writes immediately visible to the consumer.
-///3. `publish()` flushes deferred frees and performs triple-buffer swap, exposing the new state
+/// 3. `publish()` flushes deferred frees and performs triple-buffer swap, exposing the new state
 ///   to the consumer.
 ///
 /// # Traits

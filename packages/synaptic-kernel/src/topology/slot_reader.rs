@@ -5,7 +5,7 @@ use crate::primitives::triple_buffer_reader::TripleBufferReader;
 /// Provides safe, offset-based read-only access to a specific `[i32; SLOT_SIZE]` sequence.
 ///
 /// # Threading
-/// Consumer thread only. Delegates back to the underlying `TripleBufferWriter`.
+/// Consumer thread only. Delegates back to the underlying `TripleBufferReader`.
 ///
 /// # Encapsulation
 /// - Read-only: structural mutation is strictly prohibited on the reading plane.

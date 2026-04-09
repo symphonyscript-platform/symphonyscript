@@ -9,7 +9,7 @@ use crate::topology::node::node_reader::NodeReader;
 use crate::topology::synapse::synapse_chain_reader::SynapseChainReader;
 use crate::topology::synapse::synapse_reader::SynapseReader;
 
-/// Writer side graph and topology orchestrator.
+/// Reader side graph and topology orchestrator.
 ///
 /// Provides the unified API for traversing the lock-free and wait-free graph
 /// topology and attributes.

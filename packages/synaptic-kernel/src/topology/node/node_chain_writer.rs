@@ -19,10 +19,10 @@ use std::sync::Arc;
 ///
 /// # Memory Layout (Triple Buffer Plane)
 /// ```text
-/// Offset          Size        Field
+/// Offset      Size        Field
 /// -------------------------------------
-/// 0               1           head_slot
-/// N * (S + M)     S + M       nodes
+/// 0           1           head_slot
+/// 1           N*(S+M)     nodes
 ///
 /// N = capacity
 /// S = NODE_SIZE (8)
@@ -32,7 +32,7 @@ use std::sync::Arc;
 /// # Constraints
 /// - Slots are 1-based. 0 indicates an undefined state.
 /// - Built-in lifecycle safety: `remove()` marks the slot for deferred freeing,
-///   preventing reallocation until the consumer has advanced pas the pending `publish()`.
+///   preventing reallocation until the consumer has advanced past the pending `publish()`.
 /// - Use `to_reader()` to create the paired `NodeChainReader`.
 #[derive(Clone)]
 pub struct NodeChainWriter<const META_SIZE: usize> {

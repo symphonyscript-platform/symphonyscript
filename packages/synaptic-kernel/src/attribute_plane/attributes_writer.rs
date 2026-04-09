@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 
 /// Writer side view into a single, fixed-size attribute block on a shared `AtomicBuffer`.
 ///
-/// Provides 0-based read and write access to `SLOT__SIZE` elements for
+/// Provides 0-based read and write access to `SLOT_SIZE` elements for
 /// a specific slot, backing an `AttributePlaneWriter`.
 ///
 /// # Threading

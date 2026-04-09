@@ -5,7 +5,7 @@ use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-/// Writers side of flat attribute storage backed by a shared `AtomicBuffer`.
+/// Writer side of flat attribute storage backed by a shared `AtomicBuffer`.
 ///
 /// Each slot holds a fixed `[i32; SLOT_SIZE]` attribute block.
 /// Slots are 1-based (indexed same as the `SlotAllocator`).
