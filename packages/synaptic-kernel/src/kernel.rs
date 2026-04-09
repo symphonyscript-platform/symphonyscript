@@ -281,13 +281,13 @@ impl<
             return Err(KernelError::InsufficientCapacity);
         }
 
-        let mem = Self::create_mem(SynapticGraphWriter::<
+        self.mem = Self::create_mem(SynapticGraphWriter::<
             NODE_META_SIZE,
             NODE_ATTRIBUTES_SIZE,
             SYNAPSE_META_SIZE,
             SYNAPSE_ATTRIBUTES_SIZE,
         >::calculate_size_on_mem(&config));
-        let new_writer = SynapticGraphWriter::new(Arc::clone(&mem), config);
+        let new_writer = SynapticGraphWriter::new(Arc::clone(&self.mem), config);
 
         new_writer.copy_from(&self.active_writer);
 
