@@ -1,3 +1,0 @@
-NodeChainWriter / NodeChainReader
-
-SynapseChainWriter / SynapseChainReader

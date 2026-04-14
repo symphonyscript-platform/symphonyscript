@@ -12,6 +12,7 @@ pub mod kernel;
 pub mod synaptic_graph_config;
 pub mod control_plane;
 pub mod metadata;
+pub mod serialized_kernel;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right

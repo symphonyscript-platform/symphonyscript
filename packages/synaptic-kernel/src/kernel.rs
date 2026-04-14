@@ -4,13 +4,14 @@ use crate::errors::kernel_error::KernelError;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::into_array::IntoArray;
 use crate::primitives::types::AtomicBuffer;
+use crate::serialized_kernel::SerializedKernel;
 use crate::synaptic_graph_config::SynapticGraphConfig;
 use crate::synaptic_graph_reader::SynapticGraphReader;
 use crate::synaptic_graph_writer::SynapticGraphWriter;
 use crate::topology::node::node_writer::NodeWriter;
 use crate::topology::synapse::synapse_writer::SynapseWriter;
 use std::collections::VecDeque;
-use std::sync::atomic::AtomicI32;
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
 
 pub struct Kernel<
@@ -19,6 +20,7 @@ pub struct Kernel<
     const SYNAPSE_META_SIZE: usize,
     const SYNAPSE_ATTRIBUTES_SIZE: usize,
 > {
+    config: SynapticGraphConfig,
     mem: AtomicBuffer,
     control_plane: Arc<
         ControlPlane<
@@ -65,15 +67,49 @@ impl<
     }
 
     pub fn new_from_mem(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
-        let writer = SynapticGraphWriter::new(Arc::clone(&mem), config);
+        let writer = SynapticGraphWriter::new(Arc::clone(&mem), config.clone());
         let reader = Box::new(writer.to_reader());
         let control_plane = Arc::new(ControlPlane::new(reader));
 
         Kernel {
+            config,
             mem,
             control_plane,
             active_writer: writer,
             readers_pending_deletion: VecDeque::new(),
+        }
+    }
+
+    pub fn load_serialized(serialized_kernel: SerializedKernel) -> Self {
+        let config = serialized_kernel.config;
+        let mem: AtomicBuffer = Arc::new(
+            serialized_kernel
+                .mem
+                .into_iter()
+                .map(AtomicI32::new)
+                .collect(),
+        );
+        let writer = SynapticGraphWriter::bind(Arc::clone(&mem), config.clone());
+        let reader = Box::new(writer.to_reader());
+        let control_plane = Arc::new(ControlPlane::new(reader));
+
+        Kernel {
+            config,
+            mem,
+            control_plane,
+            active_writer: writer,
+            readers_pending_deletion: VecDeque::new(),
+        }
+    }
+
+    pub fn serialize(&mut self) -> SerializedKernel {
+        self.publish();
+
+        let mem = self.mem.iter().map(|a| a.load(Ordering::Relaxed)).collect();
+
+        SerializedKernel {
+            config: self.config.clone(),
+            mem,
         }
     }
 
@@ -287,12 +323,13 @@ impl<
             SYNAPSE_META_SIZE,
             SYNAPSE_ATTRIBUTES_SIZE,
         >::calculate_size_on_mem(&config));
-        let new_writer = SynapticGraphWriter::new(Arc::clone(&self.mem), config);
+        let new_writer = SynapticGraphWriter::new(Arc::clone(&self.mem), config.clone());
 
         new_writer.copy_from(&self.active_writer);
 
         let new_reader = Box::new(new_writer.to_reader());
 
+        self.config = config;
         self.active_writer = new_writer;
         let old_reader = self.control_plane.swap_graph(new_reader);
         self.readers_pending_deletion.push_back(old_reader);
