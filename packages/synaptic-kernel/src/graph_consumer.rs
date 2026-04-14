@@ -59,8 +59,22 @@ impl<
         GraphConsumer { control_plane }
     }
 
+    /// Acquires the current graph for this processing cycle.
+    ///
+    /// Acknowledges the current generation, loads the graph pointer, and
+    /// consumes any pending triple-buffer updates - returning ready-to-read
+    /// `SynapticGraphReader`.
+    ///
+    /// Takes `&mut self` to guarantee at most one live graph reference at a time.
+    /// The compiler ensures the previous reference is dropped before the next
+    /// acquisition, so the generation acknowledgement always reflects
+    /// the consumer's actual state.
+    ///
+    /// # Usage
+    /// Call once at the start of each processing cycle. The returned reference
+    /// is valid until the next `acquire_graph()` call.
     pub fn acquire_graph(
-        &self,
+        &mut self,
     ) -> &SynapticGraphReader<
         NODE_META_SIZE,
         NODE_ATTRIBUTES_SIZE,

@@ -57,7 +57,7 @@ impl<'a> Iterator for StagingBufferWriterIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         match self.buffer.peek() {
             Some([data, generation]) => {
-                if generation as usize > self.ack_generation {
+                if (generation as usize).wrapping_sub(self.ack_generation) > 0 {
                     return None;
                 }
 

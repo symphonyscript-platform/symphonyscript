@@ -333,7 +333,7 @@ impl<
         let ack = self.control_plane.get_reader_ack_generation();
 
         while let Some((_, generation)) = self.readers_pending_deletion.front() {
-            if *generation > ack {
+            if (*generation).wrapping_sub(ack) > 0 {
                 break;
             }
 
