@@ -14,6 +14,41 @@ use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
 
+/// Producer-side entry point to the synaptic graph.
+///
+/// Owns the graph memory, the active graph writer, the control plane, and the
+/// deferred-deletion queue.
+/// Provides a unified API for building and mutating a lock-free, wait-free SPSC
+/// graph topology.
+///
+/// # Threading
+/// Producer thread only. The consumer accesses the graph exclusively through
+/// a [`GraphConsumer`] obtained via [`get_control_plane()`].
+///
+/// # Lifecycle
+/// 1. Create via [`new()`] or restore via [`load_serialized()`].
+/// 2. Mutate: insert/remove nodes, connect/disconnect synapses, write attributes.
+/// 3. Call [`publish()`] to deploy structural changes to the consumer and reclaim
+///    generation-acknowledged deferred deletions.
+/// 4. Call [`grow()`] when utilization exceeds the target threshold.
+///    This allocates a new, larger backing buffer, migrates all state, and
+///    hot-swaps the consumer's graph via the [`ControlPlane`].
+/// 5. Call [`serialize()`] to a snapshot for persistence.
+///
+/// # Memory Model
+/// - **Structural Changes** (nodes, synapses, topology metadata) are written to the
+///   triple-buffered plane and become visible to the consumer after [`publish()`].
+/// - **Attributes** (node and synapse) and **mem metadata** are written to the direct
+///   plane and are visible to the consumer immediately.
+/// - **Deferred deletions** (removed nodes, disconnected synapses) are staged in a
+///   generation-gated buffer and reclaimed during [`publish()`] once the consumer has
+///   acknowledged the relevant generation.
+///
+/// # Safety Contract
+/// The consumer thread **must** be fully quiesced before the `Kernel` is dropped.
+/// Dropping the kernel unconditionally frees the deferred-deletion queue and the backing
+/// memory. If the consumer is still traversing a hot-swapped graph, the result
+/// is undefined behavior.
 pub struct Kernel<
     const NODE_META_SIZE: usize,
     const NODE_ATTRIBUTES_SIZE: usize,
