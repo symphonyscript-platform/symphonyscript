@@ -7,9 +7,8 @@ use std::sync::Arc;
 ///
 /// Three buffers rotate between producer, consumer and shared handoff.
 /// The producer writes into a private buffer, then calls `publish()` to
-/// atomically hand it off. AFter publish, the producer receives a stale buffer back and syncs
-/// it via `copy_nonoverlapping` - safe because the `AcqRel` fence guarantees exclusive
-/// ownership of the recycled buffer.
+/// atomically hand it off. After publish, the producer receives a stale buffer back and syncs
+/// it from the published buffer via element-wise atomic copies.
 ///
 /// # Threading
 /// Producer thread only. `publish()` uses `AcqRel` on the state swap:
@@ -178,14 +177,12 @@ impl TripleBufferWriter {
 
         let published_buffer_index = self.buffer_bases[published_index];
         let writer_buffer_index = self.buffer_bases[writer_index];
-        let source_ptr = self.mem[published_buffer_index..].as_ptr() as *const i32;
-        let destination_ptr = self.mem[writer_buffer_index..].as_ptr() as *mut i32;
 
-        // SAFE: The producer has exclusive ownership of the stale buffer after the swap,
-        // and the bounds are validated upon instantiation.
-        //
-        unsafe {
-            std::ptr::copy_nonoverlapping(source_ptr, destination_ptr, self.buffer_capacity);
+        for i in 0..self.buffer_capacity {
+            self.mem[writer_buffer_index + i].store(
+                self.mem[published_buffer_index + i].load(Ordering::Relaxed),
+                Ordering::Relaxed,
+            );
         }
     }
 
