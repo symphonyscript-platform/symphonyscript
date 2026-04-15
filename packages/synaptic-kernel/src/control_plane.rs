@@ -79,7 +79,7 @@ impl<
         }
     }
 
-    pub fn acquire_graph(
+    pub(crate) fn acquire_graph(
         &self,
     ) -> &SynapticGraphReader<
         NODE_META_SIZE,
