@@ -1,9 +1,5 @@
-pub const CONTROLLER_MAGIC: u32 = 0x53594752;
-pub const GRAPH_MAGIC: i32 = 0x53594354;
-pub const KERNEL_VERSION: i32 = 0x01;
-
 pub const NODE_META_SIZE: usize = 8;
-pub const NODE_ATTRIBUTES_SIZE: usize = 8;
+pub const NODE_ATTRIBUTES_SIZE: usize = 16;
 
 pub const NODE_KIND_NOTE: i32 = 0x01;
 pub const NODE_KIND_REST: i32 = 0x02;
@@ -18,3 +14,10 @@ pub const SYNAPSE_ATTRIBUTES_SIZE: usize = 16;
 
 pub const SYNAPSE_KIND_SEQUENTIAL: i32 = 0x01;
 pub const SYNAPSE_KIND_PARALLEL: i32 = 0x02;
+
+pub const SYNAPSE_ATTR_WEIGHT: usize = 0;
+pub const SYNAPSE_ATTR_TICK_OFFSET: usize = 1;
+pub const SYNAPSE_ATTR_TRANSPOSITION: usize = 2;
+pub const SYNAPSE_ATTR_VOLUME_SCALE: usize = 3;
+pub const SYNAPSE_ATTR_DURATION_SCALE: usize = 4;
+pub const SYNAPSE_ATTR_TEMPO_SCALE: usize = 5;

@@ -177,7 +177,7 @@ fn disconnect_only_synapse_clears_node_pointers() {
     let tgt = node_chain.insert_head(2).unwrap();
     let syn = synapse_chain.connect(src, tgt, 10).unwrap();
 
-    synapse_chain.disconnect(syn).unwrap();
+    synapse_chain.disconnect_synapse(syn).unwrap();
 
     // source's outgoing chain completely empty
     let src_node = node_chain.get_node(src);
@@ -206,7 +206,7 @@ fn disconnect_head_of_outgoing_chain() {
     let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();
     // src outgoing: s1 -> s2
 
-    synapse_chain.disconnect(s1).unwrap();
+    synapse_chain.disconnect_synapse(s1).unwrap();
     // src outgoing: s2
 
     let src_node = node_chain.get_node(src);
@@ -234,7 +234,7 @@ fn disconnect_tail_of_outgoing_chain() {
     let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();
     // src outgoing: s1 -> s2
 
-    synapse_chain.disconnect(s2).unwrap();
+    synapse_chain.disconnect_synapse(s2).unwrap();
     // src outgoing: s1
 
     let src_node = node_chain.get_node(src);
@@ -264,7 +264,7 @@ fn disconnect_middle_of_outgoing_chain() {
     let s3 = synapse_chain.connect(src, tgt3, 30).unwrap();
     // src outgoing: s1 -> s2 -> s3
 
-    synapse_chain.disconnect(s2).unwrap();
+    synapse_chain.disconnect_synapse(s2).unwrap();
     // src outgoing: s1 -> s3
 
     let src_node = node_chain.get_node(src);
@@ -290,7 +290,7 @@ fn disconnect_heals_incoming_chain() {
     let s3 = synapse_chain.connect(src3, tgt, 30).unwrap();
     // tgt incoming: s1 -> s2 -> s3
 
-    synapse_chain.disconnect(s2).unwrap();
+    synapse_chain.disconnect_synapse(s2).unwrap();
     // tgt incoming: s1 -> s3
 
     let tgt_node = node_chain.get_node(tgt);
@@ -321,7 +321,7 @@ fn disconnect_heals_both_chains_independently() {
     // tgt1 incoming: s1 -> s3
 
     // Disconnect s1: must heal BOTH src's outgoing chain AND tgt1's incoming chain
-    synapse_chain.disconnect(s1).unwrap();
+    synapse_chain.disconnect_synapse(s1).unwrap();
 
     // src outgoing: s2 (head and tail)
     let src_node = node_chain.get_node(src);
@@ -346,7 +346,7 @@ fn double_disconnect_returns_error() {
     let tgt = node_chain.insert_head(2).unwrap();
     let syn = synapse_chain.connect(src, tgt, 10).unwrap();
 
-    synapse_chain.disconnect(syn).unwrap();
+    synapse_chain.disconnect_synapse(syn).unwrap();
     /* commented err check */
 }
 
@@ -366,7 +366,7 @@ fn full_connect_disconnect_reconnect_cycle() {
     assert_eq!(node_chain.get_node(src).get_outgoing_synapse_head(), s1);
 
     // disconnect
-    synapse_chain.disconnect(s1).unwrap();
+    synapse_chain.disconnect_synapse(s1).unwrap();
     assert_eq!(node_chain.get_node(src).get_outgoing_synapse_head(), 0);
     assert_eq!(node_chain.get_node(tgt).get_incoming_synapse_head(), 0);
 
@@ -414,7 +414,7 @@ fn disconnect_self_loop_clears_both_chains() {
 
     let n = node_chain.insert_head(1).unwrap();
     let syn = synapse_chain.connect(n, n, 99).unwrap();
-    synapse_chain.disconnect(syn).unwrap();
+    synapse_chain.disconnect_synapse(syn).unwrap();
 
     let node_view = node_chain.get_node(n);
     assert_eq!(node_view.get_outgoing_synapse_head(), 0);
@@ -468,7 +468,7 @@ fn disconnect_head_of_incoming_chain() {
     let s3 = synapse_chain.connect(src3, tgt, 30).unwrap();
     // tgt incoming: s1 -> s2 -> s3
 
-    synapse_chain.disconnect(s1).unwrap();
+    synapse_chain.disconnect_synapse(s1).unwrap();
     // tgt incoming: s2 -> s3
 
     let tgt_node = node_chain.get_node(tgt);
@@ -503,7 +503,7 @@ fn disconnect_tail_of_incoming_chain() {
     let s3 = synapse_chain.connect(src3, tgt, 30).unwrap();
     // tgt incoming: s1 -> s2 -> s3
 
-    synapse_chain.disconnect(s3).unwrap();
+    synapse_chain.disconnect_synapse(s3).unwrap();
     // tgt incoming: s1 -> s2
 
     let tgt_node = node_chain.get_node(tgt);
@@ -605,7 +605,7 @@ fn disconnect_outgoing_does_not_affect_incoming() {
     let s_bc = synapse_chain.connect(b, c, 20).unwrap(); // B->C
 
     // disconnect B's outgoing (B->C)
-    synapse_chain.disconnect(s_bc).unwrap();
+    synapse_chain.disconnect_synapse(s_bc).unwrap();
 
     // B's outgoing should be empty
     let b_node = node_chain.get_node(b);
@@ -634,7 +634,7 @@ fn disconnect_incoming_does_not_affect_outgoing() {
     let s_bc = synapse_chain.connect(b, c, 20).unwrap(); // B->C
 
     // disconnect B's incoming (A->B)
-    synapse_chain.disconnect(s_ab).unwrap();
+    synapse_chain.disconnect_synapse(s_ab).unwrap();
 
     // B's incoming should be empty
     let b_node = node_chain.get_node(b);
@@ -666,7 +666,7 @@ fn triangle_topology_disconnect_one_edge() {
     // C incoming: s_ac -> s_bc
 
     // disconnect A->B
-    synapse_chain.disconnect(s_ab).unwrap();
+    synapse_chain.disconnect_synapse(s_ab).unwrap();
 
     // A outgoing: s_ac only
     assert_eq!(node_chain.get_node(a).get_outgoing_synapse_head(), s_ac);
@@ -730,9 +730,9 @@ fn disconnect_all_synapses_leaves_node_clean() {
     let s3 = synapse_chain.connect(c, a, 30).unwrap();
 
     // disconnect all synapses touching A
-    synapse_chain.disconnect(s1).unwrap();
-    synapse_chain.disconnect(s2).unwrap();
-    synapse_chain.disconnect(s3).unwrap();
+    synapse_chain.disconnect_synapse(s1).unwrap();
+    synapse_chain.disconnect_synapse(s2).unwrap();
+    synapse_chain.disconnect_synapse(s3).unwrap();
 
     // A must be completely clean
     let a_node = node_chain.get_node(a);
@@ -766,7 +766,7 @@ fn two_self_loops_on_same_node() {
     // incoming links
 
     // disconnect first self-loop
-    synapse_chain.disconnect(s1).unwrap();
+    synapse_chain.disconnect_synapse(s1).unwrap();
 
     let nv = node_chain.get_node(n);
     assert_eq!(nv.get_outgoing_synapse_head(), s2);
@@ -786,7 +786,7 @@ fn copy_from_preserves_topology_and_deep_data() {
     let s1 = src_h.synapse_chain.connect(n1, n2, 10).unwrap();
     let s2 = src_h.synapse_chain.connect(n2, n1, 20).unwrap();
 
-    src_h.synapse_chain.disconnect(s2).unwrap(); // defer s2
+    src_h.synapse_chain.disconnect_synapse(s2).unwrap(); // defer s2
 
     let dst_mem = create_mem(MEM_SIZE);
     let dst_tb = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);

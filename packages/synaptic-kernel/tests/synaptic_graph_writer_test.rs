@@ -213,7 +213,7 @@ fn disconnect_heals_synapse_chain() {
     let s1 = kernel.connect(src, tgt1, 10).unwrap();
     let s2 = kernel.connect(src, tgt2, 20).unwrap();
 
-    kernel.disconnect(s1).unwrap();
+    kernel.disconnect_synapse(s1).unwrap();
 
     assert_eq!(kernel.get_node(src).get_outgoing_synapse_head(), s2);
     assert_eq!(kernel.get_node(src).get_outgoing_synapse_tail(), s2);
@@ -237,7 +237,7 @@ fn disconnect_then_publish_reclaims_synapse_slot() {
         "synapse capacity full"
     );
 
-    kernel.disconnect(synapses[0]).unwrap();
+    kernel.disconnect_synapse(synapses[0]).unwrap();
 
     // not yet reclaimed
     assert!(
@@ -443,7 +443,7 @@ fn self_loop_connect_disconnect() {
     assert_eq!(kernel.get_node(n).get_outgoing_synapse_head(), syn);
     assert_eq!(kernel.get_node(n).get_incoming_synapse_head(), syn);
 
-    kernel.disconnect(syn).unwrap();
+    kernel.disconnect_synapse(syn).unwrap();
 
     assert_eq!(kernel.get_node(n).get_outgoing_synapse_head(), 0);
     assert_eq!(kernel.get_node(n).get_incoming_synapse_head(), 0);

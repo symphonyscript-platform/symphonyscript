@@ -75,7 +75,7 @@ fn multi_threaded_topology_fuzzer() {
             // 5. Tear down half the synapses
             for (i, &s) in synapses.iter().enumerate() {
                 if i % 2 == 0 {
-                    let _ = writer.disconnect(s);
+                    let _ = writer.disconnect_synapse(s);
                 }
             }
 

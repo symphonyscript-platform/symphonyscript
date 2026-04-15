@@ -186,7 +186,7 @@ fn reader_sees_disconnect_after_publish() {
         let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();
         // outgoing: s1 -> s2
 
-        synapse_chain.disconnect(s1).unwrap();
+        synapse_chain.disconnect_synapse(s1).unwrap();
         // outgoing: s2
         s2
     };

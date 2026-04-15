@@ -220,7 +220,7 @@ fn reader_sees_disconnect_after_publish_swap() {
     let s1 = kernel.connect(src, tgt1, 10).unwrap();
     let s2 = kernel.connect(src, tgt2, 20).unwrap();
 
-    kernel.disconnect(s1).unwrap();
+    kernel.disconnect_synapse(s1).unwrap();
 
     kernel.publish();
     reader.swap();
@@ -329,7 +329,7 @@ fn multi_cycle_insert_remove_connect_disconnect() {
     // cycle 2: add C, connect B->C, disconnect A->B
     let c = insert_head_with_tick(&kernel, 3, 300);
     let s2 = kernel.connect(b, c, 20).unwrap();
-    kernel.disconnect(s1).unwrap();
+    kernel.disconnect_synapse(s1).unwrap();
     kernel.publish();
     reader.swap();
 

@@ -85,7 +85,7 @@ fn bench_connect_single(c: &mut Criterion) {
                 let syn = synapse_chain.connect(
                     black_box(src), black_box(tgt), black_box(10)
                 ).unwrap();
-                synapse_chain.disconnect(syn).unwrap();
+                synapse_chain.disconnect_synapse(syn).unwrap();
                 if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
                     synapse_chain.publish();
                 }
@@ -108,7 +108,7 @@ fn bench_disconnect_single(c: &mut Criterion) {
             let start = std::time::Instant::now();
             for i in 0..iters {
                 let syn = synapse_chain.connect(src, tgt, 10).unwrap();
-                synapse_chain.disconnect(black_box(syn)).unwrap();
+                synapse_chain.disconnect_synapse(black_box(syn)).unwrap();
                 if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
                     synapse_chain.publish();
                 }
@@ -145,7 +145,7 @@ fn bench_connect_chain_growth(c: &mut Criterion) {
                         let syn = synapse_chain.connect(
                             black_box(src), black_box(bench_tgt), black_box(99)
                         ).unwrap();
-                        synapse_chain.disconnect(syn).unwrap();
+                        synapse_chain.disconnect_synapse(syn).unwrap();
                         if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
                             synapse_chain.publish();
                         }
@@ -180,9 +180,9 @@ fn bench_disconnect_head(c: &mut Criterion) {
                             let tgt = node_chain.insert_head((i + 2) as i32).unwrap();
                             synapses.push(synapse_chain.connect(src, tgt, i as i32).unwrap());
                         }
-                        synapse_chain.disconnect(black_box(synapses[0])).unwrap();
+                        synapse_chain.disconnect_synapse(black_box(synapses[0])).unwrap();
                         for s in &synapses[1..] {
-                            synapse_chain.disconnect(*s).unwrap();
+                            synapse_chain.disconnect_synapse(*s).unwrap();
                         }
                         synapse_chain.publish();
                         for _ in 0..depth {
@@ -218,7 +218,7 @@ fn bench_connect_disconnect_throughput(c: &mut Criterion) {
                 let s = synapse_chain.connect(
                     black_box(src), black_box(tgt), black_box(7)
                 ).unwrap();
-                synapse_chain.disconnect(black_box(s)).unwrap();
+                synapse_chain.disconnect_synapse(black_box(s)).unwrap();
                 if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
                     synapse_chain.publish();
                 }
@@ -329,7 +329,7 @@ fn bench_self_loop_cycle(c: &mut Criterion) {
                 let s = synapse_chain.connect(
                     black_box(n), black_box(n), black_box(99)
                 ).unwrap();
-                synapse_chain.disconnect(black_box(s)).unwrap();
+                synapse_chain.disconnect_synapse(black_box(s)).unwrap();
                 if i % FLUSH_INTERVAL == FLUSH_INTERVAL - 1 {
                     synapse_chain.publish();
                 }

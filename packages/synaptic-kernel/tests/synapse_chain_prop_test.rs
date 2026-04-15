@@ -299,7 +299,7 @@ proptest! {
                     if !state.synapse_edges.is_empty() {
                         let actual_idx = idx % state.synapse_edges.len();
                         let (syn_slot, _, _) = state.synapse_edges.remove(actual_idx);
-                        let _ = h.synapse_chain.disconnect(syn_slot);
+                        let _ = h.synapse_chain.disconnect_synapse(syn_slot);
                     }
                 }
             }
@@ -335,7 +335,7 @@ proptest! {
 
         // Disconnect all
         while let Some((syn_slot, _, _)) = state.synapse_edges.pop() {
-            h.synapse_chain.disconnect(syn_slot).unwrap();
+            h.synapse_chain.disconnect_synapse(syn_slot).unwrap();
         }
 
         // All nodes should have clean synapse pointers
@@ -369,7 +369,7 @@ proptest! {
 
         // Disconnect all self-loops
         while let Some((syn_slot, _, _)) = state.synapse_edges.pop() {
-            h.synapse_chain.disconnect(syn_slot).unwrap();
+            h.synapse_chain.disconnect_synapse(syn_slot).unwrap();
         }
 
         let n = h.node_chain.get_node(node);
@@ -394,7 +394,7 @@ fn disconnect_middle_of_outgoing_chain() {
     let s3 = h.synapse_chain.connect(a, b, 30).unwrap();
 
     // Disconnect middle
-    h.synapse_chain.disconnect(s2).unwrap();
+    h.synapse_chain.disconnect_synapse(s2).unwrap();
 
     // Chain: s1 -> s3
     let syn1 = h.synapse_chain.get_synapse(s1);
@@ -423,7 +423,7 @@ fn disconnect_head_of_incoming_chain() {
     let s2 = h.synapse_chain.connect(c, b, 20).unwrap();
 
     // Disconnect head of b's incoming chain
-    h.synapse_chain.disconnect(s1).unwrap();
+    h.synapse_chain.disconnect_synapse(s1).unwrap();
 
     let node_b = h.node_chain.get_node(b);
     assert_eq!(node_b.get_incoming_synapse_head(), s2);
@@ -470,7 +470,7 @@ fn fan_out_and_fan_in_topology() {
         .map(|&(s, _, _)| s)
         .collect();
     for syn in fan_out_syns {
-        h.synapse_chain.disconnect(syn).unwrap();
+        h.synapse_chain.disconnect_synapse(syn).unwrap();
         state.synapse_edges.retain(|&(s, _, _)| s != syn);
     }
 

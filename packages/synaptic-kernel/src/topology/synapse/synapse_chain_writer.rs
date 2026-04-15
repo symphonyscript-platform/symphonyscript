@@ -254,8 +254,30 @@ impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
         Some(new_slot)
     }
 
-    pub fn disconnect(&self, slot: usize) -> Result<(), SlotAllocatorError> {
-        let synapse = self.get_synapse(slot);
+    pub fn disconnect(
+        &self,
+        source_ptr: usize,
+        target_ptr: usize,
+    ) -> Result<(), SlotAllocatorError> {
+        let source = self.node_chain.get_node(source_ptr);
+        let mut synapse = source.get_outgoing_synapse_head();
+
+        while synapse != 0 {
+            let synapse_handle = self.get_synapse(synapse);
+            let next_synapse = synapse_handle.get_outgoing_next_ptr();
+
+            if synapse_handle.get_target_ptr() == target_ptr {
+                self.disconnect_synapse(synapse)?;
+            }
+
+            synapse = next_synapse;
+        }
+
+        Ok(())
+    }
+
+    pub fn disconnect_synapse(&self, synapse_slot: usize) -> Result<(), SlotAllocatorError> {
+        let synapse = self.get_synapse(synapse_slot);
         let source = self.node_chain.get_node(synapse.get_source_ptr());
         let target = self.node_chain.get_node(synapse.get_target_ptr());
         let synapse_outgoing_next_ptr = synapse.get_outgoing_next_ptr();
@@ -263,7 +285,7 @@ impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
         let synapse_incoming_next_ptr = synapse.get_incoming_next_ptr();
         let synapse_incoming_prev_ptr = synapse.get_incoming_prev_ptr();
 
-        self.allocator.defer_free(slot)?;
+        self.allocator.defer_free(synapse_slot)?;
 
         if synapse_outgoing_prev_ptr != 0 {
             self.get_synapse(synapse_outgoing_prev_ptr)

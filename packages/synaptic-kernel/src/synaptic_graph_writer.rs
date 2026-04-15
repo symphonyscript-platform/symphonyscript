@@ -404,7 +404,7 @@ impl<
                 break;
             }
 
-            self.synapse_chain_writer.disconnect(head)?;
+            self.synapse_chain_writer.disconnect_synapse(head)?;
         }
 
         loop {
@@ -417,7 +417,7 @@ impl<
                 break;
             }
 
-            self.synapse_chain_writer.disconnect(head)?;
+            self.synapse_chain_writer.disconnect_synapse(head)?;
         }
 
         self.node_chain_writer.remove(slot)
@@ -486,8 +486,12 @@ impl<
         }
     }
 
-    pub fn disconnect(&self, slot: usize) -> Result<(), SlotAllocatorError> {
-        self.synapse_chain_writer.disconnect(slot)
+    pub fn disconnect(&self, source: usize, target: usize) -> Result<(), SlotAllocatorError> {
+        self.synapse_chain_writer.disconnect(source, target)
+    }
+
+    pub fn disconnect_synapse(&self, slot: usize) -> Result<(), SlotAllocatorError> {
+        self.synapse_chain_writer.disconnect_synapse(slot)
     }
 
     pub fn publish(&self) {

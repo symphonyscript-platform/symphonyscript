@@ -324,8 +324,12 @@ impl<
         }
     }
 
-    pub fn disconnect(&self, slot: usize) -> Result<(), SlotAllocatorError> {
-        self.active_writer.disconnect(slot)
+    pub fn disconnect(&self, source: usize, target: usize) -> Result<(), SlotAllocatorError> {
+        self.active_writer.disconnect(source, target)
+    }
+
+    pub fn disconnect_synapse(&self, slot: usize) -> Result<(), SlotAllocatorError> {
+        self.active_writer.disconnect_synapse(slot)
     }
 
     pub fn publish(&mut self) {
