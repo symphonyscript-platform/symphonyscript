@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 
-use synaptic_kernel::attribute_plane::attribute_plane_writer::AttributePlaneWriter;
+use synaptic_kernel::attributes::attribute_plane_writer::AttributePlaneWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 const NODE_ATTR_SLOT: usize = 16;

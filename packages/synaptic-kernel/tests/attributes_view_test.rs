@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::attribute_plane::attributes_writer::AttributesWriter;
+use synaptic_kernel::attributes::attributes_writer::AttributesWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_mem(size: usize) -> AtomicBuffer {

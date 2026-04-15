@@ -1,5 +1,5 @@
-use crate::attribute_plane::attribute_plane_writer::AttributePlaneWriter;
-use crate::attribute_plane::attributes_writer::AttributesWriter;
+use crate::attributes::attribute_plane_writer::AttributePlaneWriter;
+use crate::attributes::attributes_writer::AttributesWriter;
 use crate::constants::{GRAPH_MAGIC, KERNEL_VERSION};
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::metadata::mem_metadata_writer::MemMetadataWriter;

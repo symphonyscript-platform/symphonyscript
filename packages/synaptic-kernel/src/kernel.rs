@@ -1,4 +1,4 @@
-use crate::attribute_plane::attributes_writer::AttributesWriter;
+use crate::attributes::attributes_writer::AttributesWriter;
 use crate::control_plane::ControlPlane;
 use crate::errors::kernel_error::KernelError;
 use crate::errors::slot_allocator_error::SlotAllocatorError;

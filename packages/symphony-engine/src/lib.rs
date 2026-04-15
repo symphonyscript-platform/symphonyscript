@@ -1,4 +1,4 @@
-pub mod attribute_plane;
+pub mod attributes;
 pub mod constants;
 pub mod symphony_engine;
 pub mod synapse_operations;

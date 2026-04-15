@@ -1,5 +1,5 @@
-use crate::attribute_plane::attribute_plane_writer::AttributePlaneWriter;
-use crate::attribute_plane::attributes_reader::AttributesReader;
+use crate::attributes::attribute_plane_writer::AttributePlaneWriter;
+use crate::attributes::attributes_reader::AttributesReader;
 use crate::primitives::types::AtomicBuffer;
 
 /// Readers side of flat attribute storage backed by a shared `AtomicBuffer`.

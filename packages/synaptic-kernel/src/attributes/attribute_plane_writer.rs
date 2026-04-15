@@ -1,5 +1,5 @@
-use crate::attribute_plane::attribute_plane_reader::AttributePlaneReader;
-use crate::attribute_plane::attributes_writer::AttributesWriter;
+use crate::attributes::attribute_plane_reader::AttributePlaneReader;
+use crate::attributes::attributes_writer::AttributesWriter;
 use crate::primitives::into_array::IntoArray;
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;

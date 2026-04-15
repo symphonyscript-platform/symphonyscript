@@ -2,7 +2,7 @@ extern crate core;
 
 pub mod primitives;
 pub mod errors;
-pub mod attribute_plane;
+pub mod attributes;
 pub mod constants;
 pub mod topology;
 pub mod synaptic_graph_writer;

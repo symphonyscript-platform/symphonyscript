@@ -1,5 +1,5 @@
-use crate::attribute_plane::attribute_plane_reader::AttributePlaneReader;
-use crate::attribute_plane::attributes_reader::AttributesReader;
+use crate::attributes::attribute_plane_reader::AttributePlaneReader;
+use crate::attributes::attributes_reader::AttributesReader;
 use crate::metadata::mem_metadata_reader::MemMetadataReader;
 use crate::metadata::tb_metadata_reader::TbMetadataReader;
 use crate::primitives::staging_buffer_reader::StagingBufferReader;

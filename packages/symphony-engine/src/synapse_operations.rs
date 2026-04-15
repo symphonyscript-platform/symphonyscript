@@ -1,4 +1,4 @@
-use crate::attribute_plane::synapse_attributes::SynapseAttributes;
+use crate::attributes::synapse_attributes::SynapseAttributes;
 use crate::constants::{
     SYNAPSE_ATTR_DURATION_SCALE, SYNAPSE_ATTR_TEMPO_SCALE, SYNAPSE_ATTR_TICK_OFFSET,
     SYNAPSE_ATTR_TRANSPOSITION, SYNAPSE_ATTR_VOLUME_SCALE, SYNAPSE_ATTR_WEIGHT,

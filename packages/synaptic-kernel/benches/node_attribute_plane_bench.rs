@@ -1,8 +1,8 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use synaptic_kernel::attribute_plane::attribute_plane_writer::AttributePlaneWriter;
-use synaptic_kernel::attribute_plane::attributes_writer::AttributesWriter;
+use synaptic_kernel::attributes::attribute_plane_writer::AttributePlaneWriter;
+use synaptic_kernel::attributes::attributes_writer::AttributesWriter;
 use synaptic_kernel::primitives::into_array::IntoArray;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
