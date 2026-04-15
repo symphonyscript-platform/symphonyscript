@@ -4,6 +4,7 @@ pub mod boundary_operations;
 pub mod constants;
 pub mod control_operations;
 pub mod lut_operations;
+pub mod metadata_operations;
 pub mod node_operations;
 pub mod note_operations;
 pub mod rest_operations;

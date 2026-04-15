@@ -3,6 +3,7 @@ use crate::constants::{
 };
 use std::sync::Arc;
 use synaptic_kernel::control_plane::ControlPlane;
+use synaptic_kernel::errors::kernel_error::KernelError;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::serialized_kernel::SerializedKernel;
@@ -40,32 +41,20 @@ impl SymphonyEngine {
         self.kernel.serialize()
     }
 
+    /// Returns a shared handle to the `ControlPlane` for constructing a `GraphConsumer` on
+    /// the consumer thread.
+    ///
+    /// The `Arc` is a cross-thread transport mechanism, not a lifetime extension.
+    /// The `ControlPlane` has no independent lifecycle - it is logically owned by
+    /// this `Kernel`.
+    ///
+    /// # Safety Contract
+    /// The consumer thread **must** be fully quiesced before the `Kernel` is dropped.
+    /// Dropping the kernel unconditionally frees the deferred-deletion queue.
+    /// If the consumer is still traversing a hot-swapped graph, the result is
+    /// undefined behavior.
     pub fn get_control_plane(&self) -> Arc<SymphonyEngineControlPlane> {
         self.kernel.get_control_plane()
-    }
-
-    pub fn mem_metadata_capacity(&self) -> usize {
-        self.kernel.mem_metadata_capacity()
-    }
-
-    pub fn tb_metadata_capacity(&self) -> usize {
-        self.kernel.tb_metadata_capacity()
-    }
-
-    pub fn mem_read_meta(&self, offset: usize) -> i32 {
-        self.kernel.mem_read_meta(offset)
-    }
-
-    pub fn mem_write_meta(&self, offset: usize, value: i32) {
-        self.kernel.mem_write_meta(offset, value);
-    }
-
-    pub fn tb_read_meta(&self, offset: usize) -> i32 {
-        self.kernel.tb_read_meta(offset)
-    }
-
-    pub fn tb_write_meta(&self, offset: usize, value: i32) {
-        self.kernel.tb_write_meta(offset, value);
     }
 
     pub fn node_capacity(&self) -> usize {
@@ -94,5 +83,27 @@ impl SymphonyEngine {
 
     pub fn peek_utilization(&self) -> f32 {
         self.kernel.peek_utilization()
+    }
+
+    pub fn publish(&mut self) {
+        self.kernel.publish()
+    }
+
+    pub fn should_grow(&self, target_resize_threshold: f32) -> bool {
+        self.kernel.should_grow(target_resize_threshold)
+    }
+
+    pub fn grow(&mut self, config: SynapticGraphConfig) -> Result<(), KernelError> {
+        self.kernel.grow(config)
+    }
+
+    /// Returns a reference to the underlying kernel.
+    /// Escape hatch for operations not covered by the engine's domain API.
+    ///
+    /// # Safety Contract
+    /// The caller assumes full responsibility for maintaining kernel invariants.
+    /// Intended exclusively for read-only telemetry and debugging.
+    pub fn get_kernel(&self) -> &SymphonyEngineKernel {
+        &self.kernel
     }
 }

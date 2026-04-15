@@ -378,7 +378,7 @@ impl<
 
     /// Returns a raw handle to the backing `AtomicBuffer`.
     ///
-    /// # Safety
+    /// # Safety Contract
     /// The caller assumes full responsibility for memory correctness.
     /// Writing to structural or lifecycle regions will corrupt the graph.
     /// Intended exclusively for read-only telemetry and debugging.
