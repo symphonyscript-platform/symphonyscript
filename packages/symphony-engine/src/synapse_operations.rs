@@ -63,11 +63,11 @@ impl SynapseOperations for SymphonyEngine {
     }
 
     fn get_synapse_incoming_next(&self, synapse: usize) -> usize {
-        self.kernel.get_synapse(synapse).get_outgoing_next_ptr()
+        self.kernel.get_synapse(synapse).get_incoming_next_ptr()
     }
 
     fn get_synapse_incoming_prev(&self, synapse: usize) -> usize {
-        self.kernel.get_synapse(synapse).get_outgoing_prev_ptr()
+        self.kernel.get_synapse(synapse).get_incoming_prev_ptr()
     }
 
     fn get_synapse_weight(&self, synapse: usize) -> i32 {
