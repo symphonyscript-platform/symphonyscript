@@ -40,3 +40,15 @@ pub const NOTE_ATTR_TICK_OFFSET: usize = 9;
 pub const NOTE_FLAG_MUTED: u32 = 0;
 pub const NOTE_FLAG_SOLO: u32 = 1;
 
+pub const REST_ATTR_DURATION: usize = 0;
+
+pub const CONTROL_ATTR_ID: usize = 0;
+pub const CONTROL_ATTR_VALUE: usize = 1;
+
+pub const BARRIER_ATTR_PHASE_TARGET: usize = 0;
+
+pub const BOUNDARY_ATTR_ID: usize = 0;
+
+pub const LUT_ATTR_INDEX: usize = 0;
+
+pub const SEED_ATTR_VALUE: usize = 0;
