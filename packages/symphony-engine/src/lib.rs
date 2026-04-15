@@ -1,5 +1,7 @@
 pub mod attributes;
 pub mod constants;
+pub mod node_operations;
+pub mod note_operations;
 pub mod symphony_engine;
 pub mod synapse_operations;
 
