@@ -1,6 +1,6 @@
-use symphonyscript_kernel::constants::NODE_ATTRIBUTES_SLOT_SIZE;
-use symphonyscript_kernel::primitives::into_array::IntoArray;
-use symphony_engine::attribute_plane::::attributes_writer::AttributesWriter;
+use crate::constants::NODE_ATTRIBUTES_SIZE;
+use synaptic_kernel::attribute_plane::attributes_writer::AttributesWriter;
+use synaptic_kernel::primitives::into_array::IntoArray;
 
 pub struct ControlAttributes {
     pub control_id: i32,
@@ -18,22 +18,22 @@ impl IntoArray<16> for ControlAttributes {
     }
 }
 
-pub struct ControlAttributesWriter<'a>(pub AttributesWriter<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
+pub struct ControlAttributesWriter<'a>(pub AttributesWriter<'a, NODE_ATTRIBUTES_SIZE>);
 
 impl<'a> ControlAttributesWriter<'a> {
     pub fn control_id(&self) -> i32 {
-        self.0.read(0)
+        self.0.get(0)
     }
 
     pub fn set_control_id(&self, value: i32) {
-        self.0.write(0, value)
+        self.0.set(0, value)
     }
 
     pub fn value(&self) -> i32 {
-        self.0.read(1)
+        self.0.get(1)
     }
 
     pub fn set_value(&self, value: i32) {
-        self.0.write(1, value)
+        self.0.set(1, value)
     }
 }

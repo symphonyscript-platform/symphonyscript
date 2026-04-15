@@ -1,7 +1,7 @@
-use symphony_engine::attribute_plane::::attributes_reader::AttributesReader;
-use symphonyscript_kernel::constants::NODE_ATTRIBUTES_SLOT_SIZE;
+use crate::constants::NODE_ATTRIBUTES_SIZE;
+use synaptic_kernel::attribute_plane::attributes_reader::AttributesReader;
 
-pub struct NoteAttributesReader<'a>(pub AttributesReader<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
+pub struct NoteAttributesReader<'a>(pub AttributesReader<'a, NODE_ATTRIBUTES_SIZE>);
 
 impl<'a> NoteAttributesReader<'a> {
     pub fn is_muted(&self) -> bool {
@@ -13,42 +13,42 @@ impl<'a> NoteAttributesReader<'a> {
     }
 
     pub fn pitch(&self) -> i32 {
-        self.0.read(0)
+        self.0.get(0)
     }
 
     pub fn velocity(&self) -> i32 {
-        self.0.read(1)
+        self.0.get(1)
     }
 
     pub fn duration(&self) -> i32 {
-        self.0.read(2)
+        self.0.get(2)
     }
 
     pub fn volume(&self) -> i32 {
-        self.0.read(3)
+        self.0.get(3)
     }
 
     pub fn spatial_x(&self) -> i32 {
-        self.0.read(4)
+        self.0.get(4)
     }
 
     pub fn spatial_y(&self) -> i32 {
-        self.0.read(5)
+        self.0.get(5)
     }
 
     pub fn spatial_z(&self) -> i32 {
-        self.0.read(6)
+        self.0.get(6)
     }
 
     pub fn detune(&self) -> i32 {
-        self.0.read(7)
+        self.0.get(7)
     }
 
     pub fn tick_offset(&self) -> i32 {
-        self.0.read(8)
+        self.0.get(8)
     }
 
     pub fn flags(&self) -> u32 {
-        self.0.read(9) as u32
+        self.0.get(9) as u32
     }
 }

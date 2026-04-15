@@ -1,10 +1,10 @@
-use symphony_engine::attribute_plane::::attributes_reader::AttributesReader;
-use symphonyscript_kernel::constants::NODE_ATTRIBUTES_SLOT_SIZE;
+use crate::constants::NODE_ATTRIBUTES_SIZE;
+use synaptic_kernel::attribute_plane::attributes_reader::AttributesReader;
 
-pub struct SeedAttributesReader<'a>(pub AttributesReader<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
+pub struct SeedAttributesReader<'a>(pub AttributesReader<'a, NODE_ATTRIBUTES_SIZE>);
 
 impl<'a> SeedAttributesReader<'a> {
     pub fn seed_value(&self) -> i32 {
-        self.0.read(0)
+        self.0.get(0)
     }
 }

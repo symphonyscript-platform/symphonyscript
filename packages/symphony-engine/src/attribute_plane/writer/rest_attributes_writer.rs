@@ -1,6 +1,6 @@
-use symphonyscript_kernel::constants::NODE_ATTRIBUTES_SLOT_SIZE;
-use symphonyscript_kernel::primitives::into_array::IntoArray;
-use symphony_engine::attribute_plane::::attributes_writer::AttributesWriter;
+use crate::constants::NODE_ATTRIBUTES_SIZE;
+use synaptic_kernel::attribute_plane::attributes_writer::AttributesWriter;
+use synaptic_kernel::primitives::into_array::IntoArray;
 
 pub struct RestAttributes {
     pub duration: i32,
@@ -16,14 +16,14 @@ impl IntoArray<16> for RestAttributes {
     }
 }
 
-pub struct RestAttributesWriter<'a>(pub AttributesWriter<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
+pub struct RestAttributesWriter<'a>(pub AttributesWriter<'a, NODE_ATTRIBUTES_SIZE>);
 
 impl<'a> RestAttributesWriter<'a> {
     pub fn duration(&self) -> i32 {
-        self.0.read(0)
+        self.0.get(0)
     }
 
     pub fn set_duration(&self, value: i32) {
-        self.0.write(0, value)
+        self.0.set(0, value)
     }
 }

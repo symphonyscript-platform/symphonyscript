@@ -1,6 +1,6 @@
-use symphony_engine::attribute_plane::::attributes_writer::AttributesWriter;
-use symphonyscript_kernel::primitives::into_array::IntoArray;
-use crate::constants::NODE_ATTRIBUTES_SLOT_SIZE;
+use crate::constants::NODE_ATTRIBUTES_SIZE;
+use synaptic_kernel::attribute_plane::attributes_writer::AttributesWriter;
+use synaptic_kernel::primitives::into_array::IntoArray;
 
 pub struct NoteAttributes {
     pub pitch: i32,
@@ -16,9 +16,9 @@ pub struct NoteAttributes {
                     // +24 bytes reserved
 }
 
-impl IntoArray<NODE_ATTRIBUTES_SLOT_SIZE> for NoteAttributes {
-    fn to_array(&self) -> [i32; NODE_ATTRIBUTES_SLOT_SIZE] {
-        let mut data = [0; NODE_ATTRIBUTES_SLOT_SIZE];
+impl IntoArray<NODE_ATTRIBUTES_SIZE> for NoteAttributes {
+    fn to_array(&self) -> [i32; NODE_ATTRIBUTES_SIZE] {
+        let mut data = [0; NODE_ATTRIBUTES_SIZE];
 
         data[0] = self.pitch;
         data[1] = self.velocity;
@@ -35,7 +35,7 @@ impl IntoArray<NODE_ATTRIBUTES_SLOT_SIZE> for NoteAttributes {
     }
 }
 
-pub struct NoteAttributesWriter<'a>(pub AttributesWriter<'a, NODE_ATTRIBUTES_SLOT_SIZE>);
+pub struct NoteAttributesWriter<'a>(pub AttributesWriter<'a, NODE_ATTRIBUTES_SIZE>);
 
 impl<'a> NoteAttributesWriter<'a> {
     pub fn is_muted(&self) -> bool {
@@ -55,82 +55,82 @@ impl<'a> NoteAttributesWriter<'a> {
     }
 
     pub fn pitch(&self) -> i32 {
-        self.0.read(0)
+        self.0.get(0)
     }
 
     pub fn set_pitch(&self, value: i32) {
-        self.0.write(0, value)
+        self.0.set(0, value)
     }
 
     pub fn velocity(&self) -> i32 {
-        self.0.read(1)
+        self.0.get(1)
     }
 
     pub fn set_velocity(&self, value: i32) {
-        self.0.write(1, value)
+        self.0.set(1, value)
     }
 
     pub fn duration(&self) -> i32 {
-        self.0.read(2)
+        self.0.get(2)
     }
 
     pub fn set_duration(&self, value: i32) {
-        self.0.write(2, value)
+        self.0.set(2, value)
     }
 
     pub fn volume(&self) -> i32 {
-        self.0.read(3)
+        self.0.get(3)
     }
 
     pub fn set_volume(&self, value: i32) {
-        self.0.write(3, value)
+        self.0.set(3, value)
     }
 
     pub fn spatial_x(&self) -> i32 {
-        self.0.read(4)
+        self.0.get(4)
     }
 
     pub fn set_spatial_x(&self, value: i32) {
-        self.0.write(4, value)
+        self.0.set(4, value)
     }
 
     pub fn spatial_y(&self) -> i32 {
-        self.0.read(5)
+        self.0.get(5)
     }
 
     pub fn set_spatial_y(&self, value: i32) {
-        self.0.write(5, value)
+        self.0.set(5, value)
     }
 
     pub fn spatial_z(&self) -> i32 {
-        self.0.read(6)
+        self.0.get(6)
     }
 
     pub fn set_spatial_z(&self, value: i32) {
-        self.0.write(6, value)
+        self.0.set(6, value)
     }
 
     pub fn detune(&self) -> i32 {
-        self.0.read(7)
+        self.0.get(7)
     }
 
     pub fn set_detune(&self, value: i32) {
-        self.0.write(7, value)
+        self.0.set(7, value)
     }
 
     pub fn tick_offset(&self) -> i32 {
-        self.0.read(8)
+        self.0.get(8)
     }
 
     pub fn set_tick_offset(&self, value: i32) {
-        self.0.write(8, value)
+        self.0.set(8, value)
     }
 
     pub fn flags(&self) -> u32 {
-        self.0.read(9) as u32
+        self.0.get(9) as u32
     }
 
     pub fn set_flags(&self, value: u32) {
-        self.0.write(9, value as i32)
+        self.0.set(9, value as i32)
     }
 }
