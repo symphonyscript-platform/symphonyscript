@@ -363,6 +363,28 @@ impl<
             .set(attribute_offset, value)
     }
 
+    pub fn or_node_attribute(&'_ self, slot: usize, attribute_offset: usize, mask: i32) -> i32 {
+        debug_assert!(
+            self.node_chain_writer.is_active_slot(slot),
+            "SynapticGraphWriter.or_node_attribute | attempted to read inactive slot {}",
+            slot
+        );
+        self.node_attribute_plane
+            .get(slot)
+            .or(attribute_offset, mask)
+    }
+
+    pub fn and_node_attribute(&'_ self, slot: usize, attribute_offset: usize, mask: i32) -> i32 {
+        debug_assert!(
+            self.node_chain_writer.is_active_slot(slot),
+            "SynapticGraphWriter.and_node_attribute | attempted to read inactive slot {}",
+            slot
+        );
+        self.node_attribute_plane
+            .get(slot)
+            .and(attribute_offset, mask)
+    }
+
     pub fn insert_head(&self, kind: i32) -> Option<usize> {
         match self.node_chain_writer.insert_head(kind) {
             Some(new_slot) => {
@@ -470,6 +492,27 @@ impl<
         self.synapse_attribute_plane
             .get(slot)
             .set(attribute_offset, value)
+    }
+
+    pub fn or_synapse_attribute(&'_ self, slot: usize, attribute_offset: usize, value: i32) -> i32 {
+        debug_assert!(
+            self.synapse_chain_writer.is_active_slot(slot),
+            "SynapticGraphWriter.or_synapse_attribute | attempted to read inactive slot {}",
+            slot
+        );
+        self.synapse_attribute_plane
+            .get(slot)
+            .or(attribute_offset, value)
+    }
+    pub fn and_synapse_attribute(&'_ self, slot: usize, attribute_offset: usize, value: i32) -> i32 {
+        debug_assert!(
+            self.synapse_chain_writer.is_active_slot(slot),
+            "SynapticGraphWriter.and_synapse_attribute | attempted to read inactive slot {}",
+            slot
+        );
+        self.synapse_attribute_plane
+            .get(slot)
+            .and(attribute_offset, value)
     }
 
     pub fn connect(&self, source_slot: usize, target_slot: usize, kind: i32) -> Option<usize> {

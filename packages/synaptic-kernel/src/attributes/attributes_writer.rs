@@ -55,4 +55,22 @@ impl<'a, const SLOT_SIZE: usize> AttributesWriter<'a, SLOT_SIZE> {
         );
         self.mem[self.mem_start_offset + offset].store(value, Ordering::Relaxed)
     }
+
+    pub fn or(&self, offset: usize, mask: i32) -> i32 {
+        debug_assert!(
+            offset < SLOT_SIZE,
+            "AttributesWriter.or | offset {} out of bounds",
+            offset
+        );
+        self.mem[self.mem_start_offset + offset].fetch_or(mask, Ordering::Relaxed)
+    }
+
+    pub fn and(&self, offset: usize, mask: i32) -> i32 {
+        debug_assert!(
+            offset < SLOT_SIZE,
+            "AttributesWriter.and | offset {} out of bounds",
+            offset
+        );
+        self.mem[self.mem_start_offset + offset].fetch_and(mask, Ordering::Relaxed)
+    }
 }

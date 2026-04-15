@@ -258,6 +258,16 @@ impl<
             .set_node_attribute(slot, attribute_offset, value)
     }
 
+    pub fn or_node_attribute(&'_ self, slot: usize, attribute_offset: usize, value: i32) -> i32 {
+        self.active_writer
+            .or_node_attribute(slot, attribute_offset, value)
+    }
+
+    pub fn and_node_attribute(&'_ self, slot: usize, attribute_offset: usize, value: i32) -> i32 {
+        self.active_writer
+            .and_node_attribute(slot, attribute_offset, value)
+    }
+
     pub fn insert_head(&self, kind: i32) -> Result<usize, KernelError> {
         match self.active_writer.insert_head(kind) {
             Some(slot) => Ok(slot),
@@ -310,6 +320,21 @@ impl<
     pub fn set_synapse_attribute(&'_ self, slot: usize, attribute_offset: usize, value: i32) {
         self.active_writer
             .set_synapse_attribute(slot, attribute_offset, value)
+    }
+
+    pub fn or_synapse_attribute(&'_ self, slot: usize, attribute_offset: usize, value: i32) -> i32 {
+        self.active_writer
+            .or_synapse_attribute(slot, attribute_offset, value)
+    }
+
+    pub fn and_synapse_attribute(
+        &'_ self,
+        slot: usize,
+        attribute_offset: usize,
+        value: i32,
+    ) -> i32 {
+        self.active_writer
+            .and_synapse_attribute(slot, attribute_offset, value)
     }
 
     pub fn connect(

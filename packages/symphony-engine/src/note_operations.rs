@@ -49,17 +49,13 @@ impl NoteOperations for SymphonyEngine {
     }
 
     fn mute_note(&self, note: usize) {
-        let new_value =
-            (self.kernel.get_node_attribute(note, NOTE_ATTR_FLAGS) as u32) | (1 << NOTE_FLAG_MUTED);
         self.kernel
-            .set_node_attribute(note, NOTE_ATTR_FLAGS, new_value as i32);
+            .or_node_attribute(note, NOTE_ATTR_FLAGS, 1 << NOTE_FLAG_MUTED);
     }
 
     fn unmute_note(&self, note: usize) {
-        let new_value = (self.kernel.get_node_attribute(note, NOTE_ATTR_FLAGS) as u32)
-            & !(1 << NOTE_FLAG_MUTED);
         self.kernel
-            .set_node_attribute(note, NOTE_ATTR_FLAGS, new_value as i32);
+            .and_node_attribute(note, NOTE_ATTR_FLAGS, !(1 << NOTE_FLAG_MUTED));
     }
 
     fn is_note_solo(&self, note: usize) -> bool {
@@ -68,17 +64,13 @@ impl NoteOperations for SymphonyEngine {
     }
 
     fn set_note_solo(&self, note: usize) {
-        let new_value =
-            (self.kernel.get_node_attribute(note, NOTE_ATTR_FLAGS) as u32) | (1 << NOTE_FLAG_SOLO);
         self.kernel
-            .set_node_attribute(note, NOTE_ATTR_FLAGS, new_value as i32);
+            .or_node_attribute(note, NOTE_ATTR_FLAGS, 1 << NOTE_FLAG_SOLO);
     }
 
     fn unset_note_solo(&self, note: usize) {
-        let new_value =
-            (self.kernel.get_node_attribute(note, NOTE_ATTR_FLAGS) as u32) & !(1 << NOTE_FLAG_SOLO);
         self.kernel
-            .set_node_attribute(note, NOTE_ATTR_FLAGS, new_value as i32);
+            .and_node_attribute(note, NOTE_ATTR_FLAGS, !(1 << NOTE_FLAG_SOLO));
     }
 
     fn get_note_pitch(&self, note: usize) -> i32 {
