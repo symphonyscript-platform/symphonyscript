@@ -1,3 +1,4 @@
+use synaptic_kernel::graph_consumer::GraphConsumer;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
 
@@ -24,8 +25,8 @@ fn config(capacity: usize) -> SynapticGraphConfig {
 fn flush_deferred(kernel: &mut TestKernel) {
     kernel.publish();
     let cp = kernel.get_control_plane();
-    let graph = cp.acquire_graph();
-    graph.swap();
+    let mut consumer = GraphConsumer::new(cp);
+    let _graph = consumer.acquire_graph();
     kernel.publish();
 }
 
@@ -475,7 +476,7 @@ fn disconnect_then_serialize_preserves_remaining_synapses() {
     let _s13 = kernel.connect(n1, n3, 20).unwrap();
     let s23 = kernel.connect(n2, n3, 30).unwrap();
 
-    kernel.disconnect(s12).unwrap();
+    kernel.disconnect_synapse(s12).unwrap();
     flush_deferred(&mut kernel);
 
     let serialized = kernel.serialize();
@@ -723,8 +724,8 @@ fn audio_thread_sees_loaded_state_after_publish_swap() {
     loaded.publish();
 
     let cp = loaded.get_control_plane();
-    let graph = cp.acquire_graph();
-    graph.swap();
+    let mut consumer = GraphConsumer::new(cp);
+    let graph = consumer.acquire_graph();
 
     let head = graph.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 1);
@@ -750,8 +751,8 @@ fn mutations_after_load_visible_to_audio_thread() {
     loaded.publish();
 
     let cp = loaded.get_control_plane();
-    let graph = cp.acquire_graph();
-    graph.swap();
+    let mut consumer = GraphConsumer::new(cp);
+    let graph = consumer.acquire_graph();
 
     let head = graph.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 2);

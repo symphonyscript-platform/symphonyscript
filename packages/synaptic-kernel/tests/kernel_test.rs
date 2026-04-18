@@ -1,5 +1,6 @@
 use synaptic_kernel::control_plane::ControlPlane;
 use synaptic_kernel::errors::kernel_error::KernelError;
+use synaptic_kernel::graph_consumer::GraphConsumer;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
 use synaptic_kernel::synaptic_graph_reader::SynapticGraphReader;
@@ -30,12 +31,15 @@ fn config(capacity: usize) -> SynapticGraphConfig {
     create_config(capacity, capacity)
 }
 
-/// Extract audio-thread reader from controller via raw ControlPlane pointer.
-/// This simulates the exact path the audio thread takes in production.
+/// Extract audio-thread reader from controller via a leaked `GraphConsumer`.
+/// This simulates the exact path the audio thread takes in production while
+/// giving callers a `'static` reader so mutations to the controller can
+/// proceed without fighting the borrow checker.
 unsafe fn mock_audio_reader(controller: &TestKernel) -> &'static TestReader {
-    let arc = controller.get_control_plane();
-    let cp = Arc::as_ptr(&arc);
-    unsafe { std::mem::transmute((*cp).acquire_graph()) }
+    let cp = controller.get_control_plane();
+    let consumer: &'static mut GraphConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR> =
+        Box::leak(Box::new(GraphConsumer::new(cp)));
+    consumer.acquire_graph()
 }
 
 // =========================================================
@@ -90,7 +94,7 @@ fn connect_and_disconnect_lifecycle() {
     let synapse = controller.get_synapse(s1);
     assert_eq!(synapse.get_kind(), 5);
 
-    controller.disconnect(s1).unwrap();
+    controller.disconnect_synapse(s1).unwrap();
 }
 
 #[test]
@@ -291,9 +295,9 @@ fn double_disconnect_same_synapse_panics_uaf_guard() {
     let n1 = controller.insert_head(1).unwrap();
     let n2 = controller.insert_after(n1, 2).unwrap();
     let s1 = controller.connect(n1, n2, 1).unwrap();
-    controller.disconnect(s1).unwrap();
+    controller.disconnect_synapse(s1).unwrap();
     // Second disconnect hits the UAF guard
-    let _ = controller.disconnect(s1);
+    let _ = controller.disconnect_synapse(s1);
 }
 
 // =========================================================
@@ -481,9 +485,11 @@ fn gc_pipeline_rotates_through_publish_cycles() {
     // Second publish: pending_deletion dropped
     controller.publish();
 
-    // Audio thread sees migrated data
+    // Audio thread sees migrated data.
+    // Note: `mock_audio_reader` calls `GraphConsumer::acquire_graph`, which now
+    // bundles the swap internally. The explicit `swap()` is no longer observable
+    // here — the migrated state visibility is confirmed by the kind assertion.
     let audio = unsafe { mock_audio_reader(&controller) };
-    assert!(audio.swap());
     let head = audio.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 6); // last inserted head
 }
@@ -725,13 +731,17 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
 
     // Audio thread: continuously swap + traverse
     let audio_thread = std::thread::spawn(move || {
-        let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+        let cp_ref = unsafe {
+            &*(cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>)
+        };
+        let cp_arc: Arc<ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> =
+            unsafe { Arc::from_raw(cp_ref) };
+        let mut processor = GraphConsumer::new(Arc::clone(&cp_arc));
+        std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
         while running_audio.load(std::sync::atomic::Ordering::Relaxed) {
-            let reader = unsafe { (*cp_ptr).acquire_graph() };
-
-            reader.swap();
+            let reader = processor.acquire_graph();
 
             // Traverse the full chain — must terminate, no cycles
             let mut current = reader.get_head_node();
@@ -791,14 +801,18 @@ fn concurrent_traversal_during_grow() {
 
     // Audio thread: continuously reads while main thread grows
     let audio_thread = std::thread::spawn(move || {
-        let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+        let cp_ref = unsafe {
+            &*(cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>)
+        };
+        let cp_arc: Arc<ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> =
+            unsafe { Arc::from_raw(cp_ref) };
+        let mut processor = GraphConsumer::new(Arc::clone(&cp_arc));
+        std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
         while running_audio.load(std::sync::atomic::Ordering::Relaxed) {
-            // Re-load pointer EVERY iteration — critical after grow()
-            let reader = unsafe { (*cp_ptr).acquire_graph() };
-
-            reader.swap();
+            // Re-acquire EVERY iteration — critical after grow()
+            let reader = processor.acquire_graph();
 
             let mut current = reader.get_head_node();
             while let Some(node) = current {
@@ -861,12 +875,17 @@ fn concurrent_attribute_reads_during_writes() {
 
     // Audio thread: continuously reads attributes
     let audio_thread = std::thread::spawn(move || {
-        let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+        let cp_ref = unsafe {
+            &*(cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>)
+        };
+        let cp_arc: Arc<ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> =
+            unsafe { Arc::from_raw(cp_ref) };
+        let mut processor = GraphConsumer::new(Arc::clone(&cp_arc));
+        std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
         while running_audio.load(std::sync::atomic::Ordering::Relaxed) {
-            let reader_ptr: *const TestReader = unsafe { (*cp_ptr).acquire_graph() as *const _ };
-            let reader = unsafe { &*reader_ptr };
+            let reader = processor.acquire_graph();
 
             // Read all 16 attribute offsets — must never panic or return garbage
             for offset in 0..16 {

@@ -1,3 +1,4 @@
+use synaptic_kernel::graph_consumer::GraphConsumer;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
 
@@ -304,8 +305,8 @@ fn disconnect_then_reconnect_same_pair() {
 
     kernel.publish();
     let cp = kernel.get_control_plane();
-    let graph = cp.acquire_graph();
-    graph.swap();
+    let mut consumer = GraphConsumer::new(cp);
+    let _graph = consumer.acquire_graph();
     kernel.publish();
 
     let s2 = kernel.connect(a, b, 2).unwrap();

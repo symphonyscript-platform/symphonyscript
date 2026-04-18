@@ -123,7 +123,7 @@ fn mem_metadata_visible_to_reader_without_publish() {
     // so writes should be visible immediately (Relaxed atomics, same-thread)
     controller.publish();
 
-    let processor = TestProcessor::new(controller.get_control_plane());
+    let mut processor = TestProcessor::new(controller.get_control_plane());
     let graph = processor.acquire_graph();
 
     assert_eq!(graph.mem_read_meta(0), 42);
@@ -135,7 +135,7 @@ fn mem_metadata_update_between_reads() {
     let mut controller = TestKernel::new(config());
     controller.publish();
 
-    let processor = TestProcessor::new(controller.get_control_plane());
+    let mut processor = TestProcessor::new(controller.get_control_plane());
 
     // First read
     let graph = processor.acquire_graph();
@@ -159,7 +159,7 @@ fn tb_metadata_visible_after_publish_and_swap() {
     controller.tb_write_meta(3, 456);
     controller.publish();
 
-    let processor = TestProcessor::new(controller.get_control_plane());
+    let mut processor = TestProcessor::new(controller.get_control_plane());
     let graph = processor.acquire_graph();
 
     assert_eq!(graph.tb_read_meta(0), 123);
@@ -173,7 +173,7 @@ fn tb_metadata_not_visible_without_publish() {
     // Initial publish to get clean state
     controller.publish();
 
-    let processor = TestProcessor::new(controller.get_control_plane());
+    let mut processor = TestProcessor::new(controller.get_control_plane());
     let graph = processor.acquire_graph();
     assert_eq!(graph.tb_read_meta(0), 0);
 

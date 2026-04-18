@@ -49,7 +49,7 @@ fn epoch_stress_grow_under_audio_load_with_ack() {
     let audio_thread = thread::spawn(move || {
         let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>) };
         let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> = unsafe { Arc::from_raw(cp_ref) };
-        let processor = TestProcessor::new(Arc::clone(&cp_arc));
+        let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
         let mut max_chain_len = 0usize;
@@ -156,7 +156,7 @@ fn epoch_stress_random_mutations_under_audio_load() {
     let audio_thread = thread::spawn(move || {
         let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>) };
         let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> = unsafe { Arc::from_raw(cp_ref) };
-        let processor = TestProcessor::new(Arc::clone(&cp_arc));
+        let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
@@ -212,7 +212,7 @@ fn epoch_stress_random_mutations_under_audio_load() {
         if node_slots.len() > 10 {
             // Disconnect synapses first
             while let Some(s) = synapse_slots.pop() {
-                let _ = controller.disconnect(s);
+                let _ = controller.disconnect_synapse(s);
             }
 
             // Remove a few nodes
@@ -279,7 +279,7 @@ fn epoch_stress_slow_ack_does_not_crash() {
     let audio_thread = thread::spawn(move || {
         let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>) };
         let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> = unsafe { Arc::from_raw(cp_ref) };
-        let processor = TestProcessor::new(Arc::clone(&cp_arc));
+        let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
@@ -356,7 +356,7 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
     let audio_thread = thread::spawn(move || {
         let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>) };
         let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> = unsafe { Arc::from_raw(cp_ref) };
-        let processor = TestProcessor::new(Arc::clone(&cp_arc));
+        let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
@@ -416,7 +416,7 @@ fn epoch_stress_grows_accumulate_without_ack() {
     }
 
     // Now create a processor and ack
-    let processor = TestProcessor::new(controller.get_control_plane());
+    let mut processor = TestProcessor::new(controller.get_control_plane());
 
     let graph = processor.acquire_graph();
     let head = graph.get_head_node();
