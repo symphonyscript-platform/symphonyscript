@@ -45,7 +45,12 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
         Self::create(mem, mem_start_offset, capacity, true)
     }
 
-    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
+    pub fn create(
+        mem: AtomicBuffer,
+        mem_start_offset: usize,
+        capacity: usize,
+        _bind: bool, // reserved for possible future use
+    ) -> Self {
         let mem_end_offset = mem_start_offset + capacity * SLOT_SIZE;
 
         debug_assert!(
@@ -64,6 +69,16 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
     }
 
     pub fn resolve_mem_offset(mem_start_offset: usize, slot: usize) -> usize {
+        debug_assert!(
+            slot > 0,
+            "AttributePlaneWriter::resolve_mem_offset | slot {} out of bounds",
+            slot
+        );
+        debug_assert!(
+            slot > 0,
+            "AttributePlaneWriter::resolve_mem_offset | slot {} out of bounds",
+            slot
+        );
         mem_start_offset + ((slot - 1) * SLOT_SIZE)
     }
 

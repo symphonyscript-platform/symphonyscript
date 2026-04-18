@@ -137,6 +137,13 @@ impl<
         }
     }
 
+    /// Snapshots the current kernel state for persistence.
+    ///
+    /// # Safety Contract
+    /// The consumer thread **must** be fully quiesced before calling `serialize`.
+    /// If a consumer thread is actively traversing the graph or acking generations,
+    /// the snapshot may capture a torn SPSC state (e.g., a triple buffer mid-swap).
+    /// This is the same quiescence requirement that applies to dropping the Kernel.
     pub fn serialize(&mut self) -> SerializedKernel {
         self.publish();
 
