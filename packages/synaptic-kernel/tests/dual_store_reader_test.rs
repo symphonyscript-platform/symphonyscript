@@ -461,3 +461,244 @@ fn reader_layout_sizes_match_writer_layout() {
         CAP * S,
     );
 }
+
+// ============ META_STRIDE > 0 ============
+//
+// Symmetric section to the writer's META_STRIDE > 0 block. Same layout
+// invariant under test: per-slot TB layout is `[core | meta]` interleaved.
+// For slot k (1-based):
+//   struct_start = tb_start_offset + (k - 1) * (CORE_STRIDE + META_STRIDE)
+//   core zone   = [struct_start, struct_start + CORE_STRIDE)
+//   meta zone   = [struct_start + CORE_STRIDE, struct_start + CORE_STRIDE + META_STRIDE)
+
+/// Local helper for the META_STRIDE > 0 section. The existing reader tests
+/// construct stores inline; this helper keeps the new tests compact.
+fn make_store_cma<const C: usize, const M: usize, const A: usize>(
+    capacity: usize,
+) -> (AtomicBuffer, TripleBufferWriter, DualStoreWriter<C, M, A>) {
+    let mem = create_mem(MEM_SIZE);
+    let tb = make_tb(&mem);
+    let store = DualStoreWriter::<C, M, A>::new(
+        Arc::clone(&mem),
+        tb.clone(),
+        DEFAULT_MEM_START_OFFSET,
+        0,
+        capacity,
+    );
+    (mem, tb, store)
+}
+
+// ---- Construction + size ----
+
+#[test]
+fn meta_reader_calculate_size_on_tb_is_capacity_times_core_plus_meta() {
+    assert_eq!(DualStoreReader::<4, 4, 16>::calculate_size_on_tb(4), 4 * (4 + 4));
+    assert_eq!(DualStoreReader::<8, 16, 16>::calculate_size_on_tb(4), 4 * (8 + 16));
+    assert_eq!(DualStoreReader::<1, 1, 1>::calculate_size_on_tb(1), 1 * (1 + 1));
+    assert_eq!(DualStoreReader::<16, 0, 8>::calculate_size_on_tb(256), 256 * (16 + 0));
+    assert_eq!(DualStoreReader::<64, 64, 16>::calculate_size_on_tb(32), 32 * (64 + 64));
+
+    // Reader and writer formulas must agree across several combinations.
+    for cap in [1usize, 4, 16, 32] {
+        assert_eq!(
+            DualStoreReader::<4, 4, 16>::calculate_size_on_tb(cap),
+            DualStoreWriter::<4, 4, 16>::calculate_size_on_tb(cap),
+        );
+        assert_eq!(
+            DualStoreReader::<8, 16, 16>::calculate_size_on_tb(cap),
+            DualStoreWriter::<8, 16, 16>::calculate_size_on_tb(cap),
+        );
+    }
+}
+
+#[test]
+fn meta_reader_calculate_size_on_mem_is_independent_of_core_and_meta() {
+    let base = DualStoreReader::<0, 0, 16>::calculate_size_on_mem(32);
+    assert_eq!(DualStoreReader::<8, 0, 16>::calculate_size_on_mem(32), base);
+    assert_eq!(DualStoreReader::<0, 8, 16>::calculate_size_on_mem(32), base);
+    assert_eq!(DualStoreReader::<8, 16, 16>::calculate_size_on_mem(32), base);
+    assert_eq!(DualStoreReader::<64, 64, 16>::calculate_size_on_mem(32), base);
+}
+
+// ---- Writer -> Reader roundtrip with META ----
+
+#[test]
+fn core_meta_writer_reader_roundtrip_after_publish_swap() {
+    const C: usize = 4;
+    const M: usize = 4;
+    let (_mem, tb, store) = make_store_cma::<C, M, 16>(4);
+    let tb_reader = tb.to_reader();
+
+    let s = store.insert_struct().unwrap();
+    let core: [i32; C] = [11, 22, 33, 44];
+    let meta: [i32; M] = [-11, -22, -33, -44];
+    store.core_write_all(s, core);
+    store.meta_write_all(s, meta);
+
+    tb.publish();
+    assert!(tb_reader.swap());
+
+    let reader = store.to_reader();
+    assert_eq!(reader.core_read_all(s), core);
+    assert_eq!(reader.meta_read_all(s), meta);
+    for i in 0..C {
+        assert_eq!(reader.core_read(s, i), core[i]);
+    }
+    for j in 0..M {
+        assert_eq!(reader.meta_read(s, j), meta[j]);
+    }
+}
+
+#[test]
+fn core_meta_roundtrip_with_1_1_edge_case() {
+    let (_mem, tb, store) = make_store_cma::<1, 1, 1>(1);
+    let tb_reader = tb.to_reader();
+
+    let s = store.insert_struct().unwrap();
+    store.core_write(s, 0, 7);
+    store.meta_write(s, 0, -9);
+
+    tb.publish();
+    assert!(tb_reader.swap());
+
+    let reader = store.to_reader();
+    assert_eq!(reader.core_read(s, 0), 7);
+    assert_eq!(reader.meta_read(s, 0), -9);
+    assert_eq!(reader.core_read_all(s), [7]);
+    assert_eq!(reader.meta_read_all(s), [-9]);
+}
+
+#[test]
+fn core_meta_roundtrip_with_large_strides() {
+    // CORE=64, META=64, capacity=4 => 4 * 128 = 512 <= TB_BUFFER_CAPACITY (1024).
+    const C: usize = 64;
+    const M: usize = 64;
+    const CAP: usize = 4;
+    let (_mem, tb, store) = make_store_cma::<C, M, 16>(CAP);
+    let tb_reader = tb.to_reader();
+
+    let s1 = store.insert_struct().unwrap();
+    let s2 = store.insert_struct().unwrap();
+    assert_eq!((s1, s2), (1, 2));
+
+    let mut c1 = [0i32; C];
+    let mut m1 = [0i32; M];
+    let mut c2 = [0i32; C];
+    let mut m2 = [0i32; M];
+    for i in 0..C {
+        c1[i] = i as i32;
+        c2[i] = -(i as i32) - 1;
+    }
+    for j in 0..M {
+        m1[j] = (j as i32) + 1000;
+        m2[j] = -(j as i32) - 2000;
+    }
+    store.core_write_all(s1, c1);
+    store.meta_write_all(s1, m1);
+    store.core_write_all(s2, c2);
+    store.meta_write_all(s2, m2);
+
+    tb.publish();
+    assert!(tb_reader.swap());
+
+    let reader = store.to_reader();
+    assert_eq!(reader.core_read_all(s1), c1);
+    assert_eq!(reader.meta_read_all(s1), m1);
+    assert_eq!(reader.core_read_all(s2), c2);
+    assert_eq!(reader.meta_read_all(s2), m2);
+}
+
+// ---- Layout verification via raw TripleBufferReader ----
+
+#[test]
+fn reader_core_meta_sees_tb_at_expected_interleaved_offsets() {
+    const C: usize = 4;
+    const M: usize = 4;
+    let (_mem, tb, store) = make_store_cma::<C, M, 16>(4);
+    let tb_reader = tb.to_reader();
+
+    let s1 = store.insert_struct().unwrap();
+    let s2 = store.insert_struct().unwrap();
+    let s3 = store.insert_struct().unwrap();
+    assert_eq!((s1, s2, s3), (1, 2, 3));
+
+    store.core_write_all(s1, [1, 2, 3, 4]);
+    store.meta_write_all(s1, [5, 6, 7, 8]);
+    store.core_write_all(s2, [9, 10, 11, 12]);
+    store.meta_write_all(s2, [13, 14, 15, 16]);
+    store.core_write_all(s3, [17, 18, 19, 20]);
+    store.meta_write_all(s3, [21, 22, 23, 24]);
+
+    tb.publish();
+    assert!(tb_reader.swap());
+
+    let reader = store.to_reader();
+
+    for (k, (core_exp, meta_exp)) in [
+        ([1, 2, 3, 4], [5, 6, 7, 8]),
+        ([9, 10, 11, 12], [13, 14, 15, 16]),
+        ([17, 18, 19, 20], [21, 22, 23, 24]),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let slot = k + 1;
+        assert_eq!(reader.core_read_all(slot), *core_exp, "reader core slot {}", slot);
+        assert_eq!(reader.meta_read_all(slot), *meta_exp, "reader meta slot {}", slot);
+
+        // Raw TripleBufferReader at externally-computed absolute offsets.
+        let start = k * (C + M); // tb_start_offset = 0
+        for i in 0..C {
+            assert_eq!(tb_reader.read(start + i), core_exp[i], "tb core slot {} [{}]", slot, i);
+        }
+        for j in 0..M {
+            assert_eq!(tb_reader.read(start + C + j), meta_exp[j], "tb meta slot {} [{}]", slot, j);
+        }
+    }
+}
+
+#[test]
+fn reader_core_meta_distinct_slots_do_not_overlap() {
+    const C: usize = 4;
+    const M: usize = 4;
+    let (_mem, tb, store) = make_store_cma::<C, M, 16>(4);
+    let tb_reader = tb.to_reader();
+
+    let s1 = store.insert_struct().unwrap();
+    let s2 = store.insert_struct().unwrap();
+    assert_eq!((s1, s2), (1, 2));
+
+    // Write only slot 1. Slot 2's core+meta zone must remain zero.
+    store.core_write_all(s1, [0xAA_AA_AA_AAu32 as i32; C]);
+    store.meta_write_all(s1, [0xBB_BB_BB_BBu32 as i32; M]);
+
+    tb.publish();
+    assert!(tb_reader.swap());
+
+    let reader = store.to_reader();
+    assert_eq!(reader.core_read_all(s1), [0xAA_AA_AA_AAu32 as i32; C]);
+    assert_eq!(reader.meta_read_all(s1), [0xBB_BB_BB_BBu32 as i32; M]);
+    assert_eq!(reader.core_read_all(s2), [0; C]);
+    assert_eq!(reader.meta_read_all(s2), [0; M]);
+}
+
+// ---- Bounds panics for META on reader side ----
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "TbZoneReader.read | offset")]
+fn reader_meta_read_at_stride_panics() {
+    const M: usize = 4;
+    let (_mem, tb, store) = make_store_cma::<4, M, 16>(4);
+    let tb_reader = tb.to_reader();
+
+    // Publish an active slot so the reader has something valid behind slot 1,
+    // but the bounds check in TbZoneReader.read fires regardless.
+    let _s = store.insert_struct().unwrap();
+    tb.publish();
+    let _ = tb_reader.swap();
+
+    let reader = store.to_reader();
+    // One past the last valid meta offset.
+    let _ = reader.meta_read(1, M);
+}

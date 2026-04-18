@@ -275,6 +275,120 @@ fn attr_and_masks_bits_and_returns_previous_value() {
     assert_eq!(store.attr_read(s, 0), 0b0101);
 }
 
+#[test]
+fn attr_or_with_zero_mask_is_noop_but_returns_prior() {
+    let (_mem, _tb, store) = make_store::<8, 16>(4);
+    let s = store.insert_struct().unwrap();
+
+    store.attr_write(s, 0, 0b1010);
+    let prev = store.attr_or(s, 0, 0);
+    assert_eq!(prev, 0b1010);
+    assert_eq!(store.attr_read(s, 0), 0b1010);
+}
+
+#[test]
+fn attr_and_with_all_bits_mask_is_noop_but_returns_prior() {
+    let (_mem, _tb, store) = make_store::<8, 16>(4);
+    let s = store.insert_struct().unwrap();
+
+    store.attr_write(s, 0, 0b1010);
+    let prev = store.attr_and(s, 0, !0i32);
+    assert_eq!(prev, 0b1010);
+    assert_eq!(store.attr_read(s, 0), 0b1010);
+}
+
+#[test]
+fn attr_and_with_zero_mask_clears_all_bits_and_returns_prior() {
+    let (_mem, _tb, store) = make_store::<8, 16>(4);
+    let s = store.insert_struct().unwrap();
+
+    store.attr_write(s, 0, 0b1111_0110);
+    let prev = store.attr_and(s, 0, 0);
+    assert_eq!(prev, 0b1111_0110);
+    assert_eq!(store.attr_read(s, 0), 0);
+}
+
+#[test]
+fn attr_or_is_idempotent_on_second_call() {
+    let (_mem, _tb, store) = make_store::<8, 16>(4);
+    let s = store.insert_struct().unwrap();
+
+    store.attr_write(s, 0, 0b0001);
+    let first = store.attr_or(s, 0, 0b1100);
+    let second = store.attr_or(s, 0, 0b1100);
+    assert_eq!(first, 0b0001, "first call returns prior state");
+    assert_eq!(second, 0b1101, "second call returns state already merged by first");
+    assert_eq!(store.attr_read(s, 0), 0b1101);
+}
+
+#[test]
+fn attr_or_and_chain_produces_expected_bitmask() {
+    let (_mem, _tb, store) = make_store::<8, 16>(4);
+    let s = store.insert_struct().unwrap();
+
+    store.attr_write(s, 0, 0);
+    assert_eq!(store.attr_or(s, 0, 0b0011), 0);
+    assert_eq!(store.attr_and(s, 0, 0b1010), 0b0011);
+    assert_eq!(store.attr_read(s, 0), 0b0010);
+    assert_eq!(store.attr_or(s, 0, 0b0100), 0b0010);
+    assert_eq!(store.attr_read(s, 0), 0b0110);
+}
+
+#[test]
+fn attr_or_at_distinct_offsets_within_slot_are_isolated() {
+    const A: usize = 16;
+    let (_mem, _tb, store) = make_store::<8, A>(4);
+    let s = store.insert_struct().unwrap();
+
+    for i in 0..A {
+        store.attr_write(s, i, 0);
+    }
+    store.attr_or(s, 3, 0b1010);
+    for i in 0..A {
+        let expected = if i == 3 { 0b1010 } else { 0 };
+        assert_eq!(store.attr_read(s, i), expected, "offset {} leaked", i);
+    }
+}
+
+#[test]
+fn attr_and_or_at_distinct_slots_are_isolated() {
+    let (_mem, _tb, store) = make_store::<8, 16>(4);
+    let s1 = store.insert_struct().unwrap();
+    let s2 = store.insert_struct().unwrap();
+    let s3 = store.insert_struct().unwrap();
+
+    store.attr_write(s1, 0, 0b1111);
+    store.attr_write(s2, 0, 0b1111);
+    store.attr_write(s3, 0, 0b1111);
+
+    assert_eq!(store.attr_and(s2, 0, 0b0101), 0b1111);
+    assert_eq!(store.attr_read(s1, 0), 0b1111, "s1 must not be affected");
+    assert_eq!(store.attr_read(s2, 0), 0b0101);
+    assert_eq!(store.attr_read(s3, 0), 0b1111, "s3 must not be affected");
+
+    assert_eq!(store.attr_or(s3, 0, 0b0001_0000), 0b1111);
+    assert_eq!(store.attr_read(s1, 0), 0b1111);
+    assert_eq!(store.attr_read(s2, 0), 0b0101);
+    assert_eq!(store.attr_read(s3, 0), 0b0001_1111);
+}
+
+#[test]
+fn attr_or_sets_sign_bit_and_returns_unsigned_prior() {
+    let (_mem, _tb, store) = make_store::<8, 16>(4);
+    let s = store.insert_struct().unwrap();
+
+    store.attr_write(s, 0, 0x0000_0001);
+    let prev = store.attr_or(s, 0, i32::MIN);
+    assert_eq!(prev, 0x0000_0001);
+    assert_eq!(store.attr_read(s, 0), i32::MIN | 0x0000_0001);
+    assert!(store.attr_read(s, 0) < 0, "sign bit must be set");
+
+    let prev2 = store.attr_and(s, 0, i32::MAX);
+    assert_eq!(prev2, i32::MIN | 0x0000_0001);
+    assert_eq!(store.attr_read(s, 0), 0x0000_0001);
+    assert!(store.attr_read(s, 0) > 0);
+}
+
 // ============ Active / capacity / utilization ============
 
 #[test]
@@ -864,4 +978,362 @@ fn mem_layout_matches_declared_sizes() {
         store.tb_end_offset() - store.tb_start_offset(),
         CAP * S,
     );
+}
+
+// ============ META_STRIDE > 0 ============
+//
+// New section exercising the dual-zone (core + meta) layout. The layout
+// invariant under test: per-slot TB layout is `[core | meta]` interleaved
+// per slot, not plane-separated. For slot k (1-based):
+//   struct_start = tb_start_offset + (k - 1) * (CORE_STRIDE + META_STRIDE)
+//   core zone   = [struct_start, struct_start + CORE_STRIDE)
+//   meta zone   = [struct_start + CORE_STRIDE, struct_start + CORE_STRIDE + META_STRIDE)
+
+/// New generic helper for the META_STRIDE > 0 section. The existing
+/// `make_store<S, A>` is signature-locked to `<S, 0, A>` and is used by
+/// the entire pre-existing suite — do not change it.
+fn make_store_cma<const C: usize, const M: usize, const A: usize>(
+    capacity: usize,
+) -> (AtomicBuffer, TripleBufferWriter, DualStoreWriter<C, M, A>) {
+    let mem = create_mem(MEM_SIZE);
+    let tb = make_tb(&mem);
+    let store = DualStoreWriter::<C, M, A>::new(
+        Arc::clone(&mem),
+        tb.clone(),
+        DEFAULT_MEM_START_OFFSET,
+        0,
+        capacity,
+    );
+    (mem, tb, store)
+}
+
+// ---- Construction + size ----
+
+#[test]
+fn meta_calculate_size_on_tb_is_capacity_times_core_plus_meta() {
+    // Derived directly from the layout invariant: capacity * (CORE + META).
+    assert_eq!(DualStoreWriter::<4, 4, 16>::calculate_size_on_tb(4), 4 * (4 + 4));
+    assert_eq!(DualStoreWriter::<8, 16, 16>::calculate_size_on_tb(4), 4 * (8 + 16));
+    assert_eq!(DualStoreWriter::<1, 1, 1>::calculate_size_on_tb(1), 1 * (1 + 1));
+    // META=0 edge case must still match the formula.
+    assert_eq!(DualStoreWriter::<16, 0, 8>::calculate_size_on_tb(256), 256 * (16 + 0));
+    // Large pair.
+    assert_eq!(DualStoreWriter::<64, 64, 16>::calculate_size_on_tb(32), 32 * (64 + 64));
+}
+
+#[test]
+fn meta_calculate_size_on_mem_is_independent_of_core_and_meta() {
+    // Mem plane holds only SlotAllocator + AttributePlane; CORE/META live
+    // on the TB plane. Vary CORE/META while fixing ATTR+capacity: sizes
+    // must match exactly.
+    let base = DualStoreWriter::<0, 0, 16>::calculate_size_on_mem(32);
+    assert_eq!(DualStoreWriter::<8, 0, 16>::calculate_size_on_mem(32), base);
+    assert_eq!(DualStoreWriter::<0, 8, 16>::calculate_size_on_mem(32), base);
+    assert_eq!(DualStoreWriter::<8, 16, 16>::calculate_size_on_mem(32), base);
+    assert_eq!(DualStoreWriter::<64, 64, 16>::calculate_size_on_mem(32), base);
+
+    // Doubling capacity grows by at least ATTR_STRIDE * (new - old).
+    let grown = DualStoreWriter::<8, 16, 16>::calculate_size_on_mem(64);
+    assert!(grown - base >= 32 * 16);
+}
+
+// ---- Core/meta isolation per slot ----
+
+#[test]
+fn core_meta_write_all_read_all_roundtrip_within_slot() {
+    let (_mem, _tb, store) = make_store_cma::<4, 4, 16>(4);
+    let s = store.insert_struct().unwrap();
+
+    let core: [i32; 4] = [11, 22, 33, 44];
+    let meta: [i32; 4] = [-11, -22, -33, -44];
+    store.core_write_all(s, core);
+    store.meta_write_all(s, meta);
+
+    assert_eq!(store.core_read_all(s), core);
+    assert_eq!(store.meta_read_all(s), meta);
+}
+
+#[test]
+fn core_meta_per_field_writes_and_reads_are_distinct() {
+    const C: usize = 8;
+    const M: usize = 16;
+    let (_mem, _tb, store) = make_store_cma::<C, M, 16>(4);
+    let s = store.insert_struct().unwrap();
+
+    // Distinct value spaces for core and meta so an accidental alias
+    // would land a "wrong" value at a field.
+    for i in 0..C {
+        store.core_write(s, i, 1000 + i as i32);
+    }
+    for j in 0..M {
+        store.meta_write(s, j, 2000 + j as i32);
+    }
+
+    for i in 0..C {
+        assert_eq!(store.core_read(s, i), 1000 + i as i32, "core[{}]", i);
+    }
+    for j in 0..M {
+        assert_eq!(store.meta_read(s, j), 2000 + j as i32, "meta[{}]", j);
+    }
+}
+
+#[test]
+fn core_meta_no_cross_contamination_on_mutation() {
+    const C: usize = 4;
+    const M: usize = 4;
+    let (_mem, _tb, store) = make_store_cma::<C, M, 16>(4);
+    let s = store.insert_struct().unwrap();
+
+    let core_initial: [i32; C] = [1, 2, 3, 4];
+    let meta_initial: [i32; M] = [10, 20, 30, 40];
+    store.core_write_all(s, core_initial);
+    store.meta_write_all(s, meta_initial);
+
+    // Mutating every core field must not perturb any meta field.
+    for i in 0..C {
+        store.core_write(s, i, -(i as i32) - 100);
+    }
+    assert_eq!(store.meta_read_all(s), meta_initial);
+
+    // Mutating every meta field must not perturb any core field.
+    let core_after_first_mutation = store.core_read_all(s);
+    for j in 0..M {
+        store.meta_write(s, j, -(j as i32) - 500);
+    }
+    assert_eq!(store.core_read_all(s), core_after_first_mutation);
+}
+
+// ---- Cross-slot isolation with META ----
+
+#[test]
+fn core_meta_cross_slot_isolation() {
+    const C: usize = 4;
+    const M: usize = 4;
+    let (_mem, _tb, store) = make_store_cma::<C, M, 16>(4);
+    let s1 = store.insert_struct().unwrap();
+    let s2 = store.insert_struct().unwrap();
+    let s3 = store.insert_struct().unwrap();
+    assert_eq!((s1, s2, s3), (1, 2, 3));
+
+    let c1: [i32; C] = [1, 1, 1, 1];
+    let c2: [i32; C] = [2, 2, 2, 2];
+    let c3: [i32; C] = [3, 3, 3, 3];
+    let m1: [i32; M] = [101, 101, 101, 101];
+    let m2: [i32; M] = [202, 202, 202, 202];
+    let m3: [i32; M] = [303, 303, 303, 303];
+    store.core_write_all(s1, c1);
+    store.core_write_all(s2, c2);
+    store.core_write_all(s3, c3);
+    store.meta_write_all(s1, m1);
+    store.meta_write_all(s2, m2);
+    store.meta_write_all(s3, m3);
+
+    assert_eq!(store.core_read_all(s1), c1);
+    assert_eq!(store.core_read_all(s2), c2);
+    assert_eq!(store.core_read_all(s3), c3);
+    assert_eq!(store.meta_read_all(s1), m1);
+    assert_eq!(store.meta_read_all(s2), m2);
+    assert_eq!(store.meta_read_all(s3), m3);
+}
+
+#[test]
+fn core_meta_slot_reuse_zeroes_full_core_plus_meta_zone() {
+    const C: usize = 4;
+    const M: usize = 4;
+    let (_mem, _tb, store) = make_store_cma::<C, M, 16>(4);
+
+    let s = store.insert_struct().unwrap();
+    // Poison the entire core+meta zone of slot s.
+    store.core_write_all(s, [0x11_11_11_11u32 as i32; C]);
+    store.meta_write_all(s, [0x22_22_22_22u32 as i32; M]);
+
+    let reader_ack = store.to_staging_buffer_reader();
+    store.remove_struct(s).unwrap();
+    store.publish();
+    reader_ack.ack();
+    store.publish();
+
+    let s2 = store.insert_struct().unwrap();
+    assert_eq!(s2, s, "SimpleFreeList LIFO should reuse the just-freed slot");
+
+    // insert_struct loops 0..(CORE_STRIDE + META_STRIDE), so BOTH zones
+    // must be zero on reuse.
+    assert_eq!(store.core_read_all(s2), [0; C]);
+    assert_eq!(store.meta_read_all(s2), [0; M]);
+}
+
+// ---- Layout verification via underlying TB ----
+
+#[test]
+fn core_meta_lands_at_expected_interleaved_tb_offsets_slot_1() {
+    const C: usize = 4;
+    const M: usize = 4;
+    let (_mem, tb, store) = make_store_cma::<C, M, 16>(4);
+    let slot = store.insert_struct().unwrap();
+    assert_eq!(slot, 1);
+
+    // Per layout invariant, start = tb_start_offset + (slot - 1) * (C + M) = 0.
+    let start = 0usize;
+
+    store.core_write_all(slot, [0xA1, 0xA2, 0xA3, 0xA4]);
+    store.meta_write_all(slot, [0xB1, 0xB2, 0xB3, 0xB4]);
+
+    // Core zone: [start, start + C)
+    for i in 0..C {
+        assert_eq!(tb.read(start + i), 0xA1 + i as i32, "core[{}]", i);
+    }
+    // Meta zone: [start + C, start + C + M)
+    for j in 0..M {
+        assert_eq!(tb.read(start + C + j), 0xB1 + j as i32, "meta[{}]", j);
+    }
+}
+
+#[test]
+fn core_meta_lands_at_expected_interleaved_tb_offsets_slot_3() {
+    const C: usize = 4;
+    const M: usize = 4;
+    let (_mem, tb, store) = make_store_cma::<C, M, 16>(4);
+    let _ = store.insert_struct().unwrap();
+    let _ = store.insert_struct().unwrap();
+    let slot = store.insert_struct().unwrap();
+    assert_eq!(slot, 3);
+
+    // start = 0 + (3 - 1) * (4 + 4) = 16.
+    let start: usize = (slot - 1) * (C + M);
+
+    store.core_write(slot, 0, 7_001);
+    store.core_write(slot, 3, 7_003);
+    store.meta_write(slot, 0, 8_001);
+    store.meta_write(slot, 3, 8_003);
+
+    assert_eq!(tb.read(start + 0), 7_001);
+    assert_eq!(tb.read(start + 3), 7_003);
+    assert_eq!(tb.read(start + C + 0), 8_001);
+    assert_eq!(tb.read(start + C + 3), 8_003);
+}
+
+#[test]
+fn core_meta_respects_nonzero_tb_start_offset() {
+    const C: usize = 4;
+    const M: usize = 4;
+    const TB_START: usize = 32;
+    let mem = create_mem(MEM_SIZE);
+    let tb = make_tb(&mem);
+    let store = DualStoreWriter::<C, M, 16>::new(
+        Arc::clone(&mem),
+        tb.clone(),
+        DEFAULT_MEM_START_OFFSET,
+        TB_START,
+        4,
+    );
+
+    let s1 = store.insert_struct().unwrap();
+    let s2 = store.insert_struct().unwrap();
+    assert_eq!((s1, s2), (1, 2));
+
+    store.core_write_all(s1, [1, 2, 3, 4]);
+    store.meta_write_all(s1, [5, 6, 7, 8]);
+    store.core_write_all(s2, [9, 10, 11, 12]);
+    store.meta_write_all(s2, [13, 14, 15, 16]);
+
+    let start1 = TB_START + 0 * (C + M);
+    let start2 = TB_START + 1 * (C + M);
+    for i in 0..C {
+        assert_eq!(tb.read(start1 + i), (1 + i) as i32);
+        assert_eq!(tb.read(start2 + i), (9 + i) as i32);
+    }
+    for j in 0..M {
+        assert_eq!(tb.read(start1 + C + j), (5 + j) as i32);
+        assert_eq!(tb.read(start2 + C + j), (13 + j) as i32);
+    }
+
+    // Slots are contiguous with no gap and no overlap:
+    // start2 begins exactly where slot 1 ends.
+    assert_eq!(start1 + C + M, start2);
+}
+
+// ---- Bounds panics for META ----
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "TbZoneWriter.write | offset")]
+fn meta_write_at_stride_panics() {
+    const M: usize = 4;
+    let (_mem, _tb, store) = make_store_cma::<4, M, 16>(4);
+    let s = store.insert_struct().unwrap();
+    // One past the last valid meta offset.
+    store.meta_write(s, M, 0);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "TbZoneWriter.read | offset")]
+fn meta_read_at_stride_panics() {
+    const M: usize = 4;
+    let (_mem, _tb, store) = make_store_cma::<4, M, 16>(4);
+    let s = store.insert_struct().unwrap();
+    let _ = store.meta_read(s, M);
+}
+
+// ---- copy_from with META ----
+
+#[test]
+fn copy_from_migrates_core_meta_and_attrs() {
+    const C: usize = 4;
+    const M: usize = 4;
+    const A: usize = 16;
+    let src_mem = create_mem(MEM_SIZE);
+    let src_tb = make_tb(&src_mem);
+    let src = DualStoreWriter::<C, M, A>::new(
+        Arc::clone(&src_mem),
+        src_tb.clone(),
+        DEFAULT_MEM_START_OFFSET,
+        0,
+        4,
+    );
+
+    let s1 = src.insert_struct().unwrap();
+    let s2 = src.insert_struct().unwrap();
+    let s3 = src.insert_struct().unwrap();
+
+    let c1: [i32; C] = [1, 2, 3, 4];
+    let c2: [i32; C] = [5, 6, 7, 8];
+    let c3: [i32; C] = [9, 10, 11, 12];
+    let m1: [i32; M] = [-1, -2, -3, -4];
+    let m2: [i32; M] = [-5, -6, -7, -8];
+    let m3: [i32; M] = [-9, -10, -11, -12];
+    let a1: [i32; A] = [100; A];
+    let a2: [i32; A] = [200; A];
+    let a3: [i32; A] = [300; A];
+    src.core_write_all(s1, c1);
+    src.core_write_all(s2, c2);
+    src.core_write_all(s3, c3);
+    src.meta_write_all(s1, m1);
+    src.meta_write_all(s2, m2);
+    src.meta_write_all(s3, m3);
+    src.attr_write_all(s1, a1);
+    src.attr_write_all(s2, a2);
+    src.attr_write_all(s3, a3);
+
+    let dst_mem = create_mem(MEM_SIZE);
+    let dst_tb = make_tb(&dst_mem);
+    let dst = DualStoreWriter::<C, M, A>::new(
+        Arc::clone(&dst_mem),
+        dst_tb.clone(),
+        DEFAULT_MEM_START_OFFSET,
+        0,
+        4,
+    );
+    dst.copy_from(&src);
+
+    for (s, c, m, a) in [
+        (s1, c1, m1, a1),
+        (s2, c2, m2, a2),
+        (s3, c3, m3, a3),
+    ] {
+        assert!(dst.is_active_slot(s));
+        assert_eq!(dst.core_read_all(s), c, "core slot {}", s);
+        assert_eq!(dst.meta_read_all(s), m, "meta slot {}", s);
+        assert_eq!(dst.attr_read_all(s), a, "attr slot {}", s);
+    }
 }
