@@ -1,5 +1,6 @@
+use crate::constants::NODE_SIZE;
+use crate::primitives::dual_store_reader::DualStoreReader;
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
-use crate::topology::node::node_chain_writer::NodeChainWriter;
 use crate::topology::node::node_reader::NodeReader;
 
 /// Consumer-side triple-buffered doubly-linked list for graph nodes.
@@ -17,53 +18,74 @@ use crate::topology::node::node_reader::NodeReader;
 /// - Slots are 1-based. 0 indicates an undefined state.
 /// - Created exclusively via `NodeChainWriter::to_reader()`.
 #[derive(Clone)]
-pub struct NodeChainReader<const META_SIZE: usize> {
-    triple_buffer: TripleBufferReader,
-    tb_start_offset: usize,
-    tb_end_offset: usize,
-    capacity: usize,
+pub struct NodeChainReader<const META_STRIDE: usize, const ATTR_STRIDE: usize> {
+    tb: TripleBufferReader,
+    ds: DualStoreReader<NODE_SIZE, META_STRIDE, ATTR_STRIDE>,
+    tb_head_offset: usize,
 }
 
-impl<const META_SIZE: usize> NodeChainReader<META_SIZE> {
+impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainReader<META_STRIDE, ATTR_STRIDE> {
     pub(crate) fn bind(
-        triple_buffer: TripleBufferReader,
-        tb_start_offset: usize,
-        capacity: usize,
+        tb: TripleBufferReader,
+        ds: DualStoreReader<NODE_SIZE, META_STRIDE, ATTR_STRIDE>,
+        tb_head_offset: usize,
     ) -> Self {
-        let tb_end_offset =
-            tb_start_offset + NodeChainWriter::<META_SIZE>::calculate_size_on_tb(capacity);
-
-        debug_assert!(
-            tb_end_offset <= triple_buffer.buffer_capacity(),
-            "NodeChainReader::bind | tb_end_offset {} out of bounds",
-            tb_end_offset,
-        );
-
         NodeChainReader {
-            triple_buffer,
-            tb_start_offset,
-            tb_end_offset,
-            capacity,
+            tb,
+            ds,
+            tb_head_offset,
         }
     }
 
     pub fn tb_start_offset(&self) -> usize {
-        self.tb_start_offset
+        self.tb_head_offset
     }
 
     pub fn tb_end_offset(&self) -> usize {
-        self.tb_end_offset
+        self.ds.tb_end_offset()
     }
 
     pub fn capacity(&self) -> usize {
-        self.capacity
+        self.ds.capacity()
     }
 
+    #[inline]
+    pub fn core_read(&self, slot: usize, offset: usize) -> i32 {
+        self.ds.core_read(slot, offset)
+    }
+
+    #[inline]
+    pub fn core_read_all(&self, slot: usize) -> [i32; NODE_SIZE] {
+        self.ds.core_read_all(slot)
+    }
+
+    #[inline]
+    pub fn meta_read(&self, slot: usize, offset: usize) -> i32 {
+        self.ds.meta_read(slot, offset)
+    }
+
+    #[inline]
+    pub fn meta_read_all(&self, slot: usize) -> [i32; META_STRIDE] {
+        self.ds.meta_read_all(slot)
+    }
+
+    #[inline]
+    pub fn attr_read(&self, slot: usize, offset: usize) -> i32 {
+        self.ds.attr_read(slot, offset)
+    }
+
+    #[inline]
+    pub fn attr_read_all(&self, slot: usize) -> [i32; ATTR_STRIDE] {
+        self.ds.attr_read_all(slot)
+    }
+
+    #[inline]
     pub fn get_head_slot(&self) -> usize {
-        self.triple_buffer.read(self.tb_start_offset) as usize
+        self.tb.read(self.tb_head_offset) as usize
     }
 
-    pub fn get_head(&'_ self) -> Option<NodeReader<'_, META_SIZE>> {
+    #[inline]
+    pub fn get_head(&'_ self) -> Option<NodeReader<'_, META_STRIDE>> {
         let head_slot = self.get_head_slot();
 
         if head_slot == 0 {
@@ -73,9 +95,8 @@ impl<const META_SIZE: usize> NodeChainReader<META_SIZE> {
         Some(self.get_node(head_slot))
     }
 
-    pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_, META_SIZE> {
-        let start_offset =
-            NodeChainWriter::<META_SIZE>::calculate_node_start_offset(self.tb_start_offset, slot);
-        NodeReader::new(&self.triple_buffer, start_offset)
+    #[inline]
+    pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_, META_STRIDE> {
+        NodeReader::new(self.ds.get_struct(slot))
     }
 }

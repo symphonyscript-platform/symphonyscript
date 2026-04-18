@@ -75,7 +75,7 @@ pub struct SynapticGraphWriter<
     node_attribute_plane: AttributePlaneWriter<NODE_ATTRIBUTES_SIZE>,
     synapse_attribute_plane: AttributePlaneWriter<SYNAPSE_ATTRIBUTES_SIZE>,
     tb_writer: TripleBufferWriter,
-    node_chain_writer: NodeChainWriter<NODE_META_SIZE>,
+    node_chain_writer: NodeChainWriter<NODE_META_SIZE, NODE_ATTRIBUTES_SIZE>,
     synapse_chain_writer: SynapseChainWriter<NODE_META_SIZE, SYNAPSE_META_SIZE>,
     node_capacity: usize,
     synapse_capacity: usize,
@@ -208,7 +208,9 @@ impl<
     pub fn calculate_size_on_mem(config: &SynapticGraphConfig) -> usize {
         Self::HEADERS_SIZE
             + MemMetadataWriter::calculate_size_on_mem(config.mem_metadata_size)
-            + NodeChainWriter::<NODE_META_SIZE>::calculate_size_on_mem(config.node_capacity)
+            + NodeChainWriter::<NODE_META_SIZE, NODE_ATTRIBUTES_SIZE>::calculate_size_on_mem(
+                config.node_capacity,
+            )
             + SynapseChainWriter::<NODE_META_SIZE, SYNAPSE_META_SIZE>::calculate_size_on_mem(
                 config.synapse_capacity,
             )
@@ -223,7 +225,9 @@ impl<
 
     pub fn calculate_size_on_tb(config: &SynapticGraphConfig) -> usize {
         TbMetadataWriter::calculate_size_on_tb(config.tb_metadata_size)
-            + NodeChainWriter::<NODE_META_SIZE>::calculate_size_on_tb(config.node_capacity)
+            + NodeChainWriter::<NODE_META_SIZE, NODE_ATTRIBUTES_SIZE>::calculate_size_on_tb(
+                config.node_capacity,
+            )
             + SynapseChainWriter::<NODE_META_SIZE, SYNAPSE_META_SIZE>::calculate_size_on_tb(
                 config.synapse_capacity,
             )
@@ -467,7 +471,9 @@ impl<
             "SynapticGraphWriter.get_synapse_attribute | attempted to read inactive slot {}",
             slot
         );
-        self.synapse_attribute_plane.get(slot).read(attribute_offset)
+        self.synapse_attribute_plane
+            .get(slot)
+            .read(attribute_offset)
     }
 
     pub fn set_synapse_attributes<T: IntoArray<SYNAPSE_ATTRIBUTES_SIZE>>(
@@ -504,7 +510,12 @@ impl<
             .get(slot)
             .or(attribute_offset, value)
     }
-    pub fn and_synapse_attribute(&'_ self, slot: usize, attribute_offset: usize, value: i32) -> i32 {
+    pub fn and_synapse_attribute(
+        &'_ self,
+        slot: usize,
+        attribute_offset: usize,
+        value: i32,
+    ) -> i32 {
         debug_assert!(
             self.synapse_chain_writer.is_active_slot(slot),
             "SynapticGraphWriter.and_synapse_attribute | attempted to read inactive slot {}",

@@ -101,6 +101,7 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
         self.attributes.read_all(slot)
     }
 
+    #[inline]
     pub fn get_struct(&'_ self, slot: usize) -> StructReader<'_, CORE_STRIDE, META_STRIDE> {
         let start_offset =
             DualStoreWriter::<CORE_STRIDE, META_STRIDE, ATTR_STRIDE>::calculate_struct_start_offset(

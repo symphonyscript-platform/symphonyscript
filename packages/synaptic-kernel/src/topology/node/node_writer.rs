@@ -1,6 +1,5 @@
 use crate::constants::NODE_SIZE;
-use crate::primitives::triple_buffer_writer::TripleBufferWriter;
-use crate::primitives::tb_zone_writer::TbZoneWriter;
+use crate::primitives::struct_writer::StructWriter;
 
 /// Producer-side structural facade for a graph node on the triple buffer.
 ///
@@ -11,7 +10,7 @@ use crate::primitives::tb_zone_writer::TbZoneWriter;
 /// Producer thread only. Delegates back to the underlying `SlotWriter`s.
 ///
 /// # Core Layout (8x i32)
-/// - `0`: `kind` (shifted by 24 bits) combined with internal flags (lower 24 bits).
+/// - `0`: `kind` (shifted by 24 bits) combined with potential future internal flags (lower 24 bits).
 /// - `1`: `next_ptr`
 /// - `2`: `prev_ptr`
 /// - `3`: `outgoing_synapse_head`
@@ -26,90 +25,92 @@ use crate::primitives::tb_zone_writer::TbZoneWriter;
 /// - All mutation methods (`set_*`) are `pub(crate)`. Only the kernel can mutate
 ///   active topology, enforcing structural graph invariants.
 pub struct NodeWriter<'a, const META_SIZE: usize> {
-    core: TbZoneWriter<'a, NODE_SIZE>,
-    meta: TbZoneWriter<'a, META_SIZE>,
+    struct_writer: StructWriter<'a, NODE_SIZE, META_SIZE>,
 }
 
 impl<'a, const META_SIZE: usize> NodeWriter<'a, META_SIZE> {
-    pub fn new(triple_buffer: &'a TripleBufferWriter, tb_start_offset: usize) -> Self {
-        let tb_end_offset = tb_start_offset + NODE_SIZE + META_SIZE;
-
-        debug_assert!(
-            tb_end_offset <= triple_buffer.buffer_capacity(),
-            "NodeWriter::new | range [{}..{}] exceeds buffer capacity {}",
-            tb_start_offset,
-            NODE_SIZE + META_SIZE,
-            triple_buffer.buffer_capacity(),
-        );
-
-        NodeWriter {
-            core: TbZoneWriter::new(&triple_buffer, tb_start_offset),
-            meta: TbZoneWriter::new(&triple_buffer, tb_start_offset + NODE_SIZE),
-        }
+    pub fn new(struct_writer: StructWriter<'a, NODE_SIZE, META_SIZE>) -> Self {
+        NodeWriter { struct_writer }
     }
 
+    #[inline]
     pub fn get_kind(&self) -> i32 {
-        (self.core.read(0) as u32 >> 24) as i32
+        (self.struct_writer.read_core(0) as u32 >> 24) as i32
     }
 
+    #[inline]
     pub(crate) fn set_kind(&self, value: i32) {
-        let bitmask = self.core.read(0) & ((1 << 24) - 1);
-        self.core.write(0, bitmask | value << 24)
+        let bitmask = self.struct_writer.read_core(0) & ((1 << 24) - 1);
+        self.struct_writer.write_core(0, bitmask | value << 24)
     }
 
+    #[inline]
     pub fn get_next_ptr(&self) -> usize {
-        self.core.read(1) as usize
+        self.struct_writer.read_core(1) as usize
     }
 
+    #[inline]
     pub(crate) fn set_next_ptr(&self, value: usize) {
-        self.core.write(1, value as i32)
+        self.struct_writer.write_core(1, value as i32)
     }
 
+    #[inline]
     pub fn get_prev_ptr(&self) -> usize {
-        self.core.read(2) as usize
+        self.struct_writer.read_core(2) as usize
     }
 
+    #[inline]
     pub(crate) fn set_prev_ptr(&self, value: usize) {
-        self.core.write(2, value as i32)
+        self.struct_writer.write_core(2, value as i32)
     }
 
+    #[inline]
     pub fn get_outgoing_synapse_head(&self) -> usize {
-        self.core.read(3) as usize
+        self.struct_writer.read_core(3) as usize
     }
 
+    #[inline]
     pub(crate) fn set_outgoing_synapse_head(&self, value: usize) {
-        self.core.write(3, value as i32)
+        self.struct_writer.write_core(3, value as i32)
     }
 
+    #[inline]
     pub fn get_outgoing_synapse_tail(&self) -> usize {
-        self.core.read(4) as usize
+        self.struct_writer.read_core(4) as usize
     }
 
+    #[inline]
     pub(crate) fn set_outgoing_synapse_tail(&self, value: usize) {
-        self.core.write(4, value as i32)
+        self.struct_writer.write_core(4, value as i32)
     }
 
+    #[inline]
     pub fn get_incoming_synapse_head(&self) -> usize {
-        self.core.read(5) as usize
+        self.struct_writer.read_core(5) as usize
     }
 
+    #[inline]
     pub(crate) fn set_incoming_synapse_head(&self, value: usize) {
-        self.core.write(5, value as i32)
+        self.struct_writer.write_core(5, value as i32)
     }
 
+    #[inline]
     pub fn get_incoming_synapse_tail(&self) -> usize {
-        self.core.read(6) as usize
+        self.struct_writer.read_core(6) as usize
     }
 
+    #[inline]
     pub(crate) fn set_incoming_synapse_tail(&self, value: usize) {
-        self.core.write(6, value as i32)
+        self.struct_writer.write_core(6, value as i32)
     }
 
+    #[inline]
     pub fn get_meta(&self, offset: usize) -> i32 {
-        self.meta.read(offset)
+        self.struct_writer.read_meta(offset)
     }
 
+    #[inline]
     pub fn set_meta(&self, offset: usize, value: i32) {
-        self.meta.write(offset, value)
+        self.struct_writer.write_meta(offset, value)
     }
 }

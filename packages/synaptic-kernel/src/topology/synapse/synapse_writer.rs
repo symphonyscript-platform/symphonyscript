@@ -11,7 +11,7 @@ use crate::primitives::tb_zone_writer::TbZoneWriter;
 /// Producer thread only. Delegates back to the underlying `SlotWriter`s.
 ///
 /// # Core Layout (8x i32)
-/// - `0`: `kind` (shifted by 24 bits) combined with internal flags (lower 24 bits).
+/// - `0`: `kind` (shifted by 24 bits) combined with potential future internal flags (lower 24 bits).
 /// - `1`: `source_ptr`
 /// - `2`: `target_ptr`
 /// - `3`: `outgoing_next_ptr`

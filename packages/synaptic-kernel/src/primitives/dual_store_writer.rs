@@ -149,34 +149,42 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
         self.allocator.is_active(slot)
     }
 
+    #[inline]
     pub fn core_read(&self, slot: usize, offset: usize) -> i32 {
         self.get_struct(slot).read_core(offset)
     }
 
+    #[inline]
     pub fn core_write(&self, slot: usize, offset: usize, value: i32) {
         self.get_struct(slot).write_core(offset, value)
     }
 
+    #[inline]
     pub fn core_read_all(&self, slot: usize) -> [i32; CORE_STRIDE] {
         self.get_struct(slot).read_core_all()
     }
 
+    #[inline]
     pub fn core_write_all(&self, slot: usize, data: [i32; CORE_STRIDE]) {
         self.get_struct(slot).write_core_all(data)
     }
 
+    #[inline]
     pub fn meta_read(&self, slot: usize, offset: usize) -> i32 {
         self.get_struct(slot).read_meta(offset)
     }
 
+    #[inline]
     pub fn meta_write(&self, slot: usize, offset: usize, value: i32) {
         self.get_struct(slot).write_meta(offset, value)
     }
 
+    #[inline]
     pub fn meta_read_all(&self, slot: usize) -> [i32; META_STRIDE] {
         self.get_struct(slot).read_meta_all()
     }
 
+    #[inline]
     pub fn meta_write_all(&self, slot: usize, data: [i32; META_STRIDE]) {
         self.get_struct(slot).write_meta_all(data)
     }

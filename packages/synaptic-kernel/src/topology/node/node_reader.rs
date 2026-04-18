@@ -1,6 +1,5 @@
 use crate::constants::NODE_SIZE;
-use crate::primitives::tb_zone_reader::TbZoneReader;
-use crate::primitives::triple_buffer_reader::TripleBufferReader;
+use crate::primitives::struct_reader::StructReader;
 
 /// Consumer-side structural facade for a graph node on the triple buffer.
 ///
@@ -16,57 +15,51 @@ use crate::primitives::triple_buffer_reader::TripleBufferReader;
 /// # Encapsulation
 /// - Read-only: structural mutation is strictly prohibited on the reading plane.
 pub struct NodeReader<'a, const META_SIZE: usize> {
-    core: TbZoneReader<'a, NODE_SIZE>,
-    meta: TbZoneReader<'a, META_SIZE>,
+    struct_reader: StructReader<'a, NODE_SIZE, META_SIZE>,
 }
 
 impl<'a, const META_SIZE: usize> NodeReader<'a, META_SIZE> {
-    pub fn new(triple_buffer: &'a TripleBufferReader, tb_start_offset: usize) -> Self {
-        let tb_end_offset = tb_start_offset + NODE_SIZE + META_SIZE;
-
-        debug_assert!(
-            tb_end_offset <= triple_buffer.buffer_capacity(),
-            "NodeReader::new | range [{}..{}] exceeds buffer capacity {}",
-            tb_start_offset,
-            NODE_SIZE + META_SIZE,
-            triple_buffer.buffer_capacity(),
-        );
-
-        NodeReader {
-            core: TbZoneReader::new(&triple_buffer, tb_start_offset),
-            meta: TbZoneReader::new(&triple_buffer, tb_start_offset + NODE_SIZE),
-        }
+    pub fn new(struct_reader: StructReader<'a, NODE_SIZE, META_SIZE>) -> Self {
+        NodeReader { struct_reader }
     }
 
+    #[inline]
     pub fn get_kind(&self) -> i32 {
-        (self.core.read(0) as u32 >> 24) as i32
+        (self.struct_reader.read_core(0) as u32 >> 24) as i32
     }
 
+    #[inline]
     pub fn get_next_ptr(&self) -> usize {
-        self.core.read(1) as usize
+        self.struct_reader.read_core(1) as usize
     }
 
+    #[inline]
     pub fn get_prev_ptr(&self) -> usize {
-        self.core.read(2) as usize
+        self.struct_reader.read_core(2) as usize
     }
 
+    #[inline]
     pub fn get_outgoing_synapse_head(&self) -> usize {
-        self.core.read(3) as usize
+        self.struct_reader.read_core(3) as usize
     }
 
+    #[inline]
     pub fn get_outgoing_synapse_tail(&self) -> usize {
-        self.core.read(4) as usize
+        self.struct_reader.read_core(4) as usize
     }
 
+    #[inline]
     pub fn get_incoming_synapse_head(&self) -> usize {
-        self.core.read(5) as usize
+        self.struct_reader.read_core(5) as usize
     }
 
+    #[inline]
     pub fn get_incoming_synapse_tail(&self) -> usize {
-        self.core.read(6) as usize
+        self.struct_reader.read_core(6) as usize
     }
 
+    #[inline]
     pub fn get_meta(&self, offset: usize) -> i32 {
-        self.meta.read(offset)
+        self.struct_reader.read_meta(offset)
     }
 }
