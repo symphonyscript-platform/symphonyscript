@@ -74,11 +74,6 @@ impl<const SLOT_SIZE: usize> AttributePlaneWriter<SLOT_SIZE> {
             "AttributePlaneWriter::resolve_mem_offset | slot {} out of bounds",
             slot
         );
-        debug_assert!(
-            slot > 0,
-            "AttributePlaneWriter::resolve_mem_offset | slot {} out of bounds",
-            slot
-        );
         mem_start_offset + ((slot - 1) * SLOT_SIZE)
     }
 
