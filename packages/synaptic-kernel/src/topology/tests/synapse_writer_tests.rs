@@ -1,4 +1,4 @@
-use crate::constants::SYNAPSE_SIZE;
+use crate::constants::SYNAPSE_STRIDE;
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
@@ -20,7 +20,7 @@ const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 16384;
 const NODE_CAPACITY: usize = 16;
 const SYNAPSE_CAPACITY: usize = 32;
-const NODE_HEAD_OFFSET: usize = NODE_CAPACITY * SYNAPSE_SIZE;
+const NODE_HEAD_OFFSET: usize = NODE_CAPACITY * SYNAPSE_STRIDE;
 const SYNAPSE_START_OFFSET: usize = NODE_HEAD_OFFSET + 1;
 const NODE_FL_START: usize = 50000;
 

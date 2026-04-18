@@ -1,4 +1,4 @@
-use synaptic_kernel::constants::{NODE_SIZE, SYNAPSE_SIZE};
+use synaptic_kernel::constants::{NODE_STRIDE, SYNAPSE_STRIDE};
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
 use synaptic_kernel::synaptic_graph_writer::SynapticGraphWriter;
 
@@ -461,8 +461,8 @@ fn calculate_mem_size_is_positive() {
 fn calculate_tb_size_matches_slot_count() {
     let cfg = config();
     let expected = cfg.tb_metadata_size
-        + (1 + cfg.node_capacity * (NODE_SIZE + NODE_META))
-        + cfg.synapse_capacity * (SYNAPSE_SIZE + SYNAPSE_META);
+        + (1 + cfg.node_capacity * (NODE_STRIDE + NODE_META))
+        + cfg.synapse_capacity * (SYNAPSE_STRIDE + SYNAPSE_META);
     assert_eq!(Gw::calculate_size_on_tb(&cfg), expected);
 }
 

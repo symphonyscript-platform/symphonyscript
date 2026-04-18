@@ -143,10 +143,10 @@ fn struct_reader_handle_from_get_struct() {
 
     let reader = store.to_reader();
     let handle = reader.get_struct(s);
-    assert_eq!(handle.read_core(0), 100);
-    assert_eq!(handle.read_core(3), 400);
-    assert_eq!(handle.read_core(7), 800);
-    assert_eq!(handle.read_core_all(), [100, 200, 300, 400, 500, 600, 700, 800]);
+    assert_eq!(handle.core_read(0), 100);
+    assert_eq!(handle.core_read(3), 400);
+    assert_eq!(handle.core_read(7), 800);
+    assert_eq!(handle.core_read_all(), [100, 200, 300, 400, 500, 600, 700, 800]);
 }
 
 // ============ Attribute plane read (instantly visible) ============

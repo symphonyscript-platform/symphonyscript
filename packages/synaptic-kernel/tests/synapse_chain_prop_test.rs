@@ -1,7 +1,7 @@
 use proptest::prelude::*;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::constants::NODE_SIZE;
+use synaptic_kernel::constants::NODE_STRIDE;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
@@ -15,7 +15,7 @@ const TB_BUF_CAP: usize = 32768;
 const NODE_CAPACITY: usize = 32;
 const SYNAPSE_CAPACITY: usize = 64;
 const NODE_START_OFFSET: usize = 0;
-const SYNAPSE_START_OFFSET: usize = 1 + NODE_CAPACITY * (NODE_SIZE + NODE_META);
+const SYNAPSE_START_OFFSET: usize = 1 + NODE_CAPACITY * (NODE_STRIDE + NODE_META);
 const NODE_FL_START: usize = 80000;
 const SYNAPSE_FL_START: usize = 90000;
 

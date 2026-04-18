@@ -73,22 +73,22 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
 
     #[inline]
     pub fn core_read(&self, slot: usize, offset: usize) -> i32 {
-        self.get_struct(slot).read_core(offset)
+        self.get_struct(slot).core_read(offset)
     }
 
     #[inline]
     pub fn core_read_all(&self, slot: usize) -> [i32; CORE_STRIDE] {
-        self.get_struct(slot).read_core_all()
+        self.get_struct(slot).core_read_all()
     }
 
     #[inline]
     pub fn meta_read(&self, slot: usize, offset: usize) -> i32 {
-        self.get_struct(slot).read_meta(offset)
+        self.get_struct(slot).meta_read(offset)
     }
 
     #[inline]
     pub fn meta_read_all(&self, slot: usize) -> [i32; META_STRIDE] {
-        self.get_struct(slot).read_meta_all()
+        self.get_struct(slot).meta_read_all()
     }
 
     #[inline]

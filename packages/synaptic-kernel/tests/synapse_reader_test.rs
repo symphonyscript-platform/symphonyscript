@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::constants::NODE_SIZE;
+use synaptic_kernel::constants::NODE_STRIDE;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
@@ -24,7 +24,7 @@ const TB_BUF_CAP: usize = 16384;
 const NODE_CAPACITY: usize = 16;
 const SYNAPSE_CAPACITY: usize = 32;
 const NODE_START_OFFSET: usize = 0;
-const SYNAPSE_START_OFFSET: usize = 1 + NODE_CAPACITY * (NODE_SIZE + NODE_META);
+const SYNAPSE_START_OFFSET: usize = 1 + NODE_CAPACITY * (NODE_STRIDE + NODE_META);
 const NODE_FL_START: usize = 50000;
 const SYNAPSE_FL_START: usize = 51000;
 
@@ -84,7 +84,7 @@ fn reader_sees_all_synapse_fields_after_publish() {
     h.reader.swap();
 
     let synapse_chain_r = h.synapse_chain_r;
-    let s = synapse_chain_r.get(syn);
+    let s = synapse_chain_r.get_synapse(syn);
     assert_eq!(s.get_kind(), 42);
     assert_eq!(s.get_source_ptr(), src);
     assert_eq!(s.get_target_ptr(), tgt);
@@ -118,18 +118,18 @@ fn reader_sees_chain_pointers_with_multiple_synapses() {
     let reader = h.synapse_chain_r;
 
     // verify outgoing chain traversal via reader: s1 -> s2 -> s3
-    let r1 = reader.get(s1);
+    let r1 = reader.get_synapse(s1);
     assert_eq!(r1.get_kind(), 10);
     assert_eq!(r1.get_source_ptr(), src);
     assert_eq!(r1.get_outgoing_prev_ptr(), 0, "s1 is head");
     assert_eq!(r1.get_outgoing_next_ptr(), s2);
 
-    let r2 = reader.get(s2);
+    let r2 = reader.get_synapse(s2);
     assert_eq!(r2.get_kind(), 20);
     assert_eq!(r2.get_outgoing_prev_ptr(), s1);
     assert_eq!(r2.get_outgoing_next_ptr(), s3);
 
-    let r3 = reader.get(s3);
+    let r3 = reader.get_synapse(s3);
     assert_eq!(r3.get_kind(), 30);
     assert_eq!(r3.get_outgoing_prev_ptr(), s2);
     assert_eq!(r3.get_outgoing_next_ptr(), 0, "s3 is tail");
@@ -161,7 +161,7 @@ fn reader_does_not_see_unpublished_changes() {
 
     // reader still sees old snapshot
     let reader = h.synapse_chain_r;
-    let r1 = reader.get(s1);
+    let r1 = reader.get_synapse(s1);
     assert_eq!(r1.get_kind(), 10);
     assert_eq!(
         r1.get_outgoing_next_ptr(),
@@ -194,7 +194,7 @@ fn reader_sees_disconnect_after_publish() {
     h.reader.swap();
 
     let reader = h.synapse_chain_r;
-    let r2 = reader.get(s2);
+    let r2 = reader.get_synapse(s2);
     assert_eq!(r2.get_kind(), 20);
     assert_eq!(
         r2.get_outgoing_prev_ptr(),

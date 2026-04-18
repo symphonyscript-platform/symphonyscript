@@ -37,22 +37,22 @@ impl<'a, const CORE_STRIDE: usize, const META_STRIDE: usize>
     }
 
     #[inline]
-    pub fn read_core(&self, offset: usize) -> i32 {
+    pub fn core_read(&self, offset: usize) -> i32 {
         self.core.read(offset)
     }
 
     #[inline]
-    pub fn read_core_all(&self) -> [i32; CORE_STRIDE] {
+    pub fn core_read_all(&self) -> [i32; CORE_STRIDE] {
         self.core.read_all()
     }
 
     #[inline]
-    pub fn read_meta(&self, offset: usize) -> i32 {
+    pub fn meta_read(&self, offset: usize) -> i32 {
         self.meta.read(offset)
     }
 
     #[inline]
-    pub fn read_meta_all(&self) -> [i32; META_STRIDE] {
+    pub fn meta_read_all(&self) -> [i32; META_STRIDE] {
         self.meta.read_all()
     }
 }

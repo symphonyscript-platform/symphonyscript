@@ -673,10 +673,10 @@ fn get_struct_returns_writer_handle_for_repeated_access() {
     let s = store.insert_struct().unwrap();
 
     let handle = store.get_struct(s);
-    handle.write_core(0, 77);
-    handle.write_core(7, 88);
-    assert_eq!(handle.read_core(0), 77);
-    assert_eq!(handle.read_core(7), 88);
+    handle.core_write(0, 77);
+    handle.core_write(7, 88);
+    assert_eq!(handle.core_read(0), 77);
+    assert_eq!(handle.core_read(7), 88);
     // Reads via the top-level API agree.
     assert_eq!(store.core_read(s, 0), 77);
     assert_eq!(store.core_read(s, 7), 88);

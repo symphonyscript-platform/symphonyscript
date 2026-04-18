@@ -1,7 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
-use synaptic_kernel::constants::NODE_SIZE;
+use synaptic_kernel::constants::NODE_STRIDE;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
@@ -43,7 +43,7 @@ const NODE_META: usize = 8;
 const SYNAPSE_META: usize = 8;
 
 fn synapse_tb_offset() -> usize {
-    NODE_TB_OFFSET + 1 + NODE_CAPACITY * (NODE_SIZE + NODE_META)
+    NODE_TB_OFFSET + 1 + NODE_CAPACITY * (NODE_STRIDE + NODE_META)
 }
 
 fn make_chains(
@@ -302,7 +302,7 @@ fn bench_reader_traversal(c: &mut Criterion) {
                     let mut ptr = cursor_slot;
                     let mut count = 0u32;
                     while ptr != 0 {
-                        let s = synapse_chain_r.get(black_box(ptr));
+                        let s = synapse_chain_r.get_synapse(black_box(ptr));
                         black_box(s.get_kind());
                         ptr = s.get_outgoing_next_ptr();
                         count += 1;

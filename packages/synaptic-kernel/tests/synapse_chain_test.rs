@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::constants::NODE_SIZE;
+use synaptic_kernel::constants::NODE_STRIDE;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
@@ -23,7 +23,7 @@ const TB_BUF_CAP: usize = 16384;
 const NODE_CAPACITY: usize = 16;
 const SYNAPSE_CAPACITY: usize = 32;
 const NODE_START_OFFSET: usize = 0;
-const SYNAPSE_START_OFFSET: usize = 1 + NODE_CAPACITY * (NODE_SIZE + NODE_META);
+const SYNAPSE_START_OFFSET: usize = 1 + NODE_CAPACITY * (NODE_STRIDE + NODE_META);
 const NODE_FL_START: usize = 50000;
 const SYNAPSE_FL_START: usize = 51000;
 
@@ -439,7 +439,7 @@ fn synapse_chain_reader_sees_connections_after_publish() {
     let node_chain_r = h.node_chain.to_reader();
     let synapse_chain_r = h.synapse_chain.to_reader();
 
-    let s = synapse_chain_r.get(syn);
+    let s = synapse_chain_r.get_synapse(syn);
     assert_eq!(s.get_kind(), 42);
     assert_eq!(s.get_source_ptr(), src);
     assert_eq!(s.get_target_ptr(), tgt);

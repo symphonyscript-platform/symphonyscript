@@ -1,4 +1,4 @@
-use crate::constants::NODE_SIZE;
+use crate::constants::NODE_STRIDE;
 use crate::primitives::dual_store_reader::DualStoreReader;
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::topology::node::node_reader::NodeReader;
@@ -20,14 +20,14 @@ use crate::topology::node::node_reader::NodeReader;
 #[derive(Clone)]
 pub struct NodeChainReader<const META_STRIDE: usize, const ATTR_STRIDE: usize> {
     tb: TripleBufferReader,
-    ds: DualStoreReader<NODE_SIZE, META_STRIDE, ATTR_STRIDE>,
+    ds: DualStoreReader<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>,
     tb_head_offset: usize,
 }
 
 impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainReader<META_STRIDE, ATTR_STRIDE> {
     pub(crate) fn bind(
         tb: TripleBufferReader,
-        ds: DualStoreReader<NODE_SIZE, META_STRIDE, ATTR_STRIDE>,
+        ds: DualStoreReader<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>,
         tb_head_offset: usize,
     ) -> Self {
         NodeChainReader {
@@ -55,7 +55,7 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainReader<META_ST
     }
 
     #[inline]
-    pub fn core_read_all(&self, slot: usize) -> [i32; NODE_SIZE] {
+    pub fn core_read_all(&self, slot: usize) -> [i32; NODE_STRIDE] {
         self.ds.core_read_all(slot)
     }
 

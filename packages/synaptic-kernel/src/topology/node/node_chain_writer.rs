@@ -1,4 +1,4 @@
-use crate::constants::NODE_SIZE;
+use crate::constants::NODE_STRIDE;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::dual_store_writer::DualStoreWriter;
 use crate::primitives::staging_buffer_reader::StagingBufferReader;
@@ -36,7 +36,7 @@ use crate::topology::node::node_writer::NodeWriter;
 #[derive(Clone)]
 pub struct NodeChainWriter<const META_STRIDE: usize, const ATTR_STRIDE: usize> {
     tb: TripleBufferWriter,
-    ds: DualStoreWriter<NODE_SIZE, META_STRIDE, ATTR_STRIDE>,
+    ds: DualStoreWriter<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>,
     tb_head_offset: usize,
 }
 
@@ -84,15 +84,15 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
     }
 
     pub fn calculate_size_on_mem(capacity: usize) -> usize {
-        DualStoreWriter::<NODE_SIZE, META_STRIDE, ATTR_STRIDE>::calculate_size_on_mem(capacity)
+        DualStoreWriter::<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>::calculate_size_on_mem(capacity)
     }
 
     pub fn calculate_size_on_tb(capacity: usize) -> usize {
-        1 + DualStoreWriter::<NODE_SIZE, META_STRIDE, ATTR_STRIDE>::calculate_size_on_tb(capacity)
+        1 + DualStoreWriter::<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>::calculate_size_on_tb(capacity)
     }
 
     pub(crate) fn calculate_node_start_offset(tb_head_offset: usize, slot: usize) -> usize {
-        tb_head_offset + 1 + (slot - 1) * (NODE_SIZE + META_STRIDE)
+        tb_head_offset + 1 + (slot - 1) * (NODE_STRIDE + META_STRIDE)
     }
 
     pub fn to_reader(&self) -> NodeChainReader<META_STRIDE, ATTR_STRIDE> {
@@ -154,12 +154,12 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
     }
 
     #[inline]
-    pub fn core_read_all(&self, slot: usize) -> [i32; NODE_SIZE] {
+    pub fn core_read_all(&self, slot: usize) -> [i32; NODE_STRIDE] {
         self.ds.core_read_all(slot)
     }
 
     #[inline]
-    pub fn core_write_all(&self, slot: usize, data: [i32; NODE_SIZE]) {
+    pub fn core_write_all(&self, slot: usize, data: [i32; NODE_STRIDE]) {
         self.ds.core_write_all(slot, data)
     }
 

@@ -1,5 +1,5 @@
-use crate::primitives::triple_buffer_reader::TripleBufferReader;
-use crate::topology::synapse::synapse_chain_writer::SynapseChainWriter;
+use crate::constants::SYNAPSE_STRIDE;
+use crate::primitives::dual_store_reader::DualStoreReader;
 use crate::topology::synapse::synapse_reader::SynapseReader;
 
 /// Consumer-side triple-buffered multi-linked list for graph synapses.
@@ -17,58 +17,66 @@ use crate::topology::synapse::synapse_reader::SynapseReader;
 /// - Slots are 1-based. 0 indicates an undefined state.
 /// - Created exclusively via `SynapseChainWriter::to_reader()`.
 #[derive(Clone)]
-pub struct SynapseChainReader<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize> {
-    triple_buffer: TripleBufferReader,
-    tb_start_offset: usize,
-    tb_end_offset: usize,
-    capacity: usize,
+pub struct SynapseChainReader<
+    const SYNAPSE_META_STRIDE: usize,
+    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
+> {
+    ds: DualStoreReader<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>,
 }
 
-impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
-    SynapseChainReader<NODE_META_SIZE, SYNAPSE_META_SIZE>
+impl<const SYNAPSE_META_STRIDE: usize, const SYNAPSE_ATTRIBUTES_STRIDE: usize>
+    SynapseChainReader<SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>
 {
     pub(crate) fn bind(
-        triple_buffer: TripleBufferReader,
-        tb_start_offset: usize,
-        capacity: usize,
+        ds: DualStoreReader<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>,
     ) -> Self {
-        let tb_end_offset = tb_start_offset
-            + SynapseChainWriter::<NODE_META_SIZE, SYNAPSE_META_SIZE>::calculate_size_on_tb(
-                capacity,
-            );
-
-        debug_assert!(
-            tb_end_offset <= triple_buffer.buffer_capacity(),
-            "SynapseChainReader::bind | tb_end_offset {} out of bounds",
-            tb_end_offset,
-        );
-
-        SynapseChainReader {
-            triple_buffer,
-            tb_start_offset,
-            tb_end_offset,
-            capacity,
-        }
+        SynapseChainReader { ds }
     }
 
     pub fn tb_start_offset(&self) -> usize {
-        self.tb_start_offset
+        self.ds.tb_start_offset()
     }
 
     pub fn tb_end_offset(&self) -> usize {
-        self.tb_end_offset
+        self.ds.tb_end_offset()
     }
 
     pub fn capacity(&self) -> usize {
-        self.capacity
+        self.ds.capacity()
     }
 
-    pub fn get(&'_ self, slot: usize) -> SynapseReader<'_, SYNAPSE_META_SIZE> {
-        let start_offset =
-            SynapseChainWriter::<NODE_META_SIZE, SYNAPSE_META_SIZE>::calculate_synapse_start_offset(
-                self.tb_start_offset,
-                slot,
-            );
-        SynapseReader::new(&self.triple_buffer, start_offset)
+    #[inline]
+    pub fn core_read(&self, slot: usize, offset: usize) -> i32 {
+        self.ds.core_read(slot, offset)
+    }
+
+    #[inline]
+    pub fn core_read_all(&self, slot: usize) -> [i32; SYNAPSE_STRIDE] {
+        self.ds.core_read_all(slot)
+    }
+
+    #[inline]
+    pub fn meta_read(&self, slot: usize, offset: usize) -> i32 {
+        self.ds.meta_read(slot, offset)
+    }
+
+    #[inline]
+    pub fn meta_read_all(&self, slot: usize) -> [i32; SYNAPSE_META_STRIDE] {
+        self.ds.meta_read_all(slot)
+    }
+
+    #[inline]
+    pub fn attr_read(&self, slot: usize, offset: usize) -> i32 {
+        self.ds.attr_read(slot, offset)
+    }
+
+    #[inline]
+    pub fn attr_read_all(&self, slot: usize) -> [i32; SYNAPSE_ATTRIBUTES_STRIDE] {
+        self.ds.attr_read_all(slot)
+    }
+
+    #[inline]
+    pub fn get_synapse(&'_ self, slot: usize) -> SynapseReader<'_, SYNAPSE_META_STRIDE> {
+        SynapseReader::new(self.ds.get_struct(slot))
     }
 }

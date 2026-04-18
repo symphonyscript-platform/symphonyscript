@@ -1,5 +1,6 @@
-use crate::constants::SYNAPSE_SIZE;
+use crate::constants::SYNAPSE_STRIDE;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
+use crate::primitives::dual_store_writer::DualStoreWriter;
 use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::staging_buffer_reader::StagingBufferReader;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
@@ -7,7 +8,6 @@ use crate::primitives::types::AtomicBuffer;
 use crate::topology::node::node_chain_writer::NodeChainWriter;
 use crate::topology::synapse::synapse_chain_reader::SynapseChainReader;
 use crate::topology::synapse::synapse_writer::SynapseWriter;
-use std::sync::Arc;
 
 /// Producer-side triple-buffered multi-linked list for graph synapses.
 ///
@@ -43,31 +43,40 @@ use std::sync::Arc;
 ///   preventing reallocation until the consumer has advanced pas the pending `publish()`.
 /// - Use `to_reader()` to create the paired `SynapseChainReader`.
 #[derive(Clone)]
-pub struct SynapseChainWriter<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize> {
-    triple_buffer: TripleBufferWriter,
-    node_chain: NodeChainWriter<NODE_META_SIZE>,
-    allocator: SlotAllocator,
-    mem_start_offset: usize,
-    mem_end_offset: usize,
-    tb_start_offset: usize,
-    tb_end_offset: usize,
-    capacity: usize,
+pub struct SynapseChainWriter<
+    const NODE_META_STRIDE: usize,
+    const NODE_ATTRIBUTES_STRIDE: usize,
+    const SYNAPSE_META_STRIDE: usize,
+    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
+> {
+    node_chain: NodeChainWriter<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>,
+    ds: DualStoreWriter<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>,
 }
 
-impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
-    SynapseChainWriter<NODE_META_SIZE, SYNAPSE_META_SIZE>
+impl<
+    const NODE_META_STRIDE: usize,
+    const NODE_ATTRIBUTES_STRIDE: usize,
+    const SYNAPSE_META_STRIDE: usize,
+    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
+>
+    SynapseChainWriter<
+        NODE_META_STRIDE,
+        NODE_ATTRIBUTES_STRIDE,
+        SYNAPSE_META_STRIDE,
+        SYNAPSE_ATTRIBUTES_STRIDE,
+    >
 {
     pub fn new(
         mem: AtomicBuffer,
-        buffer: TripleBufferWriter,
-        node_chain: NodeChainWriter<NODE_META_SIZE>,
+        tb: TripleBufferWriter,
+        node_chain: NodeChainWriter<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>,
         mem_start_offset: usize,
         tb_start_offset: usize,
         capacity: usize,
     ) -> Self {
         Self::create(
             mem,
-            buffer,
+            tb,
             node_chain,
             mem_start_offset,
             tb_start_offset,
@@ -78,15 +87,15 @@ impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
 
     pub fn bind(
         mem: AtomicBuffer,
-        buffer: TripleBufferWriter,
-        node_chain: NodeChainWriter<NODE_META_SIZE>,
+        tb: TripleBufferWriter,
+        node_chain: NodeChainWriter<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>,
         mem_start_offset: usize,
         tb_start_offset: usize,
         capacity: usize,
     ) -> Self {
         Self::create(
             mem,
-            buffer,
+            tb,
             node_chain,
             mem_start_offset,
             tb_start_offset,
@@ -97,38 +106,16 @@ impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
 
     pub fn create(
         mem: AtomicBuffer,
-        triple_buffer: TripleBufferWriter,
-        node_chain: NodeChainWriter<NODE_META_SIZE>,
+        tb: TripleBufferWriter,
+        node_chain: NodeChainWriter<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>,
         mem_start_offset: usize,
         tb_start_offset: usize,
         capacity: usize,
         bind: bool,
     ) -> Self {
-        debug_assert!(
-            tb_start_offset < triple_buffer.buffer_capacity(),
-            "SynapseChainWriter::create | tb_start_offset {} out of bounds",
-            tb_start_offset,
-        );
-
-        let allocator = SlotAllocator::create(Arc::clone(&mem), mem_start_offset, capacity, bind);
-        let mem_end_offset = allocator.mem_end_offset();
-        let tb_end_offset = tb_start_offset + Self::calculate_size_on_tb(capacity);
-
-        debug_assert!(
-            tb_end_offset <= triple_buffer.buffer_capacity(),
-            "SynapseChainWriter::create | tb_end_offset {} out of bounds",
-            tb_end_offset,
-        );
-
         SynapseChainWriter {
-            triple_buffer,
             node_chain,
-            allocator,
-            mem_start_offset,
-            mem_end_offset,
-            tb_start_offset,
-            tb_end_offset,
-            capacity,
+            ds: DualStoreWriter::create(mem, tb, mem_start_offset, tb_start_offset, capacity, bind),
         }
     }
 
@@ -137,69 +124,129 @@ impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
     }
 
     pub fn calculate_size_on_tb(capacity: usize) -> usize {
-        capacity * (SYNAPSE_SIZE + SYNAPSE_META_SIZE)
+        capacity * (SYNAPSE_STRIDE + SYNAPSE_META_STRIDE)
     }
 
     pub(crate) fn calculate_synapse_start_offset(tb_start_offset: usize, slot: usize) -> usize {
-        tb_start_offset + (slot - 1) * (SYNAPSE_SIZE + SYNAPSE_META_SIZE)
+        tb_start_offset + (slot - 1) * (SYNAPSE_STRIDE + SYNAPSE_META_STRIDE)
     }
 
-    pub fn to_reader(&self) -> SynapseChainReader<NODE_META_SIZE, SYNAPSE_META_SIZE> {
-        SynapseChainReader::bind(
-            self.triple_buffer.to_reader(),
-            self.tb_start_offset,
-            self.capacity,
-        )
+    pub fn to_reader(&self) -> SynapseChainReader<SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
+        SynapseChainReader::bind(self.ds.to_reader())
     }
 
     pub fn to_staging_buffer_reader(&self) -> StagingBufferReader {
-        self.allocator.to_staging_buffer_reader()
+        self.ds.to_staging_buffer_reader()
     }
 
     pub fn len(&self) -> usize {
-        self.allocator.alloc_count()
+        self.ds.len()
     }
 
     pub fn mem_start_offset(&self) -> usize {
-        self.mem_start_offset
+        self.ds.mem_start_offset()
     }
 
     pub fn mem_end_offset(&self) -> usize {
-        self.mem_end_offset
+        self.ds.mem_end_offset()
     }
 
     pub fn mem_staging_buffer_start_offset(&self) -> usize {
-        self.allocator.mem_staging_buffer_start_offset()
+        self.ds.mem_staging_buffer_start_offset()
     }
 
     pub fn tb_start_offset(&self) -> usize {
-        self.tb_start_offset
+        self.ds.tb_start_offset()
     }
 
     pub fn tb_end_offset(&self) -> usize {
-        self.tb_end_offset
+        self.ds.tb_end_offset()
     }
 
     pub fn capacity(&self) -> usize {
-        self.capacity
+        self.ds.capacity()
     }
 
     pub fn utilization(&self) -> f32 {
-        self.allocator.utilization()
+        self.ds.utilization()
     }
 
     pub fn is_active_slot(&self, slot: usize) -> bool {
-        self.allocator.is_active(slot)
+        self.ds.is_active_slot(slot)
     }
 
-    pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_, SYNAPSE_META_SIZE> {
-        debug_assert!(
-            self.allocator.is_active(slot),
-            "SynapseChainWriter.get | attempted to read inactive slot {}",
-            slot
-        );
-        let start_offset = Self::calculate_synapse_start_offset(self.tb_start_offset, slot);
-        SynapseWriter::new(&self.triple_buffer, start_offset)
+    #[inline]
+    pub fn core_read(&self, slot: usize, offset: usize) -> i32 {
+        self.ds.core_read(slot, offset)
+    }
+
+    #[inline]
+    pub fn core_write(&self, slot: usize, offset: usize, value: i32) {
+        self.ds.core_write(slot, offset, value)
+    }
+
+    #[inline]
+    pub fn core_read_all(&self, slot: usize) -> [i32; SYNAPSE_STRIDE] {
+        self.ds.core_read_all(slot)
+    }
+
+    #[inline]
+    pub fn core_write_all(&self, slot: usize, data: [i32; SYNAPSE_STRIDE]) {
+        self.ds.core_write_all(slot, data)
+    }
+
+    #[inline]
+    pub fn meta_read(&self, slot: usize, offset: usize) -> i32 {
+        self.ds.meta_read(slot, offset)
+    }
+
+    #[inline]
+    pub fn meta_write(&self, slot: usize, offset: usize, value: i32) {
+        self.ds.meta_write(slot, offset, value)
+    }
+
+    #[inline]
+    pub fn meta_read_all(&self, slot: usize) -> [i32; SYNAPSE_META_STRIDE] {
+        self.ds.meta_read_all(slot)
+    }
+
+    #[inline]
+    pub fn meta_write_all(&self, slot: usize, data: [i32; SYNAPSE_META_STRIDE]) {
+        self.ds.meta_write_all(slot, data)
+    }
+
+    #[inline]
+    pub fn attr_read(&self, slot: usize, offset: usize) -> i32 {
+        self.ds.attr_read(slot, offset)
+    }
+
+    #[inline]
+    pub fn attr_write(&self, slot: usize, offset: usize, value: i32) {
+        self.ds.attr_write(slot, offset, value)
+    }
+
+    #[inline]
+    pub fn attr_and(&self, slot: usize, offset: usize, value: i32) -> i32 {
+        self.ds.attr_and(slot, offset, value)
+    }
+
+    #[inline]
+    pub fn attr_or(&self, slot: usize, offset: usize, value: i32) -> i32 {
+        self.ds.attr_or(slot, offset, value)
+    }
+
+    #[inline]
+    pub fn attr_read_all(&self, slot: usize) -> [i32; SYNAPSE_ATTRIBUTES_STRIDE] {
+        self.ds.attr_read_all(slot)
+    }
+
+    #[inline]
+    pub fn attr_write_all(&self, slot: usize, data: [i32; SYNAPSE_ATTRIBUTES_STRIDE]) {
+        self.ds.attr_write_all(slot, data)
+    }
+
+    pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_, SYNAPSE_META_STRIDE> {
+        SynapseWriter::new(self.ds.get_struct(slot))
     }
 
     pub fn connect(&self, source_slot: usize, target_slot: usize, kind: i32) -> Option<usize> {
@@ -207,19 +254,13 @@ impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
         let target = self.node_chain.get_node(target_slot);
         let source_current_tail_ptr = source.get_outgoing_synapse_tail();
         let target_current_tail_ptr = target.get_incoming_synapse_tail();
-        let result = self.allocator.alloc();
+        let result = self.ds.insert_struct();
 
         if result.is_none() {
             return None;
         }
 
         let new_slot = result.unwrap();
-        let start_offset = Self::calculate_synapse_start_offset(self.tb_start_offset, new_slot);
-
-        for i in 0..SYNAPSE_SIZE + SYNAPSE_META_SIZE {
-            self.triple_buffer.write(start_offset + i, 0)
-        }
-
         let synapse = self.get_synapse(new_slot);
 
         synapse.set_kind(kind);
@@ -285,7 +326,7 @@ impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
         let synapse_incoming_next_ptr = synapse.get_incoming_next_ptr();
         let synapse_incoming_prev_ptr = synapse.get_incoming_prev_ptr();
 
-        self.allocator.defer_free(synapse_slot)?;
+        self.ds.remove_struct(synapse_slot)?;
 
         if synapse_outgoing_prev_ptr != 0 {
             self.get_synapse(synapse_outgoing_prev_ptr)
@@ -319,22 +360,16 @@ impl<const NODE_META_SIZE: usize, const SYNAPSE_META_SIZE: usize>
     }
 
     pub fn publish(&self) {
-        self.allocator.publish()
+        self.ds.publish()
     }
 
     pub fn copy_from(&self, source: &Self) {
         debug_assert!(
-            source.capacity <= self.capacity,
+            source.capacity() <= self.capacity(),
             "SynapseChainWriter.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
-            source.capacity,
-            self.capacity,
+            source.capacity(),
+            self.capacity(),
         );
-        self.allocator.copy_from(&source.allocator);
-        self.triple_buffer.copy_region_from(
-            &source.triple_buffer,
-            source.tb_start_offset,
-            self.tb_start_offset,
-            Self::calculate_size_on_tb(source.capacity),
-        );
+        self.ds.copy_from(&source.ds);
     }
 }
