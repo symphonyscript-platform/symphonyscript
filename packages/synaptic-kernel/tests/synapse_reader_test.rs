@@ -69,7 +69,7 @@ fn setup() -> TestHarness {
 
 #[test]
 fn reader_sees_all_synapse_fields_after_publish() {
-    let mut h = setup();
+    let h = setup();
 
     let (src, tgt, syn) = {
         let node_chain = h.node_chain;
@@ -96,7 +96,7 @@ fn reader_sees_all_synapse_fields_after_publish() {
 
 #[test]
 fn reader_sees_chain_pointers_with_multiple_synapses() {
-    let mut h = setup();
+    let h = setup();
 
     let (src, s1, s2, s3) = {
         let node_chain = h.node_chain;
@@ -137,7 +137,7 @@ fn reader_sees_chain_pointers_with_multiple_synapses() {
 
 #[test]
 fn reader_does_not_see_unpublished_changes() {
-    let mut h = setup();
+    let h = setup();
 
     // publish initial state with one synapse
     let (src, tgt, s1) = {
@@ -172,7 +172,7 @@ fn reader_does_not_see_unpublished_changes() {
 
 #[test]
 fn reader_sees_disconnect_after_publish() {
-    let mut h = setup();
+    let h = setup();
 
     let s2 = {
         let node_chain = h.node_chain;

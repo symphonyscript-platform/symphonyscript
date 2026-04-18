@@ -30,8 +30,8 @@ fn create_writer() -> Gw {
 
 #[test]
 fn multi_threaded_topology_fuzzer() {
-    let mut writer = create_writer();
-    let mut reader = writer.to_reader();
+    let writer = create_writer();
+    let reader = writer.to_reader();
 
     let is_running = Arc::new(AtomicBool::new(true));
     let is_running_writer = Arc::clone(&is_running);

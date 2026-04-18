@@ -137,7 +137,7 @@ fn remove_node_heals_chain() {
 
 #[test]
 fn remove_then_publish_reclaims_slot() {
-    let mut kernel = create_writer();
+    let kernel = create_writer();
 
     // fill all slots
     let mut slots = Vec::new();
@@ -222,7 +222,7 @@ fn disconnect_heals_synapse_chain() {
 
 #[test]
 fn disconnect_then_publish_reclaims_synapse_slot() {
-    let mut kernel = create_writer();
+    let kernel = create_writer();
 
     let src = kernel.insert_head(1).unwrap();
     let tgt = kernel.insert_head(2).unwrap();
@@ -367,13 +367,13 @@ fn set_synapse_attributes_bulk() {
 
 #[test]
 fn publish_succeeds_on_empty_kernel() {
-    let mut kernel = create_writer();
+    let kernel = create_writer();
     kernel.publish();
 }
 
 #[test]
 fn publish_after_mutations_succeeds() {
-    let mut kernel = create_writer();
+    let kernel = create_writer();
 
     let src = kernel.insert_head(1).unwrap();
     let tgt = kernel.insert_head(2).unwrap();
@@ -384,7 +384,7 @@ fn publish_after_mutations_succeeds() {
 
 #[test]
 fn multiple_publish_cycles() {
-    let mut kernel = create_writer();
+    let kernel = create_writer();
 
     // cycle 1: insert
     let a = kernel.insert_head(1).unwrap();
@@ -406,7 +406,7 @@ fn multiple_publish_cycles() {
 
 #[test]
 fn deferred_free_two_cycle_delay() {
-    let mut kernel = create_writer();
+    let kernel = create_writer();
 
     // fill capacity
     let mut slots = Vec::new();
@@ -474,7 +474,7 @@ fn copy_from_scales_full_topology_graph() {
     let small_mem: Vec<AtomicI32> = (0..Gw::calculate_size_on_mem(&small_cfg))
         .map(|_| AtomicI32::new(0))
         .collect();
-    let mut small_kernel = Gw::new(Arc::new(small_mem), small_cfg.clone());
+    let small_kernel = Gw::new(Arc::new(small_mem), small_cfg.clone());
 
     let src = small_kernel.insert_head(1).unwrap();
     let tgt = small_kernel.insert_head(2).unwrap();

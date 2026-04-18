@@ -288,7 +288,7 @@ fn double_remove_returns_error() {
 
 #[test]
 fn chain_reader_traverses_full_chain() {
-    let mut h = setup();
+    let h = setup();
 
     let (_a, _b, _c) = {
         let chain = h.chain;
@@ -318,7 +318,7 @@ fn chain_reader_traverses_full_chain() {
 
 #[test]
 fn chain_reader_empty_chain_returns_none() {
-    let mut h = setup();
+    let h = setup();
     h.writer.publish();
     h.reader.swap();
 
@@ -329,7 +329,7 @@ fn chain_reader_empty_chain_returns_none() {
 
 #[test]
 fn chain_reader_sees_removal_after_publish() {
-    let mut h = setup();
+    let h = setup();
 
     {
         let chain = h.chain;
@@ -561,7 +561,7 @@ fn remove_arbitrary_order_on_five_node_chain() {
 
 #[test]
 fn reader_traverses_chain_after_mid_chain_removal() {
-    let mut h = setup();
+    let h = setup();
 
     {
         let chain = h.chain;

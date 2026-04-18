@@ -83,7 +83,7 @@ fn node_writer_kind_bitmask_preserves_lower_bits() {
 
 #[test]
 fn node_reader_sees_writer_data_after_publish() {
-    let mut h = setup();
+    let h = setup();
 
     let chain =
         NodeChainWriter::<8>::new(h.mem.clone(), h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);

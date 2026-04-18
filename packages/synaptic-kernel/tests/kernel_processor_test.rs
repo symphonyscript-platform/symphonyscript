@@ -138,7 +138,7 @@ fn multiple_grow_then_acquire_drains_all() {
 #[test]
 fn publish_does_not_drain_without_acquire() {
     let mut controller = setup(4);
-    let  consumer = get_consumer(&controller);
+    let  _consumer = get_consumer(&controller);
 
     controller.insert_head(1).unwrap();
 

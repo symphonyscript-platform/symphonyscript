@@ -63,7 +63,7 @@ fn reader_does_not_see_unpublished_nodes() {
 
 #[test]
 fn reader_sees_nodes_after_publish_swap() {
-    let (mut kernel, mut reader) = setup();
+    let (kernel, reader) = setup();
 
     let _slot = insert_head_with_tick(&kernel, 5, 999);
     kernel.publish();
@@ -76,7 +76,7 @@ fn reader_sees_nodes_after_publish_swap() {
 
 #[test]
 fn reader_traverses_full_chain() {
-    let (mut kernel, mut reader) = setup();
+    let (kernel, reader) = setup();
 
     let _a = insert_head_with_tick(&kernel, 1, 10);
     let _b = insert_head_with_tick(&kernel, 2, 20);
@@ -101,7 +101,7 @@ fn reader_traverses_full_chain() {
 
 #[test]
 fn reader_sees_removal_after_publish_swap() {
-    let (mut kernel, mut reader) = setup();
+    let (kernel, reader) = setup();
 
     let _a = kernel.insert_head(1).unwrap();
     let b = kernel.insert_head(2).unwrap();
@@ -122,7 +122,7 @@ fn reader_sees_removal_after_publish_swap() {
 
 #[test]
 fn reader_retains_old_snapshot_without_swap() {
-    let (mut kernel, mut reader) = setup();
+    let (kernel, reader) = setup();
 
     // cycle 1
     let _a = kernel.insert_head(1).unwrap();
@@ -141,7 +141,7 @@ fn reader_retains_old_snapshot_without_swap() {
 
 #[test]
 fn reader_sees_updated_snapshot_after_swap() {
-    let (mut kernel, mut reader) = setup();
+    let (kernel, reader) = setup();
 
     // cycle 1
     kernel.insert_head(1).unwrap();
@@ -160,7 +160,7 @@ fn reader_sees_updated_snapshot_after_swap() {
 
 #[test]
 fn reader_sees_synapse_after_publish_swap() {
-    let (mut kernel, mut reader) = setup();
+    let (kernel, reader) = setup();
 
     let src = kernel.insert_head(1).unwrap();
     let tgt = kernel.insert_head(2).unwrap();
@@ -177,7 +177,7 @@ fn reader_sees_synapse_after_publish_swap() {
 
 #[test]
 fn reader_traverses_synapse_chain() {
-    let (mut kernel, mut reader) = setup();
+    let (kernel, reader) = setup();
 
     let src = kernel.insert_head(1).unwrap();
     let tgt1 = kernel.insert_head(2).unwrap();
@@ -211,7 +211,7 @@ fn reader_traverses_synapse_chain() {
 
 #[test]
 fn reader_sees_disconnect_after_publish_swap() {
-    let (mut kernel, mut reader) = setup();
+    let (kernel, reader) = setup();
 
     let src = kernel.insert_head(1).unwrap();
     let tgt1 = kernel.insert_head(2).unwrap();
@@ -310,7 +310,7 @@ fn reader_attributes_view_matches_individual_reads() {
 
 #[test]
 fn multi_cycle_insert_remove_connect_disconnect() {
-    let (mut kernel, mut reader) = setup();
+    let (kernel, reader) = setup();
 
     // cycle 1: build graph A->B with synapse
     let a = insert_head_with_tick(&kernel, 1, 100);
@@ -348,13 +348,13 @@ fn multi_cycle_insert_remove_connect_disconnect() {
 
 #[test]
 fn swap_returns_false_when_no_new_data() {
-    let (_kernel, mut reader) = setup();
+    let (_kernel, reader) = setup();
     assert!(!reader.swap(), "no publish happened");
 }
 
 #[test]
 fn swap_returns_true_when_new_data() {
-    let (mut kernel, mut reader) = setup();
+    let (kernel, reader) = setup();
     kernel.insert_head(1).unwrap();
     kernel.publish();
     assert!(reader.swap(), "publish happened");
@@ -364,7 +364,7 @@ fn swap_returns_true_when_new_data() {
 
 #[test]
 fn reader_sees_empty_chain_after_removing_all() {
-    let (mut kernel, mut reader) = setup();
+    let (kernel, reader) = setup();
 
     let a = kernel.insert_head(1).unwrap();
     let b = kernel.insert_head(2).unwrap();
@@ -382,7 +382,7 @@ fn reader_sees_empty_chain_after_removing_all() {
 
 #[test]
 fn attribute_mutation_visible_between_publishes() {
-    let (mut kernel, mut reader) = setup();
+    let (kernel, reader) = setup();
 
     let slot = kernel.insert_head(1).unwrap();
     kernel.publish();

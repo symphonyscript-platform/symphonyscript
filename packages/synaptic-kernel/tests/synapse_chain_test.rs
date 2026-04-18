@@ -356,7 +356,7 @@ fn double_disconnect_returns_error() {
 fn full_connect_disconnect_reconnect_cycle() {
     let h = setup();
     let node_chain = h.node_chain;
-    let mut synapse_chain = h.synapse_chain;
+    let synapse_chain = h.synapse_chain;
 
     let src = node_chain.insert_head(1).unwrap();
     let tgt = node_chain.insert_head(2).unwrap();
@@ -427,7 +427,7 @@ fn disconnect_self_loop_clears_both_chains() {
 
 #[test]
 fn synapse_chain_reader_sees_connections_after_publish() {
-    let mut h = setup();
+    let h = setup();
 
     let src = h.node_chain.insert_head(1).unwrap();
     let tgt = h.node_chain.insert_head(2).unwrap();
@@ -797,7 +797,7 @@ fn copy_from_preserves_topology_and_deep_data() {
         NODE_START_OFFSET,
         NODE_CAPACITY,
     );
-    let mut dst_synapse_chain = SynapseChainWriter::<NODE_META, SYNAPSE_META>::new(
+    let dst_synapse_chain = SynapseChainWriter::<NODE_META, SYNAPSE_META>::new(
         Arc::clone(&dst_mem),
         dst_tb,
         dst_node_chain.clone(),

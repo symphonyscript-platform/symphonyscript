@@ -11,6 +11,7 @@ pub mod rest_operations;
 pub mod seed_operations;
 pub mod symphony_engine;
 pub mod synapse_operations;
+pub mod modulation;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right

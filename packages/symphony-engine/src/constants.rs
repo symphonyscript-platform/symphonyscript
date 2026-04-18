@@ -52,3 +52,5 @@ pub const BOUNDARY_ATTR_ID: usize = 0;
 pub const LUT_ATTR_INDEX: usize = 0;
 
 pub const SEED_ATTR_VALUE: usize = 0;
+
+pub const MOD_SOURCE_SIZE: usize = 16;
