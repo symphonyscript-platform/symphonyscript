@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
-use synaptic_kernel::topology::slot_reader::SlotReader;
+use synaptic_kernel::primitives::struct_reader::StructReader;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
@@ -29,8 +29,8 @@ fn bench_slot_reader(c: &mut Criterion) {
     writer.publish();
     reader.swap();
 
-    let sr_slot1 = SlotReader::<SLOT_STRIDE>::new(&reader, 0);
-    let sr_slot43 = SlotReader::<SLOT_STRIDE>::new(&reader, off43);
+    let sr_slot1 = StructReader::<SLOT_STRIDE>::new(&reader, 0);
+    let sr_slot43 = StructReader::<SLOT_STRIDE>::new(&reader, off43);
 
     c.bench_function("SlotReader/read_slot1_word0", |b| {
         b.iter(|| {
@@ -40,7 +40,7 @@ fn bench_slot_reader(c: &mut Criterion) {
 
     c.bench_function("SlotReader/read_slot1_word0_rebind", |b| {
         b.iter(|| {
-            let view = SlotReader::<SLOT_STRIDE>::new(&reader, 0);
+            let view = StructReader::<SLOT_STRIDE>::new(&reader, 0);
             black_box(view.read(0));
         });
     });
@@ -55,7 +55,7 @@ fn bench_slot_reader(c: &mut Criterion) {
         b.iter(|| {
             for i in 1..=8 {
                 let off = (i - 1) * SLOT_STRIDE;
-                let sr = SlotReader::<SLOT_STRIDE>::new(&reader, off);
+                let sr = StructReader::<SLOT_STRIDE>::new(&reader, off);
                 black_box(sr.read(0));
             }
         });

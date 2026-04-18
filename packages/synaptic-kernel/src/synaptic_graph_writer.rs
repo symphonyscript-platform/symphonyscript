@@ -340,7 +340,7 @@ impl<
             "SynapticGraphWriter.get_node_attribute | attempted to read inactive slot {}",
             slot
         );
-        self.node_attribute_plane.get(slot).get(attribute_offset)
+        self.node_attribute_plane.get(slot).read(attribute_offset)
     }
 
     pub fn set_node_attributes<T: IntoArray<NODE_ATTRIBUTES_SIZE>>(&'_ self, slot: usize, data: T) {
@@ -360,7 +360,7 @@ impl<
         );
         self.node_attribute_plane
             .get(slot)
-            .set(attribute_offset, value)
+            .write(attribute_offset, value)
     }
 
     pub fn or_node_attribute(&'_ self, slot: usize, attribute_offset: usize, mask: i32) -> i32 {
@@ -467,7 +467,7 @@ impl<
             "SynapticGraphWriter.get_synapse_attribute | attempted to read inactive slot {}",
             slot
         );
-        self.synapse_attribute_plane.get(slot).get(attribute_offset)
+        self.synapse_attribute_plane.get(slot).read(attribute_offset)
     }
 
     pub fn set_synapse_attributes<T: IntoArray<SYNAPSE_ATTRIBUTES_SIZE>>(
@@ -491,7 +491,7 @@ impl<
         );
         self.synapse_attribute_plane
             .get(slot)
-            .set(attribute_offset, value)
+            .write(attribute_offset, value)
     }
 
     pub fn or_synapse_attribute(&'_ self, slot: usize, attribute_offset: usize, value: i32) -> i32 {

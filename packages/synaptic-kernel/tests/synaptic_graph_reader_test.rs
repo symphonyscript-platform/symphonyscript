@@ -267,10 +267,10 @@ fn reader_sees_bulk_node_attributes() {
     kernel.set_node_attribute(slot, 9, 0);
 
     let view = reader.get_node_attributes(slot);
-    assert_eq!(view.get(0), 72);
-    assert_eq!(view.get(1), 90);
-    assert_eq!(view.get(2), 960);
-    assert_eq!(view.get(3), 64);
+    assert_eq!(view.read(0), 72);
+    assert_eq!(view.read(1), 90);
+    assert_eq!(view.read(2), 960);
+    assert_eq!(view.read(3), 64);
 }
 
 #[test]
@@ -302,8 +302,8 @@ fn reader_attributes_view_matches_individual_reads() {
     kernel.set_node_attribute(slot, 5, 99);
 
     let view = reader.get_node_attributes(slot);
-    assert_eq!(view.get(0), reader.get_node_attribute(slot, 0));
-    assert_eq!(view.get(5), reader.get_node_attribute(slot, 5));
+    assert_eq!(view.read(0), reader.get_node_attribute(slot, 0));
+    assert_eq!(view.read(5), reader.get_node_attribute(slot, 5));
 }
 
 // ============ Multi-cycle with reader ============

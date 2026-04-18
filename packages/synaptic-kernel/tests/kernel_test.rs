@@ -31,11 +31,11 @@ fn config(capacity: usize) -> SynapticGraphConfig {
     create_config(capacity, capacity)
 }
 
-/// Extract audio-thread reader from controller via a leaked `GraphConsumer`.
-/// This simulates the exact path the audio thread takes in production while
+/// Extract consumer-thread reader from controller via a leaked `GraphConsumer`.
+/// This simulates the exact path the consumer thread takes in production while
 /// giving callers a `'static` reader so mutations to the controller can
 /// proceed without fighting the borrow checker.
-unsafe fn mock_audio_reader(controller: &TestKernel) -> &'static TestReader {
+unsafe fn mock_consumer_reader(controller: &TestKernel) -> &'static TestReader {
     let cp = controller.get_control_plane();
     let consumer: &'static mut GraphConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR> =
         Box::leak(Box::new(GraphConsumer::new(cp)));
@@ -138,31 +138,31 @@ fn negative_attribute_values_preserved() {
 }
 
 // =========================================================
-// PHASE 2: Triple Buffer Isolation — Audio Thread Boundary
+// PHASE 2: Triple Buffer Isolation — Consumer Thread Boundary
 // =========================================================
 
 #[test]
-fn mutations_invisible_to_audio_thread_before_publish_and_swap() {
+fn mutations_invisible_to_consumer_thread_before_publish_and_swap() {
     let mut controller = new_controller(config(16));
 
     // Extract raw pointer to decouple borrows
-    let audio = unsafe { mock_audio_reader(&controller) };
+    let consumer = unsafe { mock_consumer_reader(&controller) };
 
-    assert!(audio.get_head_node().is_none());
+    assert!(consumer.get_head_node().is_none());
 
     let slot = controller.insert_head(42).unwrap();
     controller.get_node(slot).set_meta(0, 100);
 
     // Not published yet
-    assert!(audio.get_head_node().is_none());
+    assert!(consumer.get_head_node().is_none());
 
     // Published but not swapped
     controller.publish();
-    assert!(audio.get_head_node().is_none());
+    assert!(consumer.get_head_node().is_none());
 
     // Swapped
-    assert!(audio.swap());
-    let head = audio.get_head_node().unwrap();
+    assert!(consumer.swap());
+    let head = consumer.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 42);
     assert_eq!(head.get_meta(0), 100);
 }
@@ -171,7 +171,7 @@ fn mutations_invisible_to_audio_thread_before_publish_and_swap() {
 fn multiple_mutations_batch_into_single_publish() {
     let mut controller = new_controller(config(16));
 
-    let audio = unsafe { mock_audio_reader(&controller) };
+    let consumer = unsafe { mock_consumer_reader(&controller) };
 
     let n1 = controller.insert_head(1).unwrap();
     let n2 = controller.insert_after(n1, 2).unwrap();
@@ -181,17 +181,17 @@ fn multiple_mutations_batch_into_single_publish() {
     controller.set_node_attribute(n1, 0, 999);
 
     // Everything invisible
-    assert!(audio.get_head_node().is_none());
+    assert!(consumer.get_head_node().is_none());
 
     controller.publish();
-    audio.swap();
+    consumer.swap();
 
-    let head = audio.get_head_node().unwrap();
+    let head = consumer.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 1);
-    assert_eq!(audio.get_node_attribute(n1, 0), 999);
-    let next = audio.get_node(head.get_next_ptr());
+    assert_eq!(consumer.get_node_attribute(n1, 0), 999);
+    let next = consumer.get_node(head.get_next_ptr());
     assert_eq!(next.get_kind(), 2);
-    let last = audio.get_node(next.get_next_ptr());
+    let last = consumer.get_node(next.get_next_ptr());
     assert_eq!(last.get_kind(), 3);
 }
 
@@ -199,13 +199,13 @@ fn multiple_mutations_batch_into_single_publish() {
 fn double_swap_without_publish_returns_false() {
     let mut controller = new_controller(config(16));
 
-    let audio = unsafe { mock_audio_reader(&controller) };
+    let consumer = unsafe { mock_consumer_reader(&controller) };
 
     controller.insert_head(1).unwrap();
     controller.publish();
 
-    assert!(audio.swap()); // first swap consumes the publish
-    assert!(!audio.swap()); // nothing new to swap
+    assert!(consumer.swap()); // first swap consumes the publish
+    assert!(!consumer.swap()); // nothing new to swap
 }
 
 #[test]
@@ -213,13 +213,13 @@ fn attributes_visible_immediately_without_publish() {
     // Attribute plane is shared (not triple-buffered), so writes are instant
     let controller = new_controller(config(16));
 
-    let audio = unsafe { mock_audio_reader(&controller) };
+    let consumer = unsafe { mock_consumer_reader(&controller) };
 
     let n = controller.insert_head(1).unwrap();
     controller.set_node_attribute(n, 3, 42);
 
-    // Attribute is visible to audio immediately (shared plane)
-    assert_eq!(audio.get_node_attribute(n, 3), 42);
+    // Attribute is visible to consumer immediately (shared plane)
+    assert_eq!(consumer.get_node_attribute(n, 3), 42);
 }
 
 // =========================================================
@@ -404,7 +404,7 @@ fn grow_expanded_capacity_is_allocatable() {
 }
 
 #[test]
-fn grow_audio_thread_sees_migrated_data_after_publish_swap() {
+fn grow_consumer_thread_sees_migrated_data_after_publish_swap() {
     let mut controller = new_controller(config(8));
 
     let n1 = controller.insert_head(10).unwrap();
@@ -416,19 +416,19 @@ fn grow_audio_thread_sees_migrated_data_after_publish_swap() {
     controller.grow(config(32)).unwrap();
     controller.publish();
 
-    let audio = unsafe { mock_audio_reader(&controller) };
-    audio.swap();
+    let consumer = unsafe { mock_consumer_reader(&controller) };
+    consumer.swap();
 
-    let head = audio.get_head_node().unwrap();
+    let head = consumer.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 10);
-    assert_eq!(audio.get_node_attribute(n1, 0), 1000);
+    assert_eq!(consumer.get_node_attribute(n1, 0), 1000);
 
-    let next = audio.get_node(head.get_next_ptr());
+    let next = consumer.get_node(head.get_next_ptr());
     assert_eq!(next.get_kind(), 20);
 
-    let syn = audio.get_synapse(s1);
+    let syn = consumer.get_synapse(s1);
     assert_eq!(syn.get_kind(), 99);
-    assert_eq!(audio.get_synapse_attribute(s1, 0), 5000);
+    assert_eq!(consumer.get_synapse_attribute(s1, 0), 5000);
 }
 
 #[test]
@@ -485,12 +485,12 @@ fn gc_pipeline_rotates_through_publish_cycles() {
     // Second publish: pending_deletion dropped
     controller.publish();
 
-    // Audio thread sees migrated data.
-    // Note: `mock_audio_reader` calls `GraphConsumer::acquire_graph`, which now
+    // Consumer thread sees migrated data.
+    // Note: `mock_consumer_reader` calls `GraphConsumer::acquire_graph`, which now
     // bundles the swap internally. The explicit `swap()` is no longer observable
     // here — the migrated state visibility is confirmed by the kind assertion.
-    let audio = unsafe { mock_audio_reader(&controller) };
-    let head = audio.get_head_node().unwrap();
+    let consumer = unsafe { mock_consumer_reader(&controller) };
+    let head = consumer.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 6); // last inserted head
 }
 
@@ -526,14 +526,14 @@ fn grow_then_mutate_then_publish() {
 
     controller.publish();
 
-    let audio = unsafe { mock_audio_reader(&controller) };
-    audio.swap();
+    let consumer = unsafe { mock_consumer_reader(&controller) };
+    consumer.swap();
 
-    let head = audio.get_head_node().unwrap();
+    let head = consumer.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 1);
-    let next = audio.get_node(head.get_next_ptr());
+    let next = consumer.get_node(head.get_next_ptr());
     assert_eq!(next.get_kind(), 2);
-    assert_eq!(audio.get_node_attribute(n2, 0), 777);
+    assert_eq!(consumer.get_node_attribute(n2, 0), 777);
 }
 
 // =========================================================
@@ -570,7 +570,7 @@ fn control_plane_address_is_stable_across_grow() {
     let addr_after = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
     // The ControlPlane is boxed and its address must not move.
-    // Audio thread holds this pointer — if it moves, segfault.
+    // Consumer thread holds this pointer — if it moves, segfault.
     assert_eq!(addr_before, addr_after);
 }
 
@@ -708,17 +708,17 @@ fn defer_then_publish_then_grow_preserves_freed_slot() {
     let n5 = controller.insert_head(5).unwrap();
     assert_eq!(controller.get_node(n5).get_kind(), 5);
 
-    // Verify audio thread sees correct state after full cycle
+    // Verify consumer thread sees correct state after full cycle
     controller.publish();
-    let audio = unsafe { mock_audio_reader(&controller) };
-    audio.swap();
+    let consumer = unsafe { mock_consumer_reader(&controller) };
+    consumer.swap();
 
-    let head = audio.get_head_node().unwrap();
+    let head = consumer.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 5);
 }
 
 // =========================================================
-// Concurrent: Audio Thread vs Main Thread
+// Concurrent: Consumer Thread vs Main Thread
 // =========================================================
 
 #[test]
@@ -727,10 +727,10 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
     let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
     let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let running_audio = running.clone();
+    let running_consumer = running.clone();
 
-    // Audio thread: continuously swap + traverse
-    let audio_thread = std::thread::spawn(move || {
+    // Consumer thread: continuously swap + traverse
+    let consumer_thread = std::thread::spawn(move || {
         let cp_ref = unsafe {
             &*(cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>)
         };
@@ -740,7 +740,7 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
-        while running_audio.load(std::sync::atomic::Ordering::Relaxed) {
+        while running_consumer.load(std::sync::atomic::Ordering::Relaxed) {
             let reader = processor.acquire_graph();
 
             // Traverse the full chain — must terminate, no cycles
@@ -776,12 +776,12 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
     // Final publish to flush everything
     controller.publish();
 
-    // Let audio thread run a few more cycles
+    // Let consumer thread run a few more cycles
     std::thread::sleep(std::time::Duration::from_millis(10));
 
     running.store(false, std::sync::atomic::Ordering::Relaxed);
-    let iterations = audio_thread.join().expect("audio thread panicked");
-    assert!(iterations > 0, "audio thread never ran");
+    let iterations = consumer_thread.join().expect("consumer thread panicked");
+    assert!(iterations > 0, "consumer thread never ran");
 }
 
 #[test]
@@ -797,10 +797,10 @@ fn concurrent_traversal_during_grow() {
     controller.publish();
 
     let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let running_audio = running.clone();
+    let running_consumer = running.clone();
 
-    // Audio thread: continuously reads while main thread grows
-    let audio_thread = std::thread::spawn(move || {
+    // Consumer thread: continuously reads while main thread grows
+    let consumer_thread = std::thread::spawn(move || {
         let cp_ref = unsafe {
             &*(cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>)
         };
@@ -810,7 +810,7 @@ fn concurrent_traversal_during_grow() {
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
-        while running_audio.load(std::sync::atomic::Ordering::Relaxed) {
+        while running_consumer.load(std::sync::atomic::Ordering::Relaxed) {
             // Re-acquire EVERY iteration — critical after grow()
             let reader = processor.acquire_graph();
 
@@ -830,7 +830,7 @@ fn concurrent_traversal_during_grow() {
         iterations
     });
 
-    // Main thread: grow multiple times while audio reads
+    // Main thread: grow multiple times while consumer reads
     controller.grow(config(16)).unwrap();
     controller.publish();
 
@@ -849,7 +849,7 @@ fn concurrent_traversal_during_grow() {
     }
     controller.publish();
 
-    // Let audio thread catch up
+    // Let consumer thread catch up
     std::thread::sleep(std::time::Duration::from_millis(10));
 
     // Extra publishes to rotate GC pipeline and drop old readers
@@ -857,7 +857,7 @@ fn concurrent_traversal_during_grow() {
     controller.publish();
 
     running.store(false, std::sync::atomic::Ordering::Relaxed);
-    let iterations = audio_thread.join().expect("audio thread panicked during grow");
+    let iterations = consumer_thread.join().expect("consumer thread panicked during grow");
     assert!(iterations > 0);
 }
 
@@ -870,11 +870,11 @@ fn concurrent_attribute_reads_during_writes() {
     let n1 = controller.insert_head(1).unwrap();
 
     let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let running_audio = running.clone();
+    let running_consumer = running.clone();
     let slot = n1;
 
-    // Audio thread: continuously reads attributes
-    let audio_thread = std::thread::spawn(move || {
+    // Consumer thread: continuously reads attributes
+    let consumer_thread = std::thread::spawn(move || {
         let cp_ref = unsafe {
             &*(cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>)
         };
@@ -884,7 +884,7 @@ fn concurrent_attribute_reads_during_writes() {
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
-        while running_audio.load(std::sync::atomic::Ordering::Relaxed) {
+        while running_consumer.load(std::sync::atomic::Ordering::Relaxed) {
             let reader = processor.acquire_graph();
 
             // Read all 16 attribute offsets — must never panic or return garbage
@@ -909,10 +909,10 @@ fn concurrent_attribute_reads_during_writes() {
         }
     }
 
-    // Let audio thread finish a few more reads
+    // Let consumer thread finish a few more reads
     std::thread::sleep(std::time::Duration::from_millis(5));
 
     running.store(false, std::sync::atomic::Ordering::Relaxed);
-    let iterations = audio_thread.join().expect("audio thread panicked during attribute writes");
-    assert!(iterations > 0, "audio thread never ran");
+    let iterations = consumer_thread.join().expect("consumer thread panicked during attribute writes");
+    assert!(iterations > 0, "consumer thread never ran");
 }

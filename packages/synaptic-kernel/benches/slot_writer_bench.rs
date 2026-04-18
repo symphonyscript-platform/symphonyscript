@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
-use synaptic_kernel::topology::slot_writer::SlotWriter;
+use synaptic_kernel::primitives::struct_writer::StructWriter;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
@@ -27,7 +27,7 @@ fn setup() -> synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWri
 
 fn bench_slot_writer(c: &mut Criterion) {
     let writer = setup();
-    let sw = SlotWriter::<SLOT_WORDS>::new(&writer, TB_OFFSET);
+    let sw = StructWriter::<SLOT_WORDS>::new(&writer, TB_OFFSET);
 
     c.bench_function("TripleBufferWriter/write_into_slot", |b| {
         b.iter(|| {
@@ -43,7 +43,7 @@ fn bench_slot_writer(c: &mut Criterion) {
 
     c.bench_function("SlotWriter/read_after_rebind", |b| {
         b.iter(|| {
-            let view = SlotWriter::<SLOT_WORDS>::new(&writer, TB_OFFSET);
+            let view = StructWriter::<SLOT_WORDS>::new(&writer, TB_OFFSET);
             black_box(view.read(0));
         });
     });

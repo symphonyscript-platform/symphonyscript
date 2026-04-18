@@ -1,6 +1,6 @@
 use crate::constants::SYNAPSE_SIZE;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
-use crate::topology::slot_writer::SlotWriter;
+use crate::primitives::struct_writer::StructWriter;
 
 /// Producer-side structural facade for a graph synapse on the triple buffer.
 ///
@@ -26,8 +26,8 @@ use crate::topology::slot_writer::SlotWriter;
 /// - All mutation methods (`set_*`) are `pub(crate)`. Only the kernel can mutate
 ///   active topology, enforcing structural graph invariants.
 pub struct SynapseWriter<'a, const META_SIZE: usize> {
-    core: SlotWriter<'a, SYNAPSE_SIZE>,
-    meta: SlotWriter<'a, META_SIZE>,
+    core: StructWriter<'a, SYNAPSE_SIZE>,
+    meta: StructWriter<'a, META_SIZE>,
 }
 
 impl<'a, const META_SIZE: usize> SynapseWriter<'a, META_SIZE> {
@@ -43,8 +43,8 @@ impl<'a, const META_SIZE: usize> SynapseWriter<'a, META_SIZE> {
         );
 
         SynapseWriter {
-            core: SlotWriter::new(&triple_buffer, tb_start_offset),
-            meta: SlotWriter::new(&triple_buffer, tb_start_offset + SYNAPSE_SIZE),
+            core: StructWriter::new(&triple_buffer, tb_start_offset),
+            meta: StructWriter::new(&triple_buffer, tb_start_offset + SYNAPSE_SIZE),
         }
     }
 

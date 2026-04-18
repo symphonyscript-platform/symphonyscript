@@ -707,11 +707,11 @@ fn serialize_load_serialize_preserves_semantic_content() {
 }
 
 // =========================================================
-// PHASE 13: Audio Thread After Load
+// PHASE 13: Consumer Thread After Load
 // =========================================================
 
 #[test]
-fn audio_thread_sees_loaded_state_after_publish_swap() {
+fn consumer_thread_sees_loaded_state_after_publish_swap() {
     let mut kernel = TestKernel::new(config(16));
     let n1 = kernel.insert_head(1).unwrap();
     let n2 = kernel.insert_after(n1, 2).unwrap();
@@ -739,7 +739,7 @@ fn audio_thread_sees_loaded_state_after_publish_swap() {
 }
 
 #[test]
-fn mutations_after_load_visible_to_audio_thread() {
+fn mutations_after_load_visible_to_consumer_thread() {
     let mut kernel = TestKernel::new(config(16));
     kernel.insert_head(1).unwrap();
 

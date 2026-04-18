@@ -2,7 +2,7 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
-use synaptic_kernel::topology::slot_reader::SlotReader;
+use synaptic_kernel::primitives::struct_reader::StructReader;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
@@ -19,7 +19,7 @@ fn new_creates_view() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
     let reader = writer.to_reader();
-    let view: SlotReader<'_, 16> = SlotReader::new(&reader, 0);
+    let view: StructReader<'_, 16> = StructReader::new(&reader, 0);
     assert_eq!(view.read(0), 0);
 }
 
@@ -28,7 +28,7 @@ fn read_returns_zero_on_fresh_mem() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
     let reader = writer.to_reader();
-    let view: SlotReader<'_, 16> = SlotReader::new(&reader, 0);
+    let view: StructReader<'_, 16> = StructReader::new(&reader, 0);
 
     for i in 0..16 {
         assert_eq!(view.read(i), 0);
@@ -46,7 +46,7 @@ fn read_at_nonzero_offset() {
     writer.publish();
     reader.swap();
 
-    let view: SlotReader<'_, 16> = SlotReader::new(&reader, 32);
+    let view: StructReader<'_, 16> = StructReader::new(&reader, 32);
     assert_eq!(view.read(0), 777);
 }
 
@@ -61,8 +61,8 @@ fn reads_are_isolated_between_slots() {
     writer.publish();
     reader.swap();
 
-    let view_a: SlotReader<'_, 16> = SlotReader::new(&reader, 0);
-    let view_b: SlotReader<'_, 16> = SlotReader::new(&reader, 16);
+    let view_a: StructReader<'_, 16> = StructReader::new(&reader, 0);
+    let view_b: StructReader<'_, 16> = StructReader::new(&reader, 16);
 
     assert_eq!(view_a.read(0), 100);
     assert_eq!(view_b.read(0), 200);
@@ -75,5 +75,5 @@ fn panics_if_out_of_bounds() {
     let writer = TripleBufferWriter::new(mem, 0, 16);
     let reader = writer.to_reader();
     // 16 buffer capacity, start at 8, SLOT_SIZE=16 => 8+16=24 > 16
-    let _view: SlotReader<'_, 16> = SlotReader::new(&reader, 8);
+    let _view: StructReader<'_, 16> = StructReader::new(&reader, 8);
 }

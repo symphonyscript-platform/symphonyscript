@@ -2,7 +2,7 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
-use synaptic_kernel::topology::slot_writer::SlotWriter;
+use synaptic_kernel::primitives::struct_writer::StructWriter;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
@@ -18,7 +18,7 @@ fn create_mem(size: usize) -> AtomicBuffer {
 fn new_creates_view() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: SlotWriter<'_, 16> = SlotWriter::new(&writer, 0);
+    let view: StructWriter<'_, 16> = StructWriter::new(&writer, 0);
     assert_eq!(view.read(0), 0);
 }
 
@@ -29,5 +29,5 @@ fn new_creates_view() {
 fn panics_if_out_of_bounds() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 16);
-    let _view: SlotWriter<'_, 16> = SlotWriter::new(&writer, 8);
+    let _view: StructWriter<'_, 16> = StructWriter::new(&writer, 8);
 }

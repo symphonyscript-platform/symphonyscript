@@ -1,6 +1,6 @@
 use crate::constants::SYNAPSE_SIZE;
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
-use crate::topology::slot_reader::SlotReader;
+use crate::primitives::struct_reader::StructReader;
 
 /// Consumer-side structural facade for a graph synapse on the triple buffer.
 ///
@@ -16,8 +16,8 @@ use crate::topology::slot_reader::SlotReader;
 /// # Encapsulation
 /// - Read-only: structural mutation is strictly prohibited on the reading plane.
 pub struct SynapseReader<'a, const META_SIZE: usize> {
-    core: SlotReader<'a, SYNAPSE_SIZE>,
-    meta: SlotReader<'a, META_SIZE>,
+    core: StructReader<'a, SYNAPSE_SIZE>,
+    meta: StructReader<'a, META_SIZE>,
 }
 
 impl<'a, const META_SIZE: usize> SynapseReader<'a, META_SIZE> {
@@ -33,8 +33,8 @@ impl<'a, const META_SIZE: usize> SynapseReader<'a, META_SIZE> {
         );
 
         SynapseReader {
-            core: SlotReader::new(&triple_buffer, tb_start_offset),
-            meta: SlotReader::new(&triple_buffer, tb_start_offset + SYNAPSE_SIZE),
+            core: StructReader::new(&triple_buffer, tb_start_offset),
+            meta: StructReader::new(&triple_buffer, tb_start_offset + SYNAPSE_SIZE),
         }
     }
 

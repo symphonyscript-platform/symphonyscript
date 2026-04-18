@@ -66,7 +66,7 @@ fn bench_connect_disconnect(c: &mut Criterion) {
             let start = std::time::Instant::now();
             for i in 0..iters {
                 let s = controller.connect(n1, n2, 1).unwrap();
-                controller.disconnect(s).unwrap();
+                controller.disconnect_synapse(s).unwrap();
                 if i % 512 == 511 {
                     controller.publish(); // flushes deferred frees
                 }
@@ -173,10 +173,10 @@ fn bench_get_node_attribute(c: &mut Criterion) {
     });
 }
 
-// ============ audio thread traversal latency ============
+// ============ consumer thread traversal latency ============
 
-fn bench_audio_traversal(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Kernel/audio_traversal");
+fn bench_consumer_traversal(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Kernel/consumer_traversal");
 
     for chain_size in [4, 16, 64, 256] {
         group.bench_with_input(
@@ -398,7 +398,7 @@ criterion_group!(
     bench_publish_swap_cycle,
     bench_set_node_attribute,
     bench_get_node_attribute,
-    bench_audio_traversal,
+    bench_consumer_traversal,
     bench_grow_empty,
     bench_grow_loaded,
     bench_grow_publish_swap,

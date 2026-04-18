@@ -311,8 +311,8 @@ fn get_node_attributes_returns_view() {
     kernel.set_node_attribute(slot, 5, 99);
 
     let view = kernel.get_node_attributes(slot);
-    assert_eq!(view.get(0), 42);
-    assert_eq!(view.get(5), 99);
+    assert_eq!(view.read(0), 42);
+    assert_eq!(view.read(5), 99);
 }
 
 #[test]

@@ -95,7 +95,7 @@ fn multi_threaded_topology_fuzzer() {
     });
 
     // --- READER THREAD ---
-    // Continuously transverses the dynamic graph memory on-the-fly, simulating an audio thread.
+    // Continuously transverses the dynamic graph memory on-the-fly, simulating an consumer thread.
     // Proves that structural pointers NEVER point to stale memory, freed memory,
     // and that the garbage collection boundaries physically prevent topology tearing.
     let reader_handle = thread::spawn(move || {

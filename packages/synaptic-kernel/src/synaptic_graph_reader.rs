@@ -119,7 +119,7 @@ impl<
     }
 
     pub fn get_node_attribute(&'_ self, slot: usize, attribute_offset: usize) -> i32 {
-        self.node_attribute_plane.get(slot).get(attribute_offset)
+        self.node_attribute_plane.get(slot).read(attribute_offset)
     }
 
     pub fn get_synapse(&'_ self, slot: usize) -> SynapseReader<'_, SYNAPSE_META_SIZE> {
@@ -134,7 +134,7 @@ impl<
     }
 
     pub fn get_synapse_attribute(&'_ self, slot: usize, attribute_offset: usize) -> i32 {
-        self.synapse_attribute_plane.get(slot).get(attribute_offset)
+        self.synapse_attribute_plane.get(slot).read(attribute_offset)
     }
 
     pub fn swap(&self) -> bool {

@@ -68,10 +68,10 @@ fn sample_data() -> BenchAttrs {
 fn bench_view_read_single_field(c: &mut Criterion) {
     let mem = create_mem(1024);
     let view: AttributesWriter<'_, SLOT> = AttributesWriter::new(&mem, 0);
-    view.set(0, 570000);
+    view.write(0, 570000);
 
     c.bench_function("AttributesWriter/read_word0", |b| {
-        b.iter(|| black_box(view.get(0)));
+        b.iter(|| black_box(view.read(0)));
     });
 }
 
@@ -80,28 +80,28 @@ fn bench_view_write_single_field(c: &mut Criterion) {
     let view: AttributesWriter<'_, SLOT> = AttributesWriter::new(&mem, 0);
 
     c.bench_function("AttributesWriter/write_word0", |b| {
-        b.iter(|| view.set(0, black_box(570000)));
+        b.iter(|| view.write(0, black_box(570000)));
     });
 }
 
 fn bench_view_read_all_fields(c: &mut Criterion) {
     let mem = create_mem(1024);
     let view: AttributesWriter<'_, SLOT> = AttributesWriter::new(&mem, 0);
-    view.set(0, 570000);
-    view.set(1, 100);
-    view.set(2, 480);
-    view.set(3, 800);
-    view.set(4, -500);
-    view.set(5, 200);
-    view.set(6, 0);
-    view.set(7, 50);
-    view.set(8, -10);
-    view.set(9, 0b11);
+    view.write(0, 570000);
+    view.write(1, 100);
+    view.write(2, 480);
+    view.write(3, 800);
+    view.write(4, -500);
+    view.write(5, 200);
+    view.write(6, 0);
+    view.write(7, 50);
+    view.write(8, -10);
+    view.write(9, 0b11);
 
     c.bench_function("AttributesWriter/read_all_10_words", |b| {
         b.iter(|| {
             for i in 0..10 {
-                black_box(view.get(i));
+                black_box(view.read(i));
             }
         });
     });
@@ -113,16 +113,16 @@ fn bench_view_write_all_fields(c: &mut Criterion) {
 
     c.bench_function("AttributesWriter/write_all_10_words", |b| {
         b.iter(|| {
-            view.set(0, black_box(570000));
-            view.set(1, black_box(100));
-            view.set(2, black_box(480));
-            view.set(3, black_box(800));
-            view.set(4, black_box(-500));
-            view.set(5, black_box(200));
-            view.set(6, black_box(0));
-            view.set(7, black_box(50));
-            view.set(8, black_box(-10));
-            view.set(9, black_box(0b11));
+            view.write(0, black_box(570000));
+            view.write(1, black_box(100));
+            view.write(2, black_box(480));
+            view.write(3, black_box(800));
+            view.write(4, black_box(-500));
+            view.write(5, black_box(200));
+            view.write(6, black_box(0));
+            view.write(7, black_box(50));
+            view.write(8, black_box(-10));
+            view.write(9, black_box(0b11));
         });
     });
 }
@@ -130,11 +130,11 @@ fn bench_view_write_all_fields(c: &mut Criterion) {
 fn bench_view_flags_mask(c: &mut Criterion) {
     let mem = create_mem(1024);
     let view: AttributesWriter<'_, SLOT> = AttributesWriter::new(&mem, 0);
-    view.set(9, 0b11);
+    view.write(9, 0b11);
 
     c.bench_function("AttributesWriter/flags_mask_read", |b| {
         b.iter(|| {
-            let f = view.get(9);
+            let f = view.read(9);
             black_box(f & 1);
             black_box(f & 2);
         });
@@ -162,7 +162,7 @@ fn bench_plane_get(c: &mut Criterion) {
     c.bench_function("AttributePlane/get_read_word0", |b| {
         b.iter(|| {
             let w = plane.get(black_box(1));
-            black_box(w.get(0));
+            black_box(w.read(0));
         });
     });
 }
@@ -175,7 +175,7 @@ fn bench_plane_set_get_cycle(c: &mut Criterion) {
         b.iter(|| {
             plane.set(black_box(42), sample_data());
             let w = plane.get(black_box(42));
-            black_box(w.get(0));
+            black_box(w.read(0));
         });
     });
 }
@@ -210,8 +210,8 @@ fn bench_plane_sequential_read(c: &mut Criterion) {
             b.iter(|| {
                 for i in 0..count {
                     let w = plane.get(i + 1);
-                    black_box(w.get(0));
-                    black_box(w.get(1));
+                    black_box(w.read(0));
+                    black_box(w.read(1));
                 }
             });
         });
@@ -258,7 +258,7 @@ fn bench_plane_random_access(c: &mut Criterion) {
         b.iter(|| {
             for &idx in &indices {
                 let w = plane.get(idx);
-                black_box(w.get(0));
+                black_box(w.read(0));
             }
         });
     });

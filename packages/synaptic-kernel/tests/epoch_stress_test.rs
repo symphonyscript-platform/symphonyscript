@@ -25,13 +25,13 @@ fn config(n: usize, s: usize) -> SynapticGraphConfig {
     }
 }
 
-// ============ Epoch Stress: Grow Under Audio Load with Proper Ack ============
+// ============ Epoch Stress: Grow Under Consumer Load with Proper Ack ============
 
-/// The critical test: main thread grows while audio thread traverses using
+/// The critical test: main thread grows while consumer thread traverses using
 /// the KernelProcessor interface (acquire_graph + ack). This validates the
 /// epoch-based reclamation prevents use-after-free.
 #[test]
-fn epoch_stress_grow_under_audio_load_with_ack() {
+fn epoch_stress_grow_under_consumer_load_with_ack() {
     let mut controller = TestKernel::new(config(8, 8));
     let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
@@ -43,10 +43,10 @@ fn epoch_stress_grow_under_audio_load_with_ack() {
     controller.publish();
 
     let running = Arc::new(AtomicBool::new(true));
-    let running_audio = running.clone();
+    let running_consumer = running.clone();
 
-    // Audio thread: uses KernelProcessor (acquire_graph + ack)
-    let audio_thread = thread::spawn(move || {
+    // Consumer thread: uses KernelProcessor (acquire_graph + ack)
+    let consumer_thread = thread::spawn(move || {
         let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>) };
         let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> = unsafe { Arc::from_raw(cp_ref) };
         let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
@@ -54,7 +54,7 @@ fn epoch_stress_grow_under_audio_load_with_ack() {
         let mut iterations = 0u64;
         let mut max_chain_len = 0usize;
 
-        while running_audio.load(Ordering::Relaxed) {
+        while running_consumer.load(Ordering::Relaxed) {
             let graph = processor.acquire_graph();
 
             // Traverse the full chain
@@ -113,7 +113,7 @@ fn epoch_stress_grow_under_audio_load_with_ack() {
     controller.grow(config(64, 64)).unwrap();
     controller.publish();
 
-    // Let audio thread process a few more frames
+    // Let consumer thread process a few more frames
     thread::sleep(Duration::from_millis(20));
 
     // Extra publishes to exercise GC draining
@@ -123,14 +123,14 @@ fn epoch_stress_grow_under_audio_load_with_ack() {
     }
 
     running.store(false, Ordering::Relaxed);
-    let (iterations, _max_chain) = audio_thread.join().expect("audio thread panicked");
-    assert!(iterations > 0, "audio thread never ran");
+    let (iterations, _max_chain) = consumer_thread.join().expect("consumer thread panicked");
+    assert!(iterations > 0, "consumer thread never ran");
 }
 
 // ============ Epoch Stress: Random Operations Under Load ============
 
 #[test]
-fn epoch_stress_random_mutations_under_audio_load() {
+fn epoch_stress_random_mutations_under_consumer_load() {
     let mut controller = TestKernel::new(config(16, 16));
     let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
@@ -150,17 +150,17 @@ fn epoch_stress_random_mutations_under_audio_load() {
     controller.publish();
 
     let running = Arc::new(AtomicBool::new(true));
-    let running_audio = running.clone();
+    let running_consumer = running.clone();
 
-    // Audio thread with KernelProcessor
-    let audio_thread = thread::spawn(move || {
+    // Consumer thread with KernelProcessor
+    let consumer_thread = thread::spawn(move || {
         let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>) };
         let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> = unsafe { Arc::from_raw(cp_ref) };
         let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
-        while running_audio.load(Ordering::Relaxed) {
+        while running_consumer.load(Ordering::Relaxed) {
             let graph = processor.acquire_graph();
 
             // Full graph traversal: nodes + synapses
@@ -258,11 +258,11 @@ fn epoch_stress_random_mutations_under_audio_load() {
     }
 
     running.store(false, Ordering::Relaxed);
-    let iterations = audio_thread.join().expect("audio thread panicked during random mutations");
-    assert!(iterations > 0, "audio thread never ran");
+    let iterations = consumer_thread.join().expect("consumer thread panicked during random mutations");
+    assert!(iterations > 0, "consumer thread never ran");
 }
 
-// ============ Epoch Stress: Audio Thread Acking at Varying Speeds ============
+// ============ Epoch Stress: Consumer Thread Acking at Varying Speeds ============
 
 #[test]
 fn epoch_stress_slow_ack_does_not_crash() {
@@ -273,17 +273,17 @@ fn epoch_stress_slow_ack_does_not_crash() {
     controller.publish();
 
     let running = Arc::new(AtomicBool::new(true));
-    let running_audio = running.clone();
+    let running_consumer = running.clone();
 
-    // Slow audio thread: acks infrequently
-    let audio_thread = thread::spawn(move || {
+    // Slow consumer thread: acks infrequently
+    let consumer_thread = thread::spawn(move || {
         let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>) };
         let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> = unsafe { Arc::from_raw(cp_ref) };
         let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
-        while running_audio.load(Ordering::Relaxed) {
+        while running_consumer.load(Ordering::Relaxed) {
             let graph = processor.acquire_graph();
 
             // Simulate slow processing
@@ -294,7 +294,7 @@ fn epoch_stress_slow_ack_does_not_crash() {
                 current = Some(graph.get_node(next));
             }
 
-            // Sleep to simulate slow audio processing
+            // Sleep to simulate slow consumer processing
             thread::sleep(Duration::from_millis(5));
             iterations += 1;
         }
@@ -302,7 +302,7 @@ fn epoch_stress_slow_ack_does_not_crash() {
         iterations
     });
 
-    // Main thread: rapid grows while audio is slow
+    // Main thread: rapid grows while consumer is slow
     // Capacities must be powers of 2
     let grow_caps = [16, 32, 64, 128, 256];
     for (i, &new_cap) in grow_caps.iter().enumerate() {
@@ -317,7 +317,7 @@ fn epoch_stress_slow_ack_does_not_crash() {
         thread::sleep(Duration::from_millis(3));
     }
 
-    // Let audio thread finish current work
+    // Let consumer thread finish current work
     thread::sleep(Duration::from_millis(30));
 
     // Drain pending readers
@@ -327,8 +327,8 @@ fn epoch_stress_slow_ack_does_not_crash() {
     }
 
     running.store(false, Ordering::Relaxed);
-    let iterations = audio_thread.join().expect("audio thread panicked with slow ack");
-    assert!(iterations > 0, "audio thread never ran");
+    let iterations = consumer_thread.join().expect("consumer thread panicked with slow ack");
+    assert!(iterations > 0, "consumer thread never ran");
 }
 
 // ============ Epoch Stress: Attribute Writes During Traversal ============
@@ -349,18 +349,18 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
     }
 
     let running = Arc::new(AtomicBool::new(true));
-    let running_audio = running.clone();
+    let running_consumer = running.clone();
     let slots_clone = slots.clone();
 
-    // Audio thread: reads attributes via KernelProcessor
-    let audio_thread = thread::spawn(move || {
+    // Consumer thread: reads attributes via KernelProcessor
+    let consumer_thread = thread::spawn(move || {
         let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>) };
         let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> = unsafe { Arc::from_raw(cp_ref) };
         let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
-        while running_audio.load(Ordering::Relaxed) {
+        while running_consumer.load(Ordering::Relaxed) {
             let graph = processor.acquire_graph();
 
             // Read all attributes for all slots
@@ -393,11 +393,11 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
     thread::sleep(Duration::from_millis(5));
 
     running.store(false, Ordering::Relaxed);
-    let iterations = audio_thread.join().expect("audio thread panicked during attribute writes");
-    assert!(iterations > 0, "audio thread never ran");
+    let iterations = consumer_thread.join().expect("consumer thread panicked during attribute writes");
+    assert!(iterations > 0, "consumer thread never ran");
 }
 
-// ============ Epoch Stress: Multiple Rapid Grows Without Audio Ack ============
+// ============ Epoch Stress: Multiple Rapid Grows Without Consumer Ack ============
 
 #[test]
 fn epoch_stress_grows_accumulate_without_ack() {
@@ -405,7 +405,7 @@ fn epoch_stress_grows_accumulate_without_ack() {
 
     controller.insert_head(1).unwrap();
 
-    // Grow 10 times rapidly WITHOUT any audio thread acking
+    // Grow 10 times rapidly WITHOUT any consumer thread acking
     // This tests that readers_pending_deletion accumulates safely
     for i in 1..=10 {
         let cap = 4 * (1 << i); // 8, 16, 32, ...
