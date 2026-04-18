@@ -26,10 +26,10 @@ fn make_tb(mem: &AtomicBuffer) -> TripleBufferWriter {
 
 fn make_store<const S: usize, const A: usize>(
     capacity: usize,
-) -> (AtomicBuffer, TripleBufferWriter, DualStoreWriter<S, A>) {
+) -> (AtomicBuffer, TripleBufferWriter, DualStoreWriter<S, 0, A>) {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = DualStoreWriter::<S, A>::new(
+    let store = DualStoreWriter::<S, 0, A>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -73,8 +73,8 @@ fn new_constructs_with_16_8_capacity_256() {
 fn calculate_size_on_mem_returns_sum() {
     // capacity 16, STRUCT_STRIDE=8, ATTR_STRIDE=16
     // mem plane holds SlotAllocator + AttributePlane => no STRUCT_STRIDE involvement
-    let size_a = DualStoreWriter::<8, 16>::calculate_size_on_mem(16);
-    let size_b = DualStoreWriter::<8, 16>::calculate_size_on_mem(32);
+    let size_a = DualStoreWriter::<8, 0, 16>::calculate_size_on_mem(16);
+    let size_b = DualStoreWriter::<8, 0, 16>::calculate_size_on_mem(32);
     // Doubling capacity strictly increases mem required.
     assert!(size_b > size_a);
     // Also sanity: size should include ATTR_STRIDE * capacity contribution.
@@ -86,10 +86,10 @@ fn calculate_size_on_mem_returns_sum() {
 
 #[test]
 fn calculate_size_on_tb_returns_capacity_times_stride() {
-    assert_eq!(DualStoreWriter::<8, 16>::calculate_size_on_tb(4), 32);
-    assert_eq!(DualStoreWriter::<4, 32>::calculate_size_on_tb(16), 64);
-    assert_eq!(DualStoreWriter::<1, 1>::calculate_size_on_tb(1), 1);
-    assert_eq!(DualStoreWriter::<16, 8>::calculate_size_on_tb(256), 256 * 16);
+    assert_eq!(DualStoreWriter::<8, 0, 16>::calculate_size_on_tb(4), 32);
+    assert_eq!(DualStoreWriter::<4, 0, 32>::calculate_size_on_tb(16), 64);
+    assert_eq!(DualStoreWriter::<1, 0, 1>::calculate_size_on_tb(1), 1);
+    assert_eq!(DualStoreWriter::<16, 0, 8>::calculate_size_on_tb(256), 256 * 16);
 }
 
 // ============ Allocation (1-based) ============
@@ -141,7 +141,7 @@ fn insert_struct_zeroes_struct_plane() {
     }
     // After 3 publishes, all three underlying buffers hold non-zero data in [0..32).
     let store =
-        DualStoreWriter::<8, 16>::new(Arc::clone(&mem), tb.clone(), DEFAULT_MEM_START_OFFSET, 0, 4);
+        DualStoreWriter::<8, 0, 16>::new(Arc::clone(&mem), tb.clone(), DEFAULT_MEM_START_OFFSET, 0, 4);
     let s = store.insert_struct().unwrap();
     for offset in 0..8 {
         assert_eq!(
@@ -205,8 +205,8 @@ fn struct_write_all_read_all_roundtrip() {
     let s = store.insert_struct().unwrap();
 
     let data: [i32; 8] = [-1, 2, -3, 4, -5, 6, -7, 8];
-    store.struct_write_all(s, data);
-    assert_eq!(store.struct_read_all(s), data);
+    store.core_write_all(s, data);
+    assert_eq!(store.core_read_all(s), data);
 }
 
 #[test]
@@ -217,11 +217,11 @@ fn struct_writes_are_isolated_per_slot() {
 
     let d1: [i32; 8] = [1, 1, 1, 1, 1, 1, 1, 1];
     let d2: [i32; 8] = [2, 2, 2, 2, 2, 2, 2, 2];
-    store.struct_write_all(s1, d1);
-    store.struct_write_all(s2, d2);
+    store.core_write_all(s1, d1);
+    store.core_write_all(s2, d2);
 
-    assert_eq!(store.struct_read_all(s1), d1);
-    assert_eq!(store.struct_read_all(s2), d2);
+    assert_eq!(store.core_read_all(s1), d1);
+    assert_eq!(store.core_read_all(s2), d2);
 }
 
 // ============ Attribute plane read/write ============
@@ -316,7 +316,7 @@ fn slot_reuse_zeroes_both_planes() {
     let (_mem, _tb, store) = make_store::<8, 16>(4);
     let s = store.insert_struct().unwrap();
 
-    store.struct_write_all(s, [11, 22, 33, 44, 55, 66, 77, 88]);
+    store.core_write_all(s, [11, 22, 33, 44, 55, 66, 77, 88]);
     store.attr_write_all(s, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
 
     let reader_ack = store.to_staging_buffer_reader();
@@ -327,7 +327,7 @@ fn slot_reuse_zeroes_both_planes() {
 
     let s2 = store.insert_struct().unwrap();
     assert_eq!(s2, s, "SimpleFreeList LIFO should reuse the just-freed slot");
-    assert_eq!(store.struct_read_all(s2), [0; 8]);
+    assert_eq!(store.core_read_all(s2), [0; 8]);
     assert_eq!(store.attr_read_all(s2), [0; 16]);
 }
 
@@ -340,7 +340,7 @@ fn mem_offset_accessors_report_sizes() {
     let mem_start = DEFAULT_MEM_START_OFFSET;
     let tb_start = 0;
     let capacity = 8;
-    let store = DualStoreWriter::<8, 16>::new(
+    let store = DualStoreWriter::<8, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         mem_start,
@@ -351,13 +351,13 @@ fn mem_offset_accessors_report_sizes() {
     assert_eq!(store.mem_start_offset(), mem_start);
     assert_eq!(
         store.mem_end_offset() - store.mem_start_offset(),
-        DualStoreWriter::<8, 16>::calculate_size_on_mem(capacity)
+        DualStoreWriter::<8, 0, 16>::calculate_size_on_mem(capacity)
     );
 
     assert_eq!(store.tb_start_offset(), tb_start);
     assert_eq!(
         store.tb_end_offset() - store.tb_start_offset(),
-        DualStoreWriter::<8, 16>::calculate_size_on_tb(capacity)
+        DualStoreWriter::<8, 0, 16>::calculate_size_on_tb(capacity)
     );
 }
 
@@ -368,7 +368,7 @@ fn construction_at_nonzero_offsets_works() {
     let mem_start = DEFAULT_MEM_START_OFFSET + 64;
     let tb_start = 32;
     let capacity = 4;
-    let store = DualStoreWriter::<8, 16>::new(
+    let store = DualStoreWriter::<8, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         mem_start,
@@ -400,7 +400,7 @@ fn mem_staging_buffer_start_offset_is_within_mem_region() {
 fn bind_recovers_state_from_preinitialized_mem() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let first = DualStoreWriter::<8, 16>::new(
+    let first = DualStoreWriter::<8, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -416,7 +416,7 @@ fn bind_recovers_state_from_preinitialized_mem() {
     first.attr_write(s2, 0, 9002);
 
     // Re-attach via bind without re-initializing.
-    let rebound = DualStoreWriter::<8, 16>::bind(
+    let rebound = DualStoreWriter::<8, 0, 16>::bind(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -452,7 +452,7 @@ fn to_reader_roundtrip_with_publish_and_swap() {
     let tb = make_tb(&mem);
     // External TripleBufferReader for swap control — DualStoreReader has no swap().
     let tb_reader = tb.to_reader();
-    let store = DualStoreWriter::<8, 16>::new(
+    let store = DualStoreWriter::<8, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -461,7 +461,7 @@ fn to_reader_roundtrip_with_publish_and_swap() {
     );
 
     let s = store.insert_struct().unwrap();
-    store.struct_write_all(s, [1, 2, 3, 4, 5, 6, 7, 8]);
+    store.core_write_all(s, [1, 2, 3, 4, 5, 6, 7, 8]);
     store.attr_write_all(s, [10; 16]);
 
     // Attribute reads are instantly visible — no publish/swap needed.
@@ -471,7 +471,7 @@ fn to_reader_roundtrip_with_publish_and_swap() {
     // Struct reads require TB publish + reader swap.
     tb.publish();
     assert!(tb_reader.swap());
-    assert_eq!(reader.struct_read_all(s), [1, 2, 3, 4, 5, 6, 7, 8]);
+    assert_eq!(reader.core_read_all(s), [1, 2, 3, 4, 5, 6, 7, 8]);
 }
 
 // ============ copy_from ============
@@ -480,7 +480,7 @@ fn to_reader_roundtrip_with_publish_and_swap() {
 fn copy_from_migrates_allocator_attrs_and_struct_data() {
     let src_mem = create_mem(MEM_SIZE);
     let src_tb = make_tb(&src_mem);
-    let src = DualStoreWriter::<8, 16>::new(
+    let src = DualStoreWriter::<8, 0, 16>::new(
         Arc::clone(&src_mem),
         src_tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -490,14 +490,14 @@ fn copy_from_migrates_allocator_attrs_and_struct_data() {
 
     let s1 = src.insert_struct().unwrap();
     let s2 = src.insert_struct().unwrap();
-    src.struct_write_all(s1, [1, 2, 3, 4, 5, 6, 7, 8]);
-    src.struct_write_all(s2, [9, 10, 11, 12, 13, 14, 15, 16]);
+    src.core_write_all(s1, [1, 2, 3, 4, 5, 6, 7, 8]);
+    src.core_write_all(s2, [9, 10, 11, 12, 13, 14, 15, 16]);
     src.attr_write_all(s1, [100; 16]);
     src.attr_write_all(s2, [200; 16]);
 
     let dst_mem = create_mem(MEM_SIZE);
     let dst_tb = make_tb(&dst_mem);
-    let dst = DualStoreWriter::<8, 16>::new(
+    let dst = DualStoreWriter::<8, 0, 16>::new(
         Arc::clone(&dst_mem),
         dst_tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -518,8 +518,8 @@ fn copy_from_migrates_allocator_attrs_and_struct_data() {
 
     // Struct data migrated. copy_region_from copies into all 3 TB buffers,
     // so writer-side reads see it immediately.
-    assert_eq!(dst.struct_read_all(s1), [1, 2, 3, 4, 5, 6, 7, 8]);
-    assert_eq!(dst.struct_read_all(s2), [9, 10, 11, 12, 13, 14, 15, 16]);
+    assert_eq!(dst.core_read_all(s1), [1, 2, 3, 4, 5, 6, 7, 8]);
+    assert_eq!(dst.core_read_all(s2), [9, 10, 11, 12, 13, 14, 15, 16]);
 }
 
 // ============ publish ============
@@ -559,10 +559,10 @@ fn get_struct_returns_writer_handle_for_repeated_access() {
     let s = store.insert_struct().unwrap();
 
     let handle = store.get_struct(s);
-    handle.write(0, 77);
-    handle.write(7, 88);
-    assert_eq!(handle.read(0), 77);
-    assert_eq!(handle.read(7), 88);
+    handle.write_core(0, 77);
+    handle.write_core(7, 88);
+    assert_eq!(handle.read_core(0), 77);
+    assert_eq!(handle.read_core(7), 88);
     // Reads via the top-level API agree.
     assert_eq!(store.core_read(s, 0), 77);
     assert_eq!(store.core_read(s, 7), 88);
@@ -589,7 +589,7 @@ fn insufficient_mem_panics_at_construction() {
     let mem = create_mem(128);
     let tb_mem = create_mem(MEM_SIZE);
     let tb = make_tb(&tb_mem);
-    let _store = DualStoreWriter::<8, 16>::new(Arc::clone(&mem), tb, 0, 0, 16);
+    let _store = DualStoreWriter::<8, 0, 16>::new(Arc::clone(&mem), tb, 0, 0, 16);
 }
 
 #[cfg(debug_assertions)]
@@ -598,7 +598,7 @@ fn insufficient_mem_panics_at_construction() {
 fn copy_from_panics_when_source_capacity_exceeds_destination() {
     let src_mem = create_mem(MEM_SIZE);
     let src_tb = TripleBufferWriter::new(Arc::clone(&src_mem), 0, 1024);
-    let src = DualStoreWriter::<8, 16>::new(
+    let src = DualStoreWriter::<8, 0, 16>::new(
         Arc::clone(&src_mem),
         src_tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -608,7 +608,7 @@ fn copy_from_panics_when_source_capacity_exceeds_destination() {
 
     let dst_mem = create_mem(MEM_SIZE);
     let dst_tb = TripleBufferWriter::new(Arc::clone(&dst_mem), 0, 1024);
-    let dst = DualStoreWriter::<8, 16>::new(
+    let dst = DualStoreWriter::<8, 0, 16>::new(
         Arc::clone(&dst_mem),
         dst_tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -671,7 +671,7 @@ fn struct_write_respects_nonzero_tb_start_offset() {
     const TB_START: usize = 32;
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = DualStoreWriter::<S, 16>::new(
+    let store = DualStoreWriter::<S, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -783,7 +783,7 @@ fn attr_write_respects_nonzero_mem_start_offset() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let store =
-        DualStoreWriter::<8, A>::new(Arc::clone(&mem), tb.clone(), MEM_START, 0, CAP);
+        DualStoreWriter::<8, 0, A>::new(Arc::clone(&mem), tb.clone(), MEM_START, 0, CAP);
     let slot = store.insert_struct().unwrap();
     assert_eq!(slot, 1);
 

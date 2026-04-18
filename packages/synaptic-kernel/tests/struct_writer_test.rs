@@ -101,7 +101,7 @@ fn tb_end_equals_start_plus_stride() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic(expected = "StructWriter::create | range")]
+#[should_panic(expected = "TbZoneWriter::new | range")]
 fn panics_if_out_of_bounds() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 16);
@@ -110,7 +110,7 @@ fn panics_if_out_of_bounds() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic(expected = "StructWriter::create | range")]
+#[should_panic(expected = "TbZoneWriter::new | range")]
 fn panics_if_start_offset_equals_capacity() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 16);
@@ -119,7 +119,7 @@ fn panics_if_start_offset_equals_capacity() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic(expected = "StructWriter::create | range")]
+#[should_panic(expected = "TbZoneWriter::new | range")]
 fn panics_if_end_offset_exceeds_capacity_by_one() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 32);
@@ -213,7 +213,7 @@ fn write_supports_negative_values() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic(expected = "StructWriter.read | offset")]
+#[should_panic(expected = "TbZoneWriter.read | offset")]
 fn panics_on_read_offset_equal_to_stride() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
@@ -223,7 +223,7 @@ fn panics_on_read_offset_equal_to_stride() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic(expected = "StructWriter.write | offset")]
+#[should_panic(expected = "TbZoneWriter.write | offset")]
 fn panics_on_write_offset_equal_to_stride() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);

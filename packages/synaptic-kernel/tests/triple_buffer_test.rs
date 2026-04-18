@@ -915,3 +915,665 @@ fn publish_does_not_corrupt_surrounding_mem_memory() {
         "Reader ID slot corrupted: {reader_id}"
     );
 }
+
+// ============================================================
+// TripleBufferWriter::write / read (offset-based accessors)
+// ============================================================
+
+#[test]
+fn writer_write_read_offset_zero() {
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem, 0, 4);
+    writer.write(0, 42);
+    assert_eq!(writer.read(0), 42);
+}
+
+#[test]
+fn writer_write_read_offset_middle() {
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem, 0, 8);
+    writer.write(4, 77);
+    assert_eq!(writer.read(4), 77);
+}
+
+#[test]
+fn writer_write_read_offset_last() {
+    let mem = create_mem(4096);
+    let capacity = 10;
+    let writer = TripleBufferWriter::new(mem, 0, capacity);
+    writer.write(capacity - 1, -123);
+    assert_eq!(writer.read(capacity - 1), -123);
+}
+
+#[test]
+fn writer_write_read_roundtrip_every_index() {
+    let mem = create_mem(4096);
+    let capacity = 16;
+    let writer = TripleBufferWriter::new(mem, 0, capacity);
+    for i in 0..capacity {
+        writer.write(i, (i as i32) * 3 - 7);
+    }
+    for i in 0..capacity {
+        assert_eq!(writer.read(i), (i as i32) * 3 - 7);
+    }
+}
+
+#[test]
+fn writer_read_returns_synced_values_after_publish() {
+    let mem = create_mem(4096);
+    let capacity = 4;
+    let writer = TripleBufferWriter::new(mem, 0, capacity);
+    writer.write(0, 10);
+    writer.write(1, 20);
+    writer.write(2, 30);
+    writer.write(3, 40);
+    writer.publish();
+    // After publish, writer's new buffer must be synced from the published buffer.
+    assert_eq!(writer.read(0), 10);
+    assert_eq!(writer.read(1), 20);
+    assert_eq!(writer.read(2), 30);
+    assert_eq!(writer.read(3), 40);
+}
+
+// ============================================================
+// TripleBufferReader::read (offset-based accessor)
+// ============================================================
+
+#[test]
+fn reader_read_returns_published_at_every_offset() {
+    let mem = create_mem(4096);
+    let capacity = 8;
+    let writer = TripleBufferWriter::new(mem, 0, capacity);
+    let reader = writer.to_reader();
+    for i in 0..capacity {
+        writer.write(i, (i as i32 + 1) * 5);
+    }
+    writer.publish();
+    assert!(reader.swap());
+    for i in 0..capacity {
+        assert_eq!(reader.read(i), (i as i32 + 1) * 5);
+    }
+}
+
+#[test]
+fn reader_read_stable_when_swap_returns_false() {
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem, 0, 4);
+    let reader = writer.to_reader();
+    writer.write(0, 11);
+    writer.write(1, 22);
+    writer.write(2, 33);
+    writer.write(3, 44);
+    writer.publish();
+    assert!(reader.swap());
+    // No new publish; swap continues to return false and reader.read
+    // continues to return the previously-seen values.
+    for _ in 0..50 {
+        assert!(!reader.swap());
+        assert_eq!(reader.read(0), 11);
+        assert_eq!(reader.read(1), 22);
+        assert_eq!(reader.read(2), 33);
+        assert_eq!(reader.read(3), 44);
+    }
+}
+
+// ============================================================
+// TripleBufferWriter::write_batch / read_batch
+// ============================================================
+
+#[test]
+fn writer_write_batch_read_batch_zero_offset() {
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem, 0, 6);
+    writer.write_batch::<3>(0, [10, 20, 30]);
+    let out = writer.read_batch::<3>(0);
+    assert_eq!(out, [10, 20, 30]);
+}
+
+#[test]
+fn writer_write_batch_nonzero_offset_regression() {
+    // read_batch<T>(offset) must read starting at `offset`, not at buffer start.
+    // Using offset 5 so the first 5 slots remain zero and read_batch at offset
+    // 0 can distinguish "bug: reads from start" from "correct: reads at offset".
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem, 0, 10);
+    writer.write_batch::<3>(5, [111, 222, 333]);
+    let out = writer.read_batch::<3>(5);
+    assert_eq!(out, [111, 222, 333]);
+    // The batch values must NOT leak to offsets outside the batch.
+    assert_eq!(writer.read(0), 0);
+    assert_eq!(writer.read(4), 0);
+    assert_eq!(writer.read(8), 0);
+    assert_eq!(writer.read(9), 0);
+    // If read_batch mistakenly ignored the offset, this would return
+    // [111, 222, 333] instead of the (correct) [0, 0, 0].
+    assert_eq!(writer.read_batch::<3>(0), [0, 0, 0]);
+}
+
+#[test]
+fn writer_write_batch_offset_matrix() {
+    let mem = create_mem(4096);
+    let capacity = 16;
+    let writer = TripleBufferWriter::new(mem, 0, capacity);
+    let t = 4usize;
+
+    for &offset in &[0usize, 1, capacity / 2, capacity - t] {
+        // Reset buffer to zero before each iteration.
+        for i in 0..capacity {
+            writer.write(i, 0);
+        }
+        let batch = [
+            offset as i32,
+            offset as i32 + 1,
+            offset as i32 + 2,
+            offset as i32 + 3,
+        ];
+        writer.write_batch::<4>(offset, batch);
+        assert_eq!(
+            writer.read_batch::<4>(offset),
+            batch,
+            "roundtrip failed at offset {offset}"
+        );
+        for i in 0..capacity {
+            if i >= offset && i < offset + t {
+                continue;
+            }
+            assert_eq!(
+                writer.read(i),
+                0,
+                "leakage at index {i} while writing batch at offset {offset}"
+            );
+        }
+    }
+}
+
+#[test]
+fn writer_write_batch_fills_exact_remainder() {
+    // offset + T == capacity.
+    let mem = create_mem(4096);
+    let capacity = 10;
+    let writer = TripleBufferWriter::new(mem, 0, capacity);
+    writer.write_batch::<4>(capacity - 4, [1, 2, 3, 4]);
+    assert_eq!(writer.read_batch::<4>(capacity - 4), [1, 2, 3, 4]);
+    assert_eq!(writer.read(capacity - 1), 4);
+}
+
+#[test]
+fn writer_write_batch_t_one() {
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem, 0, 5);
+    writer.write_batch::<1>(2, [99]);
+    assert_eq!(writer.read_batch::<1>(2), [99]);
+    assert_eq!(writer.read(2), 99);
+}
+
+#[test]
+fn writer_write_batch_entire_buffer() {
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem, 0, 8);
+    let data = [10, 20, 30, 40, 50, 60, 70, 80];
+    writer.write_batch::<8>(0, data);
+    assert_eq!(writer.read_batch::<8>(0), data);
+}
+
+#[test]
+fn writer_write_batch_then_individual_read() {
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem, 0, 8);
+    writer.write_batch::<4>(2, [7, 8, 9, 10]);
+    assert_eq!(writer.read(2), 7);
+    assert_eq!(writer.read(3), 8);
+    assert_eq!(writer.read(4), 9);
+    assert_eq!(writer.read(5), 10);
+}
+
+#[test]
+fn writer_individual_write_then_read_batch() {
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem, 0, 8);
+    writer.write(3, 100);
+    writer.write(4, 200);
+    writer.write(5, 300);
+    assert_eq!(writer.read_batch::<3>(3), [100, 200, 300]);
+}
+
+// ============================================================
+// TripleBufferReader::read_batch
+// ============================================================
+
+#[test]
+fn reader_read_batch_nonzero_offset_regression() {
+    // read_batch<T>(offset) must read starting at `offset`, not at buffer start.
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem, 0, 10);
+    let reader = writer.to_reader();
+    writer.write_batch::<3>(4, [500, 600, 700]);
+    writer.publish();
+    assert!(reader.swap());
+    assert_eq!(reader.read_batch::<3>(4), [500, 600, 700]);
+    // A batch read from offset 0 must NOT return the values written at offset 4.
+    assert_eq!(reader.read_batch::<3>(0), [0, 0, 0]);
+}
+
+#[test]
+fn reader_read_batch_offset_matrix() {
+    let mem = create_mem(4096);
+    let capacity = 16;
+    let t = 4usize;
+    let writer = TripleBufferWriter::new(mem, 0, capacity);
+    let reader = writer.to_reader();
+
+    for &offset in &[0usize, 1, capacity / 2, capacity - t] {
+        for i in 0..capacity {
+            writer.write(i, 0);
+        }
+        writer.write_batch::<4>(offset, [1, 2, 3, 4]);
+        writer.publish();
+        assert!(reader.swap(), "no new data for offset {offset}");
+        assert_eq!(
+            reader.read_batch::<4>(offset),
+            [1, 2, 3, 4],
+            "mismatch at offset {offset}"
+        );
+    }
+}
+
+#[test]
+fn reader_read_batch_fills_exact_remainder() {
+    let mem = create_mem(4096);
+    let capacity = 10;
+    let writer = TripleBufferWriter::new(mem, 0, capacity);
+    let reader = writer.to_reader();
+    writer.write_batch::<4>(capacity - 4, [21, 22, 23, 24]);
+    writer.publish();
+    assert!(reader.swap());
+    assert_eq!(reader.read_batch::<4>(capacity - 4), [21, 22, 23, 24]);
+}
+
+// ============================================================
+// publish sync semantics (writer-side invariants)
+// ============================================================
+
+#[test]
+fn publish_sync_single_offset_persists_on_writer() {
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem, 0, 4);
+    writer.write(2, 77);
+    writer.publish();
+    // After publish, writer.read(2) must reflect the value we wrote,
+    // because the new writer buffer was synced from the published buffer.
+    assert_eq!(writer.read(2), 77);
+}
+
+#[test]
+fn publish_sync_preserves_values_across_two_publishes() {
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem, 0, 4);
+    writer.write(0, 100);
+    writer.publish();
+    assert_eq!(writer.read(0), 100);
+    writer.write(2, 300);
+    writer.publish();
+    // After the second sync, BOTH offsets must be present in the writer buffer.
+    assert_eq!(writer.read(0), 100);
+    assert_eq!(writer.read(2), 300);
+}
+
+#[test]
+fn publish_read_coherent_after_writer_cycles_all_buffers() {
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem, 0, 4);
+    let reader = writer.to_reader();
+    writer.write(0, 1);
+    writer.publish();
+    assert!(reader.swap());
+    writer.write(1, 2);
+    writer.publish();
+    assert!(reader.swap());
+    writer.write(2, 3);
+    writer.publish();
+    assert!(reader.swap());
+    // After three full rotations, the writer buffer must still hold
+    // a coherent view of every field that was ever written.
+    assert_eq!(writer.read(0), 1);
+    assert_eq!(writer.read(1), 2);
+    assert_eq!(writer.read(2), 3);
+}
+
+// ============================================================
+// TripleBufferWriter::copy_metadata_from
+// ============================================================
+
+#[test]
+fn copy_metadata_from_mirrors_all_four_slots() {
+    let mem_a = create_mem(4096);
+    let mem_b = create_mem(4096);
+    let writer_a = TripleBufferWriter::new(mem_a.clone(), 0, 4);
+    let reader_a = writer_a.to_reader();
+
+    // Drive A into a non-initial state with publish + swap + publish.
+    writer_a.write(0, 123);
+    writer_a.publish();
+    assert!(reader_a.swap());
+    writer_a.write(0, 456);
+    writer_a.publish();
+
+    let writer_b = TripleBufferWriter::new(mem_b.clone(), 0, 4);
+
+    let a_state = mem_a[0].load(Ordering::Relaxed);
+    let a_writer = mem_a[1].load(Ordering::Relaxed);
+    let a_published = mem_a[2].load(Ordering::Relaxed);
+    let a_reader = mem_a[3].load(Ordering::Relaxed);
+
+    writer_b.copy_metadata_from(&writer_a);
+
+    assert_eq!(mem_b[0].load(Ordering::Relaxed), a_state, "state");
+    assert_eq!(mem_b[1].load(Ordering::Relaxed), a_writer, "writer_id");
+    assert_eq!(mem_b[2].load(Ordering::Relaxed), a_published, "published_id");
+    assert_eq!(mem_b[3].load(Ordering::Relaxed), a_reader, "reader_id");
+}
+
+#[test]
+fn copy_metadata_from_does_not_touch_buffer_region() {
+    let mem_a = create_mem(4096);
+    let mem_b = create_mem(4096);
+    let writer_a = TripleBufferWriter::new(mem_a.clone(), 0, 4);
+    writer_a.write(0, 123);
+    writer_a.publish();
+    let writer_b = TripleBufferWriter::new(mem_b.clone(), 0, 4);
+
+    // Pre-fill B's buffer region (slots 4..=15) with a sentinel.
+    for i in 4..(4 + 3 * 4) {
+        mem_b[i].store(7777, Ordering::Relaxed);
+    }
+    writer_b.copy_metadata_from(&writer_a);
+    for i in 4..(4 + 3 * 4) {
+        assert_eq!(
+            mem_b[i].load(Ordering::Relaxed),
+            7777,
+            "buffer slot {i} was touched by copy_metadata_from"
+        );
+    }
+}
+
+#[test]
+fn copy_metadata_from_panics_when_source_capacity_larger() {
+    let mem_a = create_mem(4096);
+    let mem_b = create_mem(4096);
+    let writer_a = TripleBufferWriter::new(mem_a.clone(), 0, 8);
+    let writer_b = TripleBufferWriter::new(mem_b.clone(), 0, 4);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        writer_b.copy_metadata_from(&writer_a);
+    }));
+    assert!(
+        result.is_err(),
+        "expected debug_assert to fire when source capacity exceeds destination"
+    );
+}
+
+// ============================================================
+// TripleBufferWriter::copy_region_from
+// ============================================================
+
+#[test]
+fn copy_region_from_copies_all_three_buffer_planes() {
+    let capacity = 8;
+    let a_start = 0usize;
+    let a_end = 4 + capacity * 3;
+    let b_start = a_end;
+    let total = b_start + 4 + capacity * 3;
+    let mem = create_mem(total);
+
+    let writer_a = TripleBufferWriter::new(mem.clone(), a_start, capacity);
+    let writer_b = TripleBufferWriter::new(mem.clone(), b_start, capacity);
+
+    // Fill each of A's three buffer planes with a distinct pattern.
+    // Layout: A's buffer_bases = [a_start+4, a_start+4+cap, a_start+4+2*cap]
+    for plane in 0..3 {
+        let base = a_start + 4 + plane * capacity;
+        for i in 0..capacity {
+            mem[base + i].store(
+                1000 + (plane as i32) * 100 + (i as i32),
+                Ordering::Relaxed,
+            );
+        }
+    }
+
+    // Pre-fill ALL of B's buffer region with a sentinel 7777.
+    for i in (b_start + 4)..(b_start + 4 + capacity * 3) {
+        mem[i].store(7777, Ordering::Relaxed);
+    }
+
+    let source_offset = 2usize;
+    let destination_offset = 3usize;
+    let count = 4usize;
+
+    writer_b.copy_region_from(&writer_a, source_offset, destination_offset, count);
+
+    for plane in 0..3 {
+        let a_plane_base = a_start + 4 + plane * capacity;
+        let b_plane_base = b_start + 4 + plane * capacity;
+
+        // Copied range: values match A.
+        for k in 0..count {
+            let expected = mem[a_plane_base + source_offset + k].load(Ordering::Relaxed);
+            let got = mem[b_plane_base + destination_offset + k].load(Ordering::Relaxed);
+            assert_eq!(
+                got, expected,
+                "plane {plane}, k {k}: expected {expected}, got {got}"
+            );
+        }
+
+        // Outside the destination range, B must still hold the sentinel.
+        for i in 0..capacity {
+            if i >= destination_offset && i < destination_offset + count {
+                continue;
+            }
+            assert_eq!(
+                mem[b_plane_base + i].load(Ordering::Relaxed),
+                7777,
+                "plane {plane}, slot {i} was modified outside the copied region"
+            );
+        }
+    }
+}
+
+#[test]
+fn copy_region_from_source_offset_zero_destination_offset_zero_full_capacity() {
+    let capacity = 8;
+    let a_start = 0usize;
+    let a_end = 4 + capacity * 3;
+    let b_start = a_end;
+    let total = b_start + 4 + capacity * 3;
+    let mem = create_mem(total);
+
+    let writer_a = TripleBufferWriter::new(mem.clone(), a_start, capacity);
+    let writer_b = TripleBufferWriter::new(mem.clone(), b_start, capacity);
+
+    for plane in 0..3 {
+        let base = a_start + 4 + plane * capacity;
+        for i in 0..capacity {
+            mem[base + i].store(
+                (plane as i32) * 10 + (i as i32) + 1,
+                Ordering::Relaxed,
+            );
+        }
+    }
+
+    writer_b.copy_region_from(&writer_a, 0, 0, capacity);
+
+    for plane in 0..3 {
+        let a_plane_base = a_start + 4 + plane * capacity;
+        let b_plane_base = b_start + 4 + plane * capacity;
+        for i in 0..capacity {
+            assert_eq!(
+                mem[b_plane_base + i].load(Ordering::Relaxed),
+                mem[a_plane_base + i].load(Ordering::Relaxed),
+                "plane {plane} slot {i} mismatch"
+            );
+        }
+    }
+}
+
+#[test]
+fn copy_region_from_panics_on_destination_out_of_bounds() {
+    let capacity = 8;
+    let mem = create_mem(4096);
+    let writer_a = TripleBufferWriter::new(mem.clone(), 0, capacity);
+    let writer_b = TripleBufferWriter::new(mem.clone(), 100, capacity);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        // destination_offset + count = 5 + 5 = 10 > capacity (8)
+        writer_b.copy_region_from(&writer_a, 0, 5, 5);
+    }));
+    assert!(result.is_err());
+}
+
+#[test]
+fn copy_region_from_panics_on_source_out_of_bounds() {
+    let capacity = 8;
+    let mem = create_mem(4096);
+    let writer_a = TripleBufferWriter::new(mem.clone(), 0, capacity);
+    let writer_b = TripleBufferWriter::new(mem.clone(), 100, capacity);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        // source_offset + count = 5 + 5 = 10 > source.capacity (8)
+        writer_b.copy_region_from(&writer_a, 5, 0, 5);
+    }));
+    assert!(result.is_err());
+}
+
+// ============================================================
+// TripleBufferWriter::bind — sync semantics
+// ============================================================
+
+#[test]
+fn bind_sync_is_noop_when_writer_index_equals_published_index() {
+    // After new(), writer_index == 0 == published_index, so bind's internal
+    // sync must be a no-op and must not mutate any buffer contents.
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem.clone(), 0, 4);
+
+    // Distinctive pattern in the writer's current buffer (buffer 0).
+    writer.write(0, 100);
+    writer.write(1, 200);
+    writer.write(2, 300);
+    writer.write(3, 400);
+
+    // Sentinels in the other two buffer planes to prove they're untouched.
+    for plane in 1..3 {
+        for i in 0..4 {
+            mem[4 + plane * 4 + i].store(9999, Ordering::Relaxed);
+        }
+    }
+
+    let bound = TripleBufferWriter::bind(mem.clone(), 0, 4);
+
+    // Writer buffer unchanged.
+    assert_eq!(bound.read(0), 100);
+    assert_eq!(bound.read(1), 200);
+    assert_eq!(bound.read(2), 300);
+    assert_eq!(bound.read(3), 400);
+
+    // Non-writer buffers unchanged (no sync copy happened).
+    for plane in 1..3 {
+        for i in 0..4 {
+            assert_eq!(
+                mem[4 + plane * 4 + i].load(Ordering::Relaxed),
+                9999,
+                "plane {plane} slot {i} was modified during bind's sync"
+            );
+        }
+    }
+}
+
+#[test]
+fn bind_syncs_writer_buffer_from_published_when_indices_differ() {
+    // After publish: writer_index != published_index. On bind, sync must
+    // copy the published buffer's contents into the writer's current buffer.
+    //
+    // NOTE: The SPSC contract forbids using both the original writer and the
+    // bound writer concurrently; this test merely observes bind's one-time
+    // sync behavior.
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem.clone(), 0, 4);
+    writer.write(0, 10);
+    writer.write(1, 20);
+    writer.write(2, 30);
+    writer.write(3, 40);
+    writer.publish();
+
+    // Deliberately zero out the writer's current (post-publish) buffer so
+    // we can detect whether bind re-populates it from the published buffer.
+    for i in 0..4 {
+        writer.write(i, 0);
+    }
+
+    let bound = TripleBufferWriter::bind(mem.clone(), 0, 4);
+
+    assert_eq!(bound.read(0), 10);
+    assert_eq!(bound.read(1), 20);
+    assert_eq!(bound.read(2), 30);
+    assert_eq!(bound.read(3), 40);
+}
+
+#[test]
+fn bind_bound_writer_to_reader_sees_last_published_data() {
+    let mem = create_mem(4096);
+    let writer = TripleBufferWriter::new(mem.clone(), 0, 4);
+    writer.write(0, 901);
+    writer.write(1, 902);
+    writer.write(2, 903);
+    writer.write(3, 904);
+    writer.publish();
+
+    let bound = TripleBufferWriter::bind(mem.clone(), 0, 4);
+    let reader = bound.to_reader();
+    assert!(reader.swap());
+    assert_eq!(reader.read(0), 901);
+    assert_eq!(reader.read(1), 902);
+    assert_eq!(reader.read(2), 903);
+    assert_eq!(reader.read(3), 904);
+}
+
+// ============================================================
+// Getters (buffer_capacity / mem_start_offset / mem_end_offset)
+// ============================================================
+
+#[test]
+fn getters_match_construction_parameters() {
+    let mem = create_mem(8192);
+
+    let w1 = TripleBufferWriter::new(mem.clone(), 0, 10);
+    assert_eq!(w1.buffer_capacity(), 10);
+    assert_eq!(w1.mem_start_offset(), 0);
+    assert_eq!(w1.mem_end_offset(), 4 + 3 * 10);
+
+    let w2 = TripleBufferWriter::new(mem.clone(), 50, 1);
+    assert_eq!(w2.buffer_capacity(), 1);
+    assert_eq!(w2.mem_start_offset(), 50);
+    assert_eq!(w2.mem_end_offset(), 50 + 4 + 3 * 1);
+
+    let w3 = TripleBufferWriter::new(mem.clone(), 100, 1024);
+    assert_eq!(w3.buffer_capacity(), 1024);
+    assert_eq!(w3.mem_start_offset(), 100);
+    assert_eq!(w3.mem_end_offset(), 100 + 4 + 3 * 1024);
+
+    let r1 = w1.to_reader();
+    assert_eq!(r1.buffer_capacity(), 10);
+    assert_eq!(r1.mem_start_offset(), 0);
+    assert_eq!(r1.mem_end_offset(), 4 + 3 * 10);
+}
+
+// ============================================================
+// calculate_size_on_mem
+// ============================================================
+
+#[test]
+fn calculate_size_on_mem_matches_contract() {
+    assert_eq!(TripleBufferWriter::calculate_size_on_mem(1), 4 + 1 * 3);
+    assert_eq!(TripleBufferWriter::calculate_size_on_mem(8), 4 + 8 * 3);
+    assert_eq!(TripleBufferWriter::calculate_size_on_mem(1024), 4 + 1024 * 3);
+    assert_eq!(
+        TripleBufferWriter::calculate_size_on_mem(65_536),
+        4 + 65_536 * 3
+    );
+}

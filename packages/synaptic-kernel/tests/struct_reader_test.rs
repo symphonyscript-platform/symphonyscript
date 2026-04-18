@@ -69,7 +69,7 @@ fn reads_are_isolated_between_slots() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic(expected = "StructReader::create | range")]
+#[should_panic(expected = "TbZoneReader::new | range")]
 fn panics_if_out_of_bounds() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 16);
@@ -79,7 +79,7 @@ fn panics_if_out_of_bounds() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic(expected = "StructReader::create | range")]
+#[should_panic(expected = "TbZoneReader::new | range")]
 fn panics_if_start_offset_equals_capacity() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 16);
@@ -290,7 +290,7 @@ fn multiple_struct_readers_different_strides() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic(expected = "StructReader.read | offset")]
+#[should_panic(expected = "TbZoneReader.read | offset")]
 fn panics_on_read_offset_equal_to_stride() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
