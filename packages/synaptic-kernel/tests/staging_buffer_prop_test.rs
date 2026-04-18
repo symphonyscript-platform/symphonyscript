@@ -24,9 +24,9 @@ enum SpscOp {
 }
 
 struct Oracle {
-    writer_generation: usize,
-    reader_ack_generation: usize,
-    buffer_state: Vec<(usize, usize)>, // (item, generation_stamp)
+    writer_generation: i32,
+    reader_ack_generation: i32,
+    buffer_state: Vec<(usize, i32)>, // (item, generation_stamp)
     drained_history: Vec<usize>,
 }
 
@@ -61,7 +61,8 @@ impl Oracle {
         let mut kept = Vec::new();
 
         for &(item, stamp) in &self.buffer_state {
-            if stamp <= self.reader_ack_generation {
+            // Signed-wrapping "stamp <= ack" — matches staging buffer's drain gate.
+            if stamp.wrapping_sub(self.reader_ack_generation) <= 0 {
                 drained.push(item);
                 self.drained_history.push(item);
             } else {
