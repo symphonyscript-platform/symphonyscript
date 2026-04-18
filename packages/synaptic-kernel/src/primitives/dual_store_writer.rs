@@ -30,7 +30,7 @@ impl<const STRUCT_STRIDE: usize, const ATTR_STRIDE: usize>
         tb_start_offset: usize,
         capacity: usize,
     ) -> Self {
-        Self::create(mem, tb, mem_start_offset, capacity, tb_start_offset, false)
+        Self::create(mem, tb, mem_start_offset, tb_start_offset, capacity, false)
     }
 
     pub fn bind(
@@ -40,7 +40,7 @@ impl<const STRUCT_STRIDE: usize, const ATTR_STRIDE: usize>
         tb_start_offset: usize,
         capacity: usize,
     ) -> Self {
-        Self::create(mem, tb, mem_start_offset, capacity, tb_start_offset, true)
+        Self::create(mem, tb, mem_start_offset, tb_start_offset, capacity, true)
     }
 
     pub fn create(
@@ -90,7 +90,11 @@ impl<const STRUCT_STRIDE: usize, const ATTR_STRIDE: usize>
     pub fn to_reader(&self) -> DualStoreReader<STRUCT_STRIDE, ATTR_STRIDE> {
         DualStoreReader::<STRUCT_STRIDE, ATTR_STRIDE>::bind(
             self.tb.to_reader(),
-            AttributePlaneReader::bind(Arc::clone(&self.mem), self.mem_start_offset, self.capacity),
+            AttributePlaneReader::bind(
+                Arc::clone(&self.mem),
+                self.attributes.mem_start_offset(),
+                self.capacity,
+            ),
             self.mem_start_offset,
             self.mem_end_offset,
             self.tb_start_offset,

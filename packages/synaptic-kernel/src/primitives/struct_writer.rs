@@ -8,7 +8,6 @@ use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 /// Producer thread only. Delegates back to the underlying `TripleBufferWriter`.
 ///
 /// # Encapsulation
-///   enforcing strict domain invariants.
 /// - Typically instantiated on-the-fly and short-lived.
 pub struct StructWriter<'a, const STRIDE: usize> {
     triple_buffer: &'a TripleBufferWriter,
