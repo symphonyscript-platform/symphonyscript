@@ -48,7 +48,7 @@ pub struct StagingBufferWriter {
 
 pub struct StagingBufferWriterIterator<'a> {
     buffer: &'a RingBuffer<2>,
-    ack_generation: usize,
+    ack_generation: i32,
 }
 
 impl<'a> Iterator for StagingBufferWriterIterator<'a> {
@@ -57,7 +57,7 @@ impl<'a> Iterator for StagingBufferWriterIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         match self.buffer.peek() {
             Some([data, generation]) => {
-                if (generation as usize).wrapping_sub(self.ack_generation) > 0 {
+                if generation.wrapping_sub(self.ack_generation) > 0 {
                     return None;
                 }
 
@@ -147,12 +147,12 @@ impl StagingBufferWriter {
         self.capacity
     }
 
-    pub fn writer_generation(&self) -> usize {
-        self.mem[self.mem_writer_generation_offset].load(Ordering::Relaxed) as usize
+    pub fn writer_generation(&self) -> i32 {
+        self.mem[self.mem_writer_generation_offset].load(Ordering::Relaxed)
     }
 
-    pub fn reader_ack_generation(&self) -> usize {
-        self.mem[self.mem_reader_ack_generation_offset].load(Ordering::Acquire) as usize
+    pub fn reader_ack_generation(&self) -> i32 {
+        self.mem[self.mem_reader_ack_generation_offset].load(Ordering::Acquire)
     }
 
     pub fn push(&self, slot: usize) -> Result<(), RingBufferError> {
