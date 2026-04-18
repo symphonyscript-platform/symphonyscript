@@ -1,7 +1,7 @@
+use crate::primitives::triple_buffer_def::TripleBufferId;
+use crate::primitives::types::AtomicBuffer;
 use std::fmt;
 use std::fmt::Formatter;
-use crate::primitives::triple_buffer_writer_registry::TripleBufferId;
-use crate::primitives::types::AtomicBuffer;
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -39,14 +39,7 @@ pub struct Cluster {
 }
 
 impl Pool {
-    pub fn new(
-        mem: AtomicBuffer,
-        capacity: u16,
-        clusters: Vec<Cluster>,
-    ) -> Self {
-        Pool {
-            capacity,
-            clusters,
-        }
+    pub fn new(mem: AtomicBuffer, capacity: u16, clusters: Vec<Cluster>) -> Self {
+        Pool { capacity, clusters }
     }
 }
