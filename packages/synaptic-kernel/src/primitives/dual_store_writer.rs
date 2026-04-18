@@ -9,6 +9,7 @@ use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct DualStoreWriter<const STRUCT_STRIDE: usize, const ATTR_STRIDE: usize> {
     mem: AtomicBuffer,
     tb: TripleBufferWriter,

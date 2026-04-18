@@ -5,6 +5,7 @@ use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::struct_reader::StructReader;
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
 
+#[derive(Clone)]
 pub struct DualStoreReader<const STRUCT_STRIDE: usize, const ATTR_STRIDE: usize> {
     tb: TripleBufferReader,
     attributes: AttributePlaneReader<ATTR_STRIDE>,
