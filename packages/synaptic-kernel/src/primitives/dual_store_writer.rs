@@ -207,6 +207,8 @@ impl<const STRUCT_STRIDE: usize, const ATTR_STRIDE: usize>
             self.tb.write(start_offset + i, 0)
         }
 
+        self.attributes.clear(new_slot);
+
         Some(new_slot)
     }
 
