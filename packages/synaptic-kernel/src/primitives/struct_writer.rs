@@ -1,77 +1,75 @@
+use crate::primitives::tb_zone_writer::TbZoneWriter;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 
-/// Producer-side view into a fixed-size structural block on the triple buffer.
+/// Producer-side structural facade for a dual-zone structural block on the triple buffer.
 ///
-/// Provides safe, offset-based read and write access to a specific `[i32; STRIDE]` sequence.
+/// Wraps two `TbZoneWriter`s (core and metadata)
+/// to provide a strict interface over the raw atomic memory block.
 ///
 /// # Threading
-/// Producer thread only. Delegates back to the underlying `TripleBufferWriter`.
-///
-/// # Encapsulation
-/// - Typically instantiated on-the-fly and short-lived.
-pub struct StructWriter<'a, const STRIDE: usize> {
-    triple_buffer: &'a TripleBufferWriter,
-    tb_start_offset: usize,
-    tb_end_offset: usize,
+/// Producer thread only. Delegates back to the underlying `TbZoneWriter`s.
+pub struct StructWriter<'a, const CORE_STRIDE: usize, const META_STRIDE: usize> {
+    core: TbZoneWriter<'a, CORE_STRIDE>,
+    meta: TbZoneWriter<'a, META_STRIDE>,
 }
 
-impl<'a, const STRIDE: usize> StructWriter<'a, STRIDE> {
-    pub fn new(triple_buffer: &'a TripleBufferWriter, tb_start_offset: usize) -> Self {
-        let tb_end_offset = tb_start_offset + STRIDE;
+impl<'a, const CORE_STRIDE: usize, const META_STRIDE: usize>
+    StructWriter<'a, CORE_STRIDE, META_STRIDE>
+{
+    pub fn new(tb: &'a TripleBufferWriter, tb_start_offset: usize) -> Self {
+        let tb_end_offset = tb_start_offset + CORE_STRIDE + META_STRIDE;
+
         debug_assert!(
-            tb_end_offset <= triple_buffer.buffer_capacity(),
-            "StructWriter::create | range [{}..{}] exceeds buffer capacity {}",
+            tb_end_offset <= tb.buffer_capacity(),
+            "StructWriter::new | range [{}..{}] exceeds buffer capacity {}",
             tb_start_offset,
-            STRIDE,
-            triple_buffer.buffer_capacity(),
+            CORE_STRIDE + META_STRIDE,
+            tb.buffer_capacity(),
         );
+
         StructWriter {
-            triple_buffer,
-            tb_start_offset,
-            tb_end_offset,
+            core: TbZoneWriter::new(&tb, tb_start_offset),
+            meta: TbZoneWriter::new(&tb, tb_start_offset + CORE_STRIDE),
         }
     }
 
-    pub fn read(&self, offset: usize) -> i32 {
-        debug_assert!(
-            offset < STRIDE,
-            "StructWriter.read | offset {} out of bounds",
-            offset
-        );
-        self.triple_buffer.read(self.tb_start_offset + offset)
+    #[inline]
+    pub fn read_core(&self, offset: usize) -> i32 {
+        self.core.read(offset)
     }
 
-    pub fn write(&self, offset: usize, value: i32) {
-        debug_assert!(
-            offset < STRIDE,
-            "StructWriter.write | offset {} out of bounds",
-            offset
-        );
-        self.triple_buffer
-            .write(self.tb_start_offset + offset, value)
+    #[inline]
+    pub fn write_core(&self, offset: usize, value: i32) {
+        self.core.write(offset, value)
     }
 
-    pub fn read_all(&self) -> [i32; STRIDE] {
-        let mut data: [i32; STRIDE] = [0; STRIDE];
-
-        for i in 0..STRIDE {
-            data[i] = self.read(i)
-        }
-
-        data
+    #[inline]
+    pub fn read_core_all(&self) -> [i32; CORE_STRIDE] {
+        self.core.read_all()
     }
 
-    pub fn write_all(&self, data: [i32; STRIDE]) {
-        for i in 0..STRIDE {
-            self.write(i, data[i]);
-        }
+    #[inline]
+    pub fn write_core_all(&self, data: [i32; CORE_STRIDE]) {
+        self.core.write_all(data)
     }
 
-    pub fn tb_start_offset(&self) -> usize {
-        self.tb_start_offset
+    #[inline]
+    pub fn read_meta(&self, offset: usize) -> i32 {
+        self.meta.read(offset)
     }
 
-    pub fn tb_end_offset(&self) -> usize {
-        self.tb_end_offset
+    #[inline]
+    pub fn write_meta(&self, offset: usize, value: i32) {
+        self.meta.write(offset, value)
+    }
+
+    #[inline]
+    pub fn read_meta_all(&self) -> [i32; META_STRIDE] {
+        self.meta.read_all()
+    }
+
+    #[inline]
+    pub fn write_meta_all(&self, data: [i32; META_STRIDE]) {
+        self.meta.write_all(data)
     }
 }

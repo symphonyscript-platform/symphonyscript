@@ -38,6 +38,7 @@ impl<'a, const STRIDE: usize> AttributesReader<'a, STRIDE> {
         self.mem_end_offset
     }
 
+    #[inline]
     pub fn read(&self, offset: usize) -> i32 {
         debug_assert!(
             offset < STRIDE,
@@ -47,6 +48,7 @@ impl<'a, const STRIDE: usize> AttributesReader<'a, STRIDE> {
         self.mem[self.mem_start_offset + offset].load(Ordering::Relaxed)
     }
 
+    #[inline]
     pub fn read_all(&self) -> [i32; STRIDE] {
         let mut data: [i32; STRIDE] = [0; STRIDE];
 

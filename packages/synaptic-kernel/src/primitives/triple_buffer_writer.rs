@@ -149,6 +149,7 @@ impl TripleBufferWriter {
         self.mem_end_offset
     }
 
+    #[inline]
     pub fn mem_writer_base(&self) -> usize {
         let buffer_id = self.mem[self.mem_writer_offset].load(Ordering::Relaxed) as usize;
         self.buffer_bases[buffer_id]
@@ -186,6 +187,7 @@ impl TripleBufferWriter {
         }
     }
 
+    #[inline]
     pub fn write(&self, offset: usize, value: i32) {
         debug_assert!(
             offset < self.buffer_capacity,
@@ -196,6 +198,7 @@ impl TripleBufferWriter {
         self.mem[base + offset].store(value, Ordering::Relaxed)
     }
 
+    #[inline]
     pub fn read(&self, offset: usize) -> i32 {
         debug_assert!(
             offset < self.buffer_capacity,
@@ -204,6 +207,39 @@ impl TripleBufferWriter {
         );
         let base = self.mem_writer_base();
         self.mem[base + offset].load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub fn write_batch<const T: usize>(&self, offset: usize, data: [i32; T]) {
+        debug_assert!(
+            offset + T <= self.buffer_capacity,
+            "TripleBufferWriter.write_batch | [offset, T) [{}, {}) out of bounds",
+            offset,
+            T,
+        );
+        let base = self.mem_writer_base() + offset;
+
+        for i in 0..T {
+            self.mem[base + i].store(data[i], Ordering::Relaxed)
+        }
+    }
+
+    #[inline]
+    pub fn read_batch<const T: usize>(&self, offset: usize) -> [i32; T] {
+        debug_assert!(
+            offset + T <= self.buffer_capacity,
+            "TripleBufferWriter.read_batch | [offset, T) [{}, {}) out of bounds",
+            offset,
+            T,
+        );
+        let base = self.mem_writer_base() + offset;
+        let mut data: [i32; T] = [0; T];
+
+        for i in 0..T {
+            data[i] = self.mem[base + i].load(Ordering::Relaxed)
+        }
+
+        data
     }
 
     pub fn copy_metadata_from(&self, source: &TripleBufferWriter) {

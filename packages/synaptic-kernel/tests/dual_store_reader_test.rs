@@ -213,7 +213,7 @@ fn multiple_readers_share_underlying_state() {
 
     let s = store.insert_struct().unwrap();
     store.attr_write(s, 0, 999);
-    store.struct_write(s, 0, 7);
+    store.core_write(s, 0, 7);
     tb.publish();
     assert!(tb_reader.swap());
 
@@ -248,7 +248,7 @@ fn reader_roundtrip_with_1_1_1_config() {
     );
 
     let s = store.insert_struct().unwrap();
-    store.struct_write(s, 0, 5);
+    store.core_write(s, 0, 5);
     store.attr_write(s, 0, 6);
     tb.publish();
     assert!(tb_reader.swap());
@@ -314,7 +314,7 @@ fn reader_struct_read_sees_value_written_via_tb_at_expected_offset() {
     assert_eq!(slot, 2);
 
     let expected_abs = (slot - 1) * S + 3; // tb_start_offset=0
-    store.struct_write(slot, 3, 4242);
+    store.core_write(slot, 3, 4242);
 
     tb.publish();
     assert!(tb_reader.swap());
@@ -347,9 +347,9 @@ fn reader_struct_reads_distinct_slots_at_distinct_tb_offsets() {
     let s3 = store.insert_struct().unwrap();
     assert_eq!((s1, s2, s3), (1, 2, 3));
 
-    store.struct_write(s1, 0, 91);
-    store.struct_write(s2, 0, 92);
-    store.struct_write(s3, 0, 93);
+    store.core_write(s1, 0, 91);
+    store.core_write(s2, 0, 92);
+    store.core_write(s3, 0, 93);
 
     tb.publish();
     assert!(tb_reader.swap());

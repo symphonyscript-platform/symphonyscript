@@ -145,7 +145,7 @@ fn insert_struct_zeroes_struct_plane() {
     let s = store.insert_struct().unwrap();
     for offset in 0..8 {
         assert_eq!(
-            store.struct_read(s, offset),
+            store.core_read(s, offset),
             0,
             "insert_struct must zero the struct plane at offset {}",
             offset
@@ -190,13 +190,13 @@ fn struct_write_read_roundtrip() {
     let (_mem, _tb, store) = make_store::<8, 16>(4);
     let s = store.insert_struct().unwrap();
 
-    store.struct_write(s, 0, 111);
-    store.struct_write(s, 3, 222);
-    store.struct_write(s, 7, 333);
+    store.core_write(s, 0, 111);
+    store.core_write(s, 3, 222);
+    store.core_write(s, 7, 333);
 
-    assert_eq!(store.struct_read(s, 0), 111);
-    assert_eq!(store.struct_read(s, 3), 222);
-    assert_eq!(store.struct_read(s, 7), 333);
+    assert_eq!(store.core_read(s, 0), 111);
+    assert_eq!(store.core_read(s, 3), 222);
+    assert_eq!(store.core_read(s, 7), 333);
 }
 
 #[test]
@@ -380,9 +380,9 @@ fn construction_at_nonzero_offsets_works() {
     assert_eq!(store.tb_start_offset(), tb_start);
 
     let s = store.insert_struct().unwrap();
-    store.struct_write(s, 0, 42);
+    store.core_write(s, 0, 42);
     store.attr_write(s, 0, 7);
-    assert_eq!(store.struct_read(s, 0), 42);
+    assert_eq!(store.core_read(s, 0), 42);
     assert_eq!(store.attr_read(s, 0), 7);
 }
 
@@ -410,8 +410,8 @@ fn bind_recovers_state_from_preinitialized_mem() {
 
     let s1 = first.insert_struct().unwrap();
     let s2 = first.insert_struct().unwrap();
-    first.struct_write(s1, 0, 1001);
-    first.struct_write(s2, 0, 2002);
+    first.core_write(s1, 0, 1001);
+    first.core_write(s2, 0, 2002);
     first.attr_write(s1, 0, 9001);
     first.attr_write(s2, 0, 9002);
 
@@ -427,8 +427,8 @@ fn bind_recovers_state_from_preinitialized_mem() {
     assert_eq!(rebound.len(), 2);
     assert!(rebound.is_active_slot(s1));
     assert!(rebound.is_active_slot(s2));
-    assert_eq!(rebound.struct_read(s1, 0), 1001);
-    assert_eq!(rebound.struct_read(s2, 0), 2002);
+    assert_eq!(rebound.core_read(s1, 0), 1001);
+    assert_eq!(rebound.core_read(s2, 0), 2002);
     assert_eq!(rebound.attr_read(s1, 0), 9001);
     assert_eq!(rebound.attr_read(s2, 0), 9002);
 }
@@ -564,8 +564,8 @@ fn get_struct_returns_writer_handle_for_repeated_access() {
     assert_eq!(handle.read(0), 77);
     assert_eq!(handle.read(7), 88);
     // Reads via the top-level API agree.
-    assert_eq!(store.struct_read(s, 0), 77);
-    assert_eq!(store.struct_read(s, 7), 88);
+    assert_eq!(store.core_read(s, 0), 77);
+    assert_eq!(store.core_read(s, 7), 88);
 }
 
 // ============ Debug-assertion panics ============
@@ -636,9 +636,9 @@ fn struct_write_lands_at_expected_tb_offset_slot_1() {
     let slot = store.insert_struct().unwrap();
     assert_eq!(slot, 1);
 
-    store.struct_write(slot, 0, 111);
-    store.struct_write(slot, 3, 222);
-    store.struct_write(slot, 7, 333);
+    store.core_write(slot, 0, 111);
+    store.core_write(slot, 3, 222);
+    store.core_write(slot, 7, 333);
 
     // tb_start_offset=0, slot=1 => base offset is 0*S = 0.
     assert_eq!(tb.read(0 * S + 0), 111);
@@ -655,9 +655,9 @@ fn struct_write_lands_at_expected_tb_offset_slot_3() {
     let slot = store.insert_struct().unwrap();
     assert_eq!(slot, 3);
 
-    store.struct_write(slot, 0, 444);
-    store.struct_write(slot, 3, 555);
-    store.struct_write(slot, 7, 666);
+    store.core_write(slot, 0, 444);
+    store.core_write(slot, 3, 555);
+    store.core_write(slot, 7, 666);
 
     // tb_start_offset=0, slot=3 => base offset is 2*S = 16.
     assert_eq!(tb.read(2 * S + 0), 444);
@@ -681,8 +681,8 @@ fn struct_write_respects_nonzero_tb_start_offset() {
     let slot = store.insert_struct().unwrap();
     assert_eq!(slot, 1);
 
-    store.struct_write(slot, 0, 1001);
-    store.struct_write(slot, 7, 1007);
+    store.core_write(slot, 0, 1001);
+    store.core_write(slot, 7, 1007);
 
     // tb_start_offset=32, slot=1 => base absolute offset is 32 + 0*S.
     assert_eq!(tb.read(TB_START + 0 * S + 0), 1001);
@@ -705,9 +705,9 @@ fn struct_read_sees_value_written_via_tb_directly() {
     tb.write(abs3, 7003);
     tb.write(abs7, 7007);
 
-    assert_eq!(store.struct_read(slot, 0), 7001);
-    assert_eq!(store.struct_read(slot, 3), 7003);
-    assert_eq!(store.struct_read(slot, 7), 7007);
+    assert_eq!(store.core_read(slot, 0), 7001);
+    assert_eq!(store.core_read(slot, 3), 7003);
+    assert_eq!(store.core_read(slot, 7), 7007);
 }
 
 #[test]
@@ -719,9 +719,9 @@ fn struct_writes_to_different_slots_occupy_distinct_tb_regions() {
     let s3 = store.insert_struct().unwrap();
     assert_eq!((s1, s2, s3), (1, 2, 3));
 
-    store.struct_write(s1, 0, 10_001);
-    store.struct_write(s2, 0, 20_002);
-    store.struct_write(s3, 0, 30_003);
+    store.core_write(s1, 0, 10_001);
+    store.core_write(s2, 0, 20_002);
+    store.core_write(s3, 0, 30_003);
 
     // (slot - 1) * STRIDE for each slot's 0th field, tb_start_offset=0.
     assert_eq!(tb.read(0 * S), 10_001);

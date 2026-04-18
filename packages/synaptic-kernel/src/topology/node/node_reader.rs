@@ -1,6 +1,6 @@
 use crate::constants::NODE_SIZE;
+use crate::primitives::tb_zone_reader::TbZoneReader;
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
-use crate::primitives::struct_reader::StructReader;
 
 /// Consumer-side structural facade for a graph node on the triple buffer.
 ///
@@ -16,8 +16,8 @@ use crate::primitives::struct_reader::StructReader;
 /// # Encapsulation
 /// - Read-only: structural mutation is strictly prohibited on the reading plane.
 pub struct NodeReader<'a, const META_SIZE: usize> {
-    core: StructReader<'a, NODE_SIZE>,
-    meta: StructReader<'a, META_SIZE>,
+    core: TbZoneReader<'a, NODE_SIZE>,
+    meta: TbZoneReader<'a, META_SIZE>,
 }
 
 impl<'a, const META_SIZE: usize> NodeReader<'a, META_SIZE> {
@@ -33,8 +33,8 @@ impl<'a, const META_SIZE: usize> NodeReader<'a, META_SIZE> {
         );
 
         NodeReader {
-            core: StructReader::new(&triple_buffer, tb_start_offset),
-            meta: StructReader::new(&triple_buffer, tb_start_offset + NODE_SIZE),
+            core: TbZoneReader::new(&triple_buffer, tb_start_offset),
+            meta: TbZoneReader::new(&triple_buffer, tb_start_offset + NODE_SIZE),
         }
     }
 

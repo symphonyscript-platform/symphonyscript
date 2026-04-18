@@ -10,7 +10,11 @@ use crate::primitives::types::AtomicBuffer;
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct DualStoreWriter<const STRUCT_STRIDE: usize, const ATTR_STRIDE: usize> {
+pub struct DualStoreWriter<
+    const CORE_STRIDE: usize,
+    const META_STRIDE: usize,
+    const ATTR_STRIDE: usize,
+> {
     mem: AtomicBuffer,
     tb: TripleBufferWriter,
     allocator: SlotAllocator,
@@ -21,8 +25,8 @@ pub struct DualStoreWriter<const STRUCT_STRIDE: usize, const ATTR_STRIDE: usize>
     tb_end_offset: usize,
     capacity: usize,
 }
-impl<const STRUCT_STRIDE: usize, const ATTR_STRIDE: usize>
-    DualStoreWriter<STRUCT_STRIDE, ATTR_STRIDE>
+impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usize>
+    DualStoreWriter<CORE_STRIDE, META_STRIDE, ATTR_STRIDE>
 {
     pub fn new(
         mem: AtomicBuffer,
@@ -81,15 +85,16 @@ impl<const STRUCT_STRIDE: usize, const ATTR_STRIDE: usize>
     }
 
     pub fn calculate_size_on_tb(capacity: usize) -> usize {
-        capacity * STRUCT_STRIDE
+        capacity * (CORE_STRIDE + META_STRIDE)
     }
 
+    #[inline]
     pub(crate) fn calculate_struct_start_offset(tb_start_offset: usize, slot: usize) -> usize {
-        tb_start_offset + (slot - 1) * STRUCT_STRIDE
+        tb_start_offset + (slot - 1) * (CORE_STRIDE + META_STRIDE)
     }
 
-    pub fn to_reader(&self) -> DualStoreReader<STRUCT_STRIDE, ATTR_STRIDE> {
-        DualStoreReader::<STRUCT_STRIDE, ATTR_STRIDE>::bind(
+    pub fn to_reader(&self) -> DualStoreReader<CORE_STRIDE, META_STRIDE, ATTR_STRIDE> {
+        DualStoreReader::<CORE_STRIDE, META_STRIDE, ATTR_STRIDE>::bind(
             self.tb.to_reader(),
             AttributePlaneReader::bind(
                 Arc::clone(&self.mem),
@@ -144,47 +149,70 @@ impl<const STRUCT_STRIDE: usize, const ATTR_STRIDE: usize>
         self.allocator.is_active(slot)
     }
 
-    pub fn struct_read(&self, slot: usize, offset: usize) -> i32 {
-        self.get_struct(slot).read(offset)
+    pub fn core_read(&self, slot: usize, offset: usize) -> i32 {
+        self.get_struct(slot).read_core(offset)
     }
 
-    pub fn struct_write(&self, slot: usize, offset: usize, value: i32) {
-        self.get_struct(slot).write(offset, value)
+    pub fn core_write(&self, slot: usize, offset: usize, value: i32) {
+        self.get_struct(slot).write_core(offset, value)
     }
 
-    pub fn struct_read_all(&self, slot: usize) -> [i32; STRUCT_STRIDE] {
-        self.get_struct(slot).read_all()
+    pub fn core_read_all(&self, slot: usize) -> [i32; CORE_STRIDE] {
+        self.get_struct(slot).read_core_all()
     }
 
-    pub fn struct_write_all(&self, slot: usize, data: [i32; STRUCT_STRIDE]) {
-        self.get_struct(slot).write_all(data)
+    pub fn core_write_all(&self, slot: usize, data: [i32; CORE_STRIDE]) {
+        self.get_struct(slot).write_core_all(data)
     }
 
+    pub fn meta_read(&self, slot: usize, offset: usize) -> i32 {
+        self.get_struct(slot).read_meta(offset)
+    }
+
+    pub fn meta_write(&self, slot: usize, offset: usize, value: i32) {
+        self.get_struct(slot).write_meta(offset, value)
+    }
+
+    pub fn meta_read_all(&self, slot: usize) -> [i32; META_STRIDE] {
+        self.get_struct(slot).read_meta_all()
+    }
+
+    pub fn meta_write_all(&self, slot: usize, data: [i32; META_STRIDE]) {
+        self.get_struct(slot).write_meta_all(data)
+    }
+
+    #[inline]
     pub fn attr_read(&self, slot: usize, offset: usize) -> i32 {
         self.attributes.read(slot, offset)
     }
 
+    #[inline]
     pub fn attr_write(&self, slot: usize, offset: usize, value: i32) {
         self.attributes.write(slot, offset, value)
     }
 
+    #[inline]
     pub fn attr_and(&self, slot: usize, offset: usize, value: i32) -> i32 {
         self.attributes.and(slot, offset, value)
     }
 
+    #[inline]
     pub fn attr_or(&self, slot: usize, offset: usize, value: i32) -> i32 {
         self.attributes.or(slot, offset, value)
     }
 
+    #[inline]
     pub fn attr_read_all(&self, slot: usize) -> [i32; ATTR_STRIDE] {
         self.attributes.read_all(slot)
     }
 
+    #[inline]
     pub fn attr_write_all(&self, slot: usize, data: [i32; ATTR_STRIDE]) {
         self.attributes.write_all(slot, data)
     }
 
-    pub fn get_struct(&'_ self, slot: usize) -> StructWriter<'_, STRUCT_STRIDE> {
+    #[inline]
+    pub fn get_struct(&'_ self, slot: usize) -> StructWriter<'_, CORE_STRIDE, META_STRIDE> {
         debug_assert!(
             self.allocator.is_active(slot),
             "DualStore.get_struct | attempted to read inactive slot {}",
@@ -204,7 +232,7 @@ impl<const STRUCT_STRIDE: usize, const ATTR_STRIDE: usize>
         let new_slot = result.unwrap();
         let start_offset = Self::calculate_struct_start_offset(self.tb_start_offset, new_slot);
 
-        for i in 0..STRUCT_STRIDE {
+        for i in 0..(CORE_STRIDE + META_STRIDE) {
             self.tb.write(start_offset + i, 0)
         }
 

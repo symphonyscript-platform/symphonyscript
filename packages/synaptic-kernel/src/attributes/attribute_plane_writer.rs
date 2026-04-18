@@ -68,6 +68,7 @@ impl<const STRIDE: usize> AttributePlaneWriter<STRIDE> {
         }
     }
 
+    #[inline]
     pub fn resolve_mem_offset(mem_start_offset: usize, slot: usize) -> usize {
         debug_assert!(
             slot > 0,
@@ -93,6 +94,7 @@ impl<const STRIDE: usize> AttributePlaneWriter<STRIDE> {
         self.mem_end_offset
     }
 
+    #[inline]
     pub fn read(&self, slot: usize, offset: usize) -> i32 {
         debug_assert!(
             offset < STRIDE,
@@ -103,6 +105,7 @@ impl<const STRIDE: usize> AttributePlaneWriter<STRIDE> {
         self.mem[mem_offset + offset].load(Ordering::Relaxed)
     }
 
+    #[inline]
     pub fn write(&self, slot: usize, offset: usize, value: i32) {
         debug_assert!(
             offset < STRIDE,
@@ -113,6 +116,7 @@ impl<const STRIDE: usize> AttributePlaneWriter<STRIDE> {
         self.mem[mem_offset + offset].store(value, Ordering::Relaxed)
     }
 
+    #[inline]
     pub fn or(&self, slot: usize, offset: usize, mask: i32) -> i32 {
         debug_assert!(
             offset < STRIDE,
@@ -123,6 +127,7 @@ impl<const STRIDE: usize> AttributePlaneWriter<STRIDE> {
         self.mem[mem_offset + offset].fetch_or(mask, Ordering::Relaxed)
     }
 
+    #[inline]
     pub fn and(&self, slot: usize, offset: usize, mask: i32) -> i32 {
         debug_assert!(
             offset < STRIDE,
@@ -133,6 +138,7 @@ impl<const STRIDE: usize> AttributePlaneWriter<STRIDE> {
         self.mem[mem_offset + offset].fetch_and(mask, Ordering::Relaxed)
     }
 
+    #[inline]
     pub fn read_all(&self, slot: usize) -> [i32; STRIDE] {
         let mut data: [i32; STRIDE] = [0; STRIDE];
 
@@ -143,6 +149,7 @@ impl<const STRIDE: usize> AttributePlaneWriter<STRIDE> {
         data
     }
 
+    #[inline]
     pub fn write_all(&self, slot: usize, data: [i32; STRIDE]) {
         for i in 0..STRIDE {
             self.write(slot, i, data[i]);
@@ -161,6 +168,7 @@ impl<const STRIDE: usize> AttributePlaneWriter<STRIDE> {
         AttributesWriter::new(&self.mem, mem_offset)
     }
 
+    #[inline]
     pub fn set<T: IntoArray<STRIDE>>(&self, slot: usize, data: T) {
         let attrs = self.get(slot);
         let data = data.to_array();
@@ -170,6 +178,7 @@ impl<const STRIDE: usize> AttributePlaneWriter<STRIDE> {
         }
     }
 
+    #[inline]
     pub fn clear(&self, slot: usize) {
         let attrs = self.get(slot);
 

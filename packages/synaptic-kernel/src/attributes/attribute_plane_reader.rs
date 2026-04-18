@@ -54,6 +54,7 @@ impl<const STRIDE: usize> AttributePlaneReader<STRIDE> {
         self.mem_end_offset
     }
 
+    #[inline]
     pub fn read(&self, slot: usize, offset: usize) -> i32 {
         debug_assert!(
             offset < STRIDE,
@@ -64,6 +65,7 @@ impl<const STRIDE: usize> AttributePlaneReader<STRIDE> {
         self.mem[mem_offset + offset].load(Ordering::Relaxed)
     }
 
+    #[inline]
     pub fn read_all(&self, slot: usize) -> [i32; STRIDE] {
         let mut data: [i32; STRIDE] = [0; STRIDE];
 

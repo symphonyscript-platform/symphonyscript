@@ -71,6 +71,7 @@ impl TripleBufferReader {
         self.mem_end_offset
     }
 
+    #[inline]
     pub fn mem_reader_base(&self) -> usize {
         let buffer_id = self.mem[self.mem_reader_offset].load(Ordering::Relaxed) as usize;
         self.buffer_bases[buffer_id]
@@ -99,6 +100,7 @@ impl TripleBufferReader {
         true
     }
 
+    #[inline]
     pub fn read(&self, offset: usize) -> i32 {
         debug_assert!(
             offset < self.buffer_capacity,
@@ -107,5 +109,23 @@ impl TripleBufferReader {
         );
         let base = self.mem_reader_base();
         self.mem[base + offset].load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub fn read_batch<const T: usize>(&self, offset: usize) -> [i32; T] {
+        debug_assert!(
+            offset + T <= self.buffer_capacity,
+            "TripleBufferReader.read_batch | [offset, T) [{}, {}) out of bounds",
+            offset,
+            T,
+        );
+        let base = self.mem_reader_base() + offset;
+        let mut data: [i32; T] = [0; T];
+
+        for i in 0..T {
+            data[i] = self.mem[base + i].load(Ordering::Relaxed)
+        }
+
+        data
     }
 }

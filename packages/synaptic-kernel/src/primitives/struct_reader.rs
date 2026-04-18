@@ -1,62 +1,58 @@
+use crate::primitives::tb_zone_reader::TbZoneReader;
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
 
-/// Consumer-side view into a fixed-size structural block on the triple buffer.
+/// Consumer-side structural facade for a dual-zone structural block on the triple buffer.
 ///
-/// Provides safe, offset-based read-only access to a specific `[i32; SLOT_SIZE]` sequence.
+/// Wraps two `TbZoneReader`s (core and metadata)
+/// to provide a strict read-only interface over the raw atomic memory block.
 ///
 /// # Threading
-/// Consumer thread only. Delegates back to the underlying `TripleBufferReader`.
+/// Consumer thread only. Delegates back to the underlying `TbZoneReader`s.
 ///
 /// # Encapsulation
 /// - Read-only: structural mutation is strictly prohibited on the reading plane.
-/// - Typically instantiated on-the-fly and short-lived.
-pub struct StructReader<'a, const STRIDE: usize> {
-    triple_buffer: &'a TripleBufferReader,
-    tb_start_offset: usize,
-    tb_end_offset: usize,
+pub struct StructReader<'a, const CORE_STRIDE: usize, const META_STRIDE: usize> {
+    core: TbZoneReader<'a, CORE_STRIDE>,
+    meta: TbZoneReader<'a, META_STRIDE>,
 }
 
-impl<'a, const STRIDE: usize> StructReader<'a, STRIDE> {
+impl<'a, const CORE_STRIDE: usize, const META_STRIDE: usize>
+    StructReader<'a, CORE_STRIDE, META_STRIDE>
+{
     pub fn new(triple_buffer: &'a TripleBufferReader, tb_start_offset: usize) -> Self {
-        let tb_end_offset = tb_start_offset + STRIDE;
+        let tb_end_offset = tb_start_offset + CORE_STRIDE + META_STRIDE;
+
         debug_assert!(
             tb_end_offset <= triple_buffer.buffer_capacity(),
-            "StructReader::create | range [{}..{}] exceeds buffer capacity {}",
+            "StructReader::new | range [{}..{}] exceeds buffer capacity {}",
             tb_start_offset,
-            STRIDE,
+            CORE_STRIDE + META_STRIDE,
             triple_buffer.buffer_capacity(),
         );
+
         StructReader {
-            triple_buffer,
-            tb_start_offset,
-            tb_end_offset,
+            core: TbZoneReader::new(&triple_buffer, tb_start_offset),
+            meta: TbZoneReader::new(&triple_buffer, tb_start_offset + CORE_STRIDE),
         }
     }
 
-    pub fn read(&self, offset: usize) -> i32 {
-        debug_assert!(
-            offset < STRIDE,
-            "StructReader.read | offset {} out of bounds",
-            offset
-        );
-        self.triple_buffer.read(self.tb_start_offset + offset)
+    #[inline]
+    pub fn read_core(&self, offset: usize) -> i32 {
+        self.core.read(offset)
     }
 
-    pub fn tb_start_offset(&self) -> usize {
-        self.tb_start_offset
+    #[inline]
+    pub fn read_core_all(&self) -> [i32; CORE_STRIDE] {
+        self.core.read_all()
     }
 
-    pub fn tb_end_offset(&self) -> usize {
-        self.tb_end_offset
+    #[inline]
+    pub fn read_meta(&self, offset: usize) -> i32 {
+        self.meta.read(offset)
     }
 
-    pub fn read_all(&self) -> [i32; STRIDE] {
-        let mut data: [i32; STRIDE] = [0; STRIDE];
-
-        for i in 0..STRIDE {
-            data[i] = self.read(i)
-        }
-
-        data
+    #[inline]
+    pub fn read_meta_all(&self) -> [i32; META_STRIDE] {
+        self.meta.read_all()
     }
 }

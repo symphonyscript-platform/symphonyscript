@@ -1,6 +1,6 @@
 use crate::constants::NODE_SIZE;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
-use crate::primitives::struct_writer::StructWriter;
+use crate::primitives::tb_zone_writer::TbZoneWriter;
 
 /// Producer-side structural facade for a graph node on the triple buffer.
 ///
@@ -26,8 +26,8 @@ use crate::primitives::struct_writer::StructWriter;
 /// - All mutation methods (`set_*`) are `pub(crate)`. Only the kernel can mutate
 ///   active topology, enforcing structural graph invariants.
 pub struct NodeWriter<'a, const META_SIZE: usize> {
-    core: StructWriter<'a, NODE_SIZE>,
-    meta: StructWriter<'a, META_SIZE>,
+    core: TbZoneWriter<'a, NODE_SIZE>,
+    meta: TbZoneWriter<'a, META_SIZE>,
 }
 
 impl<'a, const META_SIZE: usize> NodeWriter<'a, META_SIZE> {
@@ -43,8 +43,8 @@ impl<'a, const META_SIZE: usize> NodeWriter<'a, META_SIZE> {
         );
 
         NodeWriter {
-            core: StructWriter::new(&triple_buffer, tb_start_offset),
-            meta: StructWriter::new(&triple_buffer, tb_start_offset + NODE_SIZE),
+            core: TbZoneWriter::new(&triple_buffer, tb_start_offset),
+            meta: TbZoneWriter::new(&triple_buffer, tb_start_offset + NODE_SIZE),
         }
     }
 

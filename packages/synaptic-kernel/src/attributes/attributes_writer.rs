@@ -38,6 +38,7 @@ impl<'a, const STRIDE: usize> AttributesWriter<'a, STRIDE> {
         self.mem_end_offset
     }
 
+    #[inline]
     pub fn read(&self, offset: usize) -> i32 {
         debug_assert!(
             offset < STRIDE,
@@ -47,6 +48,7 @@ impl<'a, const STRIDE: usize> AttributesWriter<'a, STRIDE> {
         self.mem[self.mem_start_offset + offset].load(Ordering::Relaxed)
     }
 
+    #[inline]
     pub fn write(&self, offset: usize, value: i32) {
         debug_assert!(
             offset < STRIDE,
@@ -56,6 +58,7 @@ impl<'a, const STRIDE: usize> AttributesWriter<'a, STRIDE> {
         self.mem[self.mem_start_offset + offset].store(value, Ordering::Relaxed)
     }
 
+    #[inline]
     pub fn or(&self, offset: usize, mask: i32) -> i32 {
         debug_assert!(
             offset < STRIDE,
@@ -65,6 +68,7 @@ impl<'a, const STRIDE: usize> AttributesWriter<'a, STRIDE> {
         self.mem[self.mem_start_offset + offset].fetch_or(mask, Ordering::Relaxed)
     }
 
+    #[inline]
     pub fn and(&self, offset: usize, mask: i32) -> i32 {
         debug_assert!(
             offset < STRIDE,
@@ -74,6 +78,7 @@ impl<'a, const STRIDE: usize> AttributesWriter<'a, STRIDE> {
         self.mem[self.mem_start_offset + offset].fetch_and(mask, Ordering::Relaxed)
     }
 
+    #[inline]
     pub fn read_all(&self) -> [i32; STRIDE] {
         let mut data: [i32; STRIDE] = [0; STRIDE];
 
@@ -84,6 +89,7 @@ impl<'a, const STRIDE: usize> AttributesWriter<'a, STRIDE> {
         data
     }
 
+    #[inline]
     pub fn write_all(&self, data: [i32; STRIDE]) {
         for i in 0..STRIDE {
             self.write(i, data[i]);
