@@ -55,12 +55,7 @@ pub struct Epoch<
     const SYNAPSE_META_STRIDE: usize,
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > {
-    mem: AtomicBuffer,
     tb: TripleBufferWriter,
-    node_capacity: usize,
-    synapse_capacity: usize,
-    mem_metadata_size: usize,
-    tb_metadata_size: usize,
 
     pub(crate) mem_metadata: MemMetadataWriter,
     pub(crate) tb_metadata: TbMetadataWriter,
@@ -120,12 +115,7 @@ impl<
         );
 
         Epoch {
-            mem,
             tb,
-            node_capacity: config.node_capacity,
-            synapse_capacity: config.synapse_capacity,
-            mem_metadata_size: config.mem_metadata_size,
-            tb_metadata_size: config.tb_metadata_size,
             mem_metadata,
             tb_metadata,
             network,
