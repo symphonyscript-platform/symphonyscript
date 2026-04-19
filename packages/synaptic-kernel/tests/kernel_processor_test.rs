@@ -166,7 +166,7 @@ fn full_traversal_nodes_and_synapses() {
     let n2 = controller.insert_node_after(n1, 20).unwrap();
     let _n3 = controller.insert_node_after(n2, 30).unwrap();
     controller.connect(n1, n2, 99).unwrap();
-    controller.set_node_attribute(n1, 0, 1000);
+    controller.get_node(n1).attr_write(0, 1000);
     controller.publish();
 
     let graph = consumer.acquire_mirror();
@@ -183,7 +183,7 @@ fn full_traversal_nodes_and_synapses() {
     assert_eq!(kinds, vec![10, 20, 30]);
 
     // Read attributes
-    assert_eq!(graph.get_node_attribute(n1, 0), 1000);
+    assert_eq!(graph.get_node(n1).attr_read(0), 1000);
 
     // Read synapse
     let src_node = graph.get_node(n1);

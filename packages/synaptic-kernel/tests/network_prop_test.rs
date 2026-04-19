@@ -1,23 +1,23 @@
 use proptest::prelude::*;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::constants::NODE_STRIDE;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
-use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
 use synaptic_kernel::topology::network::network_writer::NetworkWriter;
 
 const NODE_META: usize = 8;
+const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
+const SYNAPSE_ATTR: usize = 16;
 const MEM_SIZE: usize = 131072;
 const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 32768;
 const NODE_CAPACITY: usize = 32;
 const SYNAPSE_CAPACITY: usize = 64;
 const NODE_START_OFFSET: usize = 0;
-const SYNAPSE_START_OFFSET: usize = 1 + NODE_CAPACITY * (NODE_STRIDE + NODE_META);
 const NODE_FL_START: usize = 80000;
-const SYNAPSE_FL_START: usize = 90000;
+
+type TestNetwork = NetworkWriter<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
@@ -28,28 +28,24 @@ fn create_mem(size: usize) -> AtomicBuffer {
 }
 
 struct TestHarness {
-    node_chain: NodeChainWriter<NODE_META>,
-    synapse_chain: NetworkWriter<NODE_META, SYNAPSE_META>,
+    /// `node_chain` and `synapse_chain` are clones of the same `NetworkWriter`.
+    node_chain: TestNetwork,
+    synapse_chain: TestNetwork,
 }
 
 fn setup() -> TestHarness {
     let mem = create_mem(MEM_SIZE);
     let writer = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
-    let node_chain = NodeChainWriter::<NODE_META>::new(
+    let network = NetworkWriter::<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>::new(
         Arc::clone(&mem),
         writer.clone(),
         NODE_FL_START,
         NODE_START_OFFSET,
         NODE_CAPACITY,
-    );
-    let synapse_chain = NetworkWriter::<NODE_META, SYNAPSE_META>::new(
-        Arc::clone(&mem),
-        writer.clone(),
-        node_chain.clone(),
-        SYNAPSE_FL_START,
-        SYNAPSE_START_OFFSET,
         SYNAPSE_CAPACITY,
     );
+    let node_chain = network.clone();
+    let synapse_chain = network;
     TestHarness {
         node_chain,
         synapse_chain,

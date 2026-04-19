@@ -39,7 +39,7 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
     let n1 = controller.insert_head_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     controller.connect(n1, n2, 10).unwrap();
-    controller.set_node_attribute(n1, 0, 42);
+    controller.get_node(n1).attr_write(0, 42);
     controller.publish();
 
     let running = Arc::new(AtomicBool::new(true));
@@ -234,7 +234,7 @@ fn epoch_stress_random_mutations_under_consumer_load() {
 
         // Write some attributes
         if let Some(&slot) = node_slots.first() {
-            controller.set_node_attribute(slot, 0, batch as i32 * 100);
+            controller.get_node(slot).attr_write(0, batch as i32 * 100);
         }
 
         controller.publish();
@@ -343,7 +343,7 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
     for i in 0..8 {
         let s = controller.insert_head_node(i).unwrap();
         for offset in 0..16 {
-            controller.set_node_attribute(s, offset, 0);
+            controller.get_node(s).attr_write(offset, 0);
         }
         slots.push(s);
     }
@@ -366,7 +366,7 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
             // Read all attributes for all slots
             for &slot in &slots_clone {
                 for offset in 0..16 {
-                    let val = graph.get_node_attribute(slot, offset);
+                    let val = graph.get_node(slot).attr_read(offset);
                     // Value should be a valid i32 (no torn reads on AtomicI32)
                     let _ = val;
                 }
@@ -381,10 +381,7 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
     for batch in 0..500 {
         for &slot in &slots {
             for offset in 0..16 {
-                controller.set_node_attribute(
-                    slot,
-                    offset,
-                    (offset as i32) * 1000 + batch,
+                controller.get_node(slot).attr_write(offset, (offset as i32) * 1000 + batch,
                 );
             }
         }

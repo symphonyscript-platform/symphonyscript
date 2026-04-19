@@ -106,22 +106,22 @@ fn node_and_synapse_attribute_round_trip() {
 
     // Node attributes: write every offset, read back
     for offset in 0..16 {
-        controller.set_node_attribute(n1, offset, (offset as i32) * 100);
+        controller.get_node(n1).attr_write(offset, (offset as i32) * 100);
     }
     for offset in 0..16 {
         assert_eq!(
-            controller.get_node_attribute(n1, offset),
+            controller.get_node(n1).attr_read(offset),
             (offset as i32) * 100
         );
     }
 
     // Synapse attributes: same
     for offset in 0..16 {
-        controller.set_synapse_attribute(s1, offset, -(offset as i32) * 50);
+        controller.get_synapse(s1).attr_write(offset, -(offset as i32) * 50);
     }
     for offset in 0..16 {
         assert_eq!(
-            controller.get_synapse_attribute(s1, offset),
+            controller.get_synapse(s1).attr_read(offset),
             -(offset as i32) * 50
         );
     }
@@ -131,10 +131,10 @@ fn node_and_synapse_attribute_round_trip() {
 fn negative_attribute_values_preserved() {
     let controller = new_controller(config(16));
     let n = controller.insert_head_node(1).unwrap();
-    controller.set_node_attribute(n, 0, i32::MIN);
-    controller.set_node_attribute(n, 1, -1);
-    assert_eq!(controller.get_node_attribute(n, 0), i32::MIN);
-    assert_eq!(controller.get_node_attribute(n, 1), -1);
+    controller.get_node(n).attr_write(0, i32::MIN);
+    controller.get_node(n).attr_write(1, -1);
+    assert_eq!(controller.get_node(n).attr_read(0), i32::MIN);
+    assert_eq!(controller.get_node(n).attr_read(1), -1);
 }
 
 // =========================================================
@@ -150,8 +150,7 @@ fn mutations_invisible_to_consumer_thread_before_publish_and_swap() {
 
     assert!(consumer.get_head_node().is_none());
 
-    let slot = controller.insert_head_node(42).unwrap();
-    controller.get_node(slot).set_meta(0, 100);
+    let _slot = controller.insert_head_node(42).unwrap();
 
     // Not published yet
     assert!(consumer.get_head_node().is_none());
@@ -160,11 +159,12 @@ fn mutations_invisible_to_consumer_thread_before_publish_and_swap() {
     controller.publish();
     assert!(consumer.get_head_node().is_none());
 
-    // Swapped
+    // Swapped — kind (TB-plane, set during insert) is now visible.
+    // Meta is writable only through internal topology operations, so the
+    // post-insert meta-write assertion from the previous API has been dropped.
     assert!(consumer.swap());
     let head = consumer.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 42);
-    assert_eq!(head.get_meta(0), 100);
 }
 
 #[test]
@@ -178,7 +178,7 @@ fn multiple_mutations_batch_into_single_publish() {
     let n3 = controller.insert_node_after(n2, 3).unwrap();
     controller.connect(n1, n2, 10).unwrap();
     controller.connect(n2, n3, 20).unwrap();
-    controller.set_node_attribute(n1, 0, 999);
+    controller.get_node(n1).attr_write(0, 999);
 
     // Everything invisible
     assert!(consumer.get_head_node().is_none());
@@ -188,7 +188,7 @@ fn multiple_mutations_batch_into_single_publish() {
 
     let head = consumer.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 1);
-    assert_eq!(consumer.get_node_attribute(n1, 0), 999);
+    assert_eq!(consumer.get_node(n1).attr_read(0), 999);
     let next = consumer.get_node(head.get_next_ptr());
     assert_eq!(next.get_kind(), 2);
     let last = consumer.get_node(next.get_next_ptr());
@@ -216,10 +216,10 @@ fn attributes_visible_immediately_without_publish() {
     let consumer = unsafe { mock_consumer_reader(&controller) };
 
     let n = controller.insert_head_node(1).unwrap();
-    controller.set_node_attribute(n, 3, 42);
+    controller.get_node(n).attr_write(3, 42);
 
     // Attribute is visible to consumer immediately (shared plane)
-    assert_eq!(consumer.get_node_attribute(n, 3), 42);
+    assert_eq!(consumer.get_node(n).attr_read(3), 42);
 }
 
 // =========================================================
@@ -348,17 +348,17 @@ fn grow_preserves_node_and_synapse_attributes() {
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     let s1 = controller.connect(n1, n2, 5).unwrap();
 
-    controller.set_node_attribute(n1, 0, 1000);
-    controller.set_node_attribute(n1, 15, -999);
-    controller.set_synapse_attribute(s1, 0, 5000);
-    controller.set_synapse_attribute(s1, 15, -5000);
+    controller.get_node(n1).attr_write(0, 1000);
+    controller.get_node(n1).attr_write(15, -999);
+    controller.get_synapse(s1).attr_write(0, 5000);
+    controller.get_synapse(s1).attr_write(15, -5000);
 
     controller.grow(config(32)).unwrap();
 
-    assert_eq!(controller.get_node_attribute(n1, 0), 1000);
-    assert_eq!(controller.get_node_attribute(n1, 15), -999);
-    assert_eq!(controller.get_synapse_attribute(s1, 0), 5000);
-    assert_eq!(controller.get_synapse_attribute(s1, 15), -5000);
+    assert_eq!(controller.get_node(n1).attr_read(0), 1000);
+    assert_eq!(controller.get_node(n1).attr_read(15), -999);
+    assert_eq!(controller.get_synapse(s1).attr_read(0), 5000);
+    assert_eq!(controller.get_synapse(s1).attr_read(15), -5000);
 }
 
 #[test]
@@ -410,8 +410,8 @@ fn grow_consumer_thread_sees_migrated_data_after_publish_swap() {
     let n1 = controller.insert_head_node(10).unwrap();
     let n2 = controller.insert_node_after(n1, 20).unwrap();
     let s1 = controller.connect(n1, n2, 99).unwrap();
-    controller.set_node_attribute(n1, 0, 1000);
-    controller.set_synapse_attribute(s1, 0, 5000);
+    controller.get_node(n1).attr_write(0, 1000);
+    controller.get_synapse(s1).attr_write(0, 5000);
 
     controller.grow(config(32)).unwrap();
     controller.publish();
@@ -421,14 +421,14 @@ fn grow_consumer_thread_sees_migrated_data_after_publish_swap() {
 
     let head = consumer.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 10);
-    assert_eq!(consumer.get_node_attribute(n1, 0), 1000);
+    assert_eq!(consumer.get_node(n1).attr_read(0), 1000);
 
     let next = consumer.get_node(head.get_next_ptr());
     assert_eq!(next.get_kind(), 20);
 
     let syn = consumer.get_synapse(s1);
     assert_eq!(syn.get_kind(), 99);
-    assert_eq!(consumer.get_synapse_attribute(s1, 0), 5000);
+    assert_eq!(consumer.get_synapse(s1).attr_read(0), 5000);
 }
 
 #[test]
@@ -522,7 +522,7 @@ fn grow_then_mutate_then_publish() {
 
     // Mutate AFTER grow, BEFORE publish
     let n2 = controller.insert_node_after(n1, 2).unwrap();
-    controller.set_node_attribute(n2, 0, 777);
+    controller.get_node(n2).attr_write(0, 777);
 
     controller.publish();
 
@@ -533,7 +533,7 @@ fn grow_then_mutate_then_publish() {
     assert_eq!(head.get_kind(), 1);
     let next = consumer.get_node(head.get_next_ptr());
     assert_eq!(next.get_kind(), 2);
-    assert_eq!(consumer.get_node_attribute(n2, 0), 777);
+    assert_eq!(consumer.get_node(n2).attr_read(0), 777);
 }
 
 // =========================================================
@@ -793,7 +793,7 @@ fn concurrent_traversal_during_grow() {
     let n1 = controller.insert_head_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     controller.connect(n1, n2, 10).unwrap();
-    controller.set_node_attribute(n1, 0, 42);
+    controller.get_node(n1).attr_write(0, 42);
     controller.publish();
 
     let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
@@ -889,7 +889,7 @@ fn concurrent_attribute_reads_during_writes() {
 
             // Read all 16 attribute offsets — must never panic or return garbage
             for offset in 0..16 {
-                let val = reader.get_node_attribute(slot, offset);
+                let val = reader.get_node(slot).attr_read(offset);
                 // Values should be either 0 (initial) or a valid written value
                 // Written values are offset * 1000 + iteration_batch
                 // Just verify it doesn't panic and isn't a torn value
@@ -905,7 +905,7 @@ fn concurrent_attribute_reads_during_writes() {
     // Main thread: rapidly writes attributes
     for batch in 0..500 {
         for offset in 0..16 {
-            controller.set_node_attribute(n1, offset, (offset as i32) * 1000 + batch);
+            controller.get_node(n1).attr_write(offset, (offset as i32) * 1000 + batch);
         }
     }
 

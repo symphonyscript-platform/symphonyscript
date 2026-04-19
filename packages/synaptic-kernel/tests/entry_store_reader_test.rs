@@ -85,15 +85,15 @@ fn struct_read_after_publish_and_swap() {
 
     let s = store.insert().unwrap();
     let data = [11, 22, 33, 44, 55, 66, 77, 88];
-    store.core_write_all(s, data);
+    store.get(s).core_write_all(data);
 
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
-    assert_eq!(reader.core_read_all(s), data);
+    assert_eq!(reader.get(s).core_read_all(), data);
     for (i, expected) in data.iter().enumerate() {
-        assert_eq!(reader.core_read(s, i), *expected);
+        assert_eq!(reader.get(s).core_read(i), *expected);
     }
 }
 
@@ -112,15 +112,15 @@ fn struct_reads_isolated_per_slot_on_reader_side() {
 
     let s1 = store.insert().unwrap();
     let s2 = store.insert().unwrap();
-    store.core_write_all(s1, [1, 1, 1, 1, 1, 1, 1, 1]);
-    store.core_write_all(s2, [2, 2, 2, 2, 2, 2, 2, 2]);
+    store.get(s1).core_write_all([1, 1, 1, 1, 1, 1, 1, 1]);
+    store.get(s2).core_write_all([2, 2, 2, 2, 2, 2, 2, 2]);
 
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
-    assert_eq!(reader.core_read_all(s1), [1; 8]);
-    assert_eq!(reader.core_read_all(s2), [2; 8]);
+    assert_eq!(reader.get(s1).core_read_all(), [1; 8]);
+    assert_eq!(reader.get(s2).core_read_all(), [2; 8]);
 }
 
 #[test]
@@ -137,7 +137,7 @@ fn struct_reader_handle_from_get_struct() {
     );
 
     let s = store.insert().unwrap();
-    store.core_write_all(s, [100, 200, 300, 400, 500, 600, 700, 800]);
+    store.get(s).core_write_all([100, 200, 300, 400, 500, 600, 700, 800]);
     tb.publish();
     assert!(tb_reader.swap());
 
@@ -164,13 +164,13 @@ fn attr_read_visible_without_publish() {
     );
 
     let s = store.insert().unwrap();
-    store.attr_write(s, 0, 1234);
-    store.attr_write(s, 15, -42);
+    store.get(s).attr_write(0, 1234);
+    store.get(s).attr_write(15, -42);
 
     let reader = store.to_reader();
     // No publish, no swap — mem plane writes are immediately visible.
-    assert_eq!(reader.attr_read(s, 0), 1234);
-    assert_eq!(reader.attr_read(s, 15), -42);
+    assert_eq!(reader.get(s).attr_read(0), 1234);
+    assert_eq!(reader.get(s).attr_read(15), -42);
 }
 
 #[test]
@@ -190,10 +190,10 @@ fn attr_read_all_visible_without_publish() {
     for i in 0..16 {
         data[i] = (i as i32) * 13 - 7;
     }
-    store.attr_write_all(s, data);
+    store.get(s).attr_write_all(data);
 
     let reader = store.to_reader();
-    assert_eq!(reader.attr_read_all(s), data);
+    assert_eq!(reader.get(s).attr_read_all(), data);
 }
 
 // ============ Multiple readers share state ============
@@ -212,8 +212,8 @@ fn multiple_readers_share_underlying_state() {
     );
 
     let s = store.insert().unwrap();
-    store.attr_write(s, 0, 999);
-    store.core_write(s, 0, 7);
+    store.get(s).attr_write(0, 999);
+    store.get(s).core_write(0, 7);
     tb.publish();
     assert!(tb_reader.swap());
 
@@ -221,15 +221,15 @@ fn multiple_readers_share_underlying_state() {
     let reader_b = store.to_reader();
 
     // Both readers observe the same published struct and attr data.
-    assert_eq!(reader_a.attr_read(s, 0), 999);
-    assert_eq!(reader_b.attr_read(s, 0), 999);
-    assert_eq!(reader_a.core_read(s, 0), 7);
-    assert_eq!(reader_b.core_read(s, 0), 7);
+    assert_eq!(reader_a.get(s).attr_read(0), 999);
+    assert_eq!(reader_b.get(s).attr_read(0), 999);
+    assert_eq!(reader_a.get(s).core_read(0), 7);
+    assert_eq!(reader_b.get(s).core_read(0), 7);
 
     // A subsequent writer-side attr update (mem plane) is visible to both.
-    store.attr_write(s, 0, -1);
-    assert_eq!(reader_a.attr_read(s, 0), -1);
-    assert_eq!(reader_b.attr_read(s, 0), -1);
+    store.get(s).attr_write(0, -1);
+    assert_eq!(reader_a.get(s).attr_read(0), -1);
+    assert_eq!(reader_b.get(s).attr_read(0), -1);
 }
 
 // ============ Cross-configuration combinations ============
@@ -248,14 +248,14 @@ fn reader_roundtrip_with_1_1_1_config() {
     );
 
     let s = store.insert().unwrap();
-    store.core_write(s, 0, 5);
-    store.attr_write(s, 0, 6);
+    store.get(s).core_write(0, 5);
+    store.get(s).attr_write(0, 6);
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
-    assert_eq!(reader.core_read(s, 0), 5);
-    assert_eq!(reader.attr_read(s, 0), 6);
+    assert_eq!(reader.get(s).core_read(0), 5);
+    assert_eq!(reader.get(s).attr_read(0), 6);
 }
 
 #[test]
@@ -314,14 +314,14 @@ fn reader_struct_read_sees_value_written_via_tb_at_expected_offset() {
     assert_eq!(slot, 2);
 
     let expected_abs = (slot - 1) * S + 3; // tb_start_offset=0
-    store.core_write(slot, 3, 4242);
+    store.get(slot).core_write(3, 4242);
 
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
     // EntryStoreReader API resolves the offset...
-    assert_eq!(reader.core_read(slot, 3), 4242);
+    assert_eq!(reader.get(slot).core_read(3), 4242);
     // ...and the raw TripleBufferReader at the externally-computed absolute
     // offset sees the same value. If either side miscomputes the offset, these
     // two reads disagree.
@@ -347,9 +347,9 @@ fn reader_struct_reads_distinct_slots_at_distinct_tb_offsets() {
     let s3 = store.insert().unwrap();
     assert_eq!((s1, s2, s3), (1, 2, 3));
 
-    store.core_write(s1, 0, 91);
-    store.core_write(s2, 0, 92);
-    store.core_write(s3, 0, 93);
+    store.get(s1).core_write(0, 91);
+    store.get(s2).core_write(0, 92);
+    store.get(s3).core_write(0, 93);
 
     tb.publish();
     assert!(tb_reader.swap());
@@ -357,9 +357,9 @@ fn reader_struct_reads_distinct_slots_at_distinct_tb_offsets() {
     let reader = store.to_reader();
 
     // Reader API resolves slot -> field-0 as (slot - 1) * S + 0.
-    assert_eq!(reader.core_read(s1, 0), 91);
-    assert_eq!(reader.core_read(s2, 0), 92);
-    assert_eq!(reader.core_read(s3, 0), 93);
+    assert_eq!(reader.get(s1).core_read(0), 91);
+    assert_eq!(reader.get(s2).core_read(0), 92);
+    assert_eq!(reader.get(s3).core_read(0), 93);
 
     // Raw TripleBufferReader reads at the externally-computed absolute offsets.
     assert_eq!(tb_reader.read(0 * S), 91);
@@ -385,14 +385,14 @@ fn reader_attr_read_sees_value_written_at_expected_mem_offset() {
     let slot = store.insert().unwrap();
     assert_eq!(slot, 2);
 
-    store.attr_write(slot, 5, 7777);
+    store.get(slot).attr_write(5, 7777);
 
     let attr_base = DEFAULT_MEM_START_OFFSET + SlotAllocator::calculate_size_on_mem(CAP);
     let expected_abs = attr_base + (slot - 1) * A + 5;
 
     let reader = store.to_reader();
     // Reader API resolves slot -> field-5.
-    assert_eq!(reader.attr_read(slot, 5), 7777);
+    assert_eq!(reader.get(slot).attr_read(5), 7777);
     // Raw mem at the externally-computed absolute offset must agree.
     assert_eq!(mem[expected_abs].load(Ordering::Relaxed), 7777);
 }
@@ -416,16 +416,16 @@ fn reader_attr_reads_distinct_slots_at_distinct_mem_offsets() {
     let s3 = store.insert().unwrap();
     assert_eq!((s1, s2, s3), (1, 2, 3));
 
-    store.attr_write(s1, 0, 501);
-    store.attr_write(s2, 0, 502);
-    store.attr_write(s3, 0, 503);
+    store.get(s1).attr_write(0, 501);
+    store.get(s2).attr_write(0, 502);
+    store.get(s3).attr_write(0, 503);
 
     let attr_base = DEFAULT_MEM_START_OFFSET + SlotAllocator::calculate_size_on_mem(CAP);
     let reader = store.to_reader();
 
-    assert_eq!(reader.attr_read(s1, 0), 501);
-    assert_eq!(reader.attr_read(s2, 0), 502);
-    assert_eq!(reader.attr_read(s3, 0), 503);
+    assert_eq!(reader.get(s1).attr_read(0), 501);
+    assert_eq!(reader.get(s2).attr_read(0), 502);
+    assert_eq!(reader.get(s3).attr_read(0), 503);
 
     // Raw mem at externally-computed absolute offsets must agree slot-for-slot.
     assert_eq!(mem[attr_base + 0 * A].load(Ordering::Relaxed), 501);
@@ -532,20 +532,20 @@ fn core_meta_writer_reader_roundtrip_after_publish_swap() {
     let s = store.insert().unwrap();
     let core: [i32; C] = [11, 22, 33, 44];
     let meta: [i32; M] = [-11, -22, -33, -44];
-    store.core_write_all(s, core);
-    store.meta_write_all(s, meta);
+    store.get(s).core_write_all(core);
+    store.get(s).meta_write_all(meta);
 
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
-    assert_eq!(reader.core_read_all(s), core);
-    assert_eq!(reader.meta_read_all(s), meta);
+    assert_eq!(reader.get(s).core_read_all(), core);
+    assert_eq!(reader.get(s).meta_read_all(), meta);
     for i in 0..C {
-        assert_eq!(reader.core_read(s, i), core[i]);
+        assert_eq!(reader.get(s).core_read(i), core[i]);
     }
     for j in 0..M {
-        assert_eq!(reader.meta_read(s, j), meta[j]);
+        assert_eq!(reader.get(s).meta_read(j), meta[j]);
     }
 }
 
@@ -555,17 +555,17 @@ fn core_meta_roundtrip_with_1_1_edge_case() {
     let tb_reader = tb.to_reader();
 
     let s = store.insert().unwrap();
-    store.core_write(s, 0, 7);
-    store.meta_write(s, 0, -9);
+    store.get(s).core_write(0, 7);
+    store.get(s).meta_write(0, -9);
 
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
-    assert_eq!(reader.core_read(s, 0), 7);
-    assert_eq!(reader.meta_read(s, 0), -9);
-    assert_eq!(reader.core_read_all(s), [7]);
-    assert_eq!(reader.meta_read_all(s), [-9]);
+    assert_eq!(reader.get(s).core_read(0), 7);
+    assert_eq!(reader.get(s).meta_read(0), -9);
+    assert_eq!(reader.get(s).core_read_all(), [7]);
+    assert_eq!(reader.get(s).meta_read_all(), [-9]);
 }
 
 #[test]
@@ -593,19 +593,19 @@ fn core_meta_roundtrip_with_large_strides() {
         m1[j] = (j as i32) + 1000;
         m2[j] = -(j as i32) - 2000;
     }
-    store.core_write_all(s1, c1);
-    store.meta_write_all(s1, m1);
-    store.core_write_all(s2, c2);
-    store.meta_write_all(s2, m2);
+    store.get(s1).core_write_all(c1);
+    store.get(s1).meta_write_all(m1);
+    store.get(s2).core_write_all(c2);
+    store.get(s2).meta_write_all(m2);
 
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
-    assert_eq!(reader.core_read_all(s1), c1);
-    assert_eq!(reader.meta_read_all(s1), m1);
-    assert_eq!(reader.core_read_all(s2), c2);
-    assert_eq!(reader.meta_read_all(s2), m2);
+    assert_eq!(reader.get(s1).core_read_all(), c1);
+    assert_eq!(reader.get(s1).meta_read_all(), m1);
+    assert_eq!(reader.get(s2).core_read_all(), c2);
+    assert_eq!(reader.get(s2).meta_read_all(), m2);
 }
 
 // ---- Layout verification via raw TripleBufferReader ----
@@ -622,12 +622,12 @@ fn reader_core_meta_sees_tb_at_expected_interleaved_offsets() {
     let s3 = store.insert().unwrap();
     assert_eq!((s1, s2, s3), (1, 2, 3));
 
-    store.core_write_all(s1, [1, 2, 3, 4]);
-    store.meta_write_all(s1, [5, 6, 7, 8]);
-    store.core_write_all(s2, [9, 10, 11, 12]);
-    store.meta_write_all(s2, [13, 14, 15, 16]);
-    store.core_write_all(s3, [17, 18, 19, 20]);
-    store.meta_write_all(s3, [21, 22, 23, 24]);
+    store.get(s1).core_write_all([1, 2, 3, 4]);
+    store.get(s1).meta_write_all([5, 6, 7, 8]);
+    store.get(s2).core_write_all([9, 10, 11, 12]);
+    store.get(s2).meta_write_all([13, 14, 15, 16]);
+    store.get(s3).core_write_all([17, 18, 19, 20]);
+    store.get(s3).meta_write_all([21, 22, 23, 24]);
 
     tb.publish();
     assert!(tb_reader.swap());
@@ -643,8 +643,8 @@ fn reader_core_meta_sees_tb_at_expected_interleaved_offsets() {
     .enumerate()
     {
         let slot = k + 1;
-        assert_eq!(reader.core_read_all(slot), *core_exp, "reader core slot {}", slot);
-        assert_eq!(reader.meta_read_all(slot), *meta_exp, "reader meta slot {}", slot);
+        assert_eq!(reader.get(slot).core_read_all(), *core_exp, "reader core slot {}", slot);
+        assert_eq!(reader.get(slot).meta_read_all(), *meta_exp, "reader meta slot {}", slot);
 
         // Raw TripleBufferReader at externally-computed absolute offsets.
         let start = k * (C + M); // tb_start_offset = 0
@@ -669,17 +669,17 @@ fn reader_core_meta_distinct_slots_do_not_overlap() {
     assert_eq!((s1, s2), (1, 2));
 
     // Write only slot 1. Slot 2's core+meta zone must remain zero.
-    store.core_write_all(s1, [0xAA_AA_AA_AAu32 as i32; C]);
-    store.meta_write_all(s1, [0xBB_BB_BB_BBu32 as i32; M]);
+    store.get(s1).core_write_all([0xAA_AA_AA_AAu32 as i32; C]);
+    store.get(s1).meta_write_all([0xBB_BB_BB_BBu32 as i32; M]);
 
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
-    assert_eq!(reader.core_read_all(s1), [0xAA_AA_AA_AAu32 as i32; C]);
-    assert_eq!(reader.meta_read_all(s1), [0xBB_BB_BB_BBu32 as i32; M]);
-    assert_eq!(reader.core_read_all(s2), [0; C]);
-    assert_eq!(reader.meta_read_all(s2), [0; M]);
+    assert_eq!(reader.get(s1).core_read_all(), [0xAA_AA_AA_AAu32 as i32; C]);
+    assert_eq!(reader.get(s1).meta_read_all(), [0xBB_BB_BB_BBu32 as i32; M]);
+    assert_eq!(reader.get(s2).core_read_all(), [0; C]);
+    assert_eq!(reader.get(s2).meta_read_all(), [0; M]);
 }
 
 // ---- Bounds panics for META on reader side ----
@@ -700,5 +700,5 @@ fn reader_meta_read_at_stride_panics() {
 
     let reader = store.to_reader();
     // One past the last valid meta offset.
-    let _ = reader.meta_read(1, M);
+    let _ = reader.get(1).meta_read(M);
 }

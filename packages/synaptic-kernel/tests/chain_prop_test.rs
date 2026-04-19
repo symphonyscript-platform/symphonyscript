@@ -6,6 +6,7 @@ use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
 
 const NODE_META: usize = 8;
+const NODE_ATTR: usize = 16;
 const MEM_SIZE: usize = 65536;
 const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 16384;
@@ -21,10 +22,10 @@ fn create_mem(size: usize) -> AtomicBuffer {
     Arc::new(vec)
 }
 
-fn setup_chain() -> NodeChainWriter<NODE_META> {
+fn setup_chain() -> NodeChainWriter<NODE_META, NODE_ATTR> {
     let mem = create_mem(MEM_SIZE);
     let writer = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
-    NodeChainWriter::<NODE_META>::new(
+    NodeChainWriter::<NODE_META, NODE_ATTR>::new(
         mem,
         writer,
         FL_START,
@@ -55,7 +56,7 @@ fn chain_op_strategy() -> impl Strategy<Value = ChainOp> {
 /// - Forward traversal from head visits every active node exactly once
 /// - Backward links are consistent (node.next.prev == node)
 /// - Head's prev == 0, tail's next == 0
-fn verify_chain_integrity(chain: &NodeChainWriter<NODE_META>, active_slots: &[usize]) {
+fn verify_chain_integrity(chain: &NodeChainWriter<NODE_META, NODE_ATTR>, active_slots: &[usize]) {
     if active_slots.is_empty() {
         assert!(chain.get_head_node().is_none(), "empty active set but chain has head");
         return;

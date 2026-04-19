@@ -1,15 +1,12 @@
+use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
-use synaptic_kernel::epoch::Epoch;
-
-use std::sync::atomic::AtomicI32;
-use std::sync::Arc;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type Gw = Epoch<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
 fn config() -> KernelConfig {
     KernelConfig {
@@ -20,11 +17,8 @@ fn config() -> KernelConfig {
     }
 }
 
-fn create_writer() -> Gw {
-    let cfg = config();
-    let size = Gw::calculate_size_on_mem(&cfg);
-    let mem: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
-    Gw::new(Arc::new(mem), cfg)
+fn create_writer() -> TestKernel {
+    TestKernel::new(config())
 }
 
 // ============ Cascade removal: remove_node auto-disconnects synapses ============
@@ -32,8 +26,8 @@ fn create_writer() -> Gw {
 #[test]
 fn remove_node_with_single_outgoing_synapse() {
     let kernel = create_writer();
-    let a = kernel.insert_head(1).unwrap();
-    let b = kernel.insert_head(2).unwrap();
+    let a = kernel.insert_head_node(1).unwrap();
+    let b = kernel.insert_head_node(2).unwrap();
     let _syn = kernel.connect(a, b, 10).unwrap();
 
     // Remove source node — synapse must be auto-disconnected
@@ -48,8 +42,8 @@ fn remove_node_with_single_outgoing_synapse() {
 #[test]
 fn remove_node_with_single_incoming_synapse() {
     let kernel = create_writer();
-    let a = kernel.insert_head(1).unwrap();
-    let b = kernel.insert_head(2).unwrap();
+    let a = kernel.insert_head_node(1).unwrap();
+    let b = kernel.insert_head_node(2).unwrap();
     let _syn = kernel.connect(a, b, 10).unwrap();
 
     // Remove target node — synapse must be auto-disconnected
@@ -64,10 +58,10 @@ fn remove_node_with_single_incoming_synapse() {
 #[test]
 fn remove_node_with_multiple_outgoing_synapses() {
     let kernel = create_writer();
-    let hub = kernel.insert_head(1).unwrap();
-    let b = kernel.insert_head(2).unwrap();
-    let c = kernel.insert_head(3).unwrap();
-    let d = kernel.insert_head(4).unwrap();
+    let hub = kernel.insert_head_node(1).unwrap();
+    let b = kernel.insert_head_node(2).unwrap();
+    let c = kernel.insert_head_node(3).unwrap();
+    let d = kernel.insert_head_node(4).unwrap();
 
     kernel.connect(hub, b, 10).unwrap();
     kernel.connect(hub, c, 20).unwrap();
@@ -92,10 +86,10 @@ fn remove_node_with_multiple_outgoing_synapses() {
 #[test]
 fn remove_node_with_multiple_incoming_synapses() {
     let kernel = create_writer();
-    let target = kernel.insert_head(1).unwrap();
-    let a = kernel.insert_head(2).unwrap();
-    let b = kernel.insert_head(3).unwrap();
-    let c = kernel.insert_head(4).unwrap();
+    let target = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_head_node(2).unwrap();
+    let b = kernel.insert_head_node(3).unwrap();
+    let c = kernel.insert_head_node(4).unwrap();
 
     kernel.connect(a, target, 10).unwrap();
     kernel.connect(b, target, 20).unwrap();
@@ -120,9 +114,9 @@ fn remove_node_with_multiple_incoming_synapses() {
 #[test]
 fn remove_node_with_both_outgoing_and_incoming_synapses() {
     let kernel = create_writer();
-    let target = kernel.insert_head(1).unwrap();
-    let upstream = kernel.insert_head(2).unwrap();
-    let downstream = kernel.insert_head(3).unwrap();
+    let target = kernel.insert_head_node(1).unwrap();
+    let upstream = kernel.insert_head_node(2).unwrap();
+    let downstream = kernel.insert_head_node(3).unwrap();
 
     // upstream -> target -> downstream
     kernel.connect(upstream, target, 10).unwrap();
@@ -144,7 +138,7 @@ fn remove_node_with_both_outgoing_and_incoming_synapses() {
 #[test]
 fn remove_node_with_self_loop() {
     let kernel = create_writer();
-    let n = kernel.insert_head(1).unwrap();
+    let n = kernel.insert_head_node(1).unwrap();
     kernel.connect(n, n, 99).unwrap();
 
     // Self-loop: node is both source and target
@@ -158,7 +152,7 @@ fn remove_node_with_self_loop() {
 #[test]
 fn remove_node_with_multiple_self_loops() {
     let kernel = create_writer();
-    let n = kernel.insert_head(1).unwrap();
+    let n = kernel.insert_head_node(1).unwrap();
     kernel.connect(n, n, 10).unwrap();
     kernel.connect(n, n, 20).unwrap();
     kernel.connect(n, n, 30).unwrap();
@@ -170,10 +164,10 @@ fn remove_node_with_multiple_self_loops() {
 #[test]
 fn remove_node_preserves_unrelated_synapses() {
     let kernel = create_writer();
-    let a = kernel.insert_head(1).unwrap();
-    let b = kernel.insert_head(2).unwrap();
-    let c = kernel.insert_head(3).unwrap();
-    let d = kernel.insert_head(4).unwrap();
+    let a = kernel.insert_head_node(1).unwrap();
+    let b = kernel.insert_head_node(2).unwrap();
+    let c = kernel.insert_head_node(3).unwrap();
+    let d = kernel.insert_head_node(4).unwrap();
 
     // a -> b (will be removed via cascade)
     kernel.connect(a, b, 10).unwrap();
@@ -200,11 +194,11 @@ fn remove_node_preserves_unrelated_synapses() {
 #[test]
 fn remove_hub_node_in_star_topology() {
     let kernel = create_writer();
-    let hub = kernel.insert_head(0).unwrap();
+    let hub = kernel.insert_head_node(0).unwrap();
 
     let mut spokes = Vec::new();
     for i in 1..=6 {
-        let s = kernel.insert_head(i).unwrap();
+        let s = kernel.insert_head_node(i).unwrap();
         spokes.push(s);
     }
 
@@ -234,9 +228,9 @@ fn remove_hub_node_in_star_topology() {
 #[test]
 fn remove_middle_node_in_linear_chain_with_synapses() {
     let kernel = create_writer();
-    let a = kernel.insert_head(1).unwrap();
-    let b = kernel.insert_after(a, 2).unwrap();
-    let c = kernel.insert_after(b, 3).unwrap();
+    let a = kernel.insert_head_node(1).unwrap();
+    let b = kernel.insert_node_after(a, 2).unwrap();
+    let c = kernel.insert_node_after(b, 3).unwrap();
 
     // a -> b -> c (synapse chain)
     kernel.connect(a, b, 10).unwrap();
@@ -261,8 +255,8 @@ fn remove_middle_node_in_linear_chain_with_synapses() {
 #[test]
 fn remove_node_without_synapses_still_works() {
     let kernel = create_writer();
-    let a = kernel.insert_head(1).unwrap();
-    let b = kernel.insert_head(2).unwrap();
+    let a = kernel.insert_head_node(1).unwrap();
+    let b = kernel.insert_head_node(2).unwrap();
 
     kernel.remove_node(a).unwrap();
 
@@ -276,20 +270,20 @@ fn remove_node_without_synapses_still_works() {
 #[test]
 fn cascade_frees_synapse_slots_for_reuse() {
     let kernel = create_writer();
-    let a = kernel.insert_head(1).unwrap();
-    let b = kernel.insert_head(2).unwrap();
+    let a = kernel.insert_head_node(1).unwrap();
+    let b = kernel.insert_head_node(2).unwrap();
 
     // Fill synapse capacity
     let mut synapses = Vec::new();
     for i in 0..32 {
-        if let Some(s) = kernel.connect(a, b, i) {
+        if let Ok(s) = kernel.connect(a, b, i) {
             synapses.push(s);
         }
     }
     assert_eq!(synapses.len(), 32, "should have allocated all 32 synapse slots");
 
     // Can't connect any more
-    assert!(kernel.connect(a, b, 999).is_none(), "should be at capacity");
+    assert!(kernel.connect(a, b, 999).is_err(), "should be at capacity");
 
     // Remove a — cascades all 32 synapses
     kernel.remove_node(a).unwrap();

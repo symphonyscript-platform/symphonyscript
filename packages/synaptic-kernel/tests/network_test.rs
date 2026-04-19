@@ -1,13 +1,13 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::constants::NODE_STRIDE;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
-use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
 use synaptic_kernel::topology::network::network_writer::NetworkWriter;
 
 const NODE_META: usize = 8;
+const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
+const SYNAPSE_ATTR: usize = 16;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
@@ -23,37 +23,36 @@ const TB_BUF_CAP: usize = 16384;
 const NODE_CAPACITY: usize = 16;
 const SYNAPSE_CAPACITY: usize = 32;
 const NODE_START_OFFSET: usize = 0;
-const SYNAPSE_START_OFFSET: usize = 1 + NODE_CAPACITY * (NODE_STRIDE + NODE_META);
 const NODE_FL_START: usize = 50000;
-const SYNAPSE_FL_START: usize = 51000;
+
+type TestNetwork = NetworkWriter<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
 struct TestHarness {
     _mem: AtomicBuffer,
     writer: synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter,
     reader: synaptic_kernel::primitives::triple_buffer_reader::TripleBufferReader,
-    node_chain: NodeChainWriter<NODE_META>,
-    synapse_chain: NetworkWriter<NODE_META, SYNAPSE_META>,
+    /// `node_chain` and `synapse_chain` are clones of the same underlying
+    /// `NetworkWriter`. The two names preserve the original test vocabulary
+    /// (which split node and synapse operations across two handles) while the
+    /// current source exposes both through the unified `NetworkWriter` facade.
+    node_chain: TestNetwork,
+    synapse_chain: TestNetwork,
 }
 
 fn setup() -> TestHarness {
     let mem = create_mem(MEM_SIZE);
     let writer = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
     let reader = writer.to_reader();
-    let node_chain = NodeChainWriter::<NODE_META>::new(
+    let network = NetworkWriter::<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>::new(
         Arc::clone(&mem),
         writer.clone(),
         NODE_FL_START,
         NODE_START_OFFSET,
         NODE_CAPACITY,
-    );
-    let synapse_chain = NetworkWriter::<NODE_META, SYNAPSE_META>::new(
-        Arc::clone(&mem),
-        writer.clone(),
-        node_chain.clone(),
-        SYNAPSE_FL_START,
-        SYNAPSE_START_OFFSET,
         SYNAPSE_CAPACITY,
     );
+    let node_chain = network.clone();
+    let synapse_chain = network;
     TestHarness {
         _mem: mem,
         writer,
@@ -371,10 +370,11 @@ fn full_connect_disconnect_reconnect_cycle() {
     assert_eq!(node_chain.get_node(tgt).get_incoming_synapse_head(), 0);
 
     synapse_chain.publish();
-    
-    // Explicitly acknowledge the publish to free the disconnected synapse
-    synapse_chain.to_staging_buffer_reader().ack();
-    
+
+    // Explicitly acknowledge the publish via the paired reader so the
+    // generation-gated deferred-free queue advances on the next publish.
+    synapse_chain.to_reader().ack_generation();
+
     synapse_chain.publish();
 
     // reconnect (slot should be reused)
@@ -790,39 +790,32 @@ fn copy_from_preserves_topology_and_deep_data() {
 
     let dst_mem = create_mem(MEM_SIZE);
     let dst_tb = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
-    let dst_node_chain = NodeChainWriter::<NODE_META>::new(
+    let dst_synapse_chain = NetworkWriter::<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>::new(
         Arc::clone(&dst_mem),
-        dst_tb.clone(),
+        dst_tb,
         NODE_FL_START,
         NODE_START_OFFSET,
         NODE_CAPACITY,
-    );
-    let dst_synapse_chain = NetworkWriter::<NODE_META, SYNAPSE_META>::new(
-        Arc::clone(&dst_mem),
-        dst_tb,
-        dst_node_chain.clone(),
-        dst_node_chain.mem_end_offset(),
-        SYNAPSE_START_OFFSET,
         SYNAPSE_CAPACITY * 2,
     );
 
     dst_synapse_chain.copy_from(&src_h.synapse_chain);
 
-    assert_eq!(dst_synapse_chain.len(), 2);
+    assert_eq!(dst_synapse_chain.synapse_count(), 2);
 
     let syn = dst_synapse_chain.get_synapse(s1);
     assert_eq!(syn.get_kind(), 10);
 
     // Test deferred flush behavior on destination shrinks allocated slots natively
     dst_synapse_chain.publish();
-    
-    // Explicitly acknowledge the publish 
-    dst_synapse_chain.to_staging_buffer_reader().ack();
-    
+
+    // Explicitly acknowledge the publish
+    dst_synapse_chain.to_reader().ack_generation();
+
     dst_synapse_chain.publish();
 
-    assert_eq!(dst_synapse_chain.len(), 1);
-    assert_eq!(dst_synapse_chain.capacity(), SYNAPSE_CAPACITY * 2);
+    assert_eq!(dst_synapse_chain.synapse_count(), 1);
+    assert_eq!(dst_synapse_chain.synapse_capacity(), SYNAPSE_CAPACITY * 2);
 }
 
 #[test]
@@ -832,20 +825,13 @@ fn copy_from_panics_if_source_larger() {
 
     let dst_mem = create_mem(MEM_SIZE);
     let dst_tb = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
-    let dst_node_chain = NodeChainWriter::<NODE_META>::new(
-        Arc::clone(&dst_mem),
-        dst_tb.clone(),
+    // Create destination with half synapse capacity → copy_from must panic.
+    let dst_synapse_chain = NetworkWriter::<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>::new(
+        dst_mem,
+        dst_tb,
         NODE_FL_START,
         NODE_START_OFFSET,
         NODE_CAPACITY,
-    );
-    // Create destination with half capacity
-    let dst_synapse_chain = NetworkWriter::<NODE_META, SYNAPSE_META>::new(
-        dst_mem,
-        dst_tb,
-        dst_node_chain.clone(),
-        dst_node_chain.mem_end_offset(),
-        SYNAPSE_START_OFFSET,
         SYNAPSE_CAPACITY / 2,
     );
 
