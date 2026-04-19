@@ -25,7 +25,9 @@ fn create_writer() -> TestKernel {
 
 fn insert_head_with_tick(kernel: &TestKernel, kind: i32, tick: i32) -> usize {
     let slot = kernel.insert_head_node(kind).unwrap();
-    kernel.get_node(slot).attr_write(0, tick);
+    // Tick lives on the TB (meta) plane: `kind` via `insert_head_node`,
+    // `tick` via `set_meta`. Matches the original semantics.
+    kernel.get_node(slot).set_meta(0, tick);
     slot
 }
 
@@ -54,8 +56,9 @@ fn insert_head_writes_kind_and_tick() {
 
     let node = kernel.get_node(slot);
     assert_eq!(node.get_kind(), 5);
-    // `insert_head_with_tick` writes tick via `attr_write(0, ...)`; read to match.
-    assert_eq!(node.attr_read(0), 999);
+    // `insert_head_with_tick` writes tick via `set_meta(0, ...)` on the TB
+    // plane; read it back from the same plane.
+    assert_eq!(node.get_meta(0), 999);
 }
 
 #[test]

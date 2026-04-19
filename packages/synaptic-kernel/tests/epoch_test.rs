@@ -170,14 +170,14 @@ fn new_with_undersized_mem_debug_panics() {
 #[test]
 fn mirror_sees_inserted_node_after_publish_swap() {
     let config = mk_config(4, 4, 1, 1);
-    let kernel = TestKernel::new(config.clone());
-    let slot = kernel.insert_head_node(5).unwrap();
-    kernel.get_node(slot).attr_write(0, 4242);
-    kernel.get_node(slot).set_meta(0, 99);
+    let mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
+    let epoch = TestEpoch::new(mem, config, 0);
+    let slot = epoch.network.insert_head_node(5).unwrap();
+    epoch.network.get_node(slot).attr_write(0, 4242);
+    epoch.network.get_node(slot).set_meta(0, 99);
 
-    let bound = TestEpoch::bind(kernel.get_mem(), config, TestKernel::HEADERS_SIZE);
-    bound.publish();
-    let mirror = bound.to_mirror();
+    epoch.publish();
+    let mirror = epoch.to_mirror();
     assert!(mirror.swap());
 
     let head = mirror.get_head_node().unwrap();
@@ -189,16 +189,16 @@ fn mirror_sees_inserted_node_after_publish_swap() {
 #[test]
 fn mirror_sees_connected_synapse_after_publish_swap() {
     let config = mk_config(4, 4, 1, 1);
-    let kernel = TestKernel::new(config.clone());
-    let a = kernel.insert_head_node(1).unwrap();
-    let b = kernel.insert_head_node(2).unwrap();
-    let s = kernel.connect(a, b, 7).unwrap();
-    kernel.get_synapse(s).attr_write(0, 111);
-    kernel.get_synapse(s).set_meta(0, 222);
+    let mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
+    let epoch = TestEpoch::new(mem, config, 0);
+    let a = epoch.network.insert_head_node(1).unwrap();
+    let b = epoch.network.insert_head_node(2).unwrap();
+    let s = epoch.network.connect(a, b, 7).unwrap();
+    epoch.network.get_synapse(s).attr_write(0, 111);
+    epoch.network.get_synapse(s).set_meta(0, 222);
 
-    let bound = TestEpoch::bind(kernel.get_mem(), config, TestKernel::HEADERS_SIZE);
-    bound.publish();
-    let mirror = bound.to_mirror();
+    epoch.publish();
+    let mirror = epoch.to_mirror();
     assert!(mirror.swap());
 
     let syn = mirror.get_synapse(s);
@@ -214,27 +214,27 @@ fn mirror_sees_connected_synapse_after_publish_swap() {
 #[test]
 fn attr_is_visible_without_publish_but_meta_requires_publish() {
     let config = mk_config(4, 4, 1, 1);
-    let kernel = TestKernel::new(config.clone());
-    let slot = kernel.insert_head_node(1).unwrap();
+    let mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
+    let epoch = TestEpoch::new(mem, config, 0);
+    let slot = epoch.network.insert_head_node(1).unwrap();
 
-    let bound = TestEpoch::bind(kernel.get_mem(), config, TestKernel::HEADERS_SIZE);
-    bound.publish();
-    let mirror = bound.to_mirror();
+    epoch.publish();
+    let mirror = epoch.to_mirror();
     assert!(mirror.swap());
     // Baseline: node exists, default meta is 0.
     assert_eq!(mirror.get_node(slot).get_meta(0), 0);
 
     // attr lives on the MEM plane — direct visibility without publish.
-    kernel.get_node(slot).attr_write(0, 1234);
+    epoch.network.get_node(slot).attr_write(0, 1234);
     assert_eq!(mirror.get_node(slot).attr_read(0), 1234);
 
     // meta lives on the TB plane — writes go to the writer buffer only.
-    kernel.get_node(slot).set_meta(0, 777);
+    epoch.network.get_node(slot).set_meta(0, 777);
     // mirror still holds the previous published buffer → must NOT see it.
     assert_eq!(mirror.get_node(slot).get_meta(0), 0);
 
     // After publish + swap, mirror picks up the new buffer and sees meta.
-    bound.publish();
+    epoch.publish();
     assert!(mirror.swap());
     assert_eq!(mirror.get_node(slot).get_meta(0), 777);
 }
@@ -242,24 +242,24 @@ fn attr_is_visible_without_publish_but_meta_requires_publish() {
 #[test]
 fn synapse_attr_visible_without_publish_synapse_meta_requires_publish() {
     let config = mk_config(4, 4, 1, 1);
-    let kernel = TestKernel::new(config.clone());
-    let a = kernel.insert_head_node(1).unwrap();
-    let b = kernel.insert_head_node(2).unwrap();
-    let s = kernel.connect(a, b, 3).unwrap();
+    let mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
+    let epoch = TestEpoch::new(mem, config, 0);
+    let a = epoch.network.insert_head_node(1).unwrap();
+    let b = epoch.network.insert_head_node(2).unwrap();
+    let s = epoch.network.connect(a, b, 3).unwrap();
 
-    let bound = TestEpoch::bind(kernel.get_mem(), config, TestKernel::HEADERS_SIZE);
-    bound.publish();
-    let mirror = bound.to_mirror();
+    epoch.publish();
+    let mirror = epoch.to_mirror();
     assert!(mirror.swap());
     assert_eq!(mirror.get_synapse(s).get_meta(0), 0);
 
-    kernel.get_synapse(s).attr_write(0, 55);
+    epoch.network.get_synapse(s).attr_write(0, 55);
     assert_eq!(mirror.get_synapse(s).attr_read(0), 55);
 
-    kernel.get_synapse(s).set_meta(0, 66);
+    epoch.network.get_synapse(s).set_meta(0, 66);
     assert_eq!(mirror.get_synapse(s).get_meta(0), 0);
 
-    bound.publish();
+    epoch.publish();
     assert!(mirror.swap());
     assert_eq!(mirror.get_synapse(s).get_meta(0), 66);
 }
@@ -269,31 +269,30 @@ fn synapse_attr_visible_without_publish_synapse_meta_requires_publish() {
 #[test]
 fn copy_from_migrates_chain_synapses_and_metadata_to_larger() {
     let src_config = mk_config(4, 4, 1, 1);
-    let kernel = TestKernel::new(src_config.clone());
+    let src_mem = make_mem(TestEpoch::calculate_size_on_mem(&src_config));
+    let source = TestEpoch::new(src_mem, src_config, 0);
 
-    let n1 = kernel.insert_head_node(10).unwrap();
-    let n2 = kernel.insert_node_after(n1, 20).unwrap();
-    let n3 = kernel.insert_node_after(n2, 30).unwrap();
+    let n1 = source.network.insert_head_node(10).unwrap();
+    let n2 = source.network.insert_node_after(n1, 20).unwrap();
+    let n3 = source.network.insert_node_after(n2, 30).unwrap();
 
-    let s12 = kernel.connect(n1, n2, 40).unwrap();
-    let s23 = kernel.connect(n2, n3, 50).unwrap();
+    let s12 = source.network.connect(n1, n2, 40).unwrap();
+    let s23 = source.network.connect(n2, n3, 50).unwrap();
 
-    kernel.get_node(n1).attr_write(0, 1001);
-    kernel.get_node(n2).attr_write(0, 2002);
-    kernel.get_node(n3).attr_write(0, 3003);
-    kernel.get_node(n1).set_meta(0, 100);
-    kernel.get_node(n2).set_meta(0, 200);
-    kernel.get_node(n3).set_meta(0, 300);
+    source.network.get_node(n1).attr_write(0, 1001);
+    source.network.get_node(n2).attr_write(0, 2002);
+    source.network.get_node(n3).attr_write(0, 3003);
+    source.network.get_node(n1).set_meta(0, 100);
+    source.network.get_node(n2).set_meta(0, 200);
+    source.network.get_node(n3).set_meta(0, 300);
 
-    kernel.get_synapse(s12).attr_write(0, 4000);
-    kernel.get_synapse(s23).attr_write(0, 5000);
-    kernel.get_synapse(s12).set_meta(0, 400);
-    kernel.get_synapse(s23).set_meta(0, 500);
+    source.network.get_synapse(s12).attr_write(0, 4000);
+    source.network.get_synapse(s23).attr_write(0, 5000);
+    source.network.get_synapse(s12).set_meta(0, 400);
+    source.network.get_synapse(s23).set_meta(0, 500);
 
-    kernel.mem_write_meta(0, 9999);
-    kernel.tb_write_meta(0, 8888);
-
-    let source = TestEpoch::bind(kernel.get_mem(), src_config, TestKernel::HEADERS_SIZE);
+    source.mem_metadata.write(0, 9999);
+    source.tb_metadata.write(0, 8888);
 
     let dst_config = mk_config(8, 8, 1, 1);
     let dst_mem = make_mem(TestEpoch::calculate_size_on_mem(&dst_config));
@@ -346,12 +345,12 @@ fn copy_from_migrates_chain_synapses_and_metadata_to_larger() {
 #[test]
 fn copy_from_with_equal_capacities() {
     let config = mk_config(4, 4, 1, 1);
-    let kernel = TestKernel::new(config.clone());
-    let n = kernel.insert_head_node(1).unwrap();
-    kernel.get_node(n).attr_write(0, 42);
-    kernel.get_node(n).set_meta(0, 7);
+    let src_mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
+    let source = TestEpoch::new(src_mem, config.clone(), 0);
+    let n = source.network.insert_head_node(1).unwrap();
+    source.network.get_node(n).attr_write(0, 42);
+    source.network.get_node(n).set_meta(0, 7);
 
-    let source = TestEpoch::bind(kernel.get_mem(), config.clone(), TestKernel::HEADERS_SIZE);
     let dst_mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
     let dst = TestEpoch::new(dst_mem, config, 0);
 
@@ -372,18 +371,18 @@ fn copy_from_with_holes_preserves_chain_only() {
     // only the surviving chain, and arbitrary freed slot data must not
     // corrupt the chain traversal.
     let config = mk_config(8, 8, 1, 1);
-    let mut kernel = TestKernel::new(config.clone());
+    let src_mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
+    let source = TestEpoch::new(src_mem, config, 0);
 
-    let n1 = kernel.insert_head_node(1).unwrap();
-    let n2 = kernel.insert_node_after(n1, 2).unwrap();
-    let n3 = kernel.insert_node_after(n2, 3).unwrap();
-    let n4 = kernel.insert_node_after(n3, 4).unwrap();
+    let n1 = source.network.insert_head_node(1).unwrap();
+    let n2 = source.network.insert_node_after(n1, 2).unwrap();
+    let n3 = source.network.insert_node_after(n2, 3).unwrap();
+    let n4 = source.network.insert_node_after(n3, 4).unwrap();
 
-    kernel.remove_node(n2).unwrap();
-    kernel.remove_node(n3).unwrap();
-    kernel.publish(); // flush deferred frees through the generational gate
+    source.network.remove_node(n2).unwrap();
+    source.network.remove_node(n3).unwrap();
+    source.publish(); // flush deferred frees through the generational gate
 
-    let source = TestEpoch::bind(kernel.get_mem(), config, TestKernel::HEADERS_SIZE);
     let bigger = mk_config(16, 16, 1, 1);
     let dst_mem = make_mem(TestEpoch::calculate_size_on_mem(&bigger));
     let dst = TestEpoch::new(dst_mem, bigger, 0);
@@ -412,16 +411,16 @@ fn copy_from_with_holes_preserves_chain_only() {
 #[test]
 fn mirror_sees_latest_state_after_10_publish_cycles() {
     let config = mk_config(16, 16, 1, 1);
-    let kernel = TestKernel::new(config.clone());
+    let mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
+    let epoch = TestEpoch::new(mem, config, 0);
 
-    let bound = TestEpoch::bind(kernel.get_mem(), config, TestKernel::HEADERS_SIZE);
-    let mirror = bound.to_mirror();
+    let mirror = epoch.to_mirror();
 
     for i in 0..10 {
-        let slot = kernel.insert_head_node(i).unwrap();
-        kernel.get_node(slot).set_meta(0, 1000 + i as i32);
+        let slot = epoch.network.insert_head_node(i).unwrap();
+        epoch.network.get_node(slot).set_meta(0, 1000 + i as i32);
 
-        bound.publish();
+        epoch.publish();
         assert!(mirror.swap(), "cycle {}: swap must return true after publish", i);
 
         let head = mirror.get_head_node().unwrap();
@@ -433,22 +432,22 @@ fn mirror_sees_latest_state_after_10_publish_cycles() {
 #[test]
 fn mirror_without_swap_retains_prior_snapshot_across_publishes() {
     let config = mk_config(8, 8, 1, 1);
-    let kernel = TestKernel::new(config.clone());
+    let mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
+    let epoch = TestEpoch::new(mem, config, 0);
 
-    let bound = TestEpoch::bind(kernel.get_mem(), config, TestKernel::HEADERS_SIZE);
-    let mirror = bound.to_mirror();
+    let mirror = epoch.to_mirror();
 
-    let a = kernel.insert_head_node(1).unwrap();
-    kernel.get_node(a).set_meta(0, 11);
-    bound.publish();
+    let a = epoch.network.insert_head_node(1).unwrap();
+    epoch.network.get_node(a).set_meta(0, 11);
+    epoch.publish();
     assert!(mirror.swap());
     assert_eq!(mirror.get_head_node().unwrap().get_kind(), 1);
     assert_eq!(mirror.get_node(a).get_meta(0), 11);
 
     // Second cycle: mutate + publish but do NOT swap.
-    let _b = kernel.insert_head_node(2).unwrap();
-    kernel.get_node(a).set_meta(0, 22);
-    bound.publish();
+    let _b = epoch.network.insert_head_node(2).unwrap();
+    epoch.network.get_node(a).set_meta(0, 22);
+    epoch.publish();
 
     // Mirror still holds state from cycle 1.
     assert_eq!(mirror.get_head_node().unwrap().get_kind(), 1);
@@ -483,16 +482,15 @@ fn copy_from_panics_when_source_node_capacity_exceeds_destination() {
 fn epoch_works_with_zero_user_zones() {
     // Zero strides: no meta or attr slots for nodes/synapses.
     type EpochZero = Epoch<0, 0, 0, 0>;
-    type KernelZero = Kernel<0, 0, 0, 0>;
 
     let config = mk_config(4, 4, 1, 1);
-    let kernel = KernelZero::new(config.clone());
-    let slot = kernel.insert_head_node(7).unwrap();
+    let mem = make_mem(EpochZero::calculate_size_on_mem(&config));
+    let epoch = EpochZero::new(mem, config, 0);
+    let slot = epoch.network.insert_head_node(7).unwrap();
     assert!(slot > 0);
 
-    let bound = EpochZero::bind(kernel.get_mem(), config, KernelZero::HEADERS_SIZE);
-    bound.publish();
-    let mirror = bound.to_mirror();
+    epoch.publish();
+    let mirror = epoch.to_mirror();
     assert!(mirror.swap());
     assert_eq!(mirror.get_head_node().unwrap().get_kind(), 7);
 }
@@ -500,22 +498,21 @@ fn epoch_works_with_zero_user_zones() {
 #[test]
 fn epoch_works_with_minimal_strides() {
     type EpochMin = Epoch<1, 1, 1, 1>;
-    type KernelMin = Kernel<1, 1, 1, 1>;
 
     let config = mk_config(4, 4, 1, 1);
-    let kernel = KernelMin::new(config.clone());
-    let a = kernel.insert_head_node(3).unwrap();
-    let b = kernel.insert_head_node(4).unwrap();
-    let s = kernel.connect(a, b, 5).unwrap();
+    let mem = make_mem(EpochMin::calculate_size_on_mem(&config));
+    let epoch = EpochMin::new(mem, config, 0);
+    let a = epoch.network.insert_head_node(3).unwrap();
+    let b = epoch.network.insert_head_node(4).unwrap();
+    let s = epoch.network.connect(a, b, 5).unwrap();
 
-    kernel.get_node(a).attr_write(0, 99);
-    kernel.get_node(a).set_meta(0, 88);
-    kernel.get_synapse(s).attr_write(0, 77);
-    kernel.get_synapse(s).set_meta(0, 66);
+    epoch.network.get_node(a).attr_write(0, 99);
+    epoch.network.get_node(a).set_meta(0, 88);
+    epoch.network.get_synapse(s).attr_write(0, 77);
+    epoch.network.get_synapse(s).set_meta(0, 66);
 
-    let bound = EpochMin::bind(kernel.get_mem(), config, KernelMin::HEADERS_SIZE);
-    bound.publish();
-    let mirror = bound.to_mirror();
+    epoch.publish();
+    let mirror = epoch.to_mirror();
     assert!(mirror.swap());
 
     let head = mirror.get_head_node().unwrap();

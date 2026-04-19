@@ -35,11 +35,10 @@ fn setup() -> (TestKernel, &'static TestMirror) {
 
 fn insert_head_with_tick(kernel: &TestKernel, kind: i32, tick: i32) -> usize {
     let slot = kernel.insert_head_node(kind).unwrap();
-    // `set_meta` is gone from the public API (meta is structural TB-plane
-    // data, written only by topology operations). The original test used
-    // the meta slot as a sidecar tick. Tick now lives in the MEM-plane
-    // attribute slot, which is mutable post-insert.
-    kernel.get_node(slot).attr_write(0, tick);
+    // Tick is stored on the TB (meta) plane so the publish/swap boundary
+    // is what makes it visible to the reader. `kind` goes via
+    // `insert_head_node` (structural), `tick` via `set_meta` (meta zone).
+    kernel.get_node(slot).set_meta(0, tick);
     slot
 }
 
@@ -69,15 +68,24 @@ fn reader_does_not_see_unpublished_nodes() {
 fn reader_sees_nodes_after_publish_swap() {
     let (mut kernel, reader) = setup();
 
-    let _slot = insert_head_with_tick(&kernel, 5, 999);
+    let slot = insert_head_with_tick(&kernel, 5, 999);
+
+    // Before publish+swap: TB (meta) plane has not shifted into the reader's
+    // active buffer, so the freshly-written meta MUST NOT be visible yet.
+    // This is the whole contract of the triple-buffer publish boundary.
+    assert_ne!(
+        reader.get_node(slot).get_meta(0),
+        999,
+        "meta must not be visible before publish+swap",
+    );
+
     kernel.publish();
     reader.swap();
 
     let head = reader.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 5);
-    // `insert_head_with_tick` writes the tick via `attr_write(0, ...)` (MEM plane)
-    // because `set_meta` is no longer public. Read it back the same way.
-    assert_eq!(head.attr_read(0), 999);
+    // After publish+swap: the TB snapshot now exposes the meta write.
+    assert_eq!(head.get_meta(0), 999);
 }
 
 #[test]

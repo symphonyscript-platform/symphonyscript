@@ -530,12 +530,10 @@ fn topology_preserved_after_grow_and_serialize() {
 
     kernel.get_node(n1).attr_write(0, 1000);
     kernel.get_synapse(s1).attr_write(0, 2000);
-    // The original test also wrote a TB-plane meta value (`set_meta(0, 3000)`)
-    // here to verify both planes survived grow+serialize. Meta is no longer
-    // publicly writable (moved to internal topology operations), so we verify
-    // a second attribute offset instead to keep the "multiple attribute writes
-    // survive serialize" invariant.
-    kernel.get_node(n1).attr_write(15, 3000);
+    // Verify BOTH planes survive grow+serialize: attr (MEM plane, above) and
+    // meta (TB plane, below). Collapsing both to attr would leave the TB
+    // serialization path untested.
+    kernel.get_node(n1).set_meta(0, 3000);
 
     kernel.grow(config(16)).unwrap();
 
@@ -550,7 +548,7 @@ fn topology_preserved_after_grow_and_serialize() {
     assert_eq!(loaded.get_synapse(s1).get_kind(), 50);
     assert_eq!(loaded.get_node(n1).attr_read(0), 1000);
     assert_eq!(loaded.get_synapse(s1).attr_read(0), 2000);
-    assert_eq!(loaded.get_node(n1).attr_read(15), 3000);
+    assert_eq!(loaded.get_node(n1).get_meta(0), 3000);
 }
 
 #[test]
