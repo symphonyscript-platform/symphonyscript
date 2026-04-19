@@ -1,6 +1,6 @@
 use synaptic_kernel::kernel::Kernel;
-use synaptic_kernel::graph_consumer::GraphConsumer;
-use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
+use synaptic_kernel::epoch_consumer::EpochConsumer;
+use synaptic_kernel::kernel_config::KernelConfig;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
@@ -8,10 +8,10 @@ const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
 type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-type TestConsumer = GraphConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestConsumer = EpochConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
-fn config(capacity: usize) -> SynapticGraphConfig {
-    SynapticGraphConfig {
+fn config(capacity: usize) -> KernelConfig {
+    KernelConfig {
         node_capacity: capacity,
         synapse_capacity: capacity,
         mem_metadata_size: 1,
@@ -33,53 +33,53 @@ fn get_consumer(controller: &TestKernel) -> TestConsumer {
 
 
 
-// ============ acquire_graph basics ============
+// ============ acquire_mirror basics ============
 
 #[test]
-fn acquire_graph_returns_reader() {
+fn acquire_mirror_returns_reader() {
     let mut controller = setup(8);
     let mut consumer = get_consumer(&controller);
 
-    controller.insert_head(42).unwrap();
+    controller.insert_head_node(42).unwrap();
     controller.publish();
 
-    let graph = consumer.acquire_graph();
+    let graph = consumer.acquire_mirror();
     let head = graph.get_head_node();
     assert!(head.is_some());
     assert_eq!(head.unwrap().get_kind(), 42);
 }
 
 #[test]
-fn acquire_graph_sees_published_mutations() {
+fn acquire_mirror_sees_published_mutations() {
     let mut controller = setup(8);
     let mut consumer = get_consumer(&controller);
 
-    controller.insert_head(1).unwrap();
+    controller.insert_head_node(1).unwrap();
     controller.publish();
 
-    let graph = consumer.acquire_graph();
+    let graph = consumer.acquire_mirror();
     assert_eq!(graph.get_head_node().unwrap().get_kind(), 1);
 
     // Second mutation
-    controller.insert_head(2).unwrap();
+    controller.insert_head_node(2).unwrap();
     controller.publish();
 
-    let graph = consumer.acquire_graph();
+    let graph = consumer.acquire_mirror();
     assert_eq!(graph.get_head_node().unwrap().get_kind(), 2);
 }
 
 #[test]
-fn acquire_graph_does_not_see_unpublished_mutations() {
+fn acquire_mirror_does_not_see_unpublished_mutations() {
     let mut controller = setup(8);
     let mut consumer = get_consumer(&controller);
 
-    controller.insert_head(1).unwrap();
+    controller.insert_head_node(1).unwrap();
     controller.publish();
 
     // Insert but don't publish
-    controller.insert_head(2).unwrap();
+    controller.insert_head_node(2).unwrap();
 
-    let graph = consumer.acquire_graph();
+    let graph = consumer.acquire_mirror();
     // Should still see the old head — unpublished mutation not visible
     assert_eq!(graph.get_head_node().unwrap().get_kind(), 1);
 }
@@ -87,20 +87,20 @@ fn acquire_graph_does_not_see_unpublished_mutations() {
 // ============ Automatic ack enables epoch reclamation ============
 
 #[test]
-fn acquire_graph_acks_previous_generation_enabling_drain() {
+fn acquire_mirror_acks_previous_generation_enabling_drain() {
     let mut controller = setup(4);
     let mut consumer = get_consumer(&controller);
 
-    controller.insert_head(1).unwrap();
+    controller.insert_head_node(1).unwrap();
 
     // Grow creates a pending reader at generation 1
     controller.grow(config(8)).unwrap();
 
     // First acquire — acks previous (gen 0), which allows draining gen-0 readers
-    let _graph = consumer.acquire_graph();
+    let _graph = consumer.acquire_mirror();
 
     // Second acquire — acks gen 1, allowing gen-1 reader to drain
-    let _graph = consumer.acquire_graph();
+    let _graph = consumer.acquire_mirror();
 
     // Publish should now drain pending readers
     controller.publish();
@@ -115,7 +115,7 @@ fn multiple_grow_then_acquire_drains_all() {
     let mut controller = setup(4);
     let mut consumer = get_consumer(&controller);
 
-    controller.insert_head(1).unwrap();
+    controller.insert_head_node(1).unwrap();
 
     // 3 grows = 3 pending readers
     controller.grow(config(8)).unwrap();
@@ -123,15 +123,15 @@ fn multiple_grow_then_acquire_drains_all() {
     controller.grow(config(32)).unwrap();
 
     // Acquire acks the previous generation each time
-    let _graph = consumer.acquire_graph();
-    let _graph = consumer.acquire_graph();
+    let _graph = consumer.acquire_mirror();
+    let _graph = consumer.acquire_mirror();
 
     // Publish should drain pending readers up to acked generation
     controller.publish();
 
     // Verify system is clean and functional
     assert_eq!(controller.node_capacity(), 32);
-    controller.insert_head(2).unwrap();
+    controller.insert_head_node(2).unwrap();
     assert_eq!(controller.get_head_node().unwrap().get_kind(), 2);
 }
 
@@ -140,7 +140,7 @@ fn publish_does_not_drain_without_acquire() {
     let mut controller = setup(4);
     let  _consumer = get_consumer(&controller);
 
-    controller.insert_head(1).unwrap();
+    controller.insert_head_node(1).unwrap();
 
     // Grow creates a pending reader
     controller.grow(config(8)).unwrap();
@@ -162,14 +162,14 @@ fn full_traversal_nodes_and_synapses() {
     let mut controller = setup(16);
     let mut consumer = get_consumer(&controller);
 
-    let n1 = controller.insert_head(10).unwrap();
-    let n2 = controller.insert_after(n1, 20).unwrap();
-    let _n3 = controller.insert_after(n2, 30).unwrap();
+    let n1 = controller.insert_head_node(10).unwrap();
+    let n2 = controller.insert_node_after(n1, 20).unwrap();
+    let _n3 = controller.insert_node_after(n2, 30).unwrap();
     controller.connect(n1, n2, 99).unwrap();
     controller.set_node_attribute(n1, 0, 1000);
     controller.publish();
 
-    let graph = consumer.acquire_graph();
+    let graph = consumer.acquire_mirror();
 
     // Traverse nodes
     let mut kinds = vec![];
@@ -200,19 +200,19 @@ fn consumer_sees_new_graph_after_grow() {
     let mut controller = setup(4);
     let mut consumer = get_consumer(&controller);
 
-    controller.insert_head(1).unwrap();
+    controller.insert_head_node(1).unwrap();
     controller.publish();
 
     // First traversal on old graph
-    let graph = consumer.acquire_graph();
+    let graph = consumer.acquire_mirror();
     assert_eq!(graph.get_head_node().unwrap().get_kind(), 1);
 
     // Grow and add more data
     controller.grow(config(16)).unwrap();
-    controller.insert_head(2).unwrap();
+    controller.insert_head_node(2).unwrap();
     controller.publish();
 
     // Second traversal should see new graph with new data
-    let graph = consumer.acquire_graph();
+    let graph = consumer.acquire_mirror();
     assert_eq!(graph.get_head_node().unwrap().get_kind(), 2);
 }

@@ -84,6 +84,7 @@ impl TbMetadataWriter {
         }
     }
 
+    #[inline]
     pub fn calculate_size_on_tb(capacity: usize) -> usize {
         capacity
     }
@@ -96,18 +97,22 @@ impl TbMetadataWriter {
         )
     }
 
+    #[inline]
     pub fn tb_start_offset(&self) -> usize {
         self.tb_start_offset
     }
 
+    #[inline]
     pub fn tb_end_offset(&self) -> usize {
         self.tb_end_offset
     }
 
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.capacity
     }
 
+    #[inline]
     pub fn write(&self, offset: usize, value: i32) {
         debug_assert!(
             offset < self.capacity,
@@ -118,6 +123,7 @@ impl TbMetadataWriter {
             .write(self.tb_start_offset + offset, value);
     }
 
+    #[inline]
     pub fn read(&self, offset: usize) -> i32 {
         debug_assert!(
             offset < self.capacity,

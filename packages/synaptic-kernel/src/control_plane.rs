@@ -1,16 +1,16 @@
-use crate::synaptic_graph_reader::SynapticGraphReader;
+use crate::epoch_mirror::EpochMirror;
 use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 
 /// Lock-free control plane for initial delivery and later hot-swapping of
 /// the active graph.
 ///
-/// Owns the current `Box<SynapticGraphReader>` and provides atomic access to it.
-/// Acts as the sole source of truth indicating which `SynapticGraphReader` instance the
+/// Owns the current `Box<EpochMirror>` and provides atomic access to it.
+/// Acts as the sole source of truth indicating which `EpochMirror` instance the
 /// consumer thread should traverse. Orchestrates the safe delivery of the initial graph, as well
 /// as hot-swapping to new graph instances when the kernel reallocates due to `grow()`.
 ///
 /// # Mechanism
-/// The kernel initializes this with a `Box<SynapticGraphReader>` via `new()`.
+/// The kernel initializes this with a `Box<EpochMirror>` via `new()`.
 /// When `grow()` occurs, the kernel calls `swap_graph()` with the new reader.
 /// `swap_graph()` atomically swaps the internal pointer, advances the writer generation,
 /// and returns the old `(old_reader, deletion_gen)` - the old reader paired with its
@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 /// The kernel holds the pair in a deletion queue and frees it only once the consumer's
 /// acknowledged generation reaches the stamp.
 ///
-/// On the consumer side, `acquire_graph()` acknowledges the current generation **before**
+/// On the consumer side, `acquire_mirror()` acknowledges the current generation **before**
 /// loading the graph pointer, ensuring the consumer's ack never exceeds the generation
 /// of the graph it actually receives.
 ///
@@ -26,14 +26,14 @@ use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 /// Wait-free SPSC synchronization.
 /// - `swap_graph()`: `AcqRel` on the `AtomicPtr` swap; `Release` on the writer generation
 ///   increment (producer-only, follows the `swap()`).
-/// - `acquire_graph()`: `Release` on the ack store; `Acquire` on the `AtomicPtr` load.
+/// - `acquire_mirror()`: `Release` on the ack store; `Acquire` on the `AtomicPtr` load.
 ///   The internal writer generation read uses `Acquire` (synchronizes against producer's
 ///   `Release` in `swap_graph()`).
 /// - `get_reader_ack_generation()`: `Acquire` (synchronizes against
-///   consumer's `Release` in `acquire_graph()`).
+///   consumer's `Release` in `acquire_mirror()`).
 ///
 /// # Constraints
-/// - `acquire_graph()`: Consumer thread only.
+/// - `acquire_mirror()`: Consumer thread only.
 /// - `swap_graph()`: Producer thread only.
 /// - `get_reader_ack_generation()`: Producer thread only (Reads consumer's ack).
 #[repr(C)]
@@ -43,8 +43,8 @@ pub struct ControlPlane<
     const SYNAPSE_META_STRIDE: usize,
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > {
-    shared_graph_ptr: AtomicPtr<
-        SynapticGraphReader<
+    mirror_ptr: AtomicPtr<
+        EpochMirror<
             NODE_META_STRIDE,
             NODE_ATTRIBUTES_STRIDE,
             SYNAPSE_META_STRIDE,
@@ -60,11 +60,17 @@ impl<
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
-> ControlPlane<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>
+>
+    ControlPlane<
+        NODE_META_STRIDE,
+        NODE_ATTRIBUTES_STRIDE,
+        SYNAPSE_META_STRIDE,
+        SYNAPSE_ATTRIBUTES_STRIDE,
+    >
 {
     pub fn new(
-        synaptic_graph_reader: Box<
-            SynapticGraphReader<
+        mirror: Box<
+            EpochMirror<
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -73,15 +79,15 @@ impl<
         >,
     ) -> Self {
         ControlPlane {
-            shared_graph_ptr: AtomicPtr::new(Box::into_raw(synaptic_graph_reader)),
+            mirror_ptr: AtomicPtr::new(Box::into_raw(mirror)),
             writer_generation: AtomicI32::new(0),
             reader_ack_generation: AtomicI32::new(0),
         }
     }
 
-    pub(crate) fn acquire_graph(
+    pub(crate) fn acquire_mirror(
         &self,
-    ) -> &SynapticGraphReader<
+    ) -> &EpochMirror<
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,
@@ -89,7 +95,7 @@ impl<
     > {
         self.ack();
 
-        let graph_ptr = self.shared_graph_ptr.load(Ordering::Acquire);
+        let graph_ptr = self.mirror_ptr.load(Ordering::Acquire);
 
         // SAFETY: The pointer is always valid, because it's managed by Kernel's Box lifecycle
         // and generation-gated deferred deletion.
@@ -99,7 +105,7 @@ impl<
     pub fn swap_graph(
         &self,
         new_graph: Box<
-            SynapticGraphReader<
+            EpochMirror<
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -108,7 +114,7 @@ impl<
         >,
     ) -> (
         Box<
-            SynapticGraphReader<
+            EpochMirror<
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -118,7 +124,7 @@ impl<
         i32,
     ) {
         let new_graph_ptr = Box::into_raw(new_graph);
-        let old_graph_ptr = self.shared_graph_ptr.swap(new_graph_ptr, Ordering::AcqRel);
+        let old_graph_ptr = self.mirror_ptr.swap(new_graph_ptr, Ordering::AcqRel);
         let prev_gen = self.writer_generation.fetch_add(1, Ordering::Release);
 
         // SAFETY: old_graph_ptr was originally created by Box::into_raw() in a prior
@@ -158,7 +164,7 @@ impl<
         // swap_graph() or ControlPlane::new(). `&mut self` guarantees exclusive access.
         // No concurrent load is possible.
         unsafe {
-            drop(Box::from_raw(self.shared_graph_ptr.load(Ordering::Relaxed)));
+            drop(Box::from_raw(self.mirror_ptr.load(Ordering::Relaxed)));
         }
     }
 }

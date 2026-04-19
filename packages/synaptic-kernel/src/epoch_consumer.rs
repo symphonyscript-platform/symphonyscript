@@ -1,10 +1,10 @@
 use crate::control_plane::ControlPlane;
-use crate::synaptic_graph_reader::SynapticGraphReader;
+use crate::epoch_mirror::EpochMirror;
 use std::sync::Arc;
 
 /// Consumer-side entry point to the graph reader.
 ///
-/// Wraps a `ControlPlane` reference and provides `acquire_graph()`,
+/// Wraps a `ControlPlane` reference and provides `acquire_mirror()`,
 /// which combines graph acquisition with triple-buffer consumption into
 /// a single call.
 ///
@@ -12,7 +12,7 @@ use std::sync::Arc;
 /// Consumer thread only.
 ///
 /// # Usage
-/// Call `acquire_graph()` at the start of every processing cycle.
+/// Call `acquire_mirror()` at the start of every processing cycle.
 /// It:
 /// 1. Acquires the current `SynapticGraphReader` from the `ControlPlane` - while also
 ///    internally acknowledging the current generation before loading the pointer.
@@ -23,7 +23,7 @@ use std::sync::Arc;
 ///
 /// # Constraints
 /// - Created by passing `Arc<ControlPlane>` to `new()`.
-pub struct GraphConsumer<
+pub struct EpochConsumer<
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
@@ -44,7 +44,13 @@ impl<
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
-> GraphConsumer<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>
+>
+    EpochConsumer<
+        NODE_META_STRIDE,
+        NODE_ATTRIBUTES_STRIDE,
+        SYNAPSE_META_STRIDE,
+        SYNAPSE_ATTRIBUTES_STRIDE,
+    >
 {
     pub fn new(
         control_plane: Arc<
@@ -56,7 +62,7 @@ impl<
             >,
         >,
     ) -> Self {
-        GraphConsumer { control_plane }
+        EpochConsumer { control_plane }
     }
 
     /// Acquires the current graph for this processing cycle.
@@ -72,16 +78,16 @@ impl<
     ///
     /// # Usage
     /// Call once at the start of each processing cycle. The returned reference
-    /// is valid until the next `acquire_graph()` call.
-    pub fn acquire_graph(
+    /// is valid until the next `acquire_mirror()` call.
+    pub fn acquire_mirror(
         &mut self,
-    ) -> &SynapticGraphReader<
+    ) -> &EpochMirror<
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,
         SYNAPSE_ATTRIBUTES_STRIDE,
     > {
-        let graph = self.control_plane.acquire_graph();
+        let graph = self.control_plane.acquire_mirror();
 
         graph.swap();
 

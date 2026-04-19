@@ -1,15 +1,15 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use synaptic_kernel::control_plane::ControlPlane;
 use synaptic_kernel::kernel::Kernel;
-use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
+use synaptic_kernel::kernel_config::KernelConfig;
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
 type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-fn config(cap: usize) -> SynapticGraphConfig {
-    SynapticGraphConfig {
+fn config(cap: usize) -> KernelConfig {
+    KernelConfig {
         node_capacity: cap,
         synapse_capacity: cap,
         mem_metadata_size: 1,
@@ -17,7 +17,7 @@ fn config(cap: usize) -> SynapticGraphConfig {
     }
 }
 
-fn new_controller(cfg: SynapticGraphConfig) -> TestKernel {
+fn new_controller(cfg: KernelConfig) -> TestKernel {
     Kernel::new(cfg)
 }
 
@@ -29,7 +29,7 @@ fn bench_insert_head(c: &mut Criterion) {
             let mut controller = new_controller(config(iters as usize + 16));
             let start = std::time::Instant::now();
             for i in 0..iters {
-                controller.insert_head(black_box(i as i32)).unwrap();
+                controller.insert_head_node(black_box(i as i32)).unwrap();
             }
             start.elapsed()
         });
@@ -42,11 +42,11 @@ fn bench_insert_after(c: &mut Criterion) {
     c.bench_function("Kernel/insert_after", |b| {
         b.iter_custom(|iters| {
             let mut controller = new_controller(config(iters as usize + 16));
-            let anchor = controller.insert_head(0).unwrap();
+            let anchor = controller.insert_head_node(0).unwrap();
             let start = std::time::Instant::now();
             for i in 0..iters {
                 controller
-                    .insert_after(anchor, black_box(i as i32))
+                    .insert_node_after(anchor, black_box(i as i32))
                     .unwrap();
             }
             start.elapsed()
@@ -60,8 +60,8 @@ fn bench_connect_disconnect(c: &mut Criterion) {
     c.bench_function("Kernel/connect_disconnect_cycle", |b| {
         b.iter_custom(|iters| {
             let mut controller = new_controller(config(1024));
-            let n1 = controller.insert_head(1).unwrap();
-            let n2 = controller.insert_after(n1, 2).unwrap();
+            let n1 = controller.insert_head_node(1).unwrap();
+            let n2 = controller.insert_node_after(n1, 2).unwrap();
 
             let start = std::time::Instant::now();
             for i in 0..iters {
@@ -101,9 +101,9 @@ fn bench_publish_after_mutations(c: &mut Criterion) {
                     let mut total = std::time::Duration::ZERO;
                     for _ in 0..iters {
                         let mut controller = new_controller(config(n + 16));
-                        let head = controller.insert_head(0).unwrap();
+                        let head = controller.insert_head_node(0).unwrap();
                         for i in 1..n {
-                            controller.insert_after(head, i as i32).unwrap();
+                            controller.insert_node_after(head, i as i32).unwrap();
                         }
                         let start = std::time::Instant::now();
                         controller.publish();
@@ -127,8 +127,8 @@ fn bench_publish_swap_cycle(c: &mut Criterion) {
             let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
             // Seed data
-            let n1 = controller.insert_head(1).unwrap();
-            controller.insert_after(n1, 2).unwrap();
+            let n1 = controller.insert_head_node(1).unwrap();
+            controller.insert_node_after(n1, 2).unwrap();
             controller.publish();
 
             let start = std::time::Instant::now();
@@ -150,7 +150,7 @@ fn bench_publish_swap_cycle(c: &mut Criterion) {
 
 fn bench_set_node_attribute(c: &mut Criterion) {
     let mut controller = new_controller(config(16));
-    let n1 = controller.insert_head(1).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
 
     c.bench_function("Kernel/set_node_attribute", |b| {
         b.iter(|| {
@@ -163,7 +163,7 @@ fn bench_set_node_attribute(c: &mut Criterion) {
 
 fn bench_get_node_attribute(c: &mut Criterion) {
     let mut controller = new_controller(config(16));
-    let n1 = controller.insert_head(1).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
     controller.set_node_attribute(n1, 0, 42);
 
     c.bench_function("Kernel/get_node_attribute", |b| {
@@ -187,9 +187,9 @@ fn bench_consumer_traversal(c: &mut Criterion) {
                 let cp_addr = controller.get_control_plane() as *const _ as usize;
                 let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
-                let mut prev = controller.insert_head(0).unwrap();
+                let mut prev = controller.insert_head_node(0).unwrap();
                 for i in 1..size {
-                    prev = controller.insert_after(prev, i as i32).unwrap();
+                    prev = controller.insert_node_after(prev, i as i32).unwrap();
                 }
                 controller.publish();
 
@@ -259,10 +259,10 @@ fn bench_grow_loaded(c: &mut Criterion) {
                     let mut total = std::time::Duration::ZERO;
                     for _ in 0..iters {
                         let mut controller = new_controller(config(from_cap));
-                        let head = controller.insert_head(0).unwrap();
+                        let head = controller.insert_head_node(0).unwrap();
                         let mut prev = head;
                         for i in 1..fill_count {
-                            prev = controller.insert_after(prev, i as i32).unwrap();
+                            prev = controller.insert_node_after(prev, i as i32).unwrap();
                         }
                         // Connect some synapses from head to next
                         let next_slot = controller.get_node(head).get_next_ptr();
@@ -296,8 +296,8 @@ fn bench_grow_publish_swap(c: &mut Criterion) {
                 let cp_addr = controller.get_control_plane() as *const _ as usize;
                 let cp_ptr = cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
-                let n1 = controller.insert_head(1).unwrap();
-                controller.insert_after(n1, 2).unwrap();
+                let n1 = controller.insert_head_node(1).unwrap();
+                controller.insert_node_after(n1, 2).unwrap();
                 controller.publish();
 
                 let reader = unsafe {
@@ -340,7 +340,7 @@ fn bench_consecutive_grows(c: &mut Criterion) {
             let mut total = std::time::Duration::ZERO;
             for _ in 0..iters {
                 let mut controller = new_controller(config(16));
-                controller.insert_head(1).unwrap();
+                controller.insert_head_node(1).unwrap();
 
                 let start = std::time::Instant::now();
                 controller.grow(config(32)).unwrap();
@@ -369,8 +369,8 @@ fn bench_full_mutation_cycle(c: &mut Criterion) {
 
             let start = std::time::Instant::now();
             for i in 0..iters {
-                let n1 = controller.insert_head(i as i32).unwrap();
-                let n2 = controller.insert_head((i + 1000) as i32).unwrap();
+                let n1 = controller.insert_head_node(i as i32).unwrap();
+                let n2 = controller.insert_head_node((i + 1000) as i32).unwrap();
                 controller.connect(n1, n2, i as i32).unwrap();
                 controller.set_node_attribute(n1, 0, i as i32);
 

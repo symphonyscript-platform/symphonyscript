@@ -3,14 +3,14 @@ extern crate core;
 pub mod constants;
 pub mod control_plane;
 pub mod errors;
-pub mod graph_consumer;
+pub mod epoch_consumer;
 pub mod kernel;
 pub mod metadata;
 pub mod primitives;
 pub mod serialized_kernel;
-pub mod synaptic_graph_config;
-pub mod synaptic_graph_reader;
-pub mod synaptic_graph_writer;
+pub mod kernel_config;
+pub mod epoch_mirror;
+pub mod epoch;
 pub mod topology;
 pub mod wide_atomic;
 

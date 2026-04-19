@@ -25,19 +25,19 @@ use crate::primitives::entry_writer::EntryWriter;
 /// - All mutation methods (`set_*`) are `pub(crate)` - except meta setters.
 ///   Only the kernel can mutate active topology, enforcing structural graph invariants.
 pub struct SynapseWriter<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize> {
-    struct_writer: EntryWriter<'a, SYNAPSE_STRIDE, META_STRIDE, ATTR_STRIDE>,
+    entry_writer: EntryWriter<'a, SYNAPSE_STRIDE, META_STRIDE, ATTR_STRIDE>,
 }
 
 impl<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize>
     SynapseWriter<'a, META_STRIDE, ATTR_STRIDE>
 {
-    pub fn new(struct_writer: EntryWriter<'a, SYNAPSE_STRIDE, META_STRIDE, ATTR_STRIDE>) -> Self {
-        SynapseWriter { struct_writer }
+    pub fn new(entry_writer: EntryWriter<'a, SYNAPSE_STRIDE, META_STRIDE, ATTR_STRIDE>) -> Self {
+        SynapseWriter { entry_writer }
     }
 
     #[inline]
     pub fn get_kind(&self) -> i32 {
-        (self.struct_writer.core_read(0) as u32 >> 24) as i32
+        (self.entry_writer.core_read(0) as u32 >> 24) as i32
     }
 
     #[inline]
@@ -47,87 +47,87 @@ impl<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize>
             "SynapseWriter.set_kind | kind {} out of bounds [0, 256)",
             value
         );
-        let bitmask = self.struct_writer.core_read(0) & ((1 << 24) - 1);
-        self.struct_writer.core_write(0, bitmask | value << 24)
+        let bitmask = self.entry_writer.core_read(0) & ((1 << 24) - 1);
+        self.entry_writer.core_write(0, bitmask | value << 24)
     }
 
     #[inline]
     pub fn get_source_ptr(&self) -> usize {
-        self.struct_writer.core_read(1) as usize
+        self.entry_writer.core_read(1) as usize
     }
 
     #[inline]
     pub(crate) fn set_source_ptr(&self, value: usize) {
-        self.struct_writer.core_write(1, value as i32)
+        self.entry_writer.core_write(1, value as i32)
     }
 
     #[inline]
     pub fn get_target_ptr(&self) -> usize {
-        self.struct_writer.core_read(2) as usize
+        self.entry_writer.core_read(2) as usize
     }
 
     #[inline]
     pub(crate) fn set_target_ptr(&self, value: usize) {
-        self.struct_writer.core_write(2, value as i32)
+        self.entry_writer.core_write(2, value as i32)
     }
 
     #[inline]
     pub fn get_outgoing_next_ptr(&self) -> usize {
-        self.struct_writer.core_read(3) as usize
+        self.entry_writer.core_read(3) as usize
     }
 
     #[inline]
     pub(crate) fn set_outgoing_next_ptr(&self, value: usize) {
-        self.struct_writer.core_write(3, value as i32)
+        self.entry_writer.core_write(3, value as i32)
     }
 
     #[inline]
     pub fn get_outgoing_prev_ptr(&self) -> usize {
-        self.struct_writer.core_read(4) as usize
+        self.entry_writer.core_read(4) as usize
     }
 
     #[inline]
     pub(crate) fn set_outgoing_prev_ptr(&self, value: usize) {
-        self.struct_writer.core_write(4, value as i32)
+        self.entry_writer.core_write(4, value as i32)
     }
 
     #[inline]
     pub fn get_incoming_next_ptr(&self) -> usize {
-        self.struct_writer.core_read(5) as usize
+        self.entry_writer.core_read(5) as usize
     }
 
     #[inline]
     pub(crate) fn set_incoming_next_ptr(&self, value: usize) {
-        self.struct_writer.core_write(5, value as i32)
+        self.entry_writer.core_write(5, value as i32)
     }
 
     #[inline]
     pub fn get_incoming_prev_ptr(&self) -> usize {
-        self.struct_writer.core_read(6) as usize
+        self.entry_writer.core_read(6) as usize
     }
 
     #[inline]
     pub(crate) fn set_incoming_prev_ptr(&self, value: usize) {
-        self.struct_writer.core_write(6, value as i32)
+        self.entry_writer.core_write(6, value as i32)
     }
 
     #[inline]
     pub fn get_meta(&self, offset: usize) -> i32 {
-        self.struct_writer.meta_read(offset)
+        self.entry_writer.meta_read(offset)
     }
 
     #[inline]
     pub fn get_meta_all(&self) -> [i32; META_STRIDE] {
-        self.struct_writer.meta_read_all()
+        self.entry_writer.meta_read_all()
     }
 
     #[inline]
     pub fn set_meta(&self, offset: usize, value: i32) {
-        self.struct_writer.meta_write(offset, value)
+        self.entry_writer.meta_write(offset, value)
     }
 
     #[inline]
     pub fn set_meta_all(&self, data: [i32; META_STRIDE]) {
-        self.struct_writer.meta_write_all(data)
+        self.entry_writer.meta_write_all(data)
     }
 }

@@ -57,12 +57,12 @@ fn chain_op_strategy() -> impl Strategy<Value = ChainOp> {
 /// - Head's prev == 0, tail's next == 0
 fn verify_chain_integrity(chain: &NodeChainWriter<NODE_META>, active_slots: &[usize]) {
     if active_slots.is_empty() {
-        assert!(chain.get_head().is_none(), "empty active set but chain has head");
+        assert!(chain.get_head_node().is_none(), "empty active set but chain has head");
         return;
     }
 
     // get_head() must return a valid node
-    let head = chain.get_head();
+    let head = chain.get_head_node();
     assert!(head.is_some(), "non-empty active set but chain has no head");
     let head = head.unwrap();
 
@@ -133,14 +133,14 @@ fn verify_chain_integrity(chain: &NodeChainWriter<NODE_META>, active_slots: &[us
 fn insert_before_head_updates_head_pointer() {
     let chain = setup_chain();
 
-    let a = chain.insert_head(1).unwrap();
+    let a = chain.insert_head_node(1).unwrap();
     assert_eq!(chain.get_head_slot(), a);
 
-    let b = chain.insert_before(a, 2).unwrap();
+    let b = chain.insert_node_before(a, 2).unwrap();
 
     // Head pointer must now point to b
     assert_eq!(chain.get_head_slot(), b, "insert_before head must update head pointer");
-    assert_eq!(chain.get_head().unwrap().get_kind(), 2);
+    assert_eq!(chain.get_head_node().unwrap().get_kind(), 2);
 
     // Chain: b -> a
     assert_eq!(chain.get_node(b).get_prev_ptr(), 0, "new head's prev must be 0");
@@ -153,9 +153,9 @@ fn insert_before_head_updates_head_pointer() {
 fn insert_before_head_twice_builds_correct_chain() {
     let chain = setup_chain();
 
-    let a = chain.insert_head(1).unwrap();
-    let b = chain.insert_before(a, 2).unwrap();
-    let c = chain.insert_before(b, 3).unwrap();
+    let a = chain.insert_head_node(1).unwrap();
+    let b = chain.insert_node_before(a, 2).unwrap();
+    let c = chain.insert_node_before(b, 3).unwrap();
 
     // Chain: c -> b -> a
     assert_eq!(chain.get_head_slot(), c);
@@ -173,10 +173,10 @@ fn insert_before_head_twice_builds_correct_chain() {
 fn insert_before_head_then_insert_head_interleaved() {
     let chain = setup_chain();
 
-    let a = chain.insert_head(1).unwrap();
-    let b = chain.insert_before(a, 2).unwrap();
+    let a = chain.insert_head_node(1).unwrap();
+    let b = chain.insert_node_before(a, 2).unwrap();
     // chain: b -> a
-    let c = chain.insert_head(3).unwrap();
+    let c = chain.insert_head_node(3).unwrap();
     // chain: c -> b -> a
 
     assert_eq!(chain.get_head_slot(), c);
@@ -192,11 +192,11 @@ fn insert_before_head_then_insert_head_interleaved() {
 fn remove_node_inserted_before_head() {
     let chain = setup_chain();
 
-    let a = chain.insert_head(1).unwrap();
-    let b = chain.insert_before(a, 2).unwrap();
+    let a = chain.insert_head_node(1).unwrap();
+    let b = chain.insert_node_before(a, 2).unwrap();
     // chain: b -> a
 
-    chain.remove(b).unwrap();
+    chain.remove_node(b).unwrap();
     // chain: a (head should revert to a)
 
     assert_eq!(chain.get_head_slot(), a);
@@ -222,7 +222,7 @@ proptest! {
                 ChainOp::InsertHead => {
                     if active_slots.len() < CAPACITY {
                         kind_counter += 1;
-                        if let Some(slot) = chain.insert_head(kind_counter) {
+                        if let Some(slot) = chain.insert_head_node(kind_counter) {
                             active_slots.push(slot);
                         }
                     }
@@ -231,7 +231,7 @@ proptest! {
                     if !active_slots.is_empty() && active_slots.len() < CAPACITY {
                         let target = active_slots[idx % active_slots.len()];
                         kind_counter += 1;
-                        if let Some(slot) = chain.insert_after(target, kind_counter) {
+                        if let Some(slot) = chain.insert_node_after(target, kind_counter) {
                             active_slots.push(slot);
                         }
                     }
@@ -240,7 +240,7 @@ proptest! {
                     if !active_slots.is_empty() && active_slots.len() < CAPACITY {
                         let target = active_slots[idx % active_slots.len()];
                         kind_counter += 1;
-                        if let Some(slot) = chain.insert_before(target, kind_counter) {
+                        if let Some(slot) = chain.insert_node_before(target, kind_counter) {
                             active_slots.push(slot);
                         }
                     }
@@ -249,7 +249,7 @@ proptest! {
                     if !active_slots.is_empty() {
                         let actual_idx = idx % active_slots.len();
                         let slot = active_slots.remove(actual_idx);
-                        let _ = chain.remove(slot);
+                        let _ = chain.remove_node(slot);
                     }
                 }
             }
@@ -267,16 +267,16 @@ proptest! {
         let mut slots = Vec::new();
 
         for i in 0..count {
-            if let Some(s) = chain.insert_head(i as i32) {
+            if let Some(s) = chain.insert_head_node(i as i32) {
                 slots.push(s);
             }
         }
 
         // Remove all in random-ish order (reverse)
         while let Some(s) = slots.pop() {
-            let _ = chain.remove(s);
+            let _ = chain.remove_node(s);
         }
 
-        prop_assert!(chain.get_head().is_none(), "chain should be empty after removing all nodes");
+        prop_assert!(chain.get_head_node().is_none(), "chain should be empty after removing all nodes");
     }
 }

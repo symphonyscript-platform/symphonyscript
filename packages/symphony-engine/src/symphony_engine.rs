@@ -7,7 +7,7 @@ use synaptic_kernel::errors::kernel_error::KernelError;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::serialized_kernel::SerializedKernel;
-use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
+use synaptic_kernel::kernel_config::KernelConfig;
 
 pub type SymphonyEngineKernel =
     Kernel<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>;
@@ -19,13 +19,13 @@ pub struct SymphonyEngine {
 }
 
 impl SymphonyEngine {
-    pub fn new(config: SynapticGraphConfig) -> Self {
+    pub fn new(config: KernelConfig) -> Self {
         SymphonyEngine {
             kernel: SymphonyEngineKernel::new(config),
         }
     }
 
-    pub fn new_from_mem(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
+    pub fn new_from_mem(mem: AtomicBuffer, config: KernelConfig) -> Self {
         SymphonyEngine {
             kernel: SymphonyEngineKernel::new_from_mem(mem, config),
         }
@@ -93,7 +93,7 @@ impl SymphonyEngine {
         self.kernel.should_grow(target_resize_threshold)
     }
 
-    pub fn grow(&mut self, config: SynapticGraphConfig) -> Result<(), KernelError> {
+    pub fn grow(&mut self, config: KernelConfig) -> Result<(), KernelError> {
         self.kernel.grow(config)
     }
 

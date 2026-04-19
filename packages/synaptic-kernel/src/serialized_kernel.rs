@@ -1,7 +1,7 @@
-use crate::synaptic_graph_config::SynapticGraphConfig;
+use crate::kernel_config::KernelConfig;
 
 #[derive(Clone)]
 pub struct SerializedKernel {
-    pub config: SynapticGraphConfig,
+    pub config: KernelConfig,
     pub mem: Vec<i32>,
 }

@@ -11,7 +11,7 @@ use crate::synaptic_graph_reader::SynapticGraphReader;
 /// Consumer thread only.
 ///
 /// # Usage
-/// Call `acquire_graph()` at the start of every processing cycle.
+/// Call `acquire_mirror()` at the start of every processing cycle.
 /// It:
 /// 1. Retrieves the currently active graph pointer from the `ControlPlane`.
 /// 2. Calls `swap()` to apply any pending triple-buffer updates.
@@ -59,7 +59,7 @@ impl<
         }
     }
 
-    pub fn acquire_graph(
+    pub fn acquire_mirror(
         &mut self,
     ) -> &SynapticGraphReader<
         NODE_META_STRIDE,

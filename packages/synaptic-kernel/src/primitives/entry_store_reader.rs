@@ -1,7 +1,10 @@
 use crate::primitives::entry_reader::EntryReader;
+use crate::primitives::entry_view::EntryView;
 use crate::primitives::mem_zone_reader::MemZoneReader;
 use crate::primitives::slot_allocator::SlotAllocator;
+use crate::primitives::staging_buffer_reader::StagingBufferReader;
 use crate::primitives::tb_zone_reader::TbZoneReader;
+use crate::primitives::tb_zone_view::TbZoneView;
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::primitives::types::AtomicBuffer;
 
@@ -13,6 +16,7 @@ pub struct EntryStoreReader<
 > {
     mem: AtomicBuffer,
     tb: TripleBufferReader,
+    staging_buffer_reader: StagingBufferReader,
     mem_start_offset: usize,
     mem_attrs_start_offset: usize,
     mem_end_offset: usize,
@@ -26,6 +30,7 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
     pub fn bind(
         mem: AtomicBuffer,
         tb: TripleBufferReader,
+        staging_buffer_reader: StagingBufferReader,
         mem_start_offset: usize,
         mem_attrs_start_offset: usize,
         mem_end_offset: usize,
@@ -36,6 +41,7 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
         EntryStoreReader {
             mem,
             tb,
+            staging_buffer_reader,
             mem_start_offset,
             mem_attrs_start_offset,
             mem_end_offset,
@@ -95,9 +101,23 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
 
     #[inline]
     pub fn get(&'_ self, slot: usize) -> EntryReader<'_, CORE_STRIDE, META_STRIDE, ATTR_STRIDE> {
+        let tb_start_offset = self.get_entry_tb_base(slot);
+        let mem_start_offset = self.get_entry_mem_base(slot);
+
+        EntryReader::new(
+            TbZoneReader::new(&self.tb, tb_start_offset),
+            TbZoneReader::new(&self.tb, tb_start_offset + CORE_STRIDE),
+            MemZoneReader::new(&self.mem, mem_start_offset),
+        )
+    }
+
+    pub fn ack_generation(&self) {
+        self.staging_buffer_reader.ack()
+    }
+
+    fn get_entry_tb_base(&self, slot: usize) -> usize {
         let tb_start_offset = Self::calculate_struct_zone_base(self.tb_start_offset, slot);
         let tb_end_offset = tb_start_offset + CORE_STRIDE + META_STRIDE;
-        let mem_start_offset = Self::calculate_attr_zone_base(self.mem_attrs_start_offset, slot);
 
         debug_assert!(
             tb_end_offset <= self.tb.buffer_capacity(),
@@ -107,16 +127,18 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
             self.tb.buffer_capacity(),
         );
 
+        tb_start_offset
+    }
+
+    fn get_entry_mem_base(&self, slot: usize) -> usize {
+        let mem_start_offset = Self::calculate_attr_zone_base(self.mem_attrs_start_offset, slot);
+
         debug_assert!(
             mem_start_offset + ATTR_STRIDE <= self.mem_end_offset,
             "EntryStoreReader.get | slot {} out of bounds",
             slot,
         );
 
-        EntryReader::new(
-            TbZoneReader::new(&self.tb, tb_start_offset),
-            TbZoneReader::new(&self.tb, tb_start_offset + CORE_STRIDE),
-            MemZoneReader::new(&self.mem, mem_start_offset),
-        )
+        mem_start_offset
     }
 }

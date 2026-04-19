@@ -1,9 +1,11 @@
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::entry_store_reader::EntryStoreReader;
+use crate::primitives::entry_view::EntryView;
 use crate::primitives::entry_writer::EntryWriter;
+use crate::primitives::mem_zone_reader::MemZoneReader;
 use crate::primitives::mem_zone_writer::MemZoneWriter;
 use crate::primitives::slot_allocator::SlotAllocator;
-use crate::primitives::staging_buffer_reader::StagingBufferReader;
+use crate::primitives::tb_zone_view::TbZoneView;
 use crate::primitives::tb_zone_writer::TbZoneWriter;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
@@ -107,6 +109,7 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
         EntryStoreReader::<CORE_STRIDE, META_STRIDE, ATTR_STRIDE>::bind(
             Arc::clone(&self.mem),
             self.tb.to_reader(),
+            self.allocator.to_staging_buffer_reader(),
             self.mem_start_offset,
             self.mem_attrs_start_offset,
             self.mem_end_offset,
@@ -114,10 +117,6 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
             self.tb_end_offset,
             self.capacity,
         )
-    }
-
-    pub fn to_staging_buffer_reader(&self) -> StagingBufferReader {
-        self.allocator.to_staging_buffer_reader()
     }
 
     pub fn len(&self) -> usize {
@@ -164,28 +163,31 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
             slot
         );
 
-        let tb_start_offset = Self::calculate_struct_zone_base(self.tb_start_offset, slot);
-        let tb_end_offset = tb_start_offset + CORE_STRIDE + META_STRIDE;
-        let mem_start_offset = Self::calculate_attr_zone_base(self.mem_attrs_start_offset, slot);
-
-        debug_assert!(
-            tb_end_offset <= self.tb.buffer_capacity(),
-            "EntryStoreWriter.get | range [{}..{}] exceeds buffer capacity {}",
-            tb_start_offset,
-            CORE_STRIDE + META_STRIDE,
-            self.tb.buffer_capacity(),
-        );
-
-        debug_assert!(
-            mem_start_offset + ATTR_STRIDE <= self.mem_end_offset,
-            "EntryStoreWriter.get | slot {} out of bounds",
-            slot,
-        );
+        let tb_start_offset = self.get_entry_tb_base(slot);
+        let mem_start_offset = self.get_entry_mem_base(slot);
 
         EntryWriter::new(
             TbZoneWriter::new(&self.tb, tb_start_offset),
             TbZoneWriter::new(&self.tb, tb_start_offset + CORE_STRIDE),
             MemZoneWriter::new(&self.mem, mem_start_offset),
+        )
+    }
+
+    #[inline]
+    pub fn get_view(&'_ self, slot: usize) -> EntryView<'_, CORE_STRIDE, META_STRIDE, ATTR_STRIDE> {
+        debug_assert!(
+            self.allocator.is_active(slot),
+            "EntryStoreWriter.get | attempted to read inactive slot {}",
+            slot
+        );
+
+        let tb_start_offset = self.get_entry_tb_base(slot);
+        let mem_start_offset = self.get_entry_mem_base(slot);
+
+        EntryView::new(
+            TbZoneView::new(&self.tb, tb_start_offset),
+            TbZoneView::new(&self.tb, tb_start_offset + CORE_STRIDE),
+            MemZoneReader::new(&self.mem, mem_start_offset),
         )
     }
 
@@ -238,5 +240,32 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
                 Ordering::Relaxed,
             )
         }
+    }
+
+    fn get_entry_tb_base(&self, slot: usize) -> usize {
+        let tb_start_offset = Self::calculate_struct_zone_base(self.tb_start_offset, slot);
+        let tb_end_offset = tb_start_offset + CORE_STRIDE + META_STRIDE;
+
+        debug_assert!(
+            tb_end_offset <= self.tb.buffer_capacity(),
+            "EntryStoreWriter.get | range [{}..{}] exceeds buffer capacity {}",
+            tb_start_offset,
+            CORE_STRIDE + META_STRIDE,
+            self.tb.buffer_capacity(),
+        );
+
+        tb_start_offset
+    }
+
+    fn get_entry_mem_base(&self, slot: usize) -> usize {
+        let mem_start_offset = Self::calculate_attr_zone_base(self.mem_attrs_start_offset, slot);
+
+        debug_assert!(
+            mem_start_offset + ATTR_STRIDE <= self.mem_end_offset,
+            "EntryStoreWriter.get | slot {} out of bounds",
+            slot,
+        );
+
+        mem_start_offset
     }
 }

@@ -20,7 +20,7 @@ use crate::topology::node::node_reader::NodeReader;
 #[derive(Clone)]
 pub struct NodeChainReader<const META_STRIDE: usize, const ATTR_STRIDE: usize> {
     tb: TripleBufferReader,
-    es: EntryStoreReader<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>,
+    pub(crate) nodes: EntryStoreReader<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>,
     tb_head_offset: usize,
 }
 
@@ -32,7 +32,7 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainReader<META_ST
     ) -> Self {
         NodeChainReader {
             tb,
-            es,
+            nodes: es,
             tb_head_offset,
         }
     }
@@ -42,11 +42,11 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainReader<META_ST
     }
 
     pub fn tb_end_offset(&self) -> usize {
-        self.es.tb_end_offset()
+        self.nodes.tb_end_offset()
     }
 
     pub fn capacity(&self) -> usize {
-        self.es.capacity()
+        self.nodes.capacity()
     }
 
     #[inline]
@@ -55,7 +55,7 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainReader<META_ST
     }
 
     #[inline]
-    pub fn get_head(&'_ self) -> Option<NodeReader<'_, META_STRIDE>> {
+    pub fn get_head(&'_ self) -> Option<NodeReader<'_, META_STRIDE, ATTR_STRIDE>> {
         let head_slot = self.get_head_slot();
 
         if head_slot == 0 {
@@ -66,7 +66,12 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainReader<META_ST
     }
 
     #[inline]
-    pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_, META_STRIDE> {
-        NodeReader::new(self.es.get(slot))
+    pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_, META_STRIDE, ATTR_STRIDE> {
+        NodeReader::new(self.nodes.get(slot))
+    }
+
+    #[inline]
+    pub fn ack_generation(&'_ self) {
+        self.nodes.ack_generation()
     }
 }

@@ -77,6 +77,7 @@ impl MemMetadataWriter {
         }
     }
 
+    #[inline]
     pub fn calculate_size_on_mem(capacity: usize) -> usize {
         capacity
     }
@@ -85,18 +86,22 @@ impl MemMetadataWriter {
         MemMetadataReader::bind(Arc::clone(&self.mem), self.mem_start_offset, self.capacity)
     }
 
+    #[inline]
     pub fn mem_start_offset(&self) -> usize {
         self.mem_start_offset
     }
 
+    #[inline]
     pub fn mem_end_offset(&self) -> usize {
         self.mem_end_offset
     }
 
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.capacity
     }
 
+    #[inline]
     pub fn write(&self, offset: usize, value: i32) {
         debug_assert!(
             offset < self.capacity,
@@ -106,6 +111,7 @@ impl MemMetadataWriter {
         self.mem[self.mem_start_offset + offset].store(value, Ordering::Relaxed)
     }
 
+    #[inline]
     pub fn read(&self, offset: usize) -> i32 {
         debug_assert!(
             offset < self.capacity,

@@ -2,12 +2,15 @@ use crate::constants::SYNAPSE_STRIDE;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::entry_store_writer::EntryStoreWriter;
 use crate::primitives::slot_allocator::SlotAllocator;
-use crate::primitives::staging_buffer_reader::StagingBufferReader;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
+use crate::topology::network::network_reader::NetworkReader;
+use crate::topology::network::synapse_view::SynapseView;
+use crate::topology::network::synapse_writer::SynapseWriter;
 use crate::topology::node::node_chain_writer::NodeChainWriter;
-use crate::topology::synapse::synapse_chain_reader::SynapseChainReader;
-use crate::topology::synapse::synapse_writer::SynapseWriter;
+use crate::topology::node::node_view::NodeView;
+use crate::topology::node::node_writer::NodeWriter;
+use std::sync::Arc;
 
 /// Producer-side triple-buffered multi-linked list for graph synapses.
 ///
@@ -37,20 +40,19 @@ use crate::topology::synapse::synapse_writer::SynapseWriter;
 ///
 /// # Constraints
 /// - Slots are 1-based. 0 indicates an undefined state.
-/// - Requires access to the `NodeChainWriter` because connecting/disconnecting
-///   automatically updates the head/tail pointers of the affected nodes.
 /// - Built-in lifecycle safety: `disconnect()` marks the slot for deferred freeing,
 ///   preventing reallocation until the consumer has advanced pas the pending `publish()`.
-/// - Use `to_reader()` to create the paired `SynapseChainReader`.
+/// - Use `to_reader()` to create the paired `NetworkReader`.
 #[derive(Clone)]
-pub struct SynapseChainWriter<
+pub struct NetworkWriter<
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > {
     node_chain: NodeChainWriter<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>,
-    es: EntryStoreWriter<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>,
+    pub(crate) synapses:
+        EntryStoreWriter<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>,
 }
 
 impl<
@@ -59,7 +61,7 @@ impl<
     const SYNAPSE_META_STRIDE: usize,
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 >
-    SynapseChainWriter<
+    NetworkWriter<
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,
@@ -69,18 +71,18 @@ impl<
     pub fn new(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
-        node_chain: NodeChainWriter<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>,
         mem_start_offset: usize,
         tb_start_offset: usize,
-        capacity: usize,
+        node_capacity: usize,
+        synapse_capacity: usize,
     ) -> Self {
         Self::create(
             mem,
             tb,
-            node_chain,
             mem_start_offset,
             tb_start_offset,
-            capacity,
+            node_capacity,
+            synapse_capacity,
             false,
         )
     }
@@ -88,18 +90,18 @@ impl<
     pub fn bind(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
-        node_chain: NodeChainWriter<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>,
         mem_start_offset: usize,
         tb_start_offset: usize,
-        capacity: usize,
+        node_capacity: usize,
+        synapse_capacity: usize,
     ) -> Self {
         Self::create(
             mem,
             tb,
-            node_chain,
             mem_start_offset,
             tb_start_offset,
-            capacity,
+            node_capacity,
+            synapse_capacity,
             true,
         )
     }
@@ -107,78 +109,179 @@ impl<
     pub fn create(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
-        node_chain: NodeChainWriter<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>,
         mem_start_offset: usize,
         tb_start_offset: usize,
-        capacity: usize,
+        node_capacity: usize,
+        synapse_capacity: usize,
         bind: bool,
     ) -> Self {
-        SynapseChainWriter {
-            node_chain,
-            es: EntryStoreWriter::create(
+        NetworkWriter {
+            node_chain: NodeChainWriter::create(
+                Arc::clone(&mem),
+                tb.clone(),
+                mem_start_offset,
+                tb_start_offset,
+                node_capacity,
+                bind,
+            ),
+            synapses: EntryStoreWriter::create(
                 mem,
                 tb,
                 mem_start_offset,
                 tb_start_offset,
-                capacity,
+                synapse_capacity,
                 bind,
             ),
         }
     }
 
-    pub fn calculate_size_on_mem(capacity: usize) -> usize {
-        SlotAllocator::calculate_size_on_mem(capacity)
+    pub fn calculate_size_on_mem(node_capacity: usize, synapse_capacity: usize) -> usize {
+        NodeChainWriter::calculate_size_on_mem(node_capacity)
+            + SlotAllocator::calculate_size_on_mem(synapse_capacity)
     }
 
-    pub fn calculate_size_on_tb(capacity: usize) -> usize {
-        capacity * (SYNAPSE_STRIDE + SYNAPSE_META_STRIDE)
+    pub fn calculate_size_on_tb(node_capacity: usize, synapse_capacity: usize) -> usize {
+        NodeChainWriter::calculate_size_on_tb(node_capacity)
+            + synapse_capacity * (SYNAPSE_STRIDE + SYNAPSE_META_STRIDE)
     }
 
-    pub(crate) fn calculate_synapse_start_offset(tb_start_offset: usize, slot: usize) -> usize {
-        tb_start_offset + (slot - 1) * (SYNAPSE_STRIDE + SYNAPSE_META_STRIDE)
-    }
-
-    pub fn to_reader(&self) -> SynapseChainReader<SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
-        SynapseChainReader::bind(self.es.to_reader())
-    }
-
-    pub fn to_staging_buffer_reader(&self) -> StagingBufferReader {
-        self.es.to_staging_buffer_reader()
+    pub fn to_reader(
+        &self,
+    ) -> NetworkReader<
+        NODE_META_STRIDE,
+        NODE_ATTRIBUTES_STRIDE,
+        SYNAPSE_META_STRIDE,
+        SYNAPSE_ATTRIBUTES_STRIDE,
+    > {
+        NetworkReader::bind(self.node_chain.to_reader(), self.synapses.to_reader())
     }
 
     pub fn len(&self) -> usize {
-        self.es.len()
+        self.synapses.len()
     }
 
     pub fn mem_start_offset(&self) -> usize {
-        self.es.mem_start_offset()
+        self.synapses.mem_start_offset()
     }
 
     pub fn mem_end_offset(&self) -> usize {
-        self.es.mem_end_offset()
+        self.synapses.mem_end_offset()
     }
 
     pub fn tb_start_offset(&self) -> usize {
-        self.es.tb_start_offset()
+        self.synapses.tb_start_offset()
     }
 
     pub fn tb_end_offset(&self) -> usize {
-        self.es.tb_end_offset()
+        self.synapses.tb_end_offset()
     }
 
-    pub fn capacity(&self) -> usize {
-        self.es.capacity()
+    pub fn node_capacity(&self) -> usize {
+        self.node_chain.capacity()
     }
 
-    pub fn utilization(&self) -> f32 {
-        self.es.utilization()
+    pub fn node_count(&self) -> usize {
+        self.node_chain.len()
+    }
+
+    pub fn node_utilization(&self) -> f32 {
+        self.node_chain.utilization()
+    }
+
+    pub fn synapse_capacity(&self) -> usize {
+        self.synapses.capacity()
+    }
+
+    pub fn synapse_count(&self) -> usize {
+        self.synapses.len()
+    }
+
+    pub fn synapse_utilization(&self) -> f32 {
+        self.synapses.utilization()
+    }
+
+    pub fn peek_utilization(&self) -> f32 {
+        self.node_utilization().max(self.synapse_utilization())
+    }
+
+    #[inline]
+    pub fn get_head_node(
+        &'_ self,
+    ) -> Option<NodeWriter<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
+        self.node_chain.get_head_node()
+    }
+
+    #[inline]
+    pub fn get_node(
+        &'_ self,
+        slot: usize,
+    ) -> NodeWriter<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE> {
+        self.node_chain.get_node(slot)
     }
 
     pub fn get_synapse(
         &'_ self,
         slot: usize,
     ) -> SynapseWriter<'_, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
-        SynapseWriter::new(self.es.get(slot))
+        SynapseWriter::new(self.synapses.get(slot))
+    }
+
+    #[inline]
+    pub fn get_head_node_view(
+        &'_ self,
+    ) -> Option<NodeView<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
+        self.node_chain.get_head_node_view()
+    }
+
+    #[inline]
+    pub fn get_node_view(
+        &'_ self,
+        slot: usize,
+    ) -> NodeView<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE> {
+        self.node_chain.get_node_view(slot)
+    }
+
+    pub fn get_synapse_view(
+        &'_ self,
+        slot: usize,
+    ) -> SynapseView<'_, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
+        SynapseView::new(self.synapses.get_view(slot))
+    }
+
+    pub fn insert_head_node(&self, kind: i32) -> Option<usize> {
+        self.node_chain.insert_head_node(kind)
+    }
+
+    pub fn insert_node_after(&self, prev_slot: usize, kind: i32) -> Option<usize> {
+        self.node_chain.insert_node_after(prev_slot, kind)
+    }
+
+    pub fn insert_node_before(&self, next_slot: usize, kind: i32) -> Option<usize> {
+        self.node_chain.insert_node_before(next_slot, kind)
+    }
+
+    pub fn remove_node(&self, slot: usize) -> Result<(), SlotAllocatorError> {
+        loop {
+            let head = self.node_chain.get_node(slot).get_outgoing_synapse_head();
+
+            if head == 0 {
+                break;
+            }
+
+            self.disconnect_synapse(head)?;
+        }
+
+        loop {
+            let head = self.node_chain.get_node(slot).get_incoming_synapse_head();
+
+            if head == 0 {
+                break;
+            }
+
+            self.disconnect_synapse(head)?;
+        }
+
+        self.node_chain.remove_node(slot)
     }
 
     pub fn connect(&self, source_slot: usize, target_slot: usize, kind: i32) -> Option<usize> {
@@ -186,7 +289,7 @@ impl<
         let target = self.node_chain.get_node(target_slot);
         let source_current_tail_ptr = source.get_outgoing_synapse_tail();
         let target_current_tail_ptr = target.get_incoming_synapse_tail();
-        let result = self.es.insert();
+        let result = self.synapses.insert();
 
         if result.is_none() {
             return None;
@@ -258,7 +361,7 @@ impl<
         let synapse_incoming_next_ptr = synapse.get_incoming_next_ptr();
         let synapse_incoming_prev_ptr = synapse.get_incoming_prev_ptr();
 
-        self.es.remove(synapse_slot)?;
+        self.synapses.remove(synapse_slot)?;
 
         if synapse_outgoing_prev_ptr != 0 {
             self.get_synapse(synapse_outgoing_prev_ptr)
@@ -292,7 +395,8 @@ impl<
     }
 
     pub fn publish(&self) {
-        self.es.publish()
+        self.node_chain.publish();
+        self.synapses.publish()
     }
 
     pub fn copy_from(&self, source: &Self) {
@@ -302,6 +406,8 @@ impl<
             source.capacity(),
             self.capacity(),
         );
-        self.es.copy_from(&source.es);
+
+        self.node_chain.copy_from(&source.node_chain);
+        self.synapses.copy_from(&source.synapses);
     }
 }

@@ -5,8 +5,8 @@ use std::time::Duration;
 
 
 use synaptic_kernel::kernel::Kernel;
-use synaptic_kernel::graph_consumer::GraphConsumer;
-use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
+use synaptic_kernel::epoch_consumer::EpochConsumer;
+use synaptic_kernel::kernel_config::KernelConfig;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
@@ -14,10 +14,10 @@ const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
 type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-type TestProcessor = GraphConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestProcessor = EpochConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
-fn config(n: usize, s: usize) -> SynapticGraphConfig {
-    SynapticGraphConfig {
+fn config(n: usize, s: usize) -> KernelConfig {
+    KernelConfig {
         node_capacity: n,
         synapse_capacity: s,
         mem_metadata_size: 1,
@@ -28,7 +28,7 @@ fn config(n: usize, s: usize) -> SynapticGraphConfig {
 // ============ Epoch Stress: Grow Under Consumer Load with Proper Ack ============
 
 /// The critical test: main thread grows while consumer thread traverses using
-/// the KernelProcessor interface (acquire_graph + ack). This validates the
+/// the KernelProcessor interface (acquire_mirror + ack). This validates the
 /// epoch-based reclamation prevents use-after-free.
 #[test]
 fn epoch_stress_grow_under_consumer_load_with_ack() {
@@ -36,8 +36,8 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
     let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
     // Seed initial data
-    let n1 = controller.insert_head(1).unwrap();
-    let n2 = controller.insert_after(n1, 2).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
+    let n2 = controller.insert_node_after(n1, 2).unwrap();
     controller.connect(n1, n2, 10).unwrap();
     controller.set_node_attribute(n1, 0, 42);
     controller.publish();
@@ -45,7 +45,7 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
     let running = Arc::new(AtomicBool::new(true));
     let running_consumer = running.clone();
 
-    // Consumer thread: uses KernelProcessor (acquire_graph + ack)
+    // Consumer thread: uses KernelProcessor (acquire_mirror + ack)
     let consumer_thread = thread::spawn(move || {
         let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>) };
         let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> = unsafe { Arc::from_raw(cp_ref) };
@@ -55,7 +55,7 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
         let mut max_chain_len = 0usize;
 
         while running_consumer.load(Ordering::Relaxed) {
-            let graph = processor.acquire_graph();
+            let graph = processor.acquire_mirror();
 
             // Traverse the full chain
             let mut current = graph.get_head_node();
@@ -98,7 +98,7 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
     controller.publish();
 
     for i in 3..14 {
-        controller.insert_head(i).unwrap();
+        controller.insert_head_node(i).unwrap();
     }
     controller.publish();
 
@@ -106,7 +106,7 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
     controller.publish();
 
     for i in 14..28 {
-        controller.insert_head(i).unwrap();
+        controller.insert_head_node(i).unwrap();
     }
     controller.publish();
 
@@ -137,7 +137,7 @@ fn epoch_stress_random_mutations_under_consumer_load() {
     // Seed some initial data
     let mut node_slots = Vec::new();
     for i in 0..8 {
-        let slot = controller.insert_head(i).unwrap();
+        let slot = controller.insert_head_node(i).unwrap();
         node_slots.push(slot);
     }
 
@@ -161,7 +161,7 @@ fn epoch_stress_random_mutations_under_consumer_load() {
         let mut iterations = 0u64;
 
         while running_consumer.load(Ordering::Relaxed) {
-            let graph = processor.acquire_graph();
+            let graph = processor.acquire_mirror();
 
             // Full graph traversal: nodes + synapses
             let mut current = graph.get_head_node();
@@ -203,7 +203,7 @@ fn epoch_stress_random_mutations_under_consumer_load() {
         // Insert some nodes
         for i in 0..3 {
             let kind = (batch * 10 + i) as i32;
-            if let Ok(slot) = controller.insert_head(kind) {
+            if let Ok(slot) = controller.insert_head_node(kind) {
                 node_slots.push(slot);
             }
         }
@@ -269,7 +269,7 @@ fn epoch_stress_slow_ack_does_not_crash() {
     let mut controller = TestKernel::new(config(8, 8));
     let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
-    controller.insert_head(1).unwrap();
+    controller.insert_head_node(1).unwrap();
     controller.publish();
 
     let running = Arc::new(AtomicBool::new(true));
@@ -284,7 +284,7 @@ fn epoch_stress_slow_ack_does_not_crash() {
         let mut iterations = 0u64;
 
         while running_consumer.load(Ordering::Relaxed) {
-            let graph = processor.acquire_graph();
+            let graph = processor.acquire_mirror();
 
             // Simulate slow processing
             let mut current = graph.get_head_node();
@@ -310,7 +310,7 @@ fn epoch_stress_slow_ack_does_not_crash() {
 
         // Insert some nodes
         for j in 0..4 {
-            let _ = controller.insert_head((i * 10 + j) as i32);
+            let _ = controller.insert_head_node((i * 10 + j) as i32);
         }
 
         controller.publish();
@@ -341,7 +341,7 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
     // Create nodes with attributes
     let mut slots = Vec::new();
     for i in 0..8 {
-        let s = controller.insert_head(i).unwrap();
+        let s = controller.insert_head_node(i).unwrap();
         for offset in 0..16 {
             controller.set_node_attribute(s, offset, 0);
         }
@@ -361,7 +361,7 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
         let mut iterations = 0u64;
 
         while running_consumer.load(Ordering::Relaxed) {
-            let graph = processor.acquire_graph();
+            let graph = processor.acquire_mirror();
 
             // Read all attributes for all slots
             for &slot in &slots_clone {
@@ -403,7 +403,7 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
 fn epoch_stress_grows_accumulate_without_ack() {
     let mut controller = TestKernel::new(config(4, 4));
 
-    controller.insert_head(1).unwrap();
+    controller.insert_head_node(1).unwrap();
 
     // Grow 10 times rapidly WITHOUT any consumer thread acking
     // This tests that readers_pending_deletion accumulates safely
@@ -418,7 +418,7 @@ fn epoch_stress_grows_accumulate_without_ack() {
     // Now create a processor and ack
     let mut processor = TestProcessor::new(controller.get_control_plane());
 
-    let graph = processor.acquire_graph();
+    let graph = processor.acquire_mirror();
     let head = graph.get_head_node();
     assert!(head.is_some());
     assert_eq!(head.unwrap().get_kind(), 1);
@@ -427,6 +427,6 @@ fn epoch_stress_grows_accumulate_without_ack() {
     controller.publish();
 
     // System should be fully functional
-    controller.insert_head(2).unwrap();
+    controller.insert_head_node(2).unwrap();
     assert_eq!(controller.get_head_node().unwrap().get_kind(), 2);
 }

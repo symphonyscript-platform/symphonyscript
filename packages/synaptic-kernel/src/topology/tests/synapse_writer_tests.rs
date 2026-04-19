@@ -3,7 +3,7 @@ use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
 use crate::topology::node::node_chain_writer::NodeChainWriter;
-use crate::topology::synapse::synapse_chain_writer::SynapseChainWriter;
+use crate::topology::network::network_writer::NetworkWriter;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 
@@ -52,7 +52,7 @@ fn synapse_writer_set_get_all_fields() {
         NODE_HEAD_OFFSET,
         NODE_CAPACITY,
     );
-    let synapse_chain = SynapseChainWriter::<8, 8>::new(
+    let synapse_chain = NetworkWriter::<8, 8>::new(
         Arc::clone(&h.mem),
         h.writer.clone(),
         node_chain.clone(),
@@ -61,8 +61,8 @@ fn synapse_writer_set_get_all_fields() {
         SYNAPSE_CAPACITY,
     );
 
-    let src = node_chain.insert_head(1).unwrap();
-    let tgt = node_chain.insert_head(2).unwrap();
+    let src = node_chain.insert_head_node(1).unwrap();
+    let tgt = node_chain.insert_head_node(2).unwrap();
     let syn = synapse_chain.connect(src, tgt, 5).unwrap();
 
     let s = synapse_chain.get_synapse(syn);
@@ -95,7 +95,7 @@ fn synapse_writer_kind_bitmask_preserves_lower_bits() {
         NODE_HEAD_OFFSET,
         NODE_CAPACITY,
     );
-    let synapse_chain = SynapseChainWriter::<8, 8>::new(
+    let synapse_chain = NetworkWriter::<8, 8>::new(
         Arc::clone(&h.mem),
         h.writer.clone(),
         node_chain.clone(),
@@ -104,8 +104,8 @@ fn synapse_writer_kind_bitmask_preserves_lower_bits() {
         SYNAPSE_CAPACITY,
     );
 
-    let src = node_chain.insert_head(1).unwrap();
-    let tgt = node_chain.insert_head(2).unwrap();
+    let src = node_chain.insert_head_node(1).unwrap();
+    let tgt = node_chain.insert_head_node(2).unwrap();
     let syn = synapse_chain.connect(src, tgt, 0).unwrap();
 
     let s = synapse_chain.get_synapse(syn);

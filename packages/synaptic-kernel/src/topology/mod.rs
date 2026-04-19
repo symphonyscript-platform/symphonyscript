@@ -1,5 +1,5 @@
 pub mod node;
-pub mod synapse;
+pub mod network;
 
 #[cfg(test)]
 mod tests;

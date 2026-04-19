@@ -1,9 +1,9 @@
 use synaptic_kernel::control_plane::ControlPlane;
 use synaptic_kernel::errors::kernel_error::KernelError;
-use synaptic_kernel::graph_consumer::GraphConsumer;
+use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::kernel::Kernel;
-use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
-use synaptic_kernel::synaptic_graph_reader::SynapticGraphReader;
+use synaptic_kernel::kernel_config::KernelConfig;
+use synaptic_kernel::epoch_mirror::EpochMirror;
 use std::sync::Arc;
 
 const NODE_META: usize = 8;
@@ -12,14 +12,14 @@ const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
 type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-type TestReader = SynapticGraphReader<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestReader = EpochMirror<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
-fn new_controller(cfg: SynapticGraphConfig) -> TestKernel {
+fn new_controller(cfg: KernelConfig) -> TestKernel {
     Kernel::new(cfg)
 }
 
-fn create_config(nodes: usize, synapses: usize) -> SynapticGraphConfig {
-    SynapticGraphConfig {
+fn create_config(nodes: usize, synapses: usize) -> KernelConfig {
+    KernelConfig {
         node_capacity: nodes,
         synapse_capacity: synapses,
         mem_metadata_size: 1,
@@ -27,7 +27,7 @@ fn create_config(nodes: usize, synapses: usize) -> SynapticGraphConfig {
     }
 }
 
-fn config(capacity: usize) -> SynapticGraphConfig {
+fn config(capacity: usize) -> KernelConfig {
     create_config(capacity, capacity)
 }
 
@@ -37,9 +37,9 @@ fn config(capacity: usize) -> SynapticGraphConfig {
 /// proceed without fighting the borrow checker.
 unsafe fn mock_consumer_reader(controller: &TestKernel) -> &'static TestReader {
     let cp = controller.get_control_plane();
-    let consumer: &'static mut GraphConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR> =
-        Box::leak(Box::new(GraphConsumer::new(cp)));
-    consumer.acquire_graph()
+    let consumer: &'static mut EpochConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR> =
+        Box::leak(Box::new(EpochConsumer::new(cp)));
+    consumer.acquire_mirror()
 }
 
 // =========================================================
@@ -61,7 +61,7 @@ fn fresh_controller_reports_zero_counts() {
 #[test]
 fn insert_head_returns_slot_and_head_visible() {
     let controller = new_controller(config(16));
-    let slot = controller.insert_head(1).unwrap();
+    let slot = controller.insert_head_node(1).unwrap();
     assert!(slot > 0);
     let head = controller.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 1);
@@ -70,9 +70,9 @@ fn insert_head_returns_slot_and_head_visible() {
 #[test]
 fn insert_after_and_before_form_correct_chain() {
     let controller = new_controller(config(16));
-    let n1 = controller.insert_head(10).unwrap();
-    let n3 = controller.insert_after(n1, 30).unwrap();
-    let n2 = controller.insert_before(n3, 20).unwrap();
+    let n1 = controller.insert_head_node(10).unwrap();
+    let n3 = controller.insert_node_after(n1, 30).unwrap();
+    let n2 = controller.insert_node_before(n3, 20).unwrap();
 
     // Chain: n1 -> n2 -> n3
     let w1 = controller.get_node(n1);
@@ -87,8 +87,8 @@ fn insert_after_and_before_form_correct_chain() {
 #[test]
 fn connect_and_disconnect_lifecycle() {
     let controller = new_controller(config(16));
-    let n1 = controller.insert_head(1).unwrap();
-    let n2 = controller.insert_after(n1, 2).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
+    let n2 = controller.insert_node_after(n1, 2).unwrap();
 
     let s1 = controller.connect(n1, n2, 5).unwrap();
     let synapse = controller.get_synapse(s1);
@@ -100,8 +100,8 @@ fn connect_and_disconnect_lifecycle() {
 #[test]
 fn node_and_synapse_attribute_round_trip() {
     let controller = new_controller(config(16));
-    let n1 = controller.insert_head(1).unwrap();
-    let n2 = controller.insert_after(n1, 2).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
+    let n2 = controller.insert_node_after(n1, 2).unwrap();
     let s1 = controller.connect(n1, n2, 1).unwrap();
 
     // Node attributes: write every offset, read back
@@ -130,7 +130,7 @@ fn node_and_synapse_attribute_round_trip() {
 #[test]
 fn negative_attribute_values_preserved() {
     let controller = new_controller(config(16));
-    let n = controller.insert_head(1).unwrap();
+    let n = controller.insert_head_node(1).unwrap();
     controller.set_node_attribute(n, 0, i32::MIN);
     controller.set_node_attribute(n, 1, -1);
     assert_eq!(controller.get_node_attribute(n, 0), i32::MIN);
@@ -150,7 +150,7 @@ fn mutations_invisible_to_consumer_thread_before_publish_and_swap() {
 
     assert!(consumer.get_head_node().is_none());
 
-    let slot = controller.insert_head(42).unwrap();
+    let slot = controller.insert_head_node(42).unwrap();
     controller.get_node(slot).set_meta(0, 100);
 
     // Not published yet
@@ -173,9 +173,9 @@ fn multiple_mutations_batch_into_single_publish() {
 
     let consumer = unsafe { mock_consumer_reader(&controller) };
 
-    let n1 = controller.insert_head(1).unwrap();
-    let n2 = controller.insert_after(n1, 2).unwrap();
-    let n3 = controller.insert_after(n2, 3).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
+    let n2 = controller.insert_node_after(n1, 2).unwrap();
+    let n3 = controller.insert_node_after(n2, 3).unwrap();
     controller.connect(n1, n2, 10).unwrap();
     controller.connect(n2, n3, 20).unwrap();
     controller.set_node_attribute(n1, 0, 999);
@@ -201,7 +201,7 @@ fn double_swap_without_publish_returns_false() {
 
     let consumer = unsafe { mock_consumer_reader(&controller) };
 
-    controller.insert_head(1).unwrap();
+    controller.insert_head_node(1).unwrap();
     controller.publish();
 
     assert!(consumer.swap()); // first swap consumes the publish
@@ -215,7 +215,7 @@ fn attributes_visible_immediately_without_publish() {
 
     let consumer = unsafe { mock_consumer_reader(&controller) };
 
-    let n = controller.insert_head(1).unwrap();
+    let n = controller.insert_head_node(1).unwrap();
     controller.set_node_attribute(n, 3, 42);
 
     // Attribute is visible to consumer immediately (shared plane)
@@ -229,19 +229,19 @@ fn attributes_visible_immediately_without_publish() {
 #[test]
 fn node_capacity_exhaustion_returns_error() {
     let controller = new_controller(config(2));
-    controller.insert_head(1).unwrap();
-    controller.insert_head(2).unwrap();
+    controller.insert_head_node(1).unwrap();
+    controller.insert_head_node(2).unwrap();
 
     assert!(matches!(
-        controller.insert_head(3),
+        controller.insert_head_node(3),
         Err(KernelError::CapacityExhausted)
     ));
     assert!(matches!(
-        controller.insert_after(1, 3),
+        controller.insert_node_after(1, 3),
         Err(KernelError::CapacityExhausted)
     ));
     assert!(matches!(
-        controller.insert_before(1, 3),
+        controller.insert_node_before(1, 3),
         Err(KernelError::CapacityExhausted)
     ));
 }
@@ -249,9 +249,9 @@ fn node_capacity_exhaustion_returns_error() {
 #[test]
 fn synapse_capacity_exhaustion_returns_error() {
     let controller = new_controller(create_config(16, 2));
-    let n1 = controller.insert_head(1).unwrap();
-    let n2 = controller.insert_after(n1, 2).unwrap();
-    let n3 = controller.insert_after(n2, 3).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
+    let n2 = controller.insert_node_after(n1, 2).unwrap();
+    let n3 = controller.insert_node_after(n2, 3).unwrap();
 
     controller.connect(n1, n2, 1).unwrap();
     controller.connect(n2, n3, 2).unwrap();
@@ -265,11 +265,11 @@ fn synapse_capacity_exhaustion_returns_error() {
 #[test]
 fn remove_then_reuse_slot() {
     let controller = new_controller(config(2));
-    let n1 = controller.insert_head(1).unwrap();
-    let _n2 = controller.insert_head(2).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
+    let _n2 = controller.insert_head_node(2).unwrap();
 
     // Full
-    assert!(controller.insert_head(3).is_err());
+    assert!(controller.insert_head_node(3).is_err());
 
     // Remove opens a slot — but deferred, so needs publish+flush
     controller.remove_node(n1).unwrap();
@@ -282,7 +282,7 @@ fn remove_then_reuse_slot() {
 #[should_panic(expected = "attempted to read inactive slot")]
 fn double_remove_same_node_panics_uaf_guard() {
     let controller = new_controller(config(16));
-    let n1 = controller.insert_head(1).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
     controller.remove_node(n1).unwrap();
     // Second remove hits the UAF guard before reaching DoubleFree
     let _ = controller.remove_node(n1);
@@ -292,8 +292,8 @@ fn double_remove_same_node_panics_uaf_guard() {
 #[should_panic(expected = "attempted to read inactive slot")]
 fn double_disconnect_same_synapse_panics_uaf_guard() {
     let controller = new_controller(config(16));
-    let n1 = controller.insert_head(1).unwrap();
-    let n2 = controller.insert_after(n1, 2).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
+    let n2 = controller.insert_node_after(n1, 2).unwrap();
     let s1 = controller.connect(n1, n2, 1).unwrap();
     controller.disconnect_synapse(s1).unwrap();
     // Second disconnect hits the UAF guard
@@ -325,9 +325,9 @@ fn grow_rejects_same_capacity() {
 fn grow_preserves_chain_topology() {
     let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head(10).unwrap();
-    let n2 = controller.insert_after(n1, 20).unwrap();
-    let _n3 = controller.insert_after(n2, 30).unwrap();
+    let n1 = controller.insert_head_node(10).unwrap();
+    let n2 = controller.insert_node_after(n1, 20).unwrap();
+    let _n3 = controller.insert_node_after(n2, 30).unwrap();
 
     controller.grow(config(32)).unwrap();
 
@@ -344,8 +344,8 @@ fn grow_preserves_chain_topology() {
 fn grow_preserves_node_and_synapse_attributes() {
     let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head(1).unwrap();
-    let n2 = controller.insert_after(n1, 2).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
+    let n2 = controller.insert_node_after(n1, 2).unwrap();
     let s1 = controller.connect(n1, n2, 5).unwrap();
 
     controller.set_node_attribute(n1, 0, 1000);
@@ -365,9 +365,9 @@ fn grow_preserves_node_and_synapse_attributes() {
 fn grow_preserves_synapse_connectivity() {
     let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head(1).unwrap();
-    let n2 = controller.insert_after(n1, 2).unwrap();
-    let n3 = controller.insert_after(n2, 3).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
+    let n2 = controller.insert_node_after(n1, 2).unwrap();
+    let n3 = controller.insert_node_after(n2, 3).unwrap();
 
     let s12 = controller.connect(n1, n2, 10).unwrap();
     let s13 = controller.connect(n1, n3, 20).unwrap();
@@ -386,20 +386,20 @@ fn grow_expanded_capacity_is_allocatable() {
     let mut controller = new_controller(config(4));
 
     // Fill old capacity
-    controller.insert_head(1).unwrap();
-    controller.insert_head(2).unwrap();
-    controller.insert_head(3).unwrap();
-    controller.insert_head(4).unwrap();
-    assert!(controller.insert_head(5).is_err());
+    controller.insert_head_node(1).unwrap();
+    controller.insert_head_node(2).unwrap();
+    controller.insert_head_node(3).unwrap();
+    controller.insert_head_node(4).unwrap();
+    assert!(controller.insert_head_node(5).is_err());
 
     controller.grow(config(8)).unwrap();
 
     // New capacity is usable
-    controller.insert_head(5).unwrap();
-    controller.insert_head(6).unwrap();
-    controller.insert_head(7).unwrap();
-    controller.insert_head(8).unwrap();
-    assert!(controller.insert_head(9).is_err());
+    controller.insert_head_node(5).unwrap();
+    controller.insert_head_node(6).unwrap();
+    controller.insert_head_node(7).unwrap();
+    controller.insert_head_node(8).unwrap();
+    assert!(controller.insert_head_node(9).is_err());
     assert_eq!(controller.node_count(), 8);
 }
 
@@ -407,8 +407,8 @@ fn grow_expanded_capacity_is_allocatable() {
 fn grow_consumer_thread_sees_migrated_data_after_publish_swap() {
     let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head(10).unwrap();
-    let n2 = controller.insert_after(n1, 20).unwrap();
+    let n1 = controller.insert_head_node(10).unwrap();
+    let n2 = controller.insert_node_after(n1, 20).unwrap();
     let s1 = controller.connect(n1, n2, 99).unwrap();
     controller.set_node_attribute(n1, 0, 1000);
     controller.set_synapse_attribute(s1, 0, 5000);
@@ -438,7 +438,7 @@ fn grow_after_heavy_fragmentation() {
     // Create 8 nodes
     let mut slots = Vec::new();
     for i in 0..8 {
-        slots.push(controller.insert_head(i).unwrap());
+        slots.push(controller.insert_head_node(i).unwrap());
     }
 
     // Remove every other node (creates fragmentation in free list)
@@ -460,7 +460,7 @@ fn grow_after_heavy_fragmentation() {
     assert_eq!(controller.get_node(slots[6]).get_kind(), 6);
 
     // Verify we can allocate into the expanded region
-    let new_node = controller.insert_head(100).unwrap();
+    let new_node = controller.insert_head_node(100).unwrap();
     assert_eq!(controller.get_node(new_node).get_kind(), 100);
 }
 
@@ -473,7 +473,7 @@ fn gc_pipeline_rotates_through_publish_cycles() {
     let mut controller = new_controller(config(8));
 
     for i in 0..7 {
-        controller.insert_head(i).unwrap();
+        controller.insert_head_node(i).unwrap();
     }
     assert!(controller.should_grow(0.70));
 
@@ -486,7 +486,7 @@ fn gc_pipeline_rotates_through_publish_cycles() {
     controller.publish();
 
     // Consumer thread sees migrated data.
-    // Note: `mock_consumer_reader` calls `GraphConsumer::acquire_graph`, which now
+    // Note: `mock_consumer_reader` calls `GraphConsumer::acquire_mirror`, which now
     // bundles the swap internally. The explicit `swap()` is no longer observable
     // here — the migrated state visibility is confirmed by the kind assertion.
     let consumer = unsafe { mock_consumer_reader(&controller) };
@@ -497,7 +497,7 @@ fn gc_pipeline_rotates_through_publish_cycles() {
 #[test]
 fn consecutive_grows_without_crash() {
     let mut controller = new_controller(config(4));
-    controller.insert_head(1).unwrap();
+    controller.insert_head_node(1).unwrap();
 
     controller.grow(config(8)).unwrap();
     controller.publish();
@@ -516,12 +516,12 @@ fn consecutive_grows_without_crash() {
 #[test]
 fn grow_then_mutate_then_publish() {
     let mut controller = new_controller(config(4));
-    let n1 = controller.insert_head(1).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
 
     controller.grow(config(16)).unwrap();
 
     // Mutate AFTER grow, BEFORE publish
-    let n2 = controller.insert_after(n1, 2).unwrap();
+    let n2 = controller.insert_node_after(n1, 2).unwrap();
     controller.set_node_attribute(n2, 0, 777);
 
     controller.publish();
@@ -545,14 +545,14 @@ fn should_grow_respects_threshold_boundary() {
     let controller = new_controller(config(4));
     assert!(!controller.should_grow(0.75));
 
-    controller.insert_head(1).unwrap();
-    controller.insert_head(2).unwrap();
-    controller.insert_head(3).unwrap();
+    controller.insert_head_node(1).unwrap();
+    controller.insert_head_node(2).unwrap();
+    controller.insert_head_node(3).unwrap();
 
     // 3/4 = 0.75, should_grow uses > not >=
     assert!(!controller.should_grow(0.75));
 
-    controller.insert_head(4).unwrap();
+    controller.insert_head_node(4).unwrap();
     // 4/4 = 1.0 > 0.75
     assert!(controller.should_grow(0.75));
 }
@@ -590,8 +590,8 @@ fn asymmetric_capacity_works() {
     assert_eq!(controller.node_capacity(), 16);
     assert_eq!(controller.synapse_capacity(), 4);
 
-    let n1 = controller.insert_head(1).unwrap();
-    let n2 = controller.insert_after(n1, 2).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
+    let n2 = controller.insert_node_after(n1, 2).unwrap();
 
     controller.connect(n1, n2, 1).unwrap();
     controller.connect(n1, n2, 2).unwrap();
@@ -626,13 +626,13 @@ fn grow_rejects_if_only_synapses_shrink() {
 fn defer_then_grow_then_publish_flushes_on_new_allocator() {
     let mut controller = new_controller(config(4));
 
-    let n1 = controller.insert_head(1).unwrap();
-    let n2 = controller.insert_after(n1, 2).unwrap();
-    let n3 = controller.insert_after(n2, 3).unwrap();
-    let n4 = controller.insert_after(n3, 4).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
+    let n2 = controller.insert_node_after(n1, 2).unwrap();
+    let n3 = controller.insert_node_after(n2, 3).unwrap();
+    let n4 = controller.insert_node_after(n3, 4).unwrap();
 
     // Full
-    assert!(controller.insert_head(99).is_err());
+    assert!(controller.insert_head_node(99).is_err());
 
     // Defer a free — slot is marked but not released yet
     controller.remove_node(n2).unwrap();
@@ -646,7 +646,7 @@ fn defer_then_grow_then_publish_flushes_on_new_allocator() {
 
     // n2's slot should now be genuinely free on the new allocator
     // We can verify by inserting — if deferred flush failed, this would fail
-    let n5 = controller.insert_head(5).unwrap();
+    let n5 = controller.insert_head_node(5).unwrap();
     assert_eq!(controller.get_node(n5).get_kind(), 5);
 
     // The remaining original nodes should still be intact
@@ -659,10 +659,10 @@ fn defer_then_grow_then_publish_flushes_on_new_allocator() {
 fn defer_then_grow_then_defer_more_then_publish() {
     let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head(1).unwrap();
-    let n2 = controller.insert_after(n1, 2).unwrap();
-    let n3 = controller.insert_after(n2, 3).unwrap();
-    let n4 = controller.insert_after(n3, 4).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
+    let n2 = controller.insert_node_after(n1, 2).unwrap();
+    let n3 = controller.insert_node_after(n2, 3).unwrap();
+    let n4 = controller.insert_node_after(n3, 4).unwrap();
 
     // Defer n2 on the OLD allocator
     controller.remove_node(n2).unwrap();
@@ -677,8 +677,8 @@ fn defer_then_grow_then_defer_more_then_publish() {
     controller.publish();
 
     // Both n2 and n4 should be reclaimable
-    let n5 = controller.insert_head(5).unwrap();
-    let n6 = controller.insert_head(6).unwrap();
+    let n5 = controller.insert_head_node(5).unwrap();
+    let n6 = controller.insert_head_node(6).unwrap();
     assert_eq!(controller.get_node(n5).get_kind(), 5);
     assert_eq!(controller.get_node(n6).get_kind(), 6);
 
@@ -691,10 +691,10 @@ fn defer_then_grow_then_defer_more_then_publish() {
 fn defer_then_publish_then_grow_preserves_freed_slot() {
     let mut controller = new_controller(config(4));
 
-    let n1 = controller.insert_head(1).unwrap();
-    let n2 = controller.insert_after(n1, 2).unwrap();
-    let _n3 = controller.insert_after(n2, 3).unwrap();
-    let _n4 = controller.insert_after(_n3, 4).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
+    let n2 = controller.insert_node_after(n1, 2).unwrap();
+    let _n3 = controller.insert_node_after(n2, 3).unwrap();
+    let _n4 = controller.insert_node_after(_n3, 4).unwrap();
 
     // Defer and flush BEFORE grow
     controller.remove_node(n2).unwrap();
@@ -705,7 +705,7 @@ fn defer_then_publish_then_grow_preserves_freed_slot() {
     controller.grow(config(8)).unwrap();
 
     // n2's slot should be allocatable on the new allocator
-    let n5 = controller.insert_head(5).unwrap();
+    let n5 = controller.insert_head_node(5).unwrap();
     assert_eq!(controller.get_node(n5).get_kind(), 5);
 
     // Verify consumer thread sees correct state after full cycle
@@ -736,12 +736,12 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
         };
         let cp_arc: Arc<ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> =
             unsafe { Arc::from_raw(cp_ref) };
-        let mut processor = GraphConsumer::new(Arc::clone(&cp_arc));
+        let mut processor = EpochConsumer::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
         while running_consumer.load(std::sync::atomic::Ordering::Relaxed) {
-            let reader = processor.acquire_graph();
+            let reader = processor.acquire_mirror();
 
             // Traverse the full chain — must terminate, no cycles
             let mut current = reader.get_head_node();
@@ -768,7 +768,7 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
 
     // Main thread: insert nodes and publish rapidly
     for i in 0..60 {
-        controller.insert_head(i).unwrap();
+        controller.insert_head_node(i).unwrap();
         if i % 5 == 0 {
             controller.publish();
         }
@@ -790,8 +790,8 @@ fn concurrent_traversal_during_grow() {
     let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
     // Seed initial data
-    let n1 = controller.insert_head(1).unwrap();
-    let n2 = controller.insert_after(n1, 2).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
+    let n2 = controller.insert_node_after(n1, 2).unwrap();
     controller.connect(n1, n2, 10).unwrap();
     controller.set_node_attribute(n1, 0, 42);
     controller.publish();
@@ -806,13 +806,13 @@ fn concurrent_traversal_during_grow() {
         };
         let cp_arc: Arc<ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> =
             unsafe { Arc::from_raw(cp_ref) };
-        let mut processor = GraphConsumer::new(Arc::clone(&cp_arc));
+        let mut processor = EpochConsumer::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
         while running_consumer.load(std::sync::atomic::Ordering::Relaxed) {
             // Re-acquire EVERY iteration — critical after grow()
-            let reader = processor.acquire_graph();
+            let reader = processor.acquire_mirror();
 
             let mut current = reader.get_head_node();
             while let Some(node) = current {
@@ -836,7 +836,7 @@ fn concurrent_traversal_during_grow() {
 
     // Insert into expanded capacity
     for i in 3..14 {
-        controller.insert_head(i).unwrap();
+        controller.insert_head_node(i).unwrap();
     }
     controller.publish();
 
@@ -845,7 +845,7 @@ fn concurrent_traversal_during_grow() {
 
     // More inserts
     for i in 14..28 {
-        controller.insert_head(i).unwrap();
+        controller.insert_head_node(i).unwrap();
     }
     controller.publish();
 
@@ -867,7 +867,7 @@ fn concurrent_attribute_reads_during_writes() {
     let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
     // Create a node whose attributes we'll hammer
-    let n1 = controller.insert_head(1).unwrap();
+    let n1 = controller.insert_head_node(1).unwrap();
 
     let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let running_consumer = running.clone();
@@ -880,12 +880,12 @@ fn concurrent_attribute_reads_during_writes() {
         };
         let cp_arc: Arc<ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> =
             unsafe { Arc::from_raw(cp_ref) };
-        let mut processor = GraphConsumer::new(Arc::clone(&cp_arc));
+        let mut processor = EpochConsumer::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
 
         while running_consumer.load(std::sync::atomic::Ordering::Relaxed) {
-            let reader = processor.acquire_graph();
+            let reader = processor.acquire_mirror();
 
             // Read all 16 attribute offsets — must never panic or return garbage
             for offset in 0..16 {

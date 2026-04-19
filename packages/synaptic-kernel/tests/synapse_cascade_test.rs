@@ -1,5 +1,5 @@
-use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
-use synaptic_kernel::synaptic_graph_writer::SynapticGraphWriter;
+use synaptic_kernel::kernel_config::KernelConfig;
+use synaptic_kernel::epoch::Epoch;
 
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
@@ -9,10 +9,10 @@ const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type Gw = SynapticGraphWriter<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type Gw = Epoch<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
-fn config() -> SynapticGraphConfig {
-    SynapticGraphConfig {
+fn config() -> KernelConfig {
+    KernelConfig {
         node_capacity: 16,
         synapse_capacity: 32,
         mem_metadata_size: 1,

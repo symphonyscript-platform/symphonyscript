@@ -1,15 +1,14 @@
-use crate::attributes::attributes_writer::AttributesWriter;
+use crate::constants::{KERNEL_MAGIC, KERNEL_VERSION};
 use crate::control_plane::ControlPlane;
+use crate::epoch::Epoch;
+use crate::epoch_mirror::EpochMirror;
 use crate::errors::kernel_error::KernelError;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
-use crate::primitives::into_array::IntoArray;
+use crate::kernel_config::KernelConfig;
 use crate::primitives::types::AtomicBuffer;
 use crate::serialized_kernel::SerializedKernel;
-use crate::synaptic_graph_config::SynapticGraphConfig;
-use crate::synaptic_graph_reader::SynapticGraphReader;
-use crate::synaptic_graph_writer::SynapticGraphWriter;
-use crate::topology::node::node_writer::NodeWriter;
-use crate::topology::synapse::synapse_writer::SynapseWriter;
+use crate::topology::network::synapse_view::SynapseView;
+use crate::topology::node::node_view::NodeView;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
@@ -50,34 +49,34 @@ use std::sync::Arc;
 /// memory. If the consumer is still traversing a hot-swapped graph, the result
 /// is undefined behavior.
 pub struct Kernel<
-    const NODE_META_SIZE: usize,
-    const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_META_SIZE: usize,
-    const SYNAPSE_ATTRIBUTES_SIZE: usize,
+    const NODE_META_STRIDE: usize,
+    const NODE_ATTRIBUTES_STRIDE: usize,
+    const SYNAPSE_META_STRIDE: usize,
+    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > {
-    config: SynapticGraphConfig,
+    config: KernelConfig,
     mem: AtomicBuffer,
     control_plane: Arc<
         ControlPlane<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+            NODE_META_STRIDE,
+            NODE_ATTRIBUTES_STRIDE,
+            SYNAPSE_META_STRIDE,
+            SYNAPSE_ATTRIBUTES_STRIDE,
         >,
     >,
-    active_writer: SynapticGraphWriter<
-        NODE_META_SIZE,
-        NODE_ATTRIBUTES_SIZE,
-        SYNAPSE_META_SIZE,
-        SYNAPSE_ATTRIBUTES_SIZE,
+    active_epoch: Epoch<
+        NODE_META_STRIDE,
+        NODE_ATTRIBUTES_STRIDE,
+        SYNAPSE_META_STRIDE,
+        SYNAPSE_ATTRIBUTES_STRIDE,
     >,
     readers_pending_deletion: VecDeque<(
         Box<
-            SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
+            EpochMirror<
+                NODE_META_STRIDE,
+                NODE_ATTRIBUTES_STRIDE,
+                SYNAPSE_META_STRIDE,
+                SYNAPSE_ATTRIBUTES_STRIDE,
             >,
         >,
         i32,
@@ -85,32 +84,47 @@ pub struct Kernel<
 }
 
 impl<
-    const NODE_META_SIZE: usize,
-    const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_META_SIZE: usize,
-    const SYNAPSE_ATTRIBUTES_SIZE: usize,
-> Kernel<NODE_META_SIZE, NODE_ATTRIBUTES_SIZE, SYNAPSE_META_SIZE, SYNAPSE_ATTRIBUTES_SIZE>
+    const NODE_META_STRIDE: usize,
+    const NODE_ATTRIBUTES_STRIDE: usize,
+    const SYNAPSE_META_STRIDE: usize,
+    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
+> Kernel<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>
 {
-    pub fn new(config: SynapticGraphConfig) -> Self {
-        let mem = Self::create_mem(SynapticGraphWriter::<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+    pub const HEADERS_SIZE: usize = 2;
+
+    pub fn new(config: KernelConfig) -> Self {
+        let mem = Self::create_mem(Epoch::<
+            NODE_META_STRIDE,
+            NODE_ATTRIBUTES_STRIDE,
+            SYNAPSE_META_STRIDE,
+            SYNAPSE_ATTRIBUTES_STRIDE,
         >::calculate_size_on_mem(&config));
         Self::new_from_mem(mem, config)
     }
 
-    pub fn new_from_mem(mem: AtomicBuffer, config: SynapticGraphConfig) -> Self {
-        let writer = SynapticGraphWriter::new(Arc::clone(&mem), config.clone());
-        let reader = Box::new(writer.to_reader());
-        let control_plane = Arc::new(ControlPlane::new(reader));
+    pub fn new_from_mem(mem: AtomicBuffer, config: KernelConfig) -> Self {
+        let epoch = Epoch::new(Arc::clone(&mem), config.clone());
+        let mirror = Box::new(epoch.to_reader());
+        let control_plane = Arc::new(ControlPlane::new(mirror));
+
+        assert!(
+            mem[0].load(Ordering::Acquire) == 0 && mem[1].load(Ordering::Acquire) == 0,
+            "Attempted to initialize SynapticGraphWriter on already allocated memory"
+        );
+
+        assert!(
+            mem.len() >= Epoch::calculate_size_on_mem(&config),
+            "Provided AtomicBuffer is too small for this configuration"
+        );
+
+        mem[0].store(KERNEL_MAGIC, Ordering::Release);
+        mem[1].store(KERNEL_VERSION, Ordering::Release);
 
         Kernel {
             config,
             mem,
             control_plane,
-            active_writer: writer,
+            active_epoch: epoch,
             readers_pending_deletion: VecDeque::new(),
         }
     }
@@ -124,7 +138,24 @@ impl<
                 .map(AtomicI32::new)
                 .collect(),
         );
-        let writer = SynapticGraphWriter::bind(Arc::clone(&mem), config.clone());
+
+        assert_eq!(
+            mem[0].load(Ordering::Acquire),
+            KERNEL_MAGIC,
+            "Attempted to initialize Kernel on foreign memory"
+        );
+        assert_eq!(
+            mem[1].load(Ordering::Acquire),
+            KERNEL_VERSION,
+            "Attempted to initialize Kernel on mismatched AtomicBuffer version"
+        );
+
+        assert!(
+            mem.len() >= Epoch::calculate_size_on_mem(&config),
+            "Provided AtomicBuffer is too small for this configuration"
+        );
+
+        let writer = Epoch::bind(Arc::clone(&mem), config.clone());
         let reader = Box::new(writer.to_reader());
         let control_plane = Arc::new(ControlPlane::new(reader));
 
@@ -132,7 +163,7 @@ impl<
             config,
             mem,
             control_plane,
-            active_writer: writer,
+            active_epoch: writer,
             readers_pending_deletion: VecDeque::new(),
         }
     }
@@ -171,177 +202,130 @@ impl<
         &self,
     ) -> Arc<
         ControlPlane<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+            NODE_META_STRIDE,
+            NODE_ATTRIBUTES_STRIDE,
+            SYNAPSE_META_STRIDE,
+            SYNAPSE_ATTRIBUTES_STRIDE,
         >,
     > {
         Arc::clone(&self.control_plane)
     }
 
+    #[inline]
     pub fn mem_metadata_capacity(&self) -> usize {
-        self.active_writer.mem_metadata_capacity()
+        self.active_epoch.mem_metadata.capacity()
     }
 
+    #[inline]
     pub fn tb_metadata_capacity(&self) -> usize {
-        self.active_writer.tb_metadata_capacity()
+        self.active_epoch.tb_metadata.capacity()
     }
 
+    #[inline]
     pub fn mem_read_meta(&self, offset: usize) -> i32 {
-        self.active_writer.mem_read_meta(offset)
+        self.active_epoch.mem_metadata.read(offset)
     }
 
+    #[inline]
     pub fn mem_write_meta(&self, offset: usize, value: i32) {
-        self.active_writer.mem_write_meta(offset, value);
+        self.active_epoch.mem_metadata.write(offset, value);
     }
 
+    #[inline]
     pub fn tb_read_meta(&self, offset: usize) -> i32 {
-        self.active_writer.tb_read_meta(offset)
+        self.active_epoch.tb_metadata.read(offset)
     }
 
+    #[inline]
     pub fn tb_write_meta(&self, offset: usize, value: i32) {
-        self.active_writer.tb_write_meta(offset, value);
+        self.active_epoch.tb_metadata.write(offset, value);
     }
 
+    #[inline]
     pub fn node_capacity(&self) -> usize {
-        self.active_writer.node_capacity()
+        self.active_epoch.network.node_capacity()
     }
 
+    #[inline]
     pub fn node_count(&self) -> usize {
-        self.active_writer.node_count()
+        self.active_epoch.network.node_count()
     }
 
+    #[inline]
     pub fn node_utilization(&self) -> f32 {
-        self.active_writer.node_utilization()
+        self.active_epoch.network.node_utilization()
     }
 
+    #[inline]
     pub fn synapse_capacity(&self) -> usize {
-        self.active_writer.synapse_capacity()
+        self.active_epoch.network.synapse_capacity()
     }
 
+    #[inline]
     pub fn synapse_count(&self) -> usize {
-        self.active_writer.synapse_count()
+        self.active_epoch.network.synapse_count()
     }
 
+    #[inline]
     pub fn synapse_utilization(&self) -> f32 {
-        self.active_writer.synapse_utilization()
+        self.active_epoch.network.synapse_utilization()
     }
 
+    #[inline]
     pub fn peek_utilization(&self) -> f32 {
-        self.active_writer.peek_utilization()
+        self.active_epoch.network.peek_utilization()
     }
 
-    pub fn get_head_node_slot(&'_ self) -> usize {
-        self.active_writer.get_head_node_slot()
+    #[inline]
+    pub fn get_head_node(
+        &'_ self,
+    ) -> Option<NodeView<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
+        self.active_epoch.network.get_head_node_view()
     }
 
-    pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_, NODE_META_SIZE>> {
-        self.active_writer.get_head_node()
-    }
-
-    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_, NODE_META_SIZE> {
-        self.active_writer.get_node(slot)
-    }
-
-    pub fn get_node_attributes(
+    #[inline]
+    pub fn get_node(
         &'_ self,
         slot: usize,
-    ) -> AttributesWriter<'_, NODE_ATTRIBUTES_SIZE> {
-        self.active_writer.get_node_attributes(slot)
+    ) -> NodeView<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE> {
+        self.active_epoch.network.get_node_view(slot)
     }
 
-    pub fn get_node_attribute(&'_ self, slot: usize, attribute_offset: usize) -> i32 {
-        self.active_writer
-            .get_node_attribute(slot, attribute_offset)
+    #[inline]
+    pub fn get_synapse(
+        &'_ self,
+        slot: usize,
+    ) -> SynapseView<'_, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
+        self.active_epoch.network.get_synapse_view(slot)
     }
 
-    pub fn set_node_attributes<T: IntoArray<NODE_ATTRIBUTES_SIZE>>(&'_ self, slot: usize, data: T) {
-        self.active_writer.set_node_attributes(slot, data)
-    }
-
-    pub fn set_node_attribute(&'_ self, slot: usize, attribute_offset: usize, value: i32) {
-        self.active_writer
-            .set_node_attribute(slot, attribute_offset, value)
-    }
-
-    pub fn or_node_attribute(&'_ self, slot: usize, attribute_offset: usize, value: i32) -> i32 {
-        self.active_writer
-            .or_node_attribute(slot, attribute_offset, value)
-    }
-
-    pub fn and_node_attribute(&'_ self, slot: usize, attribute_offset: usize, value: i32) -> i32 {
-        self.active_writer
-            .and_node_attribute(slot, attribute_offset, value)
-    }
-
-    pub fn insert_head(&self, kind: i32) -> Result<usize, KernelError> {
-        match self.active_writer.insert_head(kind) {
+    pub fn insert_head_node(&self, kind: i32) -> Result<usize, KernelError> {
+        match self.active_epoch.network.insert_head_node(kind) {
             Some(slot) => Ok(slot),
             None => Err(KernelError::CapacityExhausted),
         }
     }
 
-    pub fn insert_after(&self, prev_slot: usize, kind: i32) -> Result<usize, KernelError> {
-        match self.active_writer.insert_after(prev_slot, kind) {
+    pub fn insert_node_after(&self, prev_slot: usize, kind: i32) -> Result<usize, KernelError> {
+        match self.active_epoch.network.insert_node_after(prev_slot, kind) {
             Some(slot) => Ok(slot),
             None => Err(KernelError::CapacityExhausted),
         }
     }
 
-    pub fn insert_before(&self, next_slot: usize, kind: i32) -> Result<usize, KernelError> {
-        match self.active_writer.insert_before(next_slot, kind) {
+    pub fn insert_node_before(&self, next_slot: usize, kind: i32) -> Result<usize, KernelError> {
+        match self
+            .active_epoch
+            .network
+            .insert_node_before(next_slot, kind)
+        {
             Some(slot) => Ok(slot),
             None => Err(KernelError::CapacityExhausted),
         }
     }
 
     pub fn remove_node(&self, slot: usize) -> Result<(), SlotAllocatorError> {
-        self.active_writer.remove_node(slot)
-    }
-
-    pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_, SYNAPSE_META_SIZE> {
-        self.active_writer.get_synapse(slot)
-    }
-
-    pub fn get_synapse_attributes(
-        &'_ self,
-        slot: usize,
-    ) -> AttributesWriter<'_, SYNAPSE_ATTRIBUTES_SIZE> {
-        self.active_writer.get_synapse_attributes(slot)
-    }
-
-    pub fn get_synapse_attribute(&'_ self, slot: usize, attribute_offset: usize) -> i32 {
-        self.active_writer
-            .get_synapse_attribute(slot, attribute_offset)
-    }
-
-    pub fn set_synapse_attributes<T: IntoArray<SYNAPSE_ATTRIBUTES_SIZE>>(
-        &'_ self,
-        slot: usize,
-        data: T,
-    ) {
-        self.active_writer.set_synapse_attributes(slot, data)
-    }
-
-    pub fn set_synapse_attribute(&'_ self, slot: usize, attribute_offset: usize, value: i32) {
-        self.active_writer
-            .set_synapse_attribute(slot, attribute_offset, value)
-    }
-
-    pub fn or_synapse_attribute(&'_ self, slot: usize, attribute_offset: usize, value: i32) -> i32 {
-        self.active_writer
-            .or_synapse_attribute(slot, attribute_offset, value)
-    }
-
-    pub fn and_synapse_attribute(
-        &'_ self,
-        slot: usize,
-        attribute_offset: usize,
-        value: i32,
-    ) -> i32 {
-        self.active_writer
-            .and_synapse_attribute(slot, attribute_offset, value)
+        self.active_epoch.network.remove_node(slot)
     }
 
     pub fn connect(
@@ -350,22 +334,31 @@ impl<
         target_slot: usize,
         kind: i32,
     ) -> Result<usize, KernelError> {
-        match self.active_writer.connect(source_slot, target_slot, kind) {
+        match self
+            .active_epoch
+            .network
+            .connect(source_slot, target_slot, kind)
+        {
             Some(slot) => Ok(slot),
             None => Err(KernelError::CapacityExhausted),
         }
     }
 
     pub fn disconnect(&self, source: usize, target: usize) -> Result<(), SlotAllocatorError> {
-        self.active_writer.disconnect(source, target)
+        self.active_epoch.network.disconnect(source, target)
     }
 
     pub fn disconnect_synapse(&self, slot: usize) -> Result<(), SlotAllocatorError> {
-        self.active_writer.disconnect_synapse(slot)
+        self.active_epoch.network.disconnect_synapse(slot)
+    }
+
+    #[inline]
+    pub fn should_grow(&self, target_resize_threshold: f32) -> bool {
+        self.peek_utilization() > target_resize_threshold
     }
 
     pub fn publish(&mut self) {
-        self.active_writer.publish();
+        self.active_epoch.publish();
         let ack = self.control_plane.get_reader_ack_generation();
 
         while let Some((_, generation)) = self.readers_pending_deletion.front() {
@@ -377,31 +370,27 @@ impl<
         }
     }
 
-    pub fn should_grow(&self, target_resize_threshold: f32) -> bool {
-        self.active_writer.peek_utilization() > target_resize_threshold
-    }
-
-    pub fn grow(&mut self, config: SynapticGraphConfig) -> Result<(), KernelError> {
-        if config.node_capacity < self.active_writer.node_capacity()
-            || config.synapse_capacity < self.active_writer.synapse_capacity()
+    pub fn grow(&mut self, config: KernelConfig) -> Result<(), KernelError> {
+        if config.node_capacity < self.node_capacity()
+            || config.synapse_capacity < self.synapse_capacity()
         {
             return Err(KernelError::InsufficientCapacity);
         }
 
-        self.mem = Self::create_mem(SynapticGraphWriter::<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+        self.mem = Self::create_mem(Epoch::<
+            NODE_META_STRIDE,
+            NODE_ATTRIBUTES_STRIDE,
+            SYNAPSE_META_STRIDE,
+            SYNAPSE_ATTRIBUTES_STRIDE,
         >::calculate_size_on_mem(&config));
-        let new_writer = SynapticGraphWriter::new(Arc::clone(&self.mem), config.clone());
+        let new_writer = Epoch::new(Arc::clone(&self.mem), config.clone());
 
-        new_writer.copy_from(&self.active_writer);
+        new_writer.copy_from(&self.active_epoch);
 
         let new_reader = Box::new(new_writer.to_reader());
 
         self.config = config;
-        self.active_writer = new_writer;
+        self.active_epoch = new_writer;
         let old_reader = self.control_plane.swap_graph(new_reader);
         self.readers_pending_deletion.push_back(old_reader);
 

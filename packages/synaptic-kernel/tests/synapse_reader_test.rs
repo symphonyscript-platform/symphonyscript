@@ -4,8 +4,8 @@ use synaptic_kernel::constants::NODE_STRIDE;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
-use synaptic_kernel::topology::synapse::synapse_chain_reader::SynapseChainReader;
-use synaptic_kernel::topology::synapse::synapse_chain_writer::SynapseChainWriter;
+use synaptic_kernel::topology::network::network_reader::NetworkReader;
+use synaptic_kernel::topology::network::network_writer::NetworkWriter;
 
 const NODE_META: usize = 8;
 const SYNAPSE_META: usize = 8;
@@ -33,8 +33,8 @@ struct TestHarness {
     writer: synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter,
     reader: synaptic_kernel::primitives::triple_buffer_reader::TripleBufferReader,
     node_chain: NodeChainWriter<NODE_META>,
-    synapse_chain: SynapseChainWriter<NODE_META, SYNAPSE_META>,
-    synapse_chain_r: SynapseChainReader<NODE_META, SYNAPSE_META>,
+    synapse_chain: NetworkWriter<NODE_META, SYNAPSE_META>,
+    synapse_chain_r: NetworkReader<NODE_META, SYNAPSE_META>,
 }
 
 fn setup() -> TestHarness {
@@ -48,7 +48,7 @@ fn setup() -> TestHarness {
         NODE_START_OFFSET,
         NODE_CAPACITY,
     );
-    let synapse_chain = SynapseChainWriter::<NODE_META, SYNAPSE_META>::new(
+    let synapse_chain = NetworkWriter::<NODE_META, SYNAPSE_META>::new(
         Arc::clone(&mem),
         writer.clone(),
         node_chain.clone(),
@@ -75,8 +75,8 @@ fn reader_sees_all_synapse_fields_after_publish() {
         let node_chain = h.node_chain;
         let synapse_chain = h.synapse_chain;
 
-        let src = node_chain.insert_head(1).unwrap();
-        let tgt = node_chain.insert_head(2).unwrap();
+        let src = node_chain.insert_head_node(1).unwrap();
+        let tgt = node_chain.insert_head_node(2).unwrap();
         let syn = synapse_chain.connect(src, tgt, 42).unwrap();
         (src, tgt, syn)
     };
@@ -102,10 +102,10 @@ fn reader_sees_chain_pointers_with_multiple_synapses() {
         let node_chain = h.node_chain;
         let synapse_chain = h.synapse_chain;
 
-        let src = node_chain.insert_head(1).unwrap();
-        let tgt1 = node_chain.insert_head(2).unwrap();
-        let tgt2 = node_chain.insert_head(3).unwrap();
-        let tgt3 = node_chain.insert_head(4).unwrap();
+        let src = node_chain.insert_head_node(1).unwrap();
+        let tgt1 = node_chain.insert_head_node(2).unwrap();
+        let tgt2 = node_chain.insert_head_node(3).unwrap();
+        let tgt3 = node_chain.insert_head_node(4).unwrap();
 
         let s1 = synapse_chain.connect(src, tgt1, 10).unwrap();
         let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();
@@ -144,8 +144,8 @@ fn reader_does_not_see_unpublished_changes() {
         let node_chain = h.node_chain;
         let synapse_chain = h.synapse_chain.clone();
 
-        let src = node_chain.insert_head(1).unwrap();
-        let tgt = node_chain.insert_head(2).unwrap();
+        let src = node_chain.insert_head_node(1).unwrap();
+        let tgt = node_chain.insert_head_node(2).unwrap();
         let s1 = synapse_chain.connect(src, tgt, 10).unwrap();
         (src, tgt, s1)
     };
@@ -178,9 +178,9 @@ fn reader_sees_disconnect_after_publish() {
         let node_chain = h.node_chain;
         let synapse_chain = h.synapse_chain;
 
-        let src = node_chain.insert_head(1).unwrap();
-        let tgt1 = node_chain.insert_head(2).unwrap();
-        let tgt2 = node_chain.insert_head(3).unwrap();
+        let src = node_chain.insert_head_node(1).unwrap();
+        let tgt1 = node_chain.insert_head_node(2).unwrap();
+        let tgt2 = node_chain.insert_head_node(3).unwrap();
 
         let s1 = synapse_chain.connect(src, tgt1, 10).unwrap();
         let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();

@@ -48,7 +48,7 @@ fn node_writer_set_get_all_fields() {
     let h = setup();
     let chain = NodeChainWriter::<8>::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
 
-    let slot = chain.insert_head(5).unwrap();
+    let slot = chain.insert_head_node(5).unwrap();
     let node = chain.get_node(slot);
 
     // kind is bit-packed: upper 8 bits of field 0
@@ -72,7 +72,7 @@ fn node_writer_kind_bitmask_preserves_lower_bits() {
     let h = setup();
     let chain = NodeChainWriter::<8>::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
 
-    let slot = chain.insert_head(0x7F).unwrap();
+    let slot = chain.insert_head_node(0x7F).unwrap();
     let node = chain.get_node(slot);
 
     // mutate whatever shares field 0's lower 24 bits
@@ -88,7 +88,7 @@ fn node_reader_sees_writer_data_after_publish() {
     let chain =
         NodeChainWriter::<8>::new(h.mem.clone(), h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
     let slot = {
-        let slot = chain.insert_head(12).unwrap();
+        let slot = chain.insert_head_node(12).unwrap();
         let node = chain.get_node(slot);
         node.set_outgoing_synapse_head(99);
         slot
@@ -110,9 +110,9 @@ fn uninvolved_node_data_survives_sibling_mutations() {
     let h = setup();
     let chain = NodeChainWriter::<8>::new(h.mem, h.writer.clone(), FL_START, HEAD_OFFSET, CAPACITY);
 
-    let a = chain.insert_head(1).unwrap();
-    let b = chain.insert_head(2).unwrap();
-    let c = chain.insert_head(3).unwrap();
+    let a = chain.insert_head_node(1).unwrap();
+    let b = chain.insert_head_node(2).unwrap();
+    let c = chain.insert_head_node(3).unwrap();
     // chain: c -> b -> a
 
     // set custom fields on a
@@ -120,8 +120,8 @@ fn uninvolved_node_data_survives_sibling_mutations() {
     node_a.set_outgoing_synapse_head(88);
 
     // mutate siblings: insert between c and b, then remove b
-    let d = chain.insert_after(c, 4).unwrap();
-    chain.remove(b).unwrap();
+    let d = chain.insert_node_after(c, 4).unwrap();
+    chain.remove_node(b).unwrap();
     // chain: c -> d -> a
 
     // a's data must be completely intact

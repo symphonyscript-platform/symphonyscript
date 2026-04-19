@@ -1,6 +1,6 @@
 use synaptic_kernel::kernel::Kernel;
-use synaptic_kernel::graph_consumer::GraphConsumer;
-use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
+use synaptic_kernel::epoch_consumer::EpochConsumer;
+use synaptic_kernel::kernel_config::KernelConfig;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
@@ -8,10 +8,10 @@ const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
 type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-type TestProcessor = GraphConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestProcessor = EpochConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
 
-fn config() -> SynapticGraphConfig {
-    SynapticGraphConfig {
+fn config() -> KernelConfig {
+    KernelConfig {
         node_capacity: 4,
         synapse_capacity: 4,
         mem_metadata_size: 4,
@@ -124,7 +124,7 @@ fn mem_metadata_visible_to_reader_without_publish() {
     controller.publish();
 
     let mut processor = TestProcessor::new(controller.get_control_plane());
-    let graph = processor.acquire_graph();
+    let graph = processor.acquire_mirror();
 
     assert_eq!(graph.mem_read_meta(0), 42);
     assert_eq!(graph.mem_read_meta(1), 99);
@@ -138,14 +138,14 @@ fn mem_metadata_update_between_reads() {
     let mut processor = TestProcessor::new(controller.get_control_plane());
 
     // First read
-    let graph = processor.acquire_graph();
+    let graph = processor.acquire_mirror();
     assert_eq!(graph.mem_read_meta(0), 0);
 
     // Writer updates
     controller.mem_write_meta(0, 777);
 
     // Reader sees update immediately (shared atomics)
-    let graph = processor.acquire_graph();
+    let graph = processor.acquire_mirror();
     assert_eq!(graph.mem_read_meta(0), 777);
 }
 
@@ -160,7 +160,7 @@ fn tb_metadata_visible_after_publish_and_swap() {
     controller.publish();
 
     let mut processor = TestProcessor::new(controller.get_control_plane());
-    let graph = processor.acquire_graph();
+    let graph = processor.acquire_mirror();
 
     assert_eq!(graph.tb_read_meta(0), 123);
     assert_eq!(graph.tb_read_meta(3), 456);
@@ -174,20 +174,20 @@ fn tb_metadata_not_visible_without_publish() {
     controller.publish();
 
     let mut processor = TestProcessor::new(controller.get_control_plane());
-    let graph = processor.acquire_graph();
+    let graph = processor.acquire_mirror();
     assert_eq!(graph.tb_read_meta(0), 0);
 
     // Write without publish
     controller.tb_write_meta(0, 999);
 
     // Reader won't see it until publish + swap
-    let graph = processor.acquire_graph();
+    let graph = processor.acquire_mirror();
     // tb_metadata lives on the triple buffer — not visible without publish
     assert_eq!(graph.tb_read_meta(0), 0, "should not see tb_metadata before publish");
 
     // Now publish
     controller.publish();
-    let graph = processor.acquire_graph();
+    let graph = processor.acquire_mirror();
     assert_eq!(graph.tb_read_meta(0), 999, "should see tb_metadata after publish");
 }
 
@@ -215,7 +215,7 @@ fn mem_metadata_survives_grow() {
     controller.mem_write_meta(1, 99);
     controller.publish();
 
-    controller.grow(SynapticGraphConfig {
+    controller.grow(KernelConfig {
         node_capacity: 8,
         synapse_capacity: 8,
         mem_metadata_size: 4,
@@ -234,7 +234,7 @@ fn tb_metadata_survives_grow() {
     controller.tb_write_meta(2, 200);
     controller.publish();
 
-    controller.grow(SynapticGraphConfig {
+    controller.grow(KernelConfig {
         node_capacity: 8,
         synapse_capacity: 8,
         mem_metadata_size: 4,
@@ -254,7 +254,7 @@ fn metadata_coexists_with_node_mutations() {
     controller.mem_write_meta(0, 10);
     controller.tb_write_meta(0, 20);
 
-    let n = controller.insert_head(1).unwrap();
+    let n = controller.insert_head_node(1).unwrap();
     controller.set_node_attribute(n, 0, 42);
 
     controller.publish();
