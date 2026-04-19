@@ -24,18 +24,18 @@ use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 /// - Generation sync uses `Acquire` on read, `Release` on ack.
 #[repr(C)]
 pub struct ControlPlane<
-    const NODE_META_SIZE: usize,
-    const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_META_SIZE: usize,
-    const SYNAPSE_ATTRIBUTES_SIZE: usize,
+    const NODE_META_STRIDE: usize,
+    const NODE_ATTRIBUTES_STRIDE: usize,
+    const SYNAPSE_META_STRIDE: usize,
+    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > {
     signature: u32,
     shared_graph_ptr: AtomicPtr<
         SynapticGraphReader<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+            NODE_META_STRIDE,
+            NODE_ATTRIBUTES_STRIDE,
+            SYNAPSE_META_STRIDE,
+            SYNAPSE_ATTRIBUTES_STRIDE,
         >,
     >,
     writer_generation: AtomicI32,
@@ -43,18 +43,18 @@ pub struct ControlPlane<
 }
 
 impl<
-    const NODE_META_SIZE: usize,
-    const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_META_SIZE: usize,
-    const SYNAPSE_ATTRIBUTES_SIZE: usize,
-> ControlPlane<NODE_META_SIZE, NODE_ATTRIBUTES_SIZE, SYNAPSE_META_SIZE, SYNAPSE_ATTRIBUTES_SIZE>
+    const NODE_META_STRIDE: usize,
+    const NODE_ATTRIBUTES_STRIDE: usize,
+    const SYNAPSE_META_STRIDE: usize,
+    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
+> ControlPlane<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>
 {
     pub fn new(
         shared_graph_ptr: *mut SynapticGraphReader<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+            NODE_META_STRIDE,
+            NODE_ATTRIBUTES_STRIDE,
+            SYNAPSE_META_STRIDE,
+            SYNAPSE_ATTRIBUTES_STRIDE,
         >,
     ) -> Self {
         ControlPlane {
@@ -68,10 +68,10 @@ impl<
     pub fn get_shared_graph_ptr(
         &self,
     ) -> *mut SynapticGraphReader<
-        NODE_META_SIZE,
-        NODE_ATTRIBUTES_SIZE,
-        SYNAPSE_META_SIZE,
-        SYNAPSE_ATTRIBUTES_SIZE,
+        NODE_META_STRIDE,
+        NODE_ATTRIBUTES_STRIDE,
+        SYNAPSE_META_STRIDE,
+        SYNAPSE_ATTRIBUTES_STRIDE,
     > {
         self.shared_graph_ptr.load(Ordering::Acquire)
     }
@@ -79,10 +79,10 @@ impl<
     pub fn set_shared_graph_ptr(
         &self,
         ptr: *mut SynapticGraphReader<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+            NODE_META_STRIDE,
+            NODE_ATTRIBUTES_STRIDE,
+            SYNAPSE_META_STRIDE,
+            SYNAPSE_ATTRIBUTES_STRIDE,
         >,
     ) {
         self.shared_graph_ptr.store(ptr, Ordering::Release)

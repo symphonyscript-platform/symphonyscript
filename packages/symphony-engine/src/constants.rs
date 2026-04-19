@@ -1,5 +1,5 @@
-pub const NODE_META_SIZE: usize = 8;
-pub const NODE_ATTRIBUTES_SIZE: usize = 16;
+pub const NODE_META_STRIDE: usize = 8;
+pub const NODE_ATTRIBUTES_STRIDE: usize = 16;
 
 pub const NODE_KIND_NOTE: i32 = 0x01;
 pub const NODE_KIND_REST: i32 = 0x02;
@@ -12,8 +12,8 @@ pub const NODE_KIND_LUT: i32 = 0x07;
 pub const NODE_META_BASE_TICK: usize = 0;
 pub const NODE_META_MOD_HEAD: usize = 1;
 
-pub const SYNAPSE_META_SIZE: usize = 8;
-pub const SYNAPSE_ATTRIBUTES_SIZE: usize = 16;
+pub const SYNAPSE_META_STRIDE: usize = 8;
+pub const SYNAPSE_ATTRIBUTES_STRIDE: usize = 16;
 
 pub const SYNAPSE_KIND_SEQUENTIAL: i32 = 0x01;
 pub const SYNAPSE_KIND_PARALLEL: i32 = 0x02;

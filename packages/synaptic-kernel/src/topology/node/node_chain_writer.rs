@@ -24,8 +24,8 @@ use crate::topology::node::node_writer::NodeWriter;
 /// 1           N*(S+M)     nodes
 ///
 /// N = capacity
-/// S = NODE_SIZE (8)
-/// M = META_SIZE (const generic)
+/// S = NODE_STRIDE (8)
+/// M = META_STRIDE (const generic)
 /// ```
 ///
 /// # Constraints

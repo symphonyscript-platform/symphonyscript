@@ -1,4 +1,4 @@
-use symphonyscript_kernel::constants::{NODE_ATTRIBUTES_SLOT_SIZE, NODE_SIZE};
+use symphonyscript_kernel::constants::{NODE_ATTRIBUTES_SLOT_SIZE, NODE_STRIDE};
 use symphonyscript_kernel::kernel_controller::KernelController;
 use symphonyscript_kernel::synaptic_graph_config::SynapticGraphConfig;
 use wasm_bindgen::prelude::*;
@@ -70,9 +70,9 @@ impl WasmKernelController {
     #[wasm_bindgen]
     pub fn get_node(&self, slot: usize, output: &mut [i32]) -> bool {
         assert!(
-            output.len() >= NODE_SIZE,
+            output.len() >= NODE_STRIDE,
             "WasmKernelController.get_node | output buffer length must be at least {}",
-            NODE_SIZE
+            NODE_STRIDE
         );
 
         let node = self.kernel.get_node(slot);

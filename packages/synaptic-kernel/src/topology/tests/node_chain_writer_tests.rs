@@ -14,7 +14,7 @@ fn create_mem(size: usize) -> AtomicBuffer {
     Arc::new(vec)
 }
 
-// NODE_SLOT_SIZE = 16 (64 bytes per node)
+// NODE_STRIDE = 16 (64 bytes per node)
 // Layout: TB metadata (4) + 3 buffers of BUF_CAP each
 // We need space for the chain head pointer inside the TB buffer too
 const MEM_SIZE: usize = 16384;

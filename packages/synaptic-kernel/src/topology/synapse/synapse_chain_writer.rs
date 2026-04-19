@@ -28,8 +28,8 @@ use crate::topology::synapse::synapse_writer::SynapseWriter;
 /// 0           N*(S+M)     synapses
 ///
 /// N = capacity
-/// S = SYNAPSE_SIZE (8)
-/// M = SYNAPSE_META_SIZE (const generic)
+/// S = SYNAPSE_STRIDE (8)
+/// M = SYNAPSE_META_STRIDE (const generic)
 /// ```
 ///
 /// Note: There is no global `head_slot` parameter on the synapse plane.

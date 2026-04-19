@@ -14,41 +14,41 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 
 pub struct Kernel<
-    const NODE_META_SIZE: usize,
-    const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_META_SIZE: usize,
-    const SYNAPSE_ATTRIBUTES_SIZE: usize,
+    const NODE_META_STRIDE: usize,
+    const NODE_ATTRIBUTES_STRIDE: usize,
+    const SYNAPSE_META_STRIDE: usize,
+    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > {
     mem: AtomicBuffer,
     control_plane: Box<
         ControlPlane<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+            NODE_META_STRIDE,
+            NODE_ATTRIBUTES_STRIDE,
+            SYNAPSE_META_STRIDE,
+            SYNAPSE_ATTRIBUTES_STRIDE,
         >,
     >,
     active_writer: SynapticGraphWriter<
-        NODE_META_SIZE,
-        NODE_ATTRIBUTES_SIZE,
-        SYNAPSE_META_SIZE,
-        SYNAPSE_ATTRIBUTES_SIZE,
+        NODE_META_STRIDE,
+        NODE_ATTRIBUTES_STRIDE,
+        SYNAPSE_META_STRIDE,
+        SYNAPSE_ATTRIBUTES_STRIDE,
     >,
     active_reader: Box<
         SynapticGraphReader<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+            NODE_META_STRIDE,
+            NODE_ATTRIBUTES_STRIDE,
+            SYNAPSE_META_STRIDE,
+            SYNAPSE_ATTRIBUTES_STRIDE,
         >,
     >,
     readers_pending_deletion: VecDeque<(
         Box<
             SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
+                NODE_META_STRIDE,
+                NODE_ATTRIBUTES_STRIDE,
+                SYNAPSE_META_STRIDE,
+                SYNAPSE_ATTRIBUTES_STRIDE,
             >,
         >,
         i32,
@@ -56,18 +56,18 @@ pub struct Kernel<
 }
 
 impl<
-    const NODE_META_SIZE: usize,
-    const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_META_SIZE: usize,
-    const SYNAPSE_ATTRIBUTES_SIZE: usize,
-> Kernel<NODE_META_SIZE, NODE_ATTRIBUTES_SIZE, SYNAPSE_META_SIZE, SYNAPSE_ATTRIBUTES_SIZE>
+    const NODE_META_STRIDE: usize,
+    const NODE_ATTRIBUTES_STRIDE: usize,
+    const SYNAPSE_META_STRIDE: usize,
+    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
+> Kernel<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>
 {
     pub fn new(config: SynapticGraphConfig) -> Self {
         let mem = Self::create_mem(SynapticGraphWriter::<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+            NODE_META_STRIDE,
+            NODE_ATTRIBUTES_STRIDE,
+            SYNAPSE_META_STRIDE,
+            SYNAPSE_ATTRIBUTES_STRIDE,
         >::calculate_size_on_mem(&config));
         Self::new_from_mem(mem, config)
     }
@@ -78,16 +78,16 @@ impl<
         let reader_box = Box::new(reader);
         let reader_ptr = reader_box.as_ref()
             as *const SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
+                NODE_META_STRIDE,
+                NODE_ATTRIBUTES_STRIDE,
+                SYNAPSE_META_STRIDE,
+                SYNAPSE_ATTRIBUTES_STRIDE,
             >
             as *mut SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
+                NODE_META_STRIDE,
+                NODE_ATTRIBUTES_STRIDE,
+                SYNAPSE_META_STRIDE,
+                SYNAPSE_ATTRIBUTES_STRIDE,
             >;
         let control_plane = Box::new(ControlPlane::new(reader_ptr));
 
@@ -103,10 +103,10 @@ impl<
     pub fn get_controller_plane_address(&self) -> usize {
         self.control_plane.as_ref()
             as *const ControlPlane<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
+                NODE_META_STRIDE,
+                NODE_ATTRIBUTES_STRIDE,
+                SYNAPSE_META_STRIDE,
+                SYNAPSE_ATTRIBUTES_STRIDE,
             > as usize
     }
 
@@ -166,18 +166,18 @@ impl<
         self.active_writer.get_head_node_slot()
     }
 
-    pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_, NODE_META_SIZE>> {
+    pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_, NODE_META_STRIDE>> {
         self.active_writer.get_head_node()
     }
 
-    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_, NODE_META_SIZE> {
+    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_, NODE_META_STRIDE> {
         self.active_writer.get_node(slot)
     }
 
     pub fn get_node_attributes(
         &'_ self,
         slot: usize,
-    ) -> AttributesWriter<'_, NODE_ATTRIBUTES_SIZE> {
+    ) -> AttributesWriter<'_, NODE_ATTRIBUTES_STRIDE> {
         self.active_writer.get_node_attributes(slot)
     }
 
@@ -186,7 +186,7 @@ impl<
             .get_node_attribute(slot, attribute_offset)
     }
 
-    pub fn set_node_attributes<T: IntoArray<NODE_ATTRIBUTES_SIZE>>(&'_ self, slot: usize, data: T) {
+    pub fn set_node_attributes<T: IntoArray<NODE_ATTRIBUTES_STRIDE>>(&'_ self, slot: usize, data: T) {
         self.active_writer.set_node_attributes(slot, data)
     }
 
@@ -220,14 +220,14 @@ impl<
         self.active_writer.remove_node(slot)
     }
 
-    pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_, SYNAPSE_META_SIZE> {
+    pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_, SYNAPSE_META_STRIDE> {
         self.active_writer.get_synapse(slot)
     }
 
     pub fn get_synapse_attributes(
         &'_ self,
         slot: usize,
-    ) -> AttributesWriter<'_, SYNAPSE_ATTRIBUTES_SIZE> {
+    ) -> AttributesWriter<'_, SYNAPSE_ATTRIBUTES_STRIDE> {
         self.active_writer.get_synapse_attributes(slot)
     }
 
@@ -236,7 +236,7 @@ impl<
             .get_synapse_attribute(slot, attribute_offset)
     }
 
-    pub fn set_synapse_attributes<T: IntoArray<SYNAPSE_ATTRIBUTES_SIZE>>(
+    pub fn set_synapse_attributes<T: IntoArray<SYNAPSE_ATTRIBUTES_STRIDE>>(
         &'_ self,
         slot: usize,
         data: T,
@@ -290,10 +290,10 @@ impl<
         }
 
         let mem = Self::create_mem(SynapticGraphWriter::<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+            NODE_META_STRIDE,
+            NODE_ATTRIBUTES_STRIDE,
+            SYNAPSE_META_STRIDE,
+            SYNAPSE_ATTRIBUTES_STRIDE,
         >::calculate_size_on_mem(&config));
         let new_writer = SynapticGraphWriter::new(Arc::clone(&mem), config.clone());
 
@@ -322,19 +322,19 @@ impl<
         &mut self,
         new_reader: Box<
             SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
+                NODE_META_STRIDE,
+                NODE_ATTRIBUTES_STRIDE,
+                SYNAPSE_META_STRIDE,
+                SYNAPSE_ATTRIBUTES_STRIDE,
             >,
         >,
     ) -> (
         Box<
             SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
+                NODE_META_STRIDE,
+                NODE_ATTRIBUTES_STRIDE,
+                SYNAPSE_META_STRIDE,
+                SYNAPSE_ATTRIBUTES_STRIDE,
             >,
         >,
         i32,
@@ -342,16 +342,16 @@ impl<
         let prev_gen = self.control_plane.inc_writer_generation();
         let new_reader_ptr = new_reader.as_ref()
             as *const SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
+                NODE_META_STRIDE,
+                NODE_ATTRIBUTES_STRIDE,
+                SYNAPSE_META_STRIDE,
+                SYNAPSE_ATTRIBUTES_STRIDE,
             >
             as *mut SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
+                NODE_META_STRIDE,
+                NODE_ATTRIBUTES_STRIDE,
+                SYNAPSE_META_STRIDE,
+                SYNAPSE_ATTRIBUTES_STRIDE,
             >;
         let old_reader = std::mem::replace(&mut self.active_reader, new_reader);
         self.control_plane.set_shared_graph_ptr(new_reader_ptr);

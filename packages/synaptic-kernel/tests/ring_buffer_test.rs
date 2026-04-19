@@ -3,7 +3,7 @@ use std::sync::Arc;
 use synaptic_kernel::primitives::ring_buffer::RingBuffer;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
-const SLOT_SIZE: usize = 16;
+const STRIDE: usize = 16;
 
 /// Creates a AtomicBuffer with the given number of AtomicI32 slots.
 fn create_mem(size: usize) -> AtomicBuffer {
@@ -127,7 +127,7 @@ fn mem_end_offset_is_correct() {
     let mem = create_mem(4096);
     let ring: RingBuffer<4> = RingBuffer::new(mem, 0, 8);
 
-    // mem_end_offset = start(0) + header(3) + capacity(8) * SLOT_SIZE(4) = 35
+    // mem_end_offset = start(0) + header(3) + capacity(8) * STRIDE(4) = 35
     assert_eq!(ring.mem_end_offset(), 35);
 }
 
@@ -242,7 +242,7 @@ fn capacity_of_one() {
 #[test]
 fn large_slot_size() {
     let mem = create_mem(4096);
-    let ring: RingBuffer<SLOT_SIZE> = RingBuffer::new(mem, 0, 4);
+    let ring: RingBuffer<STRIDE> = RingBuffer::new(mem, 0, 4);
 
     let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
     ring.write(data).unwrap();

@@ -1,4 +1,4 @@
-use crate::constants::NODE_ATTRIBUTES_SIZE;
+use crate::constants::NODE_ATTRIBUTES_STRIDE;
 use synaptic_kernel::primitives::into_array::IntoArray;
 
 pub struct NoteAttributes {
@@ -15,9 +15,9 @@ pub struct NoteAttributes {
     // +24 bytes reserved
 }
 
-impl IntoArray<NODE_ATTRIBUTES_SIZE> for NoteAttributes {
-    fn to_array(&self) -> [i32; NODE_ATTRIBUTES_SIZE] {
-        let mut data = [0; NODE_ATTRIBUTES_SIZE];
+impl IntoArray<NODE_ATTRIBUTES_STRIDE> for NoteAttributes {
+    fn to_array(&self) -> [i32; NODE_ATTRIBUTES_STRIDE] {
+        let mut data = [0; NODE_ATTRIBUTES_STRIDE];
 
         data[0] = self.flags as i32;
         data[1] = self.pitch;

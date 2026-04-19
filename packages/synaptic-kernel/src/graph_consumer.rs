@@ -24,35 +24,35 @@ use std::sync::Arc;
 /// # Constraints
 /// - Created by passing `Arc<ControlPlane>` to `new()`.
 pub struct GraphConsumer<
-    const NODE_META_SIZE: usize,
-    const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_META_SIZE: usize,
-    const SYNAPSE_ATTRIBUTES_SIZE: usize,
+    const NODE_META_STRIDE: usize,
+    const NODE_ATTRIBUTES_STRIDE: usize,
+    const SYNAPSE_META_STRIDE: usize,
+    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > {
     control_plane: Arc<
         ControlPlane<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+            NODE_META_STRIDE,
+            NODE_ATTRIBUTES_STRIDE,
+            SYNAPSE_META_STRIDE,
+            SYNAPSE_ATTRIBUTES_STRIDE,
         >,
     >,
 }
 
 impl<
-    const NODE_META_SIZE: usize,
-    const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_META_SIZE: usize,
-    const SYNAPSE_ATTRIBUTES_SIZE: usize,
-> GraphConsumer<NODE_META_SIZE, NODE_ATTRIBUTES_SIZE, SYNAPSE_META_SIZE, SYNAPSE_ATTRIBUTES_SIZE>
+    const NODE_META_STRIDE: usize,
+    const NODE_ATTRIBUTES_STRIDE: usize,
+    const SYNAPSE_META_STRIDE: usize,
+    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
+> GraphConsumer<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>
 {
     pub fn new(
         control_plane: Arc<
             ControlPlane<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
+                NODE_META_STRIDE,
+                NODE_ATTRIBUTES_STRIDE,
+                SYNAPSE_META_STRIDE,
+                SYNAPSE_ATTRIBUTES_STRIDE,
             >,
         >,
     ) -> Self {
@@ -76,10 +76,10 @@ impl<
     pub fn acquire_graph(
         &mut self,
     ) -> &SynapticGraphReader<
-        NODE_META_SIZE,
-        NODE_ATTRIBUTES_SIZE,
-        SYNAPSE_META_SIZE,
-        SYNAPSE_ATTRIBUTES_SIZE,
+        NODE_META_STRIDE,
+        NODE_ATTRIBUTES_STRIDE,
+        SYNAPSE_META_STRIDE,
+        SYNAPSE_ATTRIBUTES_STRIDE,
     > {
         let graph = self.control_plane.acquire_graph();
 

@@ -38,17 +38,17 @@ use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 /// - `get_reader_ack_generation()`: Producer thread only (Reads consumer's ack).
 #[repr(C)]
 pub struct ControlPlane<
-    const NODE_META_SIZE: usize,
-    const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_META_SIZE: usize,
-    const SYNAPSE_ATTRIBUTES_SIZE: usize,
+    const NODE_META_STRIDE: usize,
+    const NODE_ATTRIBUTES_STRIDE: usize,
+    const SYNAPSE_META_STRIDE: usize,
+    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > {
     shared_graph_ptr: AtomicPtr<
         SynapticGraphReader<
-            NODE_META_SIZE,
-            NODE_ATTRIBUTES_SIZE,
-            SYNAPSE_META_SIZE,
-            SYNAPSE_ATTRIBUTES_SIZE,
+            NODE_META_STRIDE,
+            NODE_ATTRIBUTES_STRIDE,
+            SYNAPSE_META_STRIDE,
+            SYNAPSE_ATTRIBUTES_STRIDE,
         >,
     >,
     writer_generation: AtomicI32,
@@ -56,19 +56,19 @@ pub struct ControlPlane<
 }
 
 impl<
-    const NODE_META_SIZE: usize,
-    const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_META_SIZE: usize,
-    const SYNAPSE_ATTRIBUTES_SIZE: usize,
-> ControlPlane<NODE_META_SIZE, NODE_ATTRIBUTES_SIZE, SYNAPSE_META_SIZE, SYNAPSE_ATTRIBUTES_SIZE>
+    const NODE_META_STRIDE: usize,
+    const NODE_ATTRIBUTES_STRIDE: usize,
+    const SYNAPSE_META_STRIDE: usize,
+    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
+> ControlPlane<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>
 {
     pub fn new(
         synaptic_graph_reader: Box<
             SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
+                NODE_META_STRIDE,
+                NODE_ATTRIBUTES_STRIDE,
+                SYNAPSE_META_STRIDE,
+                SYNAPSE_ATTRIBUTES_STRIDE,
             >,
         >,
     ) -> Self {
@@ -82,10 +82,10 @@ impl<
     pub(crate) fn acquire_graph(
         &self,
     ) -> &SynapticGraphReader<
-        NODE_META_SIZE,
-        NODE_ATTRIBUTES_SIZE,
-        SYNAPSE_META_SIZE,
-        SYNAPSE_ATTRIBUTES_SIZE,
+        NODE_META_STRIDE,
+        NODE_ATTRIBUTES_STRIDE,
+        SYNAPSE_META_STRIDE,
+        SYNAPSE_ATTRIBUTES_STRIDE,
     > {
         self.ack();
 
@@ -100,19 +100,19 @@ impl<
         &self,
         new_graph: Box<
             SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
+                NODE_META_STRIDE,
+                NODE_ATTRIBUTES_STRIDE,
+                SYNAPSE_META_STRIDE,
+                SYNAPSE_ATTRIBUTES_STRIDE,
             >,
         >,
     ) -> (
         Box<
             SynapticGraphReader<
-                NODE_META_SIZE,
-                NODE_ATTRIBUTES_SIZE,
-                SYNAPSE_META_SIZE,
-                SYNAPSE_ATTRIBUTES_SIZE,
+                NODE_META_STRIDE,
+                NODE_ATTRIBUTES_STRIDE,
+                SYNAPSE_META_STRIDE,
+                SYNAPSE_ATTRIBUTES_STRIDE,
             >,
         >,
         i32,
@@ -141,16 +141,16 @@ impl<
 }
 
 impl<
-    const NODE_META_SIZE: usize,
-    const NODE_ATTRIBUTES_SIZE: usize,
-    const SYNAPSE_META_SIZE: usize,
-    const SYNAPSE_ATTRIBUTES_SIZE: usize,
+    const NODE_META_STRIDE: usize,
+    const NODE_ATTRIBUTES_STRIDE: usize,
+    const SYNAPSE_META_STRIDE: usize,
+    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > Drop
     for ControlPlane<
-        NODE_META_SIZE,
-        NODE_ATTRIBUTES_SIZE,
-        SYNAPSE_META_SIZE,
-        SYNAPSE_ATTRIBUTES_SIZE,
+        NODE_META_STRIDE,
+        NODE_ATTRIBUTES_STRIDE,
+        SYNAPSE_META_STRIDE,
+        SYNAPSE_ATTRIBUTES_STRIDE,
     >
 {
     fn drop(&mut self) {

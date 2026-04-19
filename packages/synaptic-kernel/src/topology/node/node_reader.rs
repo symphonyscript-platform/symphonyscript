@@ -14,12 +14,12 @@ use crate::primitives::struct_reader::StructReader;
 ///
 /// # Encapsulation
 /// - Read-only: structural mutation is strictly prohibited on the reading plane.
-pub struct NodeReader<'a, const META_SIZE: usize> {
-    struct_reader: StructReader<'a, NODE_STRIDE, META_SIZE>,
+pub struct NodeReader<'a, const META_STRIDE: usize> {
+    struct_reader: StructReader<'a, NODE_STRIDE, META_STRIDE>,
 }
 
-impl<'a, const META_SIZE: usize> NodeReader<'a, META_SIZE> {
-    pub fn new(struct_reader: StructReader<'a, NODE_STRIDE, META_SIZE>) -> Self {
+impl<'a, const META_STRIDE: usize> NodeReader<'a, META_STRIDE> {
+    pub fn new(struct_reader: StructReader<'a, NODE_STRIDE, META_STRIDE>) -> Self {
         NodeReader { struct_reader }
     }
 
@@ -64,7 +64,7 @@ impl<'a, const META_SIZE: usize> NodeReader<'a, META_SIZE> {
     }
 
     #[inline]
-    pub fn get_meta_all(&self) -> [i32; META_SIZE] {
+    pub fn get_meta_all(&self) -> [i32; META_STRIDE] {
         self.struct_reader.meta_read_all()
     }
 }

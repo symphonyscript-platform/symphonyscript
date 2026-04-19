@@ -19,7 +19,7 @@ use crate::primitives::struct_writer::StructWriter;
 /// - `6`: `incoming_prev_ptr`
 /// - `7`: (Reserved for future use)
 ///
-/// Followed by `META_SIZE` `i32` slots for custom topology metadata.
+/// Followed by `META_STRIDE` `i32` slots for custom topology metadata.
 ///
 /// # Encapsulation
 /// - All mutation methods (`set_*`) are `pub(crate)`. Only the kernel can mutate

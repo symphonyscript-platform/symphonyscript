@@ -20,21 +20,21 @@ fn bench_alloc(c: &mut Criterion) {
             1 => {
                 let mem = create_mem(1_000_000);
                 let fl: FreeList<1> = FreeList::new(mem, 0, 131072);
-                group.bench_function(BenchmarkId::new("SLOT_SIZE", 1), |b| {
+                group.bench_function(BenchmarkId::new("STRIDE", 1), |b| {
                     b.iter(|| black_box(fl.alloc()));
                 });
             }
             4 => {
                 let mem = create_mem(1_000_000);
                 let fl: FreeList<4> = FreeList::new(mem, 0, 131072);
-                group.bench_function(BenchmarkId::new("SLOT_SIZE", 4), |b| {
+                group.bench_function(BenchmarkId::new("STRIDE", 4), |b| {
                     b.iter(|| black_box(fl.alloc()));
                 });
             }
             16 => {
                 let mem = create_mem(4_000_000);
                 let fl: FreeList<16> = FreeList::new(mem, 0, 131072);
-                group.bench_function(BenchmarkId::new("SLOT_SIZE", 16), |b| {
+                group.bench_function(BenchmarkId::new("STRIDE", 16), |b| {
                     b.iter(|| black_box(fl.alloc()));
                 });
             }
@@ -53,7 +53,7 @@ fn bench_alloc_free_cycle(c: &mut Criterion) {
             1 => {
                 let mem = create_mem(1_000_000);
                 let fl: FreeList<1> = FreeList::new(mem, 0, 131072);
-                group.bench_function(BenchmarkId::new("SLOT_SIZE", 1), |b| {
+                group.bench_function(BenchmarkId::new("STRIDE", 1), |b| {
                     b.iter(|| {
                         let slot = fl.alloc().unwrap();
                         let _ = black_box(fl.free(slot));
@@ -63,7 +63,7 @@ fn bench_alloc_free_cycle(c: &mut Criterion) {
             4 => {
                 let mem = create_mem(1_000_000);
                 let fl: FreeList<4> = FreeList::new(mem, 0, 131072);
-                group.bench_function(BenchmarkId::new("SLOT_SIZE", 4), |b| {
+                group.bench_function(BenchmarkId::new("STRIDE", 4), |b| {
                     b.iter(|| {
                         let slot = fl.alloc().unwrap();
                         let _ = black_box(fl.free(slot));
@@ -73,7 +73,7 @@ fn bench_alloc_free_cycle(c: &mut Criterion) {
             16 => {
                 let mem = create_mem(4_000_000);
                 let fl: FreeList<16> = FreeList::new(mem, 0, 131072);
-                group.bench_function(BenchmarkId::new("SLOT_SIZE", 16), |b| {
+                group.bench_function(BenchmarkId::new("STRIDE", 16), |b| {
                     b.iter(|| {
                         let slot = fl.alloc().unwrap();
                         let _ = black_box(fl.free(slot));
@@ -167,7 +167,7 @@ fn bench_slot_read_write(c: &mut Criterion) {
     let fl: FreeList<4> = FreeList::new(mem, 0, 131072);
     let slot = fl.alloc().unwrap();
 
-    c.bench_function("SlotHandle/write+read (SLOT_SIZE=4)", |b| {
+    c.bench_function("SlotHandle/write+read (STRIDE=4)", |b| {
         b.iter(|| {
             slot.write_all(black_box([1, 2, 3, 4]));
             black_box(slot.read_all());

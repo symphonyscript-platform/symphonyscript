@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 /// Fixed-capacity SPSC ring buffer with const-generic slot width.
 ///
-/// Each entry is a `[i32; SLOT_SIZE]` array stored inline in the backing `AtomicBuffer`.
+/// Each entry is a `[i32; STRIDE]` array stored inline in the backing `AtomicBuffer`.
 /// Uses bitmask (& (capacity-1)) for index wrapping instead of modulo.
 ///
 /// # Threading
@@ -23,7 +23,7 @@ use std::sync::Arc;
 /// 3               N * S           slots
 ///
 /// N = capacity (power of 2)
-/// S = SLOT_SIZE (const generic)
+/// S = STRIDE (const generic)
 /// ```
 ///
 /// # Constraints
@@ -31,7 +31,7 @@ use std::sync::Arc;
 /// - `peek()` reads without advancing the read cursor.
 /// - `read()` reads and advances.
 #[derive(Clone)]
-pub struct RingBuffer<const SLOT_SIZE: usize> {
+pub struct RingBuffer<const STRIDE: usize> {
     mem: AtomicBuffer,
     mod_mask: i32,
     capacity: usize,
@@ -42,7 +42,7 @@ pub struct RingBuffer<const SLOT_SIZE: usize> {
     mem_end_offset: usize,
 }
 
-impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
+impl<const STRIDE: usize> RingBuffer<STRIDE> {
     pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
         Self::create(mem, mem_start_offset, capacity, false)
     }
@@ -52,7 +52,7 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
     }
 
     pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
-        let len = 3 + capacity * SLOT_SIZE;
+        let len = 3 + capacity * STRIDE;
         let mem_end_offset = mem_start_offset + len;
 
         debug_assert!(
@@ -96,7 +96,7 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
     }
 
     pub fn calculate_size_on_mem(capacity: usize) -> usize {
-        3 + capacity * SLOT_SIZE
+        3 + capacity * STRIDE
     }
 
     pub fn pending_count(&self) -> usize {
@@ -115,14 +115,14 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
         self.capacity
     }
 
-    pub fn peek(&self) -> Option<[i32; SLOT_SIZE]> {
+    pub fn peek(&self) -> Option<[i32; STRIDE]> {
         match self.retrieve() {
             Some((data, _)) => Some(data),
             None => None,
         }
     }
 
-    pub fn read(&self) -> Option<[i32; SLOT_SIZE]> {
+    pub fn read(&self) -> Option<[i32; STRIDE]> {
         match self.retrieve() {
             Some((data, read_offset)) => {
                 self.mem[self.mem_read_offset]
@@ -134,7 +134,7 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
         }
     }
 
-    pub fn write(&self, data: [i32; SLOT_SIZE]) -> Result<(), RingBufferError> {
+    pub fn write(&self, data: [i32; STRIDE]) -> Result<(), RingBufferError> {
         let pending_count = self.mem[self.mem_pending_offset].load(Ordering::Acquire) as usize;
 
         if pending_count >= self.capacity {
@@ -142,9 +142,9 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
         }
 
         let write_index = self.mem[self.mem_write_offset].load(Ordering::Relaxed) as usize;
-        let mem_slot_base = self.mem_start_offset + 3 + write_index * SLOT_SIZE;
+        let mem_slot_base = self.mem_start_offset + 3 + write_index * STRIDE;
 
-        for i in 0..SLOT_SIZE {
+        for i in 0..STRIDE {
             self.mem[mem_slot_base + i].store(data[i], Ordering::Relaxed)
         }
 
@@ -171,7 +171,7 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
         }
     }
 
-    fn retrieve(&self) -> Option<([i32; SLOT_SIZE], i32)> {
+    fn retrieve(&self) -> Option<([i32; STRIDE], i32)> {
         let pending_count = self.mem[self.mem_pending_offset].load(Ordering::Acquire);
 
         if pending_count == 0 {
@@ -180,10 +180,10 @@ impl<const SLOT_SIZE: usize> RingBuffer<SLOT_SIZE> {
 
         let read_index = self.mem[self.mem_read_offset].load(Ordering::Relaxed) as usize;
 
-        let mut entry: [i32; SLOT_SIZE] = [0; SLOT_SIZE];
-        let mem_slot_base = self.mem_start_offset + 3 + read_index * SLOT_SIZE;
+        let mut entry: [i32; STRIDE] = [0; STRIDE];
+        let mem_slot_base = self.mem_start_offset + 3 + read_index * STRIDE;
 
-        for i in 0..SLOT_SIZE {
+        for i in 0..STRIDE {
             entry[i] = self.mem[mem_slot_base + i].load(Ordering::Relaxed)
         }
 

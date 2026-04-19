@@ -1,5 +1,5 @@
 use crate::constants::{
-    NODE_ATTRIBUTES_SIZE, NODE_META_SIZE, SYNAPSE_ATTRIBUTES_SIZE, SYNAPSE_META_SIZE,
+    NODE_ATTRIBUTES_STRIDE, NODE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE,
 };
 use std::sync::Arc;
 use synaptic_kernel::control_plane::ControlPlane;
@@ -10,9 +10,9 @@ use synaptic_kernel::serialized_kernel::SerializedKernel;
 use synaptic_kernel::synaptic_graph_config::SynapticGraphConfig;
 
 pub type SymphonyEngineKernel =
-    Kernel<NODE_META_SIZE, NODE_ATTRIBUTES_SIZE, SYNAPSE_META_SIZE, SYNAPSE_ATTRIBUTES_SIZE>;
+    Kernel<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>;
 pub type SymphonyEngineControlPlane =
-    ControlPlane<NODE_META_SIZE, NODE_ATTRIBUTES_SIZE, SYNAPSE_META_SIZE, SYNAPSE_ATTRIBUTES_SIZE>;
+    ControlPlane<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>;
 
 pub struct SymphonyEngine {
     pub(crate) kernel: SymphonyEngineKernel,

@@ -20,21 +20,21 @@ fn bench_write(c: &mut Criterion) {
             1 => {
                 let mem = create_mem(1_000_000);
                 let ring: RingBuffer<1> = RingBuffer::new(mem, 0, 131072);
-                group.bench_function(BenchmarkId::new("SLOT_SIZE", 1), |b| {
+                group.bench_function(BenchmarkId::new("STRIDE", 1), |b| {
                     b.iter(|| black_box(ring.write([0])));
                 });
             }
             4 => {
                 let mem = create_mem(1_000_000);
                 let ring: RingBuffer<4> = RingBuffer::new(mem, 0, 131072);
-                group.bench_function(BenchmarkId::new("SLOT_SIZE", 4), |b| {
+                group.bench_function(BenchmarkId::new("STRIDE", 4), |b| {
                     b.iter(|| black_box(ring.write([0, 1, 2, 3])));
                 });
             }
             16 => {
                 let mem = create_mem(4_000_000);
                 let ring: RingBuffer<16> = RingBuffer::new(mem, 0, 131072);
-                group.bench_function(BenchmarkId::new("SLOT_SIZE", 16), |b| {
+                group.bench_function(BenchmarkId::new("STRIDE", 16), |b| {
                     b.iter(|| black_box(ring.write([0; 16])));
                 });
             }
@@ -57,7 +57,7 @@ fn bench_read(c: &mut Criterion) {
                 for i in 0..100_000 {
                     ring.write([i]).unwrap();
                 }
-                group.bench_function(BenchmarkId::new("SLOT_SIZE", 1), |b| {
+                group.bench_function(BenchmarkId::new("STRIDE", 1), |b| {
                     b.iter(|| black_box(ring.read()));
                 });
             }
@@ -67,7 +67,7 @@ fn bench_read(c: &mut Criterion) {
                 for i in 0..100_000 {
                     ring.write([i, 0, 0, 0]).unwrap();
                 }
-                group.bench_function(BenchmarkId::new("SLOT_SIZE", 4), |b| {
+                group.bench_function(BenchmarkId::new("STRIDE", 4), |b| {
                     b.iter(|| black_box(ring.read()));
                 });
             }
@@ -77,7 +77,7 @@ fn bench_read(c: &mut Criterion) {
                 for i in 0..100_000 {
                     ring.write([i; 16]).unwrap();
                 }
-                group.bench_function(BenchmarkId::new("SLOT_SIZE", 16), |b| {
+                group.bench_function(BenchmarkId::new("STRIDE", 16), |b| {
                     b.iter(|| black_box(ring.read()));
                 });
             }
