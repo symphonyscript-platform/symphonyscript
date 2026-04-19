@@ -156,7 +156,7 @@ fn remove_then_publish_reclaims_slot() {
     kernel.publish();
 
     // explicitly acknowledge the generation boundary
-    kernel.to_reader().swap();
+    kernel.to_mirror().swap();
 
     // publish #2: drains the previous list
     kernel.publish();
@@ -248,7 +248,7 @@ fn disconnect_then_publish_reclaims_synapse_slot() {
     kernel.publish();
     
     // explicitly acknowledge the generation boundary
-    kernel.to_reader().swap();
+    kernel.to_mirror().swap();
     
     kernel.publish(); // Two cycle deferral required to physically reclaim
 
@@ -422,7 +422,7 @@ fn deferred_free_two_cycle_delay() {
     kernel.publish();
     
     // explicitly acknowledge the generation boundary
-    kernel.to_reader().swap();
+    kernel.to_mirror().swap();
 
     // publish #2: drains previous list (contains slots[0]). Slot reclaimed.
     kernel.publish();

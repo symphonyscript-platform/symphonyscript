@@ -22,7 +22,7 @@ use std::sync::Arc;
 ///
 /// # Threading
 /// Producer thread only. The consumer accesses the graph exclusively through
-/// a [`GraphConsumer`] obtained via [`get_control_plane()`].
+/// a [`EpochConsumer`] obtained via [`get_control_plane()`].
 ///
 /// # Lifecycle
 /// 1. Create via [`new()`] or restore via [`load_serialized()`].
@@ -93,32 +93,26 @@ impl<
     pub const HEADERS_SIZE: usize = 2;
 
     pub fn new(config: KernelConfig) -> Self {
-        let mem = Self::create_mem(Epoch::<
-            NODE_META_STRIDE,
-            NODE_ATTRIBUTES_STRIDE,
-            SYNAPSE_META_STRIDE,
-            SYNAPSE_ATTRIBUTES_STRIDE,
-        >::calculate_size_on_mem(&config));
+        let mem = Self::create_mem(Self::calculate_size_on_mem(&config));
         Self::new_from_mem(mem, config)
     }
 
     pub fn new_from_mem(mem: AtomicBuffer, config: KernelConfig) -> Self {
-        let epoch = Epoch::new(Arc::clone(&mem), config.clone());
-        let mirror = Box::new(epoch.to_reader());
-        let control_plane = Arc::new(ControlPlane::new(mirror));
-
         assert!(
             mem[0].load(Ordering::Acquire) == 0 && mem[1].load(Ordering::Acquire) == 0,
-            "Attempted to initialize SynapticGraphWriter on already allocated memory"
+            "Attempted to initialize Kernel on already allocated memory"
         );
 
         assert!(
-            mem.len() >= Epoch::calculate_size_on_mem(&config),
+            mem.len() >= Self::calculate_size_on_mem(&config),
             "Provided AtomicBuffer is too small for this configuration"
         );
 
-        mem[0].store(KERNEL_MAGIC, Ordering::Release);
-        mem[1].store(KERNEL_VERSION, Ordering::Release);
+        let epoch = Epoch::new(Arc::clone(&mem), config.clone(), Self::HEADERS_SIZE);
+        let mirror = Box::new(epoch.to_mirror());
+        let control_plane = Arc::new(ControlPlane::new(mirror));
+
+        Self::stamp_mem(&mem);
 
         Kernel {
             config,
@@ -151,12 +145,12 @@ impl<
         );
 
         assert!(
-            mem.len() >= Epoch::calculate_size_on_mem(&config),
+            mem.len() >= Self::calculate_size_on_mem(&config),
             "Provided AtomicBuffer is too small for this configuration"
         );
 
-        let writer = Epoch::bind(Arc::clone(&mem), config.clone());
-        let reader = Box::new(writer.to_reader());
+        let writer = Epoch::bind(Arc::clone(&mem), config.clone(), Self::HEADERS_SIZE);
+        let reader = Box::new(writer.to_mirror());
         let control_plane = Arc::new(ControlPlane::new(reader));
 
         Kernel {
@@ -168,11 +162,21 @@ impl<
         }
     }
 
+    pub fn calculate_size_on_mem(config: &KernelConfig) -> usize {
+        Self::HEADERS_SIZE
+            + Epoch::<
+                NODE_META_STRIDE,
+                NODE_ATTRIBUTES_STRIDE,
+                SYNAPSE_META_STRIDE,
+                SYNAPSE_ATTRIBUTES_STRIDE,
+            >::calculate_size_on_mem(&config)
+    }
+
     /// Snapshots the current kernel state for persistence.
     ///
     /// # Safety Contract
     /// The consumer thread **must** be fully quiesced before calling `serialize`.
-    /// If a consumer thread is actively traversing the graph or acking generations,
+    /// If a consumer thread is actively traversing the topology or acking generations,
     /// the snapshot may capture a torn SPSC state (e.g., a triple buffer mid-swap).
     /// This is the same quiescence requirement that applies to dropping the Kernel.
     pub fn serialize(&mut self) -> SerializedKernel {
@@ -186,7 +190,7 @@ impl<
         }
     }
 
-    /// Returns a shared handle to the `ControlPlane` for constructing a `GraphConsumer` on
+    /// Returns a shared handle to the `ControlPlane` for constructing a `EpochConsumer` on
     /// the consumer thread.
     ///
     /// The `Arc` is a cross-thread transport mechanism, not a lifetime extension.
@@ -196,7 +200,7 @@ impl<
     /// # Safety Contract
     /// The consumer thread **must** be fully quiesced before the `Kernel` is dropped.
     /// Dropping the kernel unconditionally frees the deferred-deletion queue.
-    /// If the consumer is still traversing a hot-swapped graph, the result is
+    /// If the consumer is still traversing a hot-swapped epoch, the result is
     /// undefined behavior.
     pub fn get_control_plane(
         &self,
@@ -377,21 +381,16 @@ impl<
             return Err(KernelError::InsufficientCapacity);
         }
 
-        self.mem = Self::create_mem(Epoch::<
-            NODE_META_STRIDE,
-            NODE_ATTRIBUTES_STRIDE,
-            SYNAPSE_META_STRIDE,
-            SYNAPSE_ATTRIBUTES_STRIDE,
-        >::calculate_size_on_mem(&config));
-        let new_writer = Epoch::new(Arc::clone(&self.mem), config.clone());
+        self.mem = Self::create_mem_stamp(Self::calculate_size_on_mem(&config));
+        let new_writer = Epoch::new(Arc::clone(&self.mem), config.clone(), Self::HEADERS_SIZE);
 
         new_writer.copy_from(&self.active_epoch);
 
-        let new_reader = Box::new(new_writer.to_reader());
+        let new_reader = Box::new(new_writer.to_mirror());
 
         self.config = config;
         self.active_epoch = new_writer;
-        let old_reader = self.control_plane.swap_graph(new_reader);
+        let old_reader = self.control_plane.swap_epoch(new_reader);
         self.readers_pending_deletion.push_back(old_reader);
 
         Ok(())
@@ -411,5 +410,18 @@ impl<
         let mem: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
 
         Arc::new(mem)
+    }
+
+    fn create_mem_stamp(size: usize) -> AtomicBuffer {
+        let mem = Self::create_mem(size);
+
+        Self::stamp_mem(&mem);
+
+        mem
+    }
+
+    fn stamp_mem(mem: &AtomicBuffer) {
+        mem[0].store(KERNEL_MAGIC, Ordering::Release);
+        mem[1].store(KERNEL_VERSION, Ordering::Release);
     }
 }

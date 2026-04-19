@@ -55,7 +55,7 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainReader<META_ST
     }
 
     #[inline]
-    pub fn get_head(&'_ self) -> Option<NodeReader<'_, META_STRIDE, ATTR_STRIDE>> {
+    pub fn get_head_node(&'_ self) -> Option<NodeReader<'_, META_STRIDE, ATTR_STRIDE>> {
         let head_slot = self.get_head_slot();
 
         if head_slot == 0 {

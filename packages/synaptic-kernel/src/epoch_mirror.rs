@@ -5,7 +5,7 @@ use crate::topology::network::network_reader::NetworkReader;
 use crate::topology::network::synapse_reader::SynapseReader;
 use crate::topology::node::node_reader::NodeReader;
 
-/// Consumer-side graph and topology orchestrator.
+/// Consumer-side epoch mirror.
 ///
 /// Provides the unified API for traversing the lock-free and wait-free graph
 /// topology and attributes.
@@ -17,7 +17,7 @@ use crate::topology::node::node_reader::NodeReader;
 ///
 /// # Memory Layout
 /// Shares backing MEM (direct plane) and TB (triple-buffered plane) regions
-/// with `SynapticGraphWriter`. See its layout.
+/// with `Epoch`. See its layout.
 ///
 /// # Deployment
 /// 1. `swap()` consumes any pending structural updates (node, synapses, tb_metadata) published
@@ -27,7 +27,7 @@ use crate::topology::node::node_reader::NodeReader;
 ///
 /// # Traits
 /// - Memory sizing is defined at compile time via const generics.
-/// - Created exclusively via `SynapticGraphWriter::to_reader()`.
+/// - Created exclusively via `Epoch::to_mirror()`.
 #[derive(Clone)]
 pub struct EpochMirror<
     const NODE_META_STRIDE: usize,
@@ -97,7 +97,7 @@ impl<
     pub fn get_head_node(
         &'_ self,
     ) -> Option<NodeReader<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
-        self.network.get_head()
+        self.network.get_head_node()
     }
 
     pub fn get_node(

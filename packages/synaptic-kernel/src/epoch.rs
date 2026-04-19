@@ -1,9 +1,9 @@
+use crate::epoch_mirror::EpochMirror;
 use crate::kernel_config::KernelConfig;
 use crate::metadata::mem_metadata_writer::MemMetadataWriter;
 use crate::metadata::tb_metadata_writer::TbMetadataWriter;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
-use crate::epoch_mirror::EpochMirror;
 use crate::topology::network::network_writer::NetworkWriter;
 use std::sync::Arc;
 
@@ -20,15 +20,11 @@ use std::sync::Arc;
 /// Segments are packed sequentially in a single AtomicBuffer
 ///
 /// ```text
-/// Order       Segment                     Size
+/// Order       Segment             Size
 /// -------------------------------------------------------------------------------------------
-/// 1           Headers                     HEADERS_SIZE (2)
-/// 2           Mem Metadata                MemMetadataWriter::calculate_size_on_mem()
-/// 3           Node Attributes             AttributePlaneWriter::<NA>::calculate_size_on_mem()
-/// 4           Synapse Attributes          AttributePlaneWriter::<SA>::calculate_size_on_mem()
-/// 5           Triple Buffer               TripleBufferWriter::calculate_size_on_mem()
-/// 6           Node Slot Allocator         NodeChainWriter::calculate_size_on_mem()
-/// 7           Synapse Slot Allocator      SynapseChainWriter::calculate_size_on_mem()
+/// 1           Mem Metadata        MemMetadataWriter::calculate_size_on_mem()
+/// 2           Triple Buffer       TripleBufferWriter::calculate_size_on_mem()
+/// 3           Network             NetworkWriter::calculate_size_on_mem()
 /// ```
 ///
 /// # TB Memory Layout (triple-buffered plane)
@@ -37,13 +33,12 @@ use std::sync::Arc;
 /// ```text
 /// Order       Segment             Size
 /// --------------------------------------------------------------------------
-/// 1           Tb Metadata         TbMetadataWriter::calculate_size_on_tb()
-/// 2           Node Chain          NodeChainWriter::calculate_size_on_tb()
-/// 3           Synapse Chain       SynapseChainWriter::calculate_size_on_tb()
+/// 1           Tb Metadata     TbMetadataWriter::calculate_size_on_tb()
+/// 2           Network         NetworkWriter::calculate_size_on_tb()
 /// ```
 ///
 /// # Deployment
-/// 1. Structural updates (e.g. `add_node`, `connect`) and tb_metadata are written to the active
+/// 1. Structural updates (e.g. `insert_node`, `connect`) and tb_metadata are written to the active
 ///    triple-buffer segment.
 /// 2. Non-structural updates (e.g. node/synapse attributes) and mem_metadata are written
 ///    directly to `mem` (direct) plane, making such writes immediately visible to the consumer.
@@ -52,7 +47,7 @@ use std::sync::Arc;
 ///
 /// # Traits
 /// - Memory sizing is defined at compile time via const generics.
-/// - Use `to_reader()` to create the paired `SynapticGraphReader`.
+/// - Use `to_mirror()` to create the paired `EpochMirror`.
 #[derive(Clone)]
 pub struct Epoch<
     const NODE_META_STRIDE: usize,
@@ -84,18 +79,20 @@ impl<
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > Epoch<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>
 {
-    pub const HEADERS_SIZE: usize = 2;
-
-    pub fn new(mem: AtomicBuffer, config: KernelConfig) -> Self {
-        Self::create(mem, config, false)
+    pub fn new(mem: AtomicBuffer, config: KernelConfig, mem_start_offset: usize) -> Self {
+        Self::create(mem, config, mem_start_offset, false)
     }
 
-    pub fn bind(mem: AtomicBuffer, config: KernelConfig) -> Self {
-        Self::create(mem, config, true)
+    pub fn bind(mem: AtomicBuffer, config: KernelConfig, mem_start_offset: usize) -> Self {
+        Self::create(mem, config, mem_start_offset, true)
     }
 
-    pub fn create(mem: AtomicBuffer, config: KernelConfig, bind: bool) -> Self {
-        let mem_start_offset = 2;
+    pub fn create(
+        mem: AtomicBuffer,
+        config: KernelConfig,
+        mem_start_offset: usize,
+        bind: bool,
+    ) -> Self {
         let tb_start_offset = 0;
 
         let mem_metadata = MemMetadataWriter::create(
@@ -136,8 +133,7 @@ impl<
     }
 
     pub fn calculate_size_on_mem(config: &KernelConfig) -> usize {
-        Self::HEADERS_SIZE
-            + TripleBufferWriter::calculate_size_on_mem(Self::calculate_size_on_tb(config))
+        TripleBufferWriter::calculate_size_on_mem(Self::calculate_size_on_tb(config))
             + MemMetadataWriter::calculate_size_on_mem(config.mem_metadata_size)
             + NetworkWriter::<
                 NODE_META_STRIDE,
@@ -157,7 +153,7 @@ impl<
             >::calculate_size_on_tb(config.node_capacity, config.synapse_capacity)
     }
 
-    pub fn to_reader(
+    pub fn to_mirror(
         &self,
     ) -> EpochMirror<
         NODE_META_STRIDE,

@@ -12,12 +12,12 @@ use crate::topology::node::node_reader::NodeReader;
 /// Consumer thread only.
 ///
 /// # Memory Layout (Triple Buffer Plane)
-/// Shares backing region with `SynapseChainWriter`. See its layout.
+/// Shares backing region with `NetworkWriter`. See its layout.
 ///
 /// # Constraints
 /// - Read-only: structural mutation is strictly prohibited on the reading plane.
 /// - Slots are 1-based. 0 indicates an undefined state.
-/// - Created exclusively via `SynapseChainWriter::to_reader()`.
+/// - Created exclusively via `NetworkWriter::to_reader()`.
 #[derive(Clone)]
 pub struct NetworkReader<
     const NODE_META_STRIDE: usize,
@@ -74,8 +74,10 @@ impl<
     }
 
     #[inline]
-    pub fn get_head(&'_ self) -> Option<NodeReader<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
-        self.node_chain.get_head()
+    pub fn get_head_node(
+        &'_ self,
+    ) -> Option<NodeReader<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
+        self.node_chain.get_head_node()
     }
 
     #[inline]

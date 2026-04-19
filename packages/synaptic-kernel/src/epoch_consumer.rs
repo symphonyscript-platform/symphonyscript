@@ -2,10 +2,10 @@ use crate::control_plane::ControlPlane;
 use crate::epoch_mirror::EpochMirror;
 use std::sync::Arc;
 
-/// Consumer-side entry point to the graph reader.
+/// Consumer-side entry point to the epoch mirror reader.
 ///
 /// Wraps a `ControlPlane` reference and provides `acquire_mirror()`,
-/// which combines graph acquisition with triple-buffer consumption into
+/// which combines epoch mirror acquisition with triple-buffer consumption into
 /// a single call.
 ///
 /// # Threading
@@ -14,10 +14,10 @@ use std::sync::Arc;
 /// # Usage
 /// Call `acquire_mirror()` at the start of every processing cycle.
 /// It:
-/// 1. Acquires the current `SynapticGraphReader` from the `ControlPlane` - while also
+/// 1. Acquires the current `EpochMirror` from the `ControlPlane` - while also
 ///    internally acknowledging the current generation before loading the pointer.
 /// 2. Calls `swap()` to consume any pending triple-buffer updates.
-/// 3. Returns the ready-to-read `SynapticGraphReader`.
+/// 3. Returns the ready-to-read `EpochMirror`.
 ///
 /// The returned reference is valid for the entire cycle - no re-acquisition needed.
 ///
@@ -65,13 +65,13 @@ impl<
         EpochConsumer { control_plane }
     }
 
-    /// Acquires the current graph for this processing cycle.
+    /// Acquires the current mirror for this processing cycle.
     ///
-    /// Acknowledges the current generation, loads the graph pointer, and
+    /// Acknowledges the current generation, loads the mirror pointer, and
     /// consumes any pending triple-buffer updates - returning ready-to-read
-    /// `SynapticGraphReader`.
+    /// `EpochMirror`.
     ///
-    /// Takes `&mut self` to guarantee at most one live graph reference at a time.
+    /// Takes `&mut self` to guarantee at most one live mirror reference at a time.
     /// The compiler ensures the previous reference is dropped before the next
     /// acquisition, so the generation acknowledgement always reflects
     /// the consumer's actual state.
@@ -87,10 +87,10 @@ impl<
         SYNAPSE_META_STRIDE,
         SYNAPSE_ATTRIBUTES_STRIDE,
     > {
-        let graph = self.control_plane.acquire_mirror();
+        let mirror = self.control_plane.acquire_mirror();
 
-        graph.swap();
+        mirror.swap();
 
-        graph
+        mirror
     }
 }

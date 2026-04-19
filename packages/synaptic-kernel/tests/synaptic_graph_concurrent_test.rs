@@ -31,7 +31,7 @@ fn create_writer() -> Gw {
 #[test]
 fn multi_threaded_topology_fuzzer() {
     let writer = create_writer();
-    let reader = writer.to_reader();
+    let reader = writer.to_mirror();
 
     let is_running = Arc::new(AtomicBool::new(true));
     let is_running_writer = Arc::clone(&is_running);

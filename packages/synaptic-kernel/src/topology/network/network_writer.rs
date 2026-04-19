@@ -1,7 +1,6 @@
 use crate::constants::SYNAPSE_STRIDE;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::entry_store_writer::EntryStoreWriter;
-use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
 use crate::topology::network::network_reader::NetworkReader;
@@ -140,7 +139,7 @@ impl<
 
     pub fn calculate_size_on_mem(node_capacity: usize, synapse_capacity: usize) -> usize {
         NodeChainWriter::calculate_size_on_mem(node_capacity)
-            + SlotAllocator::calculate_size_on_mem(synapse_capacity)
+            + EntryStoreWriter::calculate_size_on_mem(synapse_capacity)
     }
 
     pub fn calculate_size_on_tb(node_capacity: usize, synapse_capacity: usize) -> usize {
@@ -164,7 +163,7 @@ impl<
     }
 
     pub fn mem_start_offset(&self) -> usize {
-        self.synapses.mem_start_offset()
+        self.node_chain.mem_start_offset()
     }
 
     pub fn mem_end_offset(&self) -> usize {
@@ -172,7 +171,7 @@ impl<
     }
 
     pub fn tb_start_offset(&self) -> usize {
-        self.synapses.tb_start_offset()
+        self.node_chain.tb_start_offset()
     }
 
     pub fn tb_end_offset(&self) -> usize {
@@ -404,10 +403,17 @@ impl<
 
     pub fn copy_from(&self, source: &Self) {
         debug_assert!(
-            source.capacity() <= self.capacity(),
-            "SynapseChainWriter.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
-            source.capacity(),
-            self.capacity(),
+            source.node_capacity() <= self.node_capacity(),
+            "NetworkWriter.copy_from | source.node_capacity() {} cannot be greater than destination.capacity {}",
+            source.node_capacity(),
+            self.node_capacity(),
+        );
+
+        debug_assert!(
+            source.synapse_capacity() <= self.synapse_capacity(),
+            "NetworkWriter.copy_from | source.synapse_capacity() {} cannot be greater than destination.capacity {}",
+            source.synapse_capacity(),
+            self.synapse_capacity(),
         );
 
         self.node_chain.copy_from(&source.node_chain);

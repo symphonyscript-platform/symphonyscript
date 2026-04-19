@@ -31,7 +31,7 @@ fn config(capacity: usize) -> KernelConfig {
     create_config(capacity, capacity)
 }
 
-/// Extract consumer-thread reader from controller via a leaked `GraphConsumer`.
+/// Extract consumer-thread reader from controller via a leaked [`EpochConsumer`].
 /// This simulates the exact path the consumer thread takes in production while
 /// giving callers a `'static` reader so mutations to the controller can
 /// proceed without fighting the borrow checker.
@@ -486,7 +486,7 @@ fn gc_pipeline_rotates_through_publish_cycles() {
     controller.publish();
 
     // Consumer thread sees migrated data.
-    // Note: `mock_consumer_reader` calls `GraphConsumer::acquire_mirror`, which now
+    // Note: `mock_consumer_reader` calls `EpochConsumer::acquire_mirror`, which now
     // bundles the swap internally. The explicit `swap()` is no longer observable
     // here — the migrated state visibility is confirmed by the kind assertion.
     let consumer = unsafe { mock_consumer_reader(&controller) };

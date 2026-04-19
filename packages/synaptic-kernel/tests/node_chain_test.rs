@@ -304,7 +304,7 @@ fn chain_reader_traverses_full_chain() {
     let chain_r = h.chain_r;
 
     // chain: c -> b -> a
-    let head = chain_r.get_head().unwrap();
+    let head = chain_r.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 3);
     assert_eq!(head.get_meta(0), 30);
 
@@ -324,7 +324,7 @@ fn chain_reader_empty_chain_returns_none() {
 
     let chain_r = h.chain_r;
 
-    assert!(chain_r.get_head().is_none());
+    assert!(chain_r.get_head_node().is_none());
 }
 
 #[test]
@@ -345,7 +345,7 @@ fn chain_reader_sees_removal_after_publish() {
 
     let chain_r = h.chain_r;
 
-    let head = chain_r.get_head().unwrap();
+    let head = chain_r.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 1);
     assert_eq!(head.get_next_ptr(), 0, "only one node left");
 }
@@ -581,7 +581,7 @@ fn reader_traverses_chain_after_mid_chain_removal() {
     let chain_r = h.chain_r;
 
     // forward traversal: d -> c -> a -> 0
-    let head = chain_r.get_head().unwrap();
+    let head = chain_r.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 4);
     assert_eq!(head.get_meta(0), 40);
 
