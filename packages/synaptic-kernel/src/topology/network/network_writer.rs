@@ -179,10 +179,6 @@ impl<
         NetworkReader::bind(self.node_chain.to_reader(), self.synapses.to_reader())
     }
 
-    pub fn len(&self) -> usize {
-        self.synapses.len()
-    }
-
     pub fn mem_start_offset(&self) -> usize {
         self.node_chain.mem_start_offset()
     }

@@ -1,5 +1,4 @@
 use crate::primitives::entry_reader::EntryReader;
-use crate::primitives::entry_handle::EntryHandle;
 use crate::primitives::mem_zone_reader::MemZoneReader;
 use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::staging_buffer_reader::StagingBufferReader;
@@ -39,13 +38,13 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
     ) -> Self {
         debug_assert!(
             mem_end_offset <= mem.len(),
-            "EntryStoreReader::create | range [{}..{}] exceeds AtomicBuffer boundaries",
+            "EntryStoreReader::bind | range [{}..{}] exceeds AtomicBuffer boundaries",
             mem_start_offset,
             mem.len(),
         );
         debug_assert!(
             tb_end_offset <= tb.buffer_capacity(),
-            "EntryStoreReader::new | range [{}..{}] exceeds buffer capacity {}",
+            "EntryStoreReader::bind | range [{}..{}] exceeds buffer capacity {}",
             tb_start_offset,
             Self::calculate_size_on_tb(capacity),
             tb.buffer_capacity(),

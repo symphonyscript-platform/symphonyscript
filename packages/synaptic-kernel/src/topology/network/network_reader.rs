@@ -62,23 +62,23 @@ impl<
         }
     }
 
-    pub fn mem_start_offset(&self) -> usize {
-        self.synapses.mem_start_offset()
-    }
-
     pub fn mem_end_offset(&self) -> usize {
         self.synapses.mem_end_offset()
     }
 
     pub fn tb_start_offset(&self) -> usize {
-        self.synapses.tb_start_offset()
+        self.node_chain.tb_start_offset()
     }
 
     pub fn tb_end_offset(&self) -> usize {
         self.synapses.tb_end_offset()
     }
 
-    pub fn capacity(&self) -> usize {
+    pub fn node_capacity(&self) -> usize {
+        self.node_chain.capacity()
+    }
+
+    pub fn synapse_capacity(&self) -> usize {
         self.synapses.capacity()
     }
 

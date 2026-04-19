@@ -111,10 +111,6 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
         )
     }
 
-    pub(crate) fn calculate_node_start_offset(tb_head_offset: usize, slot: usize) -> usize {
-        tb_head_offset + 1 + (slot - 1) * (NODE_STRIDE + META_STRIDE)
-    }
-
     pub fn to_reader(&self) -> NodeChainReader<META_STRIDE, ATTR_STRIDE> {
         NodeChainReader::bind(
             self.tb.to_reader(),
