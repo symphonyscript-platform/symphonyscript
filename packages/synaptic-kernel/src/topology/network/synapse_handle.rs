@@ -13,7 +13,7 @@ use crate::primitives::entry_handle::EntryHandle;
 /// Shares backing region with `SynapseWriter`. See its layout.
 ///
 /// # Constraints
-/// - Treats all structural data is readonly, including meta.
+/// - Treats core zone as readonly. meta zone stays writable as it belongs to user domain.
 pub struct SynapseView<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize> {
     entry_handle: EntryHandle<'a, SYNAPSE_STRIDE, META_STRIDE, ATTR_STRIDE>,
 }
@@ -68,6 +68,16 @@ impl<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize>
     #[inline]
     pub fn get_meta_all(&self) -> [i32; META_STRIDE] {
         self.entry_handle.meta_read_all()
+    }
+
+    #[inline]
+    pub fn set_meta(&self, offset: usize, value: i32) {
+        self.entry_handle.meta_write(offset, value)
+    }
+
+    #[inline]
+    pub fn set_meta_all(&self, data: [i32; META_STRIDE]) {
+        self.entry_handle.meta_write_all(data)
     }
 
     #[inline]

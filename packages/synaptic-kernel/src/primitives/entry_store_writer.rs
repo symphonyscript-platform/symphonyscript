@@ -188,7 +188,7 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
 
         EntryHandle::new(
             TbZoneView::new(&self.tb, tb_start_offset),
-            TbZoneView::new(&self.tb, tb_start_offset + CORE_STRIDE),
+            TbZoneWriter::new(&self.tb, tb_start_offset + CORE_STRIDE),
             MemZoneWriter::new(&self.mem, mem_start_offset),
         )
     }

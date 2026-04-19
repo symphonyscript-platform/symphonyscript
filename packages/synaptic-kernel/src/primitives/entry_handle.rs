@@ -1,5 +1,6 @@
 use crate::primitives::mem_zone_writer::MemZoneWriter;
 use crate::primitives::tb_zone_view::TbZoneView;
+use crate::primitives::tb_zone_writer::TbZoneWriter;
 
 /// Producer-side safe facade for an entry spanning three zones: `core` and `meta`
 /// on the triple-buffer plane, `attr` on the mem plane.
@@ -11,7 +12,7 @@ use crate::primitives::tb_zone_view::TbZoneView;
 /// Producer thread only. Delegates back to the underlying `TbZoneWriter`s and `MemZoneWriter`.
 ///
 /// # Constraints
-/// - Treats all structural data is readonly, including meta.
+/// - Treats core zone as readonly. meta zone stays writable as it belongs to user domain.
 pub struct EntryHandle<
     'a,
     const CORE_STRIDE: usize,
@@ -19,7 +20,7 @@ pub struct EntryHandle<
     const ATTR_STRIDE: usize,
 > {
     core: TbZoneView<'a, CORE_STRIDE>,
-    meta: TbZoneView<'a, META_STRIDE>,
+    meta: TbZoneWriter<'a, META_STRIDE>,
     attributes: MemZoneWriter<'a, ATTR_STRIDE>,
 }
 
@@ -28,7 +29,7 @@ impl<'a, const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: 
 {
     pub fn new(
         core: TbZoneView<'a, CORE_STRIDE>,
-        meta: TbZoneView<'a, META_STRIDE>,
+        meta: TbZoneWriter<'a, META_STRIDE>,
         attributes: MemZoneWriter<'a, ATTR_STRIDE>,
     ) -> Self {
         EntryHandle {
@@ -54,9 +55,20 @@ impl<'a, const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: 
     }
 
     #[inline]
+    pub fn meta_write(&self, offset: usize, value: i32) {
+        self.meta.write(offset, value)
+    }
+
+    #[inline]
     pub fn meta_read_all(&self) -> [i32; META_STRIDE] {
         self.meta.read_all()
     }
+
+    #[inline]
+    pub fn meta_write_all(&self, data: [i32; META_STRIDE]) {
+        self.meta.write_all(data)
+    }
+
     #[inline]
     pub fn attr_read(&self, offset: usize) -> i32 {
         self.attributes.read(offset)
