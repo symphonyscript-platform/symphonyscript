@@ -37,6 +37,13 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
         tb_end_offset: usize,
         capacity: usize,
     ) -> Self {
+        debug_assert!(
+            mem_end_offset <= mem.len(),
+            "EntryStoreReader::create | range [{}..{}] exceeds AtomicBuffer boundaries",
+            mem_start_offset,
+            mem.len(),
+        );
+
         EntryStoreReader {
             mem,
             tb,

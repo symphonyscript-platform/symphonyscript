@@ -58,6 +58,15 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
         capacity: usize,
         bind: bool,
     ) -> Self {
+        let mem_end_offset = mem_start_offset + SlotAllocator::calculate_size_on_mem(capacity);
+
+        debug_assert!(
+            mem_end_offset <= mem.len(),
+            "EntryStoreWriter::create | range [{}..{}] exceeds AtomicBuffer boundaries",
+            mem_start_offset,
+            mem.len(),
+        );
+
         let allocator = SlotAllocator::create(Arc::clone(&mem), mem_start_offset, capacity, bind);
         let mem_attrs_start_offset = allocator.mem_end_offset();
         let mem_end_offset = mem_attrs_start_offset + capacity * ATTR_STRIDE;
