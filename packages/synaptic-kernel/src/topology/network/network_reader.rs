@@ -4,19 +4,28 @@ use crate::topology::network::synapse_reader::SynapseReader;
 use crate::topology::node::node_chain_reader::NodeChainReader;
 use crate::topology::node::node_reader::NodeReader;
 
-/// Consumer-side triple-buffered multi-linked list for graph synapses.
+/// Consumer-side mirror of the node and synapse topology.
 ///
-/// Provides read-only structural traversal of the synapse topology.
+/// Provides read-only traversal across both chains. Callers walk the graph
+/// starting from the head node (`graph_head_node()`), follow `get_next_ptr()`
+/// through the node chain, and dereference `get_outgoing_synapse_head()` /
+/// `get_incoming_synapse_head()` on each node to walk its synapse lists.
 ///
 /// # Threading
 /// Consumer thread only.
 ///
-/// # Memory Layout (Triple Buffer Plane)
-/// Shares backing region with `NetworkWriter`. See its layout.
+/// # Memory Layout
+/// Shares the backing MEM and TB regions with `NetworkWriter`. See its layout.
 ///
 /// # Constraints
-/// - Read-only: structural mutation is strictly prohibited on the reading plane.
-/// - Slots are 1-based. 0 indicates an undefined state.
+/// - Read-only: structural mutation is strictly prohibited.
+/// - Slots are 1-based. 0 denotes "no slot" / "undefined".
+/// - No liveness check on random access: the reader does not carry the slot allocators,
+///   so `get_note(slot)` and `get_synapse(slot)` return raw memory for whatever entity last
+///   occupied that slot. Consumers MUST reach slots by traversing head pointers and next/prev
+///   pointers of already-acquired entries. Random-access arbitrary slot is undefined.
+/// - `ack_generation()` acknowledges both node and synapse deferred-deletion generations.
+///   Invoked by `EpochMirror::swap()` - consumers do not call it directly.
 /// - Created exclusively via `NetworkWriter::to_reader()`.
 #[derive(Clone)]
 pub struct NetworkReader<

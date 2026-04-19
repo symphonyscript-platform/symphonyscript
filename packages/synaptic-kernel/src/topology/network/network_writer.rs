@@ -11,36 +11,56 @@ use crate::topology::node::node_view::NodeView;
 use crate::topology::node::node_writer::NodeWriter;
 use std::sync::Arc;
 
-/// Producer-side triple-buffered multi-linked list for graph synapses.
+/// Producer-side orchestrator for node and synapse topology.
 ///
-/// Orchestrates allocation, lifecycle, and structural linkage of synapses.
-/// Every active synapse maintains two separate doubly-linked lists concurrently:
-/// One anchoring it to the source node's `outgoing` list, and another to
-/// the target node's `incoming` list.
+/// Owns two entity stores: a doubly-linked node chain (with a global head)
+/// and a flat synapse store. Synapse lifecycle is threaded through node state -
+/// every active synapse participates in two concurrent doubly-linked lists:
+/// one through its source node's `outgoing` slots, another through its target
+/// node's `incoming` slots.
 ///
-/// Uses `SlotAllocator` to manage synapse slot lifecycles.
+/// Node removal cascades to synapses: `remove_node()` first disconnects every
+/// outgoing and incoming synapse of the target node, then frees the node's
+/// slot. This invariant lives here - not in the node chain - because only
+/// the combined power of nodes and synapses can enforce it.
 ///
 /// # Threading
 /// Producer thread only.
 ///
-/// # Memory Layout (Triple Buffer Plane)
+/// # Memory Layout (MEM Plane)
 /// ```text
-/// Offset      Size        Field
+/// Order       Segment         Size
 /// -------------------------------------
-/// 0           N*(S+M)     synapses
-///
-/// N = capacity
-/// S = SYNAPSE_STRIDE (8)
-/// M = SYNAPSE_META_STRIDE (const generic)
+/// 1           Node Chain      NodeChainWriter::<...>::calculate_size_on_mem()
+/// 2           Synapse Store   EntryStoreWriter::<...>::calculate_size_on_mem()
 /// ```
 ///
-/// Note: There is no global `head_slot` parameter on the synapse plane.
-/// Synapses are accessed by traversing from a specific node.
+/// # Memory Layout (Triple Buffer Plane)
+/// ```text
+/// Order       Segment         Size
+/// -------------------------------------
+/// 1           Node Chain      NodeChainWriter::<...>::calculate_size_on_mem()
+/// 2           Synapse Store   EntryStoreWriter::<...>::calculate_size_on_mem()
+/// ```
+///
+/// Synapses have no global head on the TB plane. A synapse is always reached
+/// by traversing a node's `outgoing_synapse_head` or `incoming_synapse_head` and
+/// following the per-node doubly-linked lists.
+///
+/// # Deployment
+/// 1. Structural edits (node insertion/removal, connect/disconnect) stage changes
+///    on the triple-buffer's current writer buffer and on the mem-plane slot allocators.
+///    Such changes must be `publish()`-ed.
+/// 2. Attribute writes (node and synapse) go directly to the mem plane. The consumer
+///    sees them immediately, without a publishing requirement.
+/// 3. `publish()` publishes both node and synapse allocator state; the
+///    surrounding `Epoch` publishes the triple buffer.
 ///
 /// # Constraints
-/// - Slots are 1-based. 0 indicates an undefined state.
-/// - Built-in lifecycle safety: `disconnect()` marks the slot for deferred freeing,
-///   preventing reallocation until the consumer has advanced pas the pending `publish()`.
+/// - Slots are 1-based. 0 denotes "no slot" / "undefined".
+/// - Built-in lifecycle safety: `remove_node()`, `disconnect()` and `disconnect_synapse()` marks
+///   their slots for deferred freeing, preventing reallocation until the consumer has
+///   advanced pas the pending `publish()`.
 /// - Use `to_reader()` to create the paired `NetworkReader`.
 #[derive(Clone)]
 pub struct NetworkWriter<
