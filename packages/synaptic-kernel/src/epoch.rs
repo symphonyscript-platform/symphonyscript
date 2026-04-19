@@ -57,9 +57,9 @@ pub struct Epoch<
 > {
     tb: TripleBufferWriter,
 
-    pub(crate) mem_metadata: MemMetadataWriter,
-    pub(crate) tb_metadata: TbMetadataWriter,
-    pub(crate) network: NetworkWriter<
+    pub mem_metadata: MemMetadataWriter,
+    pub tb_metadata: TbMetadataWriter,
+    pub network: NetworkWriter<
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,

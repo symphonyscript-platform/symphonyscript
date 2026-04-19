@@ -1,4 +1,4 @@
-use crate::constants::{NODE_STRIDE, SYNAPSE_STRIDE};
+use crate::constants::SYNAPSE_STRIDE;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::entry_store_writer::EntryStoreWriter;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
@@ -159,7 +159,7 @@ impl<
 
     pub fn calculate_size_on_mem(node_capacity: usize, synapse_capacity: usize) -> usize {
         NodeChainWriter::<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>::calculate_size_on_mem(node_capacity)
-            + EntryStoreWriter::<NODE_STRIDE, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>::calculate_size_on_mem(synapse_capacity)
+            + EntryStoreWriter::<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>::calculate_size_on_mem(synapse_capacity)
     }
 
     pub fn calculate_size_on_tb(node_capacity: usize, synapse_capacity: usize) -> usize {
