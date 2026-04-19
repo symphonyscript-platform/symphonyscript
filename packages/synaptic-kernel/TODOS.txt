@@ -7,3 +7,5 @@
    - EpochConsumer,
    - Kernel
    - ControlPlane.
+5. identify any leftovers from the pre-refactoring: legacy names, doc comments, anything.
+6. Add benchmarks
