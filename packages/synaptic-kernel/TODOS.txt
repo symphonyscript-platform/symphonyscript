@@ -1,3 +1,9 @@
 1. Introduce SlotId(pub NonZeroU16) instead of usize
 2. Introduce TripleBufferRegistry in Epoch - supporting multiple triple buffers
 3. Migrate current, built-in, TB to TripleBufferRegistry under MAIN_TB=0 ID and export it from crate.
+4. Update doc comments of the following:
+   - Epoch
+   - EpochMirror
+   - EpochConsumer,
+   - Kernel
+   - ControlPlane.
