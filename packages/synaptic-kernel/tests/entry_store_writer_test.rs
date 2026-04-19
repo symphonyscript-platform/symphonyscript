@@ -15,10 +15,10 @@ fn create_mem(size: usize) -> AtomicBuffer {
 
 /// Default mem/tb offsets used in most tests. Pick an offset past the TB
 /// region so allocator + attribute plane data never overlaps the buffers.
-const TB_BUFFER_CAPACITY: usize = 1024;
+const TB_BUFFER_CAPACITY: usize = 4096;
 const TB_MEM_RESERVED: usize = 4 + TB_BUFFER_CAPACITY * 3; // TripleBufferWriter::calculate_size_on_mem
 const DEFAULT_MEM_START_OFFSET: usize = TB_MEM_RESERVED + 8;
-const MEM_SIZE: usize = 16384;
+const MEM_SIZE: usize = 24576;
 
 fn make_tb(mem: &AtomicBuffer) -> TripleBufferWriter {
     TripleBufferWriter::new(Arc::clone(mem), 0, TB_BUFFER_CAPACITY)
