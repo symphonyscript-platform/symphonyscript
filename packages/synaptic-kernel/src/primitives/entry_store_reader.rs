@@ -43,6 +43,13 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
             mem_start_offset,
             mem.len(),
         );
+        debug_assert!(
+            tb_end_offset <= tb.buffer_capacity(),
+            "EntryStoreReader::new | range [{}..{}] exceeds buffer capacity {}",
+            tb_start_offset,
+            Self::calculate_size_on_tb(capacity),
+            tb.buffer_capacity(),
+        );
 
         EntryStoreReader {
             mem,

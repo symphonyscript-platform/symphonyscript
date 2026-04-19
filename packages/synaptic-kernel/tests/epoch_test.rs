@@ -156,12 +156,12 @@ fn new_at_nonzero_offset_works() {
 #[test]
 #[should_panic]
 fn new_with_undersized_mem_debug_panics() {
-    // Memory too small to fit even the TripleBufferWriter header: an
-    // internal debug_assert inside one of the writer components must fire.
+    // Memory one slot short of the declared footprint must trip a
+    // debug_assert in one of the internal writer components. Tight-size
+    // property: `calculate_size_on_mem(&config)` is the minimum viable size.
     let config = mk_config(4, 4, 1, 1);
     let size = TestEpoch::calculate_size_on_mem(&config);
-    // Halve the size — well below what any viable layout needs.
-    let mem = make_mem(size / 2);
+    let mem = make_mem(size - 1);
     let _epoch = TestEpoch::new(mem, config, 0);
 }
 
