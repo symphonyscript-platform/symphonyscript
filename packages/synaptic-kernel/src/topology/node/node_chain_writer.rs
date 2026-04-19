@@ -7,31 +7,49 @@ use crate::topology::node::node_chain_reader::NodeChainReader;
 use crate::topology::node::node_view::NodeView;
 use crate::topology::node::node_writer::NodeWriter;
 
-/// Producer-side triple-buffered doubly-linked list for graph nodes.
+/// Producer-side doubly-linked list of nodes.
 ///
-/// Orchestrates allocation, lifecycle, and structural linkage of nodes.
-///
-/// Uses `SlotAllocator` to manage node slot lifecycles.
+/// Owns an internal `EntryStoreWriter<...>` for slot allocation and per-slot storage
+/// (core + meta zones in TB, attributes on the MEM). Adds a single head-slot pointer at TB
+/// offset 0 and maintains `next_ptr` / `prev_ptr` inside each node's core zone to form the chain.
 ///
 /// # Threading
 /// Producer thread only.
 ///
-/// # Memory Layout (Triple Buffer Plane)
+/// # Memory Layout (MEM plane)
 /// ```text
-/// Offset      Size        Field
+/// Order       Segment             Size
 /// -------------------------------------
-/// 0           1           head_slot
-/// 1           N*(S+M)     nodes
-///
-/// N = capacity
-/// S = NODE_STRIDE (8)
-/// M = META_STRIDE (const generic)
+/// 1           Slot Allocator      SlotAllocator::calculate_size_on_mem()
+/// 2           Node Attributes     capacity * ATTR_STRIDE
 /// ```
 ///
+/// # Memory Layout (TB plane)
+/// ```text
+/// Offset      Size            Field
+/// -------------------------------------
+/// 0           1               head_slot
+/// 1           C * (N + M)     nodes (core + meta pers slot)
+///
+/// C = capacity
+/// N = NODE_STRIDE
+/// M = META_STRIDE
+/// ```
+///
+/// Each node's core and meta zones are adjacent per slot - see `NodeWriter`
+/// for the exact core field layout.
+///
+/// # Scope
+/// This type manages only the node chain. `remove_node()` unlinks the node
+/// from the chain and defers its slot removal, but does NOT touch any synapses
+/// that reference the removed node. If the graph has active synapses,
+/// use `NetworkWriter::remove_node()` instead - it cascades synapse cleanup before
+/// invoking this.
+///
 /// # Constraints
-/// - Slots are 1-based. 0 indicates an undefined state.
-/// - Built-in lifecycle safety: `remove()` marks the slot for deferred freeing,
-///   preventing reallocation until the consumer has advanced past the pending `publish()`.
+/// - Slots are 1-based. 0 denotes "no slot" / "undefined".
+/// - Lifecycle safety: `remove_node()` marks the slot for deferred freeing, preventing
+///   reallocation until the consumer has advanced past the pending `publish()`.
 /// - Use `to_reader()` to create the paired `NodeChainReader`.
 #[derive(Clone)]
 pub struct NodeChainWriter<const META_STRIDE: usize, const ATTR_STRIDE: usize> {
