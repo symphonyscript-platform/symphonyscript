@@ -165,6 +165,41 @@ impl<
     }
 
     pub fn copy_from(&self, source: &Self) {
+        debug_assert!(
+            source.tb.buffer_capacity() <= self.tb.buffer_capacity(),
+            "Epoch.copy_from | source.tb.buffer_capacity() {} cannot be greater than destination.tb.buffer_capacity() {}",
+            source.tb.buffer_capacity(),
+            self.tb.buffer_capacity(),
+        );
+
+        debug_assert!(
+            source.mem_metadata.capacity() <= self.mem_metadata.capacity(),
+            "MemMetadataWriter.copy_from | source.mem_metadata.capacity() {} cannot be greater than destination.mem_metadata.capacity() {}",
+            source.mem_metadata.capacity(),
+            self.mem_metadata.capacity(),
+        );
+
+        debug_assert!(
+            source.tb_metadata.capacity() <= self.tb_metadata.capacity(),
+            "MemMetadataWriter.copy_from | source.tb_metadata.capacity() {} cannot be greater than destination.tb_metadata.capacity() {}",
+            source.tb_metadata.capacity(),
+            self.tb_metadata.capacity(),
+        );
+
+        debug_assert!(
+            source.network.node_capacity() <= self.network.node_capacity(),
+            "MemMetadataWriter.copy_from | source.network.node_capacity() {} cannot be greater than destination.network.node_capacity() {}",
+            source.network.node_capacity(),
+            self.network.node_capacity(),
+        );
+
+        debug_assert!(
+            source.network.synapse_capacity() <= self.network.synapse_capacity(),
+            "MemMetadataWriter.copy_from | source.network.synapse_capacity() {} cannot be greater than destination.network.synapse_capacity() {}",
+            source.network.synapse_capacity(),
+            self.network.synapse_capacity(),
+        );
+
         self.tb.copy_metadata_from(&source.tb);
         self.mem_metadata.copy_from(&source.mem_metadata);
         self.tb_metadata.copy_from(&source.tb_metadata);
