@@ -21,38 +21,38 @@ pub struct SynapseChainReader<
     const SYNAPSE_META_STRIDE: usize,
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > {
-    ds: EntryStoreReader<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>,
+    es: EntryStoreReader<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>,
 }
 
 impl<const META_STRIDE: usize, const ATTR_STRIDE: usize>
     SynapseChainReader<META_STRIDE, ATTR_STRIDE>
 {
-    pub(crate) fn bind(ds: EntryStoreReader<SYNAPSE_STRIDE, META_STRIDE, ATTR_STRIDE>) -> Self {
-        SynapseChainReader { ds }
+    pub(crate) fn bind(es: EntryStoreReader<SYNAPSE_STRIDE, META_STRIDE, ATTR_STRIDE>) -> Self {
+        SynapseChainReader { es }
     }
 
     pub fn mem_start_offset(&self) -> usize {
-        self.ds.mem_start_offset()
+        self.es.mem_start_offset()
     }
 
     pub fn mem_end_offset(&self) -> usize {
-        self.ds.mem_end_offset()
+        self.es.mem_end_offset()
     }
 
     pub fn tb_start_offset(&self) -> usize {
-        self.ds.tb_start_offset()
+        self.es.tb_start_offset()
     }
 
     pub fn tb_end_offset(&self) -> usize {
-        self.ds.tb_end_offset()
+        self.es.tb_end_offset()
     }
 
     pub fn capacity(&self) -> usize {
-        self.ds.capacity()
+        self.es.capacity()
     }
 
     #[inline]
     pub fn get_synapse(&'_ self, slot: usize) -> SynapseReader<'_, META_STRIDE, ATTR_STRIDE> {
-        SynapseReader::new(self.ds.get(slot))
+        SynapseReader::new(self.es.get(slot))
     }
 }

@@ -50,7 +50,7 @@ pub struct SynapseChainWriter<
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > {
     node_chain: NodeChainWriter<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>,
-    ds: EntryStoreWriter<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>,
+    es: EntryStoreWriter<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>,
 }
 
 impl<
@@ -115,7 +115,7 @@ impl<
     ) -> Self {
         SynapseChainWriter {
             node_chain,
-            ds: EntryStoreWriter::create(
+            es: EntryStoreWriter::create(
                 mem,
                 tb,
                 mem_start_offset,
@@ -139,46 +139,46 @@ impl<
     }
 
     pub fn to_reader(&self) -> SynapseChainReader<SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
-        SynapseChainReader::bind(self.ds.to_reader())
+        SynapseChainReader::bind(self.es.to_reader())
     }
 
     pub fn to_staging_buffer_reader(&self) -> StagingBufferReader {
-        self.ds.to_staging_buffer_reader()
+        self.es.to_staging_buffer_reader()
     }
 
     pub fn len(&self) -> usize {
-        self.ds.len()
+        self.es.len()
     }
 
     pub fn mem_start_offset(&self) -> usize {
-        self.ds.mem_start_offset()
+        self.es.mem_start_offset()
     }
 
     pub fn mem_end_offset(&self) -> usize {
-        self.ds.mem_end_offset()
+        self.es.mem_end_offset()
     }
 
     pub fn tb_start_offset(&self) -> usize {
-        self.ds.tb_start_offset()
+        self.es.tb_start_offset()
     }
 
     pub fn tb_end_offset(&self) -> usize {
-        self.ds.tb_end_offset()
+        self.es.tb_end_offset()
     }
 
     pub fn capacity(&self) -> usize {
-        self.ds.capacity()
+        self.es.capacity()
     }
 
     pub fn utilization(&self) -> f32 {
-        self.ds.utilization()
+        self.es.utilization()
     }
 
     pub fn get_synapse(
         &'_ self,
         slot: usize,
     ) -> SynapseWriter<'_, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
-        SynapseWriter::new(self.ds.get(slot))
+        SynapseWriter::new(self.es.get(slot))
     }
 
     pub fn connect(&self, source_slot: usize, target_slot: usize, kind: i32) -> Option<usize> {
@@ -186,7 +186,7 @@ impl<
         let target = self.node_chain.get_node(target_slot);
         let source_current_tail_ptr = source.get_outgoing_synapse_tail();
         let target_current_tail_ptr = target.get_incoming_synapse_tail();
-        let result = self.ds.insert();
+        let result = self.es.insert();
 
         if result.is_none() {
             return None;
@@ -258,7 +258,7 @@ impl<
         let synapse_incoming_next_ptr = synapse.get_incoming_next_ptr();
         let synapse_incoming_prev_ptr = synapse.get_incoming_prev_ptr();
 
-        self.ds.remove(synapse_slot)?;
+        self.es.remove(synapse_slot)?;
 
         if synapse_outgoing_prev_ptr != 0 {
             self.get_synapse(synapse_outgoing_prev_ptr)
@@ -292,7 +292,7 @@ impl<
     }
 
     pub fn publish(&self) {
-        self.ds.publish()
+        self.es.publish()
     }
 
     pub fn copy_from(&self, source: &Self) {
@@ -302,6 +302,6 @@ impl<
             source.capacity(),
             self.capacity(),
         );
-        self.ds.copy_from(&source.ds);
+        self.es.copy_from(&source.es);
     }
 }
