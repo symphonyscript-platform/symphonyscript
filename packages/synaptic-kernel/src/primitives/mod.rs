@@ -20,5 +20,5 @@ pub mod entry_writer;
 pub mod entry_reader;
 pub mod mem_zone_reader;
 pub mod mem_zone_writer;
-pub mod entry_view;
+pub mod entry_handle;
 pub mod tb_zone_view;

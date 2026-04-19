@@ -4,10 +4,10 @@ use crate::primitives::entry_store_writer::EntryStoreWriter;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
 use crate::topology::network::network_reader::NetworkReader;
-use crate::topology::network::synapse_view::SynapseView;
+use crate::topology::network::synapse_handle::SynapseView;
 use crate::topology::network::synapse_writer::SynapseWriter;
 use crate::topology::node::node_chain_writer::NodeChainWriter;
-use crate::topology::node::node_view::NodeView;
+use crate::topology::node::node_handle::NodeHandle;
 use crate::topology::node::node_writer::NodeWriter;
 use std::sync::Arc;
 
@@ -250,25 +250,25 @@ impl<
     }
 
     #[inline]
-    pub fn get_head_node_view(
+    pub fn get_head_node_handle(
         &'_ self,
-    ) -> Option<NodeView<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
-        self.node_chain.get_head_node_view()
+    ) -> Option<NodeHandle<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
+        self.node_chain.get_head_node_handle()
     }
 
     #[inline]
-    pub fn get_node_view(
+    pub fn get_node_handle(
         &'_ self,
         slot: usize,
-    ) -> NodeView<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE> {
-        self.node_chain.get_node_view(slot)
+    ) -> NodeHandle<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE> {
+        self.node_chain.get_node_handle(slot)
     }
 
-    pub fn get_synapse_view(
+    pub fn get_synapse_handle(
         &'_ self,
         slot: usize,
     ) -> SynapseView<'_, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
-        SynapseView::new(self.synapses.get_view(slot))
+        SynapseView::new(self.synapses.get_handle(slot))
     }
 
     pub fn insert_head_node(&self, kind: i32) -> Option<usize> {

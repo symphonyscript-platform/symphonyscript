@@ -130,4 +130,39 @@ impl<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize>
     pub fn set_meta_all(&self, data: [i32; META_STRIDE]) {
         self.entry_writer.meta_write_all(data)
     }
+
+    #[inline]
+    pub fn attr_read(&self, offset: usize) -> i32 {
+        self.entry_writer.attr_read(offset)
+    }
+
+    #[inline]
+    pub fn attr_write(&self, offset: usize, value: i32) {
+        self.entry_writer.attr_write(offset, value)
+    }
+
+    #[inline]
+    pub fn attr_and(&self, offset: usize, value: i32) -> i32 {
+        self.entry_writer.attr_and(offset, value)
+    }
+
+    #[inline]
+    pub fn attr_or(&self, offset: usize, value: i32) -> i32 {
+        self.entry_writer.attr_or(offset, value)
+    }
+
+    #[inline]
+    pub fn attr_read_all(&self) -> [i32; ATTR_STRIDE] {
+        self.entry_writer.attr_read_all()
+    }
+
+    #[inline]
+    pub fn attr_write_all(&self, data: [i32; ATTR_STRIDE]) {
+        self.entry_writer.attr_write_all(data)
+    }
+
+    #[inline]
+    pub fn attr_clear_all(&self) {
+        self.entry_writer.attr_clear_all()
+    }
 }

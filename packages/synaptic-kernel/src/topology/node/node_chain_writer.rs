@@ -4,7 +4,7 @@ use crate::primitives::entry_store_writer::EntryStoreWriter;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
 use crate::topology::node::node_chain_reader::NodeChainReader;
-use crate::topology::node::node_view::NodeView;
+use crate::topology::node::node_handle::NodeHandle;
 use crate::topology::node::node_writer::NodeWriter;
 
 /// Producer-side doubly-linked list of nodes.
@@ -173,19 +173,19 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
     }
 
     #[inline]
-    pub fn get_head_node_view(&'_ self) -> Option<NodeView<'_, META_STRIDE, ATTR_STRIDE>> {
+    pub fn get_head_node_handle(&'_ self) -> Option<NodeHandle<'_, META_STRIDE, ATTR_STRIDE>> {
         let head_slot = self.get_head_slot();
 
         if head_slot == 0 {
             return None;
         }
 
-        Some(self.get_node_view(head_slot))
+        Some(self.get_node_handle(head_slot))
     }
 
     #[inline]
-    pub fn get_node_view(&'_ self, slot: usize) -> NodeView<'_, META_STRIDE, ATTR_STRIDE> {
-        NodeView::new(self.nodes.get_view(slot))
+    pub fn get_node_handle(&'_ self, slot: usize) -> NodeHandle<'_, META_STRIDE, ATTR_STRIDE> {
+        NodeHandle::new(self.nodes.get_handle(slot))
     }
 
     pub fn insert_head_node(&self, kind: i32) -> Option<usize> {

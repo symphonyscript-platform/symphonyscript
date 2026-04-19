@@ -395,11 +395,11 @@ fn connect_self_loop() {
     let n = node_chain.insert_head_node(1).unwrap();
     let syn = synapse_chain.connect(n, n, 99).unwrap();
 
-    let node_view = node_chain.get_node(n);
-    assert_eq!(node_view.get_outgoing_synapse_head(), syn);
-    assert_eq!(node_view.get_outgoing_synapse_tail(), syn);
-    assert_eq!(node_view.get_incoming_synapse_head(), syn);
-    assert_eq!(node_view.get_incoming_synapse_tail(), syn);
+    let node_handle = node_chain.get_node(n);
+    assert_eq!(node_handle.get_outgoing_synapse_head(), syn);
+    assert_eq!(node_handle.get_outgoing_synapse_tail(), syn);
+    assert_eq!(node_handle.get_incoming_synapse_head(), syn);
+    assert_eq!(node_handle.get_incoming_synapse_tail(), syn);
 
     let s = synapse_chain.get_synapse(syn);
     assert_eq!(s.get_source_ptr(), n);
@@ -416,11 +416,11 @@ fn disconnect_self_loop_clears_both_chains() {
     let syn = synapse_chain.connect(n, n, 99).unwrap();
     synapse_chain.disconnect_synapse(syn).unwrap();
 
-    let node_view = node_chain.get_node(n);
-    assert_eq!(node_view.get_outgoing_synapse_head(), 0);
-    assert_eq!(node_view.get_outgoing_synapse_tail(), 0);
-    assert_eq!(node_view.get_incoming_synapse_head(), 0);
-    assert_eq!(node_view.get_incoming_synapse_tail(), 0);
+    let node_handle = node_chain.get_node(n);
+    assert_eq!(node_handle.get_outgoing_synapse_head(), 0);
+    assert_eq!(node_handle.get_outgoing_synapse_tail(), 0);
+    assert_eq!(node_handle.get_incoming_synapse_head(), 0);
+    assert_eq!(node_handle.get_incoming_synapse_tail(), 0);
 }
 
 // ============ reader: verify via publish/swap ============

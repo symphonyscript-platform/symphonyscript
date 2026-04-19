@@ -1,8 +1,7 @@
 use crate::errors::slot_allocator_error::SlotAllocatorError;
+use crate::primitives::entry_handle::EntryHandle;
 use crate::primitives::entry_store_reader::EntryStoreReader;
-use crate::primitives::entry_view::EntryView;
 use crate::primitives::entry_writer::EntryWriter;
-use crate::primitives::mem_zone_reader::MemZoneReader;
 use crate::primitives::mem_zone_writer::MemZoneWriter;
 use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::tb_zone_view::TbZoneView;
@@ -174,7 +173,10 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
     }
 
     #[inline]
-    pub fn get_view(&'_ self, slot: usize) -> EntryView<'_, CORE_STRIDE, META_STRIDE, ATTR_STRIDE> {
+    pub fn get_handle(
+        &'_ self,
+        slot: usize,
+    ) -> EntryHandle<'_, CORE_STRIDE, META_STRIDE, ATTR_STRIDE> {
         debug_assert!(
             self.allocator.is_active(slot),
             "EntryStoreWriter.get | attempted to read inactive slot {}",
@@ -184,10 +186,10 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
         let tb_start_offset = self.get_entry_tb_base(slot);
         let mem_start_offset = self.get_entry_mem_base(slot);
 
-        EntryView::new(
+        EntryHandle::new(
             TbZoneView::new(&self.tb, tb_start_offset),
             TbZoneView::new(&self.tb, tb_start_offset + CORE_STRIDE),
-            MemZoneReader::new(&self.mem, mem_start_offset),
+            MemZoneWriter::new(&self.mem, mem_start_offset),
         )
     }
 

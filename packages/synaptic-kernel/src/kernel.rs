@@ -7,8 +7,8 @@ use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::kernel_config::KernelConfig;
 use crate::primitives::types::AtomicBuffer;
 use crate::serialized_kernel::SerializedKernel;
-use crate::topology::network::synapse_view::SynapseView;
-use crate::topology::node::node_view::NodeView;
+use crate::topology::network::synapse_handle::SynapseView;
+use crate::topology::node::node_handle::NodeHandle;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
@@ -283,16 +283,16 @@ impl<
     #[inline]
     pub fn get_head_node(
         &'_ self,
-    ) -> Option<NodeView<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
-        self.active_epoch.network.get_head_node_view()
+    ) -> Option<NodeHandle<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
+        self.active_epoch.network.get_head_node_handle()
     }
 
     #[inline]
     pub fn get_node(
         &'_ self,
         slot: usize,
-    ) -> NodeView<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE> {
-        self.active_epoch.network.get_node_view(slot)
+    ) -> NodeHandle<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE> {
+        self.active_epoch.network.get_node_handle(slot)
     }
 
     #[inline]
@@ -300,7 +300,7 @@ impl<
         &'_ self,
         slot: usize,
     ) -> SynapseView<'_, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
-        self.active_epoch.network.get_synapse_view(slot)
+        self.active_epoch.network.get_synapse_handle(slot)
     }
 
     pub fn insert_head_node(&self, kind: i32) -> Result<usize, KernelError> {

@@ -69,4 +69,14 @@ impl<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize>
     pub fn get_meta_all(&self) -> [i32; META_STRIDE] {
         self.entry_reader.meta_read_all()
     }
+
+    #[inline]
+    pub fn attr_read(&self, offset: usize) -> i32 {
+        self.entry_reader.attr_read(offset)
+    }
+
+    #[inline]
+    pub fn attr_read_all(&self) -> [i32; ATTR_STRIDE] {
+        self.entry_reader.attr_read_all()
+    }
 }

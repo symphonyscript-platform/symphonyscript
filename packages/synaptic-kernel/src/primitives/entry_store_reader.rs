@@ -1,10 +1,9 @@
 use crate::primitives::entry_reader::EntryReader;
-use crate::primitives::entry_view::EntryView;
+use crate::primitives::entry_handle::EntryHandle;
 use crate::primitives::mem_zone_reader::MemZoneReader;
 use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::staging_buffer_reader::StagingBufferReader;
 use crate::primitives::tb_zone_reader::TbZoneReader;
-use crate::primitives::tb_zone_view::TbZoneView;
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::primitives::types::AtomicBuffer;
 
