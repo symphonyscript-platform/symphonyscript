@@ -10,15 +10,7 @@ criterion = { version = "0.5", features = ["html_reports"] }
 proptest = "1"
 
 [[bench]]
-name = "hash_table_bench"
-harness = false
-
-[[bench]]
 name = "ring_buffer_bench"
-harness = false
-
-[[bench]]
-name = "free_list_bench"
 harness = false
 
 [[bench]]
@@ -27,24 +19,4 @@ harness = false
 
 [[bench]]
 name = "triple_buffer_bench"
-harness = false
-
-[[bench]]
-name = "node_attribute_plane_bench"
-harness = false
-
-[[bench]]
-name = "slot_writer_bench"
-harness = false
-
-[[bench]]
-name = "slot_reader_bench"
-harness = false
-
-[[bench]]
-name = "synapse_chain_bench"
-harness = false
-
-[[bench]]
-name = "kernel_controller_bench"
 harness = false
