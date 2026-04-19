@@ -1,6 +1,6 @@
 pub mod bitmap;
-pub mod dual_store_reader;
-pub mod dual_store_writer;
+pub mod entry_store_reader;
+pub mod entry_store_writer;
 pub mod into_array;
 pub mod ring_buffer;
 pub mod simple_free_list;
@@ -16,5 +16,7 @@ pub mod triple_buffer_reader_registry;
 pub mod triple_buffer_writer;
 pub mod triple_buffer_writer_registry;
 pub mod types;
-pub mod struct_writer;
-pub mod struct_reader;
+pub mod entry_writer;
+pub mod entry_reader;
+pub mod mem_zone_reader;
+pub mod mem_zone_writer;

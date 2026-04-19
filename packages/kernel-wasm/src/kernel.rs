@@ -1,4 +1,4 @@
-use crate::attribute_plane::attributes_writer::AttributesWriter;
+use crate::attribute_plane::attributes_writer::MemZoneWriter;
 use crate::control_plane::ControlPlane;
 use crate::errors::kernel_error::KernelError;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
@@ -177,7 +177,7 @@ impl<
     pub fn get_node_attributes(
         &'_ self,
         slot: usize,
-    ) -> AttributesWriter<'_, NODE_ATTRIBUTES_STRIDE> {
+    ) -> MemZoneWriter<'_, NODE_ATTRIBUTES_STRIDE> {
         self.active_writer.get_node_attributes(slot)
     }
 
@@ -227,7 +227,7 @@ impl<
     pub fn get_synapse_attributes(
         &'_ self,
         slot: usize,
-    ) -> AttributesWriter<'_, SYNAPSE_ATTRIBUTES_STRIDE> {
+    ) -> MemZoneWriter<'_, SYNAPSE_ATTRIBUTES_STRIDE> {
         self.active_writer.get_synapse_attributes(slot)
     }
 

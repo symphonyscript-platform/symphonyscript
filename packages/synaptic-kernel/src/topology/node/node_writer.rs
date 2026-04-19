@@ -1,13 +1,13 @@
 use crate::constants::NODE_STRIDE;
-use crate::primitives::struct_writer::StructWriter;
+use crate::primitives::entry_writer::EntryWriter;
 
 /// Producer-side structural facade for a graph node on the triple buffer.
 ///
-/// Wraps two `SlotWriter`s (core structural pointers and custom metadata)
-/// to provide a strict interface over the raw atomic memory block.
+/// Wraps a `EntryWriter` to provide a strict interface over
+/// the raw atomic memory block.
 ///
 /// # Threading
-/// Producer thread only. Delegates back to the underlying `SlotWriter`s.
+/// Producer thread only. Delegates back to the underlying `EntryWriter`.
 ///
 /// # Core Layout (8x i32)
 /// - `0`: `kind` (shifted by 24 bits) combined with potential future internal flags (lower 24 bits).
@@ -22,14 +22,16 @@ use crate::primitives::struct_writer::StructWriter;
 /// Followed by `META_STRIDE` `i32` slots for custom topology metadata.
 ///
 /// # Encapsulation
-/// - All mutation methods (`set_*`) are `pub(crate)`. Only the kernel can mutate
-///   active topology, enforcing structural graph invariants.
-pub struct NodeWriter<'a, const META_STRIDE: usize> {
-    struct_writer: StructWriter<'a, NODE_STRIDE, META_STRIDE>,
+/// - All mutation methods (`set_*`) are `pub(crate)` except meta setters.
+///   Only the kernel can mutate active topology, enforcing structural graph invariants.
+pub struct NodeWriter<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize> {
+    struct_writer: EntryWriter<'a, NODE_STRIDE, META_STRIDE, ATTR_STRIDE>,
 }
 
-impl<'a, const META_STRIDE: usize> NodeWriter<'a, META_STRIDE> {
-    pub fn new(struct_writer: StructWriter<'a, NODE_STRIDE, META_STRIDE>) -> Self {
+impl<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize>
+    NodeWriter<'a, META_STRIDE, ATTR_STRIDE>
+{
+    pub fn new(struct_writer: EntryWriter<'a, NODE_STRIDE, META_STRIDE, ATTR_STRIDE>) -> Self {
         NodeWriter { struct_writer }
     }
 
@@ -42,7 +44,7 @@ impl<'a, const META_STRIDE: usize> NodeWriter<'a, META_STRIDE> {
     pub(crate) fn set_kind(&self, value: i32) {
         debug_assert!(
             value >= 0 && value < 256,
-            "SynapseWriter.set_kind | kind {} out of bounds [0, 256)",
+            "NodeWriter.set_kind | kind {} out of bounds [0, 256)",
             value
         );
         let bitmask = self.struct_writer.core_read(0) & ((1 << 24) - 1);

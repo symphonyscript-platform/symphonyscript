@@ -3,37 +3,39 @@ use std::sync::atomic::Ordering;
 
 /// Producer-side view into a single, fixed-size attribute block on a shared `AtomicBuffer`.
 ///
-/// Provides 0-based read and write access to `STRIDE` elements for
-/// a specific slot, backing an `AttributePlaneWriter`.
+/// Provides 0-based read and write access to `STRIDE` elements.
 ///
 /// # Threading
 /// Producer thread only. All atomic operations use `Relaxed` ordering.
-pub struct AttributesWriter<'a, const STRIDE: usize> {
+pub struct MemZoneWriter<'a, const STRIDE: usize> {
     mem: &'a AtomicBuffer,
     mem_start_offset: usize,
     mem_end_offset: usize,
 }
 
-impl<'a, const STRIDE: usize> AttributesWriter<'a, STRIDE> {
+impl<'a, const STRIDE: usize> MemZoneWriter<'a, STRIDE> {
+    #[inline]
     pub fn new(mem: &'a AtomicBuffer, mem_start_offset: usize) -> Self {
         let mem_end_offset = mem_start_offset + STRIDE;
         debug_assert!(
             mem_end_offset <= mem.len(),
-            "AttributesWriter::new | range [{}..{}] exceeds AtomicBuffer boundaries",
+            "MemZoneWriter::new | range [{}..{}] exceeds AtomicBuffer boundaries",
             mem_start_offset,
             STRIDE
         );
-        AttributesWriter {
-            mem: &mem,
+        MemZoneWriter {
+            mem,
             mem_start_offset,
             mem_end_offset,
         }
     }
 
+    #[inline]
     pub fn mem_start_offset(&self) -> usize {
         self.mem_start_offset
     }
 
+    #[inline]
     pub fn mem_end_offset(&self) -> usize {
         self.mem_end_offset
     }
@@ -42,7 +44,7 @@ impl<'a, const STRIDE: usize> AttributesWriter<'a, STRIDE> {
     pub fn read(&self, offset: usize) -> i32 {
         debug_assert!(
             offset < STRIDE,
-            "AttributesWriter.read | offset {} out of bounds",
+            "MemZoneWriter.read | offset {} out of bounds",
             offset
         );
         self.mem[self.mem_start_offset + offset].load(Ordering::Relaxed)
@@ -52,7 +54,7 @@ impl<'a, const STRIDE: usize> AttributesWriter<'a, STRIDE> {
     pub fn write(&self, offset: usize, value: i32) {
         debug_assert!(
             offset < STRIDE,
-            "AttributesWriter.write | offset {} out of bounds",
+            "MemZoneWriter.write | offset {} out of bounds",
             offset
         );
         self.mem[self.mem_start_offset + offset].store(value, Ordering::Relaxed)
@@ -62,7 +64,7 @@ impl<'a, const STRIDE: usize> AttributesWriter<'a, STRIDE> {
     pub fn or(&self, offset: usize, mask: i32) -> i32 {
         debug_assert!(
             offset < STRIDE,
-            "AttributesWriter.or | offset {} out of bounds",
+            "MemZoneWriter.or | offset {} out of bounds",
             offset
         );
         self.mem[self.mem_start_offset + offset].fetch_or(mask, Ordering::Relaxed)
@@ -72,7 +74,7 @@ impl<'a, const STRIDE: usize> AttributesWriter<'a, STRIDE> {
     pub fn and(&self, offset: usize, mask: i32) -> i32 {
         debug_assert!(
             offset < STRIDE,
-            "AttributesWriter.and | offset {} out of bounds",
+            "MemZoneWriter.and | offset {} out of bounds",
             offset
         );
         self.mem[self.mem_start_offset + offset].fetch_and(mask, Ordering::Relaxed)
@@ -94,5 +96,10 @@ impl<'a, const STRIDE: usize> AttributesWriter<'a, STRIDE> {
         for i in 0..STRIDE {
             self.write(i, data[i]);
         }
+    }
+
+    #[inline]
+    pub fn clear(&self) {
+        self.write_all([0; STRIDE]);
     }
 }

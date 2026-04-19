@@ -1,6 +1,6 @@
 use crate::constants::NODE_STRIDE;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
-use crate::primitives::dual_store_writer::DualStoreWriter;
+use crate::primitives::entry_store_writer::EntryStoreWriter;
 use crate::primitives::staging_buffer_reader::StagingBufferReader;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
@@ -36,7 +36,7 @@ use crate::topology::node::node_writer::NodeWriter;
 #[derive(Clone)]
 pub struct NodeChainWriter<const META_STRIDE: usize, const ATTR_STRIDE: usize> {
     tb: TripleBufferWriter,
-    ds: DualStoreWriter<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>,
+    ds: EntryStoreWriter<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>,
     tb_head_offset: usize,
 }
 
@@ -71,7 +71,7 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
     ) -> Self {
         NodeChainWriter {
             tb: tb.clone(),
-            ds: DualStoreWriter::create(
+            ds: EntryStoreWriter::create(
                 mem,
                 tb,
                 mem_start_offset,
@@ -84,11 +84,13 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
     }
 
     pub fn calculate_size_on_mem(capacity: usize) -> usize {
-        DualStoreWriter::<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>::calculate_size_on_mem(capacity)
+        EntryStoreWriter::<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>::calculate_size_on_mem(capacity)
     }
 
     pub fn calculate_size_on_tb(capacity: usize) -> usize {
-        1 + DualStoreWriter::<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>::calculate_size_on_tb(capacity)
+        1 + EntryStoreWriter::<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>::calculate_size_on_tb(
+            capacity,
+        )
     }
 
     pub(crate) fn calculate_node_start_offset(tb_head_offset: usize, slot: usize) -> usize {
@@ -119,10 +121,6 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
         self.ds.mem_end_offset()
     }
 
-    pub fn mem_staging_buffer_start_offset(&self) -> usize {
-        self.ds.mem_staging_buffer_start_offset()
-    }
-
     pub fn tb_start_offset(&self) -> usize {
         self.tb_head_offset
     }
@@ -139,87 +137,13 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
         self.ds.utilization()
     }
 
-    pub fn is_active_slot(&self, slot: usize) -> bool {
-        self.ds.is_active_slot(slot)
-    }
-
-    #[inline]
-    pub fn core_read(&self, slot: usize, offset: usize) -> i32 {
-        self.ds.core_read(slot, offset)
-    }
-
-    #[inline]
-    pub fn core_write(&self, slot: usize, offset: usize, value: i32) {
-        self.ds.core_write(slot, offset, value)
-    }
-
-    #[inline]
-    pub fn core_read_all(&self, slot: usize) -> [i32; NODE_STRIDE] {
-        self.ds.core_read_all(slot)
-    }
-
-    #[inline]
-    pub fn core_write_all(&self, slot: usize, data: [i32; NODE_STRIDE]) {
-        self.ds.core_write_all(slot, data)
-    }
-
-    #[inline]
-    pub fn meta_read(&self, slot: usize, offset: usize) -> i32 {
-        self.ds.meta_read(slot, offset)
-    }
-
-    #[inline]
-    pub fn meta_write(&self, slot: usize, offset: usize, value: i32) {
-        self.ds.meta_write(slot, offset, value)
-    }
-
-    #[inline]
-    pub fn meta_read_all(&self, slot: usize) -> [i32; META_STRIDE] {
-        self.ds.meta_read_all(slot)
-    }
-
-    #[inline]
-    pub fn meta_write_all(&self, slot: usize, data: [i32; META_STRIDE]) {
-        self.ds.meta_write_all(slot, data)
-    }
-
-    #[inline]
-    pub fn attr_read(&self, slot: usize, offset: usize) -> i32 {
-        self.ds.attr_read(slot, offset)
-    }
-
-    #[inline]
-    pub fn attr_write(&self, slot: usize, offset: usize, value: i32) {
-        self.ds.attr_write(slot, offset, value)
-    }
-
-    #[inline]
-    pub fn attr_and(&self, slot: usize, offset: usize, value: i32) -> i32 {
-        self.ds.attr_and(slot, offset, value)
-    }
-
-    #[inline]
-    pub fn attr_or(&self, slot: usize, offset: usize, value: i32) -> i32 {
-        self.ds.attr_or(slot, offset, value)
-    }
-
-    #[inline]
-    pub fn attr_read_all(&self, slot: usize) -> [i32; ATTR_STRIDE] {
-        self.ds.attr_read_all(slot)
-    }
-
-    #[inline]
-    pub fn attr_write_all(&self, slot: usize, data: [i32; ATTR_STRIDE]) {
-        self.ds.attr_write_all(slot, data)
-    }
-
     #[inline]
     pub fn get_head_slot(&self) -> usize {
         self.tb.read(self.tb_head_offset) as usize
     }
 
     #[inline]
-    pub fn get_head(&'_ self) -> Option<NodeWriter<'_, META_STRIDE>> {
+    pub fn get_head(&'_ self) -> Option<NodeWriter<'_, META_STRIDE, ATTR_STRIDE>> {
         let head_slot = self.get_head_slot();
 
         if head_slot == 0 {
@@ -230,8 +154,8 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
     }
 
     #[inline]
-    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_, META_STRIDE> {
-        NodeWriter::new(self.ds.get_struct(slot))
+    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_, META_STRIDE, ATTR_STRIDE> {
+        NodeWriter::new(self.ds.get(slot))
     }
 
     pub fn insert_head(&self, kind: i32) -> Option<usize> {
@@ -301,7 +225,7 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
         let prev_slot = node.get_prev_ptr();
         let next_slot = node.get_next_ptr();
 
-        self.ds.remove_struct(slot)?;
+        self.ds.remove(slot)?;
 
         if prev_slot != 0 {
             self.get_node(prev_slot).set_next_ptr(next_slot);
@@ -334,7 +258,7 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
     }
 
     fn insert_orphaned(&self, kind: i32, next_ptr: usize, prev_ptr: usize) -> Option<usize> {
-        let result = self.ds.insert_struct();
+        let result = self.ds.insert();
 
         if result.is_none() {
             return None;

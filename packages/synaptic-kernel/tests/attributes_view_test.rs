@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::attributes::attributes_writer::AttributesWriter;
+use synaptic_kernel::primitives::mem_zone_writer::MemZoneWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_mem(size: usize) -> AtomicBuffer {
@@ -14,7 +14,7 @@ fn create_mem(size: usize) -> AtomicBuffer {
 #[test]
 fn new_creates_view_at_start_index() {
     let mem = create_mem(128);
-    let view: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 0);
+    let view: MemZoneWriter<'_, 16> = MemZoneWriter::new(&mem, 0);
 
     for i in 0..16 {
         assert_eq!(view.read(i), 0);
@@ -24,7 +24,7 @@ fn new_creates_view_at_start_index() {
 #[test]
 fn raw_read_write_round_trip() {
     let mem = create_mem(128);
-    let view: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 10);
+    let view: MemZoneWriter<'_, 16> = MemZoneWriter::new(&mem, 10);
 
     view.write(0, 500);
     view.write(15, -42);
@@ -36,7 +36,7 @@ fn raw_read_write_round_trip() {
 #[test]
 fn fields_do_not_bleed() {
     let mem = create_mem(128);
-    let view: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 0);
+    let view: MemZoneWriter<'_, 16> = MemZoneWriter::new(&mem, 0);
 
     view.write(0, i32::MAX);
     assert_eq!(view.read(1), 0);
@@ -48,8 +48,8 @@ fn fields_do_not_bleed() {
 #[test]
 fn two_views_different_offsets_are_independent() {
     let mem = create_mem(128);
-    let view_a: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 0);
-    let view_b: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 16);
+    let view_a: MemZoneWriter<'_, 16> = MemZoneWriter::new(&mem, 0);
+    let view_b: MemZoneWriter<'_, 16> = MemZoneWriter::new(&mem, 16);
 
     view_a.write(0, 100);
     view_b.write(0, 200);
@@ -61,8 +61,8 @@ fn two_views_different_offsets_are_independent() {
 #[test]
 fn two_views_share_mem_see_writes() {
     let mem = create_mem(128);
-    let view_a: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 10);
-    let view_b: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 10);
+    let view_a: MemZoneWriter<'_, 16> = MemZoneWriter::new(&mem, 10);
+    let view_b: MemZoneWriter<'_, 16> = MemZoneWriter::new(&mem, 10);
 
     view_a.write(5, 999);
     assert_eq!(view_b.read(5), 999);
@@ -71,8 +71,8 @@ fn two_views_share_mem_see_writes() {
 #[test]
 fn works_with_different_slot_sizes() {
     let mem = create_mem(128);
-    let view_8: AttributesWriter<'_, 8> = AttributesWriter::new(&mem, 0);
-    let view_16: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 64);
+    let view_8: MemZoneWriter<'_, 8> = MemZoneWriter::new(&mem, 0);
+    let view_16: MemZoneWriter<'_, 16> = MemZoneWriter::new(&mem, 64);
 
     view_8.write(0, 111);
     view_16.write(0, 222);
@@ -82,15 +82,15 @@ fn works_with_different_slot_sizes() {
 }
 
 #[test]
-#[should_panic(expected = "AttributesWriter::new | range")]
+#[should_panic(expected = "MemZoneWriter::new | range")]
 fn new_panics_if_out_of_bounds() {
     let mem = create_mem(10);
-    let _view: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 0);
+    let _view: MemZoneWriter<'_, 16> = MemZoneWriter::new(&mem, 0);
 }
 
 #[test]
-#[should_panic(expected = "AttributesWriter::new | range")]
+#[should_panic(expected = "MemZoneWriter::new | range")]
 fn new_panics_if_start_index_crosses_bounds() {
     let mem = create_mem(32);
-    let _view: AttributesWriter<'_, 16> = AttributesWriter::new(&mem, 20);
+    let _view: MemZoneWriter<'_, 16> = MemZoneWriter::new(&mem, 20);
 }

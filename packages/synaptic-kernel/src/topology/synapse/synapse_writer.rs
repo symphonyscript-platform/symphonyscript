@@ -1,16 +1,16 @@
 use crate::constants::SYNAPSE_STRIDE;
-use crate::primitives::struct_writer::StructWriter;
+use crate::primitives::entry_writer::EntryWriter;
 
 /// Producer-side structural facade for a graph synapse on the triple buffer.
 ///
-/// Wraps two `StructWriter`s (core structural pointers and custom metadata)
-/// to provide a strict interface over the raw atomic memory block.
+/// Wraps a `EntryWriter` to provide a strict interface over the raw atomic memory block.
 ///
 /// # Threading
-/// Producer thread only. Delegates back to the underlying `StructWriter`s.
+/// Producer thread only. Delegates back to the underlying `EntryWriter`.
 ///
 /// # Core Layout (8x i32)
-/// - `0`: `kind` (shifted by 24 bits) combined with potential future internal flags (lower 24 bits).
+/// - `0`: `kind` (shifted by 24 bits) combined with potential future internal
+///         flags (lower 24 bits).
 /// - `1`: `source_ptr`
 /// - `2`: `target_ptr`
 /// - `3`: `outgoing_next_ptr`
@@ -22,14 +22,16 @@ use crate::primitives::struct_writer::StructWriter;
 /// Followed by `META_STRIDE` `i32` slots for custom topology metadata.
 ///
 /// # Encapsulation
-/// - All mutation methods (`set_*`) are `pub(crate)`. Only the kernel can mutate
-///   active topology, enforcing structural graph invariants.
-pub struct SynapseWriter<'a, const META_STRIDE: usize> {
-    struct_writer: StructWriter<'a, SYNAPSE_STRIDE, META_STRIDE>,
+/// - All mutation methods (`set_*`) are `pub(crate)` - except meta setters.
+///   Only the kernel can mutate active topology, enforcing structural graph invariants.
+pub struct SynapseWriter<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize> {
+    struct_writer: EntryWriter<'a, SYNAPSE_STRIDE, META_STRIDE, ATTR_STRIDE>,
 }
 
-impl<'a, const META_STRIDE: usize> SynapseWriter<'a, META_STRIDE> {
-    pub fn new(struct_writer: StructWriter<'a, SYNAPSE_STRIDE, META_STRIDE>) -> Self {
+impl<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize>
+    SynapseWriter<'a, META_STRIDE, ATTR_STRIDE>
+{
+    pub fn new(struct_writer: EntryWriter<'a, SYNAPSE_STRIDE, META_STRIDE, ATTR_STRIDE>) -> Self {
         SynapseWriter { struct_writer }
     }
 

@@ -1,25 +1,27 @@
 use crate::constants::SYNAPSE_STRIDE;
-use crate::primitives::struct_reader::StructReader;
+use crate::primitives::entry_reader::EntryReader;
 
 /// Consumer-side structural facade for a graph synapse on the triple buffer.
 ///
-/// Wraps a `StructReader` (core structural pointers and custom metadata)
-/// to provide a strict read-only interface over the raw atomic memory block.
+/// Wraps a `EntryReader` to provide a strict read-only interface over
+/// the raw atomic memory block.
 ///
 /// # Threading
-/// Consumer thread only. Delegates back to the underlying `StructReader`s.
+/// Consumer thread only. Delegates back to the underlying `EntryReader`.
 ///
 /// # Core Layout (8x i32)
 /// Shares backing region with `SynapseWriter`. See its layout.
 ///
 /// # Encapsulation
 /// - Read-only: structural mutation is strictly prohibited on the reading plane.
-pub struct SynapseReader<'a, const META_STRIDE: usize> {
-    struct_reader: StructReader<'a, SYNAPSE_STRIDE, META_STRIDE>,
+pub struct SynapseReader<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize> {
+    struct_reader: EntryReader<'a, SYNAPSE_STRIDE, META_STRIDE, ATTR_STRIDE>,
 }
 
-impl<'a, const META_STRIDE: usize> SynapseReader<'a, META_STRIDE> {
-    pub fn new(struct_reader: StructReader<'a, SYNAPSE_STRIDE, META_STRIDE>) -> Self {
+impl<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize>
+    SynapseReader<'a, META_STRIDE, ATTR_STRIDE>
+{
+    pub fn new(struct_reader: EntryReader<'a, SYNAPSE_STRIDE, META_STRIDE, ATTR_STRIDE>) -> Self {
         SynapseReader { struct_reader }
     }
 

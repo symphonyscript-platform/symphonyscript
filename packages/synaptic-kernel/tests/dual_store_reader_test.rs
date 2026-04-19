@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
-use synaptic_kernel::primitives::dual_store_reader::DualStoreReader;
-use synaptic_kernel::primitives::dual_store_writer::DualStoreWriter;
+use synaptic_kernel::primitives::entry_store_reader::EntryStoreReader;
+use synaptic_kernel::primitives::entry_store_writer::EntryStoreWriter;
 use synaptic_kernel::primitives::slot_allocator::SlotAllocator;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
@@ -29,7 +29,7 @@ fn make_tb(mem: &AtomicBuffer) -> TripleBufferWriter {
 fn to_reader_produces_matching_reader() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = DualStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::<8, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -48,20 +48,20 @@ fn to_reader_produces_matching_reader() {
 #[test]
 fn calculate_size_matches_writer() {
     assert_eq!(
-        DualStoreReader::<8, 0, 16>::calculate_size_on_mem(16),
-        DualStoreWriter::<8, 0, 16>::calculate_size_on_mem(16),
+        EntryStoreReader::<8, 0, 16>::calculate_size_on_mem(16),
+        EntryStoreWriter::<8, 0, 16>::calculate_size_on_mem(16),
     );
     assert_eq!(
-        DualStoreReader::<8, 0, 16>::calculate_size_on_tb(16),
-        DualStoreWriter::<8, 0, 16>::calculate_size_on_tb(16),
+        EntryStoreReader::<8, 0, 16>::calculate_size_on_tb(16),
+        EntryStoreWriter::<8, 0, 16>::calculate_size_on_tb(16),
     );
     assert_eq!(
-        DualStoreReader::<4, 0, 32>::calculate_size_on_mem(64),
-        DualStoreWriter::<4, 0, 32>::calculate_size_on_mem(64),
+        EntryStoreReader::<4, 0, 32>::calculate_size_on_mem(64),
+        EntryStoreWriter::<4, 0, 32>::calculate_size_on_mem(64),
     );
     assert_eq!(
-        DualStoreReader::<4, 0, 32>::calculate_size_on_tb(64),
-        DualStoreWriter::<4, 0, 32>::calculate_size_on_tb(64),
+        EntryStoreReader::<4, 0, 32>::calculate_size_on_tb(64),
+        EntryStoreWriter::<4, 0, 32>::calculate_size_on_tb(64),
     );
 }
 
@@ -71,11 +71,11 @@ fn calculate_size_matches_writer() {
 fn struct_read_after_publish_and_swap() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    // External TripleBufferReader: DualStoreReader has no swap() method,
+    // External TripleBufferReader: EntryStoreReader has no swap() method,
     // but the reader buffer id lives in shared mem, so an external swap()
-    // advances the shared reader buffer that DualStoreReader reads from.
+    // advances the shared reader buffer that EntryStoreReader reads from.
     let tb_reader = tb.to_reader();
-    let store = DualStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::<8, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -83,7 +83,7 @@ fn struct_read_after_publish_and_swap() {
         4,
     );
 
-    let s = store.insert_struct().unwrap();
+    let s = store.insert().unwrap();
     let data = [11, 22, 33, 44, 55, 66, 77, 88];
     store.core_write_all(s, data);
 
@@ -102,7 +102,7 @@ fn struct_reads_isolated_per_slot_on_reader_side() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let tb_reader = tb.to_reader();
-    let store = DualStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::<8, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -110,8 +110,8 @@ fn struct_reads_isolated_per_slot_on_reader_side() {
         4,
     );
 
-    let s1 = store.insert_struct().unwrap();
-    let s2 = store.insert_struct().unwrap();
+    let s1 = store.insert().unwrap();
+    let s2 = store.insert().unwrap();
     store.core_write_all(s1, [1, 1, 1, 1, 1, 1, 1, 1]);
     store.core_write_all(s2, [2, 2, 2, 2, 2, 2, 2, 2]);
 
@@ -128,7 +128,7 @@ fn struct_reader_handle_from_get_struct() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let tb_reader = tb.to_reader();
-    let store = DualStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::<8, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -136,13 +136,13 @@ fn struct_reader_handle_from_get_struct() {
         4,
     );
 
-    let s = store.insert_struct().unwrap();
+    let s = store.insert().unwrap();
     store.core_write_all(s, [100, 200, 300, 400, 500, 600, 700, 800]);
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
-    let handle = reader.get_struct(s);
+    let handle = reader.get(s);
     assert_eq!(handle.core_read(0), 100);
     assert_eq!(handle.core_read(3), 400);
     assert_eq!(handle.core_read(7), 800);
@@ -155,7 +155,7 @@ fn struct_reader_handle_from_get_struct() {
 fn attr_read_visible_without_publish() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = DualStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::<8, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -163,7 +163,7 @@ fn attr_read_visible_without_publish() {
         4,
     );
 
-    let s = store.insert_struct().unwrap();
+    let s = store.insert().unwrap();
     store.attr_write(s, 0, 1234);
     store.attr_write(s, 15, -42);
 
@@ -177,7 +177,7 @@ fn attr_read_visible_without_publish() {
 fn attr_read_all_visible_without_publish() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = DualStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::<8, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -185,7 +185,7 @@ fn attr_read_all_visible_without_publish() {
         4,
     );
 
-    let s = store.insert_struct().unwrap();
+    let s = store.insert().unwrap();
     let mut data: [i32; 16] = [0; 16];
     for i in 0..16 {
         data[i] = (i as i32) * 13 - 7;
@@ -203,7 +203,7 @@ fn multiple_readers_share_underlying_state() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let tb_reader = tb.to_reader();
-    let store = DualStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::<8, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -211,7 +211,7 @@ fn multiple_readers_share_underlying_state() {
         4,
     );
 
-    let s = store.insert_struct().unwrap();
+    let s = store.insert().unwrap();
     store.attr_write(s, 0, 999);
     store.core_write(s, 0, 7);
     tb.publish();
@@ -239,7 +239,7 @@ fn reader_roundtrip_with_1_1_1_config() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let tb_reader = tb.to_reader();
-    let store = DualStoreWriter::<1, 0, 1>::new(
+    let store = EntryStoreWriter::<1, 0, 1>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -247,7 +247,7 @@ fn reader_roundtrip_with_1_1_1_config() {
         1,
     );
 
-    let s = store.insert_struct().unwrap();
+    let s = store.insert().unwrap();
     store.core_write(s, 0, 5);
     store.attr_write(s, 0, 6);
     tb.publish();
@@ -264,7 +264,7 @@ fn reader_offsets_for_nonzero_start_offsets() {
     let tb = make_tb(&mem);
     let mem_start = DEFAULT_MEM_START_OFFSET + 128;
     let tb_start = 64;
-    let store = DualStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::<8, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         mem_start,
@@ -277,11 +277,11 @@ fn reader_offsets_for_nonzero_start_offsets() {
     assert_eq!(reader.tb_start_offset(), tb_start);
     assert_eq!(
         reader.tb_end_offset() - reader.tb_start_offset(),
-        DualStoreReader::<8, 0, 16>::calculate_size_on_tb(4)
+        EntryStoreReader::<8, 0, 16>::calculate_size_on_tb(4)
     );
     assert_eq!(
         reader.mem_end_offset() - reader.mem_start_offset(),
-        DualStoreReader::<8, 0, 16>::calculate_size_on_mem(4)
+        EntryStoreReader::<8, 0, 16>::calculate_size_on_mem(4)
     );
 }
 
@@ -289,7 +289,7 @@ fn reader_offsets_for_nonzero_start_offsets() {
 //
 // These tests verify that the reader resolves struct-plane and attribute-plane
 // offsets to the same absolute memory locations predicted by the documented
-// layout formulas. One side of each assertion uses the DualStoreReader API;
+// layout formulas. One side of each assertion uses the EntryStoreReader API;
 // the other side reads from the raw TripleBufferReader / raw AtomicBuffer at
 // externally-computed absolute offsets. A symmetric offset bug in the
 // resolution logic would fail these cross-checks even if the writer/reader
@@ -301,7 +301,7 @@ fn reader_struct_read_sees_value_written_via_tb_at_expected_offset() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let tb_reader = tb.to_reader();
-    let store = DualStoreWriter::<S, 0, 16>::new(
+    let store = EntryStoreWriter::<S, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -309,8 +309,8 @@ fn reader_struct_read_sees_value_written_via_tb_at_expected_offset() {
         4,
     );
 
-    let _s1 = store.insert_struct().unwrap();
-    let slot = store.insert_struct().unwrap();
+    let _s1 = store.insert().unwrap();
+    let slot = store.insert().unwrap();
     assert_eq!(slot, 2);
 
     let expected_abs = (slot - 1) * S + 3; // tb_start_offset=0
@@ -320,7 +320,7 @@ fn reader_struct_read_sees_value_written_via_tb_at_expected_offset() {
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
-    // DualStoreReader API resolves the offset...
+    // EntryStoreReader API resolves the offset...
     assert_eq!(reader.core_read(slot, 3), 4242);
     // ...and the raw TripleBufferReader at the externally-computed absolute
     // offset sees the same value. If either side miscomputes the offset, these
@@ -334,7 +334,7 @@ fn reader_struct_reads_distinct_slots_at_distinct_tb_offsets() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let tb_reader = tb.to_reader();
-    let store = DualStoreWriter::<S, 0, 16>::new(
+    let store = EntryStoreWriter::<S, 0, 16>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -342,9 +342,9 @@ fn reader_struct_reads_distinct_slots_at_distinct_tb_offsets() {
         4,
     );
 
-    let s1 = store.insert_struct().unwrap();
-    let s2 = store.insert_struct().unwrap();
-    let s3 = store.insert_struct().unwrap();
+    let s1 = store.insert().unwrap();
+    let s2 = store.insert().unwrap();
+    let s3 = store.insert().unwrap();
     assert_eq!((s1, s2, s3), (1, 2, 3));
 
     store.core_write(s1, 0, 91);
@@ -373,7 +373,7 @@ fn reader_attr_read_sees_value_written_at_expected_mem_offset() {
     const CAP: usize = 4;
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = DualStoreWriter::<8, 0, A>::new(
+    let store = EntryStoreWriter::<8, 0, A>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -381,8 +381,8 @@ fn reader_attr_read_sees_value_written_at_expected_mem_offset() {
         CAP,
     );
 
-    let _s1 = store.insert_struct().unwrap();
-    let slot = store.insert_struct().unwrap();
+    let _s1 = store.insert().unwrap();
+    let slot = store.insert().unwrap();
     assert_eq!(slot, 2);
 
     store.attr_write(slot, 5, 7777);
@@ -403,7 +403,7 @@ fn reader_attr_reads_distinct_slots_at_distinct_mem_offsets() {
     const CAP: usize = 4;
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = DualStoreWriter::<8, 0, A>::new(
+    let store = EntryStoreWriter::<8, 0, A>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -411,9 +411,9 @@ fn reader_attr_reads_distinct_slots_at_distinct_mem_offsets() {
         CAP,
     );
 
-    let s1 = store.insert_struct().unwrap();
-    let s2 = store.insert_struct().unwrap();
-    let s3 = store.insert_struct().unwrap();
+    let s1 = store.insert().unwrap();
+    let s2 = store.insert().unwrap();
+    let s3 = store.insert().unwrap();
     assert_eq!((s1, s2, s3), (1, 2, 3));
 
     store.attr_write(s1, 0, 501);
@@ -440,7 +440,7 @@ fn reader_layout_sizes_match_writer_layout() {
     const CAP: usize = 4;
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = DualStoreWriter::<S, 0, A>::new(
+    let store = EntryStoreWriter::<S, 0, A>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -475,10 +475,10 @@ fn reader_layout_sizes_match_writer_layout() {
 /// construct stores inline; this helper keeps the new tests compact.
 fn make_store_cma<const C: usize, const M: usize, const A: usize>(
     capacity: usize,
-) -> (AtomicBuffer, TripleBufferWriter, DualStoreWriter<C, M, A>) {
+) -> (AtomicBuffer, TripleBufferWriter, EntryStoreWriter<C, M, A>) {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = DualStoreWriter::<C, M, A>::new(
+    let store = EntryStoreWriter::<C, M, A>::new(
         Arc::clone(&mem),
         tb.clone(),
         DEFAULT_MEM_START_OFFSET,
@@ -492,32 +492,32 @@ fn make_store_cma<const C: usize, const M: usize, const A: usize>(
 
 #[test]
 fn meta_reader_calculate_size_on_tb_is_capacity_times_core_plus_meta() {
-    assert_eq!(DualStoreReader::<4, 4, 16>::calculate_size_on_tb(4), 4 * (4 + 4));
-    assert_eq!(DualStoreReader::<8, 16, 16>::calculate_size_on_tb(4), 4 * (8 + 16));
-    assert_eq!(DualStoreReader::<1, 1, 1>::calculate_size_on_tb(1), 1 * (1 + 1));
-    assert_eq!(DualStoreReader::<16, 0, 8>::calculate_size_on_tb(256), 256 * (16 + 0));
-    assert_eq!(DualStoreReader::<64, 64, 16>::calculate_size_on_tb(32), 32 * (64 + 64));
+    assert_eq!(EntryStoreReader::<4, 4, 16>::calculate_size_on_tb(4), 4 * (4 + 4));
+    assert_eq!(EntryStoreReader::<8, 16, 16>::calculate_size_on_tb(4), 4 * (8 + 16));
+    assert_eq!(EntryStoreReader::<1, 1, 1>::calculate_size_on_tb(1), 1 * (1 + 1));
+    assert_eq!(EntryStoreReader::<16, 0, 8>::calculate_size_on_tb(256), 256 * (16 + 0));
+    assert_eq!(EntryStoreReader::<64, 64, 16>::calculate_size_on_tb(32), 32 * (64 + 64));
 
     // Reader and writer formulas must agree across several combinations.
     for cap in [1usize, 4, 16, 32] {
         assert_eq!(
-            DualStoreReader::<4, 4, 16>::calculate_size_on_tb(cap),
-            DualStoreWriter::<4, 4, 16>::calculate_size_on_tb(cap),
+            EntryStoreReader::<4, 4, 16>::calculate_size_on_tb(cap),
+            EntryStoreWriter::<4, 4, 16>::calculate_size_on_tb(cap),
         );
         assert_eq!(
-            DualStoreReader::<8, 16, 16>::calculate_size_on_tb(cap),
-            DualStoreWriter::<8, 16, 16>::calculate_size_on_tb(cap),
+            EntryStoreReader::<8, 16, 16>::calculate_size_on_tb(cap),
+            EntryStoreWriter::<8, 16, 16>::calculate_size_on_tb(cap),
         );
     }
 }
 
 #[test]
 fn meta_reader_calculate_size_on_mem_is_independent_of_core_and_meta() {
-    let base = DualStoreReader::<0, 0, 16>::calculate_size_on_mem(32);
-    assert_eq!(DualStoreReader::<8, 0, 16>::calculate_size_on_mem(32), base);
-    assert_eq!(DualStoreReader::<0, 8, 16>::calculate_size_on_mem(32), base);
-    assert_eq!(DualStoreReader::<8, 16, 16>::calculate_size_on_mem(32), base);
-    assert_eq!(DualStoreReader::<64, 64, 16>::calculate_size_on_mem(32), base);
+    let base = EntryStoreReader::<0, 0, 16>::calculate_size_on_mem(32);
+    assert_eq!(EntryStoreReader::<8, 0, 16>::calculate_size_on_mem(32), base);
+    assert_eq!(EntryStoreReader::<0, 8, 16>::calculate_size_on_mem(32), base);
+    assert_eq!(EntryStoreReader::<8, 16, 16>::calculate_size_on_mem(32), base);
+    assert_eq!(EntryStoreReader::<64, 64, 16>::calculate_size_on_mem(32), base);
 }
 
 // ---- Writer -> Reader roundtrip with META ----
@@ -529,7 +529,7 @@ fn core_meta_writer_reader_roundtrip_after_publish_swap() {
     let (_mem, tb, store) = make_store_cma::<C, M, 16>(4);
     let tb_reader = tb.to_reader();
 
-    let s = store.insert_struct().unwrap();
+    let s = store.insert().unwrap();
     let core: [i32; C] = [11, 22, 33, 44];
     let meta: [i32; M] = [-11, -22, -33, -44];
     store.core_write_all(s, core);
@@ -554,7 +554,7 @@ fn core_meta_roundtrip_with_1_1_edge_case() {
     let (_mem, tb, store) = make_store_cma::<1, 1, 1>(1);
     let tb_reader = tb.to_reader();
 
-    let s = store.insert_struct().unwrap();
+    let s = store.insert().unwrap();
     store.core_write(s, 0, 7);
     store.meta_write(s, 0, -9);
 
@@ -577,8 +577,8 @@ fn core_meta_roundtrip_with_large_strides() {
     let (_mem, tb, store) = make_store_cma::<C, M, 16>(CAP);
     let tb_reader = tb.to_reader();
 
-    let s1 = store.insert_struct().unwrap();
-    let s2 = store.insert_struct().unwrap();
+    let s1 = store.insert().unwrap();
+    let s2 = store.insert().unwrap();
     assert_eq!((s1, s2), (1, 2));
 
     let mut c1 = [0i32; C];
@@ -617,9 +617,9 @@ fn reader_core_meta_sees_tb_at_expected_interleaved_offsets() {
     let (_mem, tb, store) = make_store_cma::<C, M, 16>(4);
     let tb_reader = tb.to_reader();
 
-    let s1 = store.insert_struct().unwrap();
-    let s2 = store.insert_struct().unwrap();
-    let s3 = store.insert_struct().unwrap();
+    let s1 = store.insert().unwrap();
+    let s2 = store.insert().unwrap();
+    let s3 = store.insert().unwrap();
     assert_eq!((s1, s2, s3), (1, 2, 3));
 
     store.core_write_all(s1, [1, 2, 3, 4]);
@@ -664,8 +664,8 @@ fn reader_core_meta_distinct_slots_do_not_overlap() {
     let (_mem, tb, store) = make_store_cma::<C, M, 16>(4);
     let tb_reader = tb.to_reader();
 
-    let s1 = store.insert_struct().unwrap();
-    let s2 = store.insert_struct().unwrap();
+    let s1 = store.insert().unwrap();
+    let s2 = store.insert().unwrap();
     assert_eq!((s1, s2), (1, 2));
 
     // Write only slot 1. Slot 2's core+meta zone must remain zero.
@@ -694,7 +694,7 @@ fn reader_meta_read_at_stride_panics() {
 
     // Publish an active slot so the reader has something valid behind slot 1,
     // but the bounds check in TbZoneReader.read fires regardless.
-    let _s = store.insert_struct().unwrap();
+    let _s = store.insert().unwrap();
     tb.publish();
     let _ = tb_reader.swap();
 

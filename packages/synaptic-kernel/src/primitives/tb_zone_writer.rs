@@ -15,6 +15,7 @@ pub struct TbZoneWriter<'a, const STRIDE: usize> {
 }
 
 impl<'a, const STRIDE: usize> TbZoneWriter<'a, STRIDE> {
+    #[inline]
     pub fn new(tb: &'a TripleBufferWriter, tb_start_offset: usize) -> Self {
         let tb_end_offset = tb_start_offset + STRIDE;
         debug_assert!(
@@ -30,10 +31,12 @@ impl<'a, const STRIDE: usize> TbZoneWriter<'a, STRIDE> {
         }
     }
 
+    #[inline]
     pub fn tb_start_offset(&self) -> usize {
         self.tb_start_offset
     }
 
+    #[inline]
     pub fn tb_end_offset(&self) -> usize {
         self.tb_start_offset + STRIDE
     }

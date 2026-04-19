@@ -1,25 +1,27 @@
 use crate::constants::NODE_STRIDE;
-use crate::primitives::struct_reader::StructReader;
+use crate::primitives::entry_reader::EntryReader;
 
 /// Consumer-side structural facade for a graph node on the triple buffer.
 ///
-/// Wraps two `SlotReader`s (core structural pointers and custom metadata)
-/// to provide a strict read-only interface over the raw atomic memory block.
+/// Wraps a `EntryWriter` to provide a strict read-only interface over
+/// the raw atomic memory block.
 ///
 /// # Threading
-/// Consumer thread only. Delegates back to the underlying `SlotReader`s.
+/// Consumer thread only. Delegates back to the underlying `EntryReader`.
 ///
 /// # Core Layout (8x i32)
 /// Shares backing region with `NodeWriter`. See its layout.
 ///
 /// # Encapsulation
 /// - Read-only: structural mutation is strictly prohibited on the reading plane.
-pub struct NodeReader<'a, const META_STRIDE: usize> {
-    struct_reader: StructReader<'a, NODE_STRIDE, META_STRIDE>,
+pub struct NodeReader<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize> {
+    struct_reader: EntryReader<'a, NODE_STRIDE, META_STRIDE, ATTR_STRIDE>,
 }
 
-impl<'a, const META_STRIDE: usize> NodeReader<'a, META_STRIDE> {
-    pub fn new(struct_reader: StructReader<'a, NODE_STRIDE, META_STRIDE>) -> Self {
+impl<'a, const META_STRIDE: usize, const ATTR_STRIDE: usize>
+    NodeReader<'a, META_STRIDE, ATTR_STRIDE>
+{
+    pub fn new(struct_reader: EntryReader<'a, NODE_STRIDE, META_STRIDE, ATTR_STRIDE>) -> Self {
         NodeReader { struct_reader }
     }
 

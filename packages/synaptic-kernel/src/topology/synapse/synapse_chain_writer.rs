@@ -1,6 +1,6 @@
 use crate::constants::SYNAPSE_STRIDE;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
-use crate::primitives::dual_store_writer::DualStoreWriter;
+use crate::primitives::entry_store_writer::EntryStoreWriter;
 use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::staging_buffer_reader::StagingBufferReader;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
@@ -50,7 +50,7 @@ pub struct SynapseChainWriter<
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > {
     node_chain: NodeChainWriter<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>,
-    ds: DualStoreWriter<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>,
+    ds: EntryStoreWriter<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>,
 }
 
 impl<
@@ -115,7 +115,14 @@ impl<
     ) -> Self {
         SynapseChainWriter {
             node_chain,
-            ds: DualStoreWriter::create(mem, tb, mem_start_offset, tb_start_offset, capacity, bind),
+            ds: EntryStoreWriter::create(
+                mem,
+                tb,
+                mem_start_offset,
+                tb_start_offset,
+                capacity,
+                bind,
+            ),
         }
     }
 
@@ -151,10 +158,6 @@ impl<
         self.ds.mem_end_offset()
     }
 
-    pub fn mem_staging_buffer_start_offset(&self) -> usize {
-        self.ds.mem_staging_buffer_start_offset()
-    }
-
     pub fn tb_start_offset(&self) -> usize {
         self.ds.tb_start_offset()
     }
@@ -171,82 +174,11 @@ impl<
         self.ds.utilization()
     }
 
-    pub fn is_active_slot(&self, slot: usize) -> bool {
-        self.ds.is_active_slot(slot)
-    }
-
-    #[inline]
-    pub fn core_read(&self, slot: usize, offset: usize) -> i32 {
-        self.ds.core_read(slot, offset)
-    }
-
-    #[inline]
-    pub fn core_write(&self, slot: usize, offset: usize, value: i32) {
-        self.ds.core_write(slot, offset, value)
-    }
-
-    #[inline]
-    pub fn core_read_all(&self, slot: usize) -> [i32; SYNAPSE_STRIDE] {
-        self.ds.core_read_all(slot)
-    }
-
-    #[inline]
-    pub fn core_write_all(&self, slot: usize, data: [i32; SYNAPSE_STRIDE]) {
-        self.ds.core_write_all(slot, data)
-    }
-
-    #[inline]
-    pub fn meta_read(&self, slot: usize, offset: usize) -> i32 {
-        self.ds.meta_read(slot, offset)
-    }
-
-    #[inline]
-    pub fn meta_write(&self, slot: usize, offset: usize, value: i32) {
-        self.ds.meta_write(slot, offset, value)
-    }
-
-    #[inline]
-    pub fn meta_read_all(&self, slot: usize) -> [i32; SYNAPSE_META_STRIDE] {
-        self.ds.meta_read_all(slot)
-    }
-
-    #[inline]
-    pub fn meta_write_all(&self, slot: usize, data: [i32; SYNAPSE_META_STRIDE]) {
-        self.ds.meta_write_all(slot, data)
-    }
-
-    #[inline]
-    pub fn attr_read(&self, slot: usize, offset: usize) -> i32 {
-        self.ds.attr_read(slot, offset)
-    }
-
-    #[inline]
-    pub fn attr_write(&self, slot: usize, offset: usize, value: i32) {
-        self.ds.attr_write(slot, offset, value)
-    }
-
-    #[inline]
-    pub fn attr_and(&self, slot: usize, offset: usize, value: i32) -> i32 {
-        self.ds.attr_and(slot, offset, value)
-    }
-
-    #[inline]
-    pub fn attr_or(&self, slot: usize, offset: usize, value: i32) -> i32 {
-        self.ds.attr_or(slot, offset, value)
-    }
-
-    #[inline]
-    pub fn attr_read_all(&self, slot: usize) -> [i32; SYNAPSE_ATTRIBUTES_STRIDE] {
-        self.ds.attr_read_all(slot)
-    }
-
-    #[inline]
-    pub fn attr_write_all(&self, slot: usize, data: [i32; SYNAPSE_ATTRIBUTES_STRIDE]) {
-        self.ds.attr_write_all(slot, data)
-    }
-
-    pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_, SYNAPSE_META_STRIDE> {
-        SynapseWriter::new(self.ds.get_struct(slot))
+    pub fn get_synapse(
+        &'_ self,
+        slot: usize,
+    ) -> SynapseWriter<'_, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
+        SynapseWriter::new(self.ds.get(slot))
     }
 
     pub fn connect(&self, source_slot: usize, target_slot: usize, kind: i32) -> Option<usize> {
@@ -254,7 +186,7 @@ impl<
         let target = self.node_chain.get_node(target_slot);
         let source_current_tail_ptr = source.get_outgoing_synapse_tail();
         let target_current_tail_ptr = target.get_incoming_synapse_tail();
-        let result = self.ds.insert_struct();
+        let result = self.ds.insert();
 
         if result.is_none() {
             return None;
@@ -326,7 +258,7 @@ impl<
         let synapse_incoming_next_ptr = synapse.get_incoming_next_ptr();
         let synapse_incoming_prev_ptr = synapse.get_incoming_prev_ptr();
 
-        self.ds.remove_struct(synapse_slot)?;
+        self.ds.remove(synapse_slot)?;
 
         if synapse_outgoing_prev_ptr != 0 {
             self.get_synapse(synapse_outgoing_prev_ptr)
