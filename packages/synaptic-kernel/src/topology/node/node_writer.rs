@@ -40,6 +40,11 @@ impl<'a, const META_STRIDE: usize> NodeWriter<'a, META_STRIDE> {
 
     #[inline]
     pub(crate) fn set_kind(&self, value: i32) {
+        debug_assert!(
+            value >= 0 && value < 256,
+            "SynapseWriter.set_kind | kind {} out of bounds [0, 256)",
+            value
+        );
         let bitmask = self.struct_writer.core_read(0) & ((1 << 24) - 1);
         self.struct_writer.core_write(0, bitmask | value << 24)
     }
