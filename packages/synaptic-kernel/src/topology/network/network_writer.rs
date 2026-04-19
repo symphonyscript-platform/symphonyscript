@@ -115,23 +115,26 @@ impl<
         synapse_capacity: usize,
         bind: bool,
     ) -> Self {
+        let node_chain = NodeChainWriter::create(
+            Arc::clone(&mem),
+            tb.clone(),
+            mem_start_offset,
+            tb_start_offset,
+            node_capacity,
+            bind,
+        );
+        let synapses = EntryStoreWriter::create(
+            mem,
+            tb,
+            node_chain.mem_end_offset(),
+            node_chain.tb_end_offset(),
+            synapse_capacity,
+            bind,
+        );
+
         NetworkWriter {
-            node_chain: NodeChainWriter::create(
-                Arc::clone(&mem),
-                tb.clone(),
-                mem_start_offset,
-                tb_start_offset,
-                node_capacity,
-                bind,
-            ),
-            synapses: EntryStoreWriter::create(
-                mem,
-                tb,
-                mem_start_offset,
-                tb_start_offset,
-                synapse_capacity,
-                bind,
-            ),
+            node_chain,
+            synapses,
         }
     }
 
