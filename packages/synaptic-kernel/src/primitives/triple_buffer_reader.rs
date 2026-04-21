@@ -59,14 +59,17 @@ impl TripleBufferReader {
         }
     }
 
+    #[inline]
     pub fn buffer_capacity(&self) -> usize {
         self.buffer_capacity
     }
 
+    #[inline]
     pub fn mem_start_offset(&self) -> usize {
         self.mem_start_offset
     }
 
+    #[inline]
     pub fn mem_end_offset(&self) -> usize {
         self.mem_end_offset
     }

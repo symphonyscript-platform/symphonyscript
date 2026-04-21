@@ -5,6 +5,7 @@ use crate::epoch_mirror::EpochMirror;
 use crate::errors::kernel_error::KernelError;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::kernel_config::KernelConfig;
+use crate::primitives::tb_writer::TbWriter;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::types::AtomicBuffer;
 use crate::serialized_kernel::SerializedKernel;
@@ -246,6 +247,16 @@ impl<
     #[inline]
     pub fn mem_write_meta(&self, offset: usize, value: i32) {
         self.active_epoch.mem_metadata.write(offset, value);
+    }
+
+    #[inline]
+    pub fn get_user_tb(&'_ self, tb_id: TripleBufferId) -> TbWriter<'_> {
+        debug_assert!(
+            tb_id.0 != TripleBufferId::DEFAULT.0,
+            "Kernel::get_user_tb | default TB cannot be accessed using get_user_tb()",
+        );
+
+        TbWriter::bind(self.active_epoch.tb_registry.get(tb_id))
     }
 
     #[inline]

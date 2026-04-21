@@ -18,17 +18,17 @@ impl TripleBufferId {
     pub const DEFAULT: TripleBufferId = TripleBufferId(u16::MAX);
 }
 
-/// Definition of user-allocated triple buffer within the registry.
-///
-/// # Fields
-/// - `id`: Unique identifier in `[0, N-1]`. Must not equal `TripleBufferId::DEFAULT`.
-/// - `buffer_capacity`: Number of `i32` slots per buffer (x3 on MEM).
 impl fmt::Display for TripleBufferId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
+/// Definition of user-allocated triple buffer within the registry.
+///
+/// # Fields
+/// - `id`: Unique identifier in `[0, N-1]`. Must not equal `TripleBufferId::DEFAULT`.
+/// - `buffer_capacity`: Number of `i32` slots per buffer (x3 on MEM).
 #[derive(Clone, Copy)]
 pub struct TripleBufferDef {
     pub id: TripleBufferId,

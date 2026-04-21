@@ -1,4 +1,5 @@
 use crate::metadata::mem_metadata_reader::MemMetadataReader;
+use crate::primitives::tb_reader::TbReader;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::triple_buffer_reader_registry::TripleBufferReaderRegistry;
 use crate::topology::network::network_reader::NetworkReader;
@@ -80,20 +81,34 @@ impl<
         }
     }
 
+    #[inline]
     pub fn mem_metadata_capacity(&self) -> usize {
         self.mem_metadata.capacity()
     }
 
+    #[inline]
     pub fn mem_read_meta(&self, offset: usize) -> i32 {
         self.mem_metadata.read(offset)
     }
 
+    #[inline]
+    pub fn get_user_tb(&'_ self, tb_id: TripleBufferId) -> TbReader<'_> {
+        debug_assert!(
+            tb_id.0 != TripleBufferId::DEFAULT.0,
+            "EpochMirror::get_user_tb | default TB cannot be accessed using get_user_tb()",
+        );
+
+        TbReader::bind(self.tb_registry.get(tb_id))
+    }
+
+    #[inline]
     pub fn get_head_node(
         &'_ self,
     ) -> Option<NodeReader<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
         self.network.get_head_node()
     }
 
+    #[inline]
     pub fn get_node(
         &'_ self,
         slot: usize,
@@ -101,6 +116,7 @@ impl<
         self.network.get_node(slot)
     }
 
+    #[inline]
     pub fn get_synapse(
         &'_ self,
         slot: usize,
