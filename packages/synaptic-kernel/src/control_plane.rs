@@ -38,6 +38,7 @@ use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 /// - `get_reader_ack_generation()`: Producer thread only (Reads consumer's ack).
 #[repr(C)]
 pub struct ControlPlane<
+    const TB_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
@@ -45,6 +46,7 @@ pub struct ControlPlane<
 > {
     mirror_ptr: AtomicPtr<
         EpochMirror<
+            TB_COUNT,
             NODE_META_STRIDE,
             NODE_ATTRIBUTES_STRIDE,
             SYNAPSE_META_STRIDE,
@@ -56,12 +58,14 @@ pub struct ControlPlane<
 }
 
 impl<
+    const TB_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 >
     ControlPlane<
+        TB_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,
@@ -71,6 +75,7 @@ impl<
     pub fn new(
         mirror: Box<
             EpochMirror<
+                TB_COUNT,
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -88,6 +93,7 @@ impl<
     pub(crate) fn acquire_mirror(
         &self,
     ) -> &EpochMirror<
+        TB_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,
@@ -106,6 +112,7 @@ impl<
         &self,
         new_epoch: Box<
             EpochMirror<
+                TB_COUNT,
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -115,6 +122,7 @@ impl<
     ) -> (
         Box<
             EpochMirror<
+                TB_COUNT,
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -147,12 +155,14 @@ impl<
 }
 
 impl<
+    const TB_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > Drop
     for ControlPlane<
+        TB_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,

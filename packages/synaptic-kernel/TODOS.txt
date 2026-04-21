@@ -10,3 +10,11 @@
 5. identify any leftovers from the pre-refactoring: legacy names, doc comments, anything.
 6. Add benchmarks
 7. replace debug_assert-s in constructors with asserts.
+
+Subagent surfaced three API asymmetries worth your attention:
+
+Result vs Option on insert/connect. Kernel::insert_head_node returns Result<usize, KernelError> but internally calls NetworkWriter::insert_head_node which returns Option<usize>. The Kernel wrapping converts None → Err(KernelError::CapacityExhausted) — informationally empty; it's a pure type conversion. Error-path tests need two different idioms depending on which driver they're written against. Pick one convention.
+
+publish receiver asymmetry. Kernel::publish takes &mut self (needs to prune the deferred-deletion queue). Epoch::publish takes &self. Propagates let mut kernel requirement to all producer-side tests using Kernel, while direct-Epoch tests don't need mut. Not a bug, but the kind of papercut that adds friction.
+
+get_node return-type asymmetry. Kernel::get_node → NodeHandle. NetworkWriter::get_node → NodeWriter. NetworkWriter::get_node_handle → NodeHandle. Same method name at different layers returns different types. Footgun for anyone reading both layers — the NetworkWriter::get_node returning NodeWriter rather than NodeHandle is the most surprising part. Consider either renaming NetworkWriter::get_node → get_node_writer (matches get_node_handle naming) or having both layers return the same type.

@@ -16,14 +16,18 @@ use std::sync::Arc;
 /// It:
 /// 1. Acquires the current `EpochMirror` from the `ControlPlane` - while also
 ///    internally acknowledging the current generation before loading the pointer.
-/// 2. Calls `swap()` to consume any pending triple-buffer updates.
+/// 2. Calls `swap()` to consume any pending updates on the default triple buffer.
 /// 3. Returns the ready-to-read `EpochMirror`.
+///
+/// User TBs are **not** swapped by `acquire_mirror()`. To consume user TB updates,
+/// call `swap_tb(id)` on the returned `EpochMirror` explicitly.
 ///
 /// The returned reference is valid for the entire cycle - no re-acquisition needed.
 ///
 /// # Constraints
 /// - Created by passing `Arc<ControlPlane>` to `new()`.
 pub struct EpochConsumer<
+    const TB_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
@@ -31,6 +35,7 @@ pub struct EpochConsumer<
 > {
     control_plane: Arc<
         ControlPlane<
+            TB_COUNT,
             NODE_META_STRIDE,
             NODE_ATTRIBUTES_STRIDE,
             SYNAPSE_META_STRIDE,
@@ -40,12 +45,14 @@ pub struct EpochConsumer<
 }
 
 impl<
+    const TB_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 >
     EpochConsumer<
+        TB_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,
@@ -55,6 +62,7 @@ impl<
     pub fn new(
         control_plane: Arc<
             ControlPlane<
+                TB_COUNT,
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -82,6 +90,7 @@ impl<
     pub fn acquire_mirror(
         &mut self,
     ) -> &EpochMirror<
+        TB_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,

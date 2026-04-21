@@ -5,6 +5,7 @@ use crate::epoch_mirror::EpochMirror;
 use crate::errors::kernel_error::KernelError;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::kernel_config::KernelConfig;
+use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::types::AtomicBuffer;
 use crate::serialized_kernel::SerializedKernel;
 use crate::topology::network::synapse_handle::SynapseView;
@@ -29,6 +30,7 @@ use std::sync::Arc;
 /// 2. Mutate: insert/remove nodes, connect/disconnect synapses, write attributes.
 /// 3. Call [`publish()`] to deploy structural changes to the consumer and reclaim
 ///    generation-acknowledged deferred deletions.
+/// 4. Call [`publish_tb(id)`] to independently deploy a user TB updates.
 /// 4. Call [`grow()`] when utilization exceeds the target threshold.
 ///    This allocates a new, larger backing buffer, migrates all state, and
 ///    hot-swaps the consumer's graph via the [`ControlPlane`].
@@ -36,7 +38,9 @@ use std::sync::Arc;
 ///
 /// # Memory Model
 /// - **Structural Changes** (nodes, synapses, topology metadata) are written to the
-///   triple-buffered plane and become visible to the consumer after [`publish()`].
+///   default tripl buffer and become visible to the consumer after [`publish()`].
+/// - **User TB Changes** are written to user-allocated triple buffers and become
+///   visible to the consumer after [`publish_tb(id)`].
 /// - **Attributes** (node and synapse) and **mem metadata** are written to the direct
 ///   plane and are visible to the consumer immediately.
 /// - **Deferred deletions** (removed nodes, disconnected synapses) are staged in a
@@ -49,15 +53,17 @@ use std::sync::Arc;
 /// memory. If the consumer is still traversing a hot-swapped graph, the result
 /// is undefined behavior.
 pub struct Kernel<
+    const TB_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > {
-    config: KernelConfig,
+    config: KernelConfig<TB_COUNT>,
     mem: AtomicBuffer,
     control_plane: Arc<
         ControlPlane<
+            TB_COUNT,
             NODE_META_STRIDE,
             NODE_ATTRIBUTES_STRIDE,
             SYNAPSE_META_STRIDE,
@@ -65,6 +71,7 @@ pub struct Kernel<
         >,
     >,
     active_epoch: Epoch<
+        TB_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,
@@ -73,6 +80,7 @@ pub struct Kernel<
     readers_pending_deletion: VecDeque<(
         Box<
             EpochMirror<
+                TB_COUNT,
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -84,20 +92,28 @@ pub struct Kernel<
 }
 
 impl<
+    const TB_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
-> Kernel<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>
+>
+    Kernel<
+        TB_COUNT,
+        NODE_META_STRIDE,
+        NODE_ATTRIBUTES_STRIDE,
+        SYNAPSE_META_STRIDE,
+        SYNAPSE_ATTRIBUTES_STRIDE,
+    >
 {
     pub const HEADERS_SIZE: usize = 2;
 
-    pub fn new(config: KernelConfig) -> Self {
+    pub fn new(config: KernelConfig<TB_COUNT>) -> Self {
         let mem = Self::create_mem(Self::calculate_size_on_mem(&config));
         Self::new_from_mem(mem, config)
     }
 
-    pub fn new_from_mem(mem: AtomicBuffer, config: KernelConfig) -> Self {
+    pub fn new_from_mem(mem: AtomicBuffer, config: KernelConfig<TB_COUNT>) -> Self {
         assert!(
             mem[0].load(Ordering::Acquire) == 0 && mem[1].load(Ordering::Acquire) == 0,
             "Attempted to initialize Kernel on already allocated memory"
@@ -123,7 +139,7 @@ impl<
         }
     }
 
-    pub fn load_serialized(serialized_kernel: SerializedKernel) -> Self {
+    pub fn load_serialized(serialized_kernel: SerializedKernel<TB_COUNT>) -> Self {
         let config = serialized_kernel.config;
         let mem: AtomicBuffer = Arc::new(
             serialized_kernel
@@ -162,9 +178,10 @@ impl<
         }
     }
 
-    pub fn calculate_size_on_mem(config: &KernelConfig) -> usize {
+    pub fn calculate_size_on_mem(config: &KernelConfig<TB_COUNT>) -> usize {
         Self::HEADERS_SIZE
             + Epoch::<
+                TB_COUNT,
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -179,7 +196,7 @@ impl<
     /// If a consumer thread is actively traversing the topology or acking generations,
     /// the snapshot may capture a torn SPSC state (e.g., a triple buffer mid-swap).
     /// This is the same quiescence requirement that applies to dropping the Kernel.
-    pub fn serialize(&mut self) -> SerializedKernel {
+    pub fn serialize(&mut self) -> SerializedKernel<TB_COUNT> {
         self.publish();
 
         let mem = self.mem.iter().map(|a| a.load(Ordering::Relaxed)).collect();
@@ -206,6 +223,7 @@ impl<
         &self,
     ) -> Arc<
         ControlPlane<
+            TB_COUNT,
             NODE_META_STRIDE,
             NODE_ATTRIBUTES_STRIDE,
             SYNAPSE_META_STRIDE,
@@ -221,11 +239,6 @@ impl<
     }
 
     #[inline]
-    pub fn tb_metadata_capacity(&self) -> usize {
-        self.active_epoch.tb_metadata.capacity()
-    }
-
-    #[inline]
     pub fn mem_read_meta(&self, offset: usize) -> i32 {
         self.active_epoch.mem_metadata.read(offset)
     }
@@ -233,16 +246,6 @@ impl<
     #[inline]
     pub fn mem_write_meta(&self, offset: usize, value: i32) {
         self.active_epoch.mem_metadata.write(offset, value);
-    }
-
-    #[inline]
-    pub fn tb_read_meta(&self, offset: usize) -> i32 {
-        self.active_epoch.tb_metadata.read(offset)
-    }
-
-    #[inline]
-    pub fn tb_write_meta(&self, offset: usize, value: i32) {
-        self.active_epoch.tb_metadata.write(offset, value);
     }
 
     #[inline]
@@ -374,7 +377,11 @@ impl<
         }
     }
 
-    pub fn grow(&mut self, config: KernelConfig) -> Result<(), KernelError> {
+    pub fn publish_tb(&self, tb_id: TripleBufferId) {
+        self.active_epoch.publish_tb(tb_id);
+    }
+
+    pub fn grow(&mut self, config: KernelConfig<TB_COUNT>) -> Result<(), KernelError> {
         if config.node_capacity < self.node_capacity()
             || config.synapse_capacity < self.synapse_capacity()
         {
