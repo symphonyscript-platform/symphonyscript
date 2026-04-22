@@ -5,6 +5,7 @@ use crate::epoch_mirror::EpochMirror;
 use crate::errors::kernel_error::KernelError;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::kernel_config::KernelConfig;
+use crate::primitives::entry_store_def::EntryStoreId;
 use crate::primitives::tb_writer::TbWriter;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::types::AtomicBuffer;
@@ -55,16 +56,18 @@ use std::sync::Arc;
 /// is undefined behavior.
 pub struct Kernel<
     const TB_COUNT: usize,
+    const STORE_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
     const SYNAPSE_ATTRIBUTES_STRIDE: usize,
 > {
-    config: KernelConfig<TB_COUNT>,
+    config: KernelConfig<TB_COUNT, STORE_COUNT>,
     mem: AtomicBuffer,
     control_plane: Arc<
         ControlPlane<
             TB_COUNT,
+            STORE_COUNT,
             NODE_META_STRIDE,
             NODE_ATTRIBUTES_STRIDE,
             SYNAPSE_META_STRIDE,
@@ -73,6 +76,7 @@ pub struct Kernel<
     >,
     active_epoch: Epoch<
         TB_COUNT,
+        STORE_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,
@@ -82,6 +86,7 @@ pub struct Kernel<
         Box<
             EpochMirror<
                 TB_COUNT,
+                STORE_COUNT,
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -94,6 +99,7 @@ pub struct Kernel<
 
 impl<
     const TB_COUNT: usize,
+    const STORE_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
@@ -101,6 +107,7 @@ impl<
 >
     Kernel<
         TB_COUNT,
+        STORE_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,
@@ -109,12 +116,12 @@ impl<
 {
     pub const HEADERS_SIZE: usize = 2;
 
-    pub fn new(config: KernelConfig<TB_COUNT>) -> Self {
+    pub fn new(config: KernelConfig<TB_COUNT, STORE_COUNT>) -> Self {
         let mem = Self::create_mem(Self::calculate_size_on_mem(&config));
         Self::new_from_mem(mem, config)
     }
 
-    pub fn new_from_mem(mem: AtomicBuffer, config: KernelConfig<TB_COUNT>) -> Self {
+    pub fn new_from_mem(mem: AtomicBuffer, config: KernelConfig<TB_COUNT, STORE_COUNT>) -> Self {
         assert!(
             mem[0].load(Ordering::Acquire) == 0 && mem[1].load(Ordering::Acquire) == 0,
             "Attempted to initialize Kernel on already allocated memory"
@@ -140,7 +147,7 @@ impl<
         }
     }
 
-    pub fn load_serialized(serialized_kernel: SerializedKernel<TB_COUNT>) -> Self {
+    pub fn load_serialized(serialized_kernel: SerializedKernel<TB_COUNT, STORE_COUNT>) -> Self {
         let config = serialized_kernel.config;
         let mem: AtomicBuffer = Arc::new(
             serialized_kernel
@@ -179,10 +186,11 @@ impl<
         }
     }
 
-    pub fn calculate_size_on_mem(config: &KernelConfig<TB_COUNT>) -> usize {
+    pub fn calculate_size_on_mem(config: &KernelConfig<TB_COUNT, STORE_COUNT>) -> usize {
         Self::HEADERS_SIZE
             + Epoch::<
                 TB_COUNT,
+                STORE_COUNT,
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -197,7 +205,7 @@ impl<
     /// If a consumer thread is actively traversing the topology or acking generations,
     /// the snapshot may capture a torn SPSC state (e.g., a triple buffer mid-swap).
     /// This is the same quiescence requirement that applies to dropping the Kernel.
-    pub fn serialize(&mut self) -> SerializedKernel<TB_COUNT> {
+    pub fn serialize(&mut self) -> SerializedKernel<TB_COUNT, STORE_COUNT> {
         self.publish();
 
         let mem = self.mem.iter().map(|a| a.load(Ordering::Relaxed)).collect();
@@ -225,6 +233,7 @@ impl<
     ) -> Arc<
         ControlPlane<
             TB_COUNT,
+            STORE_COUNT,
             NODE_META_STRIDE,
             NODE_ATTRIBUTES_STRIDE,
             SYNAPSE_META_STRIDE,
@@ -257,6 +266,25 @@ impl<
         );
 
         TbWriter::bind(self.active_epoch.tb_registry.get(tb_id))
+    }
+
+    pub fn mount_entry_store<
+        const CORE_STRIDE: usize,
+        const META_STRIDE: usize,
+        const ATTR_STRIDE: usize,
+    >(
+        &self,
+        store_id: EntryStoreId,
+    ) {
+        debug_assert!(
+            (store_id.0 as usize) < STORE_COUNT,
+            "Kernel::mount_entry_store | store_id {} out of bounds [0-{}]",
+            store_id,
+            STORE_COUNT - 1,
+        );
+
+        let index = self.id_index[id.0 as usize];
+        let def = self.config.store_defs[]
     }
 
     #[inline]
@@ -392,7 +420,7 @@ impl<
         self.active_epoch.publish_tb(tb_id);
     }
 
-    pub fn grow(&mut self, config: KernelConfig<TB_COUNT>) -> Result<(), KernelError> {
+    pub fn grow(&mut self, config: KernelConfig<TB_COUNT, STORE_COUNT>) -> Result<(), KernelError> {
         if config.node_capacity < self.node_capacity()
             || config.synapse_capacity < self.synapse_capacity()
         {

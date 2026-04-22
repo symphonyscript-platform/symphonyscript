@@ -34,6 +34,7 @@ use crate::topology::node::node_reader::NodeReader;
 #[derive(Clone)]
 pub struct EpochMirror<
     const TB_COUNT: usize,
+    const STORE_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
@@ -51,6 +52,7 @@ pub struct EpochMirror<
 
 impl<
     const TB_COUNT: usize,
+    const STORE_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
@@ -58,6 +60,7 @@ impl<
 >
     EpochMirror<
         TB_COUNT,
+        STORE_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,

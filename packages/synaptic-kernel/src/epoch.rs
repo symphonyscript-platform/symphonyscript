@@ -51,6 +51,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct Epoch<
     const TB_COUNT: usize,
+    const STORE_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
@@ -68,6 +69,7 @@ pub struct Epoch<
 
 impl<
     const TB_COUNT: usize,
+    const STORE_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
@@ -75,19 +77,24 @@ impl<
 >
     Epoch<
         TB_COUNT,
+        STORE_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,
         SYNAPSE_ATTRIBUTES_STRIDE,
     >
 {
-    pub fn new(mem: AtomicBuffer, config: KernelConfig<TB_COUNT>, mem_start_offset: usize) -> Self {
+    pub fn new(
+        mem: AtomicBuffer,
+        config: KernelConfig<TB_COUNT, STORE_COUNT>,
+        mem_start_offset: usize,
+    ) -> Self {
         Self::create(mem, config, mem_start_offset, false)
     }
 
     pub fn bind(
         mem: AtomicBuffer,
-        config: KernelConfig<TB_COUNT>,
+        config: KernelConfig<TB_COUNT, STORE_COUNT>,
         mem_start_offset: usize,
     ) -> Self {
         Self::create(mem, config, mem_start_offset, true)
@@ -95,7 +102,7 @@ impl<
 
     pub fn create(
         mem: AtomicBuffer,
-        config: KernelConfig<TB_COUNT>,
+        config: KernelConfig<TB_COUNT, STORE_COUNT>,
         mem_start_offset: usize,
         bind: bool,
     ) -> Self {
@@ -131,7 +138,7 @@ impl<
         }
     }
 
-    pub fn calculate_size_on_mem(config: &KernelConfig<TB_COUNT>) -> usize {
+    pub fn calculate_size_on_mem(config: &KernelConfig<TB_COUNT, STORE_COUNT>) -> usize {
         MemMetadataWriter::calculate_size_on_mem(config.mem_metadata_size)
             + TripleBufferWriterRegistry::calculate_size_on_mem(
                 Self::calculate_size_on_tb(&config),
@@ -145,7 +152,7 @@ impl<
             >::calculate_size_on_mem(config.node_capacity, config.synapse_capacity)
     }
 
-    pub fn calculate_size_on_tb(config: &KernelConfig<TB_COUNT>) -> usize {
+    pub fn calculate_size_on_tb(config: &KernelConfig<TB_COUNT, STORE_COUNT>) -> usize {
         NetworkWriter::<
             NODE_META_STRIDE,
             NODE_ATTRIBUTES_STRIDE,
@@ -158,6 +165,7 @@ impl<
         &self,
     ) -> EpochMirror<
         TB_COUNT,
+        STORE_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,

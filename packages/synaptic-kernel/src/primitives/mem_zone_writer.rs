@@ -7,24 +7,28 @@ use std::sync::atomic::Ordering;
 ///
 /// # Threading
 /// Producer thread only. All atomic operations use `Relaxed` ordering.
-pub struct MemZoneWriter<'a, const STRIDE: usize> {
+pub struct MemZoneWriter<'a> {
     mem: &'a AtomicBuffer,
+    pub stride: usize,
     mem_start_offset: usize,
     mem_end_offset: usize,
 }
 
-impl<'a, const STRIDE: usize> MemZoneWriter<'a, STRIDE> {
+impl<'a> MemZoneWriter<'a> {
     #[inline]
-    pub fn new(mem: &'a AtomicBuffer, mem_start_offset: usize) -> Self {
-        let mem_end_offset = mem_start_offset + STRIDE;
+    pub fn new(mem: &'a AtomicBuffer, stride: usize, mem_start_offset: usize) -> Self {
+        let mem_end_offset = mem_start_offset + stride;
+
         debug_assert!(
             mem_end_offset <= mem.len(),
             "MemZoneWriter::new | range [{}..{}] exceeds AtomicBuffer boundaries",
             mem_start_offset,
-            STRIDE
+            stride
         );
+
         MemZoneWriter {
             mem,
+            stride,
             mem_start_offset,
             mem_end_offset,
         }
@@ -43,7 +47,7 @@ impl<'a, const STRIDE: usize> MemZoneWriter<'a, STRIDE> {
     #[inline]
     pub fn read(&self, offset: usize) -> i32 {
         debug_assert!(
-            offset < STRIDE,
+            offset < self.stride,
             "MemZoneWriter.read | offset {} out of bounds",
             offset
         );
@@ -53,7 +57,7 @@ impl<'a, const STRIDE: usize> MemZoneWriter<'a, STRIDE> {
     #[inline]
     pub fn write(&self, offset: usize, value: i32) {
         debug_assert!(
-            offset < STRIDE,
+            offset < self.stride,
             "MemZoneWriter.write | offset {} out of bounds",
             offset
         );
@@ -63,7 +67,7 @@ impl<'a, const STRIDE: usize> MemZoneWriter<'a, STRIDE> {
     #[inline]
     pub fn or(&self, offset: usize, mask: i32) -> i32 {
         debug_assert!(
-            offset < STRIDE,
+            offset < self.stride,
             "MemZoneWriter.or | offset {} out of bounds",
             offset
         );
@@ -73,7 +77,7 @@ impl<'a, const STRIDE: usize> MemZoneWriter<'a, STRIDE> {
     #[inline]
     pub fn and(&self, offset: usize, mask: i32) -> i32 {
         debug_assert!(
-            offset < STRIDE,
+            offset < self.stride,
             "MemZoneWriter.and | offset {} out of bounds",
             offset
         );
@@ -81,7 +85,13 @@ impl<'a, const STRIDE: usize> MemZoneWriter<'a, STRIDE> {
     }
 
     #[inline]
-    pub fn read_all(&self) -> [i32; STRIDE] {
+    pub fn read_all<const STRIDE: usize>(&self) -> [i32; STRIDE] {
+        debug_assert_eq!(
+            STRIDE, self.stride,
+            "MemZoneWriter::read_all | STRIDE {} must be equal to pre-configured stride {}",
+            STRIDE, self.stride
+        );
+
         let mut data: [i32; STRIDE] = [0; STRIDE];
 
         for i in 0..STRIDE {
@@ -92,14 +102,26 @@ impl<'a, const STRIDE: usize> MemZoneWriter<'a, STRIDE> {
     }
 
     #[inline]
-    pub fn write_all(&self, data: [i32; STRIDE]) {
+    pub fn write_all<const STRIDE: usize>(&self, data: [i32; STRIDE]) {
+        debug_assert_eq!(
+            STRIDE, self.stride,
+            "MemZoneWriter::write_all | STRIDE {} must be equal to pre-configured stride {}",
+            STRIDE, self.stride
+        );
+
         for i in 0..STRIDE {
             self.write(i, data[i]);
         }
     }
 
     #[inline]
-    pub fn clear(&self) {
+    pub fn clear<const STRIDE: usize>(&self) {
+        debug_assert_eq!(
+            STRIDE, self.stride,
+            "MemZoneWriter::clear | STRIDE {} must be equal to pre-configured stride {}",
+            STRIDE, self.stride
+        );
+
         self.write_all([0; STRIDE]);
     }
 }

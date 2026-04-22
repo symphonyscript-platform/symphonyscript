@@ -7,24 +7,28 @@ use std::sync::atomic::Ordering;
 ///
 /// # Threading
 /// Consumer thread only. All atomic operations use `Relaxed` ordering.
-pub struct MemZoneReader<'a, const STRIDE: usize> {
+pub struct MemZoneReader<'a> {
     mem: &'a AtomicBuffer,
+    pub stride: usize,
     mem_start_offset: usize,
     mem_end_offset: usize,
 }
 
-impl<'a, const STRIDE: usize> MemZoneReader<'a, STRIDE> {
+impl<'a> MemZoneReader<'a> {
     #[inline]
-    pub fn new(mem: &'a AtomicBuffer, mem_start_offset: usize) -> Self {
-        let mem_end_offset = mem_start_offset + STRIDE;
+    pub fn new(mem: &'a AtomicBuffer, stride: usize, mem_start_offset: usize) -> Self {
+        let mem_end_offset = mem_start_offset + stride;
+
         debug_assert!(
             mem_end_offset <= mem.len(),
             "MemZoneReader::new | range [{}..{}] exceeds AtomicBuffer boundaries",
             mem_start_offset,
-            STRIDE
+            stride
         );
+
         MemZoneReader {
             mem,
+            stride,
             mem_start_offset,
             mem_end_offset,
         }
@@ -43,7 +47,7 @@ impl<'a, const STRIDE: usize> MemZoneReader<'a, STRIDE> {
     #[inline]
     pub fn read(&self, offset: usize) -> i32 {
         debug_assert!(
-            offset < STRIDE,
+            offset < self.stride,
             "MemZoneReader.read | offset {} out of bounds",
             offset
         );
@@ -51,7 +55,13 @@ impl<'a, const STRIDE: usize> MemZoneReader<'a, STRIDE> {
     }
 
     #[inline]
-    pub fn read_all(&self) -> [i32; STRIDE] {
+    pub fn read_all<const STRIDE: usize>(&self) -> [i32; STRIDE] {
+        debug_assert_eq!(
+            STRIDE, self.stride,
+            "MemZoneReader::read_all | STRIDE {} must be equal to pre-configured stride {}",
+            STRIDE, self.stride
+        );
+
         let mut data: [i32; STRIDE] = [0; STRIDE];
 
         for i in 0..STRIDE {

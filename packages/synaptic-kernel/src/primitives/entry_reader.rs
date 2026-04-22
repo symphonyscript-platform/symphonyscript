@@ -12,29 +12,22 @@ use crate::primitives::tb_zone_reader::TbZoneReader;
 ///
 /// # Encapsulation
 /// - Read-only: structural mutation is strictly prohibited on the reading plane.
-pub struct EntryReader<
-    'a,
-    const CORE_STRIDE: usize,
-    const META_STRIDE: usize,
-    const ATTR_STRIDE: usize,
-> {
-    core: TbZoneReader<'a, CORE_STRIDE>,
-    meta: TbZoneReader<'a, META_STRIDE>,
-    attributes: MemZoneReader<'a, ATTR_STRIDE>,
+pub struct EntryReader<'a> {
+    core: TbZoneReader<'a>,
+    meta: TbZoneReader<'a>,
+    attr: MemZoneReader<'a>,
 }
 
-impl<'a, const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usize>
-    EntryReader<'a, CORE_STRIDE, META_STRIDE, ATTR_STRIDE>
-{
+impl<'a> EntryReader<'a> {
     pub fn new(
-        core: TbZoneReader<'a, CORE_STRIDE>,
-        meta: TbZoneReader<'a, META_STRIDE>,
-        attributes: MemZoneReader<'a, ATTR_STRIDE>,
+        core: TbZoneReader<'a>,
+        meta: TbZoneReader<'a>,
+        attributes: MemZoneReader<'a>,
     ) -> Self {
         EntryReader {
             core,
             meta,
-            attributes,
+            attr: attributes,
         }
     }
 
@@ -44,7 +37,13 @@ impl<'a, const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: 
     }
 
     #[inline]
-    pub fn core_read_all(&self) -> [i32; CORE_STRIDE] {
+    pub fn core_read_all<const CORE_STRIDE: usize>(&self) -> [i32; CORE_STRIDE] {
+        debug_assert_eq!(
+            CORE_STRIDE, self.core.stride,
+            "EntryReader::core_read_all | CORE_STRIDE {} must be equal to pre-configured stride {}",
+            CORE_STRIDE, self.core.stride
+        );
+
         self.core.read_all()
     }
 
@@ -54,17 +53,29 @@ impl<'a, const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: 
     }
 
     #[inline]
-    pub fn meta_read_all(&self) -> [i32; META_STRIDE] {
+    pub fn meta_read_all<const META_STRIDE: usize>(&self) -> [i32; META_STRIDE] {
+        debug_assert_eq!(
+            META_STRIDE, self.meta.stride,
+            "EntryReader::meta_read_all | META_STRIDE {} must be equal to pre-configured stride {}",
+            META_STRIDE, self.meta.stride
+        );
+
         self.meta.read_all()
     }
 
     #[inline]
     pub fn attr_read(&self, offset: usize) -> i32 {
-        self.attributes.read(offset)
+        self.attr.read(offset)
     }
 
     #[inline]
-    pub fn attr_read_all(&self) -> [i32; ATTR_STRIDE] {
-        self.attributes.read_all()
+    pub fn attr_read_all<const ATTR_STRIDE: usize>(&self) -> [i32; ATTR_STRIDE] {
+        debug_assert_eq!(
+            ATTR_STRIDE, self.attr.stride,
+            "EntryReader::attr_read_all | ATTR_STRIDE {} must be equal to pre-configured stride {}",
+            ATTR_STRIDE, self.attr.stride
+        );
+
+        self.attr.read_all()
     }
 }

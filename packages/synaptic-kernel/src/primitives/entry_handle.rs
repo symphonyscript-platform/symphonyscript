@@ -13,29 +13,22 @@ use crate::primitives::tb_zone_writer::TbZoneWriter;
 ///
 /// # Constraints
 /// - Treats core zone as readonly. meta zone stays writable as it belongs to user domain.
-pub struct EntryHandle<
-    'a,
-    const CORE_STRIDE: usize,
-    const META_STRIDE: usize,
-    const ATTR_STRIDE: usize,
-> {
-    core: TbZoneView<'a, CORE_STRIDE>,
-    meta: TbZoneWriter<'a, META_STRIDE>,
-    attributes: MemZoneWriter<'a, ATTR_STRIDE>,
+pub struct EntryHandle<'a> {
+    core: TbZoneView<'a>,
+    meta: TbZoneWriter<'a>,
+    attr: MemZoneWriter<'a>,
 }
 
-impl<'a, const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usize>
-    EntryHandle<'a, CORE_STRIDE, META_STRIDE, ATTR_STRIDE>
-{
+impl<'a> EntryHandle<'a> {
     pub fn new(
-        core: TbZoneView<'a, CORE_STRIDE>,
-        meta: TbZoneWriter<'a, META_STRIDE>,
-        attributes: MemZoneWriter<'a, ATTR_STRIDE>,
+        core: TbZoneView<'a>,
+        meta: TbZoneWriter<'a>,
+        attributes: MemZoneWriter<'a>,
     ) -> Self {
         EntryHandle {
             core,
             meta,
-            attributes,
+            attr: attributes,
         }
     }
 
@@ -45,7 +38,13 @@ impl<'a, const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: 
     }
 
     #[inline]
-    pub fn core_read_all(&self) -> [i32; CORE_STRIDE] {
+    pub fn core_read_all<const CORE_STRIDE: usize>(&self) -> [i32; CORE_STRIDE] {
+        debug_assert_eq!(
+            CORE_STRIDE, self.core.stride,
+            "EntryHandle::core_read_all | CORE_STRIDE {} must be equal to pre-configured stride {}",
+            CORE_STRIDE, self.core.stride
+        );
+
         self.core.read_all()
     }
 
@@ -60,47 +59,77 @@ impl<'a, const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: 
     }
 
     #[inline]
-    pub fn meta_read_all(&self) -> [i32; META_STRIDE] {
+    pub fn meta_read_all<const META_STRIDE: usize>(&self) -> [i32; META_STRIDE] {
+        debug_assert_eq!(
+            META_STRIDE, self.meta.stride,
+            "EntryHandle::meta_read_all | META_STRIDE {} must be equal to pre-configured stride {}",
+            META_STRIDE, self.meta.stride
+        );
+
         self.meta.read_all()
     }
 
     #[inline]
-    pub fn meta_write_all(&self, data: [i32; META_STRIDE]) {
+    pub fn meta_write_all<const META_STRIDE: usize>(&self, data: [i32; META_STRIDE]) {
+        debug_assert_eq!(
+            META_STRIDE, self.meta.stride,
+            "EntryHandle::meta_write_all | META_STRIDE {} must be equal to pre-configured stride {}",
+            META_STRIDE, self.meta.stride
+        );
+
         self.meta.write_all(data)
     }
 
     #[inline]
     pub fn attr_read(&self, offset: usize) -> i32 {
-        self.attributes.read(offset)
+        self.attr.read(offset)
     }
 
     #[inline]
     pub fn attr_write(&self, offset: usize, value: i32) {
-        self.attributes.write(offset, value)
+        self.attr.write(offset, value)
     }
 
     #[inline]
     pub fn attr_and(&self, offset: usize, value: i32) -> i32 {
-        self.attributes.and(offset, value)
+        self.attr.and(offset, value)
     }
 
     #[inline]
     pub fn attr_or(&self, offset: usize, value: i32) -> i32 {
-        self.attributes.or(offset, value)
+        self.attr.or(offset, value)
     }
 
     #[inline]
-    pub fn attr_read_all(&self) -> [i32; ATTR_STRIDE] {
-        self.attributes.read_all()
+    pub fn attr_read_all<const ATTR_STRIDE: usize>(&self) -> [i32; ATTR_STRIDE] {
+        debug_assert_eq!(
+            ATTR_STRIDE, self.attr.stride,
+            "EntryHandle::attr_read_all | ATTR_STRIDE {} must be equal to pre-configured stride {}",
+            ATTR_STRIDE, self.attr.stride
+        );
+
+        self.attr.read_all()
     }
 
     #[inline]
-    pub fn attr_write_all(&self, data: [i32; ATTR_STRIDE]) {
-        self.attributes.write_all(data)
+    pub fn attr_write_all<const ATTR_STRIDE: usize>(&self, data: [i32; ATTR_STRIDE]) {
+        debug_assert_eq!(
+            ATTR_STRIDE, self.attr.stride,
+            "EntryHandle::attr_write_all | ATTR_STRIDE {} must be equal to pre-configured stride {}",
+            ATTR_STRIDE, self.attr.stride
+        );
+
+        self.attr.write_all(data)
     }
 
     #[inline]
-    pub fn attr_clear_all(&self) {
-        self.attributes.write_all([0; ATTR_STRIDE])
+    pub fn attr_clear_all<const ATTR_STRIDE: usize>(&self) {
+        debug_assert_eq!(
+            ATTR_STRIDE, self.attr.stride,
+            "EntryHandle::attr_clear_all | ATTR_STRIDE {} must be equal to pre-configured stride {}",
+            ATTR_STRIDE, self.attr.stride
+        );
+
+        self.attr.write_all([0; ATTR_STRIDE])
     }
 }

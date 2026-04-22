@@ -1,5 +1,6 @@
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::entry_handle::EntryHandle;
+use crate::primitives::entry_store_config::EntryStoreConfig;
 use crate::primitives::entry_store_reader::EntryStoreReader;
 use crate::primitives::entry_writer::EntryWriter;
 use crate::primitives::mem_zone_writer::MemZoneWriter;
@@ -12,54 +13,50 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct EntryStoreWriter<
-    const CORE_STRIDE: usize,
-    const META_STRIDE: usize,
-    const ATTR_STRIDE: usize,
-> {
+pub struct EntryStoreWriter {
     mem: AtomicBuffer,
     tb: TripleBufferWriter,
     allocator: SlotAllocator,
+    config: EntryStoreConfig,
     mem_start_offset: usize,
     mem_attrs_start_offset: usize,
     mem_end_offset: usize,
     tb_start_offset: usize,
     tb_end_offset: usize,
-    capacity: usize,
 }
-impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usize>
-    EntryStoreWriter<CORE_STRIDE, META_STRIDE, ATTR_STRIDE>
-{
+
+impl EntryStoreWriter {
     pub fn new(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
+        config: EntryStoreConfig,
         mem_start_offset: usize,
         tb_start_offset: usize,
-        capacity: usize,
     ) -> Self {
-        Self::create(mem, tb, mem_start_offset, tb_start_offset, capacity, false)
+        Self::create(mem, tb, config, mem_start_offset, tb_start_offset, false)
     }
 
     pub fn bind(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
+        config: EntryStoreConfig,
         mem_start_offset: usize,
         tb_start_offset: usize,
-        capacity: usize,
     ) -> Self {
-        Self::create(mem, tb, mem_start_offset, tb_start_offset, capacity, true)
+        Self::create(mem, tb, config, mem_start_offset, tb_start_offset, true)
     }
 
     pub fn create(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
+        config: EntryStoreConfig,
         mem_start_offset: usize,
         tb_start_offset: usize,
-        capacity: usize,
         bind: bool,
     ) -> Self {
-        let mem_end_offset = mem_start_offset + Self::calculate_size_on_mem(capacity);
-        let tb_end_offset = tb_start_offset + Self::calculate_size_on_tb(capacity);
+        let capacity = config.capacity;
+        let mem_end_offset = mem_start_offset + Self::calculate_size_on_mem(&config);
+        let tb_end_offset = tb_start_offset + Self::calculate_size_on_tb(&config);
 
         debug_assert!(
             mem_end_offset <= mem.len(),
@@ -71,7 +68,7 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
             tb_end_offset <= tb.buffer_capacity(),
             "EntryStoreWriter::new | range [{}..{}] exceeds buffer capacity {}",
             tb_start_offset,
-            Self::calculate_size_on_tb(capacity),
+            Self::calculate_size_on_tb(&config),
             tb.buffer_capacity(),
         );
 
@@ -81,55 +78,64 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
         EntryStoreWriter {
             mem,
             tb,
+            config,
             allocator,
             mem_start_offset,
             mem_attrs_start_offset,
             mem_end_offset,
             tb_start_offset,
             tb_end_offset,
-            capacity,
         }
     }
 
-    pub fn calculate_size_on_mem(capacity: usize) -> usize {
-        SlotAllocator::calculate_size_on_mem(capacity) + capacity * ATTR_STRIDE
+    pub fn calculate_size_on_mem(config: &EntryStoreConfig) -> usize {
+        SlotAllocator::calculate_size_on_mem(config.capacity) + config.capacity * config.attr_stride
     }
 
-    pub fn calculate_size_on_tb(capacity: usize) -> usize {
-        capacity * (CORE_STRIDE + META_STRIDE)
+    pub fn calculate_size_on_tb(config: &EntryStoreConfig) -> usize {
+        config.capacity * (config.core_stride + config.meta_stride)
     }
 
     #[inline]
-    pub(crate) fn calculate_struct_zone_base(tb_start_offset: usize, slot: usize) -> usize {
+    pub(crate) fn calculate_struct_zone_base(
+        tb_start_offset: usize,
+        slot: usize,
+        core_stride: usize,
+        meta_stride: usize,
+    ) -> usize {
         debug_assert!(
             slot > 0,
             "EntryStoreWriter::calculate_struct_zone_base | slot {} out of bounds",
             slot
         );
-        tb_start_offset + (slot - 1) * (CORE_STRIDE + META_STRIDE)
+        tb_start_offset + (slot - 1) * (core_stride + meta_stride)
     }
 
     #[inline]
-    pub(crate) fn calculate_attr_zone_base(mem_attrs_start_offset: usize, slot: usize) -> usize {
+    pub(crate) fn calculate_attr_zone_base(
+        mem_attrs_start_offset: usize,
+        slot: usize,
+        attr_stride: usize,
+    ) -> usize {
         debug_assert!(
             slot > 0,
             "EntryStoreWriter::calculate_attr_zone_base | slot {} out of bounds",
             slot
         );
-        mem_attrs_start_offset + ((slot - 1) * ATTR_STRIDE)
+        mem_attrs_start_offset + ((slot - 1) * attr_stride)
     }
 
-    pub fn to_reader(&self) -> EntryStoreReader<CORE_STRIDE, META_STRIDE, ATTR_STRIDE> {
-        EntryStoreReader::<CORE_STRIDE, META_STRIDE, ATTR_STRIDE>::bind(
+    pub fn to_reader(&self) -> EntryStoreReader {
+        EntryStoreReader::bind(
             Arc::clone(&self.mem),
             self.tb.to_reader(),
             self.allocator.to_staging_buffer_reader(),
+            self.config.clone(),
             self.mem_start_offset,
             self.mem_attrs_start_offset,
             self.mem_end_offset,
             self.tb_start_offset,
             self.tb_end_offset,
-            self.capacity,
         )
     }
 
@@ -158,7 +164,7 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
     }
 
     pub fn capacity(&self) -> usize {
-        self.capacity
+        self.config.capacity
     }
 
     pub fn utilization(&self) -> f32 {
@@ -170,7 +176,7 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
     }
 
     #[inline]
-    pub fn get(&'_ self, slot: usize) -> EntryWriter<'_, CORE_STRIDE, META_STRIDE, ATTR_STRIDE> {
+    pub fn get(&'_ self, slot: usize) -> EntryWriter<'_> {
         debug_assert!(
             self.allocator.is_active(slot),
             "EntryStoreWriter.get | attempted to read inactive slot {}",
@@ -181,17 +187,18 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
         let mem_start_offset = self.get_entry_mem_base(slot);
 
         EntryWriter::new(
-            TbZoneWriter::new(&self.tb, tb_start_offset),
-            TbZoneWriter::new(&self.tb, tb_start_offset + CORE_STRIDE),
-            MemZoneWriter::new(&self.mem, mem_start_offset),
+            TbZoneWriter::new(&self.tb, self.config.core_stride, tb_start_offset),
+            TbZoneWriter::new(
+                &self.tb,
+                self.config.meta_stride,
+                tb_start_offset + self.config.core_stride,
+            ),
+            MemZoneWriter::new(&self.mem, self.config.attr_stride, mem_start_offset),
         )
     }
 
     #[inline]
-    pub fn get_handle(
-        &'_ self,
-        slot: usize,
-    ) -> EntryHandle<'_, CORE_STRIDE, META_STRIDE, ATTR_STRIDE> {
+    pub fn get_handle(&'_ self, slot: usize) -> EntryHandle<'_> {
         debug_assert!(
             self.allocator.is_active(slot),
             "EntryStoreWriter.get | attempted to read inactive slot {}",
@@ -202,9 +209,13 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
         let mem_start_offset = self.get_entry_mem_base(slot);
 
         EntryHandle::new(
-            TbZoneView::new(&self.tb, tb_start_offset),
-            TbZoneWriter::new(&self.tb, tb_start_offset + CORE_STRIDE),
-            MemZoneWriter::new(&self.mem, mem_start_offset),
+            TbZoneView::new(&self.tb, self.config.core_stride, tb_start_offset),
+            TbZoneWriter::new(
+                &self.tb,
+                self.config.meta_stride,
+                tb_start_offset + self.config.core_stride,
+            ),
+            MemZoneWriter::new(&self.mem, self.config.attr_stride, mem_start_offset),
         )
     }
 
@@ -216,9 +227,14 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
         }
 
         let new_slot = result.unwrap();
-        let tb_start_offset = Self::calculate_struct_zone_base(self.tb_start_offset, new_slot);
+        let tb_start_offset = Self::calculate_struct_zone_base(
+            self.tb_start_offset,
+            new_slot,
+            self.config.core_stride,
+            self.config.meta_stride,
+        );
 
-        for i in 0..(CORE_STRIDE + META_STRIDE) {
+        for i in 0..(self.config.core_stride + self.config.meta_stride) {
             self.tb.write(tb_start_offset + i, 0)
         }
 
@@ -237,10 +253,10 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
 
     pub fn copy_from(&self, source: &Self) {
         debug_assert!(
-            source.capacity <= self.capacity,
-            "EntryStoreWriter.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
-            source.capacity,
-            self.capacity,
+            self.config.capacity <= self.config.capacity,
+            "EntryStoreWriter.copy_from | self.config.capacity {} cannot be greater than destination.capacity {}",
+            self.config.capacity,
+            self.config.capacity,
         );
 
         self.allocator.copy_from(&source.allocator);
@@ -248,10 +264,15 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
             &source.tb,
             source.tb_start_offset,
             self.tb_start_offset,
-            Self::calculate_size_on_tb(source.capacity),
+            Self::calculate_size_on_tb(&EntryStoreConfig {
+                core_stride: self.config.core_stride,
+                meta_stride: self.config.meta_stride,
+                attr_stride: self.config.attr_stride,
+                capacity: self.config.capacity,
+            }),
         );
 
-        for i in 0..source.capacity * ATTR_STRIDE {
+        for i in 0..self.config.capacity * self.config.attr_stride {
             self.mem[self.mem_attrs_start_offset + i].store(
                 source.mem[source.mem_attrs_start_offset + i].load(Ordering::Relaxed),
                 Ordering::Relaxed,
@@ -260,14 +281,19 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
     }
 
     fn get_entry_tb_base(&self, slot: usize) -> usize {
-        let tb_start_offset = Self::calculate_struct_zone_base(self.tb_start_offset, slot);
-        let tb_end_offset = tb_start_offset + CORE_STRIDE + META_STRIDE;
+        let tb_start_offset = Self::calculate_struct_zone_base(
+            self.tb_start_offset,
+            slot,
+            self.config.core_stride,
+            self.config.meta_stride,
+        );
+        let tb_end_offset = tb_start_offset + self.config.core_stride + self.mem_end_offset;
 
         debug_assert!(
             tb_end_offset <= self.tb.buffer_capacity(),
             "EntryStoreWriter.get | range [{}..{}] exceeds buffer capacity {}",
             tb_start_offset,
-            CORE_STRIDE + META_STRIDE,
+            self.config.core_stride + self.config.meta_stride,
             self.tb.buffer_capacity(),
         );
 
@@ -275,10 +301,14 @@ impl<const CORE_STRIDE: usize, const META_STRIDE: usize, const ATTR_STRIDE: usiz
     }
 
     fn get_entry_mem_base(&self, slot: usize) -> usize {
-        let mem_start_offset = Self::calculate_attr_zone_base(self.mem_attrs_start_offset, slot);
+        let mem_start_offset = Self::calculate_attr_zone_base(
+            self.mem_attrs_start_offset,
+            slot,
+            self.config.attr_stride,
+        );
 
         debug_assert!(
-            mem_start_offset + ATTR_STRIDE <= self.mem_end_offset,
+            mem_start_offset + self.config.attr_stride <= self.mem_end_offset,
             "EntryStoreWriter.get | slot {} out of bounds",
             slot,
         );

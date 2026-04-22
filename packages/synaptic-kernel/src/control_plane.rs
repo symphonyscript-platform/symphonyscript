@@ -39,6 +39,7 @@ use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 #[repr(C)]
 pub struct ControlPlane<
     const TB_COUNT: usize,
+    const STORE_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
@@ -47,6 +48,7 @@ pub struct ControlPlane<
     mirror_ptr: AtomicPtr<
         EpochMirror<
             TB_COUNT,
+            STORE_COUNT,
             NODE_META_STRIDE,
             NODE_ATTRIBUTES_STRIDE,
             SYNAPSE_META_STRIDE,
@@ -59,6 +61,7 @@ pub struct ControlPlane<
 
 impl<
     const TB_COUNT: usize,
+    const STORE_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
@@ -66,6 +69,7 @@ impl<
 >
     ControlPlane<
         TB_COUNT,
+        STORE_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,
@@ -76,6 +80,7 @@ impl<
         mirror: Box<
             EpochMirror<
                 TB_COUNT,
+                STORE_COUNT,
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -94,6 +99,7 @@ impl<
         &self,
     ) -> &EpochMirror<
         TB_COUNT,
+        STORE_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,
@@ -113,6 +119,7 @@ impl<
         new_epoch: Box<
             EpochMirror<
                 TB_COUNT,
+                STORE_COUNT,
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -123,6 +130,7 @@ impl<
         Box<
             EpochMirror<
                 TB_COUNT,
+                STORE_COUNT,
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -156,6 +164,7 @@ impl<
 
 impl<
     const TB_COUNT: usize,
+    const STORE_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
@@ -163,6 +172,7 @@ impl<
 > Drop
     for ControlPlane<
         TB_COUNT,
+        STORE_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,

@@ -28,6 +28,7 @@ use std::sync::Arc;
 /// - Created by passing `Arc<ControlPlane>` to `new()`.
 pub struct EpochConsumer<
     const TB_COUNT: usize,
+    const STORE_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
@@ -36,6 +37,7 @@ pub struct EpochConsumer<
     control_plane: Arc<
         ControlPlane<
             TB_COUNT,
+            STORE_COUNT,
             NODE_META_STRIDE,
             NODE_ATTRIBUTES_STRIDE,
             SYNAPSE_META_STRIDE,
@@ -46,6 +48,7 @@ pub struct EpochConsumer<
 
 impl<
     const TB_COUNT: usize,
+    const STORE_COUNT: usize,
     const NODE_META_STRIDE: usize,
     const NODE_ATTRIBUTES_STRIDE: usize,
     const SYNAPSE_META_STRIDE: usize,
@@ -53,6 +56,7 @@ impl<
 >
     EpochConsumer<
         TB_COUNT,
+        STORE_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,
@@ -63,6 +67,7 @@ impl<
         control_plane: Arc<
             ControlPlane<
                 TB_COUNT,
+                STORE_COUNT,
                 NODE_META_STRIDE,
                 NODE_ATTRIBUTES_STRIDE,
                 SYNAPSE_META_STRIDE,
@@ -91,6 +96,7 @@ impl<
         &mut self,
     ) -> &EpochMirror<
         TB_COUNT,
+        STORE_COUNT,
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
         SYNAPSE_META_STRIDE,

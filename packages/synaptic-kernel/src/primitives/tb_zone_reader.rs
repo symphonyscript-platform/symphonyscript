@@ -10,24 +10,28 @@ use crate::primitives::triple_buffer_reader::TripleBufferReader;
 /// # Encapsulation
 /// - Read-only: structural mutation is strictly prohibited on the reading plane.
 /// - Typically instantiated on-the-fly and short-lived.
-pub struct TbZoneReader<'a, const STRIDE: usize> {
+pub struct TbZoneReader<'a> {
     tb: &'a TripleBufferReader,
+    pub stride: usize,
     tb_start_offset: usize,
 }
 
-impl<'a, const STRIDE: usize> TbZoneReader<'a, STRIDE> {
+impl<'a> TbZoneReader<'a> {
     #[inline]
-    pub fn new(tb: &'a TripleBufferReader, tb_start_offset: usize) -> Self {
-        let tb_end_offset = tb_start_offset + STRIDE;
+    pub fn new(tb: &'a TripleBufferReader, stride: usize, tb_start_offset: usize) -> Self {
+        let tb_end_offset = tb_start_offset + stride;
+
         debug_assert!(
             tb_end_offset <= tb.buffer_capacity(),
             "TbZoneReader::new | range [{}..{}] exceeds buffer capacity {}",
             tb_start_offset,
-            STRIDE,
+            stride,
             tb.buffer_capacity(),
         );
+
         TbZoneReader {
             tb,
+            stride,
             tb_start_offset,
         }
     }
@@ -39,13 +43,13 @@ impl<'a, const STRIDE: usize> TbZoneReader<'a, STRIDE> {
 
     #[inline]
     pub fn tb_end_offset(&self) -> usize {
-        self.tb_start_offset + STRIDE
+        self.tb_start_offset + self.stride
     }
 
     #[inline]
     pub fn read(&self, offset: usize) -> i32 {
         debug_assert!(
-            offset < STRIDE,
+            offset < self.stride,
             "TbZoneReader.read | offset {} out of bounds",
             offset
         );
@@ -53,7 +57,13 @@ impl<'a, const STRIDE: usize> TbZoneReader<'a, STRIDE> {
     }
 
     #[inline]
-    pub fn read_all(&self) -> [i32; STRIDE] {
+    pub fn read_all<const STRIDE: usize>(&self) -> [i32; STRIDE] {
+        debug_assert_eq!(
+            STRIDE, self.stride,
+            "TbZoneReader::read_all | STRIDE {} must be equal to pre-configured stride {}",
+            STRIDE, self.stride
+        );
+
         self.tb.read_batch::<STRIDE>(self.tb_start_offset)
     }
 }

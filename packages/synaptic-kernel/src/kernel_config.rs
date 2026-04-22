@@ -1,3 +1,4 @@
+use crate::primitives::entry_store_def::EntryStoreDef;
 use crate::primitives::triple_buffer_def::TripleBufferDef;
 
 /// Configuration for memory sizing of a Kernel.
@@ -14,10 +15,13 @@ use crate::primitives::triple_buffer_def::TripleBufferDef;
 ///   IDs must form a permutation of `[0, TB_COUNT-1]`.
 ///   The kernel-internal default TB is managed separately and is not to be included
 ///   in this array.
+/// - `store_defs`: Definitions for `STORE_COUNT` user-allocated entity stores.
+///   IDs must form a permutation of `[0, STORE_COUNT-1]`.
 #[derive(Clone)]
-pub struct KernelConfig<const TB_COUNT: usize> {
+pub struct KernelConfig<const TB_COUNT: usize, const STORE_COUNT: usize> {
     pub node_capacity: usize,
     pub synapse_capacity: usize,
     pub mem_metadata_size: usize,
     pub tb_defs: [TripleBufferDef; TB_COUNT],
+    pub store_defs: [EntryStoreDef; STORE_COUNT],
 }

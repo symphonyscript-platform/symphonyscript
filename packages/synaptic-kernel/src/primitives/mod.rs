@@ -1,7 +1,9 @@
 pub mod bitmap;
-pub mod entity_store_def;
+pub mod entity_store_reader_registry;
+pub mod entity_store_writer_registry;
 pub mod entry_handle;
 pub mod entry_reader;
+pub mod entry_store_def;
 pub mod entry_store_reader;
 pub mod entry_store_writer;
 pub mod entry_writer;
@@ -25,3 +27,5 @@ pub mod triple_buffer_reader_registry;
 pub mod triple_buffer_writer;
 pub mod triple_buffer_writer_registry;
 pub mod types;
+pub mod entry_store_config;
+pub mod entry_stride_config;

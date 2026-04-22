@@ -9,24 +9,28 @@ use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 ///
 /// # Encapsulation
 /// - Typically instantiated on-the-fly and short-lived.
-pub struct TbZoneWriter<'a, const STRIDE: usize> {
+pub struct TbZoneWriter<'a> {
     tb: &'a TripleBufferWriter,
+    pub stride: usize,
     tb_start_offset: usize,
 }
 
-impl<'a, const STRIDE: usize> TbZoneWriter<'a, STRIDE> {
+impl<'a> TbZoneWriter<'a> {
     #[inline]
-    pub fn new(tb: &'a TripleBufferWriter, tb_start_offset: usize) -> Self {
-        let tb_end_offset = tb_start_offset + STRIDE;
+    pub fn new(tb: &'a TripleBufferWriter, stride: usize, tb_start_offset: usize) -> Self {
+        let tb_end_offset = tb_start_offset + stride;
+
         debug_assert!(
             tb_end_offset <= tb.buffer_capacity(),
             "TbZoneWriter::new | range [{}..{}] exceeds buffer capacity {}",
             tb_start_offset,
-            STRIDE,
+            stride,
             tb.buffer_capacity(),
         );
+
         TbZoneWriter {
             tb,
+            stride,
             tb_start_offset,
         }
     }
@@ -38,13 +42,13 @@ impl<'a, const STRIDE: usize> TbZoneWriter<'a, STRIDE> {
 
     #[inline]
     pub fn tb_end_offset(&self) -> usize {
-        self.tb_start_offset + STRIDE
+        self.tb_start_offset + self.stride
     }
 
     #[inline]
     pub fn read(&self, offset: usize) -> i32 {
         debug_assert!(
-            offset < STRIDE,
+            offset < self.stride,
             "TbZoneWriter.read | offset {} out of bounds",
             offset
         );
@@ -54,7 +58,7 @@ impl<'a, const STRIDE: usize> TbZoneWriter<'a, STRIDE> {
     #[inline]
     pub fn write(&self, offset: usize, value: i32) {
         debug_assert!(
-            offset < STRIDE,
+            offset < self.stride,
             "TbZoneWriter.write | offset {} out of bounds",
             offset
         );
@@ -62,12 +66,24 @@ impl<'a, const STRIDE: usize> TbZoneWriter<'a, STRIDE> {
     }
 
     #[inline]
-    pub fn read_all(&self) -> [i32; STRIDE] {
+    pub fn read_all<const STRIDE: usize>(&self) -> [i32; STRIDE] {
+        debug_assert_eq!(
+            STRIDE, self.stride,
+            "TbZoneWriter::read_all | STRIDE {} must be equal to pre-configured stride {}",
+            STRIDE, self.stride
+        );
+
         self.tb.read_batch::<STRIDE>(self.tb_start_offset)
     }
 
     #[inline]
-    pub fn write_all(&self, data: [i32; STRIDE]) {
+    pub fn write_all<const STRIDE: usize>(&self, data: [i32; STRIDE]) {
+        debug_assert_eq!(
+            STRIDE, self.stride,
+            "TbZoneWriter::write_all | STRIDE {} must be equal to pre-configured stride {}",
+            STRIDE, self.stride
+        );
+
         self.tb.write_batch(self.tb_start_offset, data);
     }
 }
