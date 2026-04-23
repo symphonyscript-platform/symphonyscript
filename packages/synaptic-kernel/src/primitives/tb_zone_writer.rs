@@ -10,8 +10,8 @@ use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 /// # Encapsulation
 /// - Typically instantiated on-the-fly and short-lived.
 pub struct TbZoneWriter<'a> {
-    tb: &'a TripleBufferWriter,
     pub stride: usize,
+    tb: &'a TripleBufferWriter,
     tb_start_offset: usize,
 }
 
@@ -66,22 +66,26 @@ impl<'a> TbZoneWriter<'a> {
     }
 
     #[inline]
-    pub fn read_all<const STRIDE: usize>(&self) -> [i32; STRIDE] {
+    pub fn read_all(&self, out: &mut [i32]) {
         debug_assert_eq!(
-            STRIDE, self.stride,
-            "TbZoneWriter::read_all | STRIDE {} must be equal to pre-configured stride {}",
-            STRIDE, self.stride
+            out.len(),
+            self.stride,
+            "TbZoneWriter::read_all | out.len() {} must be equal to pre-configured stride {}",
+            out.len(),
+            self.stride
         );
 
-        self.tb.read_batch::<STRIDE>(self.tb_start_offset)
+        self.tb.read_batch(self.tb_start_offset, out)
     }
 
     #[inline]
-    pub fn write_all<const STRIDE: usize>(&self, data: [i32; STRIDE]) {
+    pub fn write_all(&self, data: &[i32]) {
         debug_assert_eq!(
-            STRIDE, self.stride,
-            "TbZoneWriter::write_all | STRIDE {} must be equal to pre-configured stride {}",
-            STRIDE, self.stride
+            data.len(),
+            self.stride,
+            "TbZoneWriter::write_all | data.len() {} must be equal to pre-configured stride {}",
+            data.len(),
+            self.stride
         );
 
         self.tb.write_batch(self.tb_start_offset, data);

@@ -57,13 +57,15 @@ impl<'a> TbZoneReader<'a> {
     }
 
     #[inline]
-    pub fn read_all<const STRIDE: usize>(&self) -> [i32; STRIDE] {
+    pub fn read_all(&self, out: &mut [i32]) {
         debug_assert_eq!(
-            STRIDE, self.stride,
-            "TbZoneReader::read_all | STRIDE {} must be equal to pre-configured stride {}",
-            STRIDE, self.stride
+            out.len(),
+            self.stride,
+            "TbZoneReader::read_all | out.len() {} must be equal to pre-configured stride {}",
+            out.len(),
+            self.stride
         );
 
-        self.tb.read_batch::<STRIDE>(self.tb_start_offset)
+        self.tb.read_batch(self.tb_start_offset, out)
     }
 }

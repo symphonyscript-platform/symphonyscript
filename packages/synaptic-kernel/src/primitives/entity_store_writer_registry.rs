@@ -1,5 +1,6 @@
 use crate::primitives::entity_store_reader_registry::EntryStoreReaderRegistry;
-use crate::primitives::entry_store_def::EntryStoreDef;
+use crate::primitives::entry_store_config::EntryStoreConfig;
+use crate::primitives::entry_store_def::{EntryStoreDef, EntryStoreId};
 use crate::primitives::entry_store_writer::EntryStoreWriter;
 use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::triple_buffer_def::TripleBufferId;
@@ -24,7 +25,7 @@ pub struct EntryStoreWriterRegistry<const TB_COUNT: usize, const STORE_COUNT: us
     mem_end_offset: usize,
     id_index: [u16; STORE_COUNT],
     offsets: [usize; STORE_COUNT],
-    defs: [EntryStoreDef; STORE_COUNT],
+    stores: [EntryStoreWriter; STORE_COUNT],
 }
 
 impl<const TB_COUNT: usize, const STORE_COUNT: usize>
@@ -55,7 +56,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         tb_registry: TripleBufferWriterRegistry<TB_COUNT>,
         defs: [EntryStoreDef; STORE_COUNT],
         mem_start_offset: usize,
-        _bind: bool,
+        bind: bool,
     ) -> Self {
         const { assert!(STORE_COUNT > 0 && STORE_COUNT < u16::MAX as usize) };
 
@@ -98,6 +99,21 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
             id_index[id.0 as usize] = i as u16;
         }
 
+        let stores: [EntryStoreWriter; STORE_COUNT] = std::array::from_fn(|i| {
+            let def = defs[i];
+            EntryStoreWriter::create(
+                Arc::clone(&mem),
+                tb_registry.get(defs[i].tb_id).clone(),
+                EntryStoreConfig {
+                    core_stride: def.core_stride,
+                    meta_stride: def.meta_stride,
+                    attr_stride: def.attr_stride,
+                    capacity: def.capacity,
+                },
+                bind,
+            )
+        });
+
         EntryStoreWriterRegistry {
             mem,
             tb_registry,
@@ -105,7 +121,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
             mem_end_offset: cursor,
             id_index,
             offsets,
-            defs,
+            stores,
         }
     }
 
@@ -129,7 +145,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
             self.tb_registry.to_reader(),
             self.id_index,
             self.offsets,
-            self.defs,
+            self.stores.clone().map(|a| a.to_reader()),
             self.mem_start_offset,
             self.mem_end_offset,
         )
@@ -151,48 +167,56 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
     }
 
     #[inline]
-    pub fn mount_entry_store<
-        const CORE_STRIDE: usize,
-        const META_STRIDE: usize,
-        const ATTR_STRIDE: usize,
-    >(
-        &self,
-        id: TripleBufferId,
-    ) -> EntryStoreWriter<CORE_STRIDE, META_STRIDE, ATTR_STRIDE> {
+    pub fn get(&self, id: EntryStoreId) -> &EntryStoreWriter {
         debug_assert!(
-            (id.0 as usize) < STORE_COUNT,
-            "Kernel::mount_entry_store | id {} out of bounds [0-{}]",
+            (id.0 as usize) < STORE_COUNT || id.0 == TripleBufferId::DEFAULT.0,
+            "EntryStoreWriterRegistry::get | id {} out of bounds [0-{}]",
             id,
             STORE_COUNT - 1,
         );
 
-        let index = self.id_index[id.0 as usize] as usize;
-        let def = self.defs[index];
+        let index = self.id_index[id.0 as usize];
+        &self.stores[index as usize]
+    }
 
-        debug_assert_eq!(
-            CORE_STRIDE, def.core_stride,
-            "const-generic CORE_STRIDE {} does not match definition's core_stride {}",
-            CORE_STRIDE, def.core_stride
+    pub fn copy_metadata_regions_from<const TB_COUNT_M: usize, const STORE_COUNT_M: usize>(
+        &self,
+        source: &EntryStoreWriterRegistry<TB_COUNT_M, STORE_COUNT_M>,
+    ) {
+        debug_assert!(
+            TB_COUNT_M <= TB_COUNT,
+            "EntryStoreWriterRegistry.copy_from | source TB_COUNT {} cannot be greater than destination TB_COUNT {}",
+            TB_COUNT_M,
+            TB_COUNT,
         );
 
-        debug_assert_eq!(
-            META_STRIDE, def.meta_stride,
-            "const-generic META_STRIDE {} does not match definition's meta_stride {}",
-            META_STRIDE, def.meta_stride
+        debug_assert!(
+            STORE_COUNT_M <= STORE_COUNT,
+            "EntryStoreWriterRegistry.copy_from | source STORE_COUNT {} cannot be greater than destination STORE_COUNT {}",
+            STORE_COUNT_M,
+            STORE_COUNT,
         );
 
-        debug_assert_eq!(
-            ATTR_STRIDE, def.attr_stride,
-            "const-generic ATTR_STRIDE {} does not match definition's attr_stride {}",
-            ATTR_STRIDE, def.attr_stride
+        debug_assert!(
+            source.len() <= self.len(),
+            "EntryStoreWriterRegistry.copy_from | source.len() {} cannot be greater than destination.len() {}",
+            source.len(),
+            self.len(),
         );
 
-        EntryStoreWriter::bind(
-            Arc::clone(&self.mem),
-            self.tb_registry.get(def.tb_id).clone(),
-            self.offsets[index] as usize,
-            0,
-            def.capacity,
-        )
+        for i in 0..STORE_COUNT {
+            debug_assert!(
+                source.stores[i].capacity() <= self.stores[i].capacity(),
+                "EntryStoreWriterRegistry.copy_metadata_regions_from | source.stores[{}].capacity {} cannot be greater than destination.stores[{}].capacity {}",
+                i,
+                source.stores[i].capacity(),
+                i,
+                self.stores[i].capacity(),
+            );
+        }
+
+        for i in 0..STORE_COUNT {
+            self.stores[i].copy_from(&source.stores[i]);
+        }
     }
 }

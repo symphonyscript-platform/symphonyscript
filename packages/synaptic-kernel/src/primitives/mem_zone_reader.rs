@@ -55,19 +55,17 @@ impl<'a> MemZoneReader<'a> {
     }
 
     #[inline]
-    pub fn read_all<const STRIDE: usize>(&self) -> [i32; STRIDE] {
+    pub fn read_all(&self, out: &mut [i32]) {
         debug_assert_eq!(
-            STRIDE, self.stride,
-            "MemZoneReader::read_all | STRIDE {} must be equal to pre-configured stride {}",
-            STRIDE, self.stride
+            out.len(),
+            self.stride,
+            "MemZoneReader::read_all | out.len() {} must be equal to pre-configured stride {}",
+            out.len(),
+            self.stride
         );
 
-        let mut data: [i32; STRIDE] = [0; STRIDE];
-
-        for i in 0..STRIDE {
-            data[i] = self.read(i)
+        for i in 0..self.stride {
+            out[i] = self.read(i)
         }
-
-        data
     }
 }

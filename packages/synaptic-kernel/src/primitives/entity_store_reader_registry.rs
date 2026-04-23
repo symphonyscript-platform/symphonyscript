@@ -1,11 +1,8 @@
-use crate::primitives::entry_store_Reader::EntryStoreReader;
 use crate::primitives::entry_store_def::EntryStoreDef;
 use crate::primitives::entry_store_reader::EntryStoreReader;
-use crate::primitives::triple_buffer_Reader_registry::TripleBufferReaderRegistry;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::triple_buffer_reader_registry::TripleBufferReaderRegistry;
 use crate::primitives::types::AtomicBuffer;
-use std::sync::Arc;
 
 /// Fixed-size registry of `N` Entry-store Readers with user-assigned IDs in [0, N-1] range.
 ///
@@ -23,8 +20,8 @@ pub struct EntryStoreReaderRegistry<const TB_COUNT: usize, const STORE_COUNT: us
     mem_start_offset: usize,
     mem_end_offset: usize,
     id_index: [u16; STORE_COUNT],
-    offsets: [u16; STORE_COUNT],
-    defs: [EntryStoreDef; STORE_COUNT],
+    offsets: [usize; STORE_COUNT],
+    stores: [EntryStoreReader; STORE_COUNT],
 }
 
 impl<const TB_COUNT: usize, const STORE_COUNT: usize>
@@ -36,8 +33,8 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         mem: AtomicBuffer,
         tb_registry: TripleBufferReaderRegistry<TB_COUNT>,
         id_index: [u16; STORE_COUNT],
-        offsets: [u16; STORE_COUNT],
-        defs: [EntryStoreDef; STORE_COUNT],
+        offsets: [usize; STORE_COUNT],
+        stores: [EntryStoreReader; STORE_COUNT],
         mem_start_offset: usize,
         mem_end_offset: usize,
     ) -> Self {
@@ -46,7 +43,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
             tb_registry,
             id_index,
             offsets,
-            defs,
+            stores,
             mem_start_offset,
             mem_end_offset,
             false,
@@ -58,7 +55,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         tb_registry: TripleBufferReaderRegistry<TB_COUNT>,
         id_index: [u16; STORE_COUNT],
         offsets: [usize; STORE_COUNT],
-        defs: [EntryStoreDef; STORE_COUNT],
+        stores: [EntryStoreReader; STORE_COUNT],
         mem_start_offset: usize,
         mem_end_offset: usize,
     ) -> Self {
@@ -67,7 +64,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
             tb_registry,
             id_index,
             offsets,
-            defs,
+            stores,
             mem_start_offset,
             mem_end_offset,
             true,
@@ -78,8 +75,8 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         mem: AtomicBuffer,
         tb_registry: TripleBufferReaderRegistry<TB_COUNT>,
         id_index: [u16; STORE_COUNT],
-        offsets: [u16; STORE_COUNT],
-        defs: [EntryStoreDef; STORE_COUNT],
+        offsets: [usize; STORE_COUNT],
+        stores: [EntryStoreReader; STORE_COUNT],
         mem_start_offset: usize,
         mem_end_offset: usize,
         _bind: bool,
@@ -93,7 +90,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
             mem_end_offset,
             id_index,
             offsets,
-            defs,
+            stores,
         }
     }
 
@@ -118,48 +115,15 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
     }
 
     #[inline]
-    pub fn mount_entry_store<
-        const CORE_STRIDE: usize,
-        const META_STRIDE: usize,
-        const ATTR_STRIDE: usize,
-    >(
-        &self,
-        id: TripleBufferId,
-    ) -> EntryStoreReader<CORE_STRIDE, META_STRIDE, ATTR_STRIDE> {
+    pub fn get(&self, id: TripleBufferId) -> &EntryStoreReader {
         debug_assert!(
-            (id.0 as usize) < STORE_COUNT,
-            "Kernel::mount_entry_store | id {} out of bounds [0-{}]",
+            (id.0 as usize) < STORE_COUNT || id.0 == TripleBufferId::DEFAULT.0,
+            "EntryStoreReaderRegistry::get | id {} out of bounds [0-{}]",
             id,
             STORE_COUNT - 1,
         );
 
-        let index = self.id_index[id.0 as usize] as usize;
-        let def = self.defs[index];
-
-        debug_assert_eq!(
-            CORE_STRIDE, def.core_stride,
-            "const-generic CORE_STRIDE {} does not match definition's core_stride {}",
-            CORE_STRIDE, def.core_stride
-        );
-
-        debug_assert_eq!(
-            META_STRIDE, def.meta_stride,
-            "const-generic META_STRIDE {} does not match definition's meta_stride {}",
-            META_STRIDE, def.meta_stride
-        );
-
-        debug_assert_eq!(
-            ATTR_STRIDE, def.attr_stride,
-            "const-generic ATTR_STRIDE {} does not match definition's attr_stride {}",
-            ATTR_STRIDE, def.attr_stride
-        );
-
-        EntryStoreReader::bind(
-            Arc::clone(&self.mem),
-            self.tb_registry.get(def.tb_id).clone(),
-            self.offsets[index] as usize,
-            0,
-            def.capacity,
-        )
+        let index = self.id_index[id.0 as usize];
+        &self.stores[index as usize]
     }
 }

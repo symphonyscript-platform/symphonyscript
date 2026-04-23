@@ -26,7 +26,7 @@ impl<'a> TbReader<'a> {
     }
 
     #[inline]
-    pub fn read_batch<const T: usize>(&self, offset: usize) -> [i32; T] {
-        self.tb.read_batch(offset)
+    pub fn read_batch<const T: usize>(&self, offset: usize, out: &mut [i32]) {
+        self.tb.read_batch(offset, out)
     }
 }

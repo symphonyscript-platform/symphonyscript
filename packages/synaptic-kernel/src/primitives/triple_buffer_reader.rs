@@ -115,20 +115,17 @@ impl TripleBufferReader {
     }
 
     #[inline]
-    pub fn read_batch<const T: usize>(&self, offset: usize) -> [i32; T] {
+    pub fn read_batch(&self, offset: usize, out: &mut [i32]) {
         debug_assert!(
-            offset + T <= self.buffer_capacity,
+            offset + out.len() <= self.buffer_capacity,
             "TripleBufferReader.read_batch | [offset, T) [{}, {}) out of bounds",
             offset,
-            T,
+            out.len(),
         );
         let base = self.mem_reader_base() + offset;
-        let mut data: [i32; T] = [0; T];
 
-        for i in 0..T {
-            data[i] = self.mem[base + i].load(Ordering::Relaxed)
+        for i in 0..out.len() {
+            out[i] = self.mem[base + i].load(Ordering::Relaxed)
         }
-
-        data
     }
 }

@@ -26,7 +26,7 @@ impl<'a> TbWriter<'a> {
     }
 
     #[inline]
-    pub fn write_batch<const T: usize>(&self, offset: usize, data: [i32; T]) {
+    pub fn write_batch(&self, offset: usize, data: &[i32]) {
         self.tb.write_batch(offset, data);
     }
 
@@ -36,7 +36,7 @@ impl<'a> TbWriter<'a> {
     }
 
     #[inline]
-    pub fn read_batch<const T: usize>(&self, offset: usize) -> [i32; T] {
-        self.tb.read_batch(offset)
+    pub fn read_batch<const T: usize>(&self, offset: usize, out: &mut [i32]) {
+        self.tb.read_batch(offset, out)
     }
 }

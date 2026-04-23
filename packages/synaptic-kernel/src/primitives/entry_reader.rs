@@ -37,14 +37,8 @@ impl<'a> EntryReader<'a> {
     }
 
     #[inline]
-    pub fn core_read_all<const CORE_STRIDE: usize>(&self) -> [i32; CORE_STRIDE] {
-        debug_assert_eq!(
-            CORE_STRIDE, self.core.stride,
-            "EntryReader::core_read_all | CORE_STRIDE {} must be equal to pre-configured stride {}",
-            CORE_STRIDE, self.core.stride
-        );
-
-        self.core.read_all()
+    pub fn core_read_all(&self, out: &mut [i32]) {
+        self.core.read_all(out)
     }
 
     #[inline]
@@ -53,14 +47,8 @@ impl<'a> EntryReader<'a> {
     }
 
     #[inline]
-    pub fn meta_read_all<const META_STRIDE: usize>(&self) -> [i32; META_STRIDE] {
-        debug_assert_eq!(
-            META_STRIDE, self.meta.stride,
-            "EntryReader::meta_read_all | META_STRIDE {} must be equal to pre-configured stride {}",
-            META_STRIDE, self.meta.stride
-        );
-
-        self.meta.read_all()
+    pub fn meta_read_all(&self, out: &mut [i32]) {
+        self.meta.read_all(out)
     }
 
     #[inline]
@@ -69,13 +57,7 @@ impl<'a> EntryReader<'a> {
     }
 
     #[inline]
-    pub fn attr_read_all<const ATTR_STRIDE: usize>(&self) -> [i32; ATTR_STRIDE] {
-        debug_assert_eq!(
-            ATTR_STRIDE, self.attr.stride,
-            "EntryReader::attr_read_all | ATTR_STRIDE {} must be equal to pre-configured stride {}",
-            ATTR_STRIDE, self.attr.stride
-        );
-
-        self.attr.read_all()
+    pub fn attr_read_all(&self, out: &mut [i32]) {
+        self.attr.read_all(out)
     }
 }

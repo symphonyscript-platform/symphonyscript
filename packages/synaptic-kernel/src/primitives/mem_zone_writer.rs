@@ -8,8 +8,8 @@ use std::sync::atomic::Ordering;
 /// # Threading
 /// Producer thread only. All atomic operations use `Relaxed` ordering.
 pub struct MemZoneWriter<'a> {
-    mem: &'a AtomicBuffer,
     pub stride: usize,
+    mem: &'a AtomicBuffer,
     mem_start_offset: usize,
     mem_end_offset: usize,
 }
@@ -85,43 +85,39 @@ impl<'a> MemZoneWriter<'a> {
     }
 
     #[inline]
-    pub fn read_all<const STRIDE: usize>(&self) -> [i32; STRIDE] {
+    pub fn read_all(&self, out: &mut [i32]) {
         debug_assert_eq!(
-            STRIDE, self.stride,
-            "MemZoneWriter::read_all | STRIDE {} must be equal to pre-configured stride {}",
-            STRIDE, self.stride
+            out.len(),
+            self.stride,
+            "MemZoneWriter::read_all | out.len() {} must be equal to pre-configured stride {}",
+            out.len(),
+            self.stride
         );
 
-        let mut data: [i32; STRIDE] = [0; STRIDE];
-
-        for i in 0..STRIDE {
-            data[i] = self.read(i)
+        for i in 0..self.stride {
+            out[i] = self.read(i)
         }
-
-        data
     }
 
     #[inline]
-    pub fn write_all<const STRIDE: usize>(&self, data: [i32; STRIDE]) {
+    pub fn write_all(&self, data: &[i32]) {
         debug_assert_eq!(
-            STRIDE, self.stride,
-            "MemZoneWriter::write_all | STRIDE {} must be equal to pre-configured stride {}",
-            STRIDE, self.stride
+            data.len(),
+            self.stride,
+            "MemZoneWriter::write_all | data.len() {} must be equal to pre-configured stride {}",
+            data.len(),
+            self.stride
         );
 
-        for i in 0..STRIDE {
+        for i in 0..self.stride {
             self.write(i, data[i]);
         }
     }
 
     #[inline]
-    pub fn clear<const STRIDE: usize>(&self) {
-        debug_assert_eq!(
-            STRIDE, self.stride,
-            "MemZoneWriter::clear | STRIDE {} must be equal to pre-configured stride {}",
-            STRIDE, self.stride
-        );
-
-        self.write_all([0; STRIDE]);
+    pub fn clear(&self) {
+        for i in 0..self.stride {
+            self.write(i, 0);
+        }
     }
 }

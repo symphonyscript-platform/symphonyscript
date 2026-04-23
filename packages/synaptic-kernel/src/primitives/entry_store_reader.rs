@@ -1,6 +1,5 @@
 use crate::primitives::entry_reader::EntryReader;
 use crate::primitives::entry_store_config::EntryStoreConfig;
-use crate::primitives::entry_stride_config::EntryStrideConfig;
 use crate::primitives::mem_zone_reader::MemZoneReader;
 use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::staging_buffer_reader::StagingBufferReader;
