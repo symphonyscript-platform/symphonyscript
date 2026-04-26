@@ -1,7 +1,7 @@
 use crate::epoch_mirror::EpochMirror;
 use crate::kernel_config::KernelConfig;
 use crate::metadata::mem_metadata_writer::MemMetadataWriter;
-use crate::primitives::entity_store_writer_registry::EntryStoreWriterRegistry;
+use crate::primitives::entry_store_writer_registry::EntryStoreWriterRegistry;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::triple_buffer_writer_registry::TripleBufferWriterRegistry;
 use crate::primitives::types::AtomicBuffer;

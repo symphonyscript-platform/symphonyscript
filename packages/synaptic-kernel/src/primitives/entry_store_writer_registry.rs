@@ -1,4 +1,4 @@
-use crate::primitives::entity_store_reader_registry::EntryStoreReaderRegistry;
+use crate::primitives::entry_store_reader_registry::EntryStoreReaderRegistry;
 use crate::primitives::entry_store_def::{EntryStoreDef, EntryStoreId};
 use crate::primitives::entry_store_writer::EntryStoreWriter;
 use crate::primitives::triple_buffer_def::TripleBufferId;

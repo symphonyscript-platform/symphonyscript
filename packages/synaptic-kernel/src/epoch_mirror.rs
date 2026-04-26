@@ -1,5 +1,5 @@
 use crate::metadata::mem_metadata_reader::MemMetadataReader;
-use crate::primitives::entity_store_reader_registry::EntryStoreReaderRegistry;
+use crate::primitives::entry_store_reader_registry::EntryStoreReaderRegistry;
 use crate::primitives::entry_store_def::EntryStoreId;
 use crate::primitives::entry_store_reader::EntryStoreReader;
 use crate::primitives::tb_reader::TbReader;

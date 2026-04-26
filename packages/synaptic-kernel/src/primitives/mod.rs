@@ -1,6 +1,6 @@
 pub mod bitmap;
-pub mod entity_store_reader_registry;
-pub mod entity_store_writer_registry;
+pub mod entry_store_reader_registry;
+pub mod entry_store_writer_registry;
 pub mod entry_handle;
 pub mod entry_reader;
 pub mod entry_store_def;
