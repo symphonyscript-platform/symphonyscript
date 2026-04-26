@@ -1,5 +1,4 @@
 use crate::primitives::entry_store_config::EntryStoreConfig;
-use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use std::fmt;
 use std::fmt::Formatter;
@@ -27,27 +26,23 @@ impl fmt::Display for EntryStoreId {
 pub struct EntryStoreDef {
     pub id: EntryStoreId,
     pub tb_id: TripleBufferId,
-    pub core_stride: usize,
-    pub meta_stride: usize,
-    pub attr_stride: usize,
-    pub capacity: usize,
+    pub config: EntryStoreConfig,
 }
 
 impl EntryStoreDef {
+    pub fn new(id: EntryStoreId, tb_id: TripleBufferId, config: EntryStoreConfig) -> Self {
+        EntryStoreDef { id, tb_id, config }
+    }
+
     pub fn size_on_mem(&self) -> usize {
-        SlotAllocator::calculate_size_on_mem(self.capacity) + self.capacity * self.attr_stride
+        self.config.size_on_mem()
     }
 
     pub fn size_on_tb(&self) -> usize {
-        self.capacity * (self.core_stride + self.meta_stride)
+        self.config.size_on_tb()
     }
 
-    pub fn to_config(&self) -> EntryStoreConfig {
-        EntryStoreConfig {
-            core_stride: self.core_stride,
-            meta_stride: self.meta_stride,
-            attr_stride: self.attr_stride,
-            capacity: self.capacity,
-        }
+    pub fn config(&self) -> EntryStoreConfig {
+        self.config
     }
 }

@@ -6,6 +6,7 @@ use crate::errors::kernel_error::KernelError;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::kernel_config::KernelConfig;
 use crate::primitives::entry_store_def::EntryStoreId;
+use crate::primitives::entry_store_writer::EntryStoreWriter;
 use crate::primitives::tb_writer::TbWriter;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::types::AtomicBuffer;
@@ -268,23 +269,9 @@ impl<
         TbWriter::bind(self.active_epoch.tb_registry.get(tb_id))
     }
 
-    pub fn mount_entry_store<
-        const CORE_STRIDE: usize,
-        const META_STRIDE: usize,
-        const ATTR_STRIDE: usize,
-    >(
-        &self,
-        store_id: EntryStoreId,
-    ) {
-        debug_assert!(
-            (store_id.0 as usize) < STORE_COUNT,
-            "Kernel::mount_entry_store | store_id {} out of bounds [0-{}]",
-            store_id,
-            STORE_COUNT - 1,
-        );
-
-        let index = self.id_index[id.0 as usize];
-        let def = self.config.store_defs[]
+    #[inline]
+    pub fn get_entry_store(&self, store_id: EntryStoreId) -> &EntryStoreWriter {
+        self.active_epoch.store_registry.get(store_id)
     }
 
     #[inline]

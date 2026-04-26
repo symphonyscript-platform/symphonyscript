@@ -45,7 +45,7 @@ pub struct EpochMirror<
 > {
     mem_metadata: MemMetadataReader,
     tb_registry: TripleBufferReaderRegistry<TB_COUNT>,
-    store_registry: EntryStoreReaderRegistry<TB_COUNT, STORE_COUNT>,
+    store_registry: EntryStoreReaderRegistry<STORE_COUNT>,
     network: NetworkReader<
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
@@ -74,7 +74,7 @@ impl<
     pub(crate) fn bind(
         mem_metadata: MemMetadataReader,
         tb_registry: TripleBufferReaderRegistry<TB_COUNT>,
-        store_registry: EntryStoreReaderRegistry<TB_COUNT, STORE_COUNT>,
+        store_registry: EntryStoreReaderRegistry<STORE_COUNT>,
         network: NetworkReader<
             NODE_META_STRIDE,
             NODE_ATTRIBUTES_STRIDE,

@@ -102,12 +102,11 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
                 id
             );
 
-            let tb_id = def.tb_id.0 as usize;
             mem_start_offsets[i] = mem_cursor;
             mem_cursor += def.size_on_mem();
             id_index[id.0 as usize] = i as u16;
 
-            if tb_id == TripleBufferId::DEFAULT.0 as usize {
+            if def.tb_id == TripleBufferId::DEFAULT {
                 tb_start_offsets[i] = default_tb_cursor;
                 default_tb_cursor += def.size_on_tb();
 
@@ -148,7 +147,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
             EntryStoreWriter::create(
                 Arc::clone(&mem),
                 tb,
-                def.to_config(),
+                def.config(),
                 mem_start_offsets[i],
                 tb_start_offsets[i],
                 bind,
@@ -168,7 +167,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         let mut size: usize = 0;
 
         for i in 0..STORE_COUNT {
-            size += &defs[i].size_on_mem()
+            size += defs[i].size_on_mem()
         }
 
         size
@@ -187,7 +186,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         for i in 0..STORE_COUNT {
             let def = defs[i];
 
-            if def.tb_id.0 == tb_id.0 {
+            if def.tb_id == tb_id {
                 size += defs[i].size_on_tb()
             }
         }
@@ -195,8 +194,8 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         size
     }
 
-    pub fn to_reader(&self) -> EntryStoreReaderRegistry<TB_COUNT, STORE_COUNT> {
-        EntryStoreReaderRegistry::<TB_COUNT, STORE_COUNT>::bind(
+    pub fn to_reader(&self) -> EntryStoreReaderRegistry<STORE_COUNT> {
+        EntryStoreReaderRegistry::<STORE_COUNT>::bind(
             self.id_index,
             self.stores.clone().map(|a| a.to_reader()),
             self.mem_start_offset,

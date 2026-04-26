@@ -11,16 +11,14 @@ use crate::primitives::entry_store_reader::EntryStoreReader;
 /// # Threading
 /// Consumer-side only. The producer uses `EntryStoreWriterRegistry`.
 #[derive(Clone)]
-pub struct EntryStoreReaderRegistry<const TB_COUNT: usize, const STORE_COUNT: usize> {
+pub struct EntryStoreReaderRegistry<const STORE_COUNT: usize> {
     mem_start_offset: usize,
     mem_end_offset: usize,
     id_index: [u16; STORE_COUNT],
     stores: [EntryStoreReader; STORE_COUNT],
 }
 
-impl<const TB_COUNT: usize, const STORE_COUNT: usize>
-    EntryStoreReaderRegistry<TB_COUNT, STORE_COUNT>
-{
+impl<const STORE_COUNT: usize> EntryStoreReaderRegistry<STORE_COUNT> {
     const _ASSERT_N_FITS_U16_ID: () = assert!(STORE_COUNT > 0 && STORE_COUNT < u16::MAX as usize);
 
     pub fn bind(

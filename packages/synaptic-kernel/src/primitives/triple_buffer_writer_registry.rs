@@ -176,13 +176,13 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
     #[inline]
     pub fn get(&self, id: TripleBufferId) -> &TripleBufferWriter {
         debug_assert!(
-            (id.0 as usize) < N || id.0 == TripleBufferId::DEFAULT.0,
+            (id.0 as usize) < N || id == TripleBufferId::DEFAULT,
             "TripleBufferWriterRegistry::get | id {} out of bounds [0-{}]",
             id,
             N - 1,
         );
 
-        if id.0 == TripleBufferId::DEFAULT.0 {
+        if id == TripleBufferId::DEFAULT {
             return &self.default_tb;
         }
 

@@ -29,11 +29,11 @@ use std::sync::Arc;
 /// 4           Entry Store Registry    EntryStoreWriterRegistry::calculate_size_on_mem()
 /// ```
 ///
-/// # TB Memory Layout (triple-buffered plane)
+/// # DEFAULT TB Memory Layout (triple-buffered plane)
 /// Segments are packed sequentially within the TripleBufferWriter.
 ///
 /// ```text
-/// Order       Segment             Size
+/// Order       Segment                 Size
 /// --------------------------------------------------------------------------
 /// 1           Network                 NetworkWriter::calculate_size_on_tb()
 /// 2           Entry Store Registry    EntryStoreWriterRegistry::calculate_size_on_tb()
@@ -141,7 +141,7 @@ impl<
             config.store_defs,
             network.mem_end_offset(),
             network.tb_end_offset(),
-            [0; TB_COUNT],
+            [0; TB_COUNT], // User TB-s have no other consumers than user-defined entry stores.
             bind,
         );
 
