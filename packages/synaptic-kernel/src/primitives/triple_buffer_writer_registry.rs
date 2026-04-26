@@ -35,6 +35,7 @@ pub struct TripleBufferWriterRegistry<const N: usize> {
     mem_start_offset: usize,
     mem_end_offset: usize,
     id_index: [u16; N],
+    defs: [TripleBufferDef; N],
     default_tb: TripleBufferWriter,
     tbs: [TripleBufferWriter; N],
 }
@@ -122,8 +123,9 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
         TripleBufferWriterRegistry {
             mem_start_offset,
             mem_end_offset,
-            default_tb,
             id_index,
+            defs,
+            default_tb,
             tbs,
         }
     }
@@ -163,6 +165,15 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
     }
 
     #[inline]
+    pub fn index_of(&self, id: TripleBufferId) -> u16 {
+        debug_assert!(
+            id != TripleBufferId::DEFAULT,
+            "TripleBufferWriterRegistry::index_of | index_of may not be called on TripleBufferId::DEFAULT"
+        );
+        self.id_index[id.0 as usize]
+    }
+
+    #[inline]
     pub fn get(&self, id: TripleBufferId) -> &TripleBufferWriter {
         debug_assert!(
             (id.0 as usize) < N || id.0 == TripleBufferId::DEFAULT.0,
@@ -191,34 +202,30 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
         );
 
         debug_assert!(
-            source.len() <= self.len(),
-            "TripleBufferWriterRegistry.copy_from | source.len() {} cannot be greater than destination.len() {}",
-            source.len(),
-            self.len(),
-        );
-
-        debug_assert!(
             source.default_tb.buffer_capacity() <= self.default_tb.buffer_capacity(),
             "TripleBufferWriterRegistry.copy_metadata_regions_from | source.default_tb.buffer_capacity {} cannot be greater than destination.default_tb.buffer_capacity {}",
             source.default_tb.buffer_capacity(),
             self.default_tb.buffer_capacity(),
         );
 
-        for i in 0..N {
+        for i in 0..M {
+            let id = source.defs[i].id;
+            let source_tb = source.get(id);
+            let dest_tb = self.get(id);
+
             debug_assert!(
-                source.tbs[i].buffer_capacity() <= self.tbs[i].buffer_capacity(),
-                "TripleBufferWriterRegistry.copy_metadata_regions_from | source.tbs[{}].buffer_capacity {} cannot be greater than destination.tbs[{}].buffer_capacity {}",
-                i,
-                source.tbs[i].buffer_capacity(),
-                i,
-                self.tbs[i].buffer_capacity(),
+                source_tb.buffer_capacity() <= dest_tb.buffer_capacity(),
+                "TripleBufferWriterRegistry.copy_metadata_regions_from | source_tb.buffer_capacity {} cannot be greater than dest_tb.buffer_capacity {}",
+                source_tb.buffer_capacity(),
+                dest_tb.buffer_capacity(),
             );
         }
 
         self.default_tb.copy_metadata_from(&source.default_tb);
 
-        for i in 0..N {
-            self.tbs[i].copy_metadata_from(&source.tbs[i]);
+        for i in 0..M {
+            let id = source.defs[i].id;
+            self.get(id).copy_metadata_from(&source.get(id));
         }
     }
 }

@@ -1,14 +1,12 @@
 use crate::primitives::entity_store_reader_registry::EntryStoreReaderRegistry;
-use crate::primitives::entry_store_config::EntryStoreConfig;
 use crate::primitives::entry_store_def::{EntryStoreDef, EntryStoreId};
 use crate::primitives::entry_store_writer::EntryStoreWriter;
-use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::triple_buffer_writer_registry::TripleBufferWriterRegistry;
 use crate::primitives::types::AtomicBuffer;
 use std::sync::Arc;
 
-/// Fixed-size registry of `N` Entry-store writers with user-assigned IDs in [0, N-1] range.
+/// Fixed-size registry of `N` entry store writers with user-assigned IDs in [0, N-1] range.
 ///
 /// # ID Semantics
 /// IDs form a permutation of `[0, N-1]`. The user assigns each TB an ID in that range,
@@ -19,12 +17,10 @@ use std::sync::Arc;
 /// Producer-side only. The consumer uses `EntryStoreReaderRegistry`.
 #[derive(Clone)]
 pub struct EntryStoreWriterRegistry<const TB_COUNT: usize, const STORE_COUNT: usize> {
-    mem: AtomicBuffer,
-    tb_registry: TripleBufferWriterRegistry<TB_COUNT>,
     mem_start_offset: usize,
     mem_end_offset: usize,
     id_index: [u16; STORE_COUNT],
-    offsets: [usize; STORE_COUNT],
+    defs: [EntryStoreDef; STORE_COUNT],
     stores: [EntryStoreWriter; STORE_COUNT],
 }
 
@@ -38,8 +34,18 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         tb_registry: TripleBufferWriterRegistry<TB_COUNT>,
         defs: [EntryStoreDef; STORE_COUNT],
         mem_start_offset: usize,
+        default_tb_start_offset: usize,
+        extra_tb_start_offsets: [usize; TB_COUNT],
     ) -> Self {
-        Self::create(mem, tb_registry, defs, mem_start_offset, false)
+        Self::create(
+            mem,
+            tb_registry,
+            defs,
+            mem_start_offset,
+            default_tb_start_offset,
+            extra_tb_start_offsets,
+            false,
+        )
     }
 
     pub fn bind(
@@ -47,8 +53,18 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         tb_registry: TripleBufferWriterRegistry<TB_COUNT>,
         defs: [EntryStoreDef; STORE_COUNT],
         mem_start_offset: usize,
+        default_tb_start_offset: usize,
+        extra_tb_start_offsets: [usize; TB_COUNT],
     ) -> Self {
-        Self::create(mem, tb_registry, defs, mem_start_offset, true)
+        Self::create(
+            mem,
+            tb_registry,
+            defs,
+            mem_start_offset,
+            default_tb_start_offset,
+            extra_tb_start_offsets,
+            true,
+        )
     }
 
     pub fn create(
@@ -56,31 +72,21 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         tb_registry: TripleBufferWriterRegistry<TB_COUNT>,
         defs: [EntryStoreDef; STORE_COUNT],
         mem_start_offset: usize,
+        default_tb_start_offset: usize,
+        extra_tb_start_offsets: [usize; TB_COUNT],
         bind: bool,
     ) -> Self {
         const { assert!(STORE_COUNT > 0 && STORE_COUNT < u16::MAX as usize) };
 
-        let mut offsets: [usize; STORE_COUNT] = [0; STORE_COUNT];
-        let mut cursor = 0;
-
-        for i in 0..STORE_COUNT {
-            offsets[i] = cursor;
-            let capacity = defs[i].capacity;
-            cursor +=
-                SlotAllocator::calculate_size_on_mem(capacity) + capacity * defs[i].attr_stride;
-        }
-
-        debug_assert!(
-            cursor <= mem.len(),
-            "EntryStoreWriterRegistry::create | range [{}..{}] out of AtomicBuffer bounds [0; {}]",
-            mem_start_offset,
-            cursor,
-            mem.len(),
-        );
-
+        let mut mem_start_offsets: [usize; STORE_COUNT] = [0; STORE_COUNT];
+        let mut tb_start_offsets: [usize; STORE_COUNT] = [0; STORE_COUNT];
+        let mut mem_cursor = mem_start_offset;
+        let mut default_tb_cursor: usize = default_tb_start_offset;
+        let mut extra_tb_cursors: [usize; TB_COUNT] = extra_tb_start_offsets;
         let mut id_index: [u16; STORE_COUNT] = [u16::MAX; STORE_COUNT];
 
         for i in 0..STORE_COUNT {
+            let def = defs[i];
             let id = defs[i].id;
 
             debug_assert!(
@@ -96,31 +102,64 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
                 id
             );
 
+            let tb_id = def.tb_id.0 as usize;
+            mem_start_offsets[i] = mem_cursor;
+            mem_cursor += def.size_on_mem();
             id_index[id.0 as usize] = i as u16;
+
+            if tb_id == TripleBufferId::DEFAULT.0 as usize {
+                tb_start_offsets[i] = default_tb_cursor;
+                default_tb_cursor += def.size_on_tb();
+
+                debug_assert!(
+                    default_tb_cursor <= tb_registry.get(def.tb_id).buffer_capacity(),
+                    "EntryStoreWriterRegistry::create | Store {} out of Triple Buffer {} bounds [0; {}]",
+                    def.id,
+                    def.tb_id,
+                    tb_registry.get(def.tb_id).buffer_capacity(),
+                );
+            } else {
+                let index = tb_registry.index_of(def.tb_id) as usize;
+                tb_start_offsets[i] = extra_tb_cursors[index];
+                extra_tb_cursors[index] += def.size_on_tb();
+
+                debug_assert!(
+                    extra_tb_cursors[index] <= tb_registry.get(def.tb_id).buffer_capacity(),
+                    "EntryStoreWriterRegistry::create | Store {} out of Triple Buffer {} bounds [0; {}]",
+                    def.id,
+                    def.tb_id,
+                    tb_registry.get(def.tb_id).buffer_capacity(),
+                );
+            }
         }
+
+        debug_assert!(
+            mem_cursor <= mem.len(),
+            "EntryStoreWriterRegistry::create | range [{}..{}] out of AtomicBuffer bounds [0; {}]",
+            mem_start_offset,
+            mem_cursor,
+            mem.len(),
+        );
 
         let stores: [EntryStoreWriter; STORE_COUNT] = std::array::from_fn(|i| {
             let def = defs[i];
+            let tb = tb_registry.get(defs[i].tb_id).clone();
+
             EntryStoreWriter::create(
                 Arc::clone(&mem),
-                tb_registry.get(defs[i].tb_id).clone(),
-                EntryStoreConfig {
-                    core_stride: def.core_stride,
-                    meta_stride: def.meta_stride,
-                    attr_stride: def.attr_stride,
-                    capacity: def.capacity,
-                },
+                tb,
+                def.to_config(),
+                mem_start_offsets[i],
+                tb_start_offsets[i],
                 bind,
             )
         });
 
         EntryStoreWriterRegistry {
-            mem,
-            tb_registry,
             mem_start_offset,
-            mem_end_offset: cursor,
+            mem_end_offset: mem_cursor,
             id_index,
-            offsets,
+            defs,
             stores,
         }
     }
@@ -129,22 +168,36 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         let mut size: usize = 0;
 
         for i in 0..STORE_COUNT {
-            size += Self::calculate_def_size_on_mem(&defs[i])
+            size += &defs[i].size_on_mem()
         }
 
         size
     }
 
-    pub fn calculate_def_size_on_mem(def: &EntryStoreDef) -> usize {
-        SlotAllocator::calculate_size_on_mem(def.capacity) + def.capacity * def.attr_stride
+    pub fn calculate_size_on_default_tb(defs: &[EntryStoreDef; STORE_COUNT]) -> usize {
+        Self::calculate_size_on_tb_for(TripleBufferId::DEFAULT, defs)
+    }
+
+    pub fn calculate_size_on_tb_for(
+        tb_id: TripleBufferId,
+        defs: &[EntryStoreDef; STORE_COUNT],
+    ) -> usize {
+        let mut size: usize = 0;
+
+        for i in 0..STORE_COUNT {
+            let def = defs[i];
+
+            if def.tb_id.0 == tb_id.0 {
+                size += defs[i].size_on_tb()
+            }
+        }
+
+        size
     }
 
     pub fn to_reader(&self) -> EntryStoreReaderRegistry<TB_COUNT, STORE_COUNT> {
         EntryStoreReaderRegistry::<TB_COUNT, STORE_COUNT>::bind(
-            Arc::clone(&self.mem),
-            self.tb_registry.to_reader(),
             self.id_index,
-            self.offsets,
             self.stores.clone().map(|a| a.to_reader()),
             self.mem_start_offset,
             self.mem_end_offset,
@@ -169,7 +222,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
     #[inline]
     pub fn get(&self, id: EntryStoreId) -> &EntryStoreWriter {
         debug_assert!(
-            (id.0 as usize) < STORE_COUNT || id.0 == TripleBufferId::DEFAULT.0,
+            (id.0 as usize) < STORE_COUNT,
             "EntryStoreWriterRegistry::get | id {} out of bounds [0-{}]",
             id,
             STORE_COUNT - 1,
@@ -179,7 +232,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         &self.stores[index as usize]
     }
 
-    pub fn copy_metadata_regions_from<const TB_COUNT_M: usize, const STORE_COUNT_M: usize>(
+    pub fn copy_from<const TB_COUNT_M: usize, const STORE_COUNT_M: usize>(
         &self,
         source: &EntryStoreWriterRegistry<TB_COUNT_M, STORE_COUNT_M>,
     ) {
@@ -197,26 +250,22 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
             STORE_COUNT,
         );
 
-        debug_assert!(
-            source.len() <= self.len(),
-            "EntryStoreWriterRegistry.copy_from | source.len() {} cannot be greater than destination.len() {}",
-            source.len(),
-            self.len(),
-        );
+        for i in 0..STORE_COUNT_M {
+            let id = source.defs[i].id;
+            let source_store = source.get(id);
+            let dest_store = self.get(id);
 
-        for i in 0..STORE_COUNT {
             debug_assert!(
-                source.stores[i].capacity() <= self.stores[i].capacity(),
-                "EntryStoreWriterRegistry.copy_metadata_regions_from | source.stores[{}].capacity {} cannot be greater than destination.stores[{}].capacity {}",
-                i,
-                source.stores[i].capacity(),
-                i,
-                self.stores[i].capacity(),
+                source_store.capacity() <= dest_store.capacity(),
+                "EntryStoreWriterRegistry.copy_metadata_regions_from | source_store.capacity {} cannot be greater than dest_store.capacity {}",
+                source_store.capacity(),
+                dest_store.capacity(),
             );
         }
 
-        for i in 0..STORE_COUNT {
-            self.stores[i].copy_from(&source.stores[i]);
+        for i in 0..STORE_COUNT_M {
+            let id = source.defs[i].id;
+            self.get(id).copy_from(&source.get(id));
         }
     }
 }

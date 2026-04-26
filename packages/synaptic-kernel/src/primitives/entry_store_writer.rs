@@ -253,9 +253,9 @@ impl EntryStoreWriter {
 
     pub fn copy_from(&self, source: &Self) {
         debug_assert!(
-            self.config.capacity <= self.config.capacity,
-            "EntryStoreWriter.copy_from | self.config.capacity {} cannot be greater than destination.capacity {}",
-            self.config.capacity,
+            source.config.capacity <= self.config.capacity,
+            "EntryStoreWriter.copy_from | source.config.capacity {} cannot be greater than destination.config.capacity {}",
+            source.config.capacity,
             self.config.capacity,
         );
 
@@ -264,15 +264,10 @@ impl EntryStoreWriter {
             &source.tb,
             source.tb_start_offset,
             self.tb_start_offset,
-            Self::calculate_size_on_tb(&EntryStoreConfig {
-                core_stride: self.config.core_stride,
-                meta_stride: self.config.meta_stride,
-                attr_stride: self.config.attr_stride,
-                capacity: self.config.capacity,
-            }),
+            Self::calculate_size_on_tb(&source.config),
         );
 
-        for i in 0..self.config.capacity * self.config.attr_stride {
+        for i in 0..source.config.capacity * source.config.attr_stride {
             self.mem[self.mem_attrs_start_offset + i].store(
                 source.mem[source.mem_attrs_start_offset + i].load(Ordering::Relaxed),
                 Ordering::Relaxed,
@@ -287,7 +282,7 @@ impl EntryStoreWriter {
             self.config.core_stride,
             self.config.meta_stride,
         );
-        let tb_end_offset = tb_start_offset + self.config.core_stride + self.mem_end_offset;
+        let tb_end_offset = tb_start_offset + self.config.core_stride + self.config.meta_stride;
 
         debug_assert!(
             tb_end_offset <= self.tb.buffer_capacity(),

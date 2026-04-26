@@ -1,3 +1,5 @@
+use crate::primitives::entry_store_config::EntryStoreConfig;
+use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use std::fmt;
 use std::fmt::Formatter;
@@ -20,7 +22,7 @@ impl fmt::Display for EntryStoreId {
 /// # Fields
 /// - `id`: Unique identifier in `[0, N-1]`.
 /// - `tb_id`: TB identifier. It's absolutely valid to use `TripleBufferId::DEFAULT` here.
-/// - `capacity`: Entry store capacity of i32 numbers.
+/// - `capacity`: Store capacity of entries.
 #[derive(Clone, Copy)]
 pub struct EntryStoreDef {
     pub id: EntryStoreId,
@@ -29,4 +31,23 @@ pub struct EntryStoreDef {
     pub meta_stride: usize,
     pub attr_stride: usize,
     pub capacity: usize,
+}
+
+impl EntryStoreDef {
+    pub fn size_on_mem(&self) -> usize {
+        SlotAllocator::calculate_size_on_mem(self.capacity) + self.capacity * self.attr_stride
+    }
+
+    pub fn size_on_tb(&self) -> usize {
+        self.capacity * (self.core_stride + self.meta_stride)
+    }
+
+    pub fn to_config(&self) -> EntryStoreConfig {
+        EntryStoreConfig {
+            core_stride: self.core_stride,
+            meta_stride: self.meta_stride,
+            attr_stride: self.attr_stride,
+            capacity: self.capacity,
+        }
+    }
 }

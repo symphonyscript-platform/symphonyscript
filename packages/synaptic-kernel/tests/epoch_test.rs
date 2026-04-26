@@ -134,9 +134,9 @@ fn calculate_size_on_mem_grows_monotonically_with_capacity() {
 
 #[test]
 fn calculate_size_on_tb_grows_monotonically_with_capacity() {
-    let t_small = TestEpoch::calculate_size_on_tb(&mk_config(4, 4, 1, 1));
-    let t_mid = TestEpoch::calculate_size_on_tb(&mk_config(16, 32, 4, 4));
-    let t_big = TestEpoch::calculate_size_on_tb(&mk_config(128, 256, 16, 8));
+    let t_small = TestEpoch::calculate_size_on_default_tb(&mk_config(4, 4, 1, 1));
+    let t_mid = TestEpoch::calculate_size_on_default_tb(&mk_config(16, 32, 4, 4));
+    let t_big = TestEpoch::calculate_size_on_default_tb(&mk_config(128, 256, 16, 8));
     assert!(t_small < t_mid);
     assert!(t_mid < t_big);
 }

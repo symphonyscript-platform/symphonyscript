@@ -1,4 +1,7 @@
 use crate::metadata::mem_metadata_reader::MemMetadataReader;
+use crate::primitives::entity_store_reader_registry::EntryStoreReaderRegistry;
+use crate::primitives::entry_store_def::EntryStoreId;
+use crate::primitives::entry_store_reader::EntryStoreReader;
 use crate::primitives::tb_reader::TbReader;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::triple_buffer_reader_registry::TripleBufferReaderRegistry;
@@ -42,6 +45,7 @@ pub struct EpochMirror<
 > {
     mem_metadata: MemMetadataReader,
     tb_registry: TripleBufferReaderRegistry<TB_COUNT>,
+    store_registry: EntryStoreReaderRegistry<TB_COUNT, STORE_COUNT>,
     network: NetworkReader<
         NODE_META_STRIDE,
         NODE_ATTRIBUTES_STRIDE,
@@ -70,6 +74,7 @@ impl<
     pub(crate) fn bind(
         mem_metadata: MemMetadataReader,
         tb_registry: TripleBufferReaderRegistry<TB_COUNT>,
+        store_registry: EntryStoreReaderRegistry<TB_COUNT, STORE_COUNT>,
         network: NetworkReader<
             NODE_META_STRIDE,
             NODE_ATTRIBUTES_STRIDE,
@@ -80,6 +85,7 @@ impl<
         EpochMirror {
             mem_metadata,
             tb_registry,
+            store_registry,
             network,
         }
     }
@@ -102,6 +108,11 @@ impl<
         );
 
         TbReader::bind(self.tb_registry.get(tb_id))
+    }
+
+    #[inline]
+    pub fn get_entry_store(&'_ self, store_id: EntryStoreId) -> &EntryStoreReader {
+        self.store_registry.get(store_id)
     }
 
     #[inline]

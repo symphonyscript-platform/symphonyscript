@@ -1,6 +1,7 @@
 use crate::epoch_mirror::EpochMirror;
 use crate::kernel_config::KernelConfig;
 use crate::metadata::mem_metadata_writer::MemMetadataWriter;
+use crate::primitives::entity_store_writer_registry::EntryStoreWriterRegistry;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::triple_buffer_writer_registry::TripleBufferWriterRegistry;
 use crate::primitives::types::AtomicBuffer;
@@ -20,11 +21,12 @@ use std::sync::Arc;
 /// Segments are packed sequentially in a single AtomicBuffer.
 ///
 /// ```text
-/// Order       Segment             Size
+/// Order       Segment                 Size
 /// -------------------------------------------------------------------------------------------
-/// 1           Mem Metadata        MemMetadataWriter::calculate_size_on_mem()
-/// 2           TB Registry         TripleBufferWriterRegistry::calculate_size_on_mem()
-/// 3           Network             NetworkWriter::calculate_size_on_mem()
+/// 1           Mem Metadata            MemMetadataWriter::calculate_size_on_mem()
+/// 2           TB Registry             TripleBufferWriterRegistry::calculate_size_on_mem()
+/// 3           Network                 NetworkWriter::calculate_size_on_mem()
+/// 4           Entry Store Registry    EntryStoreWriterRegistry::calculate_size_on_mem()
 /// ```
 ///
 /// # TB Memory Layout (triple-buffered plane)
@@ -33,7 +35,8 @@ use std::sync::Arc;
 /// ```text
 /// Order       Segment             Size
 /// --------------------------------------------------------------------------
-/// 1           Network         NetworkWriter::calculate_size_on_tb()
+/// 1           Network                 NetworkWriter::calculate_size_on_tb()
+/// 2           Entry Store Registry    EntryStoreWriterRegistry::calculate_size_on_tb()
 /// ```
 ///
 /// # Deployment
@@ -65,6 +68,7 @@ pub struct Epoch<
         SYNAPSE_META_STRIDE,
         SYNAPSE_ATTRIBUTES_STRIDE,
     >,
+    pub store_registry: EntryStoreWriterRegistry<TB_COUNT, STORE_COUNT>,
 }
 
 impl<
@@ -118,7 +122,7 @@ impl<
             Arc::clone(&mem),
             config.tb_defs,
             mem_metadata.mem_end_offset(),
-            Self::calculate_size_on_tb(&config),
+            Self::calculate_size_on_default_tb(&config),
             bind,
         );
         let network = NetworkWriter::create(
@@ -131,17 +135,28 @@ impl<
             bind,
         );
 
+        let store_registry = EntryStoreWriterRegistry::create(
+            Arc::clone(&mem),
+            tb_registry.clone(),
+            config.store_defs,
+            network.mem_end_offset(),
+            network.tb_end_offset(),
+            [0; TB_COUNT],
+            bind,
+        );
+
         Epoch {
             mem_metadata,
             tb_registry,
             network,
+            store_registry,
         }
     }
 
     pub fn calculate_size_on_mem(config: &KernelConfig<TB_COUNT, STORE_COUNT>) -> usize {
         MemMetadataWriter::calculate_size_on_mem(config.mem_metadata_size)
             + TripleBufferWriterRegistry::calculate_size_on_mem(
-                Self::calculate_size_on_tb(&config),
+                Self::calculate_size_on_default_tb(&config),
                 &config.tb_defs,
             )
             + NetworkWriter::<
@@ -150,15 +165,21 @@ impl<
                 SYNAPSE_META_STRIDE,
                 SYNAPSE_ATTRIBUTES_STRIDE,
             >::calculate_size_on_mem(config.node_capacity, config.synapse_capacity)
+            + EntryStoreWriterRegistry::<TB_COUNT, STORE_COUNT>::calculate_size_on_mem(
+                &config.store_defs,
+            )
     }
 
-    pub fn calculate_size_on_tb(config: &KernelConfig<TB_COUNT, STORE_COUNT>) -> usize {
+    pub fn calculate_size_on_default_tb(config: &KernelConfig<TB_COUNT, STORE_COUNT>) -> usize {
         NetworkWriter::<
             NODE_META_STRIDE,
             NODE_ATTRIBUTES_STRIDE,
             SYNAPSE_META_STRIDE,
             SYNAPSE_ATTRIBUTES_STRIDE,
         >::calculate_size_on_tb(config.node_capacity, config.synapse_capacity)
+            + EntryStoreWriterRegistry::<TB_COUNT, STORE_COUNT>::calculate_size_on_default_tb(
+                &config.store_defs,
+            )
     }
 
     pub fn to_mirror(
@@ -174,6 +195,7 @@ impl<
         EpochMirror::bind(
             self.mem_metadata.to_reader(),
             self.tb_registry.to_reader(),
+            self.store_registry.to_reader(),
             self.network.to_reader(),
         )
     }
@@ -201,13 +223,6 @@ impl<
         );
 
         debug_assert!(
-            source.tb_registry.len() <= self.tb_registry.len(),
-            "Epoch.copy_from | source.tb_registry.len() {} cannot be greater than destination.tb_registry.len() {}",
-            source.tb_registry.len(),
-            self.tb_registry.len(),
-        );
-
-        debug_assert!(
             source.network.node_capacity() <= self.network.node_capacity(),
             "Epoch.copy_from | source.network.node_capacity() {} cannot be greater than destination.network.node_capacity() {}",
             source.network.node_capacity(),
@@ -225,5 +240,6 @@ impl<
         self.tb_registry
             .copy_metadata_regions_from(&source.tb_registry);
         self.network.copy_from(&source.network);
+        self.store_registry.copy_from(&source.store_registry);
     }
 }
