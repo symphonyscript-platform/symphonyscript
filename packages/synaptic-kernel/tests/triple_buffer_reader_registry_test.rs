@@ -7,6 +7,13 @@ use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::triple_buffer_writer_registry::TripleBufferWriterRegistry;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
+/// Default TB in the registry must have strictly positive `buffer_capacity` (`TripleBufferWriter` invariant).
+const DEFAULT_TB_CAP: usize = 1;
+
+fn default_tb_mem() -> usize {
+    TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP)
+}
+
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
     for _ in 0..size {
@@ -30,10 +37,7 @@ fn _type_assertions(
 ) -> (usize, usize) {
     let _reader_ref: &TripleBufferReader = r.get(TripleBufferId(0));
     let _writer_ref: &TripleBufferWriter = w.get(TripleBufferId(0));
-    (
-        TripleBufferWriter::calculate_size_on_mem(1),
-        r.mem_start_offset(),
-    )
+    (default_tb_mem(), r.mem_start_offset())
 }
 
 // ============ Happy Path — Construction via to_reader ============
@@ -42,33 +46,46 @@ fn _type_assertions(
 fn construct_via_to_reader_matches_writer_offsets() {
     let mem = create_mem(1024);
     let defs = [def(0, 4), def(1, 4)];
-    let w = TripleBufferWriterRegistry::<2>::new(mem, defs, 100);
+    let w = TripleBufferWriterRegistry::<2>::new(mem, defs, 100, DEFAULT_TB_CAP);
     let r = w.to_reader();
 
     assert_eq!(r.mem_start_offset(), w.mem_start_offset());
     assert_eq!(r.mem_end_offset(), w.mem_end_offset());
     assert_eq!(r.mem_start_offset(), 100);
-    assert_eq!(r.mem_end_offset(), 100 + 2 * (4 + 4 * 3));
+    assert_eq!(
+        r.mem_end_offset(),
+        100 + TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP) + 2 * (4 + 4 * 3)
+    );
 }
 
 #[test]
 fn construct_via_to_reader_n_eq_one() {
     let mem = create_mem(1024);
     let defs = [def(0, 8)];
-    let w = TripleBufferWriterRegistry::<1>::new(mem, defs, 0);
+    let w = TripleBufferWriterRegistry::<1>::new(mem, defs, 0, DEFAULT_TB_CAP);
     let r = w.to_reader();
     assert_eq!(r.mem_start_offset(), 0);
-    assert_eq!(r.mem_end_offset(), 4 + 8 * 3);
+    assert_eq!(
+        r.mem_end_offset(),
+        TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP) + (4 + 8 * 3)
+    );
 }
 
 #[test]
 fn construct_via_to_reader_varying_capacities() {
     let mem = create_mem(4096);
     let defs = [def(0, 10), def(1, 50), def(2, 8)];
-    let w = TripleBufferWriterRegistry::<3>::new(mem, defs, 17);
+    let w = TripleBufferWriterRegistry::<3>::new(mem, defs, 17, DEFAULT_TB_CAP);
     let r = w.to_reader();
     assert_eq!(r.mem_start_offset(), 17);
-    assert_eq!(r.mem_end_offset(), 17 + (4 + 30) + (4 + 150) + (4 + 24));
+    assert_eq!(
+        r.mem_end_offset(),
+        17
+            + TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP)
+            + (4 + 30)
+            + (4 + 150)
+            + (4 + 24)
+    );
 }
 
 // ============ get — Correctness Under Permutations ============
@@ -77,7 +94,7 @@ fn construct_via_to_reader_varying_capacities() {
 fn reader_get_identity_permutation_matches_writer_memory() {
     let mem = create_mem(4096);
     let defs = [def(0, 4), def(1, 4), def(2, 4), def(3, 4)];
-    let w = TripleBufferWriterRegistry::<4>::new(mem, defs, 0);
+    let w = TripleBufferWriterRegistry::<4>::new(mem, defs, 0, DEFAULT_TB_CAP);
     let r = w.to_reader();
 
     // Writer's mem_start_offset per ID must equal reader's mem_start_offset per ID.
@@ -101,7 +118,7 @@ fn reader_get_identity_permutation_matches_writer_memory() {
 fn reader_get_reversed_permutation_maps_to_same_memory_as_writer() {
     let mem = create_mem(4096);
     let defs = [def(3, 4), def(2, 4), def(1, 4), def(0, 4)];
-    let w = TripleBufferWriterRegistry::<4>::new(mem, defs, 0);
+    let w = TripleBufferWriterRegistry::<4>::new(mem, defs, 0, DEFAULT_TB_CAP);
     let r = w.to_reader();
 
     for id in 0..4u16 {
@@ -119,7 +136,7 @@ fn reader_get_arbitrary_permutation_shared_memory_roundtrip() {
     let mem = create_mem(4096);
     // Arbitrary permutation.
     let defs = [def(2, 4), def(0, 4), def(3, 4), def(1, 4)];
-    let w = TripleBufferWriterRegistry::<4>::new(mem, defs, 0);
+    let w = TripleBufferWriterRegistry::<4>::new(mem, defs, 0, DEFAULT_TB_CAP);
     let r = w.to_reader();
 
     // Write through writer's TB with each ID, then verify reader with same ID reads the value.
@@ -147,7 +164,7 @@ fn reader_get_arbitrary_permutation_shared_memory_roundtrip() {
 fn cross_component_writer_and_reader_share_memory_per_id() {
     let mem = create_mem(4096);
     let defs = [def(2, 4), def(0, 4), def(1, 4)];
-    let w = TripleBufferWriterRegistry::<3>::new(mem, defs, 0);
+    let w = TripleBufferWriterRegistry::<3>::new(mem, defs, 0, DEFAULT_TB_CAP);
     let r = w.to_reader();
 
     // For each ID, write through writer, swap reader, read back.
@@ -165,7 +182,7 @@ fn cross_component_writer_and_reader_share_memory_per_id() {
 fn publish_on_one_id_only_that_readers_swap_true() {
     let mem = create_mem(4096);
     let defs = [def(0, 4), def(1, 4), def(2, 4)];
-    let w = TripleBufferWriterRegistry::<3>::new(mem, defs, 0);
+    let w = TripleBufferWriterRegistry::<3>::new(mem, defs, 0, DEFAULT_TB_CAP);
     let r = w.to_reader();
 
     // Publish only through ID=0.
@@ -180,7 +197,7 @@ fn publish_on_one_id_only_that_readers_swap_true() {
 fn swap_per_id_isolated_across_many_cycles() {
     let mem = create_mem(4096);
     let defs = [def(0, 4), def(1, 4), def(2, 4), def(3, 4)];
-    let w = TripleBufferWriterRegistry::<4>::new(mem, defs, 0);
+    let w = TripleBufferWriterRegistry::<4>::new(mem, defs, 0, DEFAULT_TB_CAP);
     let r = w.to_reader();
 
     // Cycle: each round publish on a different ID and verify no others advance.
@@ -223,7 +240,7 @@ fn swap_per_id_isolated_across_many_cycles() {
 fn clone_shares_underlying_atomic_buffer() {
     let mem = create_mem(1024);
     let defs = [def(0, 4), def(1, 4)];
-    let w = TripleBufferWriterRegistry::<2>::new(mem, defs, 0);
+    let w = TripleBufferWriterRegistry::<2>::new(mem, defs, 0, DEFAULT_TB_CAP);
     let r1 = w.to_reader();
     let r2 = r1.clone();
 
@@ -244,7 +261,7 @@ fn clone_shares_underlying_atomic_buffer() {
 fn clone_observes_writer_publishes_on_independent_clone() {
     let mem = create_mem(1024);
     let defs = [def(0, 4), def(1, 4)];
-    let w = TripleBufferWriterRegistry::<2>::new(mem, defs, 0);
+    let w = TripleBufferWriterRegistry::<2>::new(mem, defs, 0, DEFAULT_TB_CAP);
     let r = w.to_reader();
     let r_clone = r.clone();
 
@@ -271,7 +288,7 @@ fn clone_observes_writer_publishes_on_independent_clone() {
 fn to_reader_called_twice_yields_compatible_registries() {
     let mem = create_mem(1024);
     let defs = [def(0, 4), def(1, 4)];
-    let w = TripleBufferWriterRegistry::<2>::new(mem, defs, 0);
+    let w = TripleBufferWriterRegistry::<2>::new(mem, defs, 0, DEFAULT_TB_CAP);
     let r_a = w.to_reader();
     let r_b = w.to_reader();
 
@@ -293,7 +310,7 @@ fn to_reader_called_twice_yields_compatible_registries() {
 fn reader_get_out_of_range_id_panics() {
     let mem = create_mem(1024);
     let defs = [def(0, 4), def(1, 4)];
-    let w = TripleBufferWriterRegistry::<2>::new(mem, defs, 0);
+    let w = TripleBufferWriterRegistry::<2>::new(mem, defs, 0, DEFAULT_TB_CAP);
     let r = w.to_reader();
     let _ = r.get(TripleBufferId(2));
 }
@@ -304,7 +321,7 @@ fn reader_get_out_of_range_id_panics() {
 fn reader_get_far_out_of_range_id_panics() {
     let mem = create_mem(1024);
     let defs = [def(0, 4), def(1, 4), def(2, 4)];
-    let w = TripleBufferWriterRegistry::<3>::new(mem, defs, 0);
+    let w = TripleBufferWriterRegistry::<3>::new(mem, defs, 0, DEFAULT_TB_CAP);
     let r = w.to_reader();
     let _ = r.get(TripleBufferId(5));
 }

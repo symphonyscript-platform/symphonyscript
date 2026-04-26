@@ -1,3 +1,5 @@
+mod common;
+
 use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::epoch_mirror::EpochMirror;
 use synaptic_kernel::kernel::Kernel;
@@ -8,17 +10,12 @@ const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-type TestConsumer = EpochConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-type TestMirror = EpochMirror<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestKernel = Kernel<1, 1>;
+type TestConsumer = EpochConsumer<1, 1>;
+type TestMirror = EpochMirror<1, 1>;
 
-fn config() -> KernelConfig {
-    KernelConfig {
-        node_capacity: 16,
-        synapse_capacity: 32,
-        mem_metadata_size: 1,
-        tb_metadata_size: 1,
-    }
+fn config() -> KernelConfig<1, 1> {
+    common::kernel_config_1_1(16, 32, NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR)
 }
 
 /// Leaks an `EpochConsumer` + `EpochMirror` pair so the test body can hold a
@@ -280,7 +277,8 @@ fn reader_sees_bulk_node_attributes() {
     kernel.get_node(slot).attr_write(8, 7);
     kernel.get_node(slot).attr_write(9, 0);
 
-    let view = reader.get_node(slot).attr_read_all();
+    let mut view = [0i32; NODE_ATTR];
+    reader.get_node(slot).attr_read_all(&mut view);
     assert_eq!(view[0], 72);
     assert_eq!(view[1], 90);
     assert_eq!(view[2], 960);
@@ -315,7 +313,8 @@ fn reader_attributes_view_matches_individual_reads() {
     kernel.get_node(slot).attr_write(0, 42);
     kernel.get_node(slot).attr_write(5, 99);
 
-    let view = reader.get_node(slot).attr_read_all();
+    let mut view = [0i32; NODE_ATTR];
+    reader.get_node(slot).attr_read_all(&mut view);
     assert_eq!(view[0], reader.get_node(slot).attr_read(0));
     assert_eq!(view[5], reader.get_node(slot).attr_read(5));
 }

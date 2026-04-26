@@ -2,6 +2,7 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
+use synaptic_kernel::topology::network::network_config::NetworkConfig;
 use synaptic_kernel::topology::network::network_reader::NetworkReader;
 use synaptic_kernel::topology::network::network_writer::NetworkWriter;
 
@@ -26,8 +27,19 @@ const SYNAPSE_CAPACITY: usize = 32;
 const NODE_START_OFFSET: usize = 0;
 const NODE_FL_START: usize = 50000;
 
-type TestNetwork = NetworkWriter<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-type TestNetworkReader = NetworkReader<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+fn net_config() -> NetworkConfig {
+    NetworkConfig {
+        node_capacity: NODE_CAPACITY,
+        node_meta_stride: NODE_META,
+        node_attr_stride: NODE_ATTR,
+        synapse_capacity: SYNAPSE_CAPACITY,
+        synapse_meta_stride: SYNAPSE_META,
+        synapse_attr_stride: SYNAPSE_ATTR,
+    }
+}
+
+type TestNetwork = NetworkWriter;
+type TestNetworkReader = NetworkReader;
 
 struct TestHarness {
     _mem: AtomicBuffer,
@@ -44,13 +56,12 @@ fn setup() -> TestHarness {
     let mem = create_mem(MEM_SIZE);
     let writer = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
     let reader = writer.to_reader();
-    let network = NetworkWriter::<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>::new(
+    let network = NetworkWriter::new(
         Arc::clone(&mem),
         writer.clone(),
+        net_config(),
         NODE_FL_START,
         NODE_START_OFFSET,
-        NODE_CAPACITY,
-        SYNAPSE_CAPACITY,
     );
     let synapse_chain_r = network.to_reader();
     let node_chain = network.clone();

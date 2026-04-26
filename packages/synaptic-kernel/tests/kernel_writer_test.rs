@@ -1,3 +1,5 @@
+mod common;
+
 use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
@@ -7,16 +9,11 @@ const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-type TestConsumer = EpochConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestKernel = Kernel<1, 1>;
+type TestConsumer = EpochConsumer<1, 1>;
 
-fn config() -> KernelConfig {
-    KernelConfig {
-        node_capacity: 16,
-        synapse_capacity: 32,
-        mem_metadata_size: 1,
-        tb_metadata_size: 1,
-    }
+fn config() -> KernelConfig<1, 1> {
+    common::kernel_config_1_1(16, 32, NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR)
 }
 
 fn create_writer() -> TestKernel {
@@ -313,9 +310,10 @@ fn get_node_attributes_returns_view() {
     // returns attributes via `get_node(slot).attr_read(...)` / `attr_read_all()`.
     assert_eq!(kernel.get_node(slot).attr_read(0), 42);
     assert_eq!(kernel.get_node(slot).attr_read(5), 99);
-    let snapshot = kernel.get_node(slot).attr_read_all();
-    assert_eq!(snapshot[0], 42);
-    assert_eq!(snapshot[5], 99);
+    let mut buf = [0i32; NODE_ATTR];
+    kernel.get_node(slot).attr_read_all(&mut buf);
+    assert_eq!(buf[0], 42);
+    assert_eq!(buf[5], 99);
 }
 
 #[test]
@@ -480,12 +478,14 @@ fn grow_scales_full_topology_graph() {
     kernel.publish();
 
     kernel
-        .grow(KernelConfig {
-            node_capacity: 32,
-            synapse_capacity: 64,
-            mem_metadata_size: 1,
-            tb_metadata_size: 1,
-        })
+        .grow(common::kernel_config_1_1(
+            32,
+            64,
+            NODE_META,
+            NODE_ATTR,
+            SYNAPSE_META,
+            SYNAPSE_ATTR,
+        ))
         .unwrap();
 
     // Nodes survived
@@ -518,11 +518,13 @@ fn grow_rejects_smaller_capacity() {
     // Attempting to grow into a smaller config must fail with InsufficientCapacity
     // rather than silently truncate — this is the modern replacement for the
     // `copy_from_panics_if_source_larger` invariant.
-    let result = kernel.grow(KernelConfig {
-        node_capacity: 8,
-        synapse_capacity: 16,
-        mem_metadata_size: 1,
-        tb_metadata_size: 1,
-    });
+    let result = kernel.grow(common::kernel_config_1_1(
+        8,
+        16,
+        NODE_META,
+        NODE_ATTR,
+        SYNAPSE_META,
+        SYNAPSE_ATTR,
+    ));
     assert!(matches!(result, Err(KernelError::InsufficientCapacity)));
 }

@@ -1,17 +1,20 @@
+mod common;
+
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use synaptic_kernel::epoch::Epoch;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
 use synaptic_kernel::primitives::types::AtomicBuffer;
+use synaptic_kernel::topology::network::network_config::NetworkConfig;
 
 const NODE_META: usize = 4;
 const NODE_ATTR: usize = 8;
 const SYNAPSE_META: usize = 4;
 const SYNAPSE_ATTR: usize = 8;
 
-type TestEpoch = Epoch<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestEpoch = Epoch<1, 1>;
+type TestKernel = Kernel<1, 1>;
 
 fn make_mem(size: usize) -> AtomicBuffer {
     let mut v = Vec::with_capacity(size);
@@ -25,14 +28,18 @@ fn mk_config(
     node_capacity: usize,
     synapse_capacity: usize,
     mem_metadata_size: usize,
-    tb_metadata_size: usize,
-) -> KernelConfig {
-    KernelConfig {
+    _tb_metadata_size_removed: usize,
+) -> KernelConfig<1, 1> {
+    common::kernel_config_1_1_full(
+        mem_metadata_size,
         node_capacity,
         synapse_capacity,
-        mem_metadata_size,
-        tb_metadata_size,
-    }
+        NODE_META,
+        NODE_ATTR,
+        SYNAPSE_META,
+        SYNAPSE_ATTR,
+        32768,
+    )
 }
 
 // ============ Section 1 — Construction & lifecycle ============
@@ -63,7 +70,6 @@ fn new_then_bind_on_same_mem_sees_same_capacities() {
     let mirror = bound.to_mirror();
 
     assert_eq!(mirror.mem_metadata_capacity(), config.mem_metadata_size);
-    assert_eq!(mirror.tb_metadata_capacity(), config.tb_metadata_size);
     // Fresh, nothing published: no head node.
     assert!(mirror.get_head_node().is_none());
 }
@@ -292,7 +298,6 @@ fn copy_from_migrates_chain_synapses_and_metadata_to_larger() {
     source.network.get_synapse(s23).set_meta(0, 500);
 
     source.mem_metadata.write(0, 9999);
-    source.tb_metadata.write(0, 8888);
 
     let dst_config = mk_config(8, 8, 1, 1);
     let dst_mem = make_mem(TestEpoch::calculate_size_on_mem(&dst_config));
@@ -337,9 +342,8 @@ fn copy_from_migrates_chain_synapses_and_metadata_to_larger() {
     assert_eq!(syn23.attr_read(0), 5000);
     assert_eq!(syn23.get_meta(0), 500);
 
-    // Metadata.
+    // Mem metadata (TB-side global metadata is no longer exposed on `EpochMirror`).
     assert_eq!(mirror.mem_read_meta(0), 9999);
-    assert_eq!(mirror.tb_read_meta(0), 8888);
 }
 
 #[test]
@@ -480,12 +484,21 @@ fn copy_from_panics_when_source_node_capacity_exceeds_destination() {
 
 #[test]
 fn epoch_works_with_zero_user_zones() {
-    // Zero strides: no meta or attr slots for nodes/synapses.
-    type EpochZero = Epoch<0, 0, 0, 0>;
-
-    let config = mk_config(4, 4, 1, 1);
-    let mem = make_mem(EpochZero::calculate_size_on_mem(&config));
-    let epoch = EpochZero::new(mem, config, 0);
+    // Zero strides: no meta or attr slots for nodes/synapses (`NetworkConfig`, not const generics).
+    let config = common::kernel_config_1_1_network(
+        1,
+        NetworkConfig {
+            node_capacity: 4,
+            node_meta_stride: 0,
+            node_attr_stride: 0,
+            synapse_capacity: 4,
+            synapse_meta_stride: 0,
+            synapse_attr_stride: 0,
+        },
+        32768,
+    );
+    let mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
+    let epoch = TestEpoch::new(mem, config, 0);
     let slot = epoch.network.insert_head_node(7).unwrap();
     assert!(slot > 0);
 
@@ -497,11 +510,20 @@ fn epoch_works_with_zero_user_zones() {
 
 #[test]
 fn epoch_works_with_minimal_strides() {
-    type EpochMin = Epoch<1, 1, 1, 1>;
-
-    let config = mk_config(4, 4, 1, 1);
-    let mem = make_mem(EpochMin::calculate_size_on_mem(&config));
-    let epoch = EpochMin::new(mem, config, 0);
+    let config = common::kernel_config_1_1_network(
+        1,
+        NetworkConfig {
+            node_capacity: 4,
+            node_meta_stride: 1,
+            node_attr_stride: 1,
+            synapse_capacity: 4,
+            synapse_meta_stride: 1,
+            synapse_attr_stride: 1,
+        },
+        32768,
+    );
+    let mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
+    let epoch = TestEpoch::new(mem, config, 0);
     let a = epoch.network.insert_head_node(3).unwrap();
     let b = epoch.network.insert_head_node(4).unwrap();
     let s = epoch.network.connect(a, b, 5).unwrap();

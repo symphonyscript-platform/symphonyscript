@@ -2,6 +2,7 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
+use synaptic_kernel::topology::network::network_config::NetworkConfig;
 use synaptic_kernel::topology::network::network_writer::NetworkWriter;
 
 const NODE_META: usize = 8;
@@ -25,7 +26,22 @@ const SYNAPSE_CAPACITY: usize = 32;
 const NODE_START_OFFSET: usize = 0;
 const NODE_FL_START: usize = 50000;
 
-type TestNetwork = NetworkWriter<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+fn net_config() -> NetworkConfig {
+    net_config_syn(SYNAPSE_CAPACITY)
+}
+
+fn net_config_syn(synapse_capacity: usize) -> NetworkConfig {
+    NetworkConfig {
+        node_capacity: NODE_CAPACITY,
+        node_meta_stride: NODE_META,
+        node_attr_stride: NODE_ATTR,
+        synapse_capacity,
+        synapse_meta_stride: SYNAPSE_META,
+        synapse_attr_stride: SYNAPSE_ATTR,
+    }
+}
+
+type TestNetwork = NetworkWriter;
 
 struct TestHarness {
     _mem: AtomicBuffer,
@@ -43,13 +59,12 @@ fn setup() -> TestHarness {
     let mem = create_mem(MEM_SIZE);
     let writer = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
     let reader = writer.to_reader();
-    let network = NetworkWriter::<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>::new(
+    let network = NetworkWriter::new(
         Arc::clone(&mem),
         writer.clone(),
+        net_config(),
         NODE_FL_START,
         NODE_START_OFFSET,
-        NODE_CAPACITY,
-        SYNAPSE_CAPACITY,
     );
     let node_chain = network.clone();
     let synapse_chain = network;
@@ -790,13 +805,12 @@ fn copy_from_preserves_topology_and_deep_data() {
 
     let dst_mem = create_mem(MEM_SIZE);
     let dst_tb = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
-    let dst_synapse_chain = NetworkWriter::<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>::new(
+    let dst_synapse_chain = NetworkWriter::new(
         Arc::clone(&dst_mem),
         dst_tb,
+        net_config_syn(SYNAPSE_CAPACITY * 2),
         NODE_FL_START,
         NODE_START_OFFSET,
-        NODE_CAPACITY,
-        SYNAPSE_CAPACITY * 2,
     );
 
     dst_synapse_chain.copy_from(&src_h.synapse_chain);
@@ -826,13 +840,12 @@ fn copy_from_panics_if_source_larger() {
     let dst_mem = create_mem(MEM_SIZE);
     let dst_tb = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
     // Create destination with half synapse capacity → copy_from must panic.
-    let dst_synapse_chain = NetworkWriter::<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>::new(
+    let dst_synapse_chain = NetworkWriter::new(
         dst_mem,
         dst_tb,
+        net_config_syn(SYNAPSE_CAPACITY / 2),
         NODE_FL_START,
         NODE_START_OFFSET,
-        NODE_CAPACITY,
-        SYNAPSE_CAPACITY / 2,
     );
 
     dst_synapse_chain.copy_from(&src_h.synapse_chain);

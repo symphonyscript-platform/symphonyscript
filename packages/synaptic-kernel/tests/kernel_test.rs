@@ -1,3 +1,5 @@
+mod common;
+
 use synaptic_kernel::control_plane::ControlPlane;
 use synaptic_kernel::errors::kernel_error::KernelError;
 use synaptic_kernel::epoch_consumer::EpochConsumer;
@@ -11,23 +13,25 @@ const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-type TestReader = EpochMirror<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestKernel = Kernel<1, 1>;
+type TestReader = EpochMirror<1, 1>;
 
-fn new_controller(cfg: KernelConfig) -> TestKernel {
+fn new_controller(cfg: KernelConfig<1, 1>) -> TestKernel {
     Kernel::new(cfg)
 }
 
-fn create_config(nodes: usize, synapses: usize) -> KernelConfig {
-    KernelConfig {
-        node_capacity: nodes,
-        synapse_capacity: synapses,
-        mem_metadata_size: 1,
-        tb_metadata_size: 1,
-    }
+fn create_config(nodes: usize, synapses: usize) -> KernelConfig<1, 1> {
+    common::kernel_config_1_1(
+        nodes,
+        synapses,
+        NODE_META,
+        NODE_ATTR,
+        SYNAPSE_META,
+        SYNAPSE_ATTR,
+    )
 }
 
-fn config(capacity: usize) -> KernelConfig {
+fn config(capacity: usize) -> KernelConfig<1, 1> {
     create_config(capacity, capacity)
 }
 
@@ -37,8 +41,7 @@ fn config(capacity: usize) -> KernelConfig {
 /// proceed without fighting the borrow checker.
 unsafe fn mock_consumer_reader(controller: &TestKernel) -> &'static TestReader {
     let cp = controller.get_control_plane();
-    let consumer: &'static mut EpochConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR> =
-        Box::leak(Box::new(EpochConsumer::new(cp)));
+    let consumer: &'static mut EpochConsumer<1, 1> = Box::leak(Box::new(EpochConsumer::new(cp)));
     consumer.acquire_mirror()
 }
 
@@ -732,9 +735,9 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
     // Consumer thread: continuously swap + traverse
     let consumer_thread = std::thread::spawn(move || {
         let cp_ref = unsafe {
-            &*(cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>)
+            &*(cp_addr as *const ControlPlane<1, 1>)
         };
-        let cp_arc: Arc<ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> =
+        let cp_arc: Arc<ControlPlane<1, 1>> =
             unsafe { Arc::from_raw(cp_ref) };
         let mut processor = EpochConsumer::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
@@ -802,9 +805,9 @@ fn concurrent_traversal_during_grow() {
     // Consumer thread: continuously reads while main thread grows
     let consumer_thread = std::thread::spawn(move || {
         let cp_ref = unsafe {
-            &*(cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>)
+            &*(cp_addr as *const ControlPlane<1, 1>)
         };
-        let cp_arc: Arc<ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> =
+        let cp_arc: Arc<ControlPlane<1, 1>> =
             unsafe { Arc::from_raw(cp_ref) };
         let mut processor = EpochConsumer::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
@@ -876,9 +879,9 @@ fn concurrent_attribute_reads_during_writes() {
     // Consumer thread: continuously reads attributes
     let consumer_thread = std::thread::spawn(move || {
         let cp_ref = unsafe {
-            &*(cp_addr as *const ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>)
+            &*(cp_addr as *const ControlPlane<1, 1>)
         };
-        let cp_arc: Arc<ControlPlane<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>> =
+        let cp_arc: Arc<ControlPlane<1, 1>> =
             unsafe { Arc::from_raw(cp_ref) };
         let mut processor = EpochConsumer::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);

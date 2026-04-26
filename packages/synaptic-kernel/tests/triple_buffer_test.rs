@@ -1025,20 +1025,22 @@ fn reader_read_stable_when_swap_returns_false() {
 fn writer_write_batch_read_batch_zero_offset() {
     let mem = create_mem(4096);
     let writer = TripleBufferWriter::new(mem, 0, 6);
-    writer.write_batch::<3>(0, [10, 20, 30]);
-    let out = writer.read_batch::<3>(0);
+    writer.write_batch(0, &[10, 20, 30]);
+    let mut out = [0i32; 3];
+    writer.read_batch(0, &mut out);
     assert_eq!(out, [10, 20, 30]);
 }
 
 #[test]
 fn writer_write_batch_nonzero_offset_regression() {
-    // read_batch<T>(offset) must read starting at `offset`, not at buffer start.
+    // read_batch(offset, out) must read starting at `offset`, not at buffer start.
     // Using offset 5 so the first 5 slots remain zero and read_batch at offset
     // 0 can distinguish "bug: reads from start" from "correct: reads at offset".
     let mem = create_mem(4096);
     let writer = TripleBufferWriter::new(mem, 0, 10);
-    writer.write_batch::<3>(5, [111, 222, 333]);
-    let out = writer.read_batch::<3>(5);
+    writer.write_batch(5, &[111, 222, 333]);
+    let mut out = [0i32; 3];
+    writer.read_batch(5, &mut out);
     assert_eq!(out, [111, 222, 333]);
     // The batch values must NOT leak to offsets outside the batch.
     assert_eq!(writer.read(0), 0);
@@ -1047,7 +1049,9 @@ fn writer_write_batch_nonzero_offset_regression() {
     assert_eq!(writer.read(9), 0);
     // If read_batch mistakenly ignored the offset, this would return
     // [111, 222, 333] instead of the (correct) [0, 0, 0].
-    assert_eq!(writer.read_batch::<3>(0), [0, 0, 0]);
+    let mut z = [0i32; 3];
+    writer.read_batch(0, &mut z);
+    assert_eq!(z, [0, 0, 0]);
 }
 
 #[test]
@@ -1068,12 +1072,10 @@ fn writer_write_batch_offset_matrix() {
             offset as i32 + 2,
             offset as i32 + 3,
         ];
-        writer.write_batch::<4>(offset, batch);
-        assert_eq!(
-            writer.read_batch::<4>(offset),
-            batch,
-            "roundtrip failed at offset {offset}"
-        );
+        writer.write_batch(offset, &batch);
+        let mut rb = [0i32; 4];
+        writer.read_batch(offset, &mut rb);
+        assert_eq!(rb, batch, "roundtrip failed at offset {offset}");
         for i in 0..capacity {
             if i >= offset && i < offset + t {
                 continue;
@@ -1093,8 +1095,10 @@ fn writer_write_batch_fills_exact_remainder() {
     let mem = create_mem(4096);
     let capacity = 10;
     let writer = TripleBufferWriter::new(mem, 0, capacity);
-    writer.write_batch::<4>(capacity - 4, [1, 2, 3, 4]);
-    assert_eq!(writer.read_batch::<4>(capacity - 4), [1, 2, 3, 4]);
+    writer.write_batch(capacity - 4, &[1, 2, 3, 4]);
+    let mut out = [0i32; 4];
+    writer.read_batch(capacity - 4, &mut out);
+    assert_eq!(out, [1, 2, 3, 4]);
     assert_eq!(writer.read(capacity - 1), 4);
 }
 
@@ -1102,8 +1106,10 @@ fn writer_write_batch_fills_exact_remainder() {
 fn writer_write_batch_t_one() {
     let mem = create_mem(4096);
     let writer = TripleBufferWriter::new(mem, 0, 5);
-    writer.write_batch::<1>(2, [99]);
-    assert_eq!(writer.read_batch::<1>(2), [99]);
+    writer.write_batch(2, &[99]);
+    let mut one = [0i32; 1];
+    writer.read_batch(2, &mut one);
+    assert_eq!(one, [99]);
     assert_eq!(writer.read(2), 99);
 }
 
@@ -1112,15 +1118,17 @@ fn writer_write_batch_entire_buffer() {
     let mem = create_mem(4096);
     let writer = TripleBufferWriter::new(mem, 0, 8);
     let data = [10, 20, 30, 40, 50, 60, 70, 80];
-    writer.write_batch::<8>(0, data);
-    assert_eq!(writer.read_batch::<8>(0), data);
+    writer.write_batch(0, &data);
+    let mut out = [0i32; 8];
+    writer.read_batch(0, &mut out);
+    assert_eq!(out, data);
 }
 
 #[test]
 fn writer_write_batch_then_individual_read() {
     let mem = create_mem(4096);
     let writer = TripleBufferWriter::new(mem, 0, 8);
-    writer.write_batch::<4>(2, [7, 8, 9, 10]);
+    writer.write_batch(2, &[7, 8, 9, 10]);
     assert_eq!(writer.read(2), 7);
     assert_eq!(writer.read(3), 8);
     assert_eq!(writer.read(4), 9);
@@ -1134,7 +1142,9 @@ fn writer_individual_write_then_read_batch() {
     writer.write(3, 100);
     writer.write(4, 200);
     writer.write(5, 300);
-    assert_eq!(writer.read_batch::<3>(3), [100, 200, 300]);
+    let mut out = [0i32; 3];
+    writer.read_batch(3, &mut out);
+    assert_eq!(out, [100, 200, 300]);
 }
 
 // ============================================================
@@ -1143,16 +1153,20 @@ fn writer_individual_write_then_read_batch() {
 
 #[test]
 fn reader_read_batch_nonzero_offset_regression() {
-    // read_batch<T>(offset) must read starting at `offset`, not at buffer start.
+    // read_batch(offset, out) must read starting at `offset`, not at buffer start.
     let mem = create_mem(4096);
     let writer = TripleBufferWriter::new(mem, 0, 10);
     let reader = writer.to_reader();
-    writer.write_batch::<3>(4, [500, 600, 700]);
+    writer.write_batch(4, &[500, 600, 700]);
     writer.publish();
     assert!(reader.swap());
-    assert_eq!(reader.read_batch::<3>(4), [500, 600, 700]);
+    let mut out = [0i32; 3];
+    reader.read_batch(4, &mut out);
+    assert_eq!(out, [500, 600, 700]);
     // A batch read from offset 0 must NOT return the values written at offset 4.
-    assert_eq!(reader.read_batch::<3>(0), [0, 0, 0]);
+    let mut z = [0i32; 3];
+    reader.read_batch(0, &mut z);
+    assert_eq!(z, [0, 0, 0]);
 }
 
 #[test]
@@ -1167,14 +1181,12 @@ fn reader_read_batch_offset_matrix() {
         for i in 0..capacity {
             writer.write(i, 0);
         }
-        writer.write_batch::<4>(offset, [1, 2, 3, 4]);
+        writer.write_batch(offset, &[1, 2, 3, 4]);
         writer.publish();
         assert!(reader.swap(), "no new data for offset {offset}");
-        assert_eq!(
-            reader.read_batch::<4>(offset),
-            [1, 2, 3, 4],
-            "mismatch at offset {offset}"
-        );
+        let mut rb = [0i32; 4];
+        reader.read_batch(offset, &mut rb);
+        assert_eq!(rb, [1, 2, 3, 4], "mismatch at offset {offset}");
     }
 }
 
@@ -1184,10 +1196,12 @@ fn reader_read_batch_fills_exact_remainder() {
     let capacity = 10;
     let writer = TripleBufferWriter::new(mem, 0, capacity);
     let reader = writer.to_reader();
-    writer.write_batch::<4>(capacity - 4, [21, 22, 23, 24]);
+    writer.write_batch(capacity - 4, &[21, 22, 23, 24]);
     writer.publish();
     assert!(reader.swap());
-    assert_eq!(reader.read_batch::<4>(capacity - 4), [21, 22, 23, 24]);
+    let mut out = [0i32; 4];
+    reader.read_batch(capacity - 4, &mut out);
+    assert_eq!(out, [21, 22, 23, 24]);
 }
 
 // ============================================================

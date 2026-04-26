@@ -18,7 +18,7 @@ fn create_mem(size: usize) -> AtomicBuffer {
 fn new_creates_view() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 16, 0);
     assert_eq!(view.read(0), 0);
 }
 
@@ -26,7 +26,7 @@ fn new_creates_view() {
 fn new_stride_1() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 1> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 1, 0);
     assert_eq!(view.tb_start_offset(), 0);
     assert_eq!(view.tb_end_offset(), 1);
 }
@@ -35,7 +35,7 @@ fn new_stride_1() {
 fn new_stride_8() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 8> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 8, 0);
     assert_eq!(view.tb_start_offset(), 0);
     assert_eq!(view.tb_end_offset(), 8);
 }
@@ -44,7 +44,7 @@ fn new_stride_8() {
 fn new_stride_16() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 16, 0);
     assert_eq!(view.tb_start_offset(), 0);
     assert_eq!(view.tb_end_offset(), 16);
 }
@@ -53,7 +53,7 @@ fn new_stride_16() {
 fn new_stride_256_fits_capacity_exactly() {
     let mem = create_mem(4096);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 256> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 256, 0);
     assert_eq!(view.tb_start_offset(), 0);
     assert_eq!(view.tb_end_offset(), 256);
 }
@@ -62,7 +62,7 @@ fn new_stride_256_fits_capacity_exactly() {
 fn new_at_nonzero_start_offset() {
     let mem = create_mem(4096);
     let writer = TripleBufferWriter::new(mem, 0, 512);
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 100);
+    let view = TbZoneWriter::new(&writer, 16, 100);
     assert_eq!(view.tb_start_offset(), 100);
     assert_eq!(view.tb_end_offset(), 116);
 }
@@ -72,9 +72,9 @@ fn tb_start_offset_accessor_various_offsets() {
     let mem = create_mem(4096);
     let writer = TripleBufferWriter::new(mem, 0, 512);
 
-    let a: TbZoneWriter<'_, 8> = TbZoneWriter::new(&writer, 0);
-    let b: TbZoneWriter<'_, 8> = TbZoneWriter::new(&writer, 7);
-    let c: TbZoneWriter<'_, 8> = TbZoneWriter::new(&writer, 128);
+    let a = TbZoneWriter::new(&writer, 8, 0);
+    let b = TbZoneWriter::new(&writer, 8, 7);
+    let c = TbZoneWriter::new(&writer, 8, 128);
 
     assert_eq!(a.tb_start_offset(), 0);
     assert_eq!(b.tb_start_offset(), 7);
@@ -86,16 +86,16 @@ fn tb_end_equals_start_plus_stride() {
     let mem = create_mem(4096);
     let writer = TripleBufferWriter::new(mem, 0, 512);
 
-    let v1: TbZoneWriter<'_, 1> = TbZoneWriter::new(&writer, 64);
+    let v1 = TbZoneWriter::new(&writer, 1, 64);
     assert_eq!(v1.tb_end_offset(), v1.tb_start_offset() + 1);
 
-    let v8: TbZoneWriter<'_, 8> = TbZoneWriter::new(&writer, 64);
+    let v8 = TbZoneWriter::new(&writer, 8, 64);
     assert_eq!(v8.tb_end_offset(), v8.tb_start_offset() + 8);
 
-    let v16: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 64);
+    let v16 = TbZoneWriter::new(&writer, 16, 64);
     assert_eq!(v16.tb_end_offset(), v16.tb_start_offset() + 16);
 
-    let v256: TbZoneWriter<'_, 256> = TbZoneWriter::new(&writer, 0);
+    let v256 = TbZoneWriter::new(&writer, 256, 0);
     assert_eq!(v256.tb_end_offset(), v256.tb_start_offset() + 256);
 }
 
@@ -105,7 +105,7 @@ fn tb_end_equals_start_plus_stride() {
 fn panics_if_out_of_bounds() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 16);
-    let _view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 8);
+    let _view = TbZoneWriter::new(&writer, 16, 8);
 }
 
 #[cfg(debug_assertions)]
@@ -114,7 +114,7 @@ fn panics_if_out_of_bounds() {
 fn panics_if_start_offset_equals_capacity() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 16);
-    let _view: TbZoneWriter<'_, 1> = TbZoneWriter::new(&writer, 16);
+    let _view = TbZoneWriter::new(&writer, 1, 16);
 }
 
 #[cfg(debug_assertions)]
@@ -123,7 +123,7 @@ fn panics_if_start_offset_equals_capacity() {
 fn panics_if_end_offset_exceeds_capacity_by_one() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 32);
-    let _view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 17);
+    let _view = TbZoneWriter::new(&writer, 16, 17);
 }
 
 // ============ Read / Write ============
@@ -132,7 +132,7 @@ fn panics_if_end_offset_exceeds_capacity_by_one() {
 fn write_then_read_same_offset() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 16, 0);
 
     view.write(0, 42);
     assert_eq!(view.read(0), 42);
@@ -142,7 +142,7 @@ fn write_then_read_same_offset() {
 fn write_all_offsets_then_read_back() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 16, 0);
 
     for i in 0..16 {
         view.write(i, (i as i32) * 10);
@@ -157,7 +157,7 @@ fn write_all_offsets_then_read_back() {
 fn multiple_writes_to_same_offset_last_wins() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 16, 0);
 
     view.write(5, 1);
     view.write(5, 2);
@@ -171,8 +171,8 @@ fn writes_dont_interfere_across_disjoint_struct_writers() {
     let mem = create_mem(4096);
     let writer = TripleBufferWriter::new(mem, 0, 512);
 
-    let view_a: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 0);
-    let view_b: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 64);
+    let view_a = TbZoneWriter::new(&writer, 16, 0);
+    let view_b = TbZoneWriter::new(&writer, 16, 64);
 
     for i in 0..16 {
         view_a.write(i, 100 + i as i32);
@@ -189,7 +189,7 @@ fn writes_dont_interfere_across_disjoint_struct_writers() {
 fn reads_on_fresh_zeroed_slot_return_zero() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 16, 0);
 
     for i in 0..16 {
         assert_eq!(view.read(i), 0);
@@ -200,7 +200,7 @@ fn reads_on_fresh_zeroed_slot_return_zero() {
 fn write_supports_negative_values() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 16, 0);
 
     view.write(0, i32::MIN);
     view.write(1, -1);
@@ -217,7 +217,7 @@ fn write_supports_negative_values() {
 fn panics_on_read_offset_equal_to_stride() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 16, 0);
     let _ = view.read(16);
 }
 
@@ -227,7 +227,7 @@ fn panics_on_read_offset_equal_to_stride() {
 fn panics_on_write_offset_equal_to_stride() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 16, 0);
     view.write(16, 0);
 }
 
@@ -237,21 +237,23 @@ fn panics_on_write_offset_equal_to_stride() {
 fn write_all_then_read_all_roundtrip() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 8> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 8, 0);
 
     let data: [i32; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
-    view.write_all(data);
-    assert_eq!(view.read_all(), data);
+    view.write_all(&data);
+    let mut out = [0i32; 8];
+    view.read_all(&mut out);
+    assert_eq!(out, data);
 }
 
 #[test]
 fn write_all_then_individual_reads() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 8> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 8, 0);
 
     let data: [i32; 8] = [10, 20, 30, 40, 50, 60, 70, 80];
-    view.write_all(data);
+    view.write_all(&data);
 
     for i in 0..8 {
         assert_eq!(view.read(i), data[i]);
@@ -262,23 +264,27 @@ fn write_all_then_individual_reads() {
 fn individual_writes_then_read_all() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 8> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 8, 0);
 
     let expected: [i32; 8] = [11, 22, 33, 44, 55, 66, 77, 88];
     for i in 0..8 {
         view.write(i, expected[i]);
     }
 
-    assert_eq!(view.read_all(), expected);
+    let mut out = [0i32; 8];
+    view.read_all(&mut out);
+    assert_eq!(out, expected);
 }
 
 #[test]
 fn read_all_on_fresh_slot_returns_zeros() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 16, 0);
 
-    assert_eq!(view.read_all(), [0i32; 16]);
+    let mut out = [0i32; 16];
+    view.read_all(&mut out);
+    assert_eq!(out, [0i32; 16]);
 }
 
 // ============ Interaction with TripleBufferWriter ============
@@ -287,7 +293,7 @@ fn read_all_on_fresh_slot_returns_zeros() {
 fn write_via_struct_visible_to_underlying_tb_writer() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 32);
+    let view = TbZoneWriter::new(&writer, 16, 32);
 
     view.write(0, 123);
     view.write(5, 456);
@@ -300,7 +306,7 @@ fn write_via_struct_visible_to_underlying_tb_writer() {
 fn write_via_tb_writer_visible_to_struct_writer() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 32);
+    let view = TbZoneWriter::new(&writer, 16, 32);
 
     writer.write(32, 789);
     writer.write(47, 111);
@@ -314,9 +320,11 @@ fn struct_writer_changes_observable_by_reader_after_publish_and_swap() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
     let reader = writer.to_reader();
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 32);
+    let view = TbZoneWriter::new(&writer, 16, 32);
 
-    view.write_all([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+    view.write_all(&[
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+    ]);
     writer.publish();
     assert!(reader.swap());
 
@@ -330,7 +338,7 @@ fn struct_writer_without_publish_invisible_to_reader() {
     let mem = create_mem(1024);
     let writer = TripleBufferWriter::new(mem, 0, 256);
     let reader = writer.to_reader();
-    let view: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 0);
+    let view = TbZoneWriter::new(&writer, 16, 0);
 
     view.write(0, 42);
 
@@ -345,17 +353,23 @@ fn multiple_struct_writers_independent_regions() {
     let mem = create_mem(4096);
     let writer = TripleBufferWriter::new(mem, 0, 512);
 
-    let a: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 0);
-    let b: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 16);
-    let c: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 32);
+    let a = TbZoneWriter::new(&writer, 16, 0);
+    let b = TbZoneWriter::new(&writer, 16, 16);
+    let c = TbZoneWriter::new(&writer, 16, 32);
 
-    a.write_all([1i32; 16]);
-    b.write_all([2i32; 16]);
-    c.write_all([3i32; 16]);
+    a.write_all(&[1i32; 16]);
+    b.write_all(&[2i32; 16]);
+    c.write_all(&[3i32; 16]);
 
-    assert_eq!(a.read_all(), [1i32; 16]);
-    assert_eq!(b.read_all(), [2i32; 16]);
-    assert_eq!(c.read_all(), [3i32; 16]);
+    let mut ra = [0i32; 16];
+    let mut rb = [0i32; 16];
+    let mut rc = [0i32; 16];
+    a.read_all(&mut ra);
+    b.read_all(&mut rb);
+    c.read_all(&mut rc);
+    assert_eq!(ra, [1i32; 16]);
+    assert_eq!(rb, [2i32; 16]);
+    assert_eq!(rc, [3i32; 16]);
 }
 
 #[test]
@@ -363,15 +377,21 @@ fn multiple_struct_writers_different_strides_independent() {
     let mem = create_mem(4096);
     let writer = TripleBufferWriter::new(mem, 0, 512);
 
-    let small: TbZoneWriter<'_, 4> = TbZoneWriter::new(&writer, 0);
-    let medium: TbZoneWriter<'_, 16> = TbZoneWriter::new(&writer, 4);
-    let large: TbZoneWriter<'_, 64> = TbZoneWriter::new(&writer, 20);
+    let small = TbZoneWriter::new(&writer, 4, 0);
+    let medium = TbZoneWriter::new(&writer, 16, 4);
+    let large = TbZoneWriter::new(&writer, 64, 20);
 
-    small.write_all([7, 8, 9, 10]);
-    medium.write_all([100i32; 16]);
-    large.write_all([-1i32; 64]);
+    small.write_all(&[7, 8, 9, 10]);
+    medium.write_all(&[100i32; 16]);
+    large.write_all(&[-1i32; 64]);
 
-    assert_eq!(small.read_all(), [7, 8, 9, 10]);
-    assert_eq!(medium.read_all(), [100i32; 16]);
-    assert_eq!(large.read_all(), [-1i32; 64]);
+    let mut sa = [0i32; 4];
+    let mut me = [0i32; 16];
+    let mut la = [0i32; 64];
+    small.read_all(&mut sa);
+    medium.read_all(&mut me);
+    large.read_all(&mut la);
+    assert_eq!(sa, [7, 8, 9, 10]);
+    assert_eq!(me, [100i32; 16]);
+    assert_eq!(la, [-1i32; 64]);
 }

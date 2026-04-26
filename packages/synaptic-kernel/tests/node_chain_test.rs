@@ -2,6 +2,7 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
+use synaptic_kernel::topology::node::node_chain_config::NodeChainConfig;
 use synaptic_kernel::topology::node::node_chain_reader::NodeChainReader;
 use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
 
@@ -28,20 +29,24 @@ struct TestHarness {
     _mem: AtomicBuffer,
     writer: synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter,
     reader: synaptic_kernel::primitives::triple_buffer_reader::TripleBufferReader,
-    chain: NodeChainWriter<NODE_META, NODE_ATTR>,
-    chain_r: NodeChainReader<NODE_META, NODE_ATTR>,
+    chain: NodeChainWriter,
+    chain_r: NodeChainReader,
 }
 
 fn setup() -> TestHarness {
     let mem = create_mem(MEM_SIZE);
     let writer = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
     let reader = writer.to_reader();
-    let chain = NodeChainWriter::<NODE_META, NODE_ATTR>::new(
+    let chain = NodeChainWriter::new(
         Arc::clone(&mem),
         writer.clone(),
+        NodeChainConfig {
+            meta_stride: NODE_META,
+            attr_stride: NODE_ATTR,
+            capacity: CAPACITY,
+        },
         FL_START,
         NODE_START_OFFSET,
-        CAPACITY,
     );
     let chain_r = chain.to_reader();
 
@@ -54,7 +59,7 @@ fn setup() -> TestHarness {
     }
 }
 
-fn insert_head_with_tick(chain: &NodeChainWriter<NODE_META, NODE_ATTR>, kind: i32, tick: i32) -> usize {
+fn insert_head_with_tick(chain: &NodeChainWriter, kind: i32, tick: i32) -> usize {
     let slot = chain.insert_head_node(kind).unwrap();
     chain.get_node(slot).set_meta(0, tick);
     slot
@@ -609,7 +614,17 @@ fn copy_from_preserves_topology_and_deep_data() {
     
     let dst_mem = create_mem(MEM_SIZE);
     let dst_tb = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
-    let dst = NodeChainWriter::<NODE_META, NODE_ATTR>::new(Arc::clone(&dst_mem), dst_tb, FL_START, NODE_START_OFFSET, CAPACITY * 2);
+    let dst = NodeChainWriter::new(
+        Arc::clone(&dst_mem),
+        dst_tb,
+        NodeChainConfig {
+            meta_stride: NODE_META,
+            attr_stride: NODE_ATTR,
+            capacity: CAPACITY * 2,
+        },
+        FL_START,
+        NODE_START_OFFSET,
+    );
     
     dst.copy_from(&src);
     
@@ -636,11 +651,31 @@ fn copy_from_preserves_topology_and_deep_data() {
 fn copy_from_panics_if_source_larger() {
     let src_mem = create_mem(MEM_SIZE);
     let src_tb = TripleBufferWriter::new(Arc::clone(&src_mem), TB_START, TB_BUF_CAP);
-    let src = NodeChainWriter::<NODE_META, NODE_ATTR>::new(src_mem, src_tb, FL_START, NODE_START_OFFSET, CAPACITY * 2);
+    let src = NodeChainWriter::new(
+        src_mem,
+        src_tb,
+        NodeChainConfig {
+            meta_stride: NODE_META,
+            attr_stride: NODE_ATTR,
+            capacity: CAPACITY * 2,
+        },
+        FL_START,
+        NODE_START_OFFSET,
+    );
     
     let dst_mem = create_mem(MEM_SIZE);
     let dst_tb = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
-    let dst = NodeChainWriter::<NODE_META, NODE_ATTR>::new(dst_mem, dst_tb, FL_START, NODE_START_OFFSET, CAPACITY);
+    let dst = NodeChainWriter::new(
+        dst_mem,
+        dst_tb,
+        NodeChainConfig {
+            meta_stride: NODE_META,
+            attr_stride: NODE_ATTR,
+            capacity: CAPACITY,
+        },
+        FL_START,
+        NODE_START_OFFSET,
+    );
     
     dst.copy_from(&src);
 }

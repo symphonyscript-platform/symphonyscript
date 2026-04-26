@@ -3,6 +3,7 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
+use synaptic_kernel::topology::network::network_config::NetworkConfig;
 use synaptic_kernel::topology::network::network_writer::NetworkWriter;
 
 const NODE_META: usize = 8;
@@ -17,7 +18,18 @@ const SYNAPSE_CAPACITY: usize = 64;
 const NODE_START_OFFSET: usize = 0;
 const NODE_FL_START: usize = 80000;
 
-type TestNetwork = NetworkWriter<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+fn net_config() -> NetworkConfig {
+    NetworkConfig {
+        node_capacity: NODE_CAPACITY,
+        node_meta_stride: NODE_META,
+        node_attr_stride: NODE_ATTR,
+        synapse_capacity: SYNAPSE_CAPACITY,
+        synapse_meta_stride: SYNAPSE_META,
+        synapse_attr_stride: SYNAPSE_ATTR,
+    }
+}
+
+type TestNetwork = NetworkWriter;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     let mut vec = Vec::with_capacity(size);
@@ -36,13 +48,12 @@ struct TestHarness {
 fn setup() -> TestHarness {
     let mem = create_mem(MEM_SIZE);
     let writer = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
-    let network = NetworkWriter::<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>::new(
+    let network = NetworkWriter::new(
         Arc::clone(&mem),
         writer.clone(),
+        net_config(),
         NODE_FL_START,
         NODE_START_OFFSET,
-        NODE_CAPACITY,
-        SYNAPSE_CAPACITY,
     );
     let node_chain = network.clone();
     let synapse_chain = network;

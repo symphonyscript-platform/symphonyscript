@@ -1,3 +1,5 @@
+mod common;
+
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
 
@@ -6,15 +8,10 @@ const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestKernel = Kernel<1, 1>;
 
-fn config() -> KernelConfig {
-    KernelConfig {
-        node_capacity: 16,
-        synapse_capacity: 32,
-        mem_metadata_size: 1,
-        tb_metadata_size: 1,
-    }
+fn config() -> KernelConfig<1, 1> {
+    common::kernel_config_1_1(16, 32, NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR)
 }
 
 fn create_writer() -> TestKernel {

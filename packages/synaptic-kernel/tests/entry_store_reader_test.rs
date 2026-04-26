@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
+use synaptic_kernel::primitives::entry_store_config::EntryStoreConfig;
 use synaptic_kernel::primitives::entry_store_reader::EntryStoreReader;
 use synaptic_kernel::primitives::entry_store_writer::EntryStoreWriter;
 use synaptic_kernel::primitives::slot_allocator::SlotAllocator;
@@ -29,12 +30,17 @@ fn make_tb(mem: &AtomicBuffer) -> TripleBufferWriter {
 fn to_reader_produces_matching_reader() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = EntryStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 4,
+        },
         DEFAULT_MEM_START_OFFSET,
         0,
-        4,
     );
 
     let reader = store.to_reader();
@@ -48,20 +54,20 @@ fn to_reader_produces_matching_reader() {
 #[test]
 fn calculate_size_matches_writer() {
     assert_eq!(
-        EntryStoreReader::<8, 0, 16>::calculate_size_on_mem(16),
-        EntryStoreWriter::<8, 0, 16>::calculate_size_on_mem(16),
+        EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 16 }),
+        EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 16 }),
     );
     assert_eq!(
-        EntryStoreReader::<8, 0, 16>::calculate_size_on_tb(16),
-        EntryStoreWriter::<8, 0, 16>::calculate_size_on_tb(16),
+        EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 16 }),
+        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 16 }),
     );
     assert_eq!(
-        EntryStoreReader::<4, 0, 32>::calculate_size_on_mem(64),
-        EntryStoreWriter::<4, 0, 32>::calculate_size_on_mem(64),
+        EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 4, meta_stride: 0, attr_stride: 32, capacity: 64 }),
+        EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig { core_stride: 4, meta_stride: 0, attr_stride: 32, capacity: 64 }),
     );
     assert_eq!(
-        EntryStoreReader::<4, 0, 32>::calculate_size_on_tb(64),
-        EntryStoreWriter::<4, 0, 32>::calculate_size_on_tb(64),
+        EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 4, meta_stride: 0, attr_stride: 32, capacity: 64 }),
+        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 4, meta_stride: 0, attr_stride: 32, capacity: 64 }),
     );
 }
 
@@ -75,23 +81,30 @@ fn struct_read_after_publish_and_swap() {
     // but the reader buffer id lives in shared mem, so an external swap()
     // advances the shared reader buffer that EntryStoreReader reads from.
     let tb_reader = tb.to_reader();
-    let store = EntryStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 4,
+        },
         DEFAULT_MEM_START_OFFSET,
         0,
-        4,
     );
 
     let s = store.insert().unwrap();
     let data = [11, 22, 33, 44, 55, 66, 77, 88];
-    store.get(s).core_write_all(data);
+    store.get(s).core_write_all(&data);
 
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
-    assert_eq!(reader.get(s).core_read_all(), data);
+    let mut cr = [0i32; 8];
+    reader.get(s).core_read_all(&mut cr);
+    assert_eq!(cr, data);
     for (i, expected) in data.iter().enumerate() {
         assert_eq!(reader.get(s).core_read(i), *expected);
     }
@@ -102,25 +115,34 @@ fn struct_reads_isolated_per_slot_on_reader_side() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let tb_reader = tb.to_reader();
-    let store = EntryStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 4,
+        },
         DEFAULT_MEM_START_OFFSET,
         0,
-        4,
     );
 
     let s1 = store.insert().unwrap();
     let s2 = store.insert().unwrap();
-    store.get(s1).core_write_all([1, 1, 1, 1, 1, 1, 1, 1]);
-    store.get(s2).core_write_all([2, 2, 2, 2, 2, 2, 2, 2]);
+    store.get(s1).core_write_all(&[1, 1, 1, 1, 1, 1, 1, 1]);
+    store.get(s2).core_write_all(&[2, 2, 2, 2, 2, 2, 2, 2]);
 
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
-    assert_eq!(reader.get(s1).core_read_all(), [1; 8]);
-    assert_eq!(reader.get(s2).core_read_all(), [2; 8]);
+    let mut b1 = [0i32; 8];
+    let mut b2 = [0i32; 8];
+    reader.get(s1).core_read_all(&mut b1);
+    reader.get(s2).core_read_all(&mut b2);
+    assert_eq!(b1, [1; 8]);
+    assert_eq!(b2, [2; 8]);
 }
 
 #[test]
@@ -128,16 +150,21 @@ fn struct_reader_handle_from_get_struct() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let tb_reader = tb.to_reader();
-    let store = EntryStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 4,
+        },
         DEFAULT_MEM_START_OFFSET,
         0,
-        4,
     );
 
     let s = store.insert().unwrap();
-    store.get(s).core_write_all([100, 200, 300, 400, 500, 600, 700, 800]);
+    store.get(s).core_write_all(&[100, 200, 300, 400, 500, 600, 700, 800]);
     tb.publish();
     assert!(tb_reader.swap());
 
@@ -146,7 +173,9 @@ fn struct_reader_handle_from_get_struct() {
     assert_eq!(handle.core_read(0), 100);
     assert_eq!(handle.core_read(3), 400);
     assert_eq!(handle.core_read(7), 800);
-    assert_eq!(handle.core_read_all(), [100, 200, 300, 400, 500, 600, 700, 800]);
+    let mut h = [0i32; 8];
+    handle.core_read_all(&mut h);
+    assert_eq!(h, [100, 200, 300, 400, 500, 600, 700, 800]);
 }
 
 // ============ Attribute plane read (instantly visible) ============
@@ -155,12 +184,17 @@ fn struct_reader_handle_from_get_struct() {
 fn attr_read_visible_without_publish() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = EntryStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 4,
+        },
         DEFAULT_MEM_START_OFFSET,
         0,
-        4,
     );
 
     let s = store.insert().unwrap();
@@ -177,12 +211,17 @@ fn attr_read_visible_without_publish() {
 fn attr_read_all_visible_without_publish() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = EntryStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 4,
+        },
         DEFAULT_MEM_START_OFFSET,
         0,
-        4,
     );
 
     let s = store.insert().unwrap();
@@ -190,10 +229,12 @@ fn attr_read_all_visible_without_publish() {
     for i in 0..16 {
         data[i] = (i as i32) * 13 - 7;
     }
-    store.get(s).attr_write_all(data);
+    store.get(s).attr_write_all(&data);
 
     let reader = store.to_reader();
-    assert_eq!(reader.get(s).attr_read_all(), data);
+    let mut ar = [0i32; 16];
+    reader.get(s).attr_read_all(&mut ar);
+    assert_eq!(ar, data);
 }
 
 // ============ Multiple readers share state ============
@@ -203,12 +244,17 @@ fn multiple_readers_share_underlying_state() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let tb_reader = tb.to_reader();
-    let store = EntryStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 4,
+        },
         DEFAULT_MEM_START_OFFSET,
         0,
-        4,
     );
 
     let s = store.insert().unwrap();
@@ -239,12 +285,17 @@ fn reader_roundtrip_with_1_1_1_config() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let tb_reader = tb.to_reader();
-    let store = EntryStoreWriter::<1, 0, 1>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride: 1,
+            meta_stride: 0,
+            attr_stride: 1,
+            capacity: 1,
+        },
         DEFAULT_MEM_START_OFFSET,
         0,
-        1,
     );
 
     let s = store.insert().unwrap();
@@ -264,12 +315,17 @@ fn reader_offsets_for_nonzero_start_offsets() {
     let tb = make_tb(&mem);
     let mem_start = DEFAULT_MEM_START_OFFSET + 128;
     let tb_start = 64;
-    let store = EntryStoreWriter::<8, 0, 16>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 4,
+        },
         mem_start,
         tb_start,
-        4,
     );
     let reader = store.to_reader();
 
@@ -277,11 +333,11 @@ fn reader_offsets_for_nonzero_start_offsets() {
     assert_eq!(reader.tb_start_offset(), tb_start);
     assert_eq!(
         reader.tb_end_offset() - reader.tb_start_offset(),
-        EntryStoreReader::<8, 0, 16>::calculate_size_on_tb(4)
+        EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 4 })
     );
     assert_eq!(
         reader.mem_end_offset() - reader.mem_start_offset(),
-        EntryStoreReader::<8, 0, 16>::calculate_size_on_mem(4)
+        EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 4 })
     );
 }
 
@@ -301,12 +357,17 @@ fn reader_struct_read_sees_value_written_via_tb_at_expected_offset() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let tb_reader = tb.to_reader();
-    let store = EntryStoreWriter::<S, 0, 16>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride: S,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 4,
+        },
         DEFAULT_MEM_START_OFFSET,
         0,
-        4,
     );
 
     let _s1 = store.insert().unwrap();
@@ -334,12 +395,17 @@ fn reader_struct_reads_distinct_slots_at_distinct_tb_offsets() {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let tb_reader = tb.to_reader();
-    let store = EntryStoreWriter::<S, 0, 16>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride: S,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 4,
+        },
         DEFAULT_MEM_START_OFFSET,
         0,
-        4,
     );
 
     let s1 = store.insert().unwrap();
@@ -373,12 +439,17 @@ fn reader_attr_read_sees_value_written_at_expected_mem_offset() {
     const CAP: usize = 4;
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = EntryStoreWriter::<8, 0, A>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: A,
+            capacity: CAP,
+        },
         DEFAULT_MEM_START_OFFSET,
         0,
-        CAP,
     );
 
     let _s1 = store.insert().unwrap();
@@ -403,12 +474,17 @@ fn reader_attr_reads_distinct_slots_at_distinct_mem_offsets() {
     const CAP: usize = 4;
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = EntryStoreWriter::<8, 0, A>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: A,
+            capacity: CAP,
+        },
         DEFAULT_MEM_START_OFFSET,
         0,
-        CAP,
     );
 
     let s1 = store.insert().unwrap();
@@ -440,12 +516,17 @@ fn reader_layout_sizes_match_writer_layout() {
     const CAP: usize = 4;
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = EntryStoreWriter::<S, 0, A>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride: S,
+            meta_stride: 0,
+            attr_stride: A,
+            capacity: CAP,
+        },
         DEFAULT_MEM_START_OFFSET,
         0,
-        CAP,
     );
     let reader = store.to_reader();
 
@@ -473,17 +554,25 @@ fn reader_layout_sizes_match_writer_layout() {
 
 /// Local helper for the META_STRIDE > 0 section. The existing reader tests
 /// construct stores inline; this helper keeps the new tests compact.
-fn make_store_cma<const C: usize, const M: usize, const A: usize>(
+fn make_store_cma(
+    core_stride: usize,
+    meta_stride: usize,
+    attr_stride: usize,
     capacity: usize,
-) -> (AtomicBuffer, TripleBufferWriter, EntryStoreWriter<C, M, A>) {
+) -> (AtomicBuffer, TripleBufferWriter, EntryStoreWriter) {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store = EntryStoreWriter::<C, M, A>::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
+        EntryStoreConfig {
+            core_stride,
+            meta_stride,
+            attr_stride,
+            capacity,
+        },
         DEFAULT_MEM_START_OFFSET,
         0,
-        capacity,
     );
     (mem, tb, store)
 }
@@ -492,32 +581,32 @@ fn make_store_cma<const C: usize, const M: usize, const A: usize>(
 
 #[test]
 fn meta_reader_calculate_size_on_tb_is_capacity_times_core_plus_meta() {
-    assert_eq!(EntryStoreReader::<4, 4, 16>::calculate_size_on_tb(4), 4 * (4 + 4));
-    assert_eq!(EntryStoreReader::<8, 16, 16>::calculate_size_on_tb(4), 4 * (8 + 16));
-    assert_eq!(EntryStoreReader::<1, 1, 1>::calculate_size_on_tb(1), 1 * (1 + 1));
-    assert_eq!(EntryStoreReader::<16, 0, 8>::calculate_size_on_tb(256), 256 * (16 + 0));
-    assert_eq!(EntryStoreReader::<64, 64, 16>::calculate_size_on_tb(32), 32 * (64 + 64));
+    assert_eq!(EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 4, meta_stride: 4, attr_stride: 16, capacity: 4 }), 4 * (4 + 4));
+    assert_eq!(EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 8, meta_stride: 16, attr_stride: 16, capacity: 4 }), 4 * (8 + 16));
+    assert_eq!(EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 1, meta_stride: 1, attr_stride: 1, capacity: 1 }), 1 * (1 + 1));
+    assert_eq!(EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 16, meta_stride: 0, attr_stride: 8, capacity: 256 }), 256 * (16 + 0));
+    assert_eq!(EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 64, meta_stride: 64, attr_stride: 16, capacity: 32 }), 32 * (64 + 64));
 
     // Reader and writer formulas must agree across several combinations.
     for cap in [1usize, 4, 16, 32] {
         assert_eq!(
-            EntryStoreReader::<4, 4, 16>::calculate_size_on_tb(cap),
-            EntryStoreWriter::<4, 4, 16>::calculate_size_on_tb(cap),
+            EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 4, meta_stride: 4, attr_stride: 16, capacity: cap }),
+            EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 4, meta_stride: 4, attr_stride: 16, capacity: cap }),
         );
         assert_eq!(
-            EntryStoreReader::<8, 16, 16>::calculate_size_on_tb(cap),
-            EntryStoreWriter::<8, 16, 16>::calculate_size_on_tb(cap),
+            EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 8, meta_stride: 16, attr_stride: 16, capacity: cap }),
+            EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 8, meta_stride: 16, attr_stride: 16, capacity: cap }),
         );
     }
 }
 
 #[test]
 fn meta_reader_calculate_size_on_mem_is_independent_of_core_and_meta() {
-    let base = EntryStoreReader::<0, 0, 16>::calculate_size_on_mem(32);
-    assert_eq!(EntryStoreReader::<8, 0, 16>::calculate_size_on_mem(32), base);
-    assert_eq!(EntryStoreReader::<0, 8, 16>::calculate_size_on_mem(32), base);
-    assert_eq!(EntryStoreReader::<8, 16, 16>::calculate_size_on_mem(32), base);
-    assert_eq!(EntryStoreReader::<64, 64, 16>::calculate_size_on_mem(32), base);
+    let base = EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 0, meta_stride: 0, attr_stride: 16, capacity: 32 });
+    assert_eq!(EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 32 }), base);
+    assert_eq!(EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 0, meta_stride: 8, attr_stride: 16, capacity: 32 }), base);
+    assert_eq!(EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 16, attr_stride: 16, capacity: 32 }), base);
+    assert_eq!(EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 64, meta_stride: 64, attr_stride: 16, capacity: 32 }), base);
 }
 
 // ---- Writer -> Reader roundtrip with META ----
@@ -526,21 +615,25 @@ fn meta_reader_calculate_size_on_mem_is_independent_of_core_and_meta() {
 fn core_meta_writer_reader_roundtrip_after_publish_swap() {
     const C: usize = 4;
     const M: usize = 4;
-    let (_mem, tb, store) = make_store_cma::<C, M, 16>(4);
+    let (_mem, tb, store) = make_store_cma(C, M, 16, 4);
     let tb_reader = tb.to_reader();
 
     let s = store.insert().unwrap();
     let core: [i32; C] = [11, 22, 33, 44];
     let meta: [i32; M] = [-11, -22, -33, -44];
-    store.get(s).core_write_all(core);
-    store.get(s).meta_write_all(meta);
+    store.get(s).core_write_all(&core);
+    store.get(s).meta_write_all(&meta);
 
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
-    assert_eq!(reader.get(s).core_read_all(), core);
-    assert_eq!(reader.get(s).meta_read_all(), meta);
+    let mut cr = [0i32; C];
+    let mut mr = [0i32; M];
+    reader.get(s).core_read_all(&mut cr);
+    reader.get(s).meta_read_all(&mut mr);
+    assert_eq!(cr, core);
+    assert_eq!(mr, meta);
     for i in 0..C {
         assert_eq!(reader.get(s).core_read(i), core[i]);
     }
@@ -551,7 +644,7 @@ fn core_meta_writer_reader_roundtrip_after_publish_swap() {
 
 #[test]
 fn core_meta_roundtrip_with_1_1_edge_case() {
-    let (_mem, tb, store) = make_store_cma::<1, 1, 1>(1);
+    let (_mem, tb, store) = make_store_cma(1, 1, 1, 1);
     let tb_reader = tb.to_reader();
 
     let s = store.insert().unwrap();
@@ -564,8 +657,12 @@ fn core_meta_roundtrip_with_1_1_edge_case() {
     let reader = store.to_reader();
     assert_eq!(reader.get(s).core_read(0), 7);
     assert_eq!(reader.get(s).meta_read(0), -9);
-    assert_eq!(reader.get(s).core_read_all(), [7]);
-    assert_eq!(reader.get(s).meta_read_all(), [-9]);
+    let mut cbuf = [0i32; 1];
+    let mut mbuf = [0i32; 1];
+    reader.get(s).core_read_all(&mut cbuf);
+    reader.get(s).meta_read_all(&mut mbuf);
+    assert_eq!(cbuf, [7]);
+    assert_eq!(mbuf, [-9]);
 }
 
 #[test]
@@ -574,7 +671,7 @@ fn core_meta_roundtrip_with_large_strides() {
     const C: usize = 64;
     const M: usize = 64;
     const CAP: usize = 4;
-    let (_mem, tb, store) = make_store_cma::<C, M, 16>(CAP);
+    let (_mem, tb, store) = make_store_cma(C, M, 16, CAP);
     let tb_reader = tb.to_reader();
 
     let s1 = store.insert().unwrap();
@@ -593,19 +690,27 @@ fn core_meta_roundtrip_with_large_strides() {
         m1[j] = (j as i32) + 1000;
         m2[j] = -(j as i32) - 2000;
     }
-    store.get(s1).core_write_all(c1);
-    store.get(s1).meta_write_all(m1);
-    store.get(s2).core_write_all(c2);
-    store.get(s2).meta_write_all(m2);
+    store.get(s1).core_write_all(&c1);
+    store.get(s1).meta_write_all(&m1);
+    store.get(s2).core_write_all(&c2);
+    store.get(s2).meta_write_all(&m2);
 
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
-    assert_eq!(reader.get(s1).core_read_all(), c1);
-    assert_eq!(reader.get(s1).meta_read_all(), m1);
-    assert_eq!(reader.get(s2).core_read_all(), c2);
-    assert_eq!(reader.get(s2).meta_read_all(), m2);
+    let mut r1c = [0i32; C];
+    let mut r1m = [0i32; M];
+    let mut r2c = [0i32; C];
+    let mut r2m = [0i32; M];
+    reader.get(s1).core_read_all(&mut r1c);
+    reader.get(s1).meta_read_all(&mut r1m);
+    reader.get(s2).core_read_all(&mut r2c);
+    reader.get(s2).meta_read_all(&mut r2m);
+    assert_eq!(r1c, c1);
+    assert_eq!(r1m, m1);
+    assert_eq!(r2c, c2);
+    assert_eq!(r2m, m2);
 }
 
 // ---- Layout verification via raw TripleBufferReader ----
@@ -614,7 +719,7 @@ fn core_meta_roundtrip_with_large_strides() {
 fn reader_core_meta_sees_tb_at_expected_interleaved_offsets() {
     const C: usize = 4;
     const M: usize = 4;
-    let (_mem, tb, store) = make_store_cma::<C, M, 16>(4);
+    let (_mem, tb, store) = make_store_cma(C, M, 16, 4);
     let tb_reader = tb.to_reader();
 
     let s1 = store.insert().unwrap();
@@ -622,12 +727,12 @@ fn reader_core_meta_sees_tb_at_expected_interleaved_offsets() {
     let s3 = store.insert().unwrap();
     assert_eq!((s1, s2, s3), (1, 2, 3));
 
-    store.get(s1).core_write_all([1, 2, 3, 4]);
-    store.get(s1).meta_write_all([5, 6, 7, 8]);
-    store.get(s2).core_write_all([9, 10, 11, 12]);
-    store.get(s2).meta_write_all([13, 14, 15, 16]);
-    store.get(s3).core_write_all([17, 18, 19, 20]);
-    store.get(s3).meta_write_all([21, 22, 23, 24]);
+    store.get(s1).core_write_all(&[1, 2, 3, 4]);
+    store.get(s1).meta_write_all(&[5, 6, 7, 8]);
+    store.get(s2).core_write_all(&[9, 10, 11, 12]);
+    store.get(s2).meta_write_all(&[13, 14, 15, 16]);
+    store.get(s3).core_write_all(&[17, 18, 19, 20]);
+    store.get(s3).meta_write_all(&[21, 22, 23, 24]);
 
     tb.publish();
     assert!(tb_reader.swap());
@@ -643,8 +748,12 @@ fn reader_core_meta_sees_tb_at_expected_interleaved_offsets() {
     .enumerate()
     {
         let slot = k + 1;
-        assert_eq!(reader.get(slot).core_read_all(), *core_exp, "reader core slot {}", slot);
-        assert_eq!(reader.get(slot).meta_read_all(), *meta_exp, "reader meta slot {}", slot);
+        let mut cr = [0i32; C];
+        let mut mr = [0i32; M];
+        reader.get(slot).core_read_all(&mut cr);
+        reader.get(slot).meta_read_all(&mut mr);
+        assert_eq!(cr, *core_exp, "reader core slot {}", slot);
+        assert_eq!(mr, *meta_exp, "reader meta slot {}", slot);
 
         // Raw TripleBufferReader at externally-computed absolute offsets.
         let start = k * (C + M); // tb_start_offset = 0
@@ -661,7 +770,7 @@ fn reader_core_meta_sees_tb_at_expected_interleaved_offsets() {
 fn reader_core_meta_distinct_slots_do_not_overlap() {
     const C: usize = 4;
     const M: usize = 4;
-    let (_mem, tb, store) = make_store_cma::<C, M, 16>(4);
+    let (_mem, tb, store) = make_store_cma(C, M, 16, 4);
     let tb_reader = tb.to_reader();
 
     let s1 = store.insert().unwrap();
@@ -669,17 +778,25 @@ fn reader_core_meta_distinct_slots_do_not_overlap() {
     assert_eq!((s1, s2), (1, 2));
 
     // Write only slot 1. Slot 2's core+meta zone must remain zero.
-    store.get(s1).core_write_all([0xAA_AA_AA_AAu32 as i32; C]);
-    store.get(s1).meta_write_all([0xBB_BB_BB_BBu32 as i32; M]);
+    store.get(s1).core_write_all(&[0xAA_AA_AA_AAu32 as i32; C]);
+    store.get(s1).meta_write_all(&[0xBB_BB_BB_BBu32 as i32; M]);
 
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
-    assert_eq!(reader.get(s1).core_read_all(), [0xAA_AA_AA_AAu32 as i32; C]);
-    assert_eq!(reader.get(s1).meta_read_all(), [0xBB_BB_BB_BBu32 as i32; M]);
-    assert_eq!(reader.get(s2).core_read_all(), [0; C]);
-    assert_eq!(reader.get(s2).meta_read_all(), [0; M]);
+    let mut aac = [0i32; C];
+    let mut aam = [0i32; M];
+    let mut z2c = [0i32; C];
+    let mut z2m = [0i32; M];
+    reader.get(s1).core_read_all(&mut aac);
+    reader.get(s1).meta_read_all(&mut aam);
+    reader.get(s2).core_read_all(&mut z2c);
+    reader.get(s2).meta_read_all(&mut z2m);
+    assert_eq!(aac, [0xAA_AA_AA_AAu32 as i32; C]);
+    assert_eq!(aam, [0xBB_BB_BB_BBu32 as i32; M]);
+    assert_eq!(z2c, [0; C]);
+    assert_eq!(z2m, [0; M]);
 }
 
 // ---- Bounds panics for META on reader side ----
@@ -689,7 +806,7 @@ fn reader_core_meta_distinct_slots_do_not_overlap() {
 #[should_panic(expected = "TbZoneReader.read | offset")]
 fn reader_meta_read_at_stride_panics() {
     const M: usize = 4;
-    let (_mem, tb, store) = make_store_cma::<4, M, 16>(4);
+    let (_mem, tb, store) = make_store_cma(4, M, 16, 4);
     let tb_reader = tb.to_reader();
 
     // Publish an active slot so the reader has something valid behind slot 1,

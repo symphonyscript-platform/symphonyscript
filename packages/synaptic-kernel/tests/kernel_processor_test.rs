@@ -1,3 +1,5 @@
+mod common;
+
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::kernel_config::KernelConfig;
@@ -7,16 +9,18 @@ const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type TestKernel = Kernel<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
-type TestConsumer = EpochConsumer<NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR>;
+type TestKernel = Kernel<1, 1>;
+type TestConsumer = EpochConsumer<1, 1>;
 
-fn config(capacity: usize) -> KernelConfig {
-    KernelConfig {
-        node_capacity: capacity,
-        synapse_capacity: capacity,
-        mem_metadata_size: 1,
-        tb_metadata_size: 1,
-    }
+fn config(capacity: usize) -> KernelConfig<1, 1> {
+    common::kernel_config_1_1(
+        capacity,
+        capacity,
+        NODE_META,
+        NODE_ATTR,
+        SYNAPSE_META,
+        SYNAPSE_ATTR,
+    )
 }
 
 fn setup(capacity: usize) -> TestKernel {
