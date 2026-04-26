@@ -139,6 +139,10 @@ impl EntryStoreWriter {
         )
     }
 
+    pub fn config(&self) -> EntryStoreConfig {
+        self.config
+    }
+
     pub fn len(&self) -> usize {
         self.allocator.alloc_count()
     }

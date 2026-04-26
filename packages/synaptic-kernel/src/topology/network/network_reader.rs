@@ -1,4 +1,3 @@
-use crate::constants::SYNAPSE_STRIDE;
 use crate::primitives::entry_store_reader::EntryStoreReader;
 use crate::topology::network::synapse_reader::SynapseReader;
 use crate::topology::node::node_chain_reader::NodeChainReader;
@@ -28,34 +27,13 @@ use crate::topology::node::node_reader::NodeReader;
 ///   Invoked by `EpochMirror::swap()` - consumers do not call it directly.
 /// - Created exclusively via `NetworkWriter::to_reader()`.
 #[derive(Clone)]
-pub struct NetworkReader<
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
-> {
-    node_chain: NodeChainReader<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>,
-    pub(crate) synapses:
-        EntryStoreReader<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>,
+pub struct NetworkReader {
+    node_chain: NodeChainReader,
+    pub(crate) synapses: EntryStoreReader,
 }
 
-impl<
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
->
-    NetworkReader<
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    >
-{
-    pub(crate) fn bind(
-        node_chain: NodeChainReader<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>,
-        synapses: EntryStoreReader<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>,
-    ) -> Self {
+impl NetworkReader {
+    pub(crate) fn bind(node_chain: NodeChainReader, synapses: EntryStoreReader) -> Self {
         NetworkReader {
             node_chain,
             synapses,
@@ -83,25 +61,17 @@ impl<
     }
 
     #[inline]
-    pub fn get_head_node(
-        &'_ self,
-    ) -> Option<NodeReader<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
+    pub fn get_head_node(&'_ self) -> Option<NodeReader<'_>> {
         self.node_chain.get_head_node()
     }
 
     #[inline]
-    pub fn get_node(
-        &'_ self,
-        slot: usize,
-    ) -> NodeReader<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE> {
+    pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_> {
         self.node_chain.get_node(slot)
     }
 
     #[inline]
-    pub fn get_synapse(
-        &'_ self,
-        slot: usize,
-    ) -> SynapseReader<'_, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
+    pub fn get_synapse(&'_ self, slot: usize) -> SynapseReader<'_> {
         SynapseReader::new(self.synapses.get(slot))
     }
 

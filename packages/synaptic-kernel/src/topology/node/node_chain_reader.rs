@@ -1,4 +1,3 @@
-use crate::constants::NODE_STRIDE;
 use crate::primitives::entry_store_reader::EntryStoreReader;
 use crate::primitives::triple_buffer_reader::TripleBufferReader;
 use crate::topology::node::node_reader::NodeReader;
@@ -18,16 +17,16 @@ use crate::topology::node::node_reader::NodeReader;
 /// - Slots are 1-based. 0 indicates an undefined state.
 /// - Created exclusively via `NodeChainWriter::to_reader()`.
 #[derive(Clone)]
-pub struct NodeChainReader<const META_STRIDE: usize, const ATTR_STRIDE: usize> {
+pub struct NodeChainReader {
     tb: TripleBufferReader,
-    pub(crate) nodes: EntryStoreReader<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>,
+    pub(crate) nodes: EntryStoreReader,
     tb_head_offset: usize,
 }
 
-impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainReader<META_STRIDE, ATTR_STRIDE> {
+impl NodeChainReader {
     pub(crate) fn bind(
         tb: TripleBufferReader,
-        es: EntryStoreReader<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>,
+        es: EntryStoreReader,
         tb_head_offset: usize,
     ) -> Self {
         NodeChainReader {
@@ -55,7 +54,7 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainReader<META_ST
     }
 
     #[inline]
-    pub fn get_head_node(&'_ self) -> Option<NodeReader<'_, META_STRIDE, ATTR_STRIDE>> {
+    pub fn get_head_node(&'_ self) -> Option<NodeReader<'_>> {
         let head_slot = self.get_head_slot();
 
         if head_slot == 0 {
@@ -66,7 +65,7 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainReader<META_ST
     }
 
     #[inline]
-    pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_, META_STRIDE, ATTR_STRIDE> {
+    pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_> {
         NodeReader::new(self.nodes.get(slot))
     }
 

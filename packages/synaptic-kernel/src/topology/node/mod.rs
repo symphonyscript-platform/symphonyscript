@@ -3,3 +3,4 @@ pub mod node_writer;
 pub mod node_chain_reader;
 pub mod node_reader;
 pub mod node_handle;
+pub mod node_chain_config;

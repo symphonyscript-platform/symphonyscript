@@ -1,7 +1,7 @@
 use crate::metadata::mem_metadata_reader::MemMetadataReader;
-use crate::primitives::entry_store_reader_registry::EntryStoreReaderRegistry;
 use crate::primitives::entry_store_def::EntryStoreId;
 use crate::primitives::entry_store_reader::EntryStoreReader;
+use crate::primitives::entry_store_reader_registry::EntryStoreReaderRegistry;
 use crate::primitives::tb_reader::TbReader;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::triple_buffer_reader_registry::TripleBufferReaderRegistry;
@@ -35,52 +35,19 @@ use crate::topology::node::node_reader::NodeReader;
 /// - Memory sizing is defined at compile time via const generics.
 /// - Created exclusively via `Epoch::to_mirror()`.
 #[derive(Clone)]
-pub struct EpochMirror<
-    const TB_COUNT: usize,
-    const STORE_COUNT: usize,
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
-> {
+pub struct EpochMirror<const TB_COUNT: usize, const STORE_COUNT: usize> {
     mem_metadata: MemMetadataReader,
     tb_registry: TripleBufferReaderRegistry<TB_COUNT>,
     store_registry: EntryStoreReaderRegistry<STORE_COUNT>,
-    network: NetworkReader<
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    >,
+    network: NetworkReader,
 }
 
-impl<
-    const TB_COUNT: usize,
-    const STORE_COUNT: usize,
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
->
-    EpochMirror<
-        TB_COUNT,
-        STORE_COUNT,
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    >
-{
+impl<const TB_COUNT: usize, const STORE_COUNT: usize> EpochMirror<TB_COUNT, STORE_COUNT> {
     pub(crate) fn bind(
         mem_metadata: MemMetadataReader,
         tb_registry: TripleBufferReaderRegistry<TB_COUNT>,
         store_registry: EntryStoreReaderRegistry<STORE_COUNT>,
-        network: NetworkReader<
-            NODE_META_STRIDE,
-            NODE_ATTRIBUTES_STRIDE,
-            SYNAPSE_META_STRIDE,
-            SYNAPSE_ATTRIBUTES_STRIDE,
-        >,
+        network: NetworkReader,
     ) -> Self {
         EpochMirror {
             mem_metadata,
@@ -116,25 +83,17 @@ impl<
     }
 
     #[inline]
-    pub fn get_head_node(
-        &'_ self,
-    ) -> Option<NodeReader<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
+    pub fn get_head_node(&'_ self) -> Option<NodeReader<'_>> {
         self.network.get_head_node()
     }
 
     #[inline]
-    pub fn get_node(
-        &'_ self,
-        slot: usize,
-    ) -> NodeReader<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE> {
+    pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_> {
         self.network.get_node(slot)
     }
 
     #[inline]
-    pub fn get_synapse(
-        &'_ self,
-        slot: usize,
-    ) -> SynapseReader<'_, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
+    pub fn get_synapse(&'_ self, slot: usize) -> SynapseReader<'_> {
         self.network.get_synapse(slot)
     }
 

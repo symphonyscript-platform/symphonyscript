@@ -37,57 +37,14 @@ use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 /// - `swap_epoch()`: Producer thread only.
 /// - `get_reader_ack_generation()`: Producer thread only (Reads consumer's ack).
 #[repr(C)]
-pub struct ControlPlane<
-    const TB_COUNT: usize,
-    const STORE_COUNT: usize,
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
-> {
-    mirror_ptr: AtomicPtr<
-        EpochMirror<
-            TB_COUNT,
-            STORE_COUNT,
-            NODE_META_STRIDE,
-            NODE_ATTRIBUTES_STRIDE,
-            SYNAPSE_META_STRIDE,
-            SYNAPSE_ATTRIBUTES_STRIDE,
-        >,
-    >,
+pub struct ControlPlane<const TB_COUNT: usize, const STORE_COUNT: usize> {
+    mirror_ptr: AtomicPtr<EpochMirror<TB_COUNT, STORE_COUNT>>,
     writer_generation: AtomicI32,
     reader_ack_generation: AtomicI32,
 }
 
-impl<
-    const TB_COUNT: usize,
-    const STORE_COUNT: usize,
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
->
-    ControlPlane<
-        TB_COUNT,
-        STORE_COUNT,
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    >
-{
-    pub fn new(
-        mirror: Box<
-            EpochMirror<
-                TB_COUNT,
-                STORE_COUNT,
-                NODE_META_STRIDE,
-                NODE_ATTRIBUTES_STRIDE,
-                SYNAPSE_META_STRIDE,
-                SYNAPSE_ATTRIBUTES_STRIDE,
-            >,
-        >,
-    ) -> Self {
+impl<const TB_COUNT: usize, const STORE_COUNT: usize> ControlPlane<TB_COUNT, STORE_COUNT> {
+    pub fn new(mirror: Box<EpochMirror<TB_COUNT, STORE_COUNT>>) -> Self {
         ControlPlane {
             mirror_ptr: AtomicPtr::new(Box::into_raw(mirror)),
             writer_generation: AtomicI32::new(0),
@@ -95,16 +52,7 @@ impl<
         }
     }
 
-    pub(crate) fn acquire_mirror(
-        &self,
-    ) -> &EpochMirror<
-        TB_COUNT,
-        STORE_COUNT,
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    > {
+    pub(crate) fn acquire_mirror(&self) -> &EpochMirror<TB_COUNT, STORE_COUNT> {
         self.ack();
 
         let epoch_ptr = self.mirror_ptr.load(Ordering::Acquire);
@@ -116,29 +64,8 @@ impl<
 
     pub fn swap_epoch(
         &self,
-        new_epoch: Box<
-            EpochMirror<
-                TB_COUNT,
-                STORE_COUNT,
-                NODE_META_STRIDE,
-                NODE_ATTRIBUTES_STRIDE,
-                SYNAPSE_META_STRIDE,
-                SYNAPSE_ATTRIBUTES_STRIDE,
-            >,
-        >,
-    ) -> (
-        Box<
-            EpochMirror<
-                TB_COUNT,
-                STORE_COUNT,
-                NODE_META_STRIDE,
-                NODE_ATTRIBUTES_STRIDE,
-                SYNAPSE_META_STRIDE,
-                SYNAPSE_ATTRIBUTES_STRIDE,
-            >,
-        >,
-        i32,
-    ) {
+        new_epoch: Box<EpochMirror<TB_COUNT, STORE_COUNT>>,
+    ) -> (Box<EpochMirror<TB_COUNT, STORE_COUNT>>, i32) {
         let new_epoch_ptr = Box::into_raw(new_epoch);
         let old_epoch_ptr = self.mirror_ptr.swap(new_epoch_ptr, Ordering::AcqRel);
         let prev_gen = self.writer_generation.fetch_add(1, Ordering::Release);
@@ -162,23 +89,7 @@ impl<
     }
 }
 
-impl<
-    const TB_COUNT: usize,
-    const STORE_COUNT: usize,
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
-> Drop
-    for ControlPlane<
-        TB_COUNT,
-        STORE_COUNT,
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    >
-{
+impl<const TB_COUNT: usize, const STORE_COUNT: usize> Drop for ControlPlane<TB_COUNT, STORE_COUNT> {
     fn drop(&mut self) {
         // SAFETY: The pointer was created by Box::into_raw() in a prior
         // swap_epoch() or ControlPlane::new(). `&mut self` guarantees exclusive access.

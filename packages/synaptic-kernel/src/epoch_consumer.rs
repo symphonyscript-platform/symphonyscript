@@ -26,55 +26,12 @@ use std::sync::Arc;
 ///
 /// # Constraints
 /// - Created by passing `Arc<ControlPlane>` to `new()`.
-pub struct EpochConsumer<
-    const TB_COUNT: usize,
-    const STORE_COUNT: usize,
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
-> {
-    control_plane: Arc<
-        ControlPlane<
-            TB_COUNT,
-            STORE_COUNT,
-            NODE_META_STRIDE,
-            NODE_ATTRIBUTES_STRIDE,
-            SYNAPSE_META_STRIDE,
-            SYNAPSE_ATTRIBUTES_STRIDE,
-        >,
-    >,
+pub struct EpochConsumer<const TB_COUNT: usize, const STORE_COUNT: usize> {
+    control_plane: Arc<ControlPlane<TB_COUNT, STORE_COUNT>>,
 }
 
-impl<
-    const TB_COUNT: usize,
-    const STORE_COUNT: usize,
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
->
-    EpochConsumer<
-        TB_COUNT,
-        STORE_COUNT,
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    >
-{
-    pub fn new(
-        control_plane: Arc<
-            ControlPlane<
-                TB_COUNT,
-                STORE_COUNT,
-                NODE_META_STRIDE,
-                NODE_ATTRIBUTES_STRIDE,
-                SYNAPSE_META_STRIDE,
-                SYNAPSE_ATTRIBUTES_STRIDE,
-            >,
-        >,
-    ) -> Self {
+impl<const TB_COUNT: usize, const STORE_COUNT: usize> EpochConsumer<TB_COUNT, STORE_COUNT> {
+    pub fn new(control_plane: Arc<ControlPlane<TB_COUNT, STORE_COUNT>>) -> Self {
         EpochConsumer { control_plane }
     }
 
@@ -92,16 +49,7 @@ impl<
     /// # Usage
     /// Call once at the start of each processing cycle. The returned reference
     /// is valid until the next `acquire_mirror()` call.
-    pub fn acquire_mirror(
-        &mut self,
-    ) -> &EpochMirror<
-        TB_COUNT,
-        STORE_COUNT,
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    > {
+    pub fn acquire_mirror(&mut self) -> &EpochMirror<TB_COUNT, STORE_COUNT> {
         let mirror = self.control_plane.acquire_mirror();
 
         mirror.swap();

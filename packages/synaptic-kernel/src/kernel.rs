@@ -55,66 +55,15 @@ use std::sync::Arc;
 /// Dropping the kernel unconditionally frees the deferred-deletion queue and the backing
 /// memory. If the consumer is still traversing a hot-swapped graph, the result
 /// is undefined behavior.
-pub struct Kernel<
-    const TB_COUNT: usize,
-    const STORE_COUNT: usize,
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
-> {
+pub struct Kernel<const TB_COUNT: usize, const STORE_COUNT: usize> {
     config: KernelConfig<TB_COUNT, STORE_COUNT>,
     mem: AtomicBuffer,
-    control_plane: Arc<
-        ControlPlane<
-            TB_COUNT,
-            STORE_COUNT,
-            NODE_META_STRIDE,
-            NODE_ATTRIBUTES_STRIDE,
-            SYNAPSE_META_STRIDE,
-            SYNAPSE_ATTRIBUTES_STRIDE,
-        >,
-    >,
-    active_epoch: Epoch<
-        TB_COUNT,
-        STORE_COUNT,
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    >,
-    readers_pending_deletion: VecDeque<(
-        Box<
-            EpochMirror<
-                TB_COUNT,
-                STORE_COUNT,
-                NODE_META_STRIDE,
-                NODE_ATTRIBUTES_STRIDE,
-                SYNAPSE_META_STRIDE,
-                SYNAPSE_ATTRIBUTES_STRIDE,
-            >,
-        >,
-        i32,
-    )>,
+    control_plane: Arc<ControlPlane<TB_COUNT, STORE_COUNT>>,
+    active_epoch: Epoch<TB_COUNT, STORE_COUNT>,
+    readers_pending_deletion: VecDeque<(Box<EpochMirror<TB_COUNT, STORE_COUNT>>, i32)>,
 }
 
-impl<
-    const TB_COUNT: usize,
-    const STORE_COUNT: usize,
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
->
-    Kernel<
-        TB_COUNT,
-        STORE_COUNT,
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    >
-{
+impl<const TB_COUNT: usize, const STORE_COUNT: usize> Kernel<TB_COUNT, STORE_COUNT> {
     pub const HEADERS_SIZE: usize = 2;
 
     pub fn new(config: KernelConfig<TB_COUNT, STORE_COUNT>) -> Self {
@@ -188,15 +137,7 @@ impl<
     }
 
     pub fn calculate_size_on_mem(config: &KernelConfig<TB_COUNT, STORE_COUNT>) -> usize {
-        Self::HEADERS_SIZE
-            + Epoch::<
-                TB_COUNT,
-                STORE_COUNT,
-                NODE_META_STRIDE,
-                NODE_ATTRIBUTES_STRIDE,
-                SYNAPSE_META_STRIDE,
-                SYNAPSE_ATTRIBUTES_STRIDE,
-            >::calculate_size_on_mem(&config)
+        Self::HEADERS_SIZE + Epoch::<TB_COUNT, STORE_COUNT>::calculate_size_on_mem(&config)
     }
 
     /// Snapshots the current kernel state for persistence.
@@ -229,18 +170,7 @@ impl<
     /// Dropping the kernel unconditionally frees the deferred-deletion queue.
     /// If the consumer is still traversing a hot-swapped epoch, the result is
     /// undefined behavior.
-    pub fn get_control_plane(
-        &self,
-    ) -> Arc<
-        ControlPlane<
-            TB_COUNT,
-            STORE_COUNT,
-            NODE_META_STRIDE,
-            NODE_ATTRIBUTES_STRIDE,
-            SYNAPSE_META_STRIDE,
-            SYNAPSE_ATTRIBUTES_STRIDE,
-        >,
-    > {
+    pub fn get_control_plane(&self) -> Arc<ControlPlane<TB_COUNT, STORE_COUNT>> {
         Arc::clone(&self.control_plane)
     }
 
@@ -310,25 +240,17 @@ impl<
     }
 
     #[inline]
-    pub fn get_head_node(
-        &'_ self,
-    ) -> Option<NodeHandle<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
+    pub fn get_head_node(&'_ self) -> Option<NodeHandle<'_>> {
         self.active_epoch.network.get_head_node_handle()
     }
 
     #[inline]
-    pub fn get_node(
-        &'_ self,
-        slot: usize,
-    ) -> NodeHandle<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE> {
+    pub fn get_node(&'_ self, slot: usize) -> NodeHandle<'_> {
         self.active_epoch.network.get_node_handle(slot)
     }
 
     #[inline]
-    pub fn get_synapse(
-        &'_ self,
-        slot: usize,
-    ) -> SynapseView<'_, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
+    pub fn get_synapse(&'_ self, slot: usize) -> SynapseView<'_> {
         self.active_epoch.network.get_synapse_handle(slot)
     }
 
@@ -408,8 +330,8 @@ impl<
     }
 
     pub fn grow(&mut self, config: KernelConfig<TB_COUNT, STORE_COUNT>) -> Result<(), KernelError> {
-        if config.node_capacity < self.node_capacity()
-            || config.synapse_capacity < self.synapse_capacity()
+        if config.network_config.node_capacity < self.node_capacity()
+            || config.network_config.synapse_capacity < self.synapse_capacity()
         {
             return Err(KernelError::InsufficientCapacity);
         }

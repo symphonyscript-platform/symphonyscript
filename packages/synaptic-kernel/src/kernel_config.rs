@@ -1,5 +1,6 @@
 use crate::primitives::entry_store_def::EntryStoreDef;
 use crate::primitives::triple_buffer_def::TripleBufferDef;
+use crate::topology::network::network_config::NetworkConfig;
 
 /// Configuration for memory sizing of a Kernel.
 ///
@@ -7,8 +8,6 @@ use crate::primitives::triple_buffer_def::TripleBufferDef;
 /// sizes ahead of initialization.
 ///
 /// # Fields
-/// - `node_capacity`: Maximum number of graph nodes.
-/// - `synapse_capacity`: Maximum number of graph synapses (connections).
 /// - `mem_metadata_size`: Power-of-2 size of the global metadata region residing
 ///    on the `mem` (direct) plane.
 /// - `tb_defs`: Definitions for `TB_COUNT` user-allocated triple-buffers.
@@ -17,11 +16,11 @@ use crate::primitives::triple_buffer_def::TripleBufferDef;
 ///   in this array.
 /// - `store_defs`: Definitions for `STORE_COUNT` user-allocated entity stores.
 ///   IDs must form a permutation of `[0, STORE_COUNT-1]`.
+/// - `network_config`: Network configuration of strides, node counts and synapse counts.
 #[derive(Clone)]
 pub struct KernelConfig<const TB_COUNT: usize, const STORE_COUNT: usize> {
-    pub node_capacity: usize,
-    pub synapse_capacity: usize,
     pub mem_metadata_size: usize,
     pub tb_defs: [TripleBufferDef; TB_COUNT],
     pub store_defs: [EntryStoreDef; STORE_COUNT],
+    pub network_config: NetworkConfig,
 }

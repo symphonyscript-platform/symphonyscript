@@ -1,8 +1,8 @@
-use crate::constants::NODE_STRIDE;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::entry_store_writer::EntryStoreWriter;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
+use crate::topology::node::node_chain_config::NodeChainConfig;
 use crate::topology::node::node_chain_reader::NodeChainReader;
 use crate::topology::node::node_handle::NodeHandle;
 use crate::topology::node::node_writer::NodeWriter;
@@ -52,39 +52,39 @@ use crate::topology::node::node_writer::NodeWriter;
 ///   reallocation until the consumer has advanced past the pending `publish()`.
 /// - Use `to_reader()` to create the paired `NodeChainReader`.
 #[derive(Clone)]
-pub struct NodeChainWriter<const META_STRIDE: usize, const ATTR_STRIDE: usize> {
+pub struct NodeChainWriter {
     tb: TripleBufferWriter,
-    pub(crate) nodes: EntryStoreWriter<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>,
+    pub(crate) nodes: EntryStoreWriter,
     tb_head_offset: usize,
 }
 
-impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_STRIDE, ATTR_STRIDE> {
+impl NodeChainWriter {
     pub fn new(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
+        config: NodeChainConfig,
         mem_start_offset: usize,
         tb_start_offset: usize,
-        capacity: usize,
     ) -> Self {
-        Self::create(mem, tb, mem_start_offset, tb_start_offset, capacity, false)
+        Self::create(mem, tb, config, mem_start_offset, tb_start_offset, false)
     }
 
     pub fn bind(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
+        config: NodeChainConfig,
         mem_start_offset: usize,
         tb_start_offset: usize,
-        capacity: usize,
     ) -> Self {
-        Self::create(mem, tb, mem_start_offset, tb_start_offset, capacity, true)
+        Self::create(mem, tb, config, mem_start_offset, tb_start_offset, true)
     }
 
     pub fn create(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
+        config: NodeChainConfig,
         mem_start_offset: usize,
         tb_start_offset: usize,
-        capacity: usize,
         bind: bool,
     ) -> Self {
         NodeChainWriter {
@@ -92,26 +92,24 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
             nodes: EntryStoreWriter::create(
                 mem,
                 tb,
+                config.to_entry_store_config(),
                 mem_start_offset,
                 tb_start_offset + 1,
-                capacity,
                 bind,
             ),
             tb_head_offset: tb_start_offset,
         }
     }
 
-    pub fn calculate_size_on_mem(capacity: usize) -> usize {
-        EntryStoreWriter::<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>::calculate_size_on_mem(capacity)
+    pub fn calculate_size_on_mem(config: &NodeChainConfig) -> usize {
+        EntryStoreWriter::calculate_size_on_mem(&config.to_entry_store_config())
     }
 
-    pub fn calculate_size_on_tb(capacity: usize) -> usize {
-        1 + EntryStoreWriter::<NODE_STRIDE, META_STRIDE, ATTR_STRIDE>::calculate_size_on_tb(
-            capacity,
-        )
+    pub fn calculate_size_on_tb(config: &NodeChainConfig) -> usize {
+        1 + EntryStoreWriter::calculate_size_on_tb(&config.to_entry_store_config())
     }
 
-    pub fn to_reader(&self) -> NodeChainReader<META_STRIDE, ATTR_STRIDE> {
+    pub fn to_reader(&self) -> NodeChainReader {
         NodeChainReader::bind(
             self.tb.to_reader(),
             self.nodes.to_reader(),
@@ -153,7 +151,7 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
     }
 
     #[inline]
-    pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_, META_STRIDE, ATTR_STRIDE>> {
+    pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_>> {
         let head_slot = self.get_head_slot();
 
         if head_slot == 0 {
@@ -164,12 +162,12 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
     }
 
     #[inline]
-    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_, META_STRIDE, ATTR_STRIDE> {
+    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_> {
         NodeWriter::new(self.nodes.get(slot))
     }
 
     #[inline]
-    pub fn get_head_node_handle(&'_ self) -> Option<NodeHandle<'_, META_STRIDE, ATTR_STRIDE>> {
+    pub fn get_head_node_handle(&'_ self) -> Option<NodeHandle<'_>> {
         let head_slot = self.get_head_slot();
 
         if head_slot == 0 {
@@ -180,7 +178,7 @@ impl<const META_STRIDE: usize, const ATTR_STRIDE: usize> NodeChainWriter<META_ST
     }
 
     #[inline]
-    pub fn get_node_handle(&'_ self, slot: usize) -> NodeHandle<'_, META_STRIDE, ATTR_STRIDE> {
+    pub fn get_node_handle(&'_ self, slot: usize) -> NodeHandle<'_> {
         NodeHandle::new(self.nodes.get_handle(slot))
     }
 

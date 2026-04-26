@@ -52,42 +52,14 @@ use std::sync::Arc;
 /// - Memory sizing is defined at compile time via const generics.
 /// - Use `to_mirror()` to create the paired `EpochMirror`.
 #[derive(Clone)]
-pub struct Epoch<
-    const TB_COUNT: usize,
-    const STORE_COUNT: usize,
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
-> {
+pub struct Epoch<const TB_COUNT: usize, const STORE_COUNT: usize> {
     pub mem_metadata: MemMetadataWriter,
     pub tb_registry: TripleBufferWriterRegistry<TB_COUNT>,
-    pub network: NetworkWriter<
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    >,
+    pub network: NetworkWriter,
     pub store_registry: EntryStoreWriterRegistry<TB_COUNT, STORE_COUNT>,
 }
 
-impl<
-    const TB_COUNT: usize,
-    const STORE_COUNT: usize,
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
->
-    Epoch<
-        TB_COUNT,
-        STORE_COUNT,
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    >
-{
+impl<const TB_COUNT: usize, const STORE_COUNT: usize> Epoch<TB_COUNT, STORE_COUNT> {
     pub fn new(
         mem: AtomicBuffer,
         config: KernelConfig<TB_COUNT, STORE_COUNT>,
@@ -128,10 +100,9 @@ impl<
         let network = NetworkWriter::create(
             Arc::clone(&mem),
             tb_registry.get(TripleBufferId::DEFAULT).clone(),
+            config.network_config,
             tb_registry.mem_end_offset(),
             tb_start_offset,
-            config.node_capacity,
-            config.synapse_capacity,
             bind,
         );
 
@@ -159,39 +130,20 @@ impl<
                 Self::calculate_size_on_default_tb(&config),
                 &config.tb_defs,
             )
-            + NetworkWriter::<
-                NODE_META_STRIDE,
-                NODE_ATTRIBUTES_STRIDE,
-                SYNAPSE_META_STRIDE,
-                SYNAPSE_ATTRIBUTES_STRIDE,
-            >::calculate_size_on_mem(config.node_capacity, config.synapse_capacity)
+            + NetworkWriter::calculate_size_on_mem(&config.network_config)
             + EntryStoreWriterRegistry::<TB_COUNT, STORE_COUNT>::calculate_size_on_mem(
                 &config.store_defs,
             )
     }
 
     pub fn calculate_size_on_default_tb(config: &KernelConfig<TB_COUNT, STORE_COUNT>) -> usize {
-        NetworkWriter::<
-            NODE_META_STRIDE,
-            NODE_ATTRIBUTES_STRIDE,
-            SYNAPSE_META_STRIDE,
-            SYNAPSE_ATTRIBUTES_STRIDE,
-        >::calculate_size_on_tb(config.node_capacity, config.synapse_capacity)
+        NetworkWriter::calculate_size_on_tb(&config.network_config)
             + EntryStoreWriterRegistry::<TB_COUNT, STORE_COUNT>::calculate_size_on_default_tb(
                 &config.store_defs,
             )
     }
 
-    pub fn to_mirror(
-        &self,
-    ) -> EpochMirror<
-        TB_COUNT,
-        STORE_COUNT,
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    > {
+    pub fn to_mirror(&self) -> EpochMirror<TB_COUNT, STORE_COUNT> {
         EpochMirror::bind(
             self.mem_metadata.to_reader(),
             self.tb_registry.to_reader(),

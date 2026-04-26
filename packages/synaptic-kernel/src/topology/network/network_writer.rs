@@ -3,6 +3,7 @@ use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::entry_store_writer::EntryStoreWriter;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
+use crate::topology::network::network_config::NetworkConfig;
 use crate::topology::network::network_reader::NetworkReader;
 use crate::topology::network::synapse_handle::SynapseView;
 use crate::topology::network::synapse_writer::SynapseWriter;
@@ -63,91 +64,54 @@ use std::sync::Arc;
 ///   advanced pas the pending `publish()`.
 /// - Use `to_reader()` to create the paired `NetworkReader`.
 #[derive(Clone)]
-pub struct NetworkWriter<
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
-> {
-    node_chain: NodeChainWriter<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>,
-    pub(crate) synapses:
-        EntryStoreWriter<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>,
+pub struct NetworkWriter {
+    node_chain: NodeChainWriter,
+    pub(crate) synapses: EntryStoreWriter,
 }
 
-impl<
-    const NODE_META_STRIDE: usize,
-    const NODE_ATTRIBUTES_STRIDE: usize,
-    const SYNAPSE_META_STRIDE: usize,
-    const SYNAPSE_ATTRIBUTES_STRIDE: usize,
->
-    NetworkWriter<
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    >
-{
+impl NetworkWriter {
     pub fn new(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
+        config: NetworkConfig,
         mem_start_offset: usize,
         tb_start_offset: usize,
-        node_capacity: usize,
-        synapse_capacity: usize,
     ) -> Self {
-        Self::create(
-            mem,
-            tb,
-            mem_start_offset,
-            tb_start_offset,
-            node_capacity,
-            synapse_capacity,
-            false,
-        )
+        Self::create(mem, tb, config, mem_start_offset, tb_start_offset, false)
     }
 
     pub fn bind(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
+        config: NetworkConfig,
         mem_start_offset: usize,
         tb_start_offset: usize,
-        node_capacity: usize,
-        synapse_capacity: usize,
     ) -> Self {
-        Self::create(
-            mem,
-            tb,
-            mem_start_offset,
-            tb_start_offset,
-            node_capacity,
-            synapse_capacity,
-            true,
-        )
+        Self::create(mem, tb, config, mem_start_offset, tb_start_offset, true)
     }
 
     pub fn create(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
+        config: NetworkConfig,
         mem_start_offset: usize,
         tb_start_offset: usize,
-        node_capacity: usize,
-        synapse_capacity: usize,
         bind: bool,
     ) -> Self {
         let node_chain = NodeChainWriter::create(
             Arc::clone(&mem),
             tb.clone(),
+            config.to_node_chain_config(),
             mem_start_offset,
             tb_start_offset,
-            node_capacity,
             bind,
         );
         let synapses = EntryStoreWriter::create(
             mem,
             tb,
+            config.to_synapse_entry_store_config(),
             node_chain.mem_end_offset(),
             node_chain.tb_end_offset(),
-            synapse_capacity,
             bind,
         );
 
@@ -157,25 +121,17 @@ impl<
         }
     }
 
-    pub fn calculate_size_on_mem(node_capacity: usize, synapse_capacity: usize) -> usize {
-        NodeChainWriter::<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>::calculate_size_on_mem(node_capacity)
-            + EntryStoreWriter::<SYNAPSE_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>::calculate_size_on_mem(synapse_capacity)
+    pub fn calculate_size_on_mem(config: &NetworkConfig) -> usize {
+        NodeChainWriter::calculate_size_on_mem(&config.to_node_chain_config())
+            + EntryStoreWriter::calculate_size_on_mem(&config.to_synapse_entry_store_config())
     }
 
-    pub fn calculate_size_on_tb(node_capacity: usize, synapse_capacity: usize) -> usize {
-        NodeChainWriter::<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>::calculate_size_on_tb(
-            node_capacity,
-        ) + synapse_capacity * (SYNAPSE_STRIDE + SYNAPSE_META_STRIDE)
+    pub fn calculate_size_on_tb(config: &NetworkConfig) -> usize {
+        NodeChainWriter::calculate_size_on_tb(&config.to_node_chain_config())
+            + config.synapse_capacity * (SYNAPSE_STRIDE + config.synapse_meta_stride)
     }
 
-    pub fn to_reader(
-        &self,
-    ) -> NetworkReader<
-        NODE_META_STRIDE,
-        NODE_ATTRIBUTES_STRIDE,
-        SYNAPSE_META_STRIDE,
-        SYNAPSE_ATTRIBUTES_STRIDE,
-    > {
+    pub fn to_reader(&self) -> NetworkReader {
         NetworkReader::bind(self.node_chain.to_reader(), self.synapses.to_reader())
     }
 
@@ -224,46 +180,30 @@ impl<
     }
 
     #[inline]
-    pub fn get_head_node(
-        &'_ self,
-    ) -> Option<NodeWriter<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
+    pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_>> {
         self.node_chain.get_head_node()
     }
 
     #[inline]
-    pub fn get_node(
-        &'_ self,
-        slot: usize,
-    ) -> NodeWriter<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE> {
+    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_> {
         self.node_chain.get_node(slot)
     }
 
-    pub fn get_synapse(
-        &'_ self,
-        slot: usize,
-    ) -> SynapseWriter<'_, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
+    pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_> {
         SynapseWriter::new(self.synapses.get(slot))
     }
 
     #[inline]
-    pub fn get_head_node_handle(
-        &'_ self,
-    ) -> Option<NodeHandle<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE>> {
+    pub fn get_head_node_handle(&'_ self) -> Option<NodeHandle<'_>> {
         self.node_chain.get_head_node_handle()
     }
 
     #[inline]
-    pub fn get_node_handle(
-        &'_ self,
-        slot: usize,
-    ) -> NodeHandle<'_, NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE> {
+    pub fn get_node_handle(&'_ self, slot: usize) -> NodeHandle<'_> {
         self.node_chain.get_node_handle(slot)
     }
 
-    pub fn get_synapse_handle(
-        &'_ self,
-        slot: usize,
-    ) -> SynapseView<'_, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE> {
+    pub fn get_synapse_handle(&'_ self, slot: usize) -> SynapseView<'_> {
         SynapseView::new(self.synapses.get_handle(slot))
     }
 
