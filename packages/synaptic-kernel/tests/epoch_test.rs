@@ -5,8 +5,10 @@ use std::sync::Arc;
 use synaptic_kernel::epoch::Epoch;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
+use synaptic_kernel::primitives::entry_store_def::EntryStoreId;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::network::network_config::NetworkConfig;
+use synaptic_kernel::topology::network::network_writer::NetworkWriter;
 
 const NODE_META: usize = 4;
 const NODE_ATTR: usize = 8;
@@ -550,4 +552,66 @@ fn epoch_works_with_minimal_strides() {
     assert_eq!(syn.get_kind(), 5);
     assert_eq!(syn.attr_read(0), 77);
     assert_eq!(syn.get_meta(0), 66);
+}
+
+#[test]
+fn entry_store_registry_created_with_epoch() {
+    let config = mk_config(4, 4, 1, 1);
+    let mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
+    let epoch = TestEpoch::new(mem, config, 0);
+    let store = epoch.store_registry.get(EntryStoreId(0));
+    assert!(store.capacity() > 0);
+}
+
+#[test]
+fn publish_publishes_default_tb_for_entry_stores() {
+    let config = mk_config(4, 4, 1, 1);
+    let mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
+    let epoch = TestEpoch::new(mem, config, 0);
+    let store = epoch.store_registry.get(EntryStoreId(0));
+    let slot = store.insert().unwrap();
+    store.get(slot).core_write(0, 4242);
+
+    epoch.publish();
+    let mirror = epoch.to_mirror();
+    assert!(mirror.swap());
+    assert_eq!(
+        mirror.get_entry_store(EntryStoreId(0)).get(slot).core_read(0),
+        4242
+    );
+}
+
+#[test]
+fn copy_from_migrates_entry_store_data() {
+    let src_config = mk_config(4, 4, 1, 1);
+    let src_mem = make_mem(TestEpoch::calculate_size_on_mem(&src_config));
+    let source = TestEpoch::new(src_mem, src_config, 0);
+    let src_store = source.store_registry.get(EntryStoreId(0));
+    let slot = src_store.insert().unwrap();
+    src_store.get(slot).core_write(0, 111);
+    src_store.get(slot).attr_write(0, 222);
+
+    let dst_config = mk_config(8, 8, 1, 1);
+    let dst_mem = make_mem(TestEpoch::calculate_size_on_mem(&dst_config));
+    let dest = TestEpoch::new(dst_mem, dst_config, 0);
+
+    dest.copy_from(&source);
+    dest.publish();
+    let mirror = dest.to_mirror();
+    assert!(mirror.swap());
+
+    let reader_store = mirror.get_entry_store(EntryStoreId(0));
+    assert_eq!(reader_store.get(slot).core_read(0), 111);
+    assert_eq!(reader_store.get(slot).attr_read(0), 222);
+}
+
+#[test]
+fn calculate_size_on_default_tb_includes_entry_stores() {
+    let config = mk_config(4, 4, 1, 1);
+    let network_tb = NetworkWriter::calculate_size_on_tb(&config.network_config);
+    let total_default_tb = TestEpoch::calculate_size_on_default_tb(&config);
+    assert!(
+        total_default_tb >= network_tb,
+        "default TB must include store registry footprint"
+    );
 }

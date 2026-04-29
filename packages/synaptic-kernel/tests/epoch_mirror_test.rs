@@ -4,6 +4,8 @@ use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::epoch_mirror::EpochMirror;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
+use synaptic_kernel::primitives::entry_store_def::EntryStoreId;
+use synaptic_kernel::primitives::triple_buffer_def::TripleBufferId;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
@@ -406,4 +408,49 @@ fn attribute_mutation_visible_between_publishes() {
 
     // reader sees it immediately (shared plane, not triple-buffered)
     assert_eq!(reader.get_node(slot).attr_read(0), 999);
+}
+
+#[test]
+fn get_entry_store_returns_readable_store() {
+    let (_kernel, reader) = setup();
+    let store = reader.get_entry_store(EntryStoreId(0));
+    assert!(store.capacity() > 0);
+}
+
+#[test]
+fn swap_tb_only_affects_targeted_tb() {
+    let (mut kernel, reader) = setup();
+
+    kernel.get_user_tb(TripleBufferId(0)).write(0, 1234);
+    let slot = insert_head_with_tick(&kernel, 5, 999);
+
+    assert!(reader.get_head_node().is_none(), "topology not published yet");
+
+    kernel.publish_tb(TripleBufferId(0));
+    reader.swap_tb(TripleBufferId(0));
+    assert_eq!(reader.get_user_tb(TripleBufferId(0)).read(0), 1234);
+
+    assert_ne!(
+        reader.get_node(slot).get_meta(0),
+        999,
+        "default TB meta must not be visible before kernel.publish + swap"
+    );
+    assert!(!reader.swap(), "default TB has no pending publish");
+
+    kernel.publish();
+    assert!(reader.swap());
+    assert_eq!(reader.get_head_node().unwrap().get_kind(), 5);
+    assert_eq!(reader.get_node(slot).get_meta(0), 999);
+}
+
+#[test]
+fn entry_store_attr_visible_without_swap() {
+    let (mut kernel, reader) = setup();
+    let store = kernel.get_entry_store(EntryStoreId(0));
+    let slot = store.insert().unwrap();
+    store.get(slot).attr_write(0, 777);
+    assert_eq!(
+        reader.get_entry_store(EntryStoreId(0)).get(slot).attr_read(0),
+        777
+    );
 }

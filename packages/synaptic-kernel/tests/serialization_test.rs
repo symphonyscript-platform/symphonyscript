@@ -3,6 +3,7 @@ mod common;
 use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
+use synaptic_kernel::primitives::entry_store_def::EntryStoreId;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
@@ -765,4 +766,31 @@ fn mutations_after_load_visible_to_consumer_thread() {
     let head = graph.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 2);
     assert_eq!(graph.get_node(n2).attr_read(0), 555);
+}
+
+#[test]
+fn entry_store_data_survives_serialize_load() {
+    let mut kernel = TestKernel::new(config(16));
+    let slot = kernel.get_entry_store(EntryStoreId(0)).insert().unwrap();
+    kernel
+        .get_entry_store(EntryStoreId(0))
+        .get(slot)
+        .attr_write(0, 12345);
+    let serialized = kernel.serialize();
+    let loaded = TestKernel::load_serialized(serialized);
+    assert_eq!(
+        loaded
+            .get_entry_store(EntryStoreId(0))
+            .get(slot)
+            .attr_read(0),
+        12345
+    );
+}
+
+#[test]
+fn store_defs_preserved_in_serialized_config() {
+    let mut kernel = TestKernel::new(config(16));
+    let serialized = kernel.serialize();
+    assert_eq!(serialized.config.store_defs[0].id, EntryStoreId(0));
+    assert_eq!(serialized.config.store_defs[0].config.capacity, 4);
 }

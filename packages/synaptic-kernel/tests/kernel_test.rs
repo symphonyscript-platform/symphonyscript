@@ -6,6 +6,8 @@ use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
 use synaptic_kernel::epoch_mirror::EpochMirror;
+use synaptic_kernel::primitives::entry_store_def::EntryStoreId;
+use synaptic_kernel::primitives::triple_buffer_def::TripleBufferId;
 use std::sync::Arc;
 
 const NODE_META: usize = 8;
@@ -918,4 +920,81 @@ fn concurrent_attribute_reads_during_writes() {
     running.store(false, std::sync::atomic::Ordering::Relaxed);
     let iterations = consumer_thread.join().expect("consumer thread panicked during attribute writes");
     assert!(iterations > 0, "consumer thread never ran");
+}
+
+#[test]
+fn get_entry_store_insert_write_read_roundtrip() {
+    let kernel = new_controller(config(16));
+    let store = kernel.get_entry_store(EntryStoreId(0));
+    let slot = store.insert().unwrap();
+    store.get(slot).attr_write(0, 42);
+    assert_eq!(store.get(slot).attr_read(0), 42);
+}
+
+#[test]
+fn get_entry_store_returns_same_store_across_calls() {
+    let kernel = new_controller(config(16));
+    let s1 = kernel.get_entry_store(EntryStoreId(0));
+    let s2 = kernel.get_entry_store(EntryStoreId(0));
+    assert_eq!(s1.mem_start_offset(), s2.mem_start_offset());
+    assert_eq!(s1.capacity(), s2.capacity());
+}
+
+#[test]
+fn entry_store_core_visible_after_publish_swap() {
+    let mut kernel = new_controller(config(16));
+    let mirror = unsafe { mock_consumer_reader(&kernel) };
+    let slot = {
+        let store = kernel.get_entry_store(EntryStoreId(0));
+        let slot = store.insert().unwrap();
+        store.get(slot).core_write(0, 777);
+        slot
+    };
+    kernel.publish();
+    assert!(mirror.swap());
+    let reader_store = mirror.get_entry_store(EntryStoreId(0));
+    assert_eq!(reader_store.get(slot).core_read(0), 777);
+}
+
+#[test]
+fn entry_store_attr_visible_without_publish() {
+    let kernel = new_controller(config(16));
+    let mirror = unsafe { mock_consumer_reader(&kernel) };
+    let store = kernel.get_entry_store(EntryStoreId(0));
+    let slot = store.insert().unwrap();
+    store.get(slot).attr_write(0, 42);
+    assert_eq!(
+        mirror.get_entry_store(EntryStoreId(0)).get(slot).attr_read(0),
+        42
+    );
+}
+
+#[test]
+fn entry_store_survives_grow() {
+    let mut kernel = new_controller(config(4));
+    let store = kernel.get_entry_store(EntryStoreId(0));
+    let slot = store.insert().unwrap();
+    store.get(slot).attr_write(0, 999);
+    kernel.publish();
+    kernel.grow(config(8)).unwrap();
+    let store_after = kernel.get_entry_store(EntryStoreId(0));
+    assert_eq!(store_after.get(slot).attr_read(0), 999);
+}
+
+#[test]
+fn publish_tb_independent_of_default_publish() {
+    let kernel = new_controller(config(16));
+    let mirror = unsafe { mock_consumer_reader(&kernel) };
+    kernel.get_user_tb(TripleBufferId(0)).write(0, 42);
+    kernel.publish_tb(TripleBufferId(0));
+    mirror.swap_tb(TripleBufferId(0));
+    assert_eq!(
+        mirror.get_user_tb(TripleBufferId(0)).read(0),
+        42,
+        "user TB visible after publish_tb + swap_tb"
+    );
+    assert!(
+        !mirror.swap(),
+        "default TB must have no pending publish when only publish_tb was used"
+    );
 }
