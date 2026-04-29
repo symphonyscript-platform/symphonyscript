@@ -79,21 +79,6 @@ fn mem_metadata_default_zero() {
     }
 }
 
-// ============ tb_metadata: write/read round-trip ============
-// SOURCE_BUG: `Kernel` / `EpochMirror` no longer expose `tb_write_meta` / `tb_read_meta`.
-
-#[test]
-#[ignore = "SOURCE_BUG: missing tb metadata API on Kernel"]
-fn tb_metadata_write_read_round_trip() {}
-
-#[test]
-#[ignore = "SOURCE_BUG: missing tb metadata API on Kernel"]
-fn tb_metadata_overwrite() {}
-
-#[test]
-#[ignore = "SOURCE_BUG: missing tb metadata API on Kernel"]
-fn tb_metadata_default_zero() {}
-
 // ============ mem_metadata: visible to reader immediately (shared AtomicBuffer) ============
 
 #[test]
@@ -133,16 +118,6 @@ fn mem_metadata_update_between_reads() {
     assert_eq!(graph.mem_read_meta(0), 777);
 }
 
-// ============ tb_metadata: visible to reader after publish + swap ============
-
-#[test]
-#[ignore = "SOURCE_BUG: missing tb metadata API on Kernel"]
-fn tb_metadata_visible_after_publish_and_swap() {}
-
-#[test]
-#[ignore = "SOURCE_BUG: missing tb metadata API on Kernel"]
-fn tb_metadata_not_visible_without_publish() {}
-
 // ============ Capacity ============
 
 #[test]
@@ -150,10 +125,6 @@ fn mem_metadata_capacity_matches_config() {
     let controller = TestKernel::new(config());
     assert_eq!(controller.mem_metadata_capacity(), 4);
 }
-
-#[test]
-#[ignore = "SOURCE_BUG: Kernel no longer exposes tb_metadata_capacity"]
-fn tb_metadata_capacity_matches_config() {}
 
 // ============ Metadata survives grow ============
 
@@ -181,10 +152,6 @@ fn mem_metadata_survives_grow() {
     assert_eq!(controller.mem_read_meta(0), 42);
     assert_eq!(controller.mem_read_meta(1), 99);
 }
-
-#[test]
-#[ignore = "SOURCE_BUG: missing tb metadata API on Kernel"]
-fn tb_metadata_survives_grow() {}
 
 // ============ Mixed: metadata + structural mutations ============
 

@@ -295,15 +295,6 @@ fn mem_metadata_preserved() {
     assert_eq!(loaded.mem_read_meta(0), 12345);
 }
 
-// SOURCE_BUG: `Kernel` no longer exposes `tb_write_meta` / `tb_read_meta` for the default TB
-// metadata region; serialization of that plane cannot be exercised from tests.
-#[test]
-#[ignore = "SOURCE_BUG: missing tb metadata API on Kernel"]
-fn tb_metadata_preserved() {
-    let mut kernel = TestKernel::new(config(16));
-    let _ = kernel.serialize();
-}
-
 // =========================================================
 // PHASE 6: Node Meta (Topology Metadata) Preservation
 // =========================================================
