@@ -982,6 +982,32 @@ fn entry_store_survives_grow() {
 }
 
 #[test]
+fn entry_store_core_meta_survives_grow() {
+    let mut kernel = new_controller(config(4));
+    let mut consumer = EpochConsumer::new(kernel.get_control_plane());
+
+    const CORE_V: i32 = 12_345;
+    const META_V: i32 = 67_890;
+
+    let slot = {
+        let store = kernel.get_entry_store(EntryStoreId(0));
+        let slot = store.insert().unwrap();
+        store.get(slot).core_write(0, CORE_V);
+        store.get(slot).meta_write(0, META_V);
+        slot
+    };
+
+    kernel.publish();
+    kernel.grow(config(8)).unwrap();
+    kernel.publish();
+
+    let mirror = consumer.acquire_mirror();
+    let reader_store = mirror.get_entry_store(EntryStoreId(0));
+    assert_eq!(reader_store.get(slot).core_read(0), CORE_V);
+    assert_eq!(reader_store.get(slot).meta_read(0), META_V);
+}
+
+#[test]
 fn publish_tb_independent_of_default_publish() {
     let kernel = new_controller(config(16));
     let mirror = unsafe { mock_consumer_reader(&kernel) };
