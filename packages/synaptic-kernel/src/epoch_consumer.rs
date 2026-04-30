@@ -26,12 +26,14 @@ use std::sync::Arc;
 ///
 /// # Constraints
 /// - Created by passing `Arc<ControlPlane>` to `new()`.
-pub struct EpochConsumer<const TB_COUNT: usize, const STORE_COUNT: usize> {
-    control_plane: Arc<ControlPlane<TB_COUNT, STORE_COUNT>>,
+pub struct EpochConsumer<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize> {
+    control_plane: Arc<ControlPlane<TB_COUNT, STORE_COUNT, LUT_COUNT>>,
 }
 
-impl<const TB_COUNT: usize, const STORE_COUNT: usize> EpochConsumer<TB_COUNT, STORE_COUNT> {
-    pub fn new(control_plane: Arc<ControlPlane<TB_COUNT, STORE_COUNT>>) -> Self {
+impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
+    EpochConsumer<TB_COUNT, STORE_COUNT, LUT_COUNT>
+{
+    pub fn new(control_plane: Arc<ControlPlane<TB_COUNT, STORE_COUNT, LUT_COUNT>>) -> Self {
         EpochConsumer { control_plane }
     }
 
@@ -49,7 +51,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> EpochConsumer<TB_COUNT, ST
     /// # Usage
     /// Call once at the start of each processing cycle. The returned reference
     /// is valid until the next `acquire_mirror()` call.
-    pub fn acquire_mirror(&mut self) -> &EpochMirror<TB_COUNT, STORE_COUNT> {
+    pub fn acquire_mirror(&mut self) -> &EpochMirror<TB_COUNT, STORE_COUNT, LUT_COUNT> {
         let mirror = self.control_plane.acquire_mirror();
 
         mirror.swap();

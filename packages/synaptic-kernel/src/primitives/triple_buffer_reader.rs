@@ -118,7 +118,7 @@ impl TripleBufferReader {
     pub fn read_batch(&self, offset: usize, out: &mut [i32]) {
         debug_assert!(
             offset + out.len() <= self.buffer_capacity,
-            "TripleBufferReader.read_batch | [offset, T) [{}, {}) out of bounds",
+            "TripleBufferReader.read_batch | [offset, out.len()) [{}, {}) out of bounds",
             offset,
             out.len(),
         );

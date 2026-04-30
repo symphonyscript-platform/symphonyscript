@@ -7,6 +7,8 @@ use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::kernel_config::KernelConfig;
 use crate::primitives::entry_store_def::EntryStoreId;
 use crate::primitives::entry_store_writer::EntryStoreWriter;
+use crate::primitives::lut_def::LutId;
+use crate::primitives::lut_writer::LutWriter;
 use crate::primitives::tb_writer::TbWriter;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::types::AtomicBuffer;
@@ -55,23 +57,28 @@ use std::sync::Arc;
 /// Dropping the kernel unconditionally frees the deferred-deletion queue and the backing
 /// memory. If the consumer is still traversing a hot-swapped graph, the result
 /// is undefined behavior.
-pub struct Kernel<const TB_COUNT: usize, const STORE_COUNT: usize> {
-    config: KernelConfig<TB_COUNT, STORE_COUNT>,
+pub struct Kernel<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize> {
+    config: KernelConfig<TB_COUNT, STORE_COUNT, LUT_COUNT>,
     mem: AtomicBuffer,
-    control_plane: Arc<ControlPlane<TB_COUNT, STORE_COUNT>>,
-    active_epoch: Epoch<TB_COUNT, STORE_COUNT>,
-    readers_pending_deletion: VecDeque<(Box<EpochMirror<TB_COUNT, STORE_COUNT>>, i32)>,
+    control_plane: Arc<ControlPlane<TB_COUNT, STORE_COUNT, LUT_COUNT>>,
+    active_epoch: Epoch<TB_COUNT, STORE_COUNT, LUT_COUNT>,
+    readers_pending_deletion: VecDeque<(Box<EpochMirror<TB_COUNT, STORE_COUNT, LUT_COUNT>>, i32)>,
 }
 
-impl<const TB_COUNT: usize, const STORE_COUNT: usize> Kernel<TB_COUNT, STORE_COUNT> {
+impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
+    Kernel<TB_COUNT, STORE_COUNT, LUT_COUNT>
+{
     pub const HEADERS_SIZE: usize = 2;
 
-    pub fn new(config: KernelConfig<TB_COUNT, STORE_COUNT>) -> Self {
+    pub fn new(config: KernelConfig<TB_COUNT, STORE_COUNT, LUT_COUNT>) -> Self {
         let mem = Self::create_mem(Self::calculate_size_on_mem(&config));
         Self::new_from_mem(mem, config)
     }
 
-    pub fn new_from_mem(mem: AtomicBuffer, config: KernelConfig<TB_COUNT, STORE_COUNT>) -> Self {
+    pub fn new_from_mem(
+        mem: AtomicBuffer,
+        config: KernelConfig<TB_COUNT, STORE_COUNT, LUT_COUNT>,
+    ) -> Self {
         assert!(
             mem[0].load(Ordering::Acquire) == 0 && mem[1].load(Ordering::Acquire) == 0,
             "Attempted to initialize Kernel on already allocated memory"
@@ -97,7 +104,9 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Kernel<TB_COUNT, STORE_COU
         }
     }
 
-    pub fn load_serialized(serialized_kernel: SerializedKernel<TB_COUNT, STORE_COUNT>) -> Self {
+    pub fn load_serialized(
+        serialized_kernel: SerializedKernel<TB_COUNT, STORE_COUNT, LUT_COUNT>,
+    ) -> Self {
         let config = serialized_kernel.config;
         let mem: AtomicBuffer = Arc::new(
             serialized_kernel
@@ -136,8 +145,9 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Kernel<TB_COUNT, STORE_COU
         }
     }
 
-    pub fn calculate_size_on_mem(config: &KernelConfig<TB_COUNT, STORE_COUNT>) -> usize {
-        Self::HEADERS_SIZE + Epoch::<TB_COUNT, STORE_COUNT>::calculate_size_on_mem(&config)
+    pub fn calculate_size_on_mem(config: &KernelConfig<TB_COUNT, STORE_COUNT, LUT_COUNT>) -> usize {
+        Self::HEADERS_SIZE
+            + Epoch::<TB_COUNT, STORE_COUNT, LUT_COUNT>::calculate_size_on_mem(&config)
     }
 
     /// Snapshots the current kernel state for persistence.
@@ -151,7 +161,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Kernel<TB_COUNT, STORE_COU
     /// Note: publish() is called internally before snapshotting. Callers do not need
     /// to call publish() beforehand. Calling it explicitly before serialize() is
     /// harmless (double-publish is idempotent) but unnecessary.
-    pub fn serialize(&mut self) -> SerializedKernel<TB_COUNT, STORE_COUNT> {
+    pub fn serialize(&mut self) -> SerializedKernel<TB_COUNT, STORE_COUNT, LUT_COUNT> {
         self.publish();
 
         let mem = self.mem.iter().map(|a| a.load(Ordering::Relaxed)).collect();
@@ -174,7 +184,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Kernel<TB_COUNT, STORE_COU
     /// Dropping the kernel unconditionally frees the deferred-deletion queue.
     /// If the consumer is still traversing a hot-swapped epoch, the result is
     /// undefined behavior.
-    pub fn get_control_plane(&self) -> Arc<ControlPlane<TB_COUNT, STORE_COUNT>> {
+    pub fn get_control_plane(&self) -> Arc<ControlPlane<TB_COUNT, STORE_COUNT, LUT_COUNT>> {
         Arc::clone(&self.control_plane)
     }
 
@@ -206,6 +216,11 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Kernel<TB_COUNT, STORE_COU
     #[inline]
     pub fn get_entry_store(&self, store_id: EntryStoreId) -> &EntryStoreWriter {
         self.active_epoch.store_registry.get(store_id)
+    }
+
+    #[inline]
+    pub fn get_lut(&self, lut_id: LutId) -> &LutWriter {
+        self.active_epoch.lut_registry.get(lut_id)
     }
 
     #[inline]
@@ -333,7 +348,10 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Kernel<TB_COUNT, STORE_COU
         self.active_epoch.publish_tb(tb_id);
     }
 
-    pub fn grow(&mut self, config: KernelConfig<TB_COUNT, STORE_COUNT>) -> Result<(), KernelError> {
+    pub fn grow(
+        &mut self,
+        config: KernelConfig<TB_COUNT, STORE_COUNT, LUT_COUNT>,
+    ) -> Result<(), KernelError> {
         if config.network_config.node_capacity < self.node_capacity()
             || config.network_config.synapse_capacity < self.synapse_capacity()
             || config.mem_metadata_size < self.config.mem_metadata_size
@@ -363,6 +381,19 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Kernel<TB_COUNT, STORE_COU
                 .ok_or(KernelError::InsufficientCapacity)?;
 
             if new_def.config.capacity < old_def.config.capacity {
+                return Err(KernelError::InsufficientCapacity);
+            }
+        }
+
+        for i in 0..self.config.lut_defs.len() {
+            let old_def = &self.config.lut_defs[i];
+            let new_def = &config
+                .lut_defs
+                .iter()
+                .find(|d| d.id == old_def.id)
+                .ok_or(KernelError::InsufficientCapacity)?;
+
+            if new_def.size < old_def.size {
                 return Err(KernelError::InsufficientCapacity);
             }
         }

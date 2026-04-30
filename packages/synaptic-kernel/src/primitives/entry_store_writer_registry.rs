@@ -17,11 +17,15 @@ use std::sync::Arc;
 /// Producer-side only. The consumer uses `EntryStoreReaderRegistry`.
 #[derive(Clone)]
 pub struct EntryStoreWriterRegistry<const TB_COUNT: usize, const STORE_COUNT: usize> {
-    mem_start_offset: usize,
-    mem_end_offset: usize,
     id_index: [u16; STORE_COUNT],
     defs: [EntryStoreDef; STORE_COUNT],
     stores: [EntryStoreWriter; STORE_COUNT],
+    mem_start_offset: usize,
+    mem_end_offset: usize,
+    default_tb_start_offset: usize,
+    default_tb_end_offset: usize,
+    extra_tb_start_offsets: [usize; TB_COUNT],
+    extra_tb_end_offsets: [usize; TB_COUNT],
 }
 
 impl<const TB_COUNT: usize, const STORE_COUNT: usize>
@@ -155,6 +159,10 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         EntryStoreWriterRegistry {
             mem_start_offset,
             mem_end_offset: mem_cursor,
+            default_tb_start_offset,
+            default_tb_end_offset: default_tb_cursor,
+            extra_tb_start_offsets,
+            extra_tb_end_offsets: extra_tb_cursors,
             id_index,
             defs,
             stores,
@@ -192,12 +200,16 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         size
     }
 
-    pub fn to_reader(&self) -> EntryStoreReaderRegistry<STORE_COUNT> {
-        EntryStoreReaderRegistry::<STORE_COUNT>::bind(
+    pub fn to_reader(&self) -> EntryStoreReaderRegistry<TB_COUNT, STORE_COUNT> {
+        EntryStoreReaderRegistry::<TB_COUNT, STORE_COUNT>::bind(
             self.id_index,
             self.stores.clone().map(|a| a.to_reader()),
             self.mem_start_offset,
             self.mem_end_offset,
+            self.default_tb_start_offset,
+            self.default_tb_end_offset,
+            self.extra_tb_start_offsets,
+            self.extra_tb_end_offsets,
         )
     }
 
@@ -209,6 +221,26 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
     #[inline]
     pub fn mem_end_offset(&self) -> usize {
         self.mem_end_offset
+    }
+
+    #[inline]
+    pub fn default_tb_start_offset(&self) -> usize {
+        self.default_tb_start_offset
+    }
+
+    #[inline]
+    pub fn default_tb_end_offset(&self) -> usize {
+        self.default_tb_end_offset
+    }
+
+    #[inline]
+    pub fn extra_tb_start_offsets(&self) -> [usize; TB_COUNT] {
+        self.extra_tb_start_offsets
+    }
+
+    #[inline]
+    pub fn extra_tb_end_offsets(&self) -> [usize; TB_COUNT] {
+        self.extra_tb_end_offsets
     }
 
     #[inline]
@@ -260,7 +292,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
 
             debug_assert!(
                 source_store.capacity() <= dest_store.capacity(),
-                "EntryStoreWriterRegistry.copy_metadata_regions_from | source_store.capacity {} cannot be greater than dest_store.capacity {}",
+                "EntryStoreWriterRegistry.copy_from | source_store.capacity {} cannot be greater than dest_store.capacity {}",
                 source_store.capacity(),
                 dest_store.capacity(),
             );

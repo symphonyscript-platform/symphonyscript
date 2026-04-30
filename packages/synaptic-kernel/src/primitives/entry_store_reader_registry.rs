@@ -11,27 +11,41 @@ use crate::primitives::entry_store_reader::EntryStoreReader;
 /// # Threading
 /// Consumer-side only. The producer uses `EntryStoreWriterRegistry`.
 #[derive(Clone)]
-pub struct EntryStoreReaderRegistry<const STORE_COUNT: usize> {
-    mem_start_offset: usize,
-    mem_end_offset: usize,
+pub struct EntryStoreReaderRegistry<const TB_COUNT: usize, const STORE_COUNT: usize> {
     id_index: [u16; STORE_COUNT],
     stores: [EntryStoreReader; STORE_COUNT],
+    mem_start_offset: usize,
+    mem_end_offset: usize,
+    default_tb_start_offset: usize,
+    default_tb_end_offset: usize,
+    extra_tb_start_offsets: [usize; TB_COUNT],
+    extra_tb_end_offsets: [usize; TB_COUNT],
 }
 
-impl<const STORE_COUNT: usize> EntryStoreReaderRegistry<STORE_COUNT> {
+impl<const TB_COUNT: usize, const STORE_COUNT: usize>
+    EntryStoreReaderRegistry<TB_COUNT, STORE_COUNT>
+{
     pub fn bind(
         id_index: [u16; STORE_COUNT],
         stores: [EntryStoreReader; STORE_COUNT],
         mem_start_offset: usize,
         mem_end_offset: usize,
+        default_tb_start_offset: usize,
+        default_tb_end_offset: usize,
+        extra_tb_start_offsets: [usize; TB_COUNT],
+        extra_tb_end_offsets: [usize; TB_COUNT],
     ) -> Self {
         const { assert!(STORE_COUNT > 0 && STORE_COUNT < u16::MAX as usize) };
 
         EntryStoreReaderRegistry {
-            mem_start_offset,
-            mem_end_offset,
             id_index,
             stores,
+            mem_start_offset,
+            mem_end_offset,
+            default_tb_start_offset,
+            default_tb_end_offset,
+            extra_tb_start_offsets,
+            extra_tb_end_offsets,
         }
     }
 
@@ -43,6 +57,26 @@ impl<const STORE_COUNT: usize> EntryStoreReaderRegistry<STORE_COUNT> {
     #[inline]
     pub fn mem_end_offset(&self) -> usize {
         self.mem_end_offset
+    }
+
+    #[inline]
+    pub fn default_tb_start_offset(&self) -> usize {
+        self.default_tb_start_offset
+    }
+
+    #[inline]
+    pub fn default_tb_end_offset(&self) -> usize {
+        self.default_tb_end_offset
+    }
+
+    #[inline]
+    pub fn extra_tb_start_offsets(&self) -> [usize; TB_COUNT] {
+        self.extra_tb_start_offsets
+    }
+
+    #[inline]
+    pub fn extra_tb_end_offsets(&self) -> [usize; TB_COUNT] {
+        self.extra_tb_end_offsets
     }
 
     #[inline]

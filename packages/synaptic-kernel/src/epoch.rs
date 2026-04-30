@@ -2,6 +2,7 @@ use crate::epoch_mirror::EpochMirror;
 use crate::kernel_config::KernelConfig;
 use crate::metadata::mem_metadata_writer::MemMetadataWriter;
 use crate::primitives::entry_store_writer_registry::EntryStoreWriterRegistry;
+use crate::primitives::lut_writer_registry::LutWriterRegistry;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::triple_buffer_writer_registry::TripleBufferWriterRegistry;
 use crate::primitives::types::AtomicBuffer;
@@ -36,7 +37,8 @@ use std::sync::Arc;
 /// Order       Segment                 Size
 /// --------------------------------------------------------------------------
 /// 1           Network                 NetworkWriter::calculate_size_on_tb()
-/// 2           Entry Store Registry    EntryStoreWriterRegistry::calculate_size_on_tb()
+/// 2           Entry Store Registry    EntryStoreWriterRegistry::calculate_size_on_default_tb()
+/// 3           LUT Registry            LutWriterRegistry::calculate_size_on_default_tb()
 /// ```
 ///
 /// # Deployment
@@ -52,17 +54,20 @@ use std::sync::Arc;
 /// - Memory sizing is defined at compile time via const generics.
 /// - Use `to_mirror()` to create the paired `EpochMirror`.
 #[derive(Clone)]
-pub struct Epoch<const TB_COUNT: usize, const STORE_COUNT: usize> {
+pub struct Epoch<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize> {
     pub mem_metadata: MemMetadataWriter,
     pub tb_registry: TripleBufferWriterRegistry<TB_COUNT>,
     pub network: NetworkWriter,
     pub store_registry: EntryStoreWriterRegistry<TB_COUNT, STORE_COUNT>,
+    pub lut_registry: LutWriterRegistry<TB_COUNT, LUT_COUNT>,
 }
 
-impl<const TB_COUNT: usize, const STORE_COUNT: usize> Epoch<TB_COUNT, STORE_COUNT> {
+impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
+    Epoch<TB_COUNT, STORE_COUNT, LUT_COUNT>
+{
     pub fn new(
         mem: AtomicBuffer,
-        config: KernelConfig<TB_COUNT, STORE_COUNT>,
+        config: KernelConfig<TB_COUNT, STORE_COUNT, LUT_COUNT>,
         mem_start_offset: usize,
     ) -> Self {
         Self::create(mem, config, mem_start_offset, false)
@@ -70,7 +75,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Epoch<TB_COUNT, STORE_COUN
 
     pub fn bind(
         mem: AtomicBuffer,
-        config: KernelConfig<TB_COUNT, STORE_COUNT>,
+        config: KernelConfig<TB_COUNT, STORE_COUNT, LUT_COUNT>,
         mem_start_offset: usize,
     ) -> Self {
         Self::create(mem, config, mem_start_offset, true)
@@ -78,7 +83,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Epoch<TB_COUNT, STORE_COUN
 
     pub fn create(
         mem: AtomicBuffer,
-        config: KernelConfig<TB_COUNT, STORE_COUNT>,
+        config: KernelConfig<TB_COUNT, STORE_COUNT, LUT_COUNT>,
         mem_start_offset: usize,
         bind: bool,
     ) -> Self {
@@ -112,7 +117,15 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Epoch<TB_COUNT, STORE_COUN
             config.store_defs,
             network.mem_end_offset(),
             network.tb_end_offset(),
-            [0; TB_COUNT], // User TB-s have no other consumers than user-defined entry stores.
+            [0; TB_COUNT], // Extra TB-s have no prior consumers than user-defined entry stores.
+            bind,
+        );
+
+        let lut_registry = LutWriterRegistry::create(
+            tb_registry.clone(),
+            config.lut_defs,
+            store_registry.default_tb_end_offset(),
+            store_registry.extra_tb_end_offsets(),
             bind,
         );
 
@@ -121,10 +134,11 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Epoch<TB_COUNT, STORE_COUN
             tb_registry,
             network,
             store_registry,
+            lut_registry,
         }
     }
 
-    pub fn calculate_size_on_mem(config: &KernelConfig<TB_COUNT, STORE_COUNT>) -> usize {
+    pub fn calculate_size_on_mem(config: &KernelConfig<TB_COUNT, STORE_COUNT, LUT_COUNT>) -> usize {
         MemMetadataWriter::calculate_size_on_mem(config.mem_metadata_size)
             + TripleBufferWriterRegistry::calculate_size_on_mem(
                 Self::calculate_size_on_default_tb(&config),
@@ -136,18 +150,24 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Epoch<TB_COUNT, STORE_COUN
             )
     }
 
-    pub fn calculate_size_on_default_tb(config: &KernelConfig<TB_COUNT, STORE_COUNT>) -> usize {
+    pub fn calculate_size_on_default_tb(
+        config: &KernelConfig<TB_COUNT, STORE_COUNT, LUT_COUNT>,
+    ) -> usize {
         NetworkWriter::calculate_size_on_tb(&config.network_config)
             + EntryStoreWriterRegistry::<TB_COUNT, STORE_COUNT>::calculate_size_on_default_tb(
                 &config.store_defs,
             )
+            + LutWriterRegistry::<TB_COUNT, LUT_COUNT>::calculate_size_on_default_tb(
+                &config.lut_defs,
+            )
     }
 
-    pub fn to_mirror(&self) -> EpochMirror<TB_COUNT, STORE_COUNT> {
+    pub fn to_mirror(&self) -> EpochMirror<TB_COUNT, STORE_COUNT, LUT_COUNT> {
         EpochMirror::bind(
             self.mem_metadata.to_reader(),
             self.tb_registry.to_reader(),
             self.store_registry.to_reader(),
+            self.lut_registry.to_reader(),
             self.network.to_reader(),
         )
     }
@@ -194,5 +214,6 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Epoch<TB_COUNT, STORE_COUN
             .copy_metadata_regions_from(&source.tb_registry);
         self.network.copy_from(&source.network);
         self.store_registry.copy_from(&source.store_registry);
+        self.lut_registry.copy_from(&source.lut_registry);
     }
 }

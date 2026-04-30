@@ -2,6 +2,9 @@ use crate::metadata::mem_metadata_reader::MemMetadataReader;
 use crate::primitives::entry_store_def::EntryStoreId;
 use crate::primitives::entry_store_reader::EntryStoreReader;
 use crate::primitives::entry_store_reader_registry::EntryStoreReaderRegistry;
+use crate::primitives::lut_def::LutId;
+use crate::primitives::lut_reader::LutReader;
+use crate::primitives::lut_reader_registry::LutReaderRegistry;
 use crate::primitives::tb_reader::TbReader;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::triple_buffer_reader_registry::TripleBufferReaderRegistry;
@@ -35,24 +38,29 @@ use crate::topology::node::node_reader::NodeReader;
 /// - Memory sizing is defined at compile time via const generics.
 /// - Created exclusively via `Epoch::to_mirror()`.
 #[derive(Clone)]
-pub struct EpochMirror<const TB_COUNT: usize, const STORE_COUNT: usize> {
+pub struct EpochMirror<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize> {
     mem_metadata: MemMetadataReader,
     tb_registry: TripleBufferReaderRegistry<TB_COUNT>,
-    store_registry: EntryStoreReaderRegistry<STORE_COUNT>,
+    store_registry: EntryStoreReaderRegistry<TB_COUNT, STORE_COUNT>,
+    lut_registry: LutReaderRegistry<TB_COUNT, LUT_COUNT>,
     network: NetworkReader,
 }
 
-impl<const TB_COUNT: usize, const STORE_COUNT: usize> EpochMirror<TB_COUNT, STORE_COUNT> {
+impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
+    EpochMirror<TB_COUNT, STORE_COUNT, LUT_COUNT>
+{
     pub(crate) fn bind(
         mem_metadata: MemMetadataReader,
         tb_registry: TripleBufferReaderRegistry<TB_COUNT>,
-        store_registry: EntryStoreReaderRegistry<STORE_COUNT>,
+        store_registry: EntryStoreReaderRegistry<TB_COUNT, STORE_COUNT>,
+        lut_registry: LutReaderRegistry<TB_COUNT, LUT_COUNT>,
         network: NetworkReader,
     ) -> Self {
         EpochMirror {
             mem_metadata,
             tb_registry,
             store_registry,
+            lut_registry,
             network,
         }
     }
@@ -80,6 +88,11 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> EpochMirror<TB_COUNT, STOR
     #[inline]
     pub fn get_entry_store(&'_ self, store_id: EntryStoreId) -> &EntryStoreReader {
         self.store_registry.get(store_id)
+    }
+
+    #[inline]
+    pub fn get_lut(&'_ self, lut_id: LutId) -> &LutReader {
+        self.lut_registry.get(lut_id)
     }
 
     #[inline]

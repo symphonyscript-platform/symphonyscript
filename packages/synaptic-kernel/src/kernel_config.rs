@@ -1,4 +1,5 @@
 use crate::primitives::entry_store_def::EntryStoreDef;
+use crate::primitives::lut_def::LutDef;
 use crate::primitives::triple_buffer_def::TripleBufferDef;
 use crate::topology::network::network_config::NetworkConfig;
 
@@ -16,11 +17,14 @@ use crate::topology::network::network_config::NetworkConfig;
 ///   in this array.
 /// - `store_defs`: Definitions for `STORE_COUNT` user-allocated entity stores.
 ///   IDs must form a permutation of `[0, STORE_COUNT-1]`.
+/// - `lut_defs`: Definitions for `LUT_COUNT` user-allocated LUTs.
+///   IDs must form a permutation of `[0, LUT_COUNT-1]`.
 /// - `network_config`: Network configuration of strides, node counts and synapse counts.
 #[derive(Clone)]
-pub struct KernelConfig<const TB_COUNT: usize, const STORE_COUNT: usize> {
+pub struct KernelConfig<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize> {
     pub mem_metadata_size: usize,
     pub tb_defs: [TripleBufferDef; TB_COUNT],
     pub store_defs: [EntryStoreDef; STORE_COUNT],
+    pub lut_defs: [LutDef; LUT_COUNT],
     pub network_config: NetworkConfig,
 }

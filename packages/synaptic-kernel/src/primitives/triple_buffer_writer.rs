@@ -217,7 +217,7 @@ impl TripleBufferWriter {
     pub fn write_batch(&self, offset: usize, data: &[i32]) {
         debug_assert!(
             offset + data.len() <= self.buffer_capacity,
-            "TripleBufferWriter.write_batch | [offset, T) [{}, {}) out of bounds",
+            "TripleBufferWriter.write_batch | [offset, out.len()) [{}, {}) out of bounds",
             offset,
             data.len(),
         );
@@ -232,7 +232,7 @@ impl TripleBufferWriter {
     pub fn read_batch(&self, offset: usize, out: &mut [i32]) {
         debug_assert!(
             offset + out.len() <= self.buffer_capacity,
-            "TripleBufferWriter.read_batch | [offset, T) [{}, {}) out of bounds",
+            "TripleBufferWriter.read_batch | [offset, out.len()) [{}, {}) out of bounds",
             offset,
             out.len(),
         );
