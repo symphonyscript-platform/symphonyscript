@@ -6,6 +6,9 @@ use synaptic_kernel::epoch::Epoch;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
 use synaptic_kernel::primitives::entry_store_def::EntryStoreId;
+use synaptic_kernel::primitives::entry_store_writer_registry::EntryStoreWriterRegistry;
+use synaptic_kernel::primitives::lut_def::LutId;
+use synaptic_kernel::primitives::lut_writer_registry::LutWriterRegistry;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::network::network_config::NetworkConfig;
 use synaptic_kernel::topology::network::network_writer::NetworkWriter;
@@ -614,4 +617,39 @@ fn calculate_size_on_default_tb_includes_entry_stores() {
         total_default_tb >= network_tb,
         "default TB must include store registry footprint"
     );
+}
+
+#[test]
+fn lut_registry_created_with_epoch() {
+    let config = mk_config(4, 4, 1, 1);
+    let mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
+    let epoch = TestEpoch::new(mem, config, 0);
+    let _ = epoch.lut_registry.get(LutId(0));
+}
+
+#[test]
+fn copy_from_migrates_lut_data() {
+    let src_config = mk_config(4, 4, 1, 1);
+    let src_mem = make_mem(TestEpoch::calculate_size_on_mem(&src_config));
+    let source = TestEpoch::new(src_mem, src_config, 0);
+    source.lut_registry.get(LutId(0)).write(0, 777);
+
+    let dst_config = mk_config(8, 8, 1, 1);
+    let dst_mem = make_mem(TestEpoch::calculate_size_on_mem(&dst_config));
+    let dest = TestEpoch::new(dst_mem, dst_config, 0);
+
+    dest.copy_from(&source);
+    dest.publish();
+    let mirror = dest.to_mirror();
+    assert!(mirror.swap());
+    assert_eq!(mirror.get_lut(LutId(0)).read(0), 777);
+}
+
+#[test]
+fn calculate_size_on_default_tb_includes_luts() {
+    let config = mk_config(4, 4, 1, 1);
+    let expected = NetworkWriter::calculate_size_on_tb(&config.network_config)
+        + EntryStoreWriterRegistry::<1, 1>::calculate_size_on_default_tb(&config.store_defs)
+        + LutWriterRegistry::<1, 1>::calculate_size_on_default_tb(&config.lut_defs);
+    assert_eq!(TestEpoch::calculate_size_on_default_tb(&config), expected);
 }

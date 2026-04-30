@@ -4,6 +4,7 @@ use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
 use synaptic_kernel::primitives::entry_store_def::EntryStoreId;
+use synaptic_kernel::primitives::lut_def::LutId;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
@@ -776,6 +777,15 @@ fn entry_store_data_survives_serialize_load() {
             .attr_read(0),
         12345
     );
+}
+
+#[test]
+fn lut_data_preserved_through_serialization() {
+    let mut kernel = TestKernel::new(config(16));
+    kernel.get_lut(LutId(0)).write(0, 31_415);
+    let serialized = kernel.serialize();
+    let loaded = TestKernel::load_serialized(serialized);
+    assert_eq!(loaded.get_lut(LutId(0)).read(0), 31_415);
 }
 
 #[test]

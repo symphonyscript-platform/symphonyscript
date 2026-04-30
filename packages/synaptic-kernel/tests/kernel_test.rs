@@ -6,8 +6,11 @@ use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
 use synaptic_kernel::epoch_mirror::EpochMirror;
-use synaptic_kernel::primitives::entry_store_def::EntryStoreId;
-use synaptic_kernel::primitives::triple_buffer_def::TripleBufferId;
+use synaptic_kernel::primitives::entry_store_config::EntryStoreConfig;
+use synaptic_kernel::primitives::entry_store_def::{EntryStoreDef, EntryStoreId};
+use synaptic_kernel::primitives::lut_def::{LutDef, LutId};
+use synaptic_kernel::topology::network::network_config::NetworkConfig;
+use synaptic_kernel::primitives::triple_buffer_def::{TripleBufferDef, TripleBufferId};
 use std::sync::Arc;
 
 const NODE_META: usize = 8;
@@ -35,6 +38,41 @@ fn create_config(nodes: usize, synapses: usize) -> KernelConfig<1, 1, 1> {
 
 fn config(capacity: usize) -> KernelConfig<1, 1, 1> {
     create_config(capacity, capacity)
+}
+
+fn config_with_lut_on_default(lut_size: usize) -> KernelConfig<1, 1, 1> {
+    let mut c = create_config(16, 16);
+    c.lut_defs = [LutDef::new(LutId(0), TripleBufferId::DEFAULT, lut_size)];
+    c
+}
+
+fn config_with_lut_on_user_tb(lut_size: usize) -> KernelConfig<1, 1, 1> {
+    KernelConfig {
+        mem_metadata_size: 1,
+        tb_defs: [TripleBufferDef {
+            id: TripleBufferId(0),
+            buffer_capacity: 32768,
+        }],
+        store_defs: [EntryStoreDef::new(
+            EntryStoreId(0),
+            TripleBufferId::DEFAULT,
+            EntryStoreConfig {
+                core_stride: 1,
+                meta_stride: 1,
+                attr_stride: 1,
+                capacity: 4,
+            },
+        )],
+        lut_defs: [LutDef::new(LutId(0), TripleBufferId(0), lut_size)],
+        network_config: NetworkConfig {
+            node_capacity: 16,
+            node_meta_stride: NODE_META,
+            node_attr_stride: NODE_ATTR,
+            synapse_capacity: 16,
+            synapse_meta_stride: SYNAPSE_META,
+            synapse_attr_stride: SYNAPSE_ATTR,
+        },
+    }
 }
 
 /// Extract consumer-thread reader from controller via a leaked [`EpochConsumer`].
@@ -1019,6 +1057,76 @@ fn publish_tb_independent_of_default_publish() {
         42,
         "user TB visible after publish_tb + swap_tb"
     );
+    assert!(
+        !mirror.swap(),
+        "default TB must have no pending publish when only publish_tb was used"
+    );
+}
+
+#[test]
+fn lut_write_read_roundtrip() {
+    let mut kernel = new_controller(config_with_lut_on_default(1));
+    kernel.get_lut(LutId(0)).write(0, 42);
+    let mirror = unsafe { mock_consumer_reader(&kernel) };
+    kernel.publish();
+    assert!(mirror.swap());
+    assert_eq!(mirror.get_lut(LutId(0)).read(0), 42);
+}
+
+#[test]
+fn lut_write_all_visible_after_publish() {
+    let mut kernel = new_controller(config_with_lut_on_default(8));
+    let data: Vec<i32> = (0..8).map(|i| i * 3).collect();
+    kernel.get_lut(LutId(0)).write_all(&data);
+    let mirror = unsafe { mock_consumer_reader(&kernel) };
+    kernel.publish();
+    assert!(mirror.swap());
+    let mut out = [0i32; 8];
+    mirror.get_lut(LutId(0)).read_all(&mut out);
+    assert_eq!(out.as_slice(), data.as_slice());
+}
+
+#[test]
+fn lut_not_visible_before_publish() {
+    let mut kernel = new_controller(config_with_lut_on_default(1));
+    kernel.get_lut(LutId(0)).write(0, 99);
+    let mirror = unsafe { mock_consumer_reader(&kernel) };
+    assert_eq!(
+        mirror.get_lut(LutId(0)).read(0),
+        0,
+        "consumer read buffer must not see producer writes until publish+swap"
+    );
+    kernel.publish();
+    assert!(mirror.swap());
+    assert_eq!(mirror.get_lut(LutId(0)).read(0), 99);
+}
+
+#[test]
+fn lut_survives_grow() {
+    let mut kernel = new_controller(config_with_lut_on_default(4));
+    kernel.get_lut(LutId(0)).write(0, 1001);
+    kernel.get_lut(LutId(0)).write(3, 2002);
+    let mut larger = config_with_lut_on_default(8);
+    larger.network_config.node_capacity = 32;
+    larger.network_config.synapse_capacity = 32;
+    kernel.grow(larger).unwrap();
+    let mirror = unsafe { mock_consumer_reader(&kernel) };
+    kernel.publish();
+    assert!(mirror.swap());
+    assert_eq!(mirror.get_lut(LutId(0)).read(0), 1001);
+    assert_eq!(mirror.get_lut(LutId(0)).read(3), 2002);
+}
+
+#[test]
+fn lut_on_user_tb_independent_publish() {
+    let kernel = new_controller(config_with_lut_on_user_tb(16));
+    kernel.get_lut(LutId(0)).write(0, 7);
+    kernel.get_lut(LutId(0)).write(5, 8);
+    let mirror = unsafe { mock_consumer_reader(&kernel) };
+    kernel.publish_tb(TripleBufferId(0));
+    mirror.swap_tb(TripleBufferId(0));
+    assert_eq!(mirror.get_lut(LutId(0)).read(0), 7);
+    assert_eq!(mirror.get_lut(LutId(0)).read(5), 8);
     assert!(
         !mirror.swap(),
         "default TB must have no pending publish when only publish_tb was used"
