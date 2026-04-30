@@ -19,8 +19,6 @@ pub struct EntryStoreReaderRegistry<const STORE_COUNT: usize> {
 }
 
 impl<const STORE_COUNT: usize> EntryStoreReaderRegistry<STORE_COUNT> {
-    const _ASSERT_N_FITS_U16_ID: () = assert!(STORE_COUNT > 0 && STORE_COUNT < u16::MAX as usize);
-
     pub fn bind(
         id_index: [u16; STORE_COUNT],
         stores: [EntryStoreReader; STORE_COUNT],

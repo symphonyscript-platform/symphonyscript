@@ -1,5 +1,5 @@
-use crate::primitives::entry_store_reader_registry::EntryStoreReaderRegistry;
 use crate::primitives::entry_store_def::{EntryStoreDef, EntryStoreId};
+use crate::primitives::entry_store_reader_registry::EntryStoreReaderRegistry;
 use crate::primitives::entry_store_writer::EntryStoreWriter;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::triple_buffer_writer_registry::TripleBufferWriterRegistry;
@@ -27,8 +27,6 @@ pub struct EntryStoreWriterRegistry<const TB_COUNT: usize, const STORE_COUNT: us
 impl<const TB_COUNT: usize, const STORE_COUNT: usize>
     EntryStoreWriterRegistry<TB_COUNT, STORE_COUNT>
 {
-    const _ASSERT_N_FITS_U16_ID: () = assert!(STORE_COUNT > 0 && STORE_COUNT < u16::MAX as usize);
-
     pub fn new(
         mem: AtomicBuffer,
         tb_registry: TripleBufferWriterRegistry<TB_COUNT>,
@@ -229,6 +227,12 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
 
         let index = self.id_index[id.0 as usize];
         &self.stores[index as usize]
+    }
+
+    pub fn publish_all(&self) {
+        for i in 0..self.stores.len() {
+            self.stores[i].publish()
+        }
     }
 
     pub fn copy_from<const TB_COUNT_M: usize, const STORE_COUNT_M: usize>(

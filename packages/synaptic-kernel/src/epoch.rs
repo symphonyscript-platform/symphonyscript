@@ -154,6 +154,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Epoch<TB_COUNT, STORE_COUN
 
     pub fn publish(&self) {
         self.network.publish();
+        self.store_registry.publish_all();
         self.tb_registry.get(TripleBufferId::DEFAULT).publish();
     }
 

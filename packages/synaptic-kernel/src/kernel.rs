@@ -147,6 +147,10 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Kernel<TB_COUNT, STORE_COU
     /// If a consumer thread is actively traversing the topology or acking generations,
     /// the snapshot may capture a torn SPSC state (e.g., a triple buffer mid-swap).
     /// This is the same quiescence requirement that applies to dropping the Kernel.
+    ///
+    /// Note: publish() is called internally before snapshotting. Callers do not need
+    /// to call publish() beforehand. Calling it explicitly before serialize() is
+    /// harmless (double-publish is idempotent) but unnecessary.
     pub fn serialize(&mut self) -> SerializedKernel<TB_COUNT, STORE_COUNT> {
         self.publish();
 
@@ -332,8 +336,35 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize> Kernel<TB_COUNT, STORE_COU
     pub fn grow(&mut self, config: KernelConfig<TB_COUNT, STORE_COUNT>) -> Result<(), KernelError> {
         if config.network_config.node_capacity < self.node_capacity()
             || config.network_config.synapse_capacity < self.synapse_capacity()
+            || config.mem_metadata_size < self.config.mem_metadata_size
         {
             return Err(KernelError::InsufficientCapacity);
+        }
+
+        for i in 0..self.config.tb_defs.len() {
+            let old_def = &self.config.tb_defs[i];
+            let new_def = &config
+                .tb_defs
+                .iter()
+                .find(|d| d.id == old_def.id)
+                .ok_or(KernelError::InsufficientCapacity)?;
+
+            if new_def.buffer_capacity < old_def.buffer_capacity {
+                return Err(KernelError::InsufficientCapacity);
+            }
+        }
+
+        for i in 0..self.config.store_defs.len() {
+            let old_def = &self.config.store_defs[i];
+            let new_def = &config
+                .store_defs
+                .iter()
+                .find(|d| d.id == old_def.id)
+                .ok_or(KernelError::InsufficientCapacity)?;
+
+            if new_def.config.capacity < old_def.config.capacity {
+                return Err(KernelError::InsufficientCapacity);
+            }
         }
 
         self.mem = Self::create_mem_stamp(Self::calculate_size_on_mem(&config));

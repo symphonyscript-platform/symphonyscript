@@ -41,8 +41,6 @@ pub struct TripleBufferWriterRegistry<const N: usize> {
 }
 
 impl<const N: usize> TripleBufferWriterRegistry<N> {
-    const _ASSERT_N_FITS_U16_ID: () = assert!(N > 0 && N < u16::MAX as usize);
-
     pub fn new(
         mem: AtomicBuffer,
         defs: [TripleBufferDef; N],

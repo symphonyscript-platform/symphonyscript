@@ -25,8 +25,6 @@ pub struct TripleBufferReaderRegistry<const N: usize> {
 }
 
 impl<const N: usize> TripleBufferReaderRegistry<N> {
-    const _ASSERT_N_FITS_U16_ID: () = assert!(N > 0 && N < u16::MAX as usize);
-
     pub(crate) fn bind(
         id_index: [u16; N],
         default_tb: TripleBufferReader,
