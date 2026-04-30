@@ -68,7 +68,7 @@ fn make_reader_registry<const STORE_COUNT: usize>(
 ) -> (
     TripleBufferWriterRegistry<1>,
     EntryStoreWriterRegistry<1, STORE_COUNT>,
-    EntryStoreReaderRegistry<STORE_COUNT>,
+    EntryStoreReaderRegistry<1, STORE_COUNT>,
 ) {
     let (tb_reg, writer_reg) = make_writer_registry(defs);
     let reader_reg = writer_reg.to_reader();

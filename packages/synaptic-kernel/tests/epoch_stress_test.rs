@@ -15,10 +15,10 @@ const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type TestKernel = Kernel<1, 1>;
-type TestProcessor = EpochConsumer<1, 1>;
+type TestKernel = Kernel<1, 1, 1>;
+type TestProcessor = EpochConsumer<1, 1, 1>;
 
-fn config(n: usize, s: usize) -> KernelConfig<1, 1> {
+fn config(n: usize, s: usize) -> KernelConfig<1, 1, 1> {
     common::kernel_config_1_1(n, s, NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR)
 }
 
@@ -44,8 +44,8 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
 
     // Consumer thread: uses KernelProcessor (acquire_mirror + ack)
     let consumer_thread = thread::spawn(move || {
-        let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1>) };
-        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1>> = unsafe { Arc::from_raw(cp_ref) };
+        let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1, 1>) };
+        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1, 1>> = unsafe { Arc::from_raw(cp_ref) };
         let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
@@ -151,8 +151,8 @@ fn epoch_stress_random_mutations_under_consumer_load() {
 
     // Consumer thread with KernelProcessor
     let consumer_thread = thread::spawn(move || {
-        let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1>) };
-        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1>> = unsafe { Arc::from_raw(cp_ref) };
+        let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1, 1>) };
+        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1, 1>> = unsafe { Arc::from_raw(cp_ref) };
         let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
@@ -274,8 +274,8 @@ fn epoch_stress_slow_ack_does_not_crash() {
 
     // Slow consumer thread: acks infrequently
     let consumer_thread = thread::spawn(move || {
-        let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1>) };
-        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1>> = unsafe { Arc::from_raw(cp_ref) };
+        let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1, 1>) };
+        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1, 1>> = unsafe { Arc::from_raw(cp_ref) };
         let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
@@ -351,8 +351,8 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
 
     // Consumer thread: reads attributes via KernelProcessor
     let consumer_thread = thread::spawn(move || {
-        let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1>) };
-        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1>> = unsafe { Arc::from_raw(cp_ref) };
+        let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1, 1>) };
+        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1, 1>> = unsafe { Arc::from_raw(cp_ref) };
         let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;

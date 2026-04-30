@@ -3,6 +3,7 @@
 use synaptic_kernel::kernel_config::KernelConfig;
 use synaptic_kernel::primitives::entry_store_config::EntryStoreConfig;
 use synaptic_kernel::primitives::entry_store_def::{EntryStoreDef, EntryStoreId};
+use synaptic_kernel::primitives::lut_def::{LutDef, LutId};
 use synaptic_kernel::primitives::triple_buffer_def::{TripleBufferDef, TripleBufferId};
 use synaptic_kernel::topology::network::network_config::NetworkConfig;
 
@@ -11,7 +12,7 @@ pub fn kernel_config_1_1_network(
     mem_metadata_size: usize,
     network_config: NetworkConfig,
     user_tb_buffer_capacity: usize,
-) -> KernelConfig<1, 1> {
+) -> KernelConfig<1, 1, 1> {
     KernelConfig {
         mem_metadata_size,
         tb_defs: [TripleBufferDef {
@@ -28,11 +29,12 @@ pub fn kernel_config_1_1_network(
                 capacity: 4,
             },
         )],
+        lut_defs: [LutDef::new(LutId(0), TripleBufferId::DEFAULT, 1)],
         network_config,
     }
 }
 
-/// `Kernel<1, 1>` / `Epoch<1, 1>` configuration with one user TB and one dummy entry store.
+/// `Kernel<1, 1, 1>` / `Epoch<1, 1, 1>` configuration with one user TB, one dummy entry store, and one dummy LUT.
 ///
 /// `user_tb_buffer_capacity` must be large enough for `Epoch::calculate_size_on_default_tb`.
 /// `dummy_store_capacity` keeps the registry layout valid; tests that never touch the user store
@@ -44,7 +46,7 @@ pub fn kernel_config_1_1(
     node_attr_stride: usize,
     synapse_meta_stride: usize,
     synapse_attr_stride: usize,
-) -> KernelConfig<1, 1> {
+) -> KernelConfig<1, 1, 1> {
     kernel_config_1_1_full(
         1,
         node_capacity,
@@ -65,7 +67,7 @@ pub fn kernel_config_1_1_with_tb(
     synapse_meta_stride: usize,
     synapse_attr_stride: usize,
     user_tb_buffer_capacity: usize,
-) -> KernelConfig<1, 1> {
+) -> KernelConfig<1, 1, 1> {
     kernel_config_1_1_full(
         1,
         node_capacity,
@@ -87,7 +89,7 @@ pub fn kernel_config_1_1_full(
     synapse_meta_stride: usize,
     synapse_attr_stride: usize,
     user_tb_buffer_capacity: usize,
-) -> KernelConfig<1, 1> {
+) -> KernelConfig<1, 1, 1> {
     KernelConfig {
         mem_metadata_size,
         tb_defs: [TripleBufferDef {
@@ -104,6 +106,7 @@ pub fn kernel_config_1_1_full(
                 capacity: 4,
             },
         )],
+        lut_defs: [LutDef::new(LutId(0), TripleBufferId::DEFAULT, 1)],
         network_config: NetworkConfig {
             node_capacity,
             node_meta_stride,

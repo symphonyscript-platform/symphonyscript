@@ -15,8 +15,8 @@ const NODE_ATTR: usize = 8;
 const SYNAPSE_META: usize = 4;
 const SYNAPSE_ATTR: usize = 8;
 
-type TestEpoch = Epoch<1, 1>;
-type TestKernel = Kernel<1, 1>;
+type TestEpoch = Epoch<1, 1, 1>;
+type TestKernel = Kernel<1, 1, 1>;
 
 fn make_mem(size: usize) -> AtomicBuffer {
     let mut v = Vec::with_capacity(size);
@@ -31,7 +31,7 @@ fn mk_config(
     synapse_capacity: usize,
     mem_metadata_size: usize,
     _tb_metadata_size_removed: usize,
-) -> KernelConfig<1, 1> {
+) -> KernelConfig<1, 1, 1> {
     common::kernel_config_1_1_full(
         mem_metadata_size,
         node_capacity,

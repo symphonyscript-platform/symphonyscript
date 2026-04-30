@@ -10,9 +10,9 @@ const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type TestKernel = Kernel<1, 1>;
+type TestKernel = Kernel<1, 1, 1>;
 
-fn create_config(nodes: usize, synapses: usize) -> KernelConfig<1, 1> {
+fn create_config(nodes: usize, synapses: usize) -> KernelConfig<1, 1, 1> {
     common::kernel_config_1_1(
         nodes,
         synapses,
@@ -23,14 +23,14 @@ fn create_config(nodes: usize, synapses: usize) -> KernelConfig<1, 1> {
     )
 }
 
-fn config(capacity: usize) -> KernelConfig<1, 1> {
+fn config(capacity: usize) -> KernelConfig<1, 1, 1> {
     create_config(capacity, capacity)
 }
 
 fn flush_deferred(kernel: &mut TestKernel) {
     kernel.publish();
     let cp = kernel.get_control_plane();
-    let mut consumer = EpochConsumer::<1, 1>::new(cp);
+    let mut consumer = EpochConsumer::<1, 1, 1>::new(cp);
     let _graph = consumer.acquire_mirror();
     kernel.publish();
 }
@@ -724,7 +724,7 @@ fn consumer_thread_sees_loaded_state_after_publish_swap() {
     loaded.publish();
 
     let cp = loaded.get_control_plane();
-    let mut consumer = EpochConsumer::<1, 1>::new(cp);
+    let mut consumer = EpochConsumer::<1, 1, 1>::new(cp);
     let graph = consumer.acquire_mirror();
 
     let head = graph.get_head_node().unwrap();
@@ -751,7 +751,7 @@ fn mutations_after_load_visible_to_consumer_thread() {
     loaded.publish();
 
     let cp = loaded.get_control_plane();
-    let mut consumer = EpochConsumer::<1, 1>::new(cp);
+    let mut consumer = EpochConsumer::<1, 1, 1>::new(cp);
     let graph = consumer.acquire_mirror();
 
     let head = graph.get_head_node().unwrap();

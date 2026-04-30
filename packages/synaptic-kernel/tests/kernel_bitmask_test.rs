@@ -16,9 +16,9 @@ const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type TestKernel = Kernel<1, 1>;
+type TestKernel = Kernel<1, 1, 1>;
 
-fn config() -> KernelConfig<1, 1> {
+fn config() -> KernelConfig<1, 1, 1> {
     common::kernel_config_1_1(16, 32, NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR)
 }
 
@@ -120,7 +120,7 @@ fn consumer_sees_producer_values_after_publish_swap() {
 
     let mut kernel = TestKernel::new(config());
     let mut consumer =
-        EpochConsumer::<1, 1>::new(kernel.get_control_plane());
+        EpochConsumer::<1, 1, 1>::new(kernel.get_control_plane());
 
     let slot = kernel.insert_head_node(12).unwrap();
     kernel.get_node(slot).attr_write(0, 99);

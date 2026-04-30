@@ -12,11 +12,11 @@ const NODE_ATTR: usize = 16;
 const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
-type TestKernel = Kernel<1, 1>;
-type TestConsumer = EpochConsumer<1, 1>;
-type TestMirror = EpochMirror<1, 1>;
+type TestKernel = Kernel<1, 1, 1>;
+type TestConsumer = EpochConsumer<1, 1, 1>;
+type TestMirror = EpochMirror<1, 1, 1>;
 
-fn config() -> KernelConfig<1, 1> {
+fn config() -> KernelConfig<1, 1, 1> {
     common::kernel_config_1_1(16, 32, NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR)
 }
 
