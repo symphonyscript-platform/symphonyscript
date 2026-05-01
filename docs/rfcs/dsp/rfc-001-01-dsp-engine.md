@@ -62,43 +62,78 @@ triple-buffered guarantees without re-implementing them.
 The DSP Engine is a **domain-specific wrapper** over the Kernel, the same way SymphonyEngine is a domain-specific
 wrapper for compositional concepts.
 
-### 3.2 Perceptual Verification Principle
+### 3.2 Verification Principle: Algorithms vs. Presets
 
-**We only build DSP components that can be verified by math and automated tests — never by human ears.**
+DSP work has two distinct layers with different verification requirements:
 
-This is the governing constraint for all build-vs-use decisions:
+1. **Algorithm implementation** — does the SVF filter produce the correct frequency response? Does the wavetable
+   oscillator output the correct harmonics? These are math questions with measurable answers.
+2. **Preset configuration** — does `cutoff=800, Q=8, attack=10ms` make a good "Acid Bass" sound? Does this wavetable
+   frame sequence create an interesting evolving timbre? These are perceptual questions that require ears.
 
-- If an algorithm's correctness can be verified by measuring its output (FFT analysis, comparing to reference signals,
-  asserting frequency response curves) → **build it**.
-- If an algorithm requires a human to listen and judge "does this sound good/natural/warm?" → **do not build it**. Use a
-  battle-tested implementation or defer.
+**We implement published, battle-tested algorithms and verify correctness through automated tests.** The algorithm
+authors (Andrew Simper for SVF, Jezar for Freeverb, etc.) already performed the perceptual tuning of the algorithms
+themselves. We inherit their work by implementing their exact formulas and published constants.
 
-This principle exists because the team lacks DSP perceptual expertise and ear-training. It is not a permanent
-limitation — it is an honest assessment of current capability that prevents shipping subtly broken audio.
+**We acknowledge that ~20% of DSP quality — preset design and integration polish — requires perceptual evaluation.**
+This work cannot be solved by any dependency or algorithm. It is mitigated, not eliminated.
 
-**Verification methods per component:**
+#### What is math-verifiable (algorithms):
 
-| Component                | How to verify correctness                                                        | Ears needed?                 |
-|--------------------------|----------------------------------------------------------------------------------|------------------------------|
-| SVF filter               | FFT output → measure frequency response curve against expected transfer function | No                           |
-| Wavetable oscillator     | Compare output to reference signal, measure harmonic content via FFT             | No                           |
-| Envelope (ADSR)          | Assert output shape: linear/exponential ramp times match configured values       | No                           |
-| Delay / chorus / flanger | Impulse response test: send a click, measure delay time and modulation           | No                           |
-| Freeverb                 | Use Jezar's published delay lengths and coefficients exactly                     | No — constants are pre-tuned |
-| Convolution reverb       | Mathematical identity: output = input ∗ IR. Verify with known input/IR pair      | No                           |
-| Distortion               | Use published waveshaping functions (tanh). Verify input→output mapping          | No                           |
-| Parameter smoothing      | Measure convergence time, assert exponential decay shape                         | No                           |
-| Sample player            | Assert correct pitch ratio, verify sample data integrity                         | No                           |
-| Karplus-Strong           | Delay length = sample_rate / frequency. Verify pitch with FFT                    | No                           |
+| Component                | How to verify correctness                                                        | Ears needed? |
+|--------------------------|----------------------------------------------------------------------------------|--------------|
+| SVF filter               | FFT output → measure frequency response curve against expected transfer function | No           |
+| Wavetable oscillator     | Compare output to reference signal, measure harmonic content via FFT             | No           |
+| Envelope (ADSR)          | Assert output shape: linear/exponential ramp times match configured values       | No           |
+| Delay / chorus / flanger | Impulse response test: send a click, measure delay time and modulation           | No           |
+| Freeverb                 | Use Jezar's published delay lengths and coefficients exactly                     | No           |
+| Convolution reverb       | Mathematical identity: output = input ∗ IR. Verify with known input/IR pair      | No           |
+| Distortion               | Use published waveshaping functions (tanh). Verify input→output mapping          | No           |
+| Parameter smoothing      | Measure convergence time, assert exponential decay shape                         | No           |
+| Sample player            | Assert correct pitch ratio, verify sample data integrity                         | No           |
+| Karplus-Strong           | Delay length = sample_rate / frequency. Verify pitch with FFT                    | No           |
+| Denormal handling        | Measure CPU time, detect performance spikes                                      | No           |
+| DC offset                | Measure running mean of output signal                                            | No           |
+| Numerical stability      | Assert output stays bounded over millions of samples at extreme parameters       | No           |
+| Aliasing                 | FFT output, assert no energy above Nyquist                                       | No           |
 
-Components NOT built because they need ears:
+#### What needs perceptual evaluation:
 
-| Component                       | Why ears are required                                                      |
+| Area                              | What specifically needs ears                                          | Severity |
+|-----------------------------------|-----------------------------------------------------------------------|----------|
+| **Preset parameter values**       | "Does cutoff=800, Q=8 make a good Acid Bass?"                        | Medium   |
+| **Factory wavetable selection**   | "Which 50 wavetables are musically interesting?"                      | Medium   |
+| **Drum preset tuning**            | "Does this 808 kick match an actual 808?"                             | Medium   |
+| **Gain staging defaults**         | "Is reverb wet/dry=0.3 a good default?"                              | Low      |
+| **Parameter smoothing quality**   | "Is 5ms smoothing time perceptually click-free in all contexts?"      | Low      |
+| **Overall integration feel**      | "Do these effects chain well together? Is the output pleasant?"       | Medium   |
+
+#### What we do NOT build (fully perceptual):
+
+| Component                       | Why excluded entirely                                                      |
 |---------------------------------|----------------------------------------------------------------------------|
 | Realistic piano synthesis       | Hammer model, soundboard, sympathetic resonance all need perceptual tuning |
 | Realistic bowed strings         | Bow-string friction is chaotic; parameters must be ear-tuned for realism   |
 | Custom reverb algorithms        | Choosing delay lengths and diffusion parameters requires listening         |
 | Spectral effects (freeze, blur) | Windowing artifacts are perceptually evaluated                             |
+
+#### Mitigation strategy for the perceptual gap:
+
+V1 presets are **"mathematically plausible, not ear-verified."** The perceptual gap is real but manageable:
+
+1. **Borrow known-good parameter values** from open-source synths. Vital and Surge are GPL — their code cannot be
+   copied, but their preset parameter values can be studied. Parameter values (numbers like cutoff=800, Q=8) are not
+   copyrightable. Use similar ranges and ratios.
+2. **808/909 parameters are extensively documented** in open-source clones and hardware analysis articles. These are
+   not secrets.
+3. **Use standard defaults** for integration parameters. Wet/dry ratios, gain staging, smoothing times — these have
+   well-known "safe" starting values documented across DSP textbooks and forums.
+4. **Community contributions from people with ears.** Once the engine ships with functional-but-imperfect presets,
+   community members can submit better ones. This is how Vital, Surge, and every open-source synth improves over time.
+5. **Iterative refinement.** Ship v1. Collect feedback. Improve presets in v1.1. This is normal.
+
+The DSP components themselves are correct by construction (math-verified). The open question is whether the factory
+configurations are musically satisfying — and that question is answered by shipping and iterating, not by blocking.
 
 ### 3.3 Differentiate on Workflow, Not on Samples
 
