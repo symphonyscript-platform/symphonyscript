@@ -7,11 +7,13 @@ pub trait LutOperations {
 }
 
 impl LutOperations for SymphonyEngine {
+    #[inline]
     fn get_lut_index(&self, node: usize) -> i32 {
-        self.kernel.get_node_attribute(node, LUT_ATTR_INDEX)
+        self.kernel.get_node(node).attr_read(LUT_ATTR_INDEX)
     }
 
+    #[inline]
     fn set_lut_index(&self, node: usize, value: i32) {
-        self.kernel.set_node_attribute(node, LUT_ATTR_INDEX, value);
+        self.kernel.get_node(node).attr_write(LUT_ATTR_INDEX, value);
     }
 }

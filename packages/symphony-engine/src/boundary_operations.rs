@@ -7,12 +7,15 @@ pub trait BoundaryOperations {
 }
 
 impl BoundaryOperations for SymphonyEngine {
+    #[inline]
     fn get_boundary_id(&self, node: usize) -> i32 {
-        self.kernel.get_node_attribute(node, BOUNDARY_ATTR_ID)
+        self.kernel.get_node(node).attr_read(BOUNDARY_ATTR_ID)
     }
 
+    #[inline]
     fn set_boundary_id(&self, node: usize, value: i32) {
         self.kernel
-            .set_node_attribute(node, BOUNDARY_ATTR_ID, value);
+            .get_node(node)
+            .attr_write(BOUNDARY_ATTR_ID, value);
     }
 }

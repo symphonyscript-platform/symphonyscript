@@ -10,20 +10,27 @@ pub trait ControlOperations {
 }
 
 impl ControlOperations for SymphonyEngine {
+    #[inline]
     fn get_control_id(&self, node: usize) -> i32 {
-        self.kernel.get_node_attribute(node, CONTROL_ATTR_ID)
+        self.kernel.get_node(node).attr_read(CONTROL_ATTR_ID)
     }
 
+    #[inline]
     fn set_control_id(&self, node: usize, value: i32) {
-        self.kernel.set_node_attribute(node, CONTROL_ATTR_ID, value);
+        self.kernel
+            .get_node(node)
+            .attr_write(CONTROL_ATTR_ID, value);
     }
 
+    #[inline]
     fn get_control_value(&self, node: usize) -> i32 {
-        self.kernel.get_node_attribute(node, CONTROL_ATTR_VALUE)
+        self.kernel.get_node(node).attr_read(CONTROL_ATTR_VALUE)
     }
 
+    #[inline]
     fn set_control_value(&self, node: usize, value: i32) {
         self.kernel
-            .set_node_attribute(node, CONTROL_ATTR_VALUE, value);
+            .get_node(node)
+            .attr_write(CONTROL_ATTR_VALUE, value);
     }
 }

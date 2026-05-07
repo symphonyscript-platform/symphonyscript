@@ -44,112 +44,145 @@ pub trait NoteOperations {
 
 impl NoteOperations for SymphonyEngine {
     fn is_note_muted(&self, node: usize) -> bool {
-        ((self.kernel.get_node_attribute(node, NOTE_ATTR_FLAGS) as u32) & (1 << NOTE_FLAG_MUTED))
+        ((self.kernel.get_node(node).attr_read(NOTE_ATTR_FLAGS) as u32) & (1 << NOTE_FLAG_MUTED))
             != 0
     }
 
     fn mute_note(&self, node: usize) {
         self.kernel
-            .or_node_attribute(node, NOTE_ATTR_FLAGS, 1 << NOTE_FLAG_MUTED);
+            .get_node(node)
+            .attr_or(NOTE_ATTR_FLAGS, 1 << NOTE_FLAG_MUTED);
     }
 
     fn unmute_note(&self, node: usize) {
         self.kernel
-            .and_node_attribute(node, NOTE_ATTR_FLAGS, !(1 << NOTE_FLAG_MUTED));
+            .get_node(node)
+            .attr_and(NOTE_ATTR_FLAGS, !(1 << NOTE_FLAG_MUTED));
     }
 
     fn is_note_solo(&self, node: usize) -> bool {
-        ((self.kernel.get_node_attribute(node, NOTE_ATTR_FLAGS) as u32) & (1 << NOTE_FLAG_SOLO))
+        ((self.kernel.get_node(node).attr_read(NOTE_ATTR_FLAGS) as u32) & (1 << NOTE_FLAG_SOLO))
             != 0
     }
 
+    #[inline]
     fn set_note_solo(&self, node: usize) {
         self.kernel
-            .or_node_attribute(node, NOTE_ATTR_FLAGS, 1 << NOTE_FLAG_SOLO);
+            .get_node(node)
+            .attr_or(NOTE_ATTR_FLAGS, 1 << NOTE_FLAG_SOLO);
     }
 
     fn unset_note_solo(&self, node: usize) {
         self.kernel
-            .and_node_attribute(node, NOTE_ATTR_FLAGS, !(1 << NOTE_FLAG_SOLO));
+            .get_node(node)
+            .attr_and(NOTE_ATTR_FLAGS, !(1 << NOTE_FLAG_SOLO));
     }
 
+    #[inline]
     fn get_note_pitch(&self, node: usize) -> i32 {
-        self.kernel.get_node_attribute(node, NOTE_ATTR_PITCH)
+        self.kernel.get_node(node).attr_read(NOTE_ATTR_PITCH)
     }
 
+    #[inline]
     fn set_note_pitch(&self, node: usize, value: i32) {
-        self.kernel.set_node_attribute(node, NOTE_ATTR_PITCH, value);
+        self.kernel
+            .get_node(node)
+            .attr_write(NOTE_ATTR_PITCH, value);
     }
 
+    #[inline]
     fn get_note_velocity(&self, node: usize) -> i32 {
-        self.kernel.get_node_attribute(node, NOTE_ATTR_VELOCITY)
+        self.kernel.get_node(node).attr_read(NOTE_ATTR_VELOCITY)
     }
 
+    #[inline]
     fn set_note_velocity(&self, node: usize, value: i32) {
         self.kernel
-            .set_node_attribute(node, NOTE_ATTR_VELOCITY, value);
+            .get_node(node)
+            .attr_write(NOTE_ATTR_VELOCITY, value);
     }
 
+    #[inline]
     fn get_note_duration(&self, node: usize) -> i32 {
-        self.kernel.get_node_attribute(node, NOTE_ATTR_DURATION)
+        self.kernel.get_node(node).attr_read(NOTE_ATTR_DURATION)
     }
 
+    #[inline]
     fn set_note_duration(&self, node: usize, value: i32) {
         self.kernel
-            .set_node_attribute(node, NOTE_ATTR_DURATION, value);
+            .get_node(node)
+            .attr_write(NOTE_ATTR_DURATION, value);
     }
 
+    #[inline]
     fn get_note_volume(&self, node: usize) -> i32 {
-        self.kernel.get_node_attribute(node, NOTE_ATTR_VOLUME)
+        self.kernel.get_node(node).attr_read(NOTE_ATTR_VOLUME)
     }
 
+    #[inline]
     fn set_note_volume(&self, node: usize, value: i32) {
         self.kernel
-            .set_node_attribute(node, NOTE_ATTR_VOLUME, value);
+            .get_node(node)
+            .attr_write(NOTE_ATTR_VOLUME, value);
     }
 
+    #[inline]
     fn get_note_spatial_x(&self, node: usize) -> i32 {
-        self.kernel.get_node_attribute(node, NOTE_ATTR_SPATIAL_X)
+        self.kernel.get_node(node).attr_read(NOTE_ATTR_SPATIAL_X)
     }
 
+    #[inline]
     fn set_note_spatial_x(&self, node: usize, value: i32) {
         self.kernel
-            .set_node_attribute(node, NOTE_ATTR_SPATIAL_X, value);
+            .get_node(node)
+            .attr_write(NOTE_ATTR_SPATIAL_X, value);
     }
 
+    #[inline]
     fn get_note_spatial_y(&self, node: usize) -> i32 {
-        self.kernel.get_node_attribute(node, NOTE_ATTR_SPATIAL_Y)
+        self.kernel.get_node(node).attr_read(NOTE_ATTR_SPATIAL_Y)
     }
 
+    #[inline]
     fn set_note_spatial_y(&self, node: usize, value: i32) {
         self.kernel
-            .set_node_attribute(node, NOTE_ATTR_SPATIAL_Y, value);
+            .get_node(node)
+            .attr_write(NOTE_ATTR_SPATIAL_Y, value);
     }
 
+    #[inline]
     fn get_note_spatial_z(&self, node: usize) -> i32 {
-        self.kernel.get_node_attribute(node, NOTE_ATTR_SPATIAL_Z)
+        self.kernel.get_node(node).attr_read(NOTE_ATTR_SPATIAL_Z)
     }
 
+    #[inline]
     fn set_note_spatial_z(&self, node: usize, value: i32) {
         self.kernel
-            .set_node_attribute(node, NOTE_ATTR_SPATIAL_Z, value);
+            .get_node(node)
+            .attr_write(NOTE_ATTR_SPATIAL_Z, value);
     }
 
+    #[inline]
     fn get_note_detune(&self, node: usize) -> i32 {
-        self.kernel.get_node_attribute(node, NOTE_ATTR_DETUNE)
+        self.kernel.get_node(node).attr_read(NOTE_ATTR_DETUNE)
     }
 
+    #[inline]
     fn set_note_detune(&self, node: usize, value: i32) {
         self.kernel
-            .set_node_attribute(node, NOTE_ATTR_DETUNE, value);
+            .get_node(node)
+            .attr_write(NOTE_ATTR_DETUNE, value);
     }
 
+    #[inline]
     fn get_note_tick_offset(&self, node: usize) -> i32 {
-        self.kernel.get_node_attribute(node, NOTE_ATTR_TICK_OFFSET)
+        self.kernel.get_node(node).attr_read(NOTE_ATTR_TICK_OFFSET)
     }
 
+    #[inline]
     fn set_note_tick_offset(&self, node: usize, value: i32) {
         self.kernel
-            .set_node_attribute(node, NOTE_ATTR_TICK_OFFSET, value);
+            .get_node(node)
+            .attr_write(NOTE_ATTR_TICK_OFFSET, value);
     }
 }

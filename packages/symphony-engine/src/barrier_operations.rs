@@ -7,13 +7,17 @@ pub trait BarrierOperations {
 }
 
 impl BarrierOperations for SymphonyEngine {
+    #[inline]
     fn get_barrier_phase_target(&self, node: usize) -> i32 {
         self.kernel
-            .get_node_attribute(node, BARRIER_ATTR_PHASE_TARGET)
+            .get_node(node)
+            .attr_read(BARRIER_ATTR_PHASE_TARGET)
     }
 
+    #[inline]
     fn set_barrier_phase_target(&self, node: usize, value: i32) {
         self.kernel
-            .set_node_attribute(node, BARRIER_ATTR_PHASE_TARGET, value);
+            .get_node(node)
+            .attr_write(BARRIER_ATTR_PHASE_TARGET, value);
     }
 }

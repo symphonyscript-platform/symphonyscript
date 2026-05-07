@@ -5,13 +5,13 @@ pub mod constants;
 pub mod control_operations;
 pub mod lut_operations;
 pub mod metadata_operations;
+pub mod modulation;
 pub mod node_operations;
 pub mod note_operations;
 pub mod rest_operations;
 pub mod seed_operations;
 pub mod symphony_engine;
 pub mod synapse_operations;
-pub mod modulation;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right

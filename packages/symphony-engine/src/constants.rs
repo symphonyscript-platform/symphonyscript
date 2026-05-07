@@ -1,3 +1,17 @@
+use synaptic_kernel::control_plane::ControlPlane;
+use synaptic_kernel::kernel::Kernel;
+use synaptic_kernel::kernel_config::KernelConfig;
+use synaptic_kernel::serialized_kernel::SerializedKernel;
+
+pub const SE_TB_COUNT: usize = 1;
+pub const SE_STORE_COUNT: usize = 1;
+pub const SE_LUT_COUNT: usize = 2;
+
+pub type SymphonyEngineConfig = KernelConfig<SE_TB_COUNT, SE_STORE_COUNT, SE_LUT_COUNT>;
+pub type SerializedSymphonyEngine = SerializedKernel<SE_TB_COUNT, SE_STORE_COUNT, SE_LUT_COUNT>;
+pub type SymphonyEngineKernel = Kernel<SE_TB_COUNT, SE_STORE_COUNT, SE_LUT_COUNT>;
+pub type SymphonyEngineControlPlane = ControlPlane<SE_TB_COUNT, SE_STORE_COUNT, SE_LUT_COUNT>;
+
 pub const NODE_META_STRIDE: usize = 8;
 pub const NODE_ATTRIBUTES_STRIDE: usize = 16;
 
@@ -24,7 +38,6 @@ pub const SYNAPSE_ATTR_TRANSPOSITION: usize = 2;
 pub const SYNAPSE_ATTR_VOLUME_SCALE: usize = 3;
 pub const SYNAPSE_ATTR_DURATION_SCALE: usize = 4;
 pub const SYNAPSE_ATTR_TEMPO_SCALE: usize = 5;
-
 
 pub const NOTE_ATTR_FLAGS: usize = 0;
 pub const NOTE_ATTR_PITCH: usize = 1;

@@ -22,48 +22,59 @@ pub trait NodeOperations {
 }
 
 impl NodeOperations for SymphonyEngine {
+    #[inline]
     fn get_node_kind(&self, node: usize) -> i32 {
         self.kernel.get_node(node).get_kind()
     }
 
+    #[inline]
     fn get_node_base_tick(&self, node: usize) -> i32 {
         self.kernel.get_node(node).get_meta(NODE_META_BASE_TICK)
     }
 
+    #[inline]
     fn get_node_next(&self, node: usize) -> usize {
         self.kernel.get_node(node).get_next_ptr()
     }
 
+    #[inline]
     fn get_node_prev(&self, node: usize) -> usize {
         self.kernel.get_node(node).get_prev_ptr()
     }
 
+    #[inline]
     fn get_node_outgoing_synapse_head(&self, node: usize) -> usize {
         self.kernel.get_node(node).get_outgoing_synapse_head()
     }
 
+    #[inline]
     fn get_node_outgoing_synapse_tail(&self, node: usize) -> usize {
         self.kernel.get_node(node).get_outgoing_synapse_tail()
     }
 
+    #[inline]
     fn get_node_incoming_synapse_head(&self, node: usize) -> usize {
         self.kernel.get_node(node).get_incoming_synapse_head()
     }
 
+    #[inline]
     fn get_node_incoming_synapse_tail(&self, node: usize) -> usize {
         self.kernel.get_node(node).get_incoming_synapse_tail()
     }
 
+    #[inline]
     fn get_node_modulation_head(&self, node: usize) -> usize {
         self.kernel.get_node(node).get_meta(NODE_META_MOD_HEAD) as usize
     }
 
+    #[inline]
     fn set_node_modulation_head(&self, node: usize, value: usize) {
         self.kernel
             .get_node(node)
             .set_meta(NODE_META_MOD_HEAD, value as i32)
     }
 
+    #[inline]
     fn remove_node(&self, node: usize) -> Result<(), SlotAllocatorError> {
         self.kernel.remove_node(node)
     }

@@ -1,88 +1,99 @@
 use crate::constants::{
-    NODE_ATTRIBUTES_STRIDE, NODE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE,
+    SerializedSymphonyEngine, SymphonyEngineConfig, SymphonyEngineControlPlane, SymphonyEngineKernel, SE_LUT_COUNT,
+    SE_STORE_COUNT, SE_TB_COUNT,
 };
 use std::sync::Arc;
-use synaptic_kernel::control_plane::ControlPlane;
 use synaptic_kernel::errors::kernel_error::KernelError;
-use synaptic_kernel::kernel::Kernel;
+use synaptic_kernel::primitives::entry_store_def::EntryStoreId;
+use synaptic_kernel::primitives::entry_store_writer::EntryStoreWriter;
+use synaptic_kernel::primitives::lut_def::LutId;
+use synaptic_kernel::primitives::lut_writer::LutWriter;
+use synaptic_kernel::primitives::tb_writer::TbWriter;
+use synaptic_kernel::primitives::triple_buffer_def::TripleBufferId;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::serialized_kernel::SerializedKernel;
-use synaptic_kernel::kernel_config::KernelConfig;
-
-pub type SymphonyEngineKernel =
-    Kernel<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>;
-pub type SymphonyEngineControlPlane =
-    ControlPlane<NODE_META_STRIDE, NODE_ATTRIBUTES_STRIDE, SYNAPSE_META_STRIDE, SYNAPSE_ATTRIBUTES_STRIDE>;
 
 pub struct SymphonyEngine {
     pub(crate) kernel: SymphonyEngineKernel,
 }
 
 impl SymphonyEngine {
-    pub fn new(config: KernelConfig) -> Self {
+    pub fn new(config: SymphonyEngineConfig) -> Self {
         SymphonyEngine {
             kernel: SymphonyEngineKernel::new(config),
         }
     }
 
-    pub fn new_from_mem(mem: AtomicBuffer, config: KernelConfig) -> Self {
+    pub fn new_from_mem(mem: AtomicBuffer, config: SymphonyEngineConfig) -> Self {
         SymphonyEngine {
             kernel: SymphonyEngineKernel::new_from_mem(mem, config),
         }
     }
 
-    pub fn load_serialized(serialized_kernel: SerializedKernel) -> Self {
+    pub fn load_serialized(
+        serialized_kernel: SerializedKernel<SE_TB_COUNT, SE_STORE_COUNT, SE_LUT_COUNT>,
+    ) -> Self {
         SymphonyEngine {
             kernel: SymphonyEngineKernel::load_serialized(serialized_kernel),
         }
     }
 
-    pub fn serialize(&mut self) -> SerializedKernel {
+    pub fn serialize(&mut self) -> SerializedSymphonyEngine {
         self.kernel.serialize()
     }
 
-    /// Returns a shared handle to the `ControlPlane` for constructing a `GraphConsumer` on
-    /// the consumer thread.
-    ///
-    /// The `Arc` is a cross-thread transport mechanism, not a lifetime extension.
-    /// The `ControlPlane` has no independent lifecycle - it is logically owned by
-    /// this `Kernel`.
-    ///
-    /// # Safety Contract
-    /// The consumer thread **must** be fully quiesced before the `Kernel` is dropped.
-    /// Dropping the kernel unconditionally frees the deferred-deletion queue.
-    /// If the consumer is still traversing a hot-swapped graph, the result is
-    /// undefined behavior.
     pub fn get_control_plane(&self) -> Arc<SymphonyEngineControlPlane> {
         self.kernel.get_control_plane()
     }
 
+    #[inline]
     pub fn node_capacity(&self) -> usize {
         self.kernel.node_capacity()
     }
 
+    #[inline]
     pub fn node_count(&self) -> usize {
         self.kernel.node_count()
     }
 
+    #[inline]
     pub fn node_utilization(&self) -> f32 {
         self.kernel.node_utilization()
     }
 
+    #[inline]
     pub fn synapse_capacity(&self) -> usize {
         self.kernel.synapse_capacity()
     }
 
+    #[inline]
     pub fn synapse_count(&self) -> usize {
         self.kernel.synapse_count()
     }
 
+    #[inline]
     pub fn synapse_utilization(&self) -> f32 {
         self.kernel.synapse_utilization()
     }
 
+    #[inline]
     pub fn peek_utilization(&self) -> f32 {
         self.kernel.peek_utilization()
+    }
+
+    #[inline]
+    pub fn get_user_tb(&'_ self, tb_id: TripleBufferId) -> TbWriter<'_> {
+        self.kernel.get_user_tb(tb_id)
+    }
+
+    #[inline]
+    pub fn get_entry_store(&self, store_id: EntryStoreId) -> &EntryStoreWriter {
+        self.kernel.get_entry_store(store_id)
+    }
+
+    #[inline]
+    pub fn get_lut(&self, lut_id: LutId) -> &LutWriter {
+        self.kernel.get_lut(lut_id)
     }
 
     pub fn publish(&mut self) {
@@ -93,7 +104,7 @@ impl SymphonyEngine {
         self.kernel.should_grow(target_resize_threshold)
     }
 
-    pub fn grow(&mut self, config: KernelConfig) -> Result<(), KernelError> {
+    pub fn grow(&mut self, config: SymphonyEngineConfig) -> Result<(), KernelError> {
         self.kernel.grow(config)
     }
 

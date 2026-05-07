@@ -7,11 +7,15 @@ pub trait SeedOperations {
 }
 
 impl SeedOperations for SymphonyEngine {
+    #[inline]
     fn get_seed_value(&self, node: usize) -> i32 {
-        self.kernel.get_node_attribute(node, SEED_ATTR_VALUE)
+        self.kernel.get_node(node).attr_read(SEED_ATTR_VALUE)
     }
 
+    #[inline]
     fn set_seed_value(&self, node: usize, value: i32) {
-        self.kernel.set_node_attribute(node, SEED_ATTR_VALUE, value);
+        self.kernel
+            .get_node(node)
+            .attr_write(SEED_ATTR_VALUE, value);
     }
 }
