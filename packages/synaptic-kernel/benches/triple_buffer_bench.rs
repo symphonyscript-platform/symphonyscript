@@ -1,15 +1,10 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::sync::atomic::{AtomicI32, Ordering};
-use std::sync::Arc;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 fn bench_writer_publish(c: &mut Criterion) {

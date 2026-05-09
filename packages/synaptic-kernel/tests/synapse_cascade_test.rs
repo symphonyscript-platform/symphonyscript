@@ -1,5 +1,6 @@
 mod common;
 
+use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
 
@@ -70,12 +71,16 @@ fn remove_node_with_multiple_outgoing_synapses() {
     for &slot in &[b, c, d] {
         let node = kernel.get_node(slot);
         assert_eq!(
-            node.get_incoming_synapse_head(), 0,
-            "node {} incoming head should be 0 after cascade", slot
+            node.get_incoming_synapse_head(),
+            0,
+            "node {} incoming head should be 0 after cascade",
+            slot
         );
         assert_eq!(
-            node.get_incoming_synapse_tail(), 0,
-            "node {} incoming tail should be 0 after cascade", slot
+            node.get_incoming_synapse_tail(),
+            0,
+            "node {} incoming tail should be 0 after cascade",
+            slot
         );
     }
 }
@@ -98,12 +103,16 @@ fn remove_node_with_multiple_incoming_synapses() {
     for &slot in &[a, b, c] {
         let node = kernel.get_node(slot);
         assert_eq!(
-            node.get_outgoing_synapse_head(), 0,
-            "node {} outgoing head should be 0 after cascade", slot
+            node.get_outgoing_synapse_head(),
+            0,
+            "node {} outgoing head should be 0 after cascade",
+            slot
         );
         assert_eq!(
-            node.get_outgoing_synapse_tail(), 0,
-            "node {} outgoing tail should be 0 after cascade", slot
+            node.get_outgoing_synapse_tail(),
+            0,
+            "node {} outgoing tail should be 0 after cascade",
+            slot
         );
     }
 }
@@ -142,8 +151,7 @@ fn remove_node_with_self_loop() {
     kernel.remove_node(n).unwrap();
 
     // If we get here without panic, the cascade handled the self-loop correctly.
-    // Node is freed, so we just verify the chain head is updated.
-    assert!(kernel.get_head_node().is_none());
+    assert_eq!(kernel.node_count(), 0);
 }
 
 #[test]
@@ -155,7 +163,7 @@ fn remove_node_with_multiple_self_loops() {
     kernel.connect(n, n, 30).unwrap();
 
     kernel.remove_node(n).unwrap();
-    assert!(kernel.get_head_node().is_none());
+    assert_eq!(kernel.node_count(), 0);
 }
 
 #[test]
@@ -215,10 +223,30 @@ fn remove_hub_node_in_star_topology() {
     // All spokes must have completely clean synapse pointers
     for &spoke in &spokes {
         let node = kernel.get_node(spoke);
-        assert_eq!(node.get_outgoing_synapse_head(), 0, "spoke {} outgoing head", spoke);
-        assert_eq!(node.get_outgoing_synapse_tail(), 0, "spoke {} outgoing tail", spoke);
-        assert_eq!(node.get_incoming_synapse_head(), 0, "spoke {} incoming head", spoke);
-        assert_eq!(node.get_incoming_synapse_tail(), 0, "spoke {} incoming tail", spoke);
+        assert_eq!(
+            node.get_outgoing_synapse_head(),
+            0,
+            "spoke {} outgoing head",
+            spoke
+        );
+        assert_eq!(
+            node.get_outgoing_synapse_tail(),
+            0,
+            "spoke {} outgoing tail",
+            spoke
+        );
+        assert_eq!(
+            node.get_incoming_synapse_head(),
+            0,
+            "spoke {} incoming head",
+            spoke
+        );
+        assert_eq!(
+            node.get_incoming_synapse_tail(),
+            0,
+            "spoke {} incoming tail",
+            spoke
+        );
     }
 }
 
@@ -257,9 +285,9 @@ fn remove_node_without_synapses_still_works() {
 
     kernel.remove_node(a).unwrap();
 
-    // b is now sole head
-    assert_eq!(kernel.get_head_node().unwrap().get_kind(), 2);
+    assert_eq!(kernel.node_count(), 1);
     let node_b = kernel.get_node(b);
+    assert_eq!(node_b.get_kind(), 2);
     assert_eq!(node_b.get_prev_ptr(), 0);
     assert_eq!(node_b.get_next_ptr(), 0);
 }
@@ -277,7 +305,11 @@ fn cascade_frees_synapse_slots_for_reuse() {
             synapses.push(s);
         }
     }
-    assert_eq!(synapses.len(), 32, "should have allocated all 32 synapse slots");
+    assert_eq!(
+        synapses.len(),
+        32,
+        "should have allocated all 32 synapse slots"
+    );
 
     // Can't connect any more
     assert!(kernel.connect(a, b, 999).is_err(), "should be at capacity");
@@ -291,4 +323,55 @@ fn cascade_frees_synapse_slots_for_reuse() {
     let node_b = kernel.get_node(b);
     assert_eq!(node_b.get_incoming_synapse_head(), 0);
     assert_eq!(node_b.get_incoming_synapse_tail(), 0);
+}
+
+#[test]
+fn remove_chain_cascades_intra_chain_synapses() {
+    let mut kernel = create_writer();
+    let mut consumer = EpochConsumer::new(kernel.get_control_plane());
+    let a = kernel.insert_node(1).unwrap();
+    let b = kernel.insert_node_after(a, 2).unwrap();
+    let c = kernel.insert_node_after(b, 3).unwrap();
+
+    kernel.connect(a, b, 10).unwrap();
+    kernel.connect(b, c, 20).unwrap();
+    kernel.connect(a, c, 30).unwrap();
+
+    assert_eq!(kernel.synapse_count(), 3);
+
+    kernel.remove_chain(a).unwrap();
+
+    kernel.publish();
+    let _ = consumer.acquire_mirror();
+    kernel.publish();
+    assert_eq!(kernel.node_count(), 0);
+    assert_eq!(kernel.synapse_count(), 0);
+}
+
+#[test]
+fn remove_chain_cascades_cross_chain_synapses_without_affecting_other_chain() {
+    let mut kernel = create_writer();
+    let mut consumer = EpochConsumer::new(kernel.get_control_plane());
+    let a = kernel.insert_node(1).unwrap();
+    let _b = kernel.insert_node_after(a, 2).unwrap();
+
+    let x = kernel.insert_node(10).unwrap();
+    let y = kernel.insert_node_after(x, 11).unwrap();
+
+    let cross = kernel.connect(a, x, 99).unwrap();
+
+    assert_eq!(kernel.get_node(x).get_incoming_synapse_head(), cross);
+
+    kernel.remove_chain(a).unwrap();
+
+    kernel.publish();
+    let _ = consumer.acquire_mirror();
+    kernel.publish();
+    assert_eq!(kernel.node_count(), 2);
+    let nx = kernel.get_node(x);
+    let ny = kernel.get_node(y);
+    assert_eq!(nx.get_next_ptr(), y);
+    assert_eq!(ny.get_prev_ptr(), x);
+    assert_eq!(nx.get_incoming_synapse_head(), 0);
+    assert_eq!(nx.get_incoming_synapse_tail(), 0);
 }

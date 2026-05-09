@@ -80,6 +80,10 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
         (old_epoch, prev_gen + 1)
     }
 
+    pub fn get_writer_generation(&self) -> i32 {
+        self.writer_generation.load(Ordering::Acquire)
+    }
+
     pub fn get_reader_ack_generation(&self) -> i32 {
         self.reader_ack_generation.load(Ordering::Acquire)
     }

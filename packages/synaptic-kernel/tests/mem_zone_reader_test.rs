@@ -1,14 +1,9 @@
 use std::sync::atomic::{AtomicI32, Ordering};
-use std::sync::Arc;
 use synaptic_kernel::primitives::mem_zone_reader::MemZoneReader;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 #[test]
@@ -25,9 +20,11 @@ fn new_creates_reader_at_start_index() {
 fn reads_reflect_backing_buffer_state() {
     let mem = create_mem(128);
     // Directly poke values into the backing buffer at offset 10..10+16.
-    for (i, v) in [500, -42, 0, 1, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]
-        .into_iter()
-        .enumerate()
+    for (i, v) in [
+        500, -42, 0, 1, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47,
+    ]
+    .into_iter()
+    .enumerate()
     {
         mem[10 + i].store(v, Ordering::Relaxed);
     }

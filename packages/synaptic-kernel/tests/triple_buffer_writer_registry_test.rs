@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use synaptic_kernel::primitives::triple_buffer_def::{TripleBufferDef, TripleBufferId};
 use synaptic_kernel::primitives::triple_buffer_reader::TripleBufferReader;
@@ -16,11 +15,7 @@ fn default_tb_mem() -> usize {
 }
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 fn def(id: u16, cap: usize) -> TripleBufferDef {
@@ -81,10 +76,22 @@ fn construct_n_eq_four_arbitrary_permutation() {
     let d = default_tb_mem();
     // id_index[user_id] = position; get(user_id) returns tbs[id_index[user_id]].
     // Positions: id=2→0, id=0→1, id=3→2, id=1→3.
-    assert_eq!(reg.get(TripleBufferId(2)).mem_start_offset(), d + 0 * stride);
-    assert_eq!(reg.get(TripleBufferId(0)).mem_start_offset(), d + 1 * stride);
-    assert_eq!(reg.get(TripleBufferId(3)).mem_start_offset(), d + 2 * stride);
-    assert_eq!(reg.get(TripleBufferId(1)).mem_start_offset(), d + 3 * stride);
+    assert_eq!(
+        reg.get(TripleBufferId(2)).mem_start_offset(),
+        d + 0 * stride
+    );
+    assert_eq!(
+        reg.get(TripleBufferId(0)).mem_start_offset(),
+        d + 1 * stride
+    );
+    assert_eq!(
+        reg.get(TripleBufferId(3)).mem_start_offset(),
+        d + 2 * stride
+    );
+    assert_eq!(
+        reg.get(TripleBufferId(1)).mem_start_offset(),
+        d + 3 * stride
+    );
 }
 
 #[test]
@@ -120,7 +127,10 @@ fn construct_with_nonzero_mem_start_offset() {
     assert_eq!(reg.mem_start_offset(), 100);
     assert_eq!(reg.mem_end_offset(), 100 + d + 2 * stride);
     assert_eq!(reg.get(TripleBufferId(0)).mem_start_offset(), 100 + d);
-    assert_eq!(reg.get(TripleBufferId(1)).mem_start_offset(), 100 + d + stride);
+    assert_eq!(
+        reg.get(TripleBufferId(1)).mem_start_offset(),
+        100 + d + stride
+    );
 }
 
 #[test]
@@ -132,9 +142,15 @@ fn construct_with_varying_capacity_per_def() {
     let d = default_tb_mem();
     // User TBs pack after the default TB on MEM.
     assert_eq!(reg.get(TripleBufferId(0)).mem_start_offset(), d);
-    assert_eq!(reg.get(TripleBufferId(0)).mem_end_offset(), d + (4 + 10 * 3));
+    assert_eq!(
+        reg.get(TripleBufferId(0)).mem_end_offset(),
+        d + (4 + 10 * 3)
+    );
 
-    assert_eq!(reg.get(TripleBufferId(1)).mem_start_offset(), d + (4 + 10 * 3));
+    assert_eq!(
+        reg.get(TripleBufferId(1)).mem_start_offset(),
+        d + (4 + 10 * 3)
+    );
     assert_eq!(
         reg.get(TripleBufferId(1)).mem_end_offset(),
         d + (4 + 10 * 3) + (4 + 50 * 3)
@@ -226,8 +242,14 @@ fn get_reversed_permutation_maps_ids_correctly() {
     // Verify physical placement: id=3 is at position 0 in the defs array.
     let stride = 4 + 4 * 3;
     let d = default_tb_mem();
-    assert_eq!(reg.get(TripleBufferId(3)).mem_start_offset(), d + 0 * stride);
-    assert_eq!(reg.get(TripleBufferId(0)).mem_start_offset(), d + 3 * stride);
+    assert_eq!(
+        reg.get(TripleBufferId(3)).mem_start_offset(),
+        d + 0 * stride
+    );
+    assert_eq!(
+        reg.get(TripleBufferId(0)).mem_start_offset(),
+        d + 3 * stride
+    );
 }
 
 #[test]

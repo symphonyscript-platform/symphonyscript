@@ -7,11 +7,7 @@ use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 /// Default mem/tb offsets used in most tests. Pick an offset past the TB
@@ -82,8 +78,18 @@ fn new_constructs_with_16_8_capacity_256() {
 fn calculate_size_on_mem_returns_sum() {
     // capacity 16, STRUCT_STRIDE=8, ATTR_STRIDE=16
     // mem plane holds SlotAllocator + AttributePlane => no STRUCT_STRIDE involvement
-    let size_a = EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 16 });
-    let size_b = EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 32 });
+    let size_a = EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig {
+        core_stride: 8,
+        meta_stride: 0,
+        attr_stride: 16,
+        capacity: 16,
+    });
+    let size_b = EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig {
+        core_stride: 8,
+        meta_stride: 0,
+        attr_stride: 16,
+        capacity: 32,
+    });
     // Doubling capacity strictly increases mem required.
     assert!(size_b > size_a);
     // Also sanity: size should include ATTR_STRIDE * capacity contribution.
@@ -95,10 +101,42 @@ fn calculate_size_on_mem_returns_sum() {
 
 #[test]
 fn calculate_size_on_tb_returns_capacity_times_stride() {
-    assert_eq!(EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 4 }), 32);
-    assert_eq!(EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 4, meta_stride: 0, attr_stride: 32, capacity: 16 }), 64);
-    assert_eq!(EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 1, meta_stride: 0, attr_stride: 1, capacity: 1 }), 1);
-    assert_eq!(EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 16, meta_stride: 0, attr_stride: 8, capacity: 256 }), 256 * 16);
+    assert_eq!(
+        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 4
+        }),
+        32
+    );
+    assert_eq!(
+        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 4,
+            meta_stride: 0,
+            attr_stride: 32,
+            capacity: 16
+        }),
+        64
+    );
+    assert_eq!(
+        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 1,
+            meta_stride: 0,
+            attr_stride: 1,
+            capacity: 1
+        }),
+        1
+    );
+    assert_eq!(
+        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 16,
+            meta_stride: 0,
+            attr_stride: 8,
+            capacity: 256
+        }),
+        256 * 16
+    );
 }
 
 // ============ Allocation (1-based) ============
@@ -344,7 +382,10 @@ fn attr_or_is_idempotent_on_second_call() {
     let first = store.get(s).attr_or(0, 0b1100);
     let second = store.get(s).attr_or(0, 0b1100);
     assert_eq!(first, 0b0001, "first call returns prior state");
-    assert_eq!(second, 0b1101, "second call returns state already merged by first");
+    assert_eq!(
+        second, 0b1101,
+        "second call returns state already merged by first"
+    );
     assert_eq!(store.get(s).attr_read(0), 0b1101);
 }
 
@@ -389,9 +430,17 @@ fn attr_and_or_at_distinct_slots_are_isolated() {
     store.get(s3).attr_write(0, 0b1111);
 
     assert_eq!(store.get(s2).attr_and(0, 0b0101), 0b1111);
-    assert_eq!(store.get(s1).attr_read(0), 0b1111, "s1 must not be affected");
+    assert_eq!(
+        store.get(s1).attr_read(0),
+        0b1111,
+        "s1 must not be affected"
+    );
     assert_eq!(store.get(s2).attr_read(0), 0b0101);
-    assert_eq!(store.get(s3).attr_read(0), 0b1111, "s3 must not be affected");
+    assert_eq!(
+        store.get(s3).attr_read(0),
+        0b1111,
+        "s3 must not be affected"
+    );
 
     assert_eq!(store.get(s3).attr_or(0, 0b0001_0000), 0b1111);
     assert_eq!(store.get(s1).attr_read(0), 0b1111);
@@ -457,8 +506,12 @@ fn slot_reuse_zeroes_both_planes() {
     let (_mem, _tb, store) = make_store(8, 16, 4);
     let s = store.insert().unwrap();
 
-    store.get(s).core_write_all(&[11, 22, 33, 44, 55, 66, 77, 88]);
-    store.get(s).attr_write_all(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+    store
+        .get(s)
+        .core_write_all(&[11, 22, 33, 44, 55, 66, 77, 88]);
+    store
+        .get(s)
+        .attr_write_all(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
 
     let reader_ack = store.to_reader();
     store.remove(s).unwrap();
@@ -467,7 +520,10 @@ fn slot_reuse_zeroes_both_planes() {
     store.publish();
 
     let s2 = store.insert().unwrap();
-    assert_eq!(s2, s, "SimpleFreeList LIFO should reuse the just-freed slot");
+    assert_eq!(
+        s2, s,
+        "SimpleFreeList LIFO should reuse the just-freed slot"
+    );
     let mut zc = [0i32; 8];
     let mut za = [0i32; 16];
     store.get(s2).core_read_all(&mut zc);
@@ -1014,8 +1070,7 @@ fn attr_write_respects_nonzero_mem_start_offset() {
     const MEM_START: usize = DEFAULT_MEM_START_OFFSET + 128;
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
-    let store =
-        EntryStoreWriter::new(
+    let store = EntryStoreWriter::new(
         Arc::clone(&mem),
         tb.clone(),
         EntryStoreConfig {
@@ -1103,10 +1158,7 @@ fn mem_layout_matches_declared_sizes() {
     );
 
     // TB plane must be exactly: STRUCT_STRIDE * capacity.
-    assert_eq!(
-        store.tb_end_offset() - store.tb_start_offset(),
-        CAP * S,
-    );
+    assert_eq!(store.tb_end_offset() - store.tb_start_offset(), CAP * S,);
 }
 
 // ============ META_STRIDE > 0 ============
@@ -1150,13 +1202,53 @@ fn make_store_cma(
 #[test]
 fn meta_calculate_size_on_tb_is_capacity_times_core_plus_meta() {
     // Derived directly from the layout invariant: capacity * (CORE + META).
-    assert_eq!(EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 4, meta_stride: 4, attr_stride: 16, capacity: 4 }), 4 * (4 + 4));
-    assert_eq!(EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 8, meta_stride: 16, attr_stride: 16, capacity: 4 }), 4 * (8 + 16));
-    assert_eq!(EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 1, meta_stride: 1, attr_stride: 1, capacity: 1 }), 1 * (1 + 1));
+    assert_eq!(
+        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 4,
+            meta_stride: 4,
+            attr_stride: 16,
+            capacity: 4
+        }),
+        4 * (4 + 4)
+    );
+    assert_eq!(
+        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 16,
+            attr_stride: 16,
+            capacity: 4
+        }),
+        4 * (8 + 16)
+    );
+    assert_eq!(
+        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 1,
+            meta_stride: 1,
+            attr_stride: 1,
+            capacity: 1
+        }),
+        1 * (1 + 1)
+    );
     // META=0 edge case must still match the formula.
-    assert_eq!(EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 16, meta_stride: 0, attr_stride: 8, capacity: 256 }), 256 * (16 + 0));
+    assert_eq!(
+        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 16,
+            meta_stride: 0,
+            attr_stride: 8,
+            capacity: 256
+        }),
+        256 * (16 + 0)
+    );
     // Large pair.
-    assert_eq!(EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 64, meta_stride: 64, attr_stride: 16, capacity: 32 }), 32 * (64 + 64));
+    assert_eq!(
+        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 64,
+            meta_stride: 64,
+            attr_stride: 16,
+            capacity: 32
+        }),
+        32 * (64 + 64)
+    );
 }
 
 #[test]
@@ -1164,14 +1256,56 @@ fn meta_calculate_size_on_mem_is_independent_of_core_and_meta() {
     // Mem plane holds only SlotAllocator + AttributePlane; CORE/META live
     // on the TB plane. Vary CORE/META while fixing ATTR+capacity: sizes
     // must match exactly.
-    let base = EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig { core_stride: 0, meta_stride: 0, attr_stride: 16, capacity: 32 });
-    assert_eq!(EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 32 }), base);
-    assert_eq!(EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig { core_stride: 0, meta_stride: 8, attr_stride: 16, capacity: 32 }), base);
-    assert_eq!(EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 16, attr_stride: 16, capacity: 32 }), base);
-    assert_eq!(EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig { core_stride: 64, meta_stride: 64, attr_stride: 16, capacity: 32 }), base);
+    let base = EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig {
+        core_stride: 0,
+        meta_stride: 0,
+        attr_stride: 16,
+        capacity: 32,
+    });
+    assert_eq!(
+        EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 32
+        }),
+        base
+    );
+    assert_eq!(
+        EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig {
+            core_stride: 0,
+            meta_stride: 8,
+            attr_stride: 16,
+            capacity: 32
+        }),
+        base
+    );
+    assert_eq!(
+        EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 16,
+            attr_stride: 16,
+            capacity: 32
+        }),
+        base
+    );
+    assert_eq!(
+        EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig {
+            core_stride: 64,
+            meta_stride: 64,
+            attr_stride: 16,
+            capacity: 32
+        }),
+        base
+    );
 
     // Doubling capacity grows by at least ATTR_STRIDE * (new - old).
-    let grown = EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 16, attr_stride: 16, capacity: 64 });
+    let grown = EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig {
+        core_stride: 8,
+        meta_stride: 16,
+        attr_stride: 16,
+        capacity: 64,
+    });
     assert!(grown - base >= 32 * 16);
 }
 
@@ -1313,7 +1447,10 @@ fn core_meta_slot_reuse_zeroes_full_core_plus_meta_zone() {
     store.publish();
 
     let s2 = store.insert().unwrap();
-    assert_eq!(s2, s, "SimpleFreeList LIFO should reuse the just-freed slot");
+    assert_eq!(
+        s2, s,
+        "SimpleFreeList LIFO should reuse the just-freed slot"
+    );
 
     // insert_struct loops 0..(CORE_STRIDE + META_STRIDE), so BOTH zones
     // must be zero on reuse.
@@ -1504,11 +1641,7 @@ fn copy_from_migrates_core_meta_and_attrs() {
     );
     dst.copy_from(&src);
 
-    for (s, c, m, a) in [
-        (s1, c1, m1, a1),
-        (s2, c2, m2, a2),
-        (s3, c3, m3, a3),
-    ] {
+    for (s, c, m, a) in [(s1, c1, m1, a1), (s2, c2, m2, a2), (s3, c3, m3, a3)] {
         assert!(dst.is_active_slot(s));
         let mut cr = [0i32; C];
         let mut mr = [0i32; M];

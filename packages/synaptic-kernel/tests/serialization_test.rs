@@ -51,7 +51,6 @@ fn empty_kernel_serialize_and_load() {
     assert_eq!(loaded.synapse_capacity(), 16);
     assert_eq!(loaded.node_count(), 0);
     assert_eq!(loaded.synapse_count(), 0);
-    assert!(loaded.get_head_node().is_none());
 }
 
 #[test]
@@ -78,13 +77,7 @@ fn single_node_survives_round_trip() {
     let loaded = TestKernel::load_serialized(serialized);
 
     assert_eq!(loaded.node_count(), 1);
-    let head = loaded.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 42);
-    // Previous API exposed `get_head_node_slot()` on the writer. The current
-    // public surface only returns a `NodeHandle` via `get_head_node()`; slot
-    // identity is implicit. Preserving a single-node store (node_count == 1
-    // + kind match) is equivalent for this assertion.
-    let _ = slot;
+    assert_eq!(loaded.get_node(slot).get_kind(), 42);
 }
 
 #[test]
@@ -115,20 +108,18 @@ fn node_store_order_preserved() {
 }
 
 #[test]
-fn head_pointer_preserved() {
+fn two_node_subchain_order_preserved_after_round_trip() {
     let mut kernel = TestKernel::new(config(16));
     let n1 = kernel.insert_node(1).unwrap();
-    let n2 = kernel.insert_node(2).unwrap();
+    let n2 = kernel.insert_node_before(n1, 2).unwrap();
 
     let serialized = kernel.serialize();
     let loaded = TestKernel::load_serialized(serialized);
 
-    let head = loaded.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 2);
-    assert_eq!(head.get_next_ptr(), n1);
-    // Head slot identity (== n2) is implied by: kind == 2 + next_ptr == n1 in a
-    // two-node store. `get_head_node_slot()` is no longer exposed.
-    let _ = n2;
+    let h = loaded.get_node(n2);
+    assert_eq!(h.get_kind(), 2);
+    assert_eq!(h.get_next_ptr(), n1);
+    assert_eq!(loaded.get_node(n1).get_prev_ptr(), n2);
 }
 
 // =========================================================
@@ -222,7 +213,9 @@ fn node_attributes_preserved() {
     let n1 = kernel.insert_node(1).unwrap();
 
     for offset in 0..NODE_ATTR {
-        kernel.get_node(n1).attr_write(offset, (offset as i32) * 100 + 7);
+        kernel
+            .get_node(n1)
+            .attr_write(offset, (offset as i32) * 100 + 7);
     }
 
     let serialized = kernel.serialize();
@@ -246,7 +239,9 @@ fn synapse_attributes_preserved() {
     let s1 = kernel.connect(n1, n2, 5).unwrap();
 
     for offset in 0..SYNAPSE_ATTR {
-        kernel.get_synapse(s1).attr_write(offset, -(offset as i32) * 50);
+        kernel
+            .get_synapse(s1)
+            .attr_write(offset, -(offset as i32) * 50);
     }
 
     let serialized = kernel.serialize();
@@ -534,9 +529,9 @@ fn topology_preserved_after_grow_and_serialize() {
     let serialized = kernel.serialize();
     let loaded = TestKernel::load_serialized(serialized);
 
-    let head = loaded.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 1);
-    assert_eq!(head.get_next_ptr(), n2);
+    let h = loaded.get_node(n1);
+    assert_eq!(h.get_kind(), 1);
+    assert_eq!(h.get_next_ptr(), n2);
 
     assert_eq!(loaded.get_node(n2).get_kind(), 2);
     assert_eq!(loaded.get_synapse(s1).get_kind(), 50);
@@ -548,16 +543,16 @@ fn topology_preserved_after_grow_and_serialize() {
 #[test]
 fn multiple_grows_then_serialize() {
     let mut kernel = TestKernel::new(config(4));
-    kernel.insert_node(1).unwrap();
+    let s1 = kernel.insert_node(1).unwrap();
 
     kernel.grow(config(8)).unwrap();
     kernel.publish();
 
-    kernel.insert_node(2).unwrap();
+    let s2 = kernel.insert_node(2).unwrap();
     kernel.grow(config(16)).unwrap();
     kernel.publish();
 
-    kernel.insert_node(3).unwrap();
+    let s3 = kernel.insert_node(3).unwrap();
     kernel.grow(config(32)).unwrap();
 
     let serialized = kernel.serialize();
@@ -566,8 +561,9 @@ fn multiple_grows_then_serialize() {
     assert_eq!(loaded.node_capacity(), 32);
     assert_eq!(loaded.node_count(), 3);
 
-    let head = loaded.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 3);
+    assert_eq!(loaded.get_node(s1).get_kind(), 1);
+    assert_eq!(loaded.get_node(s2).get_kind(), 2);
+    assert_eq!(loaded.get_node(s3).get_kind(), 3);
 }
 
 // =========================================================
@@ -728,11 +724,10 @@ fn consumer_thread_sees_loaded_state_after_publish_swap() {
     let mut consumer = EpochConsumer::<1, 1, 1>::new(cp);
     let graph = consumer.acquire_mirror();
 
-    let head = graph.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 1);
+    assert_eq!(graph.get_node(n1).get_kind(), 1);
     assert_eq!(graph.get_node(n1).attr_read(0), 42);
 
-    let next = graph.get_node(head.get_next_ptr());
+    let next = graph.get_node(graph.get_node(n1).get_next_ptr());
     assert_eq!(next.get_kind(), 2);
 
     let syn = graph.get_synapse(1);
@@ -755,8 +750,7 @@ fn mutations_after_load_visible_to_consumer_thread() {
     let mut consumer = EpochConsumer::<1, 1, 1>::new(cp);
     let graph = consumer.acquire_mirror();
 
-    let head = graph.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 2);
+    assert_eq!(graph.get_node(n2).get_kind(), 2);
     assert_eq!(graph.get_node(n2).attr_read(0), 555);
 }
 

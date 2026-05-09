@@ -6,11 +6,7 @@ use synaptic_kernel::primitives::types::AtomicBuffer;
 
 /// Creates a AtomicBuffer with the given number of AtomicI32 slots.
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 /// SPSC: one writer thread, one reader thread.

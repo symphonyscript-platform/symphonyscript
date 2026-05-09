@@ -1,5 +1,5 @@
-use synaptic_kernel::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
+use synaptic_kernel::primitives::types::AtomicBuffer;
 
 /// Writes 64-bit value to `mem` as two 32-bit halves.
 /// The low half at `offset_i32` and the high half at `offset_i32 + 1`.
@@ -49,10 +49,9 @@ pub fn mem_read_i64(mem: &AtomicBuffer, offset_i32: usize) -> i64 {
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicI32;
-    use std::sync::Arc;
 
     fn make_mem(n: usize) -> AtomicBuffer {
-        Arc::new((0..n).map(|_| AtomicI32::new(0)).collect())
+        (0..n).map(|_| AtomicI32::new(0)).collect()
     }
 
     #[test]
@@ -60,9 +59,12 @@ mod tests {
         let mem = make_mem(4);
         let cases = [
             0i64,
-            1, -1,
-            i64::MIN, i64::MAX,
-            0x1_0000_0000, -0x1_0000_0000,
+            1,
+            -1,
+            i64::MIN,
+            i64::MAX,
+            0x1_0000_0000,
+            -0x1_0000_0000,
             0x8000_0000_0000_0000u64 as i64,
             0x7FFF_FFFF_FFFF_FFFF,
             0xFFFF_FFFF, // low-half all ones (sign-extension hazard if bug ever returns)

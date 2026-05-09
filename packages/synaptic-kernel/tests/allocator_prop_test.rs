@@ -1,16 +1,11 @@
 use proptest::prelude::*;
 use std::sync::atomic::AtomicI32;
-use std::sync::Arc;
 use synaptic_kernel::primitives::simple_free_list::SimpleFreeList;
 use synaptic_kernel::primitives::slot_allocator::SlotAllocator;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 // ============ SimpleFreeList Property Tests ============

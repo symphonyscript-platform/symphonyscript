@@ -15,11 +15,7 @@ const MEM_SIZE: usize = 131072;
 const D: TripleBufferId = TripleBufferId::DEFAULT;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 fn tb_def(id: u16, cap: usize) -> TripleBufferDef {
@@ -146,7 +142,10 @@ fn calculate_size_on_default_tb_matches_runtime_layout() {
     let reg = LutWriterRegistry::<1, 2>::new(tb_reg, defs, start, [0; 1]);
     let calc = LutWriterRegistry::<1, 2>::calculate_size_on_default_tb(&defs);
     assert_eq!(calc, 11 + 22);
-    assert_eq!(reg.default_tb_end_offset() - reg.default_tb_start_offset(), calc);
+    assert_eq!(
+        reg.default_tb_end_offset() - reg.default_tb_start_offset(),
+        calc
+    );
 }
 
 #[test]
@@ -179,7 +178,10 @@ fn extra_tb_start_end_offsets_match_construction() {
     let mem = create_mem(MEM_SIZE);
     let tb_defs = [tb_def(0, 1024)];
     let tb_reg = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem), tb_defs, 0, 4096);
-    let defs = [ldef(0, TripleBufferId(0), 10), ldef(1, TripleBufferId(0), 20)];
+    let defs = [
+        ldef(0, TripleBufferId(0), 10),
+        ldef(1, TripleBufferId(0), 20),
+    ];
     let extra = [15usize; 1];
     let reg = LutWriterRegistry::<1, 2>::new(tb_reg, defs, 0, extra);
     assert_eq!(reg.extra_tb_start_offsets(), [15]);
@@ -311,12 +313,11 @@ fn luts_after_entry_stores_on_same_tb_no_corruption() {
         .get(EntryStoreId(0))
         .get(slot)
         .core_write(0, 0x5a5a);
-    lut_reg.get(LutId(0)).write_all(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+    lut_reg
+        .get(LutId(0))
+        .write_all(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
     assert_eq!(
-        store_reg
-            .get(EntryStoreId(0))
-            .get(slot)
-            .core_read(0),
+        store_reg.get(EntryStoreId(0)).get(slot).core_read(0),
         0x5a5a
     );
     for i in 0..16 {

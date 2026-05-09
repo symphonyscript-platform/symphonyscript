@@ -1,15 +1,10 @@
 use std::sync::atomic::AtomicI32;
-use std::sync::Arc;
 use synaptic_kernel::primitives::tb_zone_writer::TbZoneWriter;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 // ============ Construction ============
@@ -322,9 +317,7 @@ fn struct_writer_changes_observable_by_reader_after_publish_and_swap() {
     let reader = writer.to_reader();
     let view = TbZoneWriter::new(&writer, 16, 32);
 
-    view.write_all(&[
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-    ]);
+    view.write_all(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
     writer.publish();
     assert!(reader.swap());
 

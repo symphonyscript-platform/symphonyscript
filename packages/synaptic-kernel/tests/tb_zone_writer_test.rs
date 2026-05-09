@@ -1,15 +1,10 @@
 use std::sync::atomic::AtomicI32;
-use std::sync::Arc;
 use synaptic_kernel::primitives::tb_zone_writer::TbZoneWriter;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 // ============ Construction: STRIDE coverage ============
@@ -363,9 +358,7 @@ fn full_capacity_zone_write_all_read_all() {
     let writer = TripleBufferWriter::new(mem, 0, 16);
     let zone = TbZoneWriter::new(&writer, 16, 0);
 
-    let data: [i32; 16] = [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-    ];
+    let data: [i32; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
     zone.write_all(&data);
     let mut read_back = [0i32; 16];
     zone.read_all(&mut read_back);

@@ -5,11 +5,7 @@ use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_allocator(capacity: usize) -> (SlotAllocator, AtomicBuffer) {
     let size = SlotAllocator::calculate_size_on_mem(capacity);
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    let mem = Arc::new(vec);
+    let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
     let alloc = SlotAllocator::new(Arc::clone(&mem), 0, capacity);
     (alloc, mem)
 }
@@ -29,9 +25,9 @@ fn alloc_defer_flush_lifecycle() {
     assert_eq!(alloc.alloc_count(), 1);
     assert_eq!(alloc.deferred_count(), 1);
 
-    alloc.publish();     // advances generation, staged queue requires an ack
-    reader.ack();        // simulates reader sync
-    alloc.publish();     // now freed
+    alloc.publish(); // advances generation, staged queue requires an ack
+    reader.ack(); // simulates reader sync
+    alloc.publish(); // now freed
 
     assert_eq!(alloc.free_count(), 4);
     assert_eq!(alloc.alloc_count(), 0);
@@ -41,11 +37,14 @@ fn alloc_defer_flush_lifecycle() {
 #[test]
 fn unallocated_deferral_timebomb_is_disarmed() {
     let (alloc, _mem) = create_allocator(4);
-    
+
     // Attempting to defer slot 1 which has NOT been allocated
     let res = alloc.defer_free(1);
-    assert!(matches!(res, Err(synaptic_kernel::errors::slot_allocator_error::SlotAllocatorError::InvalidSlot)));
-    
+    assert!(matches!(
+        res,
+        Err(synaptic_kernel::errors::slot_allocator_error::SlotAllocatorError::InvalidSlot)
+    ));
+
     // Nothing should be deferred
     assert_eq!(alloc.deferred_count(), 0);
 }
@@ -54,11 +53,14 @@ fn unallocated_deferral_timebomb_is_disarmed() {
 fn double_defer_returns_error() {
     let (alloc, _mem) = create_allocator(4);
     let s1 = alloc.alloc().unwrap();
-    
+
     alloc.defer_free(s1).unwrap();
     let res = alloc.defer_free(s1);
-    
-    assert!(matches!(res, Err(synaptic_kernel::errors::slot_allocator_error::SlotAllocatorError::DoubleFree)));
+
+    assert!(matches!(
+        res,
+        Err(synaptic_kernel::errors::slot_allocator_error::SlotAllocatorError::DoubleFree)
+    ));
 }
 
 #[test]

@@ -5,11 +5,7 @@ use synaptic_kernel::primitives::bitmap::Bitmap;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 #[test]
@@ -26,12 +22,12 @@ fn new_creates_bitmap_all_off() {
 fn on_and_off_toggles_correctly() {
     let mem = create_mem(100);
     let bitmap = Bitmap::new(Arc::clone(&mem), 0, 32);
-    
+
     bitmap.on(5);
     assert!(bitmap.is_on(5));
     assert!(bitmap.is_off(4));
     assert!(bitmap.is_off(6));
-    
+
     bitmap.off(5);
     assert!(bitmap.is_off(5));
 }
@@ -42,11 +38,11 @@ fn copy_from_transfers_bit_state() {
     let b1 = Bitmap::new(Arc::clone(&mem1), 0, 32);
     b1.on(1);
     b1.on(31);
-    
+
     let mem2 = create_mem(100);
     let b2 = Bitmap::new(Arc::clone(&mem2), 0, 32);
     b2.copy_from(&b1);
-    
+
     assert!(b2.is_on(1));
     assert!(b2.is_on(31));
     assert!(b2.is_off(0));
@@ -73,10 +69,10 @@ fn on_panics_out_of_bounds() {
 fn copy_from_panics_if_source_larger() {
     let mem1 = create_mem(100);
     let b_large = Bitmap::new(Arc::clone(&mem1), 0, 64);
-    
+
     let mem2 = create_mem(100);
     let b_small = Bitmap::new(Arc::clone(&mem2), 0, 32);
-    
+
     // Attempting to copy 64 bits into 32 bits capacity will natively panic due to user's fix
     b_small.copy_from(&b_large);
 }
@@ -85,7 +81,7 @@ fn copy_from_panics_if_source_larger() {
 fn bitmap_thread_stress_test() {
     let mem = create_mem(100);
     let bitmap = Arc::new(Bitmap::new(Arc::clone(&mem), 0, 32));
-    
+
     let mut handles = vec![];
     for i in 0..16 {
         let bit = bitmap.clone();
@@ -98,13 +94,17 @@ fn bitmap_thread_stress_test() {
             }
         }));
     }
-    
+
     for handle in handles {
         handle.join().unwrap();
     }
-    
+
     // because we end on `on()`, all 16 bits should be exactly on
     for i in 0..16 {
-        assert!(bitmap.is_on(i), "Bit {} was dropped during concurrent access", i);
+        assert!(
+            bitmap.is_on(i),
+            "Bit {} was dropped during concurrent access",
+            i
+        );
     }
 }

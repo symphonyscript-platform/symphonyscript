@@ -13,11 +13,7 @@ use synaptic_kernel::primitives::types::AtomicBuffer;
 const MEM_SIZE: usize = 65536;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 fn sdef(id: u16, core: usize, meta: usize, attr: usize, cap: usize) -> EntryStoreDef {
@@ -87,7 +83,10 @@ fn bind_produces_valid_registry() {
 fn get_returns_reader_for_valid_id() {
     let defs = [sdef(0, 8, 0, 16, 4)];
     let (_tb, wr, rr) = make_reader_registry(defs);
-    assert_eq!(rr.get(EntryStoreId(0)).capacity(), wr.get(EntryStoreId(0)).capacity());
+    assert_eq!(
+        rr.get(EntryStoreId(0)).capacity(),
+        wr.get(EntryStoreId(0)).capacity()
+    );
     assert_eq!(
         rr.get(EntryStoreId(0)).mem_start_offset(),
         wr.get(EntryStoreId(0)).mem_start_offset()
@@ -99,8 +98,7 @@ fn get_identity_permutation() {
     let defs = [sdef(0, 8, 0, 16, 4), sdef(1, 4, 4, 8, 8)];
     let (_tb, _wr, rr) = make_reader_registry(defs);
     assert!(
-        rr.get(EntryStoreId(0)).mem_start_offset()
-            < rr.get(EntryStoreId(1)).mem_start_offset()
+        rr.get(EntryStoreId(0)).mem_start_offset() < rr.get(EntryStoreId(1)).mem_start_offset()
     );
 }
 
@@ -109,8 +107,7 @@ fn get_reversed_permutation() {
     let defs = [sdef(1, 8, 0, 16, 4), sdef(0, 4, 4, 8, 8)];
     let (_tb, _wr, rr) = make_reader_registry(defs);
     assert!(
-        rr.get(EntryStoreId(1)).mem_start_offset()
-            < rr.get(EntryStoreId(0)).mem_start_offset()
+        rr.get(EntryStoreId(1)).mem_start_offset() < rr.get(EntryStoreId(0)).mem_start_offset()
     );
 }
 
@@ -156,7 +153,9 @@ fn core_read_visible_after_publish_swap() {
     tb_rr.get(TripleBufferId::DEFAULT).swap();
     let reader_reg = writer_reg.to_reader();
     let mut buf = [0i32; 8];
-    reader_reg.get(EntryStoreId(0)).get(slot).core_read_all(&mut buf);
+    reader_reg
+        .get(EntryStoreId(0))
+        .get(slot)
+        .core_read_all(&mut buf);
     assert_eq!(buf, [5, 6, 7, 8, 9, 10, 11, 12]);
 }
-

@@ -6,13 +6,9 @@ use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_allocator(capacity: usize) -> (SlotAllocator, StagingBufferReader, AtomicBuffer) {
     let size = SlotAllocator::calculate_size_on_mem(capacity);
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    let mem = Arc::new(vec);
+    let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
     let alloc = SlotAllocator::new(Arc::clone(&mem), 0, capacity);
-    
+
     // We need a StagingBufferReader to simulate the reader acking generations
     let reader = alloc.to_staging_buffer_reader();
     (alloc, reader, mem)
@@ -48,9 +44,15 @@ fn after_defer_slot_is_deferred_not_active() {
 
     alloc.defer_free(s).unwrap();
 
-    assert!(alloc.is_allocated(s), "still allocated (hasn't been freed yet)");
+    assert!(
+        alloc.is_allocated(s),
+        "still allocated (hasn't been freed yet)"
+    );
     assert!(alloc.is_deferred(s), "marked as deferred");
-    assert!(!alloc.is_active(s), "not active (deferred takes precedence)");
+    assert!(
+        !alloc.is_active(s),
+        "not active (deferred takes precedence)"
+    );
     assert!(!alloc.is_free(s), "not free (still in alloc bitmap)");
 }
 
@@ -105,9 +107,7 @@ fn copy_from_preserves_state_and_adds_capacity() {
 
     // Create larger allocator and copy
     let large_size = SlotAllocator::calculate_size_on_mem(8);
-    let large_mem: AtomicBuffer = Arc::new(
-        (0..large_size).map(|_| AtomicI32::new(0)).collect(),
-    );
+    let large_mem: AtomicBuffer = (0..large_size).map(|_| AtomicI32::new(0)).collect();
     let large = SlotAllocator::new(Arc::clone(&large_mem), 0, 8);
     large.copy_from(&small);
 
@@ -139,11 +139,9 @@ fn copy_from_deferred_items_flush_correctly_on_destination() {
     small.defer_free(s2).unwrap();
 
     let large_size = SlotAllocator::calculate_size_on_mem(8);
-    let large_mem: AtomicBuffer = Arc::new(
-        (0..large_size).map(|_| AtomicI32::new(0)).collect(),
-    );
+    let large_mem: AtomicBuffer = (0..large_size).map(|_| AtomicI32::new(0)).collect();
     let large = SlotAllocator::new(Arc::clone(&large_mem), 0, 8);
-    
+
     // Also bind a reader to the large
     let large_reader = large.to_staging_buffer_reader();
 
@@ -194,13 +192,13 @@ fn stress_alloc_defer_flush_cycles() {
         // Cycle 1: publish and ack
         alloc.publish();
         reader.ack();
-        
+
         // Cycle 2: next publish un-defers and reclaims
         alloc.publish();
 
         // Invariant: free_count + alloc_count == capacity
         // Note: alloc_count inside the allocator includes deferred items.
-        // Because we deferred and then fully reclaimed, the slots returned 
+        // Because we deferred and then fully reclaimed, the slots returned
         // to the free list are no longer counted as allocated.
         assert_eq!(
             alloc.free_count() + alloc.alloc_count(),
@@ -213,7 +211,7 @@ fn stress_alloc_defer_flush_cycles() {
         for s in slots.iter().skip(slots.len() / 2) {
             alloc.defer_free(*s).unwrap();
         }
-        
+
         alloc.publish();
         reader.ack();
         alloc.publish(); // Reclaims the remaining
@@ -254,7 +252,7 @@ fn stress_interleaved_alloc_defer_with_partial_flush() {
     for s in active {
         alloc.defer_free(s).unwrap();
     }
-    
+
     // We need up to 2 publish cycles with an ack to guarantee everything drains
     alloc.publish();
     reader.ack();
@@ -287,9 +285,7 @@ fn utilization_tracks_allocation_ratio() {
 #[test]
 fn bind_reads_existing_allocator_state() {
     let size = SlotAllocator::calculate_size_on_mem(4);
-    let mem: AtomicBuffer = Arc::new(
-        (0..size).map(|_| AtomicI32::new(0)).collect(),
-    );
+    let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
 
     let alloc1 = SlotAllocator::new(Arc::clone(&mem), 0, 4);
     let _s1 = alloc1.alloc().unwrap();

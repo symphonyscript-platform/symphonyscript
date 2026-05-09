@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use synaptic_kernel::primitives::triple_buffer_def::{TripleBufferDef, TripleBufferId};
 use synaptic_kernel::primitives::triple_buffer_reader::TripleBufferReader;
@@ -15,11 +14,7 @@ fn default_tb_mem() -> usize {
 }
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 fn def(id: u16, cap: usize) -> TripleBufferDef {
@@ -80,8 +75,7 @@ fn construct_via_to_reader_varying_capacities() {
     assert_eq!(r.mem_start_offset(), 17);
     assert_eq!(
         r.mem_end_offset(),
-        17
-            + TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP)
+        17 + TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP)
             + (4 + 30)
             + (4 + 150)
             + (4 + 24)

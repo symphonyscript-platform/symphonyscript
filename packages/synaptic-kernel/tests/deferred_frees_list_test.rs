@@ -1,12 +1,13 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::primitives::staging_buffer_writer::StagingBufferWriter;
 use synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader;
+use synaptic_kernel::primitives::staging_buffer_writer::StagingBufferWriter;
+use synaptic_kernel::primitives::types::AtomicBuffer;
 
-fn create_list(capacity: usize) -> (StagingBufferWriter, StagingBufferReader, Arc<Vec<AtomicI32>>) {
+fn create_list(capacity: usize) -> (StagingBufferWriter, StagingBufferReader, AtomicBuffer) {
     let size = StagingBufferWriter::calculate_size_on_mem(capacity);
-    let mem: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
-    let mem_arc = Arc::new(mem);
+    let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
+    let mem_arc = mem;
     let list = StagingBufferWriter::new(Arc::clone(&mem_arc), 0, capacity);
     let reader = list.to_reader();
     (list, reader, mem_arc)

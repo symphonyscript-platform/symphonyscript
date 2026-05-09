@@ -1,15 +1,10 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::primitives::simple_free_list::SimpleFreeList;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 fn bench_alloc(c: &mut Criterion) {

@@ -3,11 +3,10 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-
 mod common;
 
-use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::epoch_consumer::EpochConsumer;
+use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
 
 const NODE_META: usize = 8;
@@ -39,13 +38,16 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
     controller.get_node(n1).attr_write(0, 42);
     controller.publish();
 
+    let entry_slot = n1;
     let running = Arc::new(AtomicBool::new(true));
     let running_consumer = running.clone();
 
     // Consumer thread: uses KernelProcessor (acquire_mirror + ack)
     let consumer_thread = thread::spawn(move || {
-        let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1, 1>) };
-        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1, 1>> = unsafe { Arc::from_raw(cp_ref) };
+        let cp_ref =
+            unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1, 1>) };
+        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1, 1>> =
+            unsafe { Arc::from_raw(cp_ref) };
         let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
@@ -54,8 +56,8 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
         while running_consumer.load(Ordering::Relaxed) {
             let graph = processor.acquire_mirror();
 
-            // Traverse the full chain
-            let mut current = graph.get_head_node();
+            // Traverse the full chain from pinned entry
+            let mut current = Some(graph.get_node(entry_slot));
             let mut count = 0;
             while let Some(node) = current {
                 let kind: i32 = node.get_kind();
@@ -63,7 +65,8 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
                 assert!(
                     kind >= 0 && kind < 200,
                     "corrupt kind: {} at iteration {}",
-                    kind, iterations
+                    kind,
+                    iterations
                 );
 
                 let next_ptr = node.get_next_ptr();
@@ -94,8 +97,9 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
     controller.grow(config(16, 16)).unwrap();
     controller.publish();
 
+    let mut tail = n2;
     for i in 3..14 {
-        controller.insert_node(i).unwrap();
+        tail = controller.insert_node_after(tail, i).unwrap();
     }
     controller.publish();
 
@@ -103,7 +107,7 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
     controller.publish();
 
     for i in 14..28 {
-        controller.insert_node(i).unwrap();
+        tail = controller.insert_node_after(tail, i).unwrap();
     }
     controller.publish();
 
@@ -131,28 +135,35 @@ fn epoch_stress_random_mutations_under_consumer_load() {
     let mut controller = TestKernel::new(config(16, 16));
     let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
-    // Seed some initial data
+    // Linear chain from pinned head for deterministic traversal
     let mut node_slots = Vec::new();
-    for i in 0..8 {
-        let slot = controller.insert_node(i).unwrap();
-        node_slots.push(slot);
+    let head = controller.insert_node(0).unwrap();
+    node_slots.push(head);
+    let mut tail = head;
+    for i in 1..8 {
+        tail = controller.insert_node_after(tail, i).unwrap();
+        node_slots.push(tail);
     }
-
     // Connect some synapses
     let mut synapse_slots = Vec::new();
     for i in 0..node_slots.len() - 1 {
-        let s = controller.connect(node_slots[i], node_slots[i + 1], (i * 10) as i32).unwrap();
+        let s = controller
+            .connect(node_slots[i], node_slots[i + 1], (i * 10) as i32)
+            .unwrap();
         synapse_slots.push(s);
     }
     controller.publish();
 
+    let pinned_entry = head;
     let running = Arc::new(AtomicBool::new(true));
     let running_consumer = running.clone();
 
     // Consumer thread with KernelProcessor
     let consumer_thread = thread::spawn(move || {
-        let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1, 1>) };
-        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1, 1>> = unsafe { Arc::from_raw(cp_ref) };
+        let cp_ref =
+            unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1, 1>) };
+        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1, 1>> =
+            unsafe { Arc::from_raw(cp_ref) };
         let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
@@ -160,8 +171,8 @@ fn epoch_stress_random_mutations_under_consumer_load() {
         while running_consumer.load(Ordering::Relaxed) {
             let graph = processor.acquire_mirror();
 
-            // Full graph traversal: nodes + synapses
-            let mut current = graph.get_head_node();
+            // Walk from pinned chain head (extra orphans from main thread not visited)
+            let mut current = Some(graph.get_node(pinned_entry));
             let mut node_count = 0;
             while let Some(node) = current {
                 let kind: i32 = node.get_kind();
@@ -175,10 +186,7 @@ fn epoch_stress_random_mutations_under_consumer_load() {
                     let _syn_kind = syn.get_kind();
                     syn_slot = syn.get_outgoing_next_ptr();
                     syn_count += 1;
-                    assert!(
-                        syn_count <= 64,
-                        "synapse chain too long — possible cycle"
-                    );
+                    assert!(syn_count <= 64, "synapse chain too long — possible cycle");
                 }
 
                 let next_ptr = node.get_next_ptr();
@@ -255,7 +263,9 @@ fn epoch_stress_random_mutations_under_consumer_load() {
     }
 
     running.store(false, Ordering::Relaxed);
-    let iterations = consumer_thread.join().expect("consumer thread panicked during random mutations");
+    let iterations = consumer_thread
+        .join()
+        .expect("consumer thread panicked during random mutations");
     assert!(iterations > 0, "consumer thread never ran");
 }
 
@@ -266,7 +276,7 @@ fn epoch_stress_slow_ack_does_not_crash() {
     let mut controller = TestKernel::new(config(8, 8));
     let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
-    controller.insert_node(1).unwrap();
+    let pinned = controller.insert_node(1).unwrap();
     controller.publish();
 
     let running = Arc::new(AtomicBool::new(true));
@@ -274,8 +284,10 @@ fn epoch_stress_slow_ack_does_not_crash() {
 
     // Slow consumer thread: acks infrequently
     let consumer_thread = thread::spawn(move || {
-        let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1, 1>) };
-        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1, 1>> = unsafe { Arc::from_raw(cp_ref) };
+        let cp_ref =
+            unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1, 1>) };
+        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1, 1>> =
+            unsafe { Arc::from_raw(cp_ref) };
         let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
@@ -284,10 +296,12 @@ fn epoch_stress_slow_ack_does_not_crash() {
             let graph = processor.acquire_mirror();
 
             // Simulate slow processing
-            let mut current = graph.get_head_node();
+            let mut current = Some(graph.get_node(pinned));
             while let Some(node) = current {
                 let next: usize = node.get_next_ptr();
-                if next == 0 { break; }
+                if next == 0 {
+                    break;
+                }
                 current = Some(graph.get_node(next));
             }
 
@@ -302,12 +316,14 @@ fn epoch_stress_slow_ack_does_not_crash() {
     // Main thread: rapid grows while consumer is slow
     // Capacities must be powers of 2
     let grow_caps = [16, 32, 64, 128, 256];
+    let mut tail = pinned;
     for (i, &new_cap) in grow_caps.iter().enumerate() {
         controller.grow(config(new_cap, new_cap)).unwrap();
 
-        // Insert some nodes
         for j in 0..4 {
-            let _ = controller.insert_node((i * 10 + j) as i32);
+            if let Ok(s) = controller.insert_node_after(tail, (i * 10 + j) as i32) {
+                tail = s;
+            }
         }
 
         controller.publish();
@@ -324,7 +340,9 @@ fn epoch_stress_slow_ack_does_not_crash() {
     }
 
     running.store(false, Ordering::Relaxed);
-    let iterations = consumer_thread.join().expect("consumer thread panicked with slow ack");
+    let iterations = consumer_thread
+        .join()
+        .expect("consumer thread panicked with slow ack");
     assert!(iterations > 0, "consumer thread never ran");
 }
 
@@ -351,8 +369,10 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
 
     // Consumer thread: reads attributes via KernelProcessor
     let consumer_thread = thread::spawn(move || {
-        let cp_ref = unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1, 1>) };
-        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1, 1>> = unsafe { Arc::from_raw(cp_ref) };
+        let cp_ref =
+            unsafe { &*(cp_addr as *const synaptic_kernel::control_plane::ControlPlane<1, 1, 1>) };
+        let cp_arc: Arc<synaptic_kernel::control_plane::ControlPlane<1, 1, 1>> =
+            unsafe { Arc::from_raw(cp_ref) };
         let mut processor = TestProcessor::new(Arc::clone(&cp_arc));
         std::mem::forget(cp_arc);
         let mut iterations = 0u64;
@@ -378,8 +398,9 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
     for batch in 0..500 {
         for &slot in &slots {
             for offset in 0..16 {
-                controller.get_node(slot).attr_write(offset, (offset as i32) * 1000 + batch,
-                );
+                controller
+                    .get_node(slot)
+                    .attr_write(offset, (offset as i32) * 1000 + batch);
             }
         }
     }
@@ -387,7 +408,9 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
     thread::sleep(Duration::from_millis(5));
 
     running.store(false, Ordering::Relaxed);
-    let iterations = consumer_thread.join().expect("consumer thread panicked during attribute writes");
+    let iterations = consumer_thread
+        .join()
+        .expect("consumer thread panicked during attribute writes");
     assert!(iterations > 0, "consumer thread never ran");
 }
 
@@ -397,7 +420,7 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
 fn epoch_stress_grows_accumulate_without_ack() {
     let mut controller = TestKernel::new(config(4, 4));
 
-    controller.insert_node(1).unwrap();
+    let s1 = controller.insert_node(1).unwrap();
 
     // Grow 10 times rapidly WITHOUT any consumer thread acking
     // This tests that readers_pending_deletion accumulates safely
@@ -413,14 +436,12 @@ fn epoch_stress_grows_accumulate_without_ack() {
     let mut processor = TestProcessor::new(controller.get_control_plane());
 
     let graph = processor.acquire_mirror();
-    let head = graph.get_head_node();
-    assert!(head.is_some());
-    assert_eq!(head.unwrap().get_kind(), 1);
+    assert_eq!(graph.get_node(s1).get_kind(), 1);
 
     // Publish to drain all accumulated pending readers
     controller.publish();
 
     // System should be fully functional
-    controller.insert_node(2).unwrap();
-    assert_eq!(controller.get_head_node().unwrap().get_kind(), 2);
+    let s2 = controller.insert_node(2).unwrap();
+    assert_eq!(controller.get_node(s2).get_kind(), 2);
 }

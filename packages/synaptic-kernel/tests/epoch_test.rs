@@ -22,11 +22,7 @@ type TestEpoch = Epoch<1, 1, 1>;
 type TestKernel = Kernel<1, 1, 1>;
 
 fn make_mem(size: usize) -> AtomicBuffer {
-    let mut v = Vec::with_capacity(size);
-    for _ in 0..size {
-        v.push(AtomicI32::new(0));
-    }
-    Arc::new(v)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 fn mk_config(
@@ -75,8 +71,7 @@ fn new_then_bind_on_same_mem_sees_same_capacities() {
     let mirror = bound.to_mirror();
 
     assert_eq!(mirror.mem_metadata_capacity(), config.mem_metadata_size);
-    // Fresh, nothing published: no head node.
-    assert!(mirror.get_head_node().is_none());
+    assert_eq!(bound.network.node_count(), 0);
 }
 
 #[test]
@@ -93,9 +88,7 @@ fn bind_preserves_topology_written_by_new_through_kernel_driver() {
     let mirror = bound.to_mirror();
     assert!(mirror.swap());
 
-    let head = mirror.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 42);
-    // slot numbering is 1-based.
+    assert_eq!(mirror.get_node(slot).get_kind(), 42);
     assert!(slot > 0);
 }
 
@@ -191,10 +184,10 @@ fn mirror_sees_inserted_node_after_publish_swap() {
     let mirror = epoch.to_mirror();
     assert!(mirror.swap());
 
-    let head = mirror.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 5);
-    assert_eq!(head.attr_read(0), 4242);
-    assert_eq!(head.get_meta(0), 99);
+    let n = mirror.get_node(slot);
+    assert_eq!(n.get_kind(), 5);
+    assert_eq!(n.attr_read(0), 4242);
+    assert_eq!(n.get_meta(0), 99);
 }
 
 #[test]
@@ -314,7 +307,7 @@ fn copy_from_migrates_chain_synapses_and_metadata_to_larger() {
     assert!(mirror.swap());
 
     // Node chain n1 -> n2 -> n3.
-    let head = mirror.get_head_node().unwrap();
+    let head = mirror.get_node(n1);
     assert_eq!(head.get_kind(), 10);
     assert_eq!(head.attr_read(0), 1001);
     assert_eq!(head.get_meta(0), 100);
@@ -368,10 +361,10 @@ fn copy_from_with_equal_capacities() {
     let mirror = dst.to_mirror();
     assert!(mirror.swap());
 
-    let head = mirror.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 1);
-    assert_eq!(head.attr_read(0), 42);
-    assert_eq!(head.get_meta(0), 7);
+    let hn = mirror.get_node(n);
+    assert_eq!(hn.get_kind(), 1);
+    assert_eq!(hn.attr_read(0), 42);
+    assert_eq!(hn.get_meta(0), 7);
 }
 
 #[test]
@@ -401,7 +394,7 @@ fn copy_from_with_holes_preserves_chain_only() {
     let mirror = dst.to_mirror();
     assert!(mirror.swap());
 
-    let head = mirror.get_head_node().unwrap();
+    let head = mirror.get_node(n1);
     assert_eq!(head.get_kind(), 1);
     let next = mirror.get_node(head.get_next_ptr());
     assert_eq!(next.get_kind(), 4);
@@ -430,11 +423,15 @@ fn mirror_sees_latest_state_after_10_publish_cycles() {
         epoch.network.get_node(slot).set_meta(0, 1000 + i as i32);
 
         epoch.publish();
-        assert!(mirror.swap(), "cycle {}: swap must return true after publish", i);
+        assert!(
+            mirror.swap(),
+            "cycle {}: swap must return true after publish",
+            i
+        );
 
-        let head = mirror.get_head_node().unwrap();
-        assert_eq!(head.get_kind(), i, "cycle {}: head kind", i);
-        assert_eq!(head.get_meta(0), 1000 + i as i32, "cycle {}: head meta", i);
+        let node = mirror.get_node(slot);
+        assert_eq!(node.get_kind(), i, "cycle {}: node kind", i);
+        assert_eq!(node.get_meta(0), 1000 + i as i32, "cycle {}: node meta", i);
     }
 }
 
@@ -450,22 +447,21 @@ fn mirror_without_swap_retains_prior_snapshot_across_publishes() {
     epoch.network.get_node(a).set_meta(0, 11);
     epoch.publish();
     assert!(mirror.swap());
-    assert_eq!(mirror.get_head_node().unwrap().get_kind(), 1);
+    assert_eq!(mirror.get_node(a).get_kind(), 1);
     assert_eq!(mirror.get_node(a).get_meta(0), 11);
 
     // Second cycle: mutate + publish but do NOT swap.
-    let _b = epoch.network.insert_node(2).unwrap();
+    let b = epoch.network.insert_node(2).unwrap();
     epoch.network.get_node(a).set_meta(0, 22);
     epoch.publish();
 
     // Mirror still holds state from cycle 1.
-    assert_eq!(mirror.get_head_node().unwrap().get_kind(), 1);
     assert_eq!(mirror.get_node(a).get_meta(0), 11);
 
     // Only after swap does the new state appear.
     assert!(mirror.swap());
-    assert_eq!(mirror.get_head_node().unwrap().get_kind(), 2);
     assert_eq!(mirror.get_node(a).get_meta(0), 22);
+    assert_eq!(mirror.get_node(b).get_kind(), 2);
 }
 
 // ============ Section 6 — debug-assert panic coverage ============
@@ -510,7 +506,7 @@ fn epoch_works_with_zero_user_zones() {
     epoch.publish();
     let mirror = epoch.to_mirror();
     assert!(mirror.swap());
-    assert_eq!(mirror.get_head_node().unwrap().get_kind(), 7);
+    assert_eq!(mirror.get_node(slot).get_kind(), 7);
 }
 
 #[test]
@@ -542,9 +538,8 @@ fn epoch_works_with_minimal_strides() {
     let mirror = epoch.to_mirror();
     assert!(mirror.swap());
 
-    let head = mirror.get_head_node().unwrap();
-    // head is the most recent insert (b, kind=4).
-    assert_eq!(head.get_kind(), 4);
+    let b_view = mirror.get_node(b);
+    assert_eq!(b_view.get_kind(), 4);
 
     let a_view = mirror.get_node(a);
     assert_eq!(a_view.get_kind(), 3);
@@ -579,7 +574,10 @@ fn publish_publishes_default_tb_for_entry_stores() {
     let mirror = epoch.to_mirror();
     assert!(mirror.swap());
     assert_eq!(
-        mirror.get_entry_store(EntryStoreId(0)).get(slot).core_read(0),
+        mirror
+            .get_entry_store(EntryStoreId(0))
+            .get(slot)
+            .core_read(0),
         4242
     );
 }

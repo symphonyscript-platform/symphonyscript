@@ -1,15 +1,15 @@
 use proptest::prelude::*;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::primitives::staging_buffer_writer::StagingBufferWriter;
 use synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader;
+use synaptic_kernel::primitives::staging_buffer_writer::StagingBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 const STAGING_CAPACITY: usize = 1024;
 
 fn create_staging(capacity: usize) -> (StagingBufferWriter, StagingBufferReader, AtomicBuffer) {
     let size = StagingBufferWriter::calculate_size_on_mem(capacity);
-    let mem: AtomicBuffer = Arc::new((0..size).map(|_| AtomicI32::new(0)).collect());
+    let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
     let buffer = StagingBufferWriter::new(Arc::clone(&mem), 0, capacity);
     let reader = buffer.to_reader();
     (buffer, reader, mem)
@@ -102,13 +102,13 @@ proptest! {
                 SpscOp::Publish => {
                     buf.publish();
                     oracle.publish();
-                    
+
                     assert_eq!(buf.writer_generation(), oracle.writer_generation);
                 }
                 SpscOp::ReaderAck => {
                     reader.ack();
                     oracle.reader_ack();
-                    
+
                     assert_eq!(buf.reader_ack_generation(), oracle.reader_ack_generation);
                 }
                 SpscOp::Drain => {
@@ -121,18 +121,18 @@ proptest! {
                 }
             }
         }
-        
-        // Final invariant check: after we publish and ack everything, 
+
+        // Final invariant check: after we publish and ack everything,
         // the remaining buffer should completely drain.
         buf.publish();
         oracle.publish();
-        
+
         reader.ack();
         oracle.reader_ack();
-        
+
         let final_actual_drained: Vec<usize> = buf.drain().collect();
         let final_oracle_drained = oracle.drain();
-        
+
         assert_eq!(final_actual_drained, final_oracle_drained);
         assert_eq!(buf.len(), 0, "Buffer should be entirely empty after final sync");
     }

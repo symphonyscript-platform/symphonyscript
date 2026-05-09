@@ -11,11 +11,7 @@ const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 const MEM_SIZE: usize = 65536;
@@ -699,8 +695,14 @@ fn triangle_topology_disconnect_one_edge() {
     // C incoming: s_ac -> s_bc still intact
     assert_eq!(node_chain.get_node(c).get_incoming_synapse_head(), s_ac);
     assert_eq!(node_chain.get_node(c).get_incoming_synapse_tail(), s_bc);
-    assert_eq!(synapse_chain.get_synapse(s_ac).get_incoming_next_ptr(), s_bc);
-    assert_eq!(synapse_chain.get_synapse(s_bc).get_incoming_prev_ptr(), s_ac);
+    assert_eq!(
+        synapse_chain.get_synapse(s_ac).get_incoming_next_ptr(),
+        s_bc
+    );
+    assert_eq!(
+        synapse_chain.get_synapse(s_bc).get_incoming_prev_ptr(),
+        s_ac
+    );
 }
 
 // ============ capacity exhaustion ============
@@ -830,6 +832,48 @@ fn copy_from_preserves_topology_and_deep_data() {
 
     assert_eq!(dst_synapse_chain.synapse_count(), 1);
     assert_eq!(dst_synapse_chain.synapse_capacity(), SYNAPSE_CAPACITY * 2);
+}
+
+#[test]
+fn remove_chain_walks_next_ptr_and_removes_all() {
+    let h = setup();
+    let nc = h.node_chain;
+    let a = nc.insert_node(1).unwrap();
+    let b = nc.insert_node_after(a, 2).unwrap();
+    let _c = nc.insert_node_after(b, 3).unwrap();
+    assert_eq!(nc.node_count(), 3);
+    nc.remove_chain(a).unwrap();
+    nc.publish();
+    nc.to_reader().ack_generation();
+    nc.publish();
+    assert_eq!(nc.node_count(), 0);
+}
+
+#[test]
+fn remove_chain_on_single_node_chain() {
+    let h = setup();
+    let nc = h.node_chain;
+    let a = nc.insert_node(1).unwrap();
+    nc.remove_chain(a).unwrap();
+    nc.publish();
+    nc.to_reader().ack_generation();
+    nc.publish();
+    assert_eq!(nc.node_count(), 0);
+}
+
+#[test]
+fn cross_subchain_synapse_connects_disjoint_chains() {
+    let h = setup();
+    let nc = h.node_chain;
+    let a1 = nc.insert_node(1).unwrap();
+    let a2 = nc.insert_node_after(a1, 2).unwrap();
+    let b1 = nc.insert_node(10).unwrap();
+    let b2 = nc.insert_node_after(b1, 11).unwrap();
+    let s = h.synapse_chain.connect(a1, b1, 5).unwrap();
+    assert_eq!(nc.get_node(a1).get_outgoing_synapse_head(), s);
+    assert_eq!(nc.get_node(b1).get_incoming_synapse_head(), s);
+    assert_eq!(nc.get_node(a2).get_prev_ptr(), a1);
+    assert_eq!(nc.get_node(b2).get_prev_ptr(), b1);
 }
 
 #[test]

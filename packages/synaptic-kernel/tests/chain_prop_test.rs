@@ -1,4 +1,5 @@
 use proptest::prelude::*;
+use std::collections::HashSet;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
@@ -16,11 +17,7 @@ const NODE_START_OFFSET: usize = 0;
 const CAPACITY: usize = 64;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 fn setup_chain() -> NodeStoreWriter {
@@ -41,7 +38,7 @@ fn setup_chain() -> NodeStoreWriter {
 
 #[derive(Debug, Clone)]
 enum ChainOp {
-    InsertHead,
+    InsertOrphan,
     InsertAfter(usize),  // index into active slots
     InsertBefore(usize), // index into active slots
     Remove(usize),       // index into active slots
@@ -49,107 +46,96 @@ enum ChainOp {
 
 fn chain_op_strategy() -> impl Strategy<Value = ChainOp> {
     prop_oneof![
-        3 => Just(ChainOp::InsertHead),
+        3 => Just(ChainOp::InsertOrphan),
         2 => (0..64usize).prop_map(ChainOp::InsertAfter),
         2 => (0..64usize).prop_map(ChainOp::InsertBefore),
         2 => (0..64usize).prop_map(ChainOp::Remove),
     ]
 }
 
-/// Verify that a chain is a valid doubly-linked list:
-/// - get_head() returns the actual first node (prev == 0)
-/// - Forward traversal from head visits every active node exactly once
-/// - Backward links are consistent (node.next.prev == node)
-/// - Head's prev == 0, tail's next == 0
+/// Active slots form one or more disjoint doubly-linked sub-chains (orphans count
+/// as length-1). Each sub-chain head has prev_ptr == 0; forward traversal from
+/// every head covers all active slots exactly once.
 fn verify_chain_integrity(chain: &NodeStoreWriter, active_slots: &[usize]) {
     if active_slots.is_empty() {
-        assert!(chain.get_head_node().is_none(), "empty active set but chain has head");
+        // Deferred frees can leave len > 0 until publish drains the allocator.
         return;
     }
 
-    // get_head() must return a valid node
-    let head = chain.get_head_node();
-    assert!(head.is_some(), "non-empty active set but chain has no head");
-    let head = head.unwrap();
+    let active: HashSet<usize> = active_slots.iter().copied().collect();
+    let mut global_visited: HashSet<usize> = HashSet::new();
 
-    // Head's prev must be 0
-    assert_eq!(head.get_prev_ptr(), 0, "head's prev must be 0");
-
-    // Find the head slot from active_slots
-    let head_slot = chain.get_head_slot();
-    assert!(
-        active_slots.contains(&head_slot),
-        "head slot {} not in active slots {:?}",
-        head_slot, active_slots
-    );
-
-    // Forward traversal from head
-    let mut visited = Vec::new();
-    let mut current_slot = head_slot;
-    let mut guard = 0;
-    loop {
-        visited.push(current_slot);
-        let node = chain.get_node(current_slot);
-        let next: usize = node.get_next_ptr();
-
-        if next == 0 {
-            break;
-        }
-
-        // Verify backward link consistency
-        let next_node = chain.get_node(next);
-        assert_eq!(
-            next_node.get_prev_ptr(), current_slot,
-            "backward link broken: node {}'s next is {}, but {}'s prev is {}",
-            current_slot, next, next, next_node.get_prev_ptr()
-        );
-
-        current_slot = next;
-        guard += 1;
-        assert!(guard <= CAPACITY, "cycle detected in chain traversal");
-    }
-
-    // Every active slot should be visited exactly once
-    assert_eq!(
-        visited.len(), active_slots.len(),
-        "traversal visited {} nodes but {} are active. visited: {:?}, active: {:?}",
-        visited.len(), active_slots.len(), visited, active_slots
-    );
-
-    let mut visited_sorted = visited.clone();
-    visited_sorted.sort();
-    visited_sorted.dedup();
-    assert_eq!(
-        visited_sorted.len(), visited.len(),
-        "duplicate nodes in traversal"
-    );
-
+    let mut heads: Vec<usize> = Vec::new();
     for &s in active_slots {
-        assert!(
-            visited.contains(&s),
-            "active slot {} not visited during traversal",
-            s
-        );
+        let prev = chain.get_node(s).get_prev_ptr();
+        if prev == 0 || !active.contains(&prev) {
+            heads.push(s);
+        }
     }
+
+    for head_slot in heads {
+        assert_eq!(
+            chain.get_node(head_slot).get_prev_ptr(),
+            0,
+            "sub-chain entry must have prev_ptr 0"
+        );
+        let mut current = head_slot;
+        let mut guard = 0;
+        loop {
+            assert!(
+                active.contains(&current),
+                "traversal left active set at {}",
+                current
+            );
+            assert!(
+                !global_visited.contains(&current),
+                "slot {} appears in more than one component",
+                current
+            );
+            global_visited.insert(current);
+
+            let node = chain.get_node(current);
+            let next = node.get_next_ptr();
+            if next == 0 {
+                break;
+            }
+            assert!(active.contains(&next), "next_ptr leaves active set");
+            assert_eq!(
+                chain.get_node(next).get_prev_ptr(),
+                current,
+                "backward link broken at {} -> {}",
+                current,
+                next
+            );
+            current = next;
+            guard += 1;
+            assert!(guard <= CAPACITY, "cycle detected in sub-chain");
+        }
+    }
+
+    assert_eq!(
+        global_visited.len(),
+        active.len(),
+        "visited {} of {:?} but active is {:?}",
+        global_visited.len(),
+        global_visited,
+        active_slots
+    );
 }
 
-// ============ Explicit insert_before on head tests ============
-
 #[test]
-fn insert_before_head_updates_head_pointer() {
+fn insert_before_makes_new_subchain_head() {
     let chain = setup_chain();
 
     let a = chain.insert_node(1).unwrap();
-    assert_eq!(chain.get_head_slot(), a);
+    assert_eq!(chain.get_node(a).get_prev_ptr(), 0);
 
     let b = chain.insert_node_before(a, 2).unwrap();
 
-    // Head pointer must now point to b
-    assert_eq!(chain.get_head_slot(), b, "insert_before head must update head pointer");
-    assert_eq!(chain.get_head_node().unwrap().get_kind(), 2);
+    assert_eq!(chain.get_node(b).get_prev_ptr(), 0);
+    assert_eq!(chain.get_node(b).get_kind(), 2);
 
     // Chain: b -> a
-    assert_eq!(chain.get_node(b).get_prev_ptr(), 0, "new head's prev must be 0");
     assert_eq!(chain.get_node(b).get_next_ptr(), a);
     assert_eq!(chain.get_node(a).get_prev_ptr(), b);
     assert_eq!(chain.get_node(a).get_next_ptr(), 0);
@@ -164,7 +150,6 @@ fn insert_before_head_twice_builds_correct_chain() {
     let c = chain.insert_node_before(b, 3).unwrap();
 
     // Chain: c -> b -> a
-    assert_eq!(chain.get_head_slot(), c);
     assert_eq!(chain.get_node(c).get_prev_ptr(), 0);
     assert_eq!(chain.get_node(c).get_next_ptr(), b);
     assert_eq!(chain.get_node(b).get_prev_ptr(), c);
@@ -176,16 +161,15 @@ fn insert_before_head_twice_builds_correct_chain() {
 }
 
 #[test]
-fn insert_before_head_then_insert_head_interleaved() {
+fn prepend_twice_to_form_three_node_subchain() {
     let chain = setup_chain();
 
     let a = chain.insert_node(1).unwrap();
     let b = chain.insert_node_before(a, 2).unwrap();
-    // chain: b -> a
-    let c = chain.insert_node(3).unwrap();
-    // chain: c -> b -> a
+    // b -> a
+    let c = chain.insert_node_before(b, 3).unwrap();
+    // c -> b -> a
 
-    assert_eq!(chain.get_head_slot(), c);
     assert_eq!(chain.get_node(c).get_prev_ptr(), 0);
     assert_eq!(chain.get_node(c).get_next_ptr(), b);
     assert_eq!(chain.get_node(b).get_prev_ptr(), c);
@@ -195,7 +179,7 @@ fn insert_before_head_then_insert_head_interleaved() {
 }
 
 #[test]
-fn remove_node_inserted_before_head() {
+fn remove_prepended_node_restores_prior_subchain_head() {
     let chain = setup_chain();
 
     let a = chain.insert_node(1).unwrap();
@@ -203,16 +187,13 @@ fn remove_node_inserted_before_head() {
     // chain: b -> a
 
     chain.remove_node(b).unwrap();
-    // chain: a (head should revert to a)
+    // chain: a
 
-    assert_eq!(chain.get_head_slot(), a);
     assert_eq!(chain.get_node(a).get_prev_ptr(), 0);
     assert_eq!(chain.get_node(a).get_next_ptr(), 0);
 
     verify_chain_integrity(&chain, &[a]);
 }
-
-// ============ Property-based tests ============
 
 proptest! {
     #[test]
@@ -225,7 +206,7 @@ proptest! {
 
         for op in ops {
             match op {
-                ChainOp::InsertHead => {
+                ChainOp::InsertOrphan => {
                     if active_slots.len() < CAPACITY {
                         kind_counter += 1;
                         if let Some(slot) = chain.insert_node(kind_counter) {
@@ -260,7 +241,6 @@ proptest! {
                 }
             }
 
-            // INVARIANT: chain is a valid doubly-linked list after every operation
             verify_chain_integrity(&chain, &active_slots);
         }
     }
@@ -278,11 +258,13 @@ proptest! {
             }
         }
 
-        // Remove all in random-ish order (reverse)
         while let Some(s) = slots.pop() {
             let _ = chain.remove_node(s);
         }
 
-        prop_assert!(chain.get_head_node().is_none(), "chain should be empty after removing all nodes");
+        chain.publish();
+        chain.to_reader().ack_generation();
+        chain.publish();
+        prop_assert_eq!(chain.len(), 0);
     }
 }

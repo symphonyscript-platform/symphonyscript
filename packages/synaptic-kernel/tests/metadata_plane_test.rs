@@ -1,8 +1,8 @@
 mod common;
 
+use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
-use synaptic_kernel::epoch_consumer::EpochConsumer;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
@@ -75,7 +75,12 @@ fn mem_metadata_default_zero() {
     let controller = TestKernel::new(config());
 
     for i in 0..4 {
-        assert_eq!(controller.mem_read_meta(i), 0, "mem_metadata slot {} should default to 0", i);
+        assert_eq!(
+            controller.mem_read_meta(i),
+            0,
+            "mem_metadata slot {} should default to 0",
+            i
+        );
     }
 }
 
@@ -168,5 +173,5 @@ fn metadata_coexists_with_node_mutations() {
 
     assert_eq!(controller.mem_read_meta(0), 10);
     // Node intact
-    assert_eq!(controller.get_head_node().unwrap().get_kind(), 1);
+    assert_eq!(controller.get_node(n).get_kind(), 1);
 }

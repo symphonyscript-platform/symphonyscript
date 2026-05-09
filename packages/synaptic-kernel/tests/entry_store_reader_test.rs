@@ -8,11 +8,7 @@ use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 const TB_BUFFER_CAPACITY: usize = 1024;
@@ -54,20 +50,60 @@ fn to_reader_produces_matching_reader() {
 #[test]
 fn calculate_size_matches_writer() {
     assert_eq!(
-        EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 16 }),
-        EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 16 }),
+        EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 16
+        }),
+        EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 16
+        }),
     );
     assert_eq!(
-        EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 16 }),
-        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 16 }),
+        EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 16
+        }),
+        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 16
+        }),
     );
     assert_eq!(
-        EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 4, meta_stride: 0, attr_stride: 32, capacity: 64 }),
-        EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig { core_stride: 4, meta_stride: 0, attr_stride: 32, capacity: 64 }),
+        EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig {
+            core_stride: 4,
+            meta_stride: 0,
+            attr_stride: 32,
+            capacity: 64
+        }),
+        EntryStoreWriter::calculate_size_on_mem(&EntryStoreConfig {
+            core_stride: 4,
+            meta_stride: 0,
+            attr_stride: 32,
+            capacity: 64
+        }),
     );
     assert_eq!(
-        EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 4, meta_stride: 0, attr_stride: 32, capacity: 64 }),
-        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 4, meta_stride: 0, attr_stride: 32, capacity: 64 }),
+        EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 4,
+            meta_stride: 0,
+            attr_stride: 32,
+            capacity: 64
+        }),
+        EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 4,
+            meta_stride: 0,
+            attr_stride: 32,
+            capacity: 64
+        }),
     );
 }
 
@@ -164,7 +200,9 @@ fn struct_reader_handle_from_get_struct() {
     );
 
     let s = store.insert().unwrap();
-    store.get(s).core_write_all(&[100, 200, 300, 400, 500, 600, 700, 800]);
+    store
+        .get(s)
+        .core_write_all(&[100, 200, 300, 400, 500, 600, 700, 800]);
     tb.publish();
     assert!(tb_reader.swap());
 
@@ -333,11 +371,21 @@ fn reader_offsets_for_nonzero_start_offsets() {
     assert_eq!(reader.tb_start_offset(), tb_start);
     assert_eq!(
         reader.tb_end_offset() - reader.tb_start_offset(),
-        EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 4 })
+        EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 4
+        })
     );
     assert_eq!(
         reader.mem_end_offset() - reader.mem_start_offset(),
-        EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 4 })
+        EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 4
+        })
     );
 }
 
@@ -537,10 +585,7 @@ fn reader_layout_sizes_match_writer_layout() {
     );
 
     // TB plane span as predicted by the layout formula: capacity * STRUCT_STRIDE.
-    assert_eq!(
-        reader.tb_end_offset() - reader.tb_start_offset(),
-        CAP * S,
-    );
+    assert_eq!(reader.tb_end_offset() - reader.tb_start_offset(), CAP * S,);
 }
 
 // ============ META_STRIDE > 0 ============
@@ -581,32 +626,129 @@ fn make_store_cma(
 
 #[test]
 fn meta_reader_calculate_size_on_tb_is_capacity_times_core_plus_meta() {
-    assert_eq!(EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 4, meta_stride: 4, attr_stride: 16, capacity: 4 }), 4 * (4 + 4));
-    assert_eq!(EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 8, meta_stride: 16, attr_stride: 16, capacity: 4 }), 4 * (8 + 16));
-    assert_eq!(EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 1, meta_stride: 1, attr_stride: 1, capacity: 1 }), 1 * (1 + 1));
-    assert_eq!(EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 16, meta_stride: 0, attr_stride: 8, capacity: 256 }), 256 * (16 + 0));
-    assert_eq!(EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 64, meta_stride: 64, attr_stride: 16, capacity: 32 }), 32 * (64 + 64));
+    assert_eq!(
+        EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 4,
+            meta_stride: 4,
+            attr_stride: 16,
+            capacity: 4
+        }),
+        4 * (4 + 4)
+    );
+    assert_eq!(
+        EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 16,
+            attr_stride: 16,
+            capacity: 4
+        }),
+        4 * (8 + 16)
+    );
+    assert_eq!(
+        EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 1,
+            meta_stride: 1,
+            attr_stride: 1,
+            capacity: 1
+        }),
+        1 * (1 + 1)
+    );
+    assert_eq!(
+        EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 16,
+            meta_stride: 0,
+            attr_stride: 8,
+            capacity: 256
+        }),
+        256 * (16 + 0)
+    );
+    assert_eq!(
+        EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig {
+            core_stride: 64,
+            meta_stride: 64,
+            attr_stride: 16,
+            capacity: 32
+        }),
+        32 * (64 + 64)
+    );
 
     // Reader and writer formulas must agree across several combinations.
     for cap in [1usize, 4, 16, 32] {
         assert_eq!(
-            EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 4, meta_stride: 4, attr_stride: 16, capacity: cap }),
-            EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 4, meta_stride: 4, attr_stride: 16, capacity: cap }),
+            EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig {
+                core_stride: 4,
+                meta_stride: 4,
+                attr_stride: 16,
+                capacity: cap
+            }),
+            EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig {
+                core_stride: 4,
+                meta_stride: 4,
+                attr_stride: 16,
+                capacity: cap
+            }),
         );
         assert_eq!(
-            EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig { core_stride: 8, meta_stride: 16, attr_stride: 16, capacity: cap }),
-            EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig { core_stride: 8, meta_stride: 16, attr_stride: 16, capacity: cap }),
+            EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig {
+                core_stride: 8,
+                meta_stride: 16,
+                attr_stride: 16,
+                capacity: cap
+            }),
+            EntryStoreWriter::calculate_size_on_tb(&EntryStoreConfig {
+                core_stride: 8,
+                meta_stride: 16,
+                attr_stride: 16,
+                capacity: cap
+            }),
         );
     }
 }
 
 #[test]
 fn meta_reader_calculate_size_on_mem_is_independent_of_core_and_meta() {
-    let base = EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 0, meta_stride: 0, attr_stride: 16, capacity: 32 });
-    assert_eq!(EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 0, attr_stride: 16, capacity: 32 }), base);
-    assert_eq!(EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 0, meta_stride: 8, attr_stride: 16, capacity: 32 }), base);
-    assert_eq!(EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 8, meta_stride: 16, attr_stride: 16, capacity: 32 }), base);
-    assert_eq!(EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig { core_stride: 64, meta_stride: 64, attr_stride: 16, capacity: 32 }), base);
+    let base = EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig {
+        core_stride: 0,
+        meta_stride: 0,
+        attr_stride: 16,
+        capacity: 32,
+    });
+    assert_eq!(
+        EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 0,
+            attr_stride: 16,
+            capacity: 32
+        }),
+        base
+    );
+    assert_eq!(
+        EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig {
+            core_stride: 0,
+            meta_stride: 8,
+            attr_stride: 16,
+            capacity: 32
+        }),
+        base
+    );
+    assert_eq!(
+        EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig {
+            core_stride: 8,
+            meta_stride: 16,
+            attr_stride: 16,
+            capacity: 32
+        }),
+        base
+    );
+    assert_eq!(
+        EntryStoreReader::calculate_size_on_mem(&EntryStoreConfig {
+            core_stride: 64,
+            meta_stride: 64,
+            attr_stride: 16,
+            capacity: 32
+        }),
+        base
+    );
 }
 
 // ---- Writer -> Reader roundtrip with META ----
@@ -758,10 +900,22 @@ fn reader_core_meta_sees_tb_at_expected_interleaved_offsets() {
         // Raw TripleBufferReader at externally-computed absolute offsets.
         let start = k * (C + M); // tb_start_offset = 0
         for i in 0..C {
-            assert_eq!(tb_reader.read(start + i), core_exp[i], "tb core slot {} [{}]", slot, i);
+            assert_eq!(
+                tb_reader.read(start + i),
+                core_exp[i],
+                "tb core slot {} [{}]",
+                slot,
+                i
+            );
         }
         for j in 0..M {
-            assert_eq!(tb_reader.read(start + C + j), meta_exp[j], "tb meta slot {} [{}]", slot, j);
+            assert_eq!(
+                tb_reader.read(start + C + j),
+                meta_exp[j],
+                "tb meta slot {} [{}]",
+                slot,
+                j
+            );
         }
     }
 }

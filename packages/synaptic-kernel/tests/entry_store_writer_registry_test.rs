@@ -13,15 +13,18 @@ use synaptic_kernel::primitives::types::AtomicBuffer;
 const MEM_SIZE: usize = 131072; // 128K — enough for large stride combos
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 /// Shorthand for creating an EntryStoreDef.
-fn sdef(id: u16, tb_id: TripleBufferId, core: usize, meta: usize, attr: usize, cap: usize) -> EntryStoreDef {
+fn sdef(
+    id: u16,
+    tb_id: TripleBufferId,
+    core: usize,
+    meta: usize,
+    attr: usize,
+    cap: usize,
+) -> EntryStoreDef {
     EntryStoreDef::new(
         EntryStoreId(id),
         tb_id,
@@ -81,7 +84,10 @@ fn construct_single_store_on_user_tb() {
         [0; 1],
     );
     assert_eq!(reg.get(EntryStoreId(0)).tb_start_offset(), 0);
-    assert_eq!(EntryStoreWriterRegistry::<1, 1>::calculate_size_on_default_tb(&defs), 0);
+    assert_eq!(
+        EntryStoreWriterRegistry::<1, 1>::calculate_size_on_default_tb(&defs),
+        0
+    );
     assert_eq!(
         EntryStoreWriterRegistry::<1, 1>::calculate_size_on_tb_for(TripleBufferId(0), &defs),
         (4 + 4) * 8
@@ -93,10 +99,7 @@ fn construct_two_stores_contiguous_on_default_tb() {
     let mem = create_mem(MEM_SIZE);
     let tb_defs = [tb_def(0, 1024)];
     let tb_reg = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem), tb_defs, 0, 4096);
-    let defs = [
-        sdef(0, D, 4, 2, 8, 4),
-        sdef(1, D, 8, 0, 16, 8),
-    ];
+    let defs = [sdef(0, D, 4, 2, 8, 4), sdef(1, D, 8, 0, 16, 8)];
     let reg = EntryStoreWriterRegistry::<1, 2>::new(
         Arc::clone(&mem),
         tb_reg.clone(),
@@ -300,10 +303,7 @@ fn heterogeneous_strides_fill_to_capacity() {
     let mem = create_mem(MEM_SIZE);
     let tb_defs = [tb_def(0, 4096)];
     let tb_reg = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem), tb_defs, 0, 8192);
-    let defs = [
-        sdef(0, D, 8, 4, 16, 4),
-        sdef(1, D, 2, 0, 4, 16),
-    ];
+    let defs = [sdef(0, D, 8, 4, 16, 4), sdef(1, D, 2, 0, 4, 16)];
     let reg = EntryStoreWriterRegistry::<1, 2>::new(
         Arc::clone(&mem),
         tb_reg.clone(),
@@ -316,23 +316,43 @@ fn heterogeneous_strides_fill_to_capacity() {
     let mut slots1 = [0usize; 16];
     for i in 0..4 {
         slots0[i] = reg.get(EntryStoreId(0)).insert().unwrap();
-        reg.get(EntryStoreId(0)).get(slots0[i]).core_write(0, (100 + i) as i32);
-        reg.get(EntryStoreId(0)).get(slots0[i]).attr_write(0, (1000 + i) as i32);
+        reg.get(EntryStoreId(0))
+            .get(slots0[i])
+            .core_write(0, (100 + i) as i32);
+        reg.get(EntryStoreId(0))
+            .get(slots0[i])
+            .attr_write(0, (1000 + i) as i32);
     }
     for i in 0..16 {
         slots1[i] = reg.get(EntryStoreId(1)).insert().unwrap();
-        reg.get(EntryStoreId(1)).get(slots1[i]).core_write(0, (200 + i) as i32);
-        reg.get(EntryStoreId(1)).get(slots1[i]).attr_write(0, (2000 + i) as i32);
+        reg.get(EntryStoreId(1))
+            .get(slots1[i])
+            .core_write(0, (200 + i) as i32);
+        reg.get(EntryStoreId(1))
+            .get(slots1[i])
+            .attr_write(0, (2000 + i) as i32);
     }
     for i in 0..4 {
         let s = slots0[i];
-        assert_eq!(reg.get(EntryStoreId(0)).get(s).core_read(0), (100 + i) as i32);
-        assert_eq!(reg.get(EntryStoreId(0)).get(s).attr_read(0), (1000 + i) as i32);
+        assert_eq!(
+            reg.get(EntryStoreId(0)).get(s).core_read(0),
+            (100 + i) as i32
+        );
+        assert_eq!(
+            reg.get(EntryStoreId(0)).get(s).attr_read(0),
+            (1000 + i) as i32
+        );
     }
     for i in 0..16 {
         let s = slots1[i];
-        assert_eq!(reg.get(EntryStoreId(1)).get(s).core_read(0), (200 + i) as i32);
-        assert_eq!(reg.get(EntryStoreId(1)).get(s).attr_read(0), (2000 + i) as i32);
+        assert_eq!(
+            reg.get(EntryStoreId(1)).get(s).core_read(0),
+            (200 + i) as i32
+        );
+        assert_eq!(
+            reg.get(EntryStoreId(1)).get(s).attr_read(0),
+            (2000 + i) as i32
+        );
     }
 }
 
@@ -341,10 +361,7 @@ fn heterogeneous_strides_meta_zone_isolation() {
     let mem = create_mem(MEM_SIZE);
     let tb_defs = [tb_def(0, 2048)];
     let tb_reg = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem), tb_defs, 0, 4096);
-    let defs = [
-        sdef(0, D, 4, 8, 0, 4),
-        sdef(1, D, 4, 2, 0, 4),
-    ];
+    let defs = [sdef(0, D, 4, 8, 0, 4), sdef(1, D, 4, 2, 0, 4)];
     let reg = EntryStoreWriterRegistry::<1, 2>::new(
         Arc::clone(&mem),
         tb_reg.clone(),
@@ -356,20 +373,30 @@ fn heterogeneous_strides_meta_zone_isolation() {
     let s0 = reg.get(EntryStoreId(0)).insert().unwrap();
     let s1 = reg.get(EntryStoreId(1)).insert().unwrap();
     for k in 0..8 {
-        reg.get(EntryStoreId(0)).get(s0).meta_write(k, (10 + k) as i32);
+        reg.get(EntryStoreId(0))
+            .get(s0)
+            .meta_write(k, (10 + k) as i32);
     }
     for k in 0..2 {
-        reg.get(EntryStoreId(1)).get(s1).meta_write(k, (99 + k) as i32);
+        reg.get(EntryStoreId(1))
+            .get(s1)
+            .meta_write(k, (99 + k) as i32);
     }
     tb_reg.get(D).publish();
     let tb_r = tb_reg.to_reader();
     tb_r.get(D).swap();
     let rr = reg.to_reader();
     for k in 0..8 {
-        assert_eq!(rr.get(EntryStoreId(0)).get(s0).meta_read(k), (10 + k) as i32);
+        assert_eq!(
+            rr.get(EntryStoreId(0)).get(s0).meta_read(k),
+            (10 + k) as i32
+        );
     }
     for k in 0..2 {
-        assert_eq!(rr.get(EntryStoreId(1)).get(s1).meta_read(k), (99 + k) as i32);
+        assert_eq!(
+            rr.get(EntryStoreId(1)).get(s1).meta_read(k),
+            (99 + k) as i32
+        );
     }
 }
 
@@ -394,12 +421,10 @@ fn id_identity_permutation() {
         [0; 1],
     );
     assert!(
-        reg.get(EntryStoreId(0)).mem_start_offset()
-            < reg.get(EntryStoreId(1)).mem_start_offset()
+        reg.get(EntryStoreId(0)).mem_start_offset() < reg.get(EntryStoreId(1)).mem_start_offset()
     );
     assert!(
-        reg.get(EntryStoreId(1)).mem_start_offset()
-            < reg.get(EntryStoreId(2)).mem_start_offset()
+        reg.get(EntryStoreId(1)).mem_start_offset() < reg.get(EntryStoreId(2)).mem_start_offset()
     );
 }
 
@@ -422,12 +447,10 @@ fn id_reversed_permutation() {
         [0; 1],
     );
     assert!(
-        reg.get(EntryStoreId(2)).mem_start_offset()
-            < reg.get(EntryStoreId(1)).mem_start_offset()
+        reg.get(EntryStoreId(2)).mem_start_offset() < reg.get(EntryStoreId(1)).mem_start_offset()
     );
     assert!(
-        reg.get(EntryStoreId(1)).mem_start_offset()
-            < reg.get(EntryStoreId(0)).mem_start_offset()
+        reg.get(EntryStoreId(1)).mem_start_offset() < reg.get(EntryStoreId(0)).mem_start_offset()
     );
 }
 
@@ -805,10 +828,7 @@ fn copy_from_same_size_migrates_core_meta_attr() {
     let tb_defs = [tb_def(0, 4096)];
     let tb_src = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem_src), tb_defs, 0, 8192);
     let tb_dst = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem_dst), tb_defs, 0, 8192);
-    let defs = [
-        sdef(0, D, 8, 4, 16, 4),
-        sdef(1, D, 4, 0, 8, 8),
-    ];
+    let defs = [sdef(0, D, 8, 4, 16, 4), sdef(1, D, 4, 0, 8, 8)];
     let source = EntryStoreWriterRegistry::<1, 2>::new(
         Arc::clone(&mem_src),
         tb_src.clone(),
@@ -854,10 +874,7 @@ fn copy_from_smaller_to_larger_registry() {
     let tb_src = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem_src), tb_defs, 0, 4096);
     let tb_dst = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem_dst), tb_defs, 0, 4096);
     let defs_src = [sdef(0, D, 8, 0, 16, 4)];
-    let defs_dst = [
-        sdef(0, D, 8, 0, 16, 4),
-        sdef(1, D, 4, 4, 8, 8),
-    ];
+    let defs_dst = [sdef(0, D, 8, 0, 16, 4), sdef(1, D, 4, 4, 8, 8)];
     let source = EntryStoreWriterRegistry::<1, 1>::new(
         Arc::clone(&mem_src),
         tb_src.clone(),
@@ -888,14 +905,8 @@ fn copy_from_preserves_id_mapping_with_permuted_defs() {
     let tb_defs = [tb_def(0, 2048)];
     let tb_src = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem_src), tb_defs, 0, 4096);
     let tb_dst = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem_dst), tb_defs, 0, 4096);
-    let defs_src = [
-        sdef(1, D, 8, 0, 16, 4),
-        sdef(0, D, 4, 4, 8, 8),
-    ];
-    let defs_dst = [
-        sdef(0, D, 4, 4, 8, 8),
-        sdef(1, D, 8, 0, 16, 4),
-    ];
+    let defs_src = [sdef(1, D, 8, 0, 16, 4), sdef(0, D, 4, 4, 8, 8)];
+    let defs_dst = [sdef(0, D, 4, 4, 8, 8), sdef(1, D, 8, 0, 16, 4)];
     let source = EntryStoreWriterRegistry::<1, 2>::new(
         Arc::clone(&mem_src),
         tb_src.clone(),
@@ -925,10 +936,7 @@ fn copy_from_with_heterogeneous_strides() {
     let tb_defs = [tb_def(0, 8192)];
     let tb_src = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem_src), tb_defs, 0, 16384);
     let tb_dst = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem_dst), tb_defs, 0, 16384);
-    let defs = [
-        sdef(0, D, 4, 2, 8, 4),
-        sdef(1, D, 8, 0, 16, 8),
-    ];
+    let defs = [sdef(0, D, 4, 2, 8, 4), sdef(1, D, 8, 0, 16, 8)];
     let source = EntryStoreWriterRegistry::<1, 2>::new(
         Arc::clone(&mem_src),
         tb_src.clone(),
@@ -949,11 +957,17 @@ fn copy_from_with_heterogeneous_strides() {
     let mut slots1 = [0usize; 8];
     for i in 0..4 {
         slots0[i] = source.get(EntryStoreId(0)).insert().unwrap();
-        source.get(EntryStoreId(0)).get(slots0[i]).core_write(0, i as i32);
+        source
+            .get(EntryStoreId(0))
+            .get(slots0[i])
+            .core_write(0, i as i32);
     }
     for i in 0..8 {
         slots1[i] = source.get(EntryStoreId(1)).insert().unwrap();
-        source.get(EntryStoreId(1)).get(slots1[i]).core_write(0, (100 + i) as i32);
+        source
+            .get(EntryStoreId(1))
+            .get(slots1[i])
+            .core_write(0, (100 + i) as i32);
     }
     dest.copy_from(&source);
     for i in 0..4 {
@@ -1025,7 +1039,10 @@ fn calculate_size_on_mem_sums_heterogeneous_stores() {
         sdef(2, D, 2, 0, 4, 16),
     ];
     let sum = defs[0].size_on_mem() + defs[1].size_on_mem() + defs[2].size_on_mem();
-    assert_eq!(EntryStoreWriterRegistry::<1, 3>::calculate_size_on_mem(&defs), sum);
+    assert_eq!(
+        EntryStoreWriterRegistry::<1, 3>::calculate_size_on_mem(&defs),
+        sum
+    );
 }
 
 #[test]
@@ -1058,10 +1075,7 @@ fn duplicate_ids_panic() {
     let mem = create_mem(MEM_SIZE);
     let tb_defs = [tb_def(0, 1024)];
     let tb_reg = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem), tb_defs, 0, 4096);
-    let defs = [
-        sdef(0, D, 8, 0, 16, 4),
-        sdef(0, D, 4, 4, 8, 8),
-    ];
+    let defs = [sdef(0, D, 8, 0, 16, 4), sdef(0, D, 4, 4, 8, 8)];
     let _ = EntryStoreWriterRegistry::<1, 2>::new(
         Arc::clone(&mem),
         tb_reg.clone(),
@@ -1079,10 +1093,7 @@ fn out_of_range_id_panics_at_construction() {
     let mem = create_mem(MEM_SIZE);
     let tb_defs = [tb_def(0, 1024)];
     let tb_reg = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem), tb_defs, 0, 4096);
-    let defs = [
-        sdef(0, D, 8, 0, 16, 4),
-        sdef(5, D, 4, 4, 8, 8),
-    ];
+    let defs = [sdef(0, D, 8, 0, 16, 4), sdef(5, D, 4, 4, 8, 8)];
     let _ = EntryStoreWriterRegistry::<1, 2>::new(
         Arc::clone(&mem),
         tb_reg.clone(),
@@ -1241,10 +1252,7 @@ fn stress_remove_reuse_across_stores() {
     let mem = create_mem(MEM_SIZE);
     let tb_defs = [tb_def(0, 4096)];
     let tb_reg = TripleBufferWriterRegistry::<1>::new(Arc::clone(&mem), tb_defs, 0, 8192);
-    let defs = [
-        sdef(0, D, 8, 0, 16, 4),
-        sdef(1, D, 4, 4, 8, 4),
-    ];
+    let defs = [sdef(0, D, 8, 0, 16, 4), sdef(1, D, 4, 4, 8, 4)];
     let reg = EntryStoreWriterRegistry::<1, 2>::new(
         Arc::clone(&mem),
         tb_reg.clone(),
@@ -1283,4 +1291,3 @@ fn stress_remove_reuse_across_stores() {
     assert_eq!(rr.get(EntryStoreId(1)).get(s1).core_read(0), 999);
     assert_eq!(rr.get(EntryStoreId(1)).get(s1).attr_read(0), 888);
 }
-

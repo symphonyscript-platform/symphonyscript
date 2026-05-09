@@ -1,15 +1,10 @@
 use std::sync::atomic::{AtomicI32, Ordering};
-use std::sync::Arc;
 use std::thread;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 // ============ Happy Paths ============
@@ -1283,7 +1278,11 @@ fn copy_metadata_from_mirrors_all_four_slots() {
 
     assert_eq!(mem_b[0].load(Ordering::Relaxed), a_state, "state");
     assert_eq!(mem_b[1].load(Ordering::Relaxed), a_writer, "writer_id");
-    assert_eq!(mem_b[2].load(Ordering::Relaxed), a_published, "published_id");
+    assert_eq!(
+        mem_b[2].load(Ordering::Relaxed),
+        a_published,
+        "published_id"
+    );
     assert_eq!(mem_b[3].load(Ordering::Relaxed), a_reader, "reader_id");
 }
 
@@ -1346,10 +1345,7 @@ fn copy_region_from_copies_all_three_buffer_planes() {
     for plane in 0..3 {
         let base = a_start + 4 + plane * capacity;
         for i in 0..capacity {
-            mem[base + i].store(
-                1000 + (plane as i32) * 100 + (i as i32),
-                Ordering::Relaxed,
-            );
+            mem[base + i].store(1000 + (plane as i32) * 100 + (i as i32), Ordering::Relaxed);
         }
     }
 
@@ -1407,10 +1403,7 @@ fn copy_region_from_source_offset_zero_destination_offset_zero_full_capacity() {
     for plane in 0..3 {
         let base = a_start + 4 + plane * capacity;
         for i in 0..capacity {
-            mem[base + i].store(
-                (plane as i32) * 10 + (i as i32) + 1,
-                Ordering::Relaxed,
-            );
+            mem[base + i].store((plane as i32) * 10 + (i as i32) + 1, Ordering::Relaxed);
         }
     }
 
@@ -1585,7 +1578,10 @@ fn getters_match_construction_parameters() {
 fn calculate_size_on_mem_matches_contract() {
     assert_eq!(TripleBufferWriter::calculate_size_on_mem(1), 4 + 1 * 3);
     assert_eq!(TripleBufferWriter::calculate_size_on_mem(8), 4 + 8 * 3);
-    assert_eq!(TripleBufferWriter::calculate_size_on_mem(1024), 4 + 1024 * 3);
+    assert_eq!(
+        TripleBufferWriter::calculate_size_on_mem(1024),
+        4 + 1024 * 3
+    );
     assert_eq!(
         TripleBufferWriter::calculate_size_on_mem(65_536),
         4 + 65_536 * 3

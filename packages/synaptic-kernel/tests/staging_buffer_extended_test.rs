@@ -1,12 +1,12 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::primitives::staging_buffer_writer::StagingBufferWriter;
 use synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader;
+use synaptic_kernel::primitives::staging_buffer_writer::StagingBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_staging(capacity: usize) -> (StagingBufferWriter, StagingBufferReader, AtomicBuffer) {
     let size = StagingBufferWriter::calculate_size_on_mem(capacity);
-    let mem: AtomicBuffer = Arc::new((0..size).map(|_| AtomicI32::new(0)).collect());
+    let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
     let buffer = StagingBufferWriter::new(Arc::clone(&mem), 0, capacity);
     let reader = buffer.to_reader();
     (buffer, reader, mem)
@@ -130,7 +130,7 @@ fn interleaved_push_publish_ack_drain() {
 #[test]
 fn bind_preserves_generation_state() {
     let size = StagingBufferWriter::calculate_size_on_mem(4);
-    let mem: AtomicBuffer = Arc::new((0..size).map(|_| AtomicI32::new(0)).collect());
+    let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
 
     let buf1 = StagingBufferWriter::new(Arc::clone(&mem), 0, 4);
     buf1.push(42).unwrap();

@@ -1,12 +1,12 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
-use synaptic_kernel::primitives::staging_buffer_writer::StagingBufferWriter;
 use synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader;
+use synaptic_kernel::primitives::staging_buffer_writer::StagingBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_staging(capacity: usize) -> (StagingBufferWriter, StagingBufferReader, AtomicBuffer) {
     let size = StagingBufferWriter::calculate_size_on_mem(capacity);
-    let mem: AtomicBuffer = Arc::new((0..size).map(|_| AtomicI32::new(0)).collect());
+    let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
     let buffer = StagingBufferWriter::new(Arc::clone(&mem), 0, capacity);
     let reader = buffer.to_reader();
     (buffer, reader, mem)
@@ -88,11 +88,11 @@ fn drain_only_yields_acked_generations() {
     // Reader acks gen 1 (writer_gen - 1 = 2 - 1 = 1... but we simulate seeing 2)
     // Actually, reader.ack() reads the current writer_gen (3) so it acks 2!
     // We want to simulate the reader only acknowledging gen 1.
-    // Instead of reader.ack() which goes to the bleeding edge, let's just 
+    // Instead of reader.ack() which goes to the bleeding edge, let's just
     // manually advance it or test standard sync flow.
     // Let's create a separate scenario.
-    
-    // For this test, we want to prove it only yields up to what's acked. 
+
+    // For this test, we want to prove it only yields up to what's acked.
     // Let's just use reader.ack(). It acks writer_gen - 1, so it acks 2.
     reader.ack(); // reads writer_gen=3, acks 3-1=2
 
@@ -303,8 +303,8 @@ fn push_beyond_capacity_returns_error() {
 fn nonzero_start_offset_works() {
     let offset = 100;
     let size = StagingBufferWriter::calculate_size_on_mem(4) + offset;
-    let mem: AtomicBuffer = Arc::new((0..size).map(|_| AtomicI32::new(0)).collect());
-    
+    let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
+
     // Explicitly initialize writer_generation for the raw instantiated mem
     mem[offset].store(1, std::sync::atomic::Ordering::Relaxed);
 
@@ -324,8 +324,8 @@ fn nonzero_start_offset_works() {
 #[test]
 fn bind_reads_existing_state() {
     let size = StagingBufferWriter::calculate_size_on_mem(4);
-    let mem: AtomicBuffer = Arc::new((0..size).map(|_| AtomicI32::new(0)).collect());
-    
+    let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
+
     mem[0].store(1, std::sync::atomic::Ordering::Relaxed);
 
     let buf1 = StagingBufferWriter::new(Arc::clone(&mem), 0, 4);
@@ -370,7 +370,7 @@ fn entries_stamped_with_correct_generation() {
 
     // Manually ack only gen 1
     mem[1].store(1, std::sync::atomic::Ordering::Relaxed);
-    
+
     let d: Vec<usize> = buf.drain().collect();
     assert_eq!(d, vec![100]); // Only A (gen 1 <= ack 1)
 

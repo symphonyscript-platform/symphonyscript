@@ -108,13 +108,11 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
         serialized_kernel: SerializedKernel<TB_COUNT, STORE_COUNT, LUT_COUNT>,
     ) -> Self {
         let config = serialized_kernel.config;
-        let mem: AtomicBuffer = Arc::new(
-            serialized_kernel
-                .mem
-                .into_iter()
-                .map(AtomicI32::new)
-                .collect(),
-        );
+        let mem: AtomicBuffer = serialized_kernel
+            .mem
+            .into_iter()
+            .map(AtomicI32::new)
+            .collect();
 
         assert_eq!(
             mem[0].load(Ordering::Acquire),
@@ -423,9 +421,9 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
     }
 
     fn create_mem(size: usize) -> AtomicBuffer {
-        let mem: Vec<AtomicI32> = (0..size).map(|_| AtomicI32::new(0)).collect();
+        let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
 
-        Arc::new(mem)
+        mem
     }
 
     fn create_mem_stamp(size: usize) -> AtomicBuffer {
@@ -439,5 +437,14 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
     fn stamp_mem(mem: &AtomicBuffer) {
         mem[0].store(KERNEL_MAGIC, Ordering::Release);
         mem[1].store(KERNEL_VERSION, Ordering::Release);
+    }
+}
+
+#[cfg(debug_assertions)]
+impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize> Drop
+    for Kernel<TB_COUNT, STORE_COUNT, LUT_COUNT>
+{
+    fn drop(&mut self) {
+        debug_assert!(self.control_plane.get_writer_generation() == self.control_plane.get_reader_ack_generation(), "Kernel::drop | ")
     }
 }
