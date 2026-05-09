@@ -176,3 +176,75 @@ ___
 
 12. No, I haven't read `tests/`. I should not have implied otherwise — that was sloppy. The doc covers `src/` only. If
     you want tests reviewed for coverage gaps, say so and I'll read them.
+
+___
+
+you raise solid points overall. noted in the file. feel free to read tests and review. you can run them as well, but
+they all pass (just checked). so the tests you see there and the coverage - is the actual behavior of the current kernel
+that stands.
+
+___
+
+Tests reviewed. I owe you a retraction: my earlier "tests probably thin" claim was wrong. 820 tests across 43 files, ~
+19k lines, including real-thread SPSC stress (`kernel_concurrent_test`: 100k iter producer churn + concurrent consumer
+traversal), proptest oracle for the staging-buffer generation gating, triple-buffer torn-frame assertions (sentinel
+pattern across 10k iter, plus reader-monotonicity check), grow-under-consumer-load, grows-accumulating-without-ack,
+slow-consumer + rapid-grow, and the synapse cascade explicitly tested per shape (single out, single in, hub, etc.).
+
+What's actually verified, not just documented:
+
+- **Triple-buffer no-torn-frame** — the sentinel `[i, i, i, ..., i]` pattern in `concurrent_writer_reader_stress` would
+  catch any AcqRel violation.
+- **Reader-never-goes-backward** — explicit assertion in same test.
+- **Generation-gating protocol** — `staging_buffer_prop_test` builds an Oracle mirroring the protocol and
+  proptest-fuzzes 1000-op sequences against it. That's the strongest evidence I'd want for that subsystem.
+- **Hot-swap correctness during grow** — three separate stress tests cover grow-with-active-consumer,
+  accumulating-without-ack, slow-ack-with-rapid-grow.
+- **Cascade invariant** — `synapse_cascade_test` covers single/multi/hub shapes per direction.
+- **Network DLL invariants** — `network_prop_test` rebuilds source-of-truth via HashMap and walks both outgoing and
+  incoming chains end-to-end.
+- **Serialization round-trip** — 35 dedicated tests.
+
+Real gaps I'd still call out:
+
+1. **No loom.** `grep -l loom` returns nothing. Every concurrent test runs on real OS threads under x86 TSO.
+   Memory-ordering bugs that depend on interleavings the OS scheduler doesn't pick will pass forever on x86 and ship
+   broken to ARM/RISC-V. For a kernel that hand-rolls every `Acquire`/`Release`/`AcqRel` choice, loom is the right tool.
+   The 100k-iter stress tests increase confidence; they don't replace exhaustive interleaving exploration. This is the
+   single biggest gap.
+
+2. **Const-generic testing is monoculture.** Almost everything is `Kernel<1, 1, 1>` — one user TB, one store, one LUT.
+   The multi-store-per-TB cursor logic in `EntryStoreWriterRegistry::create` (the `extra_tb_cursors[index]` loop) is
+   exercised against a single store. If the cursor math is off for a config like `<3, 5, 2>` with stores 2, 3 sharing
+   TB[1] and stores 4 sharing TB[2], no test would catch it. Worth at least one `<2, 4, 2>` configuration with
+   overlapping TB assignments.
+
+3. **`Arc::as_ptr` + `Arc::from_raw` + `mem::forget` in `epoch_stress_test.rs`.** Lines 47-50 (and repeated in three
+   tests) do this dance to share the control plane across `thread::spawn`. `Arc<ControlPlane>` is `Send` —
+   `Arc::clone(&cp); thread::spawn(move || { /* use cp_clone */ })` is the safe pattern, and it's exactly what
+   `kernel_concurrent_test` does. The unsafe dance in `epoch_stress_test` is suspicious — it's either a workaround for a
+   borrow issue that no longer exists, or it's hiding something. Either way, two patterns for the same problem in the
+   same test suite is a code smell. Worth investigating whether the unsafe path is leaking refcounts (the `mem::forget`
+   on the inner `cp_arc` after constructing `processor` from a clone of it is suspicious).
+
+4. **No bind-mid-publish round-trip.** Serialization tests cover snapshot-after-publish. I didn't see one that snapshots
+   while a publish is partially observable (writer_index updated, published_index updated, NEW_DATA set, but consumer
+   hasn't swapped yet) and verifies that `load_serialized` → `bind` recovers the correct state. The `bind` path in
+   `TripleBufferWriter` has explicit logic for this (`load Acquire on state, then sync`) — would be good to exercise it
+   directly.
+
+5. **Capacity-saturation cycling.** I don't see a test that does: alloc to capacity → defer all → publish → ack →
+   publish → verify all reclaimed → alloc again succeeds. The deferred-reclaim path under pressure is exactly where
+   off-by-one errors hide.
+
+6. **Kind boundary tests.** `set_kind(256)` should panic in debug. `set_kind(255)` should round-trip and not corrupt the
+   lower 24 bits. Quick to add, would catch a future "let's expand kind to 16 bits" refactor that forgets to update the
+   bitmask.
+
+7. **`grow()` validation branches.** The four `< current` checks in `Kernel::grow` (network capacities, mem_metadata,
+   per-TB capacity, per-store capacity, per-LUT size) — would want one negative test per branch.
+
+Net assessment: the test suite is much stronger than I implied. Coverage of the *correctness* of the SPSC protocol,
+deferred-deletion gating, grow hot-swap, cascade removal, and serialization round-trip is solid. The gaps are at the
+periphery (loom, multi-config, snapshot-during-flight) and in negative-path coverage. The unsafe Arc dance in
+epoch_stress_test is the one thing I'd actually look at this week.
