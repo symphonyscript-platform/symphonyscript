@@ -695,14 +695,14 @@ SCENARIO: Main thread writes faster than audio reads
 
 ## 6. Structures (Rust, Preliminary)
 
-> **Implementation deviation:** The TripleBuffer operates on the AtomicBuffer (`Arc<Vec<AtomicI32>>`),
+> **Implementation deviation:** The TripleBuffer operates on the AtomicBuffer (`Arc<[AtomicI32]>`),
 > not on stack-allocated `UnsafeCell<T>` buffers. All state — metadata slots, buffer indices,
 > and structural data — lives as element indices into a flat `AtomicI32` array. This enables
 > AtomicBuffer reconstruction via `bind_writer()`/`bind_reader()` for hot-reload and crash recovery.
 
 ```rust
 // AtomicBuffer-based TripleBuffer (actual implementation)
-type AtomicBuffer = Arc<Vec<AtomicI32>>;
+type AtomicBuffer = Arc<[AtomicI32]>;
 
 struct TripleBufferWriter {
     mem: MEM,

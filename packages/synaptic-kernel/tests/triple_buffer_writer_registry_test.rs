@@ -469,7 +469,7 @@ fn clone_shares_underlying_atomic_buffer() {
     w.get(TripleBufferId(0)).write(0, 42);
     w.get(TripleBufferId(0)).publish();
 
-    // Clone's reader should see the data (shared Arc<Vec<AtomicI32>>).
+    // Clone's reader should see the data (shared Arc<[AtomicI32]>).
     let r_clone = w_clone.to_reader();
     assert!(r_clone.get(TripleBufferId(0)).swap());
     assert_eq!(r_clone.get(TripleBufferId(0)).read(0), 42);

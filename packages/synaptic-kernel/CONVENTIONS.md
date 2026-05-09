@@ -147,7 +147,7 @@ construction is `u16::MAX`. This collides nominally with `TripleBufferId::DEFAUL
 functionally because registries short-circuit `DEFAULT` before indexing. If you add a new registry kind, follow the same
 pattern; do not introduce a new sentinel scheme.
 
-## Memory: `AtomicBuffer = Arc<Vec<AtomicI32>>`
+## Memory: `AtomicBuffer = Arc<[AtomicI32]>`
 
 The `Arc` is the cross-thread bridge. Every primitive that holds a region clones the `Arc` (cheap — refcount bump, no
 data copy). The buffer outlives the kernel struct precisely as long as something is still holding a clone — including
