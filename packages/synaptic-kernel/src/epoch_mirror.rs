@@ -96,11 +96,6 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
     }
 
     #[inline]
-    pub fn get_head_node(&'_ self) -> Option<NodeReader<'_>> {
-        self.network.get_head_node()
-    }
-
-    #[inline]
     pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_> {
         self.network.get_node(slot)
     }
