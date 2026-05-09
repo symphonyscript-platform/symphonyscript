@@ -1,4 +1,4 @@
-use crate::primitives::types::AtomicBuffer;
+use synaptic_kernel::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 
 /// Writes 64-bit value to `mem` as two 32-bit halves.

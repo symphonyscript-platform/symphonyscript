@@ -4,6 +4,7 @@ pub mod slot_view;
 pub mod free_list;
 pub mod slot_handle;
 pub mod table_error;
+pub mod wide_atomic;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right

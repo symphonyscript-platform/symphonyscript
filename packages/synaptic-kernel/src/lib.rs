@@ -12,4 +12,3 @@ pub mod metadata;
 pub mod primitives;
 pub mod serialized_kernel;
 pub mod topology;
-pub mod wide_atomic;
