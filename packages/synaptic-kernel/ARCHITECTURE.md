@@ -2,33 +2,50 @@
 
 ## Purpose
 
-A wait-free, lock-free SPSC (single-producer / single-consumer) graph kernel. One thread mutates a graph of nodes and synapses; another thread traverses a consistent snapshot. Backing memory is a single flat `Vec<AtomicI32>`, addressed entirely by integer offsets — no boxed nodes, no per-entity allocation. The whole kernel is bind-able onto pre-existing memory and serializable to a flat `Vec<i32>`.
+A wait-free, lock-free SPSC (single-producer / single-consumer) graph kernel. One thread mutates a graph of nodes and
+synapses; another thread traverses a consistent snapshot. Backing memory is a single flat `Vec<AtomicI32>`, addressed
+entirely by integer offsets — no boxed nodes, no per-entity allocation. The whole kernel is bind-able onto pre-existing
+memory and serializable to a flat `Vec<i32>`.
 
-The kernel is deliberately schema-agnostic: it owns topology (nodes, synapses, chain pointers) but lets the user define how many bytes of metadata and attributes to attach per node and per synapse, and lets the user spin up additional triple buffers, entry stores, and LUTs alongside the kernel-internal graph.
-
+The kernel is deliberately schema-agnostic: it owns topology (nodes, synapses, chain pointers) but lets the user define
+how many bytes of metadata and attributes to attach per node and per synapse, and lets the user spin up additional
+triple buffers, entry stores, and LUTs alongside the kernel-internal graph.
 
 ## Top-level types
 
-- `Kernel<TB_COUNT, STORE_COUNT, LUT_COUNT>` — producer-side facade. Owns the buffer and lifecycle. Const generics fix the number of user-defined triple buffers, entry stores, and LUTs at compile time.
-- `KernelConfig<...>` — declarative sizing: metadata capacity, network config, plus arrays of `TripleBufferDef`, `EntryStoreDef`, `LutDef`.
-- `ControlPlane<...>` — `Arc`-shared between producer and consumer. Holds an `AtomicPtr<EpochMirror>` plus `(writer_generation, reader_ack_generation)` for hot-swap.
-- `EpochConsumer<...>` — consumer-side facade. Wraps `Arc<ControlPlane>`. Each cycle: `acquire_mirror()` returns a ready-to-read `&EpochMirror`.
-- `Epoch<...>` / `EpochMirror<...>` — paired writer/reader projections of the same memory layout. `Epoch` mutates; `EpochMirror` traverses. Always created together.
+- `Kernel<TB_COUNT, STORE_COUNT, LUT_COUNT>` — producer-side facade. Owns the buffer and lifecycle. Const generics fix
+  the number of user-defined triple buffers, entry stores, and LUTs at compile time.
+- `KernelConfig<...>` — declarative sizing: metadata capacity, network config, plus arrays of `TripleBufferDef`,
+  `EntryStoreDef`, `LutDef`.
+- `ControlPlane<...>` — `Arc`-shared between producer and consumer. Holds an `AtomicPtr<EpochMirror>` plus
+  `(writer_generation, reader_ack_generation)` for hot-swap.
+- `EpochConsumer<...>` — consumer-side facade. Wraps `Arc<ControlPlane>`. Each cycle: `acquire_mirror()` returns a
+  ready-to-read `&EpochMirror`.
+- `Epoch<...>` / `EpochMirror<...>` — paired writer/reader projections of the same memory layout. `Epoch` mutates;
+  `EpochMirror` traverses. Always created together.
 - `SerializedKernel<...>` — `(KernelConfig, Vec<i32>)`. Snapshot/restore unit.
 
-`Kernel::get_control_plane()` returns the `Arc<ControlPlane>`. The consumer constructs `EpochConsumer::new(arc)` on its own thread. That `Arc` is the only legal cross-thread bridge.
-
+`Kernel::get_control_plane()` returns the `Arc<ControlPlane>`. The consumer constructs `EpochConsumer::new(arc)` on its
+own thread. That `Arc` is the only legal cross-thread bridge.
 
 ## Memory model — three planes
 
-Every read and write lands in one of three planes. The plane determines visibility semantics, *not* which thread writes it.
+Every read and write lands in one of three planes. The plane determines visibility semantics, *not* which thread writes
+it.
 
-1. **MEM (direct) plane** — backing region of the global `AtomicBuffer`. Writes are immediately visible to the consumer. Used for: graph-level metadata, slot allocator state (free list, allocation bitmap, deferred-free staging buffer), and per-entry attributes.
-2. **TB (triple-buffered) plane** — three rotating buffers per `TripleBufferWriter`. Producer writes to a private buffer; `publish()` hands it off; consumer's `swap()` picks it up. Used for: structural pointers (chain head, next/prev, synapse heads/tails), node/synapse "core" fields, optional user metadata, LUTs.
-3. **Default TB vs user TBs** — there is exactly one kernel-internal default triple buffer (`TripleBufferId::DEFAULT`, `u16::MAX`). It carries the network's structural state. User-defined triple buffers are independent and publish on their own cadence.
+1. **MEM (direct) plane** — backing region of the global `AtomicBuffer`. Writes are immediately visible to the consumer.
+   Used for: graph-level metadata, slot allocator state (free list, allocation bitmap, deferred-free staging buffer),
+   and per-entry attributes.
+2. **TB (triple-buffered) plane** — three rotating buffers per `TripleBufferWriter`. Producer writes to a private
+   buffer; `publish()` hands it off; consumer's `swap()` picks it up. Used for: structural pointers (chain head,
+   next/prev, synapse heads/tails), node/synapse "core" fields, optional user metadata, LUTs.
+3. **Default TB vs user TBs** — there is exactly one kernel-internal default triple buffer (`TripleBufferId::DEFAULT`,
+   `u16::MAX`). It carries the network's structural state. User-defined triple buffers are independent and publish on
+   their own cadence.
 
-The split between MEM and TB is the central design choice: structural changes need atomic visibility (publish/swap) so the consumer never sees a half-linked chain. Attributes don't — they tolerate per-field racing because they are scalar and idempotent, and the consumer just reads what's there.
-
+The split between MEM and TB is the central design choice: structural changes need atomic visibility (publish/swap) so
+the consumer never sees a half-linked chain. Attributes don't — they tolerate per-field racing because they are scalar
+and idempotent, and the consumer just reads what's there.
 
 ## Data hierarchy
 
@@ -47,8 +64,8 @@ Kernel
     └── LutWriterRegistry<TB_COUNT, LUT_COUNT>          └── LutReaderRegistry<...>
 ```
 
-Every writer type has a corresponding reader type. Writer holds the canonical `mem_start_offset`/`tb_start_offset`; reader is built via `to_reader()` and binds the same offsets. Memory layout is shared by construction, never duplicated.
-
+Every writer type has a corresponding reader type. Writer holds the canonical `mem_start_offset`/`tb_start_offset`;
+reader is built via `to_reader()` and binds the same offsets. Memory layout is shared by construction, never duplicated.
 
 ## Memory layout (single AtomicBuffer)
 
@@ -62,7 +79,8 @@ Offset 2:  Epoch begins
            └── EntryStoreRegistry    (per-store: SlotAllocator + attr region)
 ```
 
-Each TB carries its own intra-buffer layout for the structural plane (network's nodes + synapses, plus user stores/LUTs that target that TB). The default TB layout:
+Each TB carries its own intra-buffer layout for the structural plane (network's nodes + synapses, plus user stores/LUTs
+that target that TB). The default TB layout:
 
 ```
 TB[0]: head_slot (1 i32)
@@ -74,7 +92,6 @@ TB[...]: user LUTs assigned to default TB
 
 `NODE_STRIDE = SYNAPSE_STRIDE = 8` — one slot reserved.
 
-
 ## Triple buffer protocol
 
 `TripleBufferWriter` rotates three buffers. State packs `(shared_buffer_id, NEW_DATA flag)` into a single i32:
@@ -84,17 +101,21 @@ TB[...]: user LUTs assigned to default TB
 
 Initial state: `0b001` (shared=1, NEW_DATA=0). Producer owns 0, consumer owns 2.
 
-`publish()` (producer): swap the shared buffer with the producer's buffer, set NEW_DATA, then sync (memcpy) the new producer-owned buffer from the just-published one — so the producer always starts the next frame from the most recent published state.
+`publish()` (producer): swap the shared buffer with the producer's buffer, set NEW_DATA, then sync (memcpy) the new
+producer-owned buffer from the just-published one — so the producer always starts the next frame from the most recent
+published state.
 
-`swap()` (consumer): if NEW_DATA is unset, return false. Otherwise swap producer's old buffer back, clear NEW_DATA, return true.
+`swap()` (consumer): if NEW_DATA is unset, return false. Otherwise swap producer's old buffer back, clear NEW_DATA,
+return true.
 
 Atomic ordering:
+
 - Writer publish: `AcqRel` swap on state.
 - Reader swap: `Acquire` load on state, `AcqRel` swap.
 - Buffer payload reads/writes use `Relaxed` — the publish/swap fence does the synchronization.
 
-The protocol is wait-free in both directions: no spinning, no CAS retry, no allocation. Triple-buffer means stale data is at most one frame old; consumer never reads a torn frame.
-
+The protocol is wait-free in both directions: no spinning, no CAS retry, no allocation. Triple-buffer means stale data
+is at most one frame old; consumer never reads a torn frame.
 
 ## Slot allocation and deferred deletion
 
@@ -103,7 +124,8 @@ Topology entities (nodes, synapses, entry-store entries) live at fixed slot indi
 `SlotAllocator` composes three primitives:
 
 - `SimpleFreeList` — embedded singly-linked free list with allocation bitmap. `alloc()` / `free()` are O(1).
-- `Bitmap` — 32-bits-per-i32 packed bit array. Used twice: by the free list (allocation bit) and by the slot allocator (staging bit).
+- `Bitmap` — 32-bits-per-i32 packed bit array. Used twice: by the free list (allocation bit) and by the slot allocator (
+  staging bit).
 - `StagingBufferWriter` — generation-stamped SPSC ring buffer of pending frees.
 
 Lifecycle:
@@ -112,45 +134,56 @@ Lifecycle:
 free → alloc() → active → defer_free() → deferred → publish() → free
 ```
 
-`defer_free(slot)` does NOT return the slot to the free list. It pushes `(slot, current_writer_generation)` to the staging buffer and sets the staging bit. The slot is unreachable for new allocations until two events happen:
+`defer_free(slot)` does NOT return the slot to the free list. It pushes `(slot, current_writer_generation)` to the
+staging buffer and sets the staging bit. The slot is unreachable for new allocations until two events happen:
 
 1. `StagingBufferWriter::publish()` advances `writer_generation`.
-2. The consumer's `StagingBufferReader::ack()` (called from `EpochMirror::swap()` via `NetworkReader::ack_generation()`) writes back `writer_generation - 1`.
+2. The consumer's `StagingBufferReader::ack()` (called from `EpochMirror::swap()` via `NetworkReader::ack_generation()`)
+   writes back `writer_generation - 1`.
 
 When the producer next calls `publish()` and drains, only entries whose generation ≤ ack are reclaimed.
 
-This is the central invariant that makes the whole graph safe: a slot the consumer might still be reading is *never* given back to `alloc()` until the consumer has acknowledged a generation strictly newer than the one in which the slot was retired.
+This is the central invariant that makes the whole graph safe: a slot the consumer might still be reading is *never*
+given back to `alloc()` until the consumer has acknowledged a generation strictly newer than the one in which the slot
+was retired.
 
 Generations are i32 with wrapping arithmetic (`wrapping_sub`).
 
-
 ## Entry store — the universal slotted container
 
-Most things in this kernel are an `EntryStoreWriter`/`EntryStoreReader` pair. Every entry has three zones with separately configurable strides:
+Most things in this kernel are an `EntryStoreWriter`/`EntryStoreReader` pair. Every entry has three zones with
+separately configurable strides:
 
 - **core** — TB plane, fixed schema owned by the kernel (e.g. node next/prev pointers, synapse source/target).
 - **meta** — TB plane, user schema, structural updates.
 - **attr** — MEM plane, user schema, scalar attributes with no publish requirement.
 
-`EntryWriter` exposes all three for writing. `EntryHandle` (also producer-side) treats core as read-only — used when the caller can edit user fields but must not corrupt structural pointers. `EntryReader` is read-only on all three.
+`EntryWriter` exposes all three for writing. `EntryHandle` (also producer-side) treats core as read-only — used when the
+caller can edit user fields but must not corrupt structural pointers. `EntryReader` is read-only on all three.
 
-Entry stores can be bound to any triple buffer — default or user. The kernel uses two entry stores internally (nodes and synapses, both on the default TB); users can add `STORE_COUNT` more.
+Entry stores can be bound to any triple buffer — default or user. The kernel uses two entry stores internally (nodes and
+synapses, both on the default TB); users can add `STORE_COUNT` more.
 
 Per-entry sizing on disk:
+
 - MEM: `SlotAllocator::calculate_size_on_mem(capacity) + capacity * attr_stride`
 - TB:  `capacity * (core_stride + meta_stride)`
 
-Random-access reads from arbitrary slot indices are unsafe on the consumer side — `NetworkReader` documents that consumers MUST traverse from a head pointer through next/prev links. Reading a freed-but-not-yet-reclaimed slot would return live memory from a future allocation. The slot allocator's deferred-free protocol relies on the consumer respecting traversal-from-head.
-
+Random-access reads from arbitrary slot indices are unsafe on the consumer side — `NetworkReader` documents that
+consumers MUST traverse from a head pointer through next/prev links. Reading a freed-but-not-yet-reclaimed slot would
+return live memory from a future allocation. The slot allocator's deferred-free protocol relies on the consumer
+respecting traversal-from-head.
 
 ## Network — graph topology
 
 `NetworkWriter` is the only domain-aware composite. It owns:
 
-- A `NodeChainWriter` — global doubly-linked list of nodes with a single head slot stored at `tb_head_offset`. Built on top of `EntryStoreWriter` with `core_stride = NODE_STRIDE = 8`.
+- A `NodeChainWriter` — global doubly-linked list of nodes with a single head slot stored at `tb_head_offset`. Built on
+  top of `EntryStoreWriter` with `core_stride = NODE_STRIDE = 8`.
 - A flat `EntryStoreWriter` of synapses with `core_stride = SYNAPSE_STRIDE = 8`.
 
 ### Node core layout (8 i32 per slot)
+
 ```
 0: kind (high 8 bits)  | reserved flags (low 24 bits)
 1: next_ptr            (chain)
@@ -163,6 +196,7 @@ Random-access reads from arbitrary slot indices are unsafe on the consumer side 
 ```
 
 ### Synapse core layout (8 i32 per slot)
+
 ```
 0: kind (high 8 bits)  | reserved flags (low 24 bits)
 1: source_ptr          (node slot)
@@ -176,13 +210,16 @@ Random-access reads from arbitrary slot indices are unsafe on the consumer side 
 
 ### Topology invariants
 
-- Every active synapse participates in *two* concurrent doubly-linked lists: through its source's outgoing chain and its target's incoming chain.
-- `connect()` allocates a synapse, sets all six pointers, splices into both source.outgoing and target.incoming. Updates head/tail on the target nodes.
+- Every active synapse participates in *two* concurrent doubly-linked lists: through its source's outgoing chain and its
+  target's incoming chain.
+- `connect()` allocates a synapse, sets all six pointers, splices into both source.outgoing and target.incoming. Updates
+  head/tail on the target nodes.
 - `disconnect_synapse()` defer-frees the synapse and patches all four sides of both lists, plus head/tail.
 - `disconnect(source, target)` walks the source's outgoing list and disconnects every synapse pointing at target.
-- `remove_node()` cascades: drains all outgoing then all incoming synapses (each via `disconnect_synapse`), then defer-frees the node and patches the chain. **This invariant lives in `NetworkWriter`, not `NodeChainWriter` — `NodeChainWriter::remove_node()` alone leaves dangling synapses.**
+- `remove_node()` cascades: drains all outgoing then all incoming synapses (each via `disconnect_synapse`), then
+  defer-frees the node and patches the chain. **This invariant lives in `NetworkWriter`,
+  not `NodeChainWriter` — `NodeChainWriter::remove_node()` alone leaves dangling synapses.**
 - `kind` is restricted to `[0, 256)` because it occupies the top 8 bits of core slot 0.
-
 
 ## Publish / swap cycle
 
@@ -217,55 +254,68 @@ EpochConsumer::acquire_mirror()
       └── network.ack_generation()   → node + synapse staging-buffer acks
 ```
 
-User TB swaps are explicit: the consumer must call `EpochMirror::swap_tb(id)` per cycle if it cares about that TB. `acquire_mirror()` only handles the default TB.
+User TB swaps are explicit: the consumer must call `EpochMirror::swap_tb(id)` per cycle if it cares about that TB.
+`acquire_mirror()` only handles the default TB.
 
 Two independent generation tracks:
 
-- **Slot reclamation generation** — per `StagingBuffer`. Producer increments on `publish`, consumer acks on `swap`. Keeps deferred slots unreachable for new allocations until consumer has moved past them.
-- **Epoch generation** — per `ControlPlane`. Producer increments on `swap_epoch` (only fires during `grow()`). Consumer acks on `acquire_mirror`. Keeps the old `EpochMirror` box alive in the kernel's `readers_pending_deletion` queue until the consumer has moved past the swap.
+- **Slot reclamation generation** — per `StagingBuffer`. Producer increments on `publish`, consumer acks on `swap`.
+  Keeps deferred slots unreachable for new allocations until consumer has moved past them.
+- **Epoch generation** — per `ControlPlane`. Producer increments on `swap_epoch` (only fires during `grow()`). Consumer
+  acks on `acquire_mirror`. Keeps the old `EpochMirror` box alive in the kernel's `readers_pending_deletion` queue until
+  the consumer has moved past the swap.
 
-The two are independent because they protect different things: per-store generations keep individual slots safe; the epoch generation keeps the entire memory layout safe across `grow()`.
-
+The two are independent because they protect different things: per-store generations keep individual slots safe; the
+epoch generation keeps the entire memory layout safe across `grow()`.
 
 ## Hot-swap and grow
 
 `Kernel::grow(new_config)`:
 
-1. Validate that every dimension in `new_config` is `>= current` (capacities, mem_metadata_size, all TB capacities, all store capacities, all LUT sizes). Return `InsufficientCapacity` otherwise.
+1. Validate that every dimension in `new_config` is `>= current` (capacities, mem_metadata_size, all TB capacities, all
+   store capacities, all LUT sizes). Return `InsufficientCapacity` otherwise.
 2. Allocate a new `AtomicBuffer` sized for the new config; stamp the magic and version headers.
 3. `Epoch::new` on the new buffer.
-4. `Epoch::copy_from(old)` — element-wise atomic copy of mem_metadata, TB metadata regions, network MEM+TB, all entry stores, all LUTs.
+4. `Epoch::copy_from(old)` — element-wise atomic copy of mem_metadata, TB metadata regions, network MEM+TB, all entry
+   stores, all LUTs.
 5. `EpochMirror::bind` on the new epoch.
-6. `ControlPlane::swap_epoch(new_mirror)` atomically swaps the `AtomicPtr` and increments writer_generation. Returns the old mirror with its retirement generation.
+6. `ControlPlane::swap_epoch(new_mirror)` atomically swaps the `AtomicPtr` and increments writer_generation. Returns the
+   old mirror with its retirement generation.
 7. Push `(old_mirror, gen)` onto `readers_pending_deletion`.
 8. Subsequent `publish()` calls drain `readers_pending_deletion` once `reader_ack_generation` has caught up.
 
-The old `AtomicBuffer` is held only via `Arc` clones inside the old `Epoch`/`EpochMirror`. Once the mirror is dropped from the deletion queue, the `Arc` count drops to zero and the buffer is freed.
-
+The old `AtomicBuffer` is held only via `Arc` clones inside the old `Epoch`/`EpochMirror`. Once the mirror is dropped
+from the deletion queue, the `Arc` count drops to zero and the buffer is freed.
 
 ## Const-generic registries
 
-`TripleBufferWriterRegistry<N>`, `EntryStoreWriterRegistry<TB_COUNT, STORE_COUNT>`, `LutWriterRegistry<TB_COUNT, LUT_COUNT>` all share the same shape:
+`TripleBufferWriterRegistry<N>`, `EntryStoreWriterRegistry<TB_COUNT, STORE_COUNT>`,
+`LutWriterRegistry<TB_COUNT, LUT_COUNT>` all share the same shape:
 
 - IDs are values in `[0, N-1]`. The user assigns each definition an ID in any order.
-- The registry maintains an `id_index: [u16; N]` lookup table mapping ID → array slot, validated for uniqueness and range at construction.
-- `TripleBufferId::DEFAULT` (`u16::MAX`) is reserved — it's the kernel's own structural TB and never appears in user-supplied `tb_defs`.
-- Entry stores and LUTs declare which TB they live on via `tb_id`. A store/LUT may target either the default TB or any user TB. Layouts compute per-TB cursor offsets so multiple entities can coexist in one TB.
+- The registry maintains an `id_index: [u16; N]` lookup table mapping ID → array slot, validated for uniqueness and
+  range at construction.
+- `TripleBufferId::DEFAULT` (`u16::MAX`) is reserved — it's the kernel's own structural TB and never appears in
+  user-supplied `tb_defs`.
+- Entry stores and LUTs declare which TB they live on via `tb_id`. A store/LUT may target either the default TB or any
+  user TB. Layouts compute per-TB cursor offsets so multiple entities can coexist in one TB.
 
-This is why `EntryStoreWriterRegistry` carries `extra_tb_start_offsets: [usize; TB_COUNT]` and `extra_tb_end_offsets: [usize; TB_COUNT]` — each user TB gets its own intra-buffer cursor.
-
+This is why `EntryStoreWriterRegistry` carries `extra_tb_start_offsets: [usize; TB_COUNT]` and
+`extra_tb_end_offsets: [usize; TB_COUNT]` — each user TB gets its own intra-buffer cursor.
 
 ## Construction modes — `new` vs `bind`
 
 Every primitive that backs a memory region exposes two constructors plus one private `create(..., bind: bool)`:
 
 - `new(...)` — zero-initializes the region. First-time construction.
-- `bind(...)` — assumes the region already holds valid state. Used during `Kernel::load_serialized` and the writer-side replay after a mid-publish snapshot.
+- `bind(...)` — assumes the region already holds valid state. Used during `Kernel::load_serialized` and the writer-side
+  replay after a mid-publish snapshot.
 
-`TripleBufferWriter::bind` does an `Acquire` load on `state` to pick up the last published frame, then re-syncs the writer buffer from the published one. Without that step, the rebound writer would start from stale buffer 0 and lose updates.
+`TripleBufferWriter::bind` does an `Acquire` load on `state` to pick up the last published frame, then re-syncs the
+writer buffer from the published one. Without that step, the rebound writer would start from stale buffer 0 and lose
+updates.
 
 `Kernel::load_serialized` checks magic and version against the buffer's first two i32 slots before binding.
-
 
 ## Threading rules
 
@@ -274,12 +324,14 @@ These are not enforced by the type system; they are documented contracts. Violat
 - Producer thread only: everything on `Kernel`, `Epoch`, all `*Writer` types.
 - Consumer thread only: `EpochConsumer`, `EpochMirror`, all `*Reader` types.
 - The `Arc<ControlPlane>` is the *only* object passed between threads. Producer drops its handle last.
-- The consumer must be fully quiesced before `Kernel` is dropped or `serialize()` is called. Drop unconditionally frees the deletion queue; serialize captures memory mid-flight.
+- The consumer must be fully quiesced before `Kernel` is dropped or `serialize()` is called. Drop unconditionally frees
+  the deletion queue; serialize captures memory mid-flight.
 
 The atomic ordering choices:
 
 - `Relaxed` everywhere by default. Most reads and writes are protected by a coarser fence somewhere upstream.
-- `Acquire`/`Release` on `pending_count` in `RingBuffer`, on `reader_ack_generation` in `StagingBuffer`, on `state` in `TripleBufferWriter`/`TripleBufferReader`, on `writer_generation`/`reader_ack_generation` in `ControlPlane`.
+- `Acquire`/`Release` on `pending_count` in `RingBuffer`, on `reader_ack_generation` in `StagingBuffer`, on `state` in
+  `TripleBufferWriter`/`TripleBufferReader`, on `writer_generation`/`reader_ack_generation` in `ControlPlane`.
 - `AcqRel` on triple-buffer state swaps and on `ControlPlane::swap_epoch`.
 
 The three-level synchronization stack:
@@ -290,20 +342,25 @@ ControlPlane.writer_generation     ← whole-epoch handoff (grow)
         └── StagingBuffer.gen      ← per-slot reclamation
 ```
 
-
 ## What is *not* in this kernel
 
-- No allocation in the hot path. `alloc` and `dealloc` happen only inside `Kernel::new`, `load_serialized`, `grow`, and `Box::new`/`Box::from_raw` for the mirror swap.
+- No allocation in the hot path. `alloc` and `dealloc` happen only inside `Kernel::new`, `load_serialized`, `grow`, and
+  `Box::new`/`Box::from_raw` for the mirror swap.
 - No queue for inserts. Insert and remove operations are immediate; their visibility is gated by `publish()`.
 - No retry loops. SPSC + triple-buffer means the producer never spins.
-- No type safety on entity payloads. Everything is `i32`. `IntoArray<STRIDE>` is a marker trait, but the kernel itself doesn't use it — it's there for consumers to wrap their own structs.
+- No type safety on entity payloads. Everything is `i32`. `IntoArray<STRIDE>` is a marker trait, but the kernel itself
+  doesn't use it — it's there for consumers to wrap their own structs.
 - No bounds-checking in release: most assertions are `debug_assert!`. Hot path is unchecked.
-
 
 ## Failure modes — what can go wrong
 
-- `KernelError::CapacityExhausted` from `insert_*` / `connect` → slot allocator full. Caller must `publish` and let the consumer ack so deferred slots can be reclaimed, then retry.
+- `KernelError::CapacityExhausted` from `insert_*` / `connect` → slot allocator full. Caller must `publish` and let the
+  consumer ack so deferred slots can be reclaimed, then retry.
 - `SlotAllocatorError::InvalidSlot` / `DoubleFree` from `remove_node` / `disconnect*` → caller bug.
-- `RingBufferError::Full` from `defer_free` → staging buffer overflow. Means the producer is retiring slots faster than the consumer is acknowledging, and the staging buffer's capacity (= entry store capacity) was exceeded. Should not happen if entity count ≤ store capacity.
-- `KernelError::InsufficientCapacity` from `grow` → `new_config` shrinks something. `grow` is monotonic — only expansion is supported.
-- Torn writes — if `serialize()` is called concurrently with consumer `swap()`, the snapshot may capture a triple buffer mid-rotation. The doc explicitly requires consumer quiescence before `serialize()` or drop.
+- `RingBufferError::Full` from `defer_free` → staging buffer overflow. Means the producer is retiring slots faster than
+  the consumer is acknowledging, and the staging buffer's capacity (= entry store capacity) was exceeded. Should not
+  happen if entity count ≤ store capacity.
+- `KernelError::InsufficientCapacity` from `grow` → `new_config` shrinks something. `grow` is monotonic — only expansion
+  is supported.
+- Torn writes — if `serialize()` is called concurrently with consumer `swap()`, the snapshot may capture a triple buffer
+  mid-rotation. The doc explicitly requires consumer quiescence before `serialize()` or drop.
