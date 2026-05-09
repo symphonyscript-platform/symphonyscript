@@ -8,10 +8,12 @@
 
 ## Hard rules — violating these breaks the kernel
 
-- **Consumer must traverse from head every swap.** Cached slot pointers are valid within one cycle (between two `swap()`
-  calls); they are invalid across cycles. After `swap()`, the producer is permitted to reclaim deferred slots and
-  reallocate them — a cached pointer may now reference a different entity. Re-traverse from `get_head_node()` every
-  cycle.
+- **Consumer must enter the graph at a known-live slot every swap.** The kernel does not designate a root or maintain a
+  registry of entry points — that's a user-side concern (typically a slot stored in `mem_metadata`). Within one cycle
+  (between two `swap()` calls), pointers acquired by traversing from the entry slot via `next_ptr` / `prev_ptr` /
+  synapse adjacency are safe. Across cycles, cached slot indices are unsafe — after `swap()`, the producer may have
+  reclaimed deferred slots and reallocated them, so the same slot index may now reference a different entity.
+  Re-enter from the user-designated entry slot every cycle.
 
 - **Consumer must be quiesced before `Kernel` drop or `serialize()`.** Drop unconditionally frees the deferred-deletion
   queue. Serialize captures memory mid-flight. Either while the consumer is active is undefined behavior.
@@ -37,6 +39,16 @@
   `Arc<ControlPlane>` is the only legal cross-thread bridge.
 
 - **`grow()` is monotonic.** Every dimension in the new config must be `>= current`. There is no shrink path.
+
+- **No domain concepts in the kernel.** The kernel is topology-agnostic. It does not know what a root, clip, group,
+  component, or entry point is. Sub-chains and synaptic components are emergent from the link structure, not first-class
+  kernel concepts. If you find yourself adding a "root pointer," "head registry," "clip ID," or anything that names a
+  user-level structure, stop — that belongs in the consumer (e.g. SymphonyEngine), not here.
+
+- **Chain links are acyclic; synapses are arbitrary.** `next_ptr` / `prev_ptr` form doubly-linked sub-chains and cannot
+  form cycles (mutators preserve invariants; direct setters are `pub(crate)`). The synapse graph may contain cycles,
+  multi-edges, and self-loops — the kernel does not check or care. If a higher layer needs acyclic synapses, it enforces
+  that itself.
 
 ## Where to look
 

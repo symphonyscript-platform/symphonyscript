@@ -104,7 +104,7 @@ fn fresh_controller_reports_zero_counts() {
 #[test]
 fn insert_head_returns_slot_and_head_visible() {
     let controller = new_controller(config(16));
-    let slot = controller.insert_head_node(1).unwrap();
+    let slot = controller.insert_node(1).unwrap();
     assert!(slot > 0);
     let head = controller.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 1);
@@ -113,7 +113,7 @@ fn insert_head_returns_slot_and_head_visible() {
 #[test]
 fn insert_after_and_before_form_correct_chain() {
     let controller = new_controller(config(16));
-    let n1 = controller.insert_head_node(10).unwrap();
+    let n1 = controller.insert_node(10).unwrap();
     let n3 = controller.insert_node_after(n1, 30).unwrap();
     let n2 = controller.insert_node_before(n3, 20).unwrap();
 
@@ -130,7 +130,7 @@ fn insert_after_and_before_form_correct_chain() {
 #[test]
 fn connect_and_disconnect_lifecycle() {
     let controller = new_controller(config(16));
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
 
     let s1 = controller.connect(n1, n2, 5).unwrap();
@@ -143,7 +143,7 @@ fn connect_and_disconnect_lifecycle() {
 #[test]
 fn node_and_synapse_attribute_round_trip() {
     let controller = new_controller(config(16));
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     let s1 = controller.connect(n1, n2, 1).unwrap();
 
@@ -173,7 +173,7 @@ fn node_and_synapse_attribute_round_trip() {
 #[test]
 fn negative_attribute_values_preserved() {
     let controller = new_controller(config(16));
-    let n = controller.insert_head_node(1).unwrap();
+    let n = controller.insert_node(1).unwrap();
     controller.get_node(n).attr_write(0, i32::MIN);
     controller.get_node(n).attr_write(1, -1);
     assert_eq!(controller.get_node(n).attr_read(0), i32::MIN);
@@ -193,7 +193,7 @@ fn mutations_invisible_to_consumer_thread_before_publish_and_swap() {
 
     assert!(consumer.get_head_node().is_none());
 
-    let _slot = controller.insert_head_node(42).unwrap();
+    let _slot = controller.insert_node(42).unwrap();
 
     // Not published yet
     assert!(consumer.get_head_node().is_none());
@@ -216,7 +216,7 @@ fn multiple_mutations_batch_into_single_publish() {
 
     let consumer = unsafe { mock_consumer_reader(&controller) };
 
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     let n3 = controller.insert_node_after(n2, 3).unwrap();
     controller.connect(n1, n2, 10).unwrap();
@@ -244,7 +244,7 @@ fn double_swap_without_publish_returns_false() {
 
     let consumer = unsafe { mock_consumer_reader(&controller) };
 
-    controller.insert_head_node(1).unwrap();
+    controller.insert_node(1).unwrap();
     controller.publish();
 
     assert!(consumer.swap()); // first swap consumes the publish
@@ -258,7 +258,7 @@ fn attributes_visible_immediately_without_publish() {
 
     let consumer = unsafe { mock_consumer_reader(&controller) };
 
-    let n = controller.insert_head_node(1).unwrap();
+    let n = controller.insert_node(1).unwrap();
     controller.get_node(n).attr_write(3, 42);
 
     // Attribute is visible to consumer immediately (shared plane)
@@ -272,11 +272,11 @@ fn attributes_visible_immediately_without_publish() {
 #[test]
 fn node_capacity_exhaustion_returns_error() {
     let controller = new_controller(config(2));
-    controller.insert_head_node(1).unwrap();
-    controller.insert_head_node(2).unwrap();
+    controller.insert_node(1).unwrap();
+    controller.insert_node(2).unwrap();
 
     assert!(matches!(
-        controller.insert_head_node(3),
+        controller.insert_node(3),
         Err(KernelError::CapacityExhausted)
     ));
     assert!(matches!(
@@ -292,7 +292,7 @@ fn node_capacity_exhaustion_returns_error() {
 #[test]
 fn synapse_capacity_exhaustion_returns_error() {
     let controller = new_controller(create_config(16, 2));
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     let n3 = controller.insert_node_after(n2, 3).unwrap();
 
@@ -308,11 +308,11 @@ fn synapse_capacity_exhaustion_returns_error() {
 #[test]
 fn remove_then_reuse_slot() {
     let controller = new_controller(config(2));
-    let n1 = controller.insert_head_node(1).unwrap();
-    let _n2 = controller.insert_head_node(2).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
+    let _n2 = controller.insert_node(2).unwrap();
 
     // Full
-    assert!(controller.insert_head_node(3).is_err());
+    assert!(controller.insert_node(3).is_err());
 
     // Remove opens a slot — but deferred, so needs publish+flush
     controller.remove_node(n1).unwrap();
@@ -325,7 +325,7 @@ fn remove_then_reuse_slot() {
 #[should_panic(expected = "attempted to read inactive slot")]
 fn double_remove_same_node_panics_uaf_guard() {
     let controller = new_controller(config(16));
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     controller.remove_node(n1).unwrap();
     // Second remove hits the UAF guard before reaching DoubleFree
     let _ = controller.remove_node(n1);
@@ -335,7 +335,7 @@ fn double_remove_same_node_panics_uaf_guard() {
 #[should_panic(expected = "attempted to read inactive slot")]
 fn double_disconnect_same_synapse_panics_uaf_guard() {
     let controller = new_controller(config(16));
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     let s1 = controller.connect(n1, n2, 1).unwrap();
     controller.disconnect_synapse(s1).unwrap();
@@ -368,7 +368,7 @@ fn grow_rejects_same_capacity() {
 fn grow_preserves_chain_topology() {
     let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head_node(10).unwrap();
+    let n1 = controller.insert_node(10).unwrap();
     let n2 = controller.insert_node_after(n1, 20).unwrap();
     let _n3 = controller.insert_node_after(n2, 30).unwrap();
 
@@ -387,7 +387,7 @@ fn grow_preserves_chain_topology() {
 fn grow_preserves_node_and_synapse_attributes() {
     let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     let s1 = controller.connect(n1, n2, 5).unwrap();
 
@@ -408,7 +408,7 @@ fn grow_preserves_node_and_synapse_attributes() {
 fn grow_preserves_synapse_connectivity() {
     let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     let n3 = controller.insert_node_after(n2, 3).unwrap();
 
@@ -429,20 +429,20 @@ fn grow_expanded_capacity_is_allocatable() {
     let mut controller = new_controller(config(4));
 
     // Fill old capacity
-    controller.insert_head_node(1).unwrap();
-    controller.insert_head_node(2).unwrap();
-    controller.insert_head_node(3).unwrap();
-    controller.insert_head_node(4).unwrap();
-    assert!(controller.insert_head_node(5).is_err());
+    controller.insert_node(1).unwrap();
+    controller.insert_node(2).unwrap();
+    controller.insert_node(3).unwrap();
+    controller.insert_node(4).unwrap();
+    assert!(controller.insert_node(5).is_err());
 
     controller.grow(config(8)).unwrap();
 
     // New capacity is usable
-    controller.insert_head_node(5).unwrap();
-    controller.insert_head_node(6).unwrap();
-    controller.insert_head_node(7).unwrap();
-    controller.insert_head_node(8).unwrap();
-    assert!(controller.insert_head_node(9).is_err());
+    controller.insert_node(5).unwrap();
+    controller.insert_node(6).unwrap();
+    controller.insert_node(7).unwrap();
+    controller.insert_node(8).unwrap();
+    assert!(controller.insert_node(9).is_err());
     assert_eq!(controller.node_count(), 8);
 }
 
@@ -450,7 +450,7 @@ fn grow_expanded_capacity_is_allocatable() {
 fn grow_consumer_thread_sees_migrated_data_after_publish_swap() {
     let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head_node(10).unwrap();
+    let n1 = controller.insert_node(10).unwrap();
     let n2 = controller.insert_node_after(n1, 20).unwrap();
     let s1 = controller.connect(n1, n2, 99).unwrap();
     controller.get_node(n1).attr_write(0, 1000);
@@ -481,7 +481,7 @@ fn grow_after_heavy_fragmentation() {
     // Create 8 nodes
     let mut slots = Vec::new();
     for i in 0..8 {
-        slots.push(controller.insert_head_node(i).unwrap());
+        slots.push(controller.insert_node(i).unwrap());
     }
 
     // Remove every other node (creates fragmentation in free list)
@@ -503,7 +503,7 @@ fn grow_after_heavy_fragmentation() {
     assert_eq!(controller.get_node(slots[6]).get_kind(), 6);
 
     // Verify we can allocate into the expanded region
-    let new_node = controller.insert_head_node(100).unwrap();
+    let new_node = controller.insert_node(100).unwrap();
     assert_eq!(controller.get_node(new_node).get_kind(), 100);
 }
 
@@ -516,7 +516,7 @@ fn gc_pipeline_rotates_through_publish_cycles() {
     let mut controller = new_controller(config(8));
 
     for i in 0..7 {
-        controller.insert_head_node(i).unwrap();
+        controller.insert_node(i).unwrap();
     }
     assert!(controller.should_grow(0.70));
 
@@ -540,7 +540,7 @@ fn gc_pipeline_rotates_through_publish_cycles() {
 #[test]
 fn consecutive_grows_without_crash() {
     let mut controller = new_controller(config(4));
-    controller.insert_head_node(1).unwrap();
+    controller.insert_node(1).unwrap();
 
     controller.grow(config(8)).unwrap();
     controller.publish();
@@ -559,7 +559,7 @@ fn consecutive_grows_without_crash() {
 #[test]
 fn grow_then_mutate_then_publish() {
     let mut controller = new_controller(config(4));
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
 
     controller.grow(config(16)).unwrap();
 
@@ -588,14 +588,14 @@ fn should_grow_respects_threshold_boundary() {
     let controller = new_controller(config(4));
     assert!(!controller.should_grow(0.75));
 
-    controller.insert_head_node(1).unwrap();
-    controller.insert_head_node(2).unwrap();
-    controller.insert_head_node(3).unwrap();
+    controller.insert_node(1).unwrap();
+    controller.insert_node(2).unwrap();
+    controller.insert_node(3).unwrap();
 
     // 3/4 = 0.75, should_grow uses > not >=
     assert!(!controller.should_grow(0.75));
 
-    controller.insert_head_node(4).unwrap();
+    controller.insert_node(4).unwrap();
     // 4/4 = 1.0 > 0.75
     assert!(controller.should_grow(0.75));
 }
@@ -633,7 +633,7 @@ fn asymmetric_capacity_works() {
     assert_eq!(controller.node_capacity(), 16);
     assert_eq!(controller.synapse_capacity(), 4);
 
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
 
     controller.connect(n1, n2, 1).unwrap();
@@ -669,13 +669,13 @@ fn grow_rejects_if_only_synapses_shrink() {
 fn defer_then_grow_then_publish_flushes_on_new_allocator() {
     let mut controller = new_controller(config(4));
 
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     let n3 = controller.insert_node_after(n2, 3).unwrap();
     let n4 = controller.insert_node_after(n3, 4).unwrap();
 
     // Full
-    assert!(controller.insert_head_node(99).is_err());
+    assert!(controller.insert_node(99).is_err());
 
     // Defer a free — slot is marked but not released yet
     controller.remove_node(n2).unwrap();
@@ -689,7 +689,7 @@ fn defer_then_grow_then_publish_flushes_on_new_allocator() {
 
     // n2's slot should now be genuinely free on the new allocator
     // We can verify by inserting — if deferred flush failed, this would fail
-    let n5 = controller.insert_head_node(5).unwrap();
+    let n5 = controller.insert_node(5).unwrap();
     assert_eq!(controller.get_node(n5).get_kind(), 5);
 
     // The remaining original nodes should still be intact
@@ -702,7 +702,7 @@ fn defer_then_grow_then_publish_flushes_on_new_allocator() {
 fn defer_then_grow_then_defer_more_then_publish() {
     let mut controller = new_controller(config(8));
 
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     let n3 = controller.insert_node_after(n2, 3).unwrap();
     let n4 = controller.insert_node_after(n3, 4).unwrap();
@@ -720,8 +720,8 @@ fn defer_then_grow_then_defer_more_then_publish() {
     controller.publish();
 
     // Both n2 and n4 should be reclaimable
-    let n5 = controller.insert_head_node(5).unwrap();
-    let n6 = controller.insert_head_node(6).unwrap();
+    let n5 = controller.insert_node(5).unwrap();
+    let n6 = controller.insert_node(6).unwrap();
     assert_eq!(controller.get_node(n5).get_kind(), 5);
     assert_eq!(controller.get_node(n6).get_kind(), 6);
 
@@ -734,7 +734,7 @@ fn defer_then_grow_then_defer_more_then_publish() {
 fn defer_then_publish_then_grow_preserves_freed_slot() {
     let mut controller = new_controller(config(4));
 
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     let _n3 = controller.insert_node_after(n2, 3).unwrap();
     let _n4 = controller.insert_node_after(_n3, 4).unwrap();
@@ -748,7 +748,7 @@ fn defer_then_publish_then_grow_preserves_freed_slot() {
     controller.grow(config(8)).unwrap();
 
     // n2's slot should be allocatable on the new allocator
-    let n5 = controller.insert_head_node(5).unwrap();
+    let n5 = controller.insert_node(5).unwrap();
     assert_eq!(controller.get_node(n5).get_kind(), 5);
 
     // Verify consumer thread sees correct state after full cycle
@@ -811,7 +811,7 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
 
     // Main thread: insert nodes and publish rapidly
     for i in 0..60 {
-        controller.insert_head_node(i).unwrap();
+        controller.insert_node(i).unwrap();
         if i % 5 == 0 {
             controller.publish();
         }
@@ -833,7 +833,7 @@ fn concurrent_traversal_during_grow() {
     let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
     // Seed initial data
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     controller.connect(n1, n2, 10).unwrap();
     controller.get_node(n1).attr_write(0, 42);
@@ -879,7 +879,7 @@ fn concurrent_traversal_during_grow() {
 
     // Insert into expanded capacity
     for i in 3..14 {
-        controller.insert_head_node(i).unwrap();
+        controller.insert_node(i).unwrap();
     }
     controller.publish();
 
@@ -888,7 +888,7 @@ fn concurrent_traversal_during_grow() {
 
     // More inserts
     for i in 14..28 {
-        controller.insert_head_node(i).unwrap();
+        controller.insert_node(i).unwrap();
     }
     controller.publish();
 
@@ -910,7 +910,7 @@ fn concurrent_attribute_reads_during_writes() {
     let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
     // Create a node whose attributes we'll hammer
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
 
     let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let running_consumer = running.clone();

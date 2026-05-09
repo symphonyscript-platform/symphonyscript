@@ -7,9 +7,29 @@ synapses; another thread traverses a consistent snapshot. Backing memory is a si
 entirely by integer offsets — no boxed nodes, no per-entity allocation. The whole kernel is bind-able onto pre-existing
 memory and serializable to a flat `Vec<i32>`.
 
-The kernel is deliberately schema-agnostic: it owns topology (nodes, synapses, chain pointers) but lets the user define
-how many bytes of metadata and attributes to attach per node and per synapse, and lets the user spin up additional
-triple buffers, entry stores, and LUTs alongside the kernel-internal graph.
+The kernel is deliberately schema-agnostic and topology-agnostic. It owns the primitive structures (node and synapse
+slots, chain links, synapse adjacency lists) but does *not* impose a single graph shape. The same primitives compose
+into a single linear chain, a forest of disjoint sub-chains, a pure synaptic graph with no chain links, or any mix.
+The kernel does not know what the graph means, where playback or traversal "starts," or which slots are roots —
+those are user concerns. Users also define the per-node and per-synapse metadata/attribute strides, and may spin up
+additional triple buffers, entry stores, and LUTs alongside the kernel-internal node and synapse stores.
+
+### Example consumer: SymphonyScript
+
+SymphonyScript uses the kernel to back its reactive music graph. Domain → kernel mapping:
+
+- **Clip** (a sequence of musical events) → a sub-chain of nodes linked by `next_ptr` / `prev_ptr`. The clip's head
+  has `prev_ptr=0`; its tail has `next_ptr=0`. Multiple clips coexist as disjoint sub-chains in the same node store.
+- **Clip-to-clip connection** → a kernel synapse from one clip's head node to another clip's head node. Synapse
+  attributes carry tempo scaling, velocity weight, timing offset.
+- **Synapse `kind`** (top 8 bits of synapse `core[0]`) → SymphonyScript uses this to distinguish *synchronous*
+  (target plays after source completes) vs *parallel* (target plays alongside source) connections. Kernel does not
+  interpret `kind`.
+- **Root clip** → SymphonyScript designates one clip's head as the root and stores its slot externally (e.g. in
+  `mem_metadata`). The kernel does not know which slot is "root."
+
+This is one application of the kernel's primitives. A different consumer (graph analysis, offline export, debugger)
+can use the same kernel with a completely different topology and traversal model.
 
 ## Top-level types
 
@@ -57,7 +77,7 @@ Kernel
     │   ├── default_tb : TripleBufferWriter            │   ├── default_tb
     │   └── tbs[0..TB_COUNT]                           │   └── tbs[0..TB_COUNT]
     ├── NetworkWriter   (uses default_tb)              ├── NetworkReader
-    │   ├── NodeChainWriter                            │   ├── NodeChainReader
+    │   ├── NodeStoreWriter                            │   ├── NodeStoreReader
     │   │   └── EntryStoreWriter (NODE_STRIDE=8)       │   │   └── EntryStoreReader
     │   └── EntryStoreWriter (SYNAPSE_STRIDE=8)        │   └── EntryStoreReader
     ├── EntryStoreWriterRegistry<TB_COUNT, STORE_COUNT> ├── EntryStoreReaderRegistry<...>
@@ -83,14 +103,16 @@ Each TB carries its own intra-buffer layout for the structural plane (network's 
 that target that TB). The default TB layout:
 
 ```
-TB[0]: head_slot (1 i32)
-TB[1..]: nodes[0..node_capacity] of (NODE_STRIDE + node_meta_stride) i32
-TB[...]: synapses[0..synapse_capacity] of (SYNAPSE_STRIDE + synapse_meta_stride) i32
-TB[...]: user entry stores assigned to default TB
-TB[...]: user LUTs assigned to default TB
+TB[0..]:    nodes[0..node_capacity] of (NODE_STRIDE + node_meta_stride) i32
+TB[...]:    synapses[0..synapse_capacity] of (SYNAPSE_STRIDE + synapse_meta_stride) i32
+TB[...]:    user entry stores assigned to default TB
+TB[...]:    user LUTs assigned to default TB
 ```
 
 `NODE_STRIDE = SYNAPSE_STRIDE = 8` — one slot reserved.
+
+The kernel itself reserves no fixed TB slot for a "root pointer" or any other entry point. Users that need a stable
+entry point store its slot in `mem_metadata` (or in their own user-defined TB / store).
 
 ## Triple buffer protocol
 
@@ -169,18 +191,45 @@ Per-entry sizing on disk:
 - MEM: `SlotAllocator::calculate_size_on_mem(capacity) + capacity * attr_stride`
 - TB:  `capacity * (core_stride + meta_stride)`
 
-Random-access reads from arbitrary slot indices are unsafe on the consumer side — `NetworkReader` documents that
-consumers MUST traverse from a head pointer through next/prev links. Reading a freed-but-not-yet-reclaimed slot would
-return live memory from a future allocation. The slot allocator's deferred-free protocol relies on the consumer
-respecting traversal-from-head.
+Random-access reads from arbitrary slot indices are unsafe on the consumer side. Consumers must enter the graph at a
+slot they know is currently live (typically a user-designated entry slot stored in `mem_metadata`) and reach all
+other slots by traversing chain links and synapse adjacency from there. Reading an arbitrary slot — including one
+the consumer cached across cycles — risks landing on a freed-and-reallocated slot whose content now belongs to a
+different entity. The slot allocator's deferred-free protocol guarantees safety only for slots reached through the
+current cycle's traversal.
 
 ## Network — graph topology
 
 `NetworkWriter` is the only domain-aware composite. It owns:
 
-- A `NodeChainWriter` — global doubly-linked list of nodes with a single head slot stored at `tb_head_offset`. Built on
-  top of `EntryStoreWriter` with `core_stride = NODE_STRIDE = 8`.
+- A `NodeStoreWriter` — pool of node slots, each with `next_ptr` / `prev_ptr` fields that *may* be used to form
+  doubly-linked sub-chains. The kernel does not maintain a global head, root, or registry of sub-chain heads —
+  sub-chains are emergent from the link structure. Built on top of `EntryStoreWriter` with
+  `core_stride = NODE_STRIDE = 8`.
 - A flat `EntryStoreWriter` of synapses with `core_stride = SYNAPSE_STRIDE = 8`.
+
+### Topology composition
+
+The kernel provides two orthogonal organizing structures over the same node pool, and the user composes them:
+
+- **Chain links** (`next_ptr` / `prev_ptr` on each node) — form doubly-linked sub-chains. Acyclic by construction:
+  the only way to mutate links is through `insert_node`, `insert_node_after`, `insert_node_before`, and `remove_node`,
+  all of which preserve invariants. Direct setters are `pub(crate)`.
+- **Synapse graph** (`outgoing_*` / `incoming_*` heads/tails on each node + per-synapse adjacency pointers) — forms
+  an arbitrary directed graph between nodes. Cycles allowed, multi-edges allowed.
+
+Users build whatever shape they need with these two primitives:
+
+| Topology | How |
+|---|---|
+| Single linear sequence | One sub-chain via `insert_node` then `insert_node_after`. No synapses. |
+| Forest of sub-chains | Multiple `insert_node` calls; extend each with `insert_node_after`. Optional synapses to connect them. |
+| Pure synaptic graph | Each node a singleton (no chain links). Use `connect` to wire them. |
+| SymphonyScript clip graph | Each clip = one sub-chain. Clip-to-clip connections = synapses between clip-head nodes. |
+| Singleton + adjacency lookup | Single sub-chain plus cross-references via synapses between non-adjacent nodes. |
+
+The kernel is indifferent. Reachability, "where to start," cycle detection, traversal order, component count — all
+domain concerns owned by the consumer.
 
 ### Node core layout (8 i32 per slot)
 
@@ -217,9 +266,15 @@ respecting traversal-from-head.
 - `disconnect_synapse()` defer-frees the synapse and patches all four sides of both lists, plus head/tail.
 - `disconnect(source, target)` walks the source's outgoing list and disconnects every synapse pointing at target.
 - `remove_node()` cascades: drains all outgoing then all incoming synapses (each via `disconnect_synapse`), then
-  defer-frees the node and patches the chain. **This invariant lives in `NetworkWriter`,
-  not `NodeChainWriter` — `NodeChainWriter::remove_node()` alone leaves dangling synapses.**
-- `kind` is restricted to `[0, 256)` because it occupies the top 8 bits of core slot 0.
+  defer-frees the node and patches the sub-chain it belonged to. **This invariant lives in `NetworkWriter`,
+  not `NodeStoreWriter` — `NodeStoreWriter::remove_node()` alone leaves dangling synapses.**
+- `remove_chain(head_slot)` is a convenience: walks `next_ptr` from `head_slot` and calls `remove_node` on each.
+  Removes a whole sub-chain and cascades all synapses incident to its nodes. Caller must pass a chain head — calling
+  it on a mid-chain node removes only the suffix from that node onward and leaves the prefix dangling.
+- Chain links are acyclic by construction (mutators preserve doubly-linked invariants; direct setters are
+  `pub(crate)`). The synapse graph may contain cycles — `connect(A, B)` and `connect(B, A)` is permitted.
+- `kind` (top 8 bits of `core[0]` on both nodes and synapses) is `[0, 256)`. The kernel does not interpret it; it's
+  user-defined semantics.
 
 ## Publish / swap cycle
 
@@ -233,7 +288,7 @@ mutate (insert_node, connect, write attrs, etc.)
 Kernel::publish()
   ├── Epoch::publish()
   │   ├── NetworkWriter::publish()
-  │   │   ├── NodeChainWriter::publish()  → node SlotAllocator::publish()
+  │   │   ├── NodeStoreWriter::publish()  → node SlotAllocator::publish()
   │   │   └── synapses.publish()           → synapse SlotAllocator::publish()
   │   ├── store_registry.publish_all()    → all user EntryStoreWriters
   │   └── default_tb.publish()             → triple-buffer hand-off

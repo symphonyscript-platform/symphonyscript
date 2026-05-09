@@ -42,7 +42,7 @@ fn multi_threaded_topology_fuzzer() {
 
             // 1. Allocate a burst of nodes
             for i in 0..64 {
-                if let Ok(slot) = writer.insert_head_node(i) {
+                if let Ok(slot) = writer.insert_node(i) {
                     nodes.push(slot);
                     writer.get_node(slot).attr_write(0, round); // mark with round
                 }

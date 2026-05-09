@@ -161,7 +161,7 @@ fn metadata_coexists_with_node_mutations() {
 
     controller.mem_write_meta(0, 10);
 
-    let n = controller.insert_head_node(1).unwrap();
+    let n = controller.insert_node(1).unwrap();
     controller.get_node(n).attr_write(0, 42);
 
     controller.publish();

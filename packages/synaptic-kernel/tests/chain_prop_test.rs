@@ -3,8 +3,8 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
-use synaptic_kernel::topology::node::node_chain_config::NodeChainConfig;
-use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
+use synaptic_kernel::topology::node::node_store_config::NodeStoreConfig;
+use synaptic_kernel::topology::node::node_store_writer::NodeStoreWriter;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
@@ -23,13 +23,13 @@ fn create_mem(size: usize) -> AtomicBuffer {
     Arc::new(vec)
 }
 
-fn setup_chain() -> NodeChainWriter {
+fn setup_chain() -> NodeStoreWriter {
     let mem = create_mem(MEM_SIZE);
     let writer = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
-    NodeChainWriter::new(
+    NodeStoreWriter::new(
         mem,
         writer,
-        NodeChainConfig {
+        NodeStoreConfig {
             meta_stride: NODE_META,
             attr_stride: NODE_ATTR,
             capacity: CAPACITY,
@@ -61,7 +61,7 @@ fn chain_op_strategy() -> impl Strategy<Value = ChainOp> {
 /// - Forward traversal from head visits every active node exactly once
 /// - Backward links are consistent (node.next.prev == node)
 /// - Head's prev == 0, tail's next == 0
-fn verify_chain_integrity(chain: &NodeChainWriter, active_slots: &[usize]) {
+fn verify_chain_integrity(chain: &NodeStoreWriter, active_slots: &[usize]) {
     if active_slots.is_empty() {
         assert!(chain.get_head_node().is_none(), "empty active set but chain has head");
         return;
@@ -139,7 +139,7 @@ fn verify_chain_integrity(chain: &NodeChainWriter, active_slots: &[usize]) {
 fn insert_before_head_updates_head_pointer() {
     let chain = setup_chain();
 
-    let a = chain.insert_head_node(1).unwrap();
+    let a = chain.insert_node(1).unwrap();
     assert_eq!(chain.get_head_slot(), a);
 
     let b = chain.insert_node_before(a, 2).unwrap();
@@ -159,7 +159,7 @@ fn insert_before_head_updates_head_pointer() {
 fn insert_before_head_twice_builds_correct_chain() {
     let chain = setup_chain();
 
-    let a = chain.insert_head_node(1).unwrap();
+    let a = chain.insert_node(1).unwrap();
     let b = chain.insert_node_before(a, 2).unwrap();
     let c = chain.insert_node_before(b, 3).unwrap();
 
@@ -179,10 +179,10 @@ fn insert_before_head_twice_builds_correct_chain() {
 fn insert_before_head_then_insert_head_interleaved() {
     let chain = setup_chain();
 
-    let a = chain.insert_head_node(1).unwrap();
+    let a = chain.insert_node(1).unwrap();
     let b = chain.insert_node_before(a, 2).unwrap();
     // chain: b -> a
-    let c = chain.insert_head_node(3).unwrap();
+    let c = chain.insert_node(3).unwrap();
     // chain: c -> b -> a
 
     assert_eq!(chain.get_head_slot(), c);
@@ -198,7 +198,7 @@ fn insert_before_head_then_insert_head_interleaved() {
 fn remove_node_inserted_before_head() {
     let chain = setup_chain();
 
-    let a = chain.insert_head_node(1).unwrap();
+    let a = chain.insert_node(1).unwrap();
     let b = chain.insert_node_before(a, 2).unwrap();
     // chain: b -> a
 
@@ -216,7 +216,7 @@ fn remove_node_inserted_before_head() {
 
 proptest! {
     #[test]
-    fn node_chain_random_ops_preserve_doubly_linked_invariants(
+    fn node_store_random_ops_preserve_doubly_linked_invariants(
         ops in proptest::collection::vec(chain_op_strategy(), 1..100)
     ) {
         let chain = setup_chain();
@@ -228,7 +228,7 @@ proptest! {
                 ChainOp::InsertHead => {
                     if active_slots.len() < CAPACITY {
                         kind_counter += 1;
-                        if let Some(slot) = chain.insert_head_node(kind_counter) {
+                        if let Some(slot) = chain.insert_node(kind_counter) {
                             active_slots.push(slot);
                         }
                     }
@@ -266,14 +266,14 @@ proptest! {
     }
 
     #[test]
-    fn node_chain_insert_remove_all_leaves_empty(
+    fn node_store_insert_remove_all_leaves_empty(
         count in 1..32usize
     ) {
         let chain = setup_chain();
         let mut slots = Vec::new();
 
         for i in 0..count {
-            if let Some(s) = chain.insert_head_node(i as i32) {
+            if let Some(s) = chain.insert_node(i as i32) {
                 slots.push(s);
             }
         }

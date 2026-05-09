@@ -29,7 +29,7 @@ fn config(capacity: usize) -> KernelConfig<1, 1, 1> {
 #[test]
 fn disconnect_by_endpoints_removes_single_synapse() {
     let kernel = TestKernel::new(config(16));
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     let b = kernel.insert_node_after(a, 2).unwrap();
 
     kernel.connect(a, b, 1).unwrap();
@@ -53,7 +53,7 @@ fn disconnect_by_endpoints_removes_single_synapse() {
 #[test]
 fn disconnect_by_endpoints_removes_all_synapses_between_pair() {
     let kernel = TestKernel::new(config(16));
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     let b = kernel.insert_node_after(a, 2).unwrap();
 
     kernel.connect(a, b, 1).unwrap();
@@ -79,7 +79,7 @@ fn disconnect_by_endpoints_removes_all_synapses_between_pair() {
 #[test]
 fn disconnect_by_endpoints_preserves_other_targets() {
     let kernel = TestKernel::new(config(16));
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     let b = kernel.insert_node_after(a, 2).unwrap();
     let c = kernel.insert_node_after(b, 3).unwrap();
 
@@ -99,7 +99,7 @@ fn disconnect_by_endpoints_preserves_other_targets() {
 #[test]
 fn disconnect_by_endpoints_preserves_other_sources() {
     let kernel = TestKernel::new(config(16));
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     let b = kernel.insert_node_after(a, 2).unwrap();
     let c = kernel.insert_node_after(b, 3).unwrap();
 
@@ -120,7 +120,7 @@ fn disconnect_by_endpoints_preserves_other_sources() {
 #[test]
 fn disconnect_by_endpoints_noop_when_not_connected() {
     let kernel = TestKernel::new(config(16));
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     let b = kernel.insert_node_after(a, 2).unwrap();
 
     kernel.disconnect(a, b).unwrap();
@@ -133,7 +133,7 @@ fn disconnect_by_endpoints_noop_when_not_connected() {
 #[test]
 fn disconnect_by_endpoints_is_directional() {
     let kernel = TestKernel::new(config(16));
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     let b = kernel.insert_node_after(a, 2).unwrap();
 
     let s_ab = kernel.connect(a, b, 1).unwrap();
@@ -151,7 +151,7 @@ fn disconnect_by_endpoints_is_directional() {
 #[test]
 fn disconnect_by_endpoints_after_surgical_disconnect() {
     let kernel = TestKernel::new(config(16));
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     let b = kernel.insert_node_after(a, 2).unwrap();
 
     let s1 = kernel.connect(a, b, 1).unwrap();
@@ -173,7 +173,7 @@ fn disconnect_by_endpoints_after_surgical_disconnect() {
 #[test]
 fn multigraph_allows_duplicate_edges() {
     let kernel = TestKernel::new(config(16));
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     let b = kernel.insert_node_after(a, 2).unwrap();
 
     let s1 = kernel.connect(a, b, 1).unwrap();
@@ -192,7 +192,7 @@ fn multigraph_allows_duplicate_edges() {
 #[test]
 fn multigraph_surgical_disconnect_preserves_sibling() {
     let kernel = TestKernel::new(config(16));
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     let b = kernel.insert_node_after(a, 2).unwrap();
 
     let s1 = kernel.connect(a, b, 1).unwrap();
@@ -214,7 +214,7 @@ fn multigraph_surgical_disconnect_preserves_sibling() {
 #[test]
 fn disconnect_by_endpoints_removes_self_loop() {
     let kernel = TestKernel::new(config(16));
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
 
     kernel.connect(a, a, 1).unwrap();
     kernel.disconnect(a, a).unwrap();
@@ -229,7 +229,7 @@ fn disconnect_by_endpoints_removes_self_loop() {
 #[test]
 fn disconnect_by_endpoints_removes_multiple_self_loops() {
     let kernel = TestKernel::new(config(16));
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
 
     kernel.connect(a, a, 1).unwrap();
     kernel.connect(a, a, 2).unwrap();
@@ -250,7 +250,7 @@ fn disconnect_by_endpoints_removes_multiple_self_loops() {
 #[test]
 fn disconnect_in_triangle_preserves_remaining_edges() {
     let kernel = TestKernel::new(config(16));
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     let b = kernel.insert_node_after(a, 2).unwrap();
     let c = kernel.insert_node_after(b, 3).unwrap();
 
@@ -273,7 +273,7 @@ fn disconnect_in_triangle_preserves_remaining_edges() {
 #[test]
 fn disconnect_all_edges_in_fully_connected_triangle() {
     let kernel = TestKernel::new(config(16));
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     let b = kernel.insert_node_after(a, 2).unwrap();
     let c = kernel.insert_node_after(b, 3).unwrap();
 
@@ -301,7 +301,7 @@ fn disconnect_all_edges_in_fully_connected_triangle() {
 #[test]
 fn disconnect_then_reconnect_same_pair() {
     let mut kernel = TestKernel::new(config(4));
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     let b = kernel.insert_node_after(a, 2).unwrap();
 
     let s1 = kernel.connect(a, b, 1).unwrap();
@@ -325,13 +325,13 @@ fn disconnect_then_reconnect_same_pair() {
 #[test]
 fn disconnect_synapse_and_disconnect_produce_same_result() {
     let kernel_a = TestKernel::new(config(16));
-    let a1 = kernel_a.insert_head_node(1).unwrap();
+    let a1 = kernel_a.insert_node(1).unwrap();
     let b1 = kernel_a.insert_node_after(a1, 2).unwrap();
     kernel_a.connect(a1, b1, 10).unwrap();
     kernel_a.disconnect(a1, b1).unwrap();
 
     let kernel_b = TestKernel::new(config(16));
-    let a2 = kernel_b.insert_head_node(1).unwrap();
+    let a2 = kernel_b.insert_node(1).unwrap();
     let b2 = kernel_b.insert_node_after(a2, 2).unwrap();
     let s = kernel_b.connect(a2, b2, 10).unwrap();
     kernel_b.disconnect_synapse(s).unwrap();

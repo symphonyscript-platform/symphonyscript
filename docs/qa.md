@@ -3,7 +3,7 @@
 
 No, the slot is not freed.
 
-The path is remove_node → NodeChainWriter::remove → SlotAllocator::defer_free → StagingBufferWriter::push. The entry is
+The path is remove_node → NodeStoreWriter::remove → SlotAllocator::defer_free → StagingBufferWriter::push. The entry is
 stamped with the current writer_generation, which starts at 1.
 
 When publish() runs, SlotAllocator::publish() calls self.staging_buffer.drain(), which creates an iterator that reads

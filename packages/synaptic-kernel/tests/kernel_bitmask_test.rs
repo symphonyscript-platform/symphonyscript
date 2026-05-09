@@ -31,7 +31,7 @@ fn node_kind_survives_sibling_insert_remove_cycles() {
     // (which is where `prev_ptr` lives — siblings hammer this on every
     // insert_node_before / remove_node of a neighbour) a chance to bleed
     // into the kind byte if the bitmask logic is wrong.
-    let watched = kernel.insert_head_node(0x7F).unwrap();
+    let watched = kernel.insert_node(0x7F).unwrap();
 
     // Churn siblings so the topology engine repeatedly rewrites the
     // watched node's prev_ptr and next_ptr.
@@ -55,9 +55,9 @@ fn node_kind_survives_sibling_insert_remove_cycles() {
 fn synapse_kind_survives_peer_connect_disconnect_cycles() {
     let kernel = TestKernel::new(config());
 
-    let a = kernel.insert_head_node(1).unwrap();
-    let b = kernel.insert_head_node(2).unwrap();
-    let c = kernel.insert_head_node(3).unwrap();
+    let a = kernel.insert_node(1).unwrap();
+    let b = kernel.insert_node(2).unwrap();
+    let c = kernel.insert_node(3).unwrap();
 
     // Watched synapse a→b with a kind whose lower 24 bits would be obliterated
     // if the bitmask in the linked-list pointer writes were wrong.
@@ -83,18 +83,18 @@ fn synapse_kind_survives_peer_connect_disconnect_cycles() {
 #[test]
 fn uninvolved_node_data_survives_sibling_mutations() {
     // Replaces the old `uninvolved_node_data_survives_sibling_mutations` test
-    // from `src/topology/tests/node_chain_writer_tests.rs`. Asserts that
+    // from `src/topology/tests/node_store_writer_tests.rs`. Asserts that
     // mutating siblings through the public `Kernel` API leaves an untouched
     // node's kind, meta (set during insert), and attributes fully intact.
     let kernel = TestKernel::new(config());
 
-    let watched = kernel.insert_head_node(42).unwrap();
+    let watched = kernel.insert_node(42).unwrap();
     kernel.get_node(watched).attr_write(0, 1000);
     kernel.get_node(watched).attr_write(15, -999);
 
     // Insert + remove surrounding siblings.
-    let b = kernel.insert_head_node(2).unwrap();
-    let _c = kernel.insert_head_node(3).unwrap();
+    let b = kernel.insert_node(2).unwrap();
+    let _c = kernel.insert_node(3).unwrap();
     let d = kernel.insert_node_after(watched, 4).unwrap();
     kernel.remove_node(b).unwrap();
     kernel.remove_node(d).unwrap();
@@ -122,7 +122,7 @@ fn consumer_sees_producer_values_after_publish_swap() {
     let mut consumer =
         EpochConsumer::<1, 1, 1>::new(kernel.get_control_plane());
 
-    let slot = kernel.insert_head_node(12).unwrap();
+    let slot = kernel.insert_node(12).unwrap();
     kernel.get_node(slot).attr_write(0, 99);
     kernel.publish();
 

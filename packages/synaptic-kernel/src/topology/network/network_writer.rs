@@ -7,14 +7,14 @@ use crate::topology::network::network_config::NetworkConfig;
 use crate::topology::network::network_reader::NetworkReader;
 use crate::topology::network::synapse_handle::SynapseView;
 use crate::topology::network::synapse_writer::SynapseWriter;
-use crate::topology::node::node_chain_writer::NodeChainWriter;
 use crate::topology::node::node_handle::NodeHandle;
+use crate::topology::node::node_store_writer::NodeStoreWriter;
 use crate::topology::node::node_writer::NodeWriter;
 use std::sync::Arc;
 
 /// Producer-side orchestrator for node and synapse topology.
 ///
-/// Owns two entity stores: a doubly-linked node chain (with a global head)
+/// Owns two entity stores: a node store of doubly-linked sub-chains of nodes
 /// and a flat synapse store. Synapse lifecycle is threaded through node state -
 /// every active synapse participates in two concurrent doubly-linked lists:
 /// one through its source node's `outgoing` slots, another through its target
@@ -22,7 +22,7 @@ use std::sync::Arc;
 ///
 /// Node removal cascades to synapses: `remove_node()` first disconnects every
 /// outgoing and incoming synapse of the target node, then frees the node's
-/// slot. This invariant lives here - not in the node chain - because only
+/// slot. This invariant lives here - not in the node store - because only
 /// the combined power of nodes and synapses can enforce it.
 ///
 /// # Threading
@@ -32,7 +32,7 @@ use std::sync::Arc;
 /// ```text
 /// Order       Segment         Size
 /// -------------------------------------
-/// 1           Node Chain      NodeChainWriter::<...>::calculate_size_on_mem()
+/// 1           Node Store      NodeStoreWriter::<...>::calculate_size_on_mem()
 /// 2           Synapse Store   EntryStoreWriter::<...>::calculate_size_on_mem()
 /// ```
 ///
@@ -40,7 +40,7 @@ use std::sync::Arc;
 /// ```text
 /// Order       Segment         Size
 /// -------------------------------------
-/// 1           Node Chain      NodeChainWriter::<...>::calculate_size_on_mem()
+/// 1           Node Store      NodeStoreWriter::<...>::calculate_size_on_mem()
 /// 2           Synapse Store   EntryStoreWriter::<...>::calculate_size_on_mem()
 /// ```
 ///
@@ -65,7 +65,7 @@ use std::sync::Arc;
 /// - Use `to_reader()` to create the paired `NetworkReader`.
 #[derive(Clone)]
 pub struct NetworkWriter {
-    node_chain: NodeChainWriter,
+    node_chain: NodeStoreWriter,
     pub(crate) synapses: EntryStoreWriter,
 }
 
@@ -98,10 +98,10 @@ impl NetworkWriter {
         tb_start_offset: usize,
         bind: bool,
     ) -> Self {
-        let node_chain = NodeChainWriter::create(
+        let node_chain = NodeStoreWriter::create(
             Arc::clone(&mem),
             tb.clone(),
-            config.to_node_chain_config(),
+            config.to_node_store_config(),
             mem_start_offset,
             tb_start_offset,
             bind,
@@ -122,12 +122,12 @@ impl NetworkWriter {
     }
 
     pub fn calculate_size_on_mem(config: &NetworkConfig) -> usize {
-        NodeChainWriter::calculate_size_on_mem(&config.to_node_chain_config())
+        NodeStoreWriter::calculate_size_on_mem(&config.to_node_store_config())
             + EntryStoreWriter::calculate_size_on_mem(&config.to_synapse_entry_store_config())
     }
 
     pub fn calculate_size_on_tb(config: &NetworkConfig) -> usize {
-        NodeChainWriter::calculate_size_on_tb(&config.to_node_chain_config())
+        NodeStoreWriter::calculate_size_on_tb(&config.to_node_store_config())
             + config.synapse_capacity * (SYNAPSE_STRIDE + config.synapse_meta_stride)
     }
 
@@ -180,22 +180,12 @@ impl NetworkWriter {
     }
 
     #[inline]
-    pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_>> {
-        self.node_chain.get_head_node()
-    }
-
-    #[inline]
     pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_> {
         self.node_chain.get_node(slot)
     }
 
     pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_> {
         SynapseWriter::new(self.synapses.get(slot))
-    }
-
-    #[inline]
-    pub fn get_head_node_handle(&'_ self) -> Option<NodeHandle<'_>> {
-        self.node_chain.get_head_node_handle()
     }
 
     #[inline]
@@ -207,8 +197,8 @@ impl NetworkWriter {
         SynapseView::new(self.synapses.get_handle(slot))
     }
 
-    pub fn insert_head_node(&self, kind: i32) -> Option<usize> {
-        self.node_chain.insert_head_node(kind)
+    pub fn insert_node(&self, kind: i32) -> Option<usize> {
+        self.node_chain.insert_node(kind)
     }
 
     pub fn insert_node_after(&self, prev_slot: usize, kind: i32) -> Option<usize> {
@@ -241,6 +231,18 @@ impl NetworkWriter {
         }
 
         self.node_chain.remove_node(slot)
+    }
+
+    pub fn remove_chain(&self, head_slot: usize) -> Result<(), SlotAllocatorError> {
+        let mut current_slot = head_slot;
+
+        while current_slot != 0 {
+            let next_slot = self.node_chain.get_node(current_slot).get_next_ptr();
+            self.remove_node(current_slot)?;
+            current_slot = next_slot;
+        }
+
+        Ok(())
     }
 
     pub fn connect(&self, source_slot: usize, target_slot: usize, kind: i32) -> Option<usize> {

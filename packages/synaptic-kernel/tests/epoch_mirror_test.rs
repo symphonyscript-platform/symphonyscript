@@ -33,7 +33,7 @@ fn setup() -> (TestKernel, &'static TestMirror) {
 }
 
 fn insert_head_with_tick(kernel: &TestKernel, kind: i32, tick: i32) -> usize {
-    let slot = kernel.insert_head_node(kind).unwrap();
+    let slot = kernel.insert_node(kind).unwrap();
     // Tick is stored on the TB (meta) plane so the publish/swap boundary
     // is what makes it visible to the reader. `kind` goes via
     // `insert_head_node` (structural), `tick` via `set_meta` (meta zone).
@@ -55,7 +55,7 @@ fn reader_bind_creates_empty_chain() {
 fn reader_does_not_see_unpublished_nodes() {
     let (mut kernel, reader) = setup();
 
-    kernel.insert_head_node(1).unwrap();
+    kernel.insert_node(1).unwrap();
 
     // no publish, no swap
     assert!(reader.get_head_node().is_none());
@@ -116,8 +116,8 @@ fn reader_traverses_full_chain() {
 fn reader_sees_removal_after_publish_swap() {
     let (mut kernel, reader) = setup();
 
-    let _a = kernel.insert_head_node(1).unwrap();
-    let b = kernel.insert_head_node(2).unwrap();
+    let _a = kernel.insert_node(1).unwrap();
+    let b = kernel.insert_node(2).unwrap();
     // chain: b -> a
 
     kernel.remove_node(b).unwrap();
@@ -138,12 +138,12 @@ fn reader_retains_old_snapshot_without_swap() {
     let (mut kernel, reader) = setup();
 
     // cycle 1
-    let _a = kernel.insert_head_node(1).unwrap();
+    let _a = kernel.insert_node(1).unwrap();
     kernel.publish();
     reader.swap();
 
     // cycle 2: mutate but reader does NOT swap
-    kernel.insert_head_node(2).unwrap();
+    kernel.insert_node(2).unwrap();
     kernel.publish();
 
     // reader still sees cycle 1 snapshot
@@ -157,13 +157,13 @@ fn reader_sees_updated_snapshot_after_swap() {
     let (mut kernel, reader) = setup();
 
     // cycle 1
-    kernel.insert_head_node(1).unwrap();
+    kernel.insert_node(1).unwrap();
     kernel.publish();
     reader.swap();
     assert_eq!(reader.get_head_node().unwrap().get_kind(), 1);
 
     // cycle 2
-    kernel.insert_head_node(2).unwrap();
+    kernel.insert_node(2).unwrap();
     kernel.publish();
     reader.swap();
     assert_eq!(reader.get_head_node().unwrap().get_kind(), 2);
@@ -175,8 +175,8 @@ fn reader_sees_updated_snapshot_after_swap() {
 fn reader_sees_synapse_after_publish_swap() {
     let (mut kernel, reader) = setup();
 
-    let src = kernel.insert_head_node(1).unwrap();
-    let tgt = kernel.insert_head_node(2).unwrap();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt = kernel.insert_node(2).unwrap();
     let syn = kernel.connect(src, tgt, 42).unwrap();
 
     kernel.publish();
@@ -192,10 +192,10 @@ fn reader_sees_synapse_after_publish_swap() {
 fn reader_traverses_synapse_chain() {
     let (mut kernel, reader) = setup();
 
-    let src = kernel.insert_head_node(1).unwrap();
-    let tgt1 = kernel.insert_head_node(2).unwrap();
-    let tgt2 = kernel.insert_head_node(3).unwrap();
-    let tgt3 = kernel.insert_head_node(4).unwrap();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt1 = kernel.insert_node(2).unwrap();
+    let tgt2 = kernel.insert_node(3).unwrap();
+    let tgt3 = kernel.insert_node(4).unwrap();
 
     let s1 = kernel.connect(src, tgt1, 10).unwrap();
     let s2 = kernel.connect(src, tgt2, 20).unwrap();
@@ -226,9 +226,9 @@ fn reader_traverses_synapse_chain() {
 fn reader_sees_disconnect_after_publish_swap() {
     let (mut kernel, reader) = setup();
 
-    let src = kernel.insert_head_node(1).unwrap();
-    let tgt1 = kernel.insert_head_node(2).unwrap();
-    let tgt2 = kernel.insert_head_node(3).unwrap();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt1 = kernel.insert_node(2).unwrap();
+    let tgt2 = kernel.insert_node(3).unwrap();
 
     let s1 = kernel.connect(src, tgt1, 10).unwrap();
     let s2 = kernel.connect(src, tgt2, 20).unwrap();
@@ -252,7 +252,7 @@ fn reader_sees_disconnect_after_publish_swap() {
 fn reader_sees_node_attributes_immediately() {
     let (mut kernel, reader) = setup();
 
-    let slot = kernel.insert_head_node(1).unwrap();
+    let slot = kernel.insert_node(1).unwrap();
 
     // attributes are on shared plane — visible without publish
     kernel.get_node(slot).attr_write(0, 60); // pitch
@@ -266,7 +266,7 @@ fn reader_sees_node_attributes_immediately() {
 fn reader_sees_bulk_node_attributes() {
     let (mut kernel, reader) = setup();
 
-    let slot = kernel.insert_head_node(1).unwrap();
+    let slot = kernel.insert_node(1).unwrap();
 
     kernel.get_node(slot).attr_write(0, 72);
     kernel.get_node(slot).attr_write(1, 90);
@@ -291,8 +291,8 @@ fn reader_sees_bulk_node_attributes() {
 fn reader_sees_synapse_attributes_immediately() {
     let (mut kernel, reader) = setup();
 
-    let src = kernel.insert_head_node(1).unwrap();
-    let tgt = kernel.insert_head_node(2).unwrap();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt = kernel.insert_node(2).unwrap();
     let syn = kernel.connect(src, tgt, 10).unwrap();
 
     kernel.get_synapse(syn).attr_write(0, 500);
@@ -311,7 +311,7 @@ fn reader_sees_synapse_attributes_immediately() {
 fn reader_attributes_view_matches_individual_reads() {
     let (mut kernel, reader) = setup();
 
-    let slot = kernel.insert_head_node(1).unwrap();
+    let slot = kernel.insert_node(1).unwrap();
     kernel.get_node(slot).attr_write(0, 42);
     kernel.get_node(slot).attr_write(5, 99);
 
@@ -370,7 +370,7 @@ fn swap_returns_false_when_no_new_data() {
 #[test]
 fn swap_returns_true_when_new_data() {
     let (mut kernel, reader) = setup();
-    kernel.insert_head_node(1).unwrap();
+    kernel.insert_node(1).unwrap();
     kernel.publish();
     assert!(reader.swap(), "publish happened");
 }
@@ -381,8 +381,8 @@ fn swap_returns_true_when_new_data() {
 fn reader_sees_empty_chain_after_removing_all() {
     let (mut kernel, reader) = setup();
 
-    let a = kernel.insert_head_node(1).unwrap();
-    let b = kernel.insert_head_node(2).unwrap();
+    let a = kernel.insert_node(1).unwrap();
+    let b = kernel.insert_node(2).unwrap();
 
     kernel.remove_node(a).unwrap();
     kernel.remove_node(b).unwrap();
@@ -399,7 +399,7 @@ fn reader_sees_empty_chain_after_removing_all() {
 fn attribute_mutation_visible_between_publishes() {
     let (mut kernel, reader) = setup();
 
-    let slot = kernel.insert_head_node(1).unwrap();
+    let slot = kernel.insert_node(1).unwrap();
     kernel.publish();
     reader.swap();
 

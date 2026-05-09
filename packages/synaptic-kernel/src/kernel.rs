@@ -259,11 +259,6 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
     }
 
     #[inline]
-    pub fn get_head_node(&'_ self) -> Option<NodeHandle<'_>> {
-        self.active_epoch.network.get_head_node_handle()
-    }
-
-    #[inline]
     pub fn get_node(&'_ self, slot: usize) -> NodeHandle<'_> {
         self.active_epoch.network.get_node_handle(slot)
     }
@@ -273,8 +268,8 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
         self.active_epoch.network.get_synapse_handle(slot)
     }
 
-    pub fn insert_head_node(&self, kind: i32) -> Result<usize, KernelError> {
-        match self.active_epoch.network.insert_head_node(kind) {
+    pub fn insert_node(&self, kind: i32) -> Result<usize, KernelError> {
+        match self.active_epoch.network.insert_node(kind) {
             Some(slot) => Ok(slot),
             None => Err(KernelError::CapacityExhausted),
         }
@@ -300,6 +295,10 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
 
     pub fn remove_node(&self, slot: usize) -> Result<(), SlotAllocatorError> {
         self.active_epoch.network.remove_node(slot)
+    }
+
+    pub fn remove_chain(&self, head_slot: usize) -> Result<(), SlotAllocatorError> {
+        self.active_epoch.network.remove_chain(head_slot)
     }
 
     pub fn connect(

@@ -389,7 +389,7 @@ fn process(&mut self, output: &mut [f32]) {
     // 1. Grab latest structural frame (one swap, ~11ns)
     self.reader.swap();
 
-    // 2. Walk node chain using structural indices on AtomicBuffer
+    // 2. Walk node store using structural indices on AtomicBuffer
     let reader_base = self.reader.current_start_index();
     let mut slot = self.mem[reader_base + HEAD_OFFSET].load(Relaxed) as usize;
     while slot != NONE {
@@ -736,7 +736,7 @@ struct Kernel {
 
 // StructuralFrame is a region of the AtomicBuffer, not a Rust struct.
 // Its layout within each buffer:
-//   [0..MAX_NODES*2]           node chain (next/prev pairs)
+//   [0..MAX_NODES*2]           node store (next/prev pairs)
 //   [MAX_NODES*2]              chain head
 //   [MAX_NODES*2+1..+MAX_MODS] mod list heads
 //   [remaining]                synapse table slots

@@ -84,8 +84,8 @@ fn reader_sees_all_synapse_fields_after_publish() {
         let node_chain = h.node_chain;
         let synapse_chain = h.synapse_chain;
 
-        let src = node_chain.insert_head_node(1).unwrap();
-        let tgt = node_chain.insert_head_node(2).unwrap();
+        let src = node_chain.insert_node(1).unwrap();
+        let tgt = node_chain.insert_node(2).unwrap();
         let syn = synapse_chain.connect(src, tgt, 42).unwrap();
         (src, tgt, syn)
     };
@@ -111,10 +111,10 @@ fn reader_sees_chain_pointers_with_multiple_synapses() {
         let node_chain = h.node_chain;
         let synapse_chain = h.synapse_chain;
 
-        let src = node_chain.insert_head_node(1).unwrap();
-        let tgt1 = node_chain.insert_head_node(2).unwrap();
-        let tgt2 = node_chain.insert_head_node(3).unwrap();
-        let tgt3 = node_chain.insert_head_node(4).unwrap();
+        let src = node_chain.insert_node(1).unwrap();
+        let tgt1 = node_chain.insert_node(2).unwrap();
+        let tgt2 = node_chain.insert_node(3).unwrap();
+        let tgt3 = node_chain.insert_node(4).unwrap();
 
         let s1 = synapse_chain.connect(src, tgt1, 10).unwrap();
         let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();
@@ -153,8 +153,8 @@ fn reader_does_not_see_unpublished_changes() {
         let node_chain = h.node_chain;
         let synapse_chain = h.synapse_chain.clone();
 
-        let src = node_chain.insert_head_node(1).unwrap();
-        let tgt = node_chain.insert_head_node(2).unwrap();
+        let src = node_chain.insert_node(1).unwrap();
+        let tgt = node_chain.insert_node(2).unwrap();
         let s1 = synapse_chain.connect(src, tgt, 10).unwrap();
         (src, tgt, s1)
     };
@@ -187,9 +187,9 @@ fn reader_sees_disconnect_after_publish() {
         let node_chain = h.node_chain;
         let synapse_chain = h.synapse_chain;
 
-        let src = node_chain.insert_head_node(1).unwrap();
-        let tgt1 = node_chain.insert_head_node(2).unwrap();
-        let tgt2 = node_chain.insert_head_node(3).unwrap();
+        let src = node_chain.insert_node(1).unwrap();
+        let tgt1 = node_chain.insert_node(2).unwrap();
+        let tgt2 = node_chain.insert_node(3).unwrap();
 
         let s1 = synapse_chain.connect(src, tgt1, 10).unwrap();
         let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();

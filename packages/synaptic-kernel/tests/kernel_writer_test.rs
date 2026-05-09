@@ -21,7 +21,7 @@ fn create_writer() -> TestKernel {
 }
 
 fn insert_head_with_tick(kernel: &TestKernel, kind: i32, tick: i32) -> usize {
-    let slot = kernel.insert_head_node(kind).unwrap();
+    let slot = kernel.insert_node(kind).unwrap();
     // Tick lives on the TB (meta) plane: `kind` via `insert_head_node`,
     // `tick` via `set_meta`. Matches the original semantics.
     kernel.get_node(slot).set_meta(0, tick);
@@ -41,7 +41,7 @@ fn kernel_new_creates_empty_chain() {
 #[test]
 fn insert_head_returns_slot() {
     let mut kernel = create_writer();
-    let slot = kernel.insert_head_node(1);
+    let slot = kernel.insert_node(1);
     assert!(slot.is_ok());
     assert!(slot.unwrap() > 0);
 }
@@ -79,7 +79,7 @@ fn insert_head_chain_ordering() {
 fn insert_after_splices_correctly() {
     let mut kernel = create_writer();
 
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     let c = kernel.insert_node_after(a, 3).unwrap();
     let b = kernel.insert_node_after(a, 2).unwrap();
 
@@ -93,7 +93,7 @@ fn insert_after_splices_correctly() {
 fn insert_before_splices_correctly() {
     let mut kernel = create_writer();
 
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     let c = kernel.insert_node_after(a, 3).unwrap();
     let b = kernel.insert_node_before(c, 2).unwrap();
 
@@ -108,9 +108,9 @@ fn insert_exhausts_capacity() {
     let mut kernel = create_writer();
 
     for i in 0..16 {
-        assert!(kernel.insert_head_node(i).is_ok());
+        assert!(kernel.insert_node(i).is_ok());
     }
-    assert!(kernel.insert_head_node(99).is_err());
+    assert!(kernel.insert_node(99).is_err());
 }
 
 // ============ Node removal + deferred frees ============
@@ -119,9 +119,9 @@ fn insert_exhausts_capacity() {
 fn remove_node_heals_chain() {
     let mut kernel = create_writer();
 
-    let a = kernel.insert_head_node(1).unwrap();
-    let b = kernel.insert_head_node(2).unwrap();
-    let c = kernel.insert_head_node(3).unwrap();
+    let a = kernel.insert_node(1).unwrap();
+    let b = kernel.insert_node(2).unwrap();
+    let c = kernel.insert_node(3).unwrap();
     // chain: c -> b -> a
 
     kernel.remove_node(b).unwrap();
@@ -138,15 +138,15 @@ fn remove_then_publish_reclaims_slot() {
     // fill all slots
     let mut slots = Vec::new();
     for i in 0..16 {
-        slots.push(kernel.insert_head_node(i).unwrap());
+        slots.push(kernel.insert_node(i).unwrap());
     }
-    assert!(kernel.insert_head_node(99).is_err(), "capacity full");
+    assert!(kernel.insert_node(99).is_err(), "capacity full");
 
     // remove one
     kernel.remove_node(slots[0]).unwrap();
 
     // slot not yet reclaimed (deferred)
-    assert!(kernel.insert_head_node(99).is_err(), "still deferred");
+    assert!(kernel.insert_node(99).is_err(), "still deferred");
 
     // publish #1: shift to previous list
     kernel.publish();
@@ -158,7 +158,7 @@ fn remove_then_publish_reclaims_slot() {
     kernel.publish();
 
     // now the slot is available
-    let reclaimed = kernel.insert_head_node(99);
+    let reclaimed = kernel.insert_node(99);
     assert!(reclaimed.is_ok(), "slot reclaimed after publish");
 }
 
@@ -173,8 +173,8 @@ fn remove_then_publish_reclaims_slot() {
 fn connect_creates_synapse() {
     let mut kernel = create_writer();
 
-    let src = kernel.insert_head_node(1).unwrap();
-    let tgt = kernel.insert_head_node(2).unwrap();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt = kernel.insert_node(2).unwrap();
 
     let syn = kernel.connect(src, tgt, 10).unwrap();
 
@@ -188,8 +188,8 @@ fn connect_creates_synapse() {
 fn connect_updates_node_synapse_pointers() {
     let mut kernel = create_writer();
 
-    let src = kernel.insert_head_node(1).unwrap();
-    let tgt = kernel.insert_head_node(2).unwrap();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt = kernel.insert_node(2).unwrap();
     let syn = kernel.connect(src, tgt, 10).unwrap();
 
     assert_eq!(kernel.get_node(src).get_outgoing_synapse_head(), syn);
@@ -202,9 +202,9 @@ fn connect_updates_node_synapse_pointers() {
 fn disconnect_heals_synapse_chain() {
     let mut kernel = create_writer();
 
-    let src = kernel.insert_head_node(1).unwrap();
-    let tgt1 = kernel.insert_head_node(2).unwrap();
-    let tgt2 = kernel.insert_head_node(3).unwrap();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt1 = kernel.insert_node(2).unwrap();
+    let tgt2 = kernel.insert_node(3).unwrap();
 
     let s1 = kernel.connect(src, tgt1, 10).unwrap();
     let s2 = kernel.connect(src, tgt2, 20).unwrap();
@@ -220,8 +220,8 @@ fn disconnect_heals_synapse_chain() {
 fn disconnect_then_publish_reclaims_synapse_slot() {
     let mut kernel = create_writer();
 
-    let src = kernel.insert_head_node(1).unwrap();
-    let tgt = kernel.insert_head_node(2).unwrap();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt = kernel.insert_node(2).unwrap();
 
     // fill all synapse slots
     let mut synapses = Vec::new();
@@ -268,7 +268,7 @@ fn disconnect_then_publish_reclaims_synapse_slot() {
 #[test]
 fn set_node_attribute_single_field() {
     let mut kernel = create_writer();
-    let slot = kernel.insert_head_node(1).unwrap();
+    let slot = kernel.insert_node(1).unwrap();
 
     kernel.get_node(slot).attr_write(0, 60); // pitch
     kernel.get_node(slot).attr_write(1, 100); // velocity
@@ -280,7 +280,7 @@ fn set_node_attribute_single_field() {
 #[test]
 fn set_node_attributes_bulk() {
     let mut kernel = create_writer();
-    let slot = kernel.insert_head_node(1).unwrap();
+    let slot = kernel.insert_node(1).unwrap();
 
     kernel.get_node(slot).attr_write(0, 72);
     kernel.get_node(slot).attr_write(1, 90);
@@ -301,7 +301,7 @@ fn set_node_attributes_bulk() {
 #[test]
 fn get_node_attributes_returns_view() {
     let mut kernel = create_writer();
-    let slot = kernel.insert_head_node(1).unwrap();
+    let slot = kernel.insert_node(1).unwrap();
 
     kernel.get_node(slot).attr_write(0, 42);
     kernel.get_node(slot).attr_write(5, 99);
@@ -319,8 +319,8 @@ fn get_node_attributes_returns_view() {
 #[test]
 fn node_attributes_independent_across_slots() {
     let mut kernel = create_writer();
-    let a = kernel.insert_head_node(1).unwrap();
-    let b = kernel.insert_head_node(2).unwrap();
+    let a = kernel.insert_node(1).unwrap();
+    let b = kernel.insert_node(2).unwrap();
 
     kernel.get_node(a).attr_write(0, 111);
     kernel.get_node(b).attr_write(0, 222);
@@ -334,8 +334,8 @@ fn node_attributes_independent_across_slots() {
 #[test]
 fn set_synapse_attribute_single_field() {
     let mut kernel = create_writer();
-    let src = kernel.insert_head_node(1).unwrap();
-    let tgt = kernel.insert_head_node(2).unwrap();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt = kernel.insert_node(2).unwrap();
     let syn = kernel.connect(src, tgt, 10).unwrap();
 
     kernel.get_synapse(syn).attr_write(0, 1000); // weight
@@ -348,8 +348,8 @@ fn set_synapse_attribute_single_field() {
 #[test]
 fn set_synapse_attributes_bulk() {
     let mut kernel = create_writer();
-    let src = kernel.insert_head_node(1).unwrap();
-    let tgt = kernel.insert_head_node(2).unwrap();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt = kernel.insert_node(2).unwrap();
     let syn = kernel.connect(src, tgt, 10).unwrap();
 
     kernel.get_synapse(syn).attr_write(0, 500);
@@ -376,8 +376,8 @@ fn publish_succeeds_on_empty_kernel() {
 fn publish_after_mutations_succeeds() {
     let mut kernel = create_writer();
 
-    let src = kernel.insert_head_node(1).unwrap();
-    let tgt = kernel.insert_head_node(2).unwrap();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt = kernel.insert_node(2).unwrap();
     kernel.connect(src, tgt, 10).unwrap();
 
     kernel.publish();
@@ -388,16 +388,16 @@ fn multiple_publish_cycles() {
     let mut kernel = create_writer();
 
     // cycle 1: insert
-    let a = kernel.insert_head_node(1).unwrap();
+    let a = kernel.insert_node(1).unwrap();
     kernel.publish();
 
     // cycle 2: insert + remove
-    let _b = kernel.insert_head_node(2).unwrap();
+    let _b = kernel.insert_node(2).unwrap();
     kernel.remove_node(a).unwrap();
     kernel.publish();
 
     // cycle 3: a's slot should be reclaimed now
-    let _c = kernel.insert_head_node(3).unwrap();
+    let _c = kernel.insert_node(3).unwrap();
     kernel.publish();
 
     // chain should have c and b (a was removed)
@@ -412,7 +412,7 @@ fn deferred_free_two_cycle_delay() {
     // fill capacity
     let mut slots = Vec::new();
     for i in 0..16 {
-        slots.push(kernel.insert_head_node(i).unwrap());
+        slots.push(kernel.insert_node(i).unwrap());
     }
 
     // remove in cycle 0 (pushes to current deferred list)
@@ -429,7 +429,7 @@ fn deferred_free_two_cycle_delay() {
     kernel.publish();
 
     // slot should be available now
-    assert!(kernel.insert_head_node(99).is_ok());
+    assert!(kernel.insert_node(99).is_ok());
 }
 
 // ============ Self-loop ============
@@ -437,7 +437,7 @@ fn deferred_free_two_cycle_delay() {
 #[test]
 fn self_loop_connect_disconnect() {
     let mut kernel = create_writer();
-    let n = kernel.insert_head_node(1).unwrap();
+    let n = kernel.insert_node(1).unwrap();
 
     let syn = kernel.connect(n, n, 99).unwrap();
 
@@ -470,8 +470,8 @@ fn calculate_mem_size_is_positive() {
 fn grow_scales_full_topology_graph() {
     let mut kernel = create_writer();
 
-    let src = kernel.insert_head_node(1).unwrap();
-    let tgt = kernel.insert_head_node(2).unwrap();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt = kernel.insert_node(2).unwrap();
     let syn = kernel.connect(src, tgt, 10).unwrap();
 
     kernel.get_node(src).attr_write(0, 60);

@@ -722,7 +722,7 @@ As for cycle-counting state — the main thread owns it. A simple `HashMap<loop_
 
 **6. Polymetric loops:**
 
-Two loops with different cycle lengths, materializing into the same structural plane. Different head pointers, different chains, same SAB. The audio thread traverses both. This works today — nothing stops you from having multiple node chains.
+Two loops with different cycle lengths, materializing into the same structural plane. Different head pointers, different chains, same SAB. The audio thread traverses both. This works today — nothing stops you from having multiple node stores.
 
 The power: `loop(3beats) { kick hat kick }` against `loop(4beats) { snare . snare . }` gives you a 3-against-4 polymetric groove that phases naturally. This is genuinely hard to do in Tidal without gymnastics.
 

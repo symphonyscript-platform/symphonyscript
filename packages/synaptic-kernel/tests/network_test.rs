@@ -85,8 +85,8 @@ fn connect_single_synapse_between_two_nodes() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src = node_chain.insert_head_node(1).unwrap();
-    let tgt = node_chain.insert_head_node(2).unwrap();
+    let src = node_chain.insert_node(1).unwrap();
+    let tgt = node_chain.insert_node(2).unwrap();
 
     let syn = synapse_chain.connect(src, tgt, 10).unwrap();
 
@@ -119,9 +119,9 @@ fn connect_two_synapses_from_same_source() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src = node_chain.insert_head_node(1).unwrap();
-    let tgt1 = node_chain.insert_head_node(2).unwrap();
-    let tgt2 = node_chain.insert_head_node(3).unwrap();
+    let src = node_chain.insert_node(1).unwrap();
+    let tgt1 = node_chain.insert_node(2).unwrap();
+    let tgt2 = node_chain.insert_node(3).unwrap();
 
     let s1 = synapse_chain.connect(src, tgt1, 10).unwrap();
     let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();
@@ -158,9 +158,9 @@ fn connect_two_synapses_to_same_target() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src1 = node_chain.insert_head_node(1).unwrap();
-    let src2 = node_chain.insert_head_node(2).unwrap();
-    let tgt = node_chain.insert_head_node(3).unwrap();
+    let src1 = node_chain.insert_node(1).unwrap();
+    let src2 = node_chain.insert_node(2).unwrap();
+    let tgt = node_chain.insert_node(3).unwrap();
 
     let s1 = synapse_chain.connect(src1, tgt, 10).unwrap();
     let s2 = synapse_chain.connect(src2, tgt, 20).unwrap();
@@ -187,8 +187,8 @@ fn disconnect_only_synapse_clears_node_pointers() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src = node_chain.insert_head_node(1).unwrap();
-    let tgt = node_chain.insert_head_node(2).unwrap();
+    let src = node_chain.insert_node(1).unwrap();
+    let tgt = node_chain.insert_node(2).unwrap();
     let syn = synapse_chain.connect(src, tgt, 10).unwrap();
 
     synapse_chain.disconnect_synapse(syn).unwrap();
@@ -212,9 +212,9 @@ fn disconnect_head_of_outgoing_chain() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src = node_chain.insert_head_node(1).unwrap();
-    let tgt1 = node_chain.insert_head_node(2).unwrap();
-    let tgt2 = node_chain.insert_head_node(3).unwrap();
+    let src = node_chain.insert_node(1).unwrap();
+    let tgt1 = node_chain.insert_node(2).unwrap();
+    let tgt2 = node_chain.insert_node(3).unwrap();
 
     let s1 = synapse_chain.connect(src, tgt1, 10).unwrap();
     let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();
@@ -240,9 +240,9 @@ fn disconnect_tail_of_outgoing_chain() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src = node_chain.insert_head_node(1).unwrap();
-    let tgt1 = node_chain.insert_head_node(2).unwrap();
-    let tgt2 = node_chain.insert_head_node(3).unwrap();
+    let src = node_chain.insert_node(1).unwrap();
+    let tgt1 = node_chain.insert_node(2).unwrap();
+    let tgt2 = node_chain.insert_node(3).unwrap();
 
     let s1 = synapse_chain.connect(src, tgt1, 10).unwrap();
     let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();
@@ -268,10 +268,10 @@ fn disconnect_middle_of_outgoing_chain() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src = node_chain.insert_head_node(1).unwrap();
-    let tgt1 = node_chain.insert_head_node(2).unwrap();
-    let tgt2 = node_chain.insert_head_node(3).unwrap();
-    let tgt3 = node_chain.insert_head_node(4).unwrap();
+    let src = node_chain.insert_node(1).unwrap();
+    let tgt1 = node_chain.insert_node(2).unwrap();
+    let tgt2 = node_chain.insert_node(3).unwrap();
+    let tgt3 = node_chain.insert_node(4).unwrap();
 
     let s1 = synapse_chain.connect(src, tgt1, 10).unwrap();
     let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();
@@ -294,10 +294,10 @@ fn disconnect_heals_incoming_chain() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src1 = node_chain.insert_head_node(1).unwrap();
-    let src2 = node_chain.insert_head_node(2).unwrap();
-    let src3 = node_chain.insert_head_node(3).unwrap();
-    let tgt = node_chain.insert_head_node(4).unwrap();
+    let src1 = node_chain.insert_node(1).unwrap();
+    let src2 = node_chain.insert_node(2).unwrap();
+    let src3 = node_chain.insert_node(3).unwrap();
+    let tgt = node_chain.insert_node(4).unwrap();
 
     let s1 = synapse_chain.connect(src1, tgt, 10).unwrap();
     let s2 = synapse_chain.connect(src2, tgt, 20).unwrap();
@@ -322,10 +322,10 @@ fn disconnect_heals_both_chains_independently() {
 
     // Build: src -> tgt1, src -> tgt2 (outgoing from src: s1, s2)
     //        src2 -> tgt1 (incoming to tgt1: s1, s3)
-    let src = node_chain.insert_head_node(1).unwrap();
-    let src2 = node_chain.insert_head_node(2).unwrap();
-    let tgt1 = node_chain.insert_head_node(3).unwrap();
-    let tgt2 = node_chain.insert_head_node(4).unwrap();
+    let src = node_chain.insert_node(1).unwrap();
+    let src2 = node_chain.insert_node(2).unwrap();
+    let tgt1 = node_chain.insert_node(3).unwrap();
+    let tgt2 = node_chain.insert_node(4).unwrap();
 
     let s1 = synapse_chain.connect(src, tgt1, 10).unwrap();
     let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();
@@ -356,8 +356,8 @@ fn double_disconnect_returns_error() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src = node_chain.insert_head_node(1).unwrap();
-    let tgt = node_chain.insert_head_node(2).unwrap();
+    let src = node_chain.insert_node(1).unwrap();
+    let tgt = node_chain.insert_node(2).unwrap();
     let syn = synapse_chain.connect(src, tgt, 10).unwrap();
 
     synapse_chain.disconnect_synapse(syn).unwrap();
@@ -372,8 +372,8 @@ fn full_connect_disconnect_reconnect_cycle() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src = node_chain.insert_head_node(1).unwrap();
-    let tgt = node_chain.insert_head_node(2).unwrap();
+    let src = node_chain.insert_node(1).unwrap();
+    let tgt = node_chain.insert_node(2).unwrap();
 
     // connect
     let s1 = synapse_chain.connect(src, tgt, 10).unwrap();
@@ -407,7 +407,7 @@ fn connect_self_loop() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let n = node_chain.insert_head_node(1).unwrap();
+    let n = node_chain.insert_node(1).unwrap();
     let syn = synapse_chain.connect(n, n, 99).unwrap();
 
     let node_handle = node_chain.get_node(n);
@@ -427,7 +427,7 @@ fn disconnect_self_loop_clears_both_chains() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let n = node_chain.insert_head_node(1).unwrap();
+    let n = node_chain.insert_node(1).unwrap();
     let syn = synapse_chain.connect(n, n, 99).unwrap();
     synapse_chain.disconnect_synapse(syn).unwrap();
 
@@ -444,14 +444,14 @@ fn disconnect_self_loop_clears_both_chains() {
 fn synapse_chain_reader_sees_connections_after_publish() {
     let h = setup();
 
-    let src = h.node_chain.insert_head_node(1).unwrap();
-    let tgt = h.node_chain.insert_head_node(2).unwrap();
+    let src = h.node_chain.insert_node(1).unwrap();
+    let tgt = h.node_chain.insert_node(2).unwrap();
     let syn = h.synapse_chain.connect(src, tgt, 42).unwrap();
 
     h.writer.publish();
     h.reader.swap();
 
-    let node_chain_r = h.node_chain.to_reader();
+    let node_store_r = h.node_chain.to_reader();
     let synapse_chain_r = h.synapse_chain.to_reader();
 
     let s = synapse_chain_r.get_synapse(syn);
@@ -460,7 +460,7 @@ fn synapse_chain_reader_sees_connections_after_publish() {
     assert_eq!(s.get_target_ptr(), tgt);
 
     // verify node reader sees the synapse pointers
-    let src_r = node_chain_r.get_node(src);
+    let src_r = node_store_r.get_node(src);
     assert_eq!(src_r.get_outgoing_synapse_head(), syn);
     assert_eq!(src_r.get_outgoing_synapse_tail(), syn);
 }
@@ -473,10 +473,10 @@ fn disconnect_head_of_incoming_chain() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src1 = node_chain.insert_head_node(1).unwrap();
-    let src2 = node_chain.insert_head_node(2).unwrap();
-    let src3 = node_chain.insert_head_node(3).unwrap();
-    let tgt = node_chain.insert_head_node(4).unwrap();
+    let src1 = node_chain.insert_node(1).unwrap();
+    let src2 = node_chain.insert_node(2).unwrap();
+    let src3 = node_chain.insert_node(3).unwrap();
+    let tgt = node_chain.insert_node(4).unwrap();
 
     let s1 = synapse_chain.connect(src1, tgt, 10).unwrap();
     let s2 = synapse_chain.connect(src2, tgt, 20).unwrap();
@@ -508,10 +508,10 @@ fn disconnect_tail_of_incoming_chain() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src1 = node_chain.insert_head_node(1).unwrap();
-    let src2 = node_chain.insert_head_node(2).unwrap();
-    let src3 = node_chain.insert_head_node(3).unwrap();
-    let tgt = node_chain.insert_head_node(4).unwrap();
+    let src1 = node_chain.insert_node(1).unwrap();
+    let src2 = node_chain.insert_node(2).unwrap();
+    let src3 = node_chain.insert_node(3).unwrap();
+    let tgt = node_chain.insert_node(4).unwrap();
 
     let s1 = synapse_chain.connect(src1, tgt, 10).unwrap();
     let s2 = synapse_chain.connect(src2, tgt, 20).unwrap();
@@ -543,11 +543,11 @@ fn outgoing_chain_traversal_order_is_insertion_order() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src = node_chain.insert_head_node(1).unwrap();
-    let tgt1 = node_chain.insert_head_node(2).unwrap();
-    let tgt2 = node_chain.insert_head_node(3).unwrap();
-    let tgt3 = node_chain.insert_head_node(4).unwrap();
-    let tgt4 = node_chain.insert_head_node(5).unwrap();
+    let src = node_chain.insert_node(1).unwrap();
+    let tgt1 = node_chain.insert_node(2).unwrap();
+    let tgt2 = node_chain.insert_node(3).unwrap();
+    let tgt3 = node_chain.insert_node(4).unwrap();
+    let tgt4 = node_chain.insert_node(5).unwrap();
 
     let s1 = synapse_chain.connect(src, tgt1, 10).unwrap();
     let s2 = synapse_chain.connect(src, tgt2, 20).unwrap();
@@ -585,10 +585,10 @@ fn incoming_chain_traversal_order_is_insertion_order() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src1 = node_chain.insert_head_node(1).unwrap();
-    let src2 = node_chain.insert_head_node(2).unwrap();
-    let src3 = node_chain.insert_head_node(3).unwrap();
-    let tgt = node_chain.insert_head_node(4).unwrap();
+    let src1 = node_chain.insert_node(1).unwrap();
+    let src2 = node_chain.insert_node(2).unwrap();
+    let src3 = node_chain.insert_node(3).unwrap();
+    let tgt = node_chain.insert_node(4).unwrap();
 
     let s1 = synapse_chain.connect(src1, tgt, 10).unwrap();
     let _s2 = synapse_chain.connect(src2, tgt, 20).unwrap();
@@ -612,9 +612,9 @@ fn disconnect_outgoing_does_not_affect_incoming() {
     let synapse_chain = h.synapse_chain;
 
     // node B has both outgoing (B->C) and incoming (A->B)
-    let a = node_chain.insert_head_node(1).unwrap();
-    let b = node_chain.insert_head_node(2).unwrap();
-    let c = node_chain.insert_head_node(3).unwrap();
+    let a = node_chain.insert_node(1).unwrap();
+    let b = node_chain.insert_node(2).unwrap();
+    let c = node_chain.insert_node(3).unwrap();
 
     let s_ab = synapse_chain.connect(a, b, 10).unwrap(); // A->B
     let s_bc = synapse_chain.connect(b, c, 20).unwrap(); // B->C
@@ -641,9 +641,9 @@ fn disconnect_incoming_does_not_affect_outgoing() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let a = node_chain.insert_head_node(1).unwrap();
-    let b = node_chain.insert_head_node(2).unwrap();
-    let c = node_chain.insert_head_node(3).unwrap();
+    let a = node_chain.insert_node(1).unwrap();
+    let b = node_chain.insert_node(2).unwrap();
+    let c = node_chain.insert_node(3).unwrap();
 
     let s_ab = synapse_chain.connect(a, b, 10).unwrap(); // A->B
     let s_bc = synapse_chain.connect(b, c, 20).unwrap(); // B->C
@@ -669,9 +669,9 @@ fn triangle_topology_disconnect_one_edge() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let a = node_chain.insert_head_node(1).unwrap();
-    let b = node_chain.insert_head_node(2).unwrap();
-    let c = node_chain.insert_head_node(3).unwrap();
+    let a = node_chain.insert_node(1).unwrap();
+    let b = node_chain.insert_node(2).unwrap();
+    let c = node_chain.insert_node(3).unwrap();
 
     let s_ab = synapse_chain.connect(a, b, 10).unwrap(); // A->B
     let s_ac = synapse_chain.connect(a, c, 20).unwrap(); // A->C
@@ -711,8 +711,8 @@ fn connect_exhausts_synapse_capacity() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let src = node_chain.insert_head_node(1).unwrap();
-    let tgt = node_chain.insert_head_node(2).unwrap();
+    let src = node_chain.insert_node(1).unwrap();
+    let tgt = node_chain.insert_node(2).unwrap();
 
     for i in 0..SYNAPSE_CAPACITY {
         assert!(
@@ -735,9 +735,9 @@ fn disconnect_all_synapses_leaves_node_clean() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let a = node_chain.insert_head_node(1).unwrap();
-    let b = node_chain.insert_head_node(2).unwrap();
-    let c = node_chain.insert_head_node(3).unwrap();
+    let a = node_chain.insert_node(1).unwrap();
+    let b = node_chain.insert_node(2).unwrap();
+    let c = node_chain.insert_node(3).unwrap();
 
     // A has outgoing: s1, s2. A has incoming: s3.
     let s1 = synapse_chain.connect(a, b, 10).unwrap();
@@ -765,7 +765,7 @@ fn two_self_loops_on_same_node() {
     let node_chain = h.node_chain;
     let synapse_chain = h.synapse_chain;
 
-    let n = node_chain.insert_head_node(1).unwrap();
+    let n = node_chain.insert_node(1).unwrap();
     let s1 = synapse_chain.connect(n, n, 10).unwrap();
     let s2 = synapse_chain.connect(n, n, 20).unwrap();
 
@@ -795,8 +795,8 @@ fn two_self_loops_on_same_node() {
 #[test]
 fn copy_from_preserves_topology_and_deep_data() {
     let src_h = setup();
-    let n1 = src_h.node_chain.insert_head_node(1).unwrap();
-    let n2 = src_h.node_chain.insert_head_node(2).unwrap();
+    let n1 = src_h.node_chain.insert_node(1).unwrap();
+    let n2 = src_h.node_chain.insert_node(2).unwrap();
 
     let s1 = src_h.synapse_chain.connect(n1, n2, 10).unwrap();
     let s2 = src_h.synapse_chain.connect(n2, n1, 20).unwrap();

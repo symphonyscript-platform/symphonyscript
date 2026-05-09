@@ -275,7 +275,7 @@ proptest! {
 
         // Seed at least 2 nodes
         for i in 0..2 {
-            if let Some(slot) = h.node_chain.insert_head_node(i) {
+            if let Some(slot) = h.node_chain.insert_node(i) {
                 state.node_slots.push(slot);
             }
         }
@@ -285,7 +285,7 @@ proptest! {
                 SynapseOp::AddNode => {
                     if state.node_slots.len() < NODE_CAPACITY {
                         kind_counter += 1;
-                        if let Some(slot) = h.node_chain.insert_head_node(kind_counter) {
+                        if let Some(slot) = h.node_chain.insert_node(kind_counter) {
                             state.node_slots.push(slot);
                         }
                     }
@@ -325,7 +325,7 @@ proptest! {
 
         // Create 4 nodes
         for i in 0..4 {
-            let slot = h.node_chain.insert_head_node(i).unwrap();
+            let slot = h.node_chain.insert_node(i).unwrap();
             state.node_slots.push(slot);
         }
 
@@ -362,7 +362,7 @@ proptest! {
         let h = setup();
         let mut state = GraphState::new();
 
-        let node = h.node_chain.insert_head_node(1).unwrap();
+        let node = h.node_chain.insert_node(1).unwrap();
         state.node_slots.push(node);
 
         // Create self-loops
@@ -393,8 +393,8 @@ proptest! {
 fn disconnect_middle_of_outgoing_chain() {
     let h = setup();
 
-    let a = h.node_chain.insert_head_node(1).unwrap();
-    let b = h.node_chain.insert_head_node(2).unwrap();
+    let a = h.node_chain.insert_node(1).unwrap();
+    let b = h.node_chain.insert_node(2).unwrap();
 
     let s1 = h.synapse_chain.connect(a, b, 10).unwrap();
     let s2 = h.synapse_chain.connect(a, b, 20).unwrap();
@@ -421,9 +421,9 @@ fn disconnect_middle_of_outgoing_chain() {
 fn disconnect_head_of_incoming_chain() {
     let h = setup();
 
-    let a = h.node_chain.insert_head_node(1).unwrap();
-    let b = h.node_chain.insert_head_node(2).unwrap();
-    let c = h.node_chain.insert_head_node(3).unwrap();
+    let a = h.node_chain.insert_node(1).unwrap();
+    let b = h.node_chain.insert_node(2).unwrap();
+    let c = h.node_chain.insert_node(3).unwrap();
 
     // All point to b
     let s1 = h.synapse_chain.connect(a, b, 10).unwrap();
@@ -446,13 +446,13 @@ fn fan_out_and_fan_in_topology() {
     let h = setup();
     let mut state = GraphState::new();
 
-    let hub = h.node_chain.insert_head_node(0).unwrap();
+    let hub = h.node_chain.insert_node(0).unwrap();
     state.node_slots.push(hub);
 
     // Create 8 spoke nodes
     let mut spokes = Vec::new();
     for i in 1..=8 {
-        let s = h.node_chain.insert_head_node(i).unwrap();
+        let s = h.node_chain.insert_node(i).unwrap();
         state.node_slots.push(s);
         spokes.push(s);
     }

@@ -55,7 +55,7 @@ export class SynapticCursor {
   private readonly synapseTableOffsetI32: number
   private readonly capacity: number
 
-  /** Current position in the node chain (byte pointer) */
+  /** Current position in the node store (byte pointer) */
   private currentPtr: number = NULL_PTR
 
   /** Pending jitter ticks to wait before starting next clip */

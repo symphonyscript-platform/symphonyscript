@@ -2,9 +2,9 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
-use synaptic_kernel::topology::node::node_chain_config::NodeChainConfig;
-use synaptic_kernel::topology::node::node_chain_reader::NodeChainReader;
-use synaptic_kernel::topology::node::node_chain_writer::NodeChainWriter;
+use synaptic_kernel::topology::node::node_store_config::NodeStoreConfig;
+use synaptic_kernel::topology::node::node_store_reader::NodeStoreReader;
+use synaptic_kernel::topology::node::node_store_writer::NodeStoreWriter;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
@@ -29,18 +29,18 @@ struct TestHarness {
     _mem: AtomicBuffer,
     writer: synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter,
     reader: synaptic_kernel::primitives::triple_buffer_reader::TripleBufferReader,
-    chain: NodeChainWriter,
-    chain_r: NodeChainReader,
+    chain: NodeStoreWriter,
+    chain_r: NodeStoreReader,
 }
 
 fn setup() -> TestHarness {
     let mem = create_mem(MEM_SIZE);
     let writer = TripleBufferWriter::new(Arc::clone(&mem), TB_START, TB_BUF_CAP);
     let reader = writer.to_reader();
-    let chain = NodeChainWriter::new(
+    let chain = NodeStoreWriter::new(
         Arc::clone(&mem),
         writer.clone(),
-        NodeChainConfig {
+        NodeStoreConfig {
             meta_stride: NODE_META,
             attr_stride: NODE_ATTR,
             capacity: CAPACITY,
@@ -59,13 +59,13 @@ fn setup() -> TestHarness {
     }
 }
 
-fn insert_head_with_tick(chain: &NodeChainWriter, kind: i32, tick: i32) -> usize {
-    let slot = chain.insert_head_node(kind).unwrap();
+fn insert_head_with_tick(chain: &NodeStoreWriter, kind: i32, tick: i32) -> usize {
+    let slot = chain.insert_node(kind).unwrap();
     chain.get_node(slot).set_meta(0, tick);
     slot
 }
 
-// ============ NodeChainWriter: insert_head ============
+// ============ NodeStoreWriter: insert_head ============
 
 #[test]
 fn insert_head_into_empty_chain() {
@@ -74,7 +74,7 @@ fn insert_head_into_empty_chain() {
 
     assert!(chain.get_head_node().is_none());
 
-    let slot = chain.insert_head_node(1).unwrap();
+    let slot = chain.insert_node(1).unwrap();
     let head = chain.get_head_node().unwrap();
 
     assert_eq!(head.get_kind(), 1);
@@ -88,8 +88,8 @@ fn insert_head_pushes_existing_head() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head_node(1).unwrap();
-    let b = chain.insert_head_node(2).unwrap();
+    let a = chain.insert_node(1).unwrap();
+    let b = chain.insert_node(2).unwrap();
 
     // chain: b -> a
     let head = chain.get_head_node().unwrap();
@@ -124,14 +124,14 @@ fn insert_head_three_nodes_links_correct() {
     assert_eq!(chain.get_node(a).get_next_ptr(), 0);
 }
 
-// ============ NodeChainWriter: insert_after ============
+// ============ NodeStoreWriter: insert_after ============
 
 #[test]
 fn insert_after_tail() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head_node(1).unwrap();
+    let a = chain.insert_node(1).unwrap();
     let b = chain.insert_node_after(a, 2).unwrap();
 
     // chain: a -> b
@@ -145,7 +145,7 @@ fn insert_after_middle() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head_node(1).unwrap();
+    let a = chain.insert_node(1).unwrap();
     let c = chain.insert_node_after(a, 3).unwrap();
     // chain: a -> c
     let b = chain.insert_node_after(a, 2).unwrap();
@@ -158,14 +158,14 @@ fn insert_after_middle() {
     assert_eq!(chain.get_node(c).get_next_ptr(), 0);
 }
 
-// ============ NodeChainWriter: insert_before ============
+// ============ NodeStoreWriter: insert_before ============
 
 #[test]
 fn insert_before_head_updates_chain_head() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head_node(1).unwrap();
+    let a = chain.insert_node(1).unwrap();
     let b = chain.insert_node_before(a, 2).unwrap();
 
     // insert_before on head must update head pointer to new node
@@ -180,7 +180,7 @@ fn insert_before_middle_node() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head_node(1).unwrap();
+    let a = chain.insert_node(1).unwrap();
     let c = chain.insert_node_after(a, 3).unwrap();
     // chain: a -> c
     let b = chain.insert_node_before(c, 2).unwrap();
@@ -192,14 +192,14 @@ fn insert_before_middle_node() {
     assert_eq!(chain.get_node(c).get_prev_ptr(), b);
 }
 
-// ============ NodeChainWriter: remove ============
+// ============ NodeStoreWriter: remove ============
 
 #[test]
 fn remove_only_node_empties_chain() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head_node(1).unwrap();
+    let a = chain.insert_node(1).unwrap();
     chain.remove_node(a).unwrap();
 
     assert!(chain.get_head_node().is_none(), "chain must be empty");
@@ -210,8 +210,8 @@ fn remove_head_promotes_next() {
     let h = setup();
     let chain = h.chain;
 
-    let _a = chain.insert_head_node(1).unwrap();
-    let b = chain.insert_head_node(2).unwrap();
+    let _a = chain.insert_node(1).unwrap();
+    let b = chain.insert_node(2).unwrap();
     // chain: b -> a
 
     chain.remove_node(b).unwrap();
@@ -228,8 +228,8 @@ fn remove_tail_patches_prev() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head_node(1).unwrap();
-    let b = chain.insert_head_node(2).unwrap();
+    let a = chain.insert_node(1).unwrap();
+    let b = chain.insert_node(2).unwrap();
     // chain: b -> a
 
     chain.remove_node(a).unwrap();
@@ -245,9 +245,9 @@ fn remove_middle_heals_chain() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head_node(1).unwrap();
-    let b = chain.insert_head_node(2).unwrap();
-    let c = chain.insert_head_node(3).unwrap();
+    let a = chain.insert_node(1).unwrap();
+    let b = chain.insert_node(2).unwrap();
+    let c = chain.insert_node(3).unwrap();
     // chain: c -> b -> a
 
     chain.remove_node(b).unwrap();
@@ -262,9 +262,9 @@ fn remove_all_then_reinsert() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head_node(1).unwrap();
-    let b = chain.insert_head_node(2).unwrap();
-    let c = chain.insert_head_node(3).unwrap();
+    let a = chain.insert_node(1).unwrap();
+    let b = chain.insert_node(2).unwrap();
+    let c = chain.insert_node(3).unwrap();
 
     chain.remove_node(c).unwrap();
     chain.remove_node(b).unwrap();
@@ -273,7 +273,7 @@ fn remove_all_then_reinsert() {
     assert!(chain.get_head_node().is_none());
 
     // reinsert
-    let _d = chain.insert_head_node(99).unwrap();
+    let _d = chain.insert_node(99).unwrap();
     let head = chain.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 99);
     assert_eq!(head.get_next_ptr(), 0);
@@ -285,12 +285,12 @@ fn double_remove_returns_error() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head_node(1).unwrap();
+    let a = chain.insert_node(1).unwrap();
     chain.remove_node(a).unwrap();
     /* commented err check */
 }
 
-// ============ NodeChainReader: traversal after publish ============
+// ============ NodeStoreReader: traversal after publish ============
 
 #[test]
 fn chain_reader_traverses_full_chain() {
@@ -340,8 +340,8 @@ fn chain_reader_sees_removal_after_publish() {
     {
         let chain = h.chain;
 
-        let _a = chain.insert_head_node(1).unwrap();
-        let b = chain.insert_head_node(2).unwrap();
+        let _a = chain.insert_node(1).unwrap();
+        let b = chain.insert_node(2).unwrap();
         // chain: b -> a
         chain.remove_node(b).unwrap();
         // chain: a
@@ -364,10 +364,10 @@ fn insert_head_exhausts_capacity() {
     let chain = h.chain;
 
     for i in 0..CAPACITY {
-        assert!(chain.insert_head_node(i as i32).is_some());
+        assert!(chain.insert_node(i as i32).is_some());
     }
     assert!(
-        chain.insert_head_node(99).is_none(),
+        chain.insert_node(99).is_none(),
         "capacity exhausted"
     );
 }
@@ -379,7 +379,7 @@ fn insert_after_does_not_mutate_unrelated_nodes() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head_node(1).unwrap();
+    let a = chain.insert_node(1).unwrap();
     let b = chain.insert_node_after(a, 2).unwrap();
     let c = chain.insert_node_after(b, 3).unwrap();
     // chain: a -> b -> c
@@ -401,7 +401,7 @@ fn insert_after_does_not_mutate_unrelated_nodes() {
 // ============ Forward + backward traversal ============
 
 #[test]
-fn four_node_chain_traversal_forward_and_backward() {
+fn four_node_store_traversal_forward_and_backward() {
     let h = setup();
     let chain = h.chain;
 
@@ -436,7 +436,7 @@ fn insert_after_returns_none_on_exhaustion() {
     let h = setup();
     let chain = h.chain;
 
-    let head = chain.insert_head_node(0).unwrap();
+    let head = chain.insert_node(0).unwrap();
     // fill remaining capacity via insert_after
     let mut last = head;
     for i in 1..CAPACITY {
@@ -453,7 +453,7 @@ fn insert_before_returns_none_on_exhaustion() {
     let h = setup();
     let chain = h.chain;
 
-    let head = chain.insert_head_node(0).unwrap();
+    let head = chain.insert_node(0).unwrap();
     // fill remaining capacity via insert_before
     for i in 1..CAPACITY {
         chain.insert_node_before(head, i as i32).unwrap();
@@ -471,7 +471,7 @@ fn insert_before_tail_in_three_node_chain() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head_node(1).unwrap();
+    let a = chain.insert_node(1).unwrap();
     let c = chain.insert_node_after(a, 3).unwrap();
     let d = chain.insert_node_after(c, 4).unwrap();
     // chain: a -> c -> d
@@ -494,10 +494,10 @@ fn remove_tail_first_then_middle_then_head() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head_node(1).unwrap();
-    let b = chain.insert_head_node(2).unwrap();
-    let c = chain.insert_head_node(3).unwrap();
-    let d = chain.insert_head_node(4).unwrap();
+    let a = chain.insert_node(1).unwrap();
+    let b = chain.insert_node(2).unwrap();
+    let c = chain.insert_node(3).unwrap();
+    let d = chain.insert_node(4).unwrap();
     // chain: d -> c -> b -> a
 
     // remove tail
@@ -525,11 +525,11 @@ fn remove_arbitrary_order_on_five_node_chain() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_head_node(1).unwrap();
-    let b = chain.insert_head_node(2).unwrap();
-    let c = chain.insert_head_node(3).unwrap();
-    let d = chain.insert_head_node(4).unwrap();
-    let e = chain.insert_head_node(5).unwrap();
+    let a = chain.insert_node(1).unwrap();
+    let b = chain.insert_node(2).unwrap();
+    let c = chain.insert_node(3).unwrap();
+    let d = chain.insert_node(4).unwrap();
+    let e = chain.insert_node(5).unwrap();
     // chain: e -> d -> c -> b -> a
 
     // remove c (middle)
@@ -614,10 +614,10 @@ fn copy_from_preserves_topology_and_deep_data() {
     
     let dst_mem = create_mem(MEM_SIZE);
     let dst_tb = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
-    let dst = NodeChainWriter::new(
+    let dst = NodeStoreWriter::new(
         Arc::clone(&dst_mem),
         dst_tb,
-        NodeChainConfig {
+        NodeStoreConfig {
             meta_stride: NODE_META,
             attr_stride: NODE_ATTR,
             capacity: CAPACITY * 2,
@@ -651,10 +651,10 @@ fn copy_from_preserves_topology_and_deep_data() {
 fn copy_from_panics_if_source_larger() {
     let src_mem = create_mem(MEM_SIZE);
     let src_tb = TripleBufferWriter::new(Arc::clone(&src_mem), TB_START, TB_BUF_CAP);
-    let src = NodeChainWriter::new(
+    let src = NodeStoreWriter::new(
         src_mem,
         src_tb,
-        NodeChainConfig {
+        NodeStoreConfig {
             meta_stride: NODE_META,
             attr_stride: NODE_ATTR,
             capacity: CAPACITY * 2,
@@ -665,10 +665,10 @@ fn copy_from_panics_if_source_larger() {
     
     let dst_mem = create_mem(MEM_SIZE);
     let dst_tb = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
-    let dst = NodeChainWriter::new(
+    let dst = NodeStoreWriter::new(
         dst_mem,
         dst_tb,
-        NodeChainConfig {
+        NodeStoreConfig {
             meta_stride: NODE_META,
             attr_stride: NODE_ATTR,
             capacity: CAPACITY,

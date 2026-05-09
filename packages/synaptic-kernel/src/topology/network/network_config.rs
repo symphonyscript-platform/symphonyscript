@@ -1,6 +1,6 @@
 use crate::constants::SYNAPSE_STRIDE;
 use crate::primitives::entry_store_config::EntryStoreConfig;
-use crate::topology::node::node_chain_config::NodeChainConfig;
+use crate::topology::node::node_store_config::NodeStoreConfig;
 
 #[derive(Clone, Copy)]
 pub struct NetworkConfig {
@@ -13,8 +13,8 @@ pub struct NetworkConfig {
 }
 
 impl NetworkConfig {
-    pub fn to_node_chain_config(&self) -> NodeChainConfig {
-        NodeChainConfig {
+    pub fn to_node_store_config(&self) -> NodeStoreConfig {
+        NodeStoreConfig {
             meta_stride: self.node_meta_stride,
             attr_stride: self.node_attr_stride,
             capacity: self.node_capacity,

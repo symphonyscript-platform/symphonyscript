@@ -33,7 +33,7 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
     let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
     // Seed initial data
-    let n1 = controller.insert_head_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     controller.connect(n1, n2, 10).unwrap();
     controller.get_node(n1).attr_write(0, 42);
@@ -95,7 +95,7 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
     controller.publish();
 
     for i in 3..14 {
-        controller.insert_head_node(i).unwrap();
+        controller.insert_node(i).unwrap();
     }
     controller.publish();
 
@@ -103,7 +103,7 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
     controller.publish();
 
     for i in 14..28 {
-        controller.insert_head_node(i).unwrap();
+        controller.insert_node(i).unwrap();
     }
     controller.publish();
 
@@ -134,7 +134,7 @@ fn epoch_stress_random_mutations_under_consumer_load() {
     // Seed some initial data
     let mut node_slots = Vec::new();
     for i in 0..8 {
-        let slot = controller.insert_head_node(i).unwrap();
+        let slot = controller.insert_node(i).unwrap();
         node_slots.push(slot);
     }
 
@@ -187,7 +187,7 @@ fn epoch_stress_random_mutations_under_consumer_load() {
                 }
                 current = Some(graph.get_node(next_ptr));
                 node_count += 1;
-                assert!(node_count <= 128, "node chain too long");
+                assert!(node_count <= 128, "node store too long");
             }
             iterations += 1;
         }
@@ -200,7 +200,7 @@ fn epoch_stress_random_mutations_under_consumer_load() {
         // Insert some nodes
         for i in 0..3 {
             let kind = (batch * 10 + i) as i32;
-            if let Ok(slot) = controller.insert_head_node(kind) {
+            if let Ok(slot) = controller.insert_node(kind) {
                 node_slots.push(slot);
             }
         }
@@ -266,7 +266,7 @@ fn epoch_stress_slow_ack_does_not_crash() {
     let mut controller = TestKernel::new(config(8, 8));
     let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
 
-    controller.insert_head_node(1).unwrap();
+    controller.insert_node(1).unwrap();
     controller.publish();
 
     let running = Arc::new(AtomicBool::new(true));
@@ -307,7 +307,7 @@ fn epoch_stress_slow_ack_does_not_crash() {
 
         // Insert some nodes
         for j in 0..4 {
-            let _ = controller.insert_head_node((i * 10 + j) as i32);
+            let _ = controller.insert_node((i * 10 + j) as i32);
         }
 
         controller.publish();
@@ -338,7 +338,7 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
     // Create nodes with attributes
     let mut slots = Vec::new();
     for i in 0..8 {
-        let s = controller.insert_head_node(i).unwrap();
+        let s = controller.insert_node(i).unwrap();
         for offset in 0..16 {
             controller.get_node(s).attr_write(offset, 0);
         }
@@ -397,7 +397,7 @@ fn epoch_stress_concurrent_attribute_writes_with_processor() {
 fn epoch_stress_grows_accumulate_without_ack() {
     let mut controller = TestKernel::new(config(4, 4));
 
-    controller.insert_head_node(1).unwrap();
+    controller.insert_node(1).unwrap();
 
     // Grow 10 times rapidly WITHOUT any consumer thread acking
     // This tests that readers_pending_deletion accumulates safely
@@ -421,6 +421,6 @@ fn epoch_stress_grows_accumulate_without_ack() {
     controller.publish();
 
     // System should be fully functional
-    controller.insert_head_node(2).unwrap();
+    controller.insert_node(2).unwrap();
     assert_eq!(controller.get_head_node().unwrap().get_kind(), 2);
 }

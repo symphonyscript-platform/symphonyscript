@@ -63,7 +63,7 @@ const DEFAULT_CONFIG_BASE = {
  * The buffer is fully initialized with:
  * - Magic number and version
  * - Configuration values (PPQ, BPM, safe zone)
- * - Empty node chain (HEAD_PTR = NULL)
+ * - Empty node store (HEAD_PTR = NULL)
  * - Full free list (all nodes linked)
  * - Zeroed groove template region
  *

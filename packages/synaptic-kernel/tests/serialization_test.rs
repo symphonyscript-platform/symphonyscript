@@ -71,7 +71,7 @@ fn empty_kernel_serialized_config_matches() {
 #[test]
 fn single_node_survives_round_trip() {
     let mut kernel = TestKernel::new(config(16));
-    let slot = kernel.insert_head_node(42).unwrap();
+    let slot = kernel.insert_node(42).unwrap();
     kernel.publish();
 
     let serialized = kernel.serialize();
@@ -82,15 +82,15 @@ fn single_node_survives_round_trip() {
     assert_eq!(head.get_kind(), 42);
     // Previous API exposed `get_head_node_slot()` on the writer. The current
     // public surface only returns a `NodeHandle` via `get_head_node()`; slot
-    // identity is implicit. Preserving a single-node chain (node_count == 1
+    // identity is implicit. Preserving a single-node store (node_count == 1
     // + kind match) is equivalent for this assertion.
     let _ = slot;
 }
 
 #[test]
-fn node_chain_order_preserved() {
+fn node_store_order_preserved() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(10).unwrap();
+    let n1 = kernel.insert_node(10).unwrap();
     let n2 = kernel.insert_node_after(n1, 20).unwrap();
     let n3 = kernel.insert_node_after(n2, 30).unwrap();
 
@@ -117,8 +117,8 @@ fn node_chain_order_preserved() {
 #[test]
 fn head_pointer_preserved() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
-    let n2 = kernel.insert_head_node(2).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
+    let n2 = kernel.insert_node(2).unwrap();
 
     let serialized = kernel.serialize();
     let loaded = TestKernel::load_serialized(serialized);
@@ -127,7 +127,7 @@ fn head_pointer_preserved() {
     assert_eq!(head.get_kind(), 2);
     assert_eq!(head.get_next_ptr(), n1);
     // Head slot identity (== n2) is implied by: kind == 2 + next_ptr == n1 in a
-    // two-node chain. `get_head_node_slot()` is no longer exposed.
+    // two-node store. `get_head_node_slot()` is no longer exposed.
     let _ = n2;
 }
 
@@ -138,7 +138,7 @@ fn head_pointer_preserved() {
 #[test]
 fn synapse_connectivity_preserved() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
     let n2 = kernel.insert_node_after(n1, 2).unwrap();
     let n3 = kernel.insert_node_after(n2, 3).unwrap();
 
@@ -165,7 +165,7 @@ fn synapse_connectivity_preserved() {
 #[test]
 fn outgoing_synapse_chain_preserved() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
     let n2 = kernel.insert_node_after(n1, 2).unwrap();
     let n3 = kernel.insert_node_after(n2, 3).unwrap();
 
@@ -191,7 +191,7 @@ fn outgoing_synapse_chain_preserved() {
 #[test]
 fn incoming_synapse_chain_preserved() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
     let n2 = kernel.insert_node_after(n1, 2).unwrap();
     let n3 = kernel.insert_node_after(n2, 3).unwrap();
 
@@ -219,7 +219,7 @@ fn incoming_synapse_chain_preserved() {
 #[test]
 fn node_attributes_preserved() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
 
     for offset in 0..NODE_ATTR {
         kernel.get_node(n1).attr_write(offset, (offset as i32) * 100 + 7);
@@ -241,7 +241,7 @@ fn node_attributes_preserved() {
 #[test]
 fn synapse_attributes_preserved() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
     let n2 = kernel.insert_node_after(n1, 2).unwrap();
     let s1 = kernel.connect(n1, n2, 5).unwrap();
 
@@ -265,7 +265,7 @@ fn synapse_attributes_preserved() {
 #[test]
 fn negative_and_extreme_attribute_values_preserved() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
 
     kernel.get_node(n1).attr_write(0, i32::MIN);
     kernel.get_node(n1).attr_write(1, i32::MAX);
@@ -303,7 +303,7 @@ fn mem_metadata_preserved() {
 #[test]
 fn node_meta_preserved() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
 
     for i in 0..NODE_META {
         kernel.get_node(n1).attr_write(i, (i as i32) * 11);
@@ -325,7 +325,7 @@ fn node_meta_preserved() {
 #[test]
 fn synapse_meta_preserved() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
     let n2 = kernel.insert_node_after(n1, 2).unwrap();
     let s1 = kernel.connect(n1, n2, 5).unwrap();
 
@@ -353,9 +353,9 @@ fn synapse_meta_preserved() {
 #[test]
 fn node_count_preserved() {
     let mut kernel = TestKernel::new(config(16));
-    kernel.insert_head_node(1).unwrap();
-    kernel.insert_head_node(2).unwrap();
-    kernel.insert_head_node(3).unwrap();
+    kernel.insert_node(1).unwrap();
+    kernel.insert_node(2).unwrap();
+    kernel.insert_node(3).unwrap();
 
     let serialized = kernel.serialize();
     let loaded = TestKernel::load_serialized(serialized);
@@ -367,7 +367,7 @@ fn node_count_preserved() {
 #[test]
 fn synapse_count_preserved() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
     let n2 = kernel.insert_node_after(n1, 2).unwrap();
     kernel.connect(n1, n2, 1).unwrap();
     kernel.connect(n2, n1, 2).unwrap();
@@ -381,33 +381,33 @@ fn synapse_count_preserved() {
 #[test]
 fn free_slots_allocatable_after_load() {
     let mut kernel = TestKernel::new(config(4));
-    kernel.insert_head_node(1).unwrap();
-    kernel.insert_head_node(2).unwrap();
+    kernel.insert_node(1).unwrap();
+    kernel.insert_node(2).unwrap();
 
     let serialized = kernel.serialize();
     let loaded = TestKernel::load_serialized(serialized);
 
     assert_eq!(loaded.node_count(), 2);
-    loaded.insert_head_node(3).unwrap();
-    loaded.insert_head_node(4).unwrap();
+    loaded.insert_node(3).unwrap();
+    loaded.insert_node(4).unwrap();
     assert_eq!(loaded.node_count(), 4);
 
-    assert!(loaded.insert_head_node(5).is_err());
+    assert!(loaded.insert_node(5).is_err());
 }
 
 #[test]
 fn capacity_at_limit_round_trips() {
     let mut kernel = TestKernel::new(config(4));
-    kernel.insert_head_node(1).unwrap();
-    kernel.insert_head_node(2).unwrap();
-    kernel.insert_head_node(3).unwrap();
-    kernel.insert_head_node(4).unwrap();
+    kernel.insert_node(1).unwrap();
+    kernel.insert_node(2).unwrap();
+    kernel.insert_node(3).unwrap();
+    kernel.insert_node(4).unwrap();
 
     let serialized = kernel.serialize();
     let loaded = TestKernel::load_serialized(serialized);
 
     assert_eq!(loaded.node_count(), 4);
-    assert!(loaded.insert_head_node(5).is_err());
+    assert!(loaded.insert_node(5).is_err());
 }
 
 // =========================================================
@@ -417,10 +417,10 @@ fn capacity_at_limit_round_trips() {
 #[test]
 fn deferred_frees_flushed_before_serialize() {
     let mut kernel = TestKernel::new(config(4));
-    let n1 = kernel.insert_head_node(1).unwrap();
-    let n2 = kernel.insert_head_node(2).unwrap();
-    kernel.insert_head_node(3).unwrap();
-    kernel.insert_head_node(4).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
+    let n2 = kernel.insert_node(2).unwrap();
+    kernel.insert_node(3).unwrap();
+    kernel.insert_node(4).unwrap();
 
     kernel.remove_node(n1).unwrap();
     kernel.remove_node(n2).unwrap();
@@ -430,8 +430,8 @@ fn deferred_frees_flushed_before_serialize() {
     let loaded = TestKernel::load_serialized(serialized);
 
     assert_eq!(loaded.node_count(), 2);
-    loaded.insert_head_node(5).unwrap();
-    loaded.insert_head_node(6).unwrap();
+    loaded.insert_node(5).unwrap();
+    loaded.insert_node(6).unwrap();
     assert_eq!(loaded.node_count(), 4);
 }
 
@@ -441,7 +441,7 @@ fn fragmented_free_list_survives_round_trip() {
 
     let mut slots = Vec::new();
     for i in 0..8 {
-        slots.push(kernel.insert_head_node(i).unwrap());
+        slots.push(kernel.insert_node(i).unwrap());
     }
 
     kernel.remove_node(slots[1]).unwrap();
@@ -459,16 +459,16 @@ fn fragmented_free_list_survives_round_trip() {
     assert_eq!(loaded.get_node(slots[6]).get_kind(), 6);
     assert_eq!(loaded.get_node(slots[7]).get_kind(), 7);
 
-    loaded.insert_head_node(100).unwrap();
-    loaded.insert_head_node(101).unwrap();
-    loaded.insert_head_node(102).unwrap();
+    loaded.insert_node(100).unwrap();
+    loaded.insert_node(101).unwrap();
+    loaded.insert_node(102).unwrap();
     assert_eq!(loaded.node_count(), 8);
 }
 
 #[test]
 fn disconnect_then_serialize_preserves_remaining_synapses() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
     let n2 = kernel.insert_node_after(n1, 2).unwrap();
     let n3 = kernel.insert_node_after(n2, 3).unwrap();
 
@@ -496,8 +496,8 @@ fn disconnect_then_serialize_preserves_remaining_synapses() {
 #[test]
 fn serialize_after_grow_uses_new_capacity() {
     let mut kernel = TestKernel::new(config(4));
-    kernel.insert_head_node(1).unwrap();
-    kernel.insert_head_node(2).unwrap();
+    kernel.insert_node(1).unwrap();
+    kernel.insert_node(2).unwrap();
 
     kernel.grow(config(16)).unwrap();
 
@@ -510,7 +510,7 @@ fn serialize_after_grow_uses_new_capacity() {
     assert_eq!(loaded.node_count(), 2);
 
     for i in 3..=16 {
-        loaded.insert_head_node(i as i32).unwrap();
+        loaded.insert_node(i as i32).unwrap();
     }
     assert_eq!(loaded.node_count(), 16);
 }
@@ -518,7 +518,7 @@ fn serialize_after_grow_uses_new_capacity() {
 #[test]
 fn topology_preserved_after_grow_and_serialize() {
     let mut kernel = TestKernel::new(config(4));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
     let n2 = kernel.insert_node_after(n1, 2).unwrap();
     let s1 = kernel.connect(n1, n2, 50).unwrap();
 
@@ -548,16 +548,16 @@ fn topology_preserved_after_grow_and_serialize() {
 #[test]
 fn multiple_grows_then_serialize() {
     let mut kernel = TestKernel::new(config(4));
-    kernel.insert_head_node(1).unwrap();
+    kernel.insert_node(1).unwrap();
 
     kernel.grow(config(8)).unwrap();
     kernel.publish();
 
-    kernel.insert_head_node(2).unwrap();
+    kernel.insert_node(2).unwrap();
     kernel.grow(config(16)).unwrap();
     kernel.publish();
 
-    kernel.insert_head_node(3).unwrap();
+    kernel.insert_node(3).unwrap();
     kernel.grow(config(32)).unwrap();
 
     let serialized = kernel.serialize();
@@ -577,7 +577,7 @@ fn multiple_grows_then_serialize() {
 #[test]
 fn asymmetric_config_round_trips() {
     let mut kernel = TestKernel::new(create_config(32, 8));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
     let n2 = kernel.insert_node_after(n1, 2).unwrap();
     kernel.connect(n1, n2, 5).unwrap();
 
@@ -597,7 +597,7 @@ fn asymmetric_config_round_trips() {
 #[test]
 fn loaded_kernel_supports_full_mutation_cycle() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
     let n2 = kernel.insert_node_after(n1, 2).unwrap();
     kernel.connect(n1, n2, 10).unwrap();
 
@@ -621,8 +621,8 @@ fn loaded_kernel_supports_full_mutation_cycle() {
 #[test]
 fn loaded_kernel_supports_grow() {
     let mut kernel = TestKernel::new(config(4));
-    kernel.insert_head_node(1).unwrap();
-    kernel.insert_head_node(2).unwrap();
+    kernel.insert_node(1).unwrap();
+    kernel.insert_node(2).unwrap();
 
     let serialized = kernel.serialize();
     let mut loaded = TestKernel::load_serialized(serialized);
@@ -632,7 +632,7 @@ fn loaded_kernel_supports_grow() {
     assert_eq!(loaded.node_count(), 2);
 
     for i in 3..=16 {
-        loaded.insert_head_node(i as i32).unwrap();
+        loaded.insert_node(i as i32).unwrap();
     }
     assert_eq!(loaded.node_count(), 16);
 }
@@ -640,20 +640,20 @@ fn loaded_kernel_supports_grow() {
 #[test]
 fn loaded_kernel_supports_remove_and_realloc() {
     let mut kernel = TestKernel::new(config(4));
-    let n1 = kernel.insert_head_node(1).unwrap();
-    kernel.insert_head_node(2).unwrap();
-    kernel.insert_head_node(3).unwrap();
-    kernel.insert_head_node(4).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
+    kernel.insert_node(2).unwrap();
+    kernel.insert_node(3).unwrap();
+    kernel.insert_node(4).unwrap();
 
     let serialized = kernel.serialize();
     let mut loaded = TestKernel::load_serialized(serialized);
 
-    assert!(loaded.insert_head_node(5).is_err());
+    assert!(loaded.insert_node(5).is_err());
 
     loaded.remove_node(n1).unwrap();
     flush_deferred(&mut loaded);
 
-    let n5 = loaded.insert_head_node(5).unwrap();
+    let n5 = loaded.insert_node(5).unwrap();
     assert_eq!(loaded.get_node(n5).get_kind(), 5);
 }
 
@@ -664,7 +664,7 @@ fn loaded_kernel_supports_remove_and_realloc() {
 #[test]
 fn double_serialize_preserves_semantic_content() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
     let n2 = kernel.insert_node_after(n1, 2).unwrap();
     kernel.connect(n1, n2, 10).unwrap();
     kernel.get_node(n1).attr_write(0, 999);
@@ -682,7 +682,7 @@ fn double_serialize_preserves_semantic_content() {
 #[test]
 fn serialize_load_serialize_preserves_semantic_content() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
     let n2 = kernel.insert_node_after(n1, 2).unwrap();
     let s1 = kernel.connect(n1, n2, 10).unwrap();
     kernel.get_node(n1).attr_write(0, 999);
@@ -714,7 +714,7 @@ fn serialize_load_serialize_preserves_semantic_content() {
 #[test]
 fn consumer_thread_sees_loaded_state_after_publish_swap() {
     let mut kernel = TestKernel::new(config(16));
-    let n1 = kernel.insert_head_node(1).unwrap();
+    let n1 = kernel.insert_node(1).unwrap();
     let n2 = kernel.insert_node_after(n1, 2).unwrap();
     kernel.connect(n1, n2, 10).unwrap();
     kernel.get_node(n1).attr_write(0, 42);
@@ -742,12 +742,12 @@ fn consumer_thread_sees_loaded_state_after_publish_swap() {
 #[test]
 fn mutations_after_load_visible_to_consumer_thread() {
     let mut kernel = TestKernel::new(config(16));
-    kernel.insert_head_node(1).unwrap();
+    kernel.insert_node(1).unwrap();
 
     let serialized = kernel.serialize();
     let mut loaded = TestKernel::load_serialized(serialized);
 
-    let n2 = loaded.insert_head_node(2).unwrap();
+    let n2 = loaded.insert_node(2).unwrap();
     loaded.get_node(n2).attr_write(0, 555);
     loaded.publish();
 

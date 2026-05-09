@@ -1,14 +1,15 @@
 use crate::primitives::entry_store_reader::EntryStoreReader;
 use crate::topology::network::synapse_reader::SynapseReader;
-use crate::topology::node::node_chain_reader::NodeChainReader;
 use crate::topology::node::node_reader::NodeReader;
+use crate::topology::node::node_store_reader::NodeStoreReader;
 
 /// Consumer-side mirror of the node and synapse topology.
 ///
 /// Provides read-only traversal across both chains. Callers walk the graph
-/// starting from the head node (`graph_head_node()`), follow `get_next_ptr()`
-/// through the node chain, and dereference `get_outgoing_synapse_head()` /
-/// `get_incoming_synapse_head()` on each node to walk its synapse lists.
+/// starting from the head pointers for desired nodes that they know are alive,
+/// follow `get_next_ptr()` through the node store,
+/// and dereference `get_outgoing_synapse_head()` / `get_incoming_synapse_head()`
+/// on each node to walk its synapse lists.
 ///
 /// # Threading
 /// Consumer thread only.
@@ -28,41 +29,41 @@ use crate::topology::node::node_reader::NodeReader;
 /// - Created exclusively via `NetworkWriter::to_reader()`.
 #[derive(Clone)]
 pub struct NetworkReader {
-    node_chain: NodeChainReader,
+    node_chain: NodeStoreReader,
     pub(crate) synapses: EntryStoreReader,
 }
 
 impl NetworkReader {
-    pub(crate) fn bind(node_chain: NodeChainReader, synapses: EntryStoreReader) -> Self {
+    pub(crate) fn bind(node_chain: NodeStoreReader, synapses: EntryStoreReader) -> Self {
         NetworkReader {
             node_chain,
             synapses,
         }
     }
 
+    #[inline]
     pub fn mem_end_offset(&self) -> usize {
         self.synapses.mem_end_offset()
     }
 
+    #[inline]
     pub fn tb_start_offset(&self) -> usize {
         self.node_chain.tb_start_offset()
     }
 
+    #[inline]
     pub fn tb_end_offset(&self) -> usize {
         self.synapses.tb_end_offset()
     }
 
+    #[inline]
     pub fn node_capacity(&self) -> usize {
         self.node_chain.capacity()
     }
 
+    #[inline]
     pub fn synapse_capacity(&self) -> usize {
         self.synapses.capacity()
-    }
-
-    #[inline]
-    pub fn get_head_node(&'_ self) -> Option<NodeReader<'_>> {
-        self.node_chain.get_head_node()
     }
 
     #[inline]

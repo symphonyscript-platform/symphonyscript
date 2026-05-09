@@ -11,7 +11,7 @@
 
 | Struct | What | Why |
 |---|---|---|
-| `StructuralFrame` | One frame of structural state: node chain, mod heads, synapse table. The `T` in `TripleBuffer<T>`. | The unit of atomic consistency. Writer builds a complete frame, swaps it, audio reads it whole. |
+| `StructuralFrame` | One frame of structural state: node store, mod heads, synapse table. The `T` in `TripleBuffer<T>`. | The unit of atomic consistency. Writer builds a complete frame, swaps it, audio reads it whole. |
 | `ChainNode` | Per-slot `{ next: i32, prev: i32 }`. Lives inside `StructuralFrame`. | Doubly-linked list traversal. Audio follows these pointers. 8 bytes, cache-friendly. |
 | `SynapseTable` | Fixed-capacity probe hash table inside `StructuralFrame`. Maps `(source, target)` → routing data. | Modulation/signal routing topology. Structural because changing a route mid-read corrupts traversal. |
 

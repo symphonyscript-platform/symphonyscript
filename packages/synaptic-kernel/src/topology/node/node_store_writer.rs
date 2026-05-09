@@ -2,16 +2,15 @@ use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::entry_store_writer::EntryStoreWriter;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
-use crate::topology::node::node_chain_config::NodeChainConfig;
-use crate::topology::node::node_chain_reader::NodeChainReader;
 use crate::topology::node::node_handle::NodeHandle;
+use crate::topology::node::node_store_config::NodeStoreConfig;
+use crate::topology::node::node_store_reader::NodeStoreReader;
 use crate::topology::node::node_writer::NodeWriter;
 
 /// Producer-side doubly-linked list of nodes.
 ///
 /// Owns an internal `EntryStoreWriter<...>` for slot allocation and per-slot storage
-/// (core + meta zones in TB, attributes on the MEM). Adds a single head-slot pointer at TB
-/// offset 0 and maintains `next_ptr` / `prev_ptr` inside each node's core zone to form the chain.
+/// (core + meta zones in TB, attributes on the MEM).
 ///
 /// # Threading
 /// Producer thread only.
@@ -28,8 +27,7 @@ use crate::topology::node::node_writer::NodeWriter;
 /// ```text
 /// Offset      Size            Field
 /// -------------------------------------
-/// 0           1               head_slot
-/// 1           C * (N + M)     nodes (core + meta pers slot)
+/// 0           C * (N + M)     nodes (core + meta pers slot)
 ///
 /// C = capacity
 /// N = NODE_STRIDE
@@ -40,8 +38,8 @@ use crate::topology::node::node_writer::NodeWriter;
 /// for the exact core field layout.
 ///
 /// # Scope
-/// This type manages only the node chain. `remove_node()` unlinks the node
-/// from the chain and defers its slot removal, but does NOT touch any synapses
+/// This type manages only the node store. `remove_node()` unlinks the node
+/// from the sub-chain and defers its slot removal, but does NOT touch any synapses
 /// that reference the removed node. If the graph has active synapses,
 /// use `NetworkWriter::remove_node()` instead - it cascades synapse cleanup before
 /// invoking this.
@@ -50,19 +48,17 @@ use crate::topology::node::node_writer::NodeWriter;
 /// - Slots are 1-based. 0 denotes "no slot" / "undefined".
 /// - Lifecycle safety: `remove_node()` marks the slot for deferred freeing, preventing
 ///   reallocation until the consumer has advanced past the pending `publish()`.
-/// - Use `to_reader()` to create the paired `NodeChainReader`.
+/// - Use `to_reader()` to create the paired `NodeStoreReader`.
 #[derive(Clone)]
-pub struct NodeChainWriter {
-    tb: TripleBufferWriter,
+pub struct NodeStoreWriter {
     pub(crate) nodes: EntryStoreWriter,
-    tb_head_offset: usize,
 }
 
-impl NodeChainWriter {
+impl NodeStoreWriter {
     pub fn new(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
-        config: NodeChainConfig,
+        config: NodeStoreConfig,
         mem_start_offset: usize,
         tb_start_offset: usize,
     ) -> Self {
@@ -72,7 +68,7 @@ impl NodeChainWriter {
     pub fn bind(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
-        config: NodeChainConfig,
+        config: NodeStoreConfig,
         mem_start_offset: usize,
         tb_start_offset: usize,
     ) -> Self {
@@ -82,83 +78,70 @@ impl NodeChainWriter {
     pub fn create(
         mem: AtomicBuffer,
         tb: TripleBufferWriter,
-        config: NodeChainConfig,
+        config: NodeStoreConfig,
         mem_start_offset: usize,
         tb_start_offset: usize,
         bind: bool,
     ) -> Self {
-        NodeChainWriter {
-            tb: tb.clone(),
+        NodeStoreWriter {
             nodes: EntryStoreWriter::create(
                 mem,
                 tb,
                 config.to_entry_store_config(),
                 mem_start_offset,
-                tb_start_offset + 1,
+                tb_start_offset,
                 bind,
             ),
-            tb_head_offset: tb_start_offset,
         }
     }
 
-    pub fn calculate_size_on_mem(config: &NodeChainConfig) -> usize {
+    #[inline]
+    pub fn calculate_size_on_mem(config: &NodeStoreConfig) -> usize {
         EntryStoreWriter::calculate_size_on_mem(&config.to_entry_store_config())
     }
 
-    pub fn calculate_size_on_tb(config: &NodeChainConfig) -> usize {
-        1 + EntryStoreWriter::calculate_size_on_tb(&config.to_entry_store_config())
+    #[inline]
+    pub fn calculate_size_on_tb(config: &NodeStoreConfig) -> usize {
+        EntryStoreWriter::calculate_size_on_tb(&config.to_entry_store_config())
     }
 
-    pub fn to_reader(&self) -> NodeChainReader {
-        NodeChainReader::bind(
-            self.tb.to_reader(),
-            self.nodes.to_reader(),
-            self.tb_head_offset,
-        )
+    pub fn to_reader(&self) -> NodeStoreReader {
+        NodeStoreReader::bind(self.nodes.to_reader())
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.nodes.len()
     }
 
+    #[inline]
     pub fn mem_start_offset(&self) -> usize {
         self.nodes.mem_start_offset()
     }
 
+    #[inline]
     pub fn mem_end_offset(&self) -> usize {
         self.nodes.mem_end_offset()
     }
 
+    #[inline]
     pub fn tb_start_offset(&self) -> usize {
-        self.tb_head_offset
+        self.nodes.tb_start_offset()
     }
 
+    #[inline]
     pub fn tb_end_offset(&self) -> usize {
         self.nodes.tb_end_offset()
     }
 
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.nodes.capacity()
     }
 
+    #[inline]
     pub fn utilization(&self) -> f32 {
         self.nodes.utilization()
-    }
-
-    #[inline]
-    pub fn get_head_slot(&self) -> usize {
-        self.tb.read(self.tb_head_offset) as usize
-    }
-
-    #[inline]
-    pub fn get_head_node(&'_ self) -> Option<NodeWriter<'_>> {
-        let head_slot = self.get_head_slot();
-
-        if head_slot == 0 {
-            return None;
-        }
-
-        Some(self.get_node(head_slot))
     }
 
     #[inline]
@@ -167,39 +150,12 @@ impl NodeChainWriter {
     }
 
     #[inline]
-    pub fn get_head_node_handle(&'_ self) -> Option<NodeHandle<'_>> {
-        let head_slot = self.get_head_slot();
-
-        if head_slot == 0 {
-            return None;
-        }
-
-        Some(self.get_node_handle(head_slot))
-    }
-
-    #[inline]
     pub fn get_node_handle(&'_ self, slot: usize) -> NodeHandle<'_> {
         NodeHandle::new(self.nodes.get_handle(slot))
     }
 
-    pub fn insert_head_node(&self, kind: i32) -> Option<usize> {
-        let current_head_slot = self.tb.read(self.tb_head_offset);
-        let result = self.insert_orphaned_node(kind, current_head_slot as usize, 0);
-
-        if result.is_none() {
-            return None;
-        }
-
-        let new_slot = result.unwrap();
-
-        if current_head_slot != 0 {
-            self.get_node(current_head_slot as usize)
-                .set_prev_ptr(new_slot);
-        }
-
-        self.tb.write(self.tb_head_offset, new_slot as i32);
-
-        Some(new_slot)
+    pub fn insert_node(&self, kind: i32) -> Option<usize> {
+        self.insert_orphaned_node(kind, 0, 0)
     }
 
     pub fn insert_node_after(&self, prev_slot: usize, kind: i32) -> Option<usize> {
@@ -237,8 +193,6 @@ impl NodeChainWriter {
 
         if next_prev_slot != 0 {
             self.get_node(next_prev_slot).set_next_ptr(new_slot);
-        } else {
-            self.tb.write(self.tb_head_offset, new_slot as i32);
         }
 
         Some(new_slot)
@@ -253,8 +207,6 @@ impl NodeChainWriter {
 
         if prev_slot != 0 {
             self.get_node(prev_slot).set_next_ptr(next_slot);
-        } else {
-            self.tb.write(self.tb_head_offset, next_slot as i32)
         }
 
         if next_slot != 0 {
@@ -271,13 +223,11 @@ impl NodeChainWriter {
     pub fn copy_from(&self, source: &Self) {
         debug_assert!(
             source.capacity() <= self.capacity(),
-            "NodeChainWriter.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
+            "NodeStoreWriter.copy_from | source.capacity {} cannot be greater than destination.capacity {}",
             source.capacity(),
             self.capacity(),
         );
 
-        self.tb
-            .copy_region_from(&source.tb, source.tb_head_offset, self.tb_head_offset, 1);
         self.nodes.copy_from(&source.nodes);
     }
 

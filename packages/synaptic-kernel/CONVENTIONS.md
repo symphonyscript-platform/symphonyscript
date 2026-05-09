@@ -101,6 +101,27 @@ Structural setters on `NodeWriter` / `SynapseWriter` (`set_next_ptr`, `set_outgo
 `pub(crate)`. Only the kernel mutates structural pointers — external mutation would break the cascade and link-list
 invariants. User-domain setters (`set_meta`, `attr_*`) are `pub`. Preserve this split when adding new entity facades.
 
+## Topology — what the kernel does and does not own
+
+Working anywhere under `topology/`? Read this first.
+
+- The kernel owns *primitives*: node slots, synapse slots, chain links (`next_ptr` / `prev_ptr`), synapse adjacency
+  (`outgoing_*` / `incoming_*` heads/tails). It does **not** own *shapes*: there is no kernel concept of root, head,
+  clip, group, component, or entry point. Sub-chains and synaptic components are emergent from the link structure.
+- Two asymmetric organizing structures over the same node pool:
+  - **Chain links** are acyclic by construction. The only mutators are `insert_node`, `insert_node_after`,
+    `insert_node_before`, `remove_node`, and `remove_chain`. Direct setters are `pub(crate)` so users can't introduce
+    cycles by hand.
+  - **Synapse graph** is arbitrary. Cycles, multi-edges, and self-loops are all permitted. The kernel never checks.
+- When adding to `NetworkWriter` / `NodeStoreWriter`: do not introduce a kernel-level "head registry," "root pointer,"
+  or any structure that names a user-domain concept. If you find yourself typing `clip` or `root` in kernel code,
+  stop. Push it to the consumer.
+- `remove_node` cascades incident synapses; `remove_chain(head_slot)` is its sub-chain analogue, walking `next_ptr`
+  from the given head and removing each. Both belong on `NetworkWriter`, not `NodeStoreWriter` — the cascade requires
+  combined node+synapse access.
+- The user-side entry point (e.g. SymphonyScript's "root clip") lives outside the kernel. Conventionally stored in
+  `mem_metadata`. The consumer reads it there and calls `EpochMirror::get_node(slot)` to enter.
+
 ## Bit-packing
 
 Node and synapse `kind` occupies the top 8 bits of `core[0]`; the lower 24 bits are reserved for internal flags. Range
@@ -154,7 +175,7 @@ change this type, every primitive has to be touched — that's why it hasn't hap
 When changing the shape of any of these, expect to touch the corresponding writer + reader + handle/view + their
 registries. Skipping the reader side or the registry side is the most common partial-update bug.
 
-- Node:    `node_writer.rs`, `node_reader.rs`, `node_handle.rs`, `node_chain_writer.rs`, `node_chain_reader.rs`
+- Node:    `node_writer.rs`, `node_reader.rs`, `node_handle.rs`, `node_store_writer.rs`, `node_store_reader.rs`
 - Synapse: `synapse_writer.rs`, `synapse_reader.rs`, `synapse_handle.rs`
 - Entry:   `entry_writer.rs`, `entry_reader.rs`, `entry_handle.rs`, `entry_store_*.rs`, `entry_store_*_registry.rs`
 - TB:      `triple_buffer_writer.rs`, `triple_buffer_reader.rs`, `triple_buffer_*_registry.rs`, plus `tb_writer.rs` /
