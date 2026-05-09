@@ -32,9 +32,11 @@ fn setup() -> (TestKernel, &'static TestMirror) {
     (kernel, reader)
 }
 
-fn insert_node_with_tick(kernel: &TestKernel, kind: i32, tick: i32) -> usize {
+fn insert_head_with_tick(kernel: &TestKernel, kind: i32, tick: i32) -> usize {
     let slot = kernel.insert_node(kind).unwrap();
-    // Tick on TB meta plane; structural kind from insert_node.
+    // Tick is stored on the TB (meta) plane so the publish/swap boundary
+    // is what makes it visible to the reader. `kind` goes via
+    // `insert_head_node` (structural), `tick` via `set_meta` (meta zone).
     kernel.get_node(slot).set_meta(0, tick);
     slot
 }
@@ -42,24 +44,21 @@ fn insert_node_with_tick(kernel: &TestKernel, kind: i32, tick: i32) -> usize {
 // ============ Construction ============
 
 #[test]
-fn reader_bind_sees_empty_store_on_producer() {
-    let (kernel, _reader) = setup();
-    assert_eq!(kernel.node_count(), 0);
+fn reader_bind_creates_empty_chain() {
+    let (_kernel, reader) = setup();
+    assert!(reader.get_head_node().is_none());
 }
 
 // ============ Reader sees nothing before publish/swap ============
 
 #[test]
 fn reader_does_not_see_unpublished_nodes() {
-    let (kernel, reader) = setup();
+    let (mut kernel, reader) = setup();
 
-    let slot = kernel.insert_node(1).unwrap();
+    kernel.insert_node(1).unwrap();
 
-    // no publish, no swap — structural TB not visible on reader buffer
-    // removed: consumer-side "no head" check; kernel no longer
-    // exposes a global head, and consumer entry is now via
-    // user-supplied slot (see ADDENDUM ADDITION 1).
-    let _ = (reader, slot);
+    // no publish, no swap
+    assert!(reader.get_head_node().is_none());
 }
 
 // ============ Reader sees nodes after publish + swap ============
@@ -68,10 +67,11 @@ fn reader_does_not_see_unpublished_nodes() {
 fn reader_sees_nodes_after_publish_swap() {
     let (mut kernel, reader) = setup();
 
-    let slot = insert_node_with_tick(&kernel, 5, 999);
+    let slot = insert_head_with_tick(&kernel, 5, 999);
 
     // Before publish+swap: TB (meta) plane has not shifted into the reader's
     // active buffer, so the freshly-written meta MUST NOT be visible yet.
+    // This is the whole contract of the triple-buffer publish boundary.
     assert_ne!(
         reader.get_node(slot).get_meta(0),
         999,
@@ -81,26 +81,25 @@ fn reader_sees_nodes_after_publish_swap() {
     kernel.publish();
     reader.swap();
 
-    let n = reader.get_node(slot);
-    assert_eq!(n.get_kind(), 5);
-    assert_eq!(n.get_meta(0), 999);
+    let head = reader.get_head_node().unwrap();
+    assert_eq!(head.get_kind(), 5);
+    // After publish+swap: the TB snapshot now exposes the meta write.
+    assert_eq!(head.get_meta(0), 999);
 }
 
 #[test]
 fn reader_traverses_full_chain() {
     let (mut kernel, reader) = setup();
 
-    let a = insert_node_with_tick(&kernel, 1, 10);
-    let b = kernel.insert_node_before(a, 2).unwrap();
-    kernel.get_node(b).set_meta(0, 20);
-    let c = kernel.insert_node_before(b, 3).unwrap();
-    kernel.get_node(c).set_meta(0, 30);
+    let _a = insert_head_with_tick(&kernel, 1, 10);
+    let _b = insert_head_with_tick(&kernel, 2, 20);
+    let _c = insert_head_with_tick(&kernel, 3, 30);
     // chain: c -> b -> a
 
     kernel.publish();
     reader.swap();
 
-    let head = reader.get_node(c);
+    let head = reader.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 3);
 
     let n_b = reader.get_node(head.get_next_ptr());
@@ -117,8 +116,8 @@ fn reader_traverses_full_chain() {
 fn reader_sees_removal_after_publish_swap() {
     let (mut kernel, reader) = setup();
 
-    let a = kernel.insert_node(1).unwrap();
-    let b = kernel.insert_node_before(a, 2).unwrap();
+    let _a = kernel.insert_node(1).unwrap();
+    let b = kernel.insert_node(2).unwrap();
     // chain: b -> a
 
     kernel.remove_node(b).unwrap();
@@ -127,9 +126,9 @@ fn reader_sees_removal_after_publish_swap() {
     kernel.publish();
     reader.swap();
 
-    let n = reader.get_node(a);
-    assert_eq!(n.get_kind(), 1);
-    assert_eq!(n.get_next_ptr(), 0);
+    let head = reader.get_head_node().unwrap();
+    assert_eq!(head.get_kind(), 1);
+    assert_eq!(head.get_next_ptr(), 0);
 }
 
 // ============ Reader snapshot isolation ============
@@ -139,7 +138,7 @@ fn reader_retains_old_snapshot_without_swap() {
     let (mut kernel, reader) = setup();
 
     // cycle 1
-    let a = kernel.insert_node(1).unwrap();
+    let _a = kernel.insert_node(1).unwrap();
     kernel.publish();
     reader.swap();
 
@@ -148,9 +147,9 @@ fn reader_retains_old_snapshot_without_swap() {
     kernel.publish();
 
     // reader still sees cycle 1 snapshot
-    let n = reader.get_node(a);
-    assert_eq!(n.get_kind(), 1);
-    assert_eq!(n.get_next_ptr(), 0);
+    let head = reader.get_head_node().unwrap();
+    assert_eq!(head.get_kind(), 1);
+    assert_eq!(head.get_next_ptr(), 0);
 }
 
 #[test]
@@ -158,16 +157,16 @@ fn reader_sees_updated_snapshot_after_swap() {
     let (mut kernel, reader) = setup();
 
     // cycle 1
-    let s1 = kernel.insert_node(1).unwrap();
+    kernel.insert_node(1).unwrap();
     kernel.publish();
     reader.swap();
-    assert_eq!(reader.get_node(s1).get_kind(), 1);
+    assert_eq!(reader.get_head_node().unwrap().get_kind(), 1);
 
     // cycle 2
-    let s2 = kernel.insert_node(2).unwrap();
+    kernel.insert_node(2).unwrap();
     kernel.publish();
     reader.swap();
-    assert_eq!(reader.get_node(s2).get_kind(), 2);
+    assert_eq!(reader.get_head_node().unwrap().get_kind(), 2);
 }
 
 // ============ Reader sees synapse data ============
@@ -205,9 +204,11 @@ fn reader_traverses_synapse_chain() {
     kernel.publish();
     reader.swap();
 
+    // find src's outgoing head via the node reader
     let src_node = reader.get_node(src);
     assert_eq!(src_node.get_outgoing_synapse_head(), s1);
 
+    // traverse: s1 -> s2 -> s3 -> 0
     let r1 = reader.get_synapse(s1);
     assert_eq!(r1.get_kind(), 10);
     assert_eq!(r1.get_outgoing_next_ptr(), s2);
@@ -249,12 +250,13 @@ fn reader_sees_disconnect_after_publish_swap() {
 
 #[test]
 fn reader_sees_node_attributes_immediately() {
-    let (kernel, reader) = setup();
+    let (mut kernel, reader) = setup();
 
     let slot = kernel.insert_node(1).unwrap();
 
-    kernel.get_node(slot).attr_write(0, 60);
-    kernel.get_node(slot).attr_write(1, 100);
+    // attributes are on shared plane — visible without publish
+    kernel.get_node(slot).attr_write(0, 60); // pitch
+    kernel.get_node(slot).attr_write(1, 100); // velocity
 
     assert_eq!(reader.get_node(slot).attr_read(0), 60);
     assert_eq!(reader.get_node(slot).attr_read(1), 100);
@@ -262,7 +264,7 @@ fn reader_sees_node_attributes_immediately() {
 
 #[test]
 fn reader_sees_bulk_node_attributes() {
-    let (kernel, reader) = setup();
+    let (mut kernel, reader) = setup();
 
     let slot = kernel.insert_node(1).unwrap();
 
@@ -287,7 +289,7 @@ fn reader_sees_bulk_node_attributes() {
 
 #[test]
 fn reader_sees_synapse_attributes_immediately() {
-    let (kernel, reader) = setup();
+    let (mut kernel, reader) = setup();
 
     let src = kernel.insert_node(1).unwrap();
     let tgt = kernel.insert_node(2).unwrap();
@@ -307,7 +309,7 @@ fn reader_sees_synapse_attributes_immediately() {
 
 #[test]
 fn reader_attributes_view_matches_individual_reads() {
-    let (kernel, reader) = setup();
+    let (mut kernel, reader) = setup();
 
     let slot = kernel.insert_node(1).unwrap();
     kernel.get_node(slot).attr_write(0, 42);
@@ -325,30 +327,35 @@ fn reader_attributes_view_matches_individual_reads() {
 fn multi_cycle_insert_remove_connect_disconnect() {
     let (mut kernel, reader) = setup();
 
-    let a = insert_node_with_tick(&kernel, 1, 100);
-    let b = insert_node_with_tick(&kernel, 2, 200);
+    // cycle 1: build graph A->B with synapse
+    let a = insert_head_with_tick(&kernel, 1, 100);
+    let b = insert_head_with_tick(&kernel, 2, 200);
     let s1 = kernel.connect(a, b, 10).unwrap();
-    kernel.get_node(a).attr_write(0, 60);
+    kernel.get_node(a).attr_write(0, 60); // pitch of A
     kernel.publish();
     reader.swap();
 
+    // verify cycle 1 snapshot
     assert_eq!(reader.get_node(a).get_kind(), 1);
     assert_eq!(reader.get_node(b).get_kind(), 2);
     assert_eq!(reader.get_synapse(s1).get_kind(), 10);
     assert_eq!(reader.get_node(a).attr_read(0), 60);
 
-    let c = insert_node_with_tick(&kernel, 3, 300);
+    // cycle 2: add C, connect B->C, disconnect A->B
+    let c = insert_head_with_tick(&kernel, 3, 300);
     let s2 = kernel.connect(b, c, 20).unwrap();
     kernel.disconnect_synapse(s1).unwrap();
     kernel.publish();
     reader.swap();
 
-    assert_eq!(reader.get_node(c).get_kind(), 3);
+    // verify cycle 2 snapshot
+    assert_eq!(reader.get_head_node().unwrap().get_kind(), 3);
     let b_node = reader.get_node(b);
     assert_eq!(b_node.get_outgoing_synapse_head(), s2);
     assert_eq!(reader.get_synapse(s2).get_source_ptr(), b);
     assert_eq!(reader.get_synapse(s2).get_target_ptr(), c);
 
+    // A's outgoing should be empty after disconnect
     assert_eq!(reader.get_node(a).get_outgoing_synapse_head(), 0);
 }
 
@@ -368,10 +375,10 @@ fn swap_returns_true_when_new_data() {
     assert!(reader.swap(), "publish happened");
 }
 
-// ============ Empty store after removing all ============
+// ============ Empty chain after removing all ============
 
 #[test]
-fn reader_sees_empty_store_after_removing_all() {
+fn reader_sees_empty_chain_after_removing_all() {
     let (mut kernel, reader) = setup();
 
     let a = kernel.insert_node(1).unwrap();
@@ -382,9 +389,8 @@ fn reader_sees_empty_store_after_removing_all() {
 
     kernel.publish();
     reader.swap();
-    kernel.publish();
 
-    assert_eq!(kernel.node_count(), 0);
+    assert!(reader.get_head_node().is_none());
 }
 
 // ============ Attribute mutation visible between publishes ============
@@ -397,8 +403,10 @@ fn attribute_mutation_visible_between_publishes() {
     kernel.publish();
     reader.swap();
 
+    // mutate attribute WITHOUT publishing
     kernel.get_node(slot).attr_write(0, 999);
 
+    // reader sees it immediately (shared plane, not triple-buffered)
     assert_eq!(reader.get_node(slot).attr_read(0), 999);
 }
 
@@ -414,11 +422,9 @@ fn swap_tb_only_affects_targeted_tb() {
     let (mut kernel, reader) = setup();
 
     kernel.get_user_tb(TripleBufferId(0)).write(0, 1234);
-    let slot = insert_node_with_tick(&kernel, 5, 999);
+    let slot = insert_head_with_tick(&kernel, 5, 999);
 
-    // removed: consumer-side "no head" check; kernel no longer
-    // exposes a global head, and consumer entry is now via
-    // user-supplied slot (see ADDENDUM ADDITION 1).
+    assert!(reader.get_head_node().is_none(), "topology not published yet");
 
     kernel.publish_tb(TripleBufferId(0));
     reader.swap_tb(TripleBufferId(0));
@@ -433,21 +439,18 @@ fn swap_tb_only_affects_targeted_tb() {
 
     kernel.publish();
     assert!(reader.swap());
-    assert_eq!(reader.get_node(slot).get_kind(), 5);
+    assert_eq!(reader.get_head_node().unwrap().get_kind(), 5);
     assert_eq!(reader.get_node(slot).get_meta(0), 999);
 }
 
 #[test]
 fn entry_store_attr_visible_without_swap() {
-    let (kernel, reader) = setup();
+    let (mut kernel, reader) = setup();
     let store = kernel.get_entry_store(EntryStoreId(0));
     let slot = store.insert().unwrap();
     store.get(slot).attr_write(0, 777);
     assert_eq!(
-        reader
-            .get_entry_store(EntryStoreId(0))
-            .get(slot)
-            .attr_read(0),
+        reader.get_entry_store(EntryStoreId(0)).get(slot).attr_read(0),
         777
     );
 }

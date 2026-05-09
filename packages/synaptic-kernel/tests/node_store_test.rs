@@ -10,10 +10,14 @@ const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    (0..size).map(|_| AtomicI32::new(0)).collect()
+    let mut vec = Vec::with_capacity(size);
+    for _ in 0..size {
+        vec.push(AtomicI32::new(0));
+    }
+    Arc::new(vec)
 }
 
-// Node TB: layout word at NODE_START_OFFSET, then interleaved core+meta per slot.
+// Node TB: head word at NODE_START_OFFSET, then interleaved core+meta per slot.
 const MEM_SIZE: usize = 16384;
 const TB_START: usize = 0;
 const TB_BUF_CAP: usize = 4096;
@@ -55,58 +59,72 @@ fn setup() -> TestHarness {
     }
 }
 
-fn insert_node_with_tick(chain: &NodeStoreWriter, kind: i32, tick: i32) -> usize {
+fn insert_head_with_tick(chain: &NodeStoreWriter, kind: i32, tick: i32) -> usize {
     let slot = chain.insert_node(kind).unwrap();
     chain.get_node(slot).set_meta(0, tick);
     slot
 }
 
+// ============ NodeStoreWriter: insert_head ============
+
 #[test]
-fn insert_node_creates_orphan_with_prev_and_next_zero() {
+fn insert_head_into_empty_chain() {
     let h = setup();
     let chain = h.chain;
 
-    assert_eq!(chain.len(), 0);
+    assert!(chain.get_head_node().is_none());
 
     let slot = chain.insert_node(1).unwrap();
-    let n = chain.get_node(slot);
+    let head = chain.get_head_node().unwrap();
 
-    assert_eq!(n.get_kind(), 1);
-    assert_eq!(n.get_next_ptr(), 0);
-    assert_eq!(n.get_prev_ptr(), 0);
+    assert_eq!(head.get_kind(), 1);
+    assert_eq!(head.get_next_ptr(), 0, "single node: next = null");
+    assert_eq!(head.get_prev_ptr(), 0, "single node: prev = null");
     assert_eq!(slot, 1, "first alloc = slot 1");
 }
 
 #[test]
-fn two_insert_node_calls_produce_disjoint_orphans() {
+fn insert_head_pushes_existing_head() {
     let h = setup();
     let chain = h.chain;
 
     let a = chain.insert_node(1).unwrap();
     let b = chain.insert_node(2).unwrap();
 
-    assert_eq!(chain.get_node(a).get_prev_ptr(), 0);
-    assert_eq!(chain.get_node(a).get_next_ptr(), 0);
-    assert_eq!(chain.get_node(b).get_prev_ptr(), 0);
-    assert_eq!(chain.get_node(b).get_next_ptr(), 0);
+    // chain: b -> a
+    let head = chain.get_head_node().unwrap();
+    assert_eq!(head.get_kind(), 2, "head is b");
+
+    let node_b = chain.get_node(b);
+    assert_eq!(node_b.get_next_ptr(), a);
+    assert_eq!(node_b.get_prev_ptr(), 0, "head has no prev");
+
+    let node_a = chain.get_node(a);
+    assert_eq!(node_a.get_prev_ptr(), b);
+    assert_eq!(node_a.get_next_ptr(), 0, "tail has no next");
 }
 
 #[test]
-fn extending_one_subchain_does_not_affect_other() {
+fn insert_head_three_nodes_links_correct() {
     let h = setup();
     let chain = h.chain;
 
-    let a = chain.insert_node(1).unwrap();
-    let b = chain.insert_node(2).unwrap();
-    let c = chain.insert_node_after(a, 3).unwrap();
+    let a = insert_head_with_tick(&chain, 1, 10);
+    let b = insert_head_with_tick(&chain, 2, 20);
+    let c = insert_head_with_tick(&chain, 3, 30);
 
-    assert_eq!(chain.get_node(a).get_next_ptr(), c);
-    assert_eq!(chain.get_node(c).get_prev_ptr(), a);
-    assert_eq!(chain.get_node(b).get_prev_ptr(), 0);
-    assert_eq!(chain.get_node(b).get_next_ptr(), 0);
+    // chain: c -> b -> a
+    assert_eq!(chain.get_node(c).get_prev_ptr(), 0);
+    assert_eq!(chain.get_node(c).get_next_ptr(), b);
+
+    assert_eq!(chain.get_node(b).get_prev_ptr(), c);
+    assert_eq!(chain.get_node(b).get_next_ptr(), a);
+
+    assert_eq!(chain.get_node(a).get_prev_ptr(), b);
+    assert_eq!(chain.get_node(a).get_next_ptr(), 0);
 }
 
-// ============ NodeStoreWriter: insert ============
+// ============ NodeStoreWriter: insert_after ============
 
 #[test]
 fn insert_after_tail() {
@@ -143,13 +161,15 @@ fn insert_after_middle() {
 // ============ NodeStoreWriter: insert_before ============
 
 #[test]
-fn insert_before_first_node_makes_new_subchain_head() {
+fn insert_before_head_updates_chain_head() {
     let h = setup();
     let chain = h.chain;
 
     let a = chain.insert_node(1).unwrap();
     let b = chain.insert_node_before(a, 2).unwrap();
 
+    // insert_before on head must update head pointer to new node
+    assert_eq!(chain.get_head_slot(), b);
     assert_eq!(chain.get_node(b).get_next_ptr(), a);
     assert_eq!(chain.get_node(a).get_prev_ptr(), b);
     assert_eq!(chain.get_node(b).get_prev_ptr(), 0);
@@ -172,56 +192,35 @@ fn insert_before_middle_node() {
     assert_eq!(chain.get_node(c).get_prev_ptr(), b);
 }
 
-#[test]
-fn build_chain_of_three_via_insert_before() {
-    let h = setup();
-    let chain = h.chain;
-
-    let a = insert_node_with_tick(&chain, 1, 10);
-    let b = chain.insert_node_before(a, 2).unwrap();
-    chain.get_node(b).set_meta(0, 20);
-    let c = chain.insert_node_before(b, 3).unwrap();
-    chain.get_node(c).set_meta(0, 30);
-
-    // chain: c -> b -> a
-    assert_eq!(chain.get_node(c).get_prev_ptr(), 0);
-    assert_eq!(chain.get_node(c).get_next_ptr(), b);
-
-    assert_eq!(chain.get_node(b).get_prev_ptr(), c);
-    assert_eq!(chain.get_node(b).get_next_ptr(), a);
-
-    assert_eq!(chain.get_node(a).get_prev_ptr(), b);
-    assert_eq!(chain.get_node(a).get_next_ptr(), 0);
-}
-
 // ============ NodeStoreWriter: remove ============
 
 #[test]
-fn remove_only_node_empties_store() {
+fn remove_only_node_empties_chain() {
     let h = setup();
     let chain = h.chain;
 
     let a = chain.insert_node(1).unwrap();
     chain.remove_node(a).unwrap();
 
-    assert_eq!(chain.len(), 0);
+    assert!(chain.get_head_node().is_none(), "chain must be empty");
 }
 
 #[test]
-fn remove_subchain_head_promotes_next() {
+fn remove_head_promotes_next() {
     let h = setup();
     let chain = h.chain;
 
-    let tail = chain.insert_node(1).unwrap();
-    let head = chain.insert_node_before(tail, 2).unwrap();
-    // chain: head(kind 2) -> tail(kind 1)
+    let _a = chain.insert_node(1).unwrap();
+    let b = chain.insert_node(2).unwrap();
+    // chain: b -> a
 
-    chain.remove_node(head).unwrap();
+    chain.remove_node(b).unwrap();
+    // chain: a
 
-    let n = chain.get_node(tail);
-    assert_eq!(n.get_kind(), 1);
-    assert_eq!(n.get_prev_ptr(), 0);
-    assert_eq!(n.get_next_ptr(), 0);
+    let head = chain.get_head_node().unwrap();
+    assert_eq!(head.get_kind(), 1);
+    assert_eq!(head.get_prev_ptr(), 0);
+    assert_eq!(head.get_next_ptr(), 0);
 }
 
 #[test]
@@ -229,15 +228,16 @@ fn remove_tail_patches_prev() {
     let h = setup();
     let chain = h.chain;
 
-    let head = chain.insert_node(1).unwrap();
-    let tail = chain.insert_node_after(head, 2).unwrap();
-    // chain: head -> tail
+    let a = chain.insert_node(1).unwrap();
+    let b = chain.insert_node(2).unwrap();
+    // chain: b -> a
 
-    chain.remove_node(tail).unwrap();
+    chain.remove_node(a).unwrap();
+    // chain: b
 
-    let node_head = chain.get_node(head);
-    assert_eq!(node_head.get_next_ptr(), 0, "head is now tail");
-    assert_eq!(node_head.get_prev_ptr(), 0);
+    let node_b = chain.get_node(b);
+    assert_eq!(node_b.get_next_ptr(), 0, "b is now tail");
+    assert_eq!(node_b.get_prev_ptr(), 0, "b is also head");
 }
 
 #[test]
@@ -246,8 +246,8 @@ fn remove_middle_heals_chain() {
     let chain = h.chain;
 
     let a = chain.insert_node(1).unwrap();
-    let b = chain.insert_node_before(a, 2).unwrap();
-    let c = chain.insert_node_before(b, 3).unwrap();
+    let b = chain.insert_node(2).unwrap();
+    let c = chain.insert_node(3).unwrap();
     // chain: c -> b -> a
 
     chain.remove_node(b).unwrap();
@@ -270,13 +270,14 @@ fn remove_all_then_reinsert() {
     chain.remove_node(b).unwrap();
     chain.remove_node(a).unwrap();
 
-    assert_eq!(chain.len(), 0);
+    assert!(chain.get_head_node().is_none());
 
-    let d = chain.insert_node(99).unwrap();
-    let n = chain.get_node(d);
-    assert_eq!(n.get_kind(), 99);
-    assert_eq!(n.get_next_ptr(), 0);
-    assert_eq!(n.get_prev_ptr(), 0);
+    // reinsert
+    let _d = chain.insert_node(99).unwrap();
+    let head = chain.get_head_node().unwrap();
+    assert_eq!(head.get_kind(), 99);
+    assert_eq!(head.get_next_ptr(), 0);
+    assert_eq!(head.get_prev_ptr(), 0);
 }
 
 #[test]
@@ -286,6 +287,7 @@ fn double_remove_returns_error() {
 
     let a = chain.insert_node(1).unwrap();
     chain.remove_node(a).unwrap();
+    /* commented err check */
 }
 
 // ============ NodeStoreReader: traversal after publish ============
@@ -294,15 +296,13 @@ fn double_remove_returns_error() {
 fn chain_reader_traverses_full_chain() {
     let h = setup();
 
-    let head_slot = {
+    let (_a, _b, _c) = {
         let chain = h.chain;
 
-        let a = insert_node_with_tick(&chain, 1, 10);
-        let b = chain.insert_node_before(a, 2).unwrap();
-        chain.get_node(b).set_meta(0, 20);
-        let c = chain.insert_node_before(b, 3).unwrap();
-        chain.get_node(c).set_meta(0, 30);
-        c
+        let a = insert_head_with_tick(&chain, 1, 10);
+        let b = insert_head_with_tick(&chain, 2, 20);
+        let c = insert_head_with_tick(&chain, 3, 30);
+        (a, b, c)
     };
     h.writer.publish();
     h.reader.swap();
@@ -310,7 +310,7 @@ fn chain_reader_traverses_full_chain() {
     let chain_r = h.chain_r;
 
     // chain: c -> b -> a
-    let head = chain_r.get_node(head_slot);
+    let head = chain_r.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 3);
     assert_eq!(head.get_meta(0), 30);
 
@@ -323,35 +323,35 @@ fn chain_reader_traverses_full_chain() {
 }
 
 #[test]
-fn chain_reader_sees_empty_store_after_publish() {
+fn chain_reader_empty_chain_returns_none() {
     let h = setup();
-    assert_eq!(h.chain.len(), 0);
     h.writer.publish();
     h.reader.swap();
 
-    assert_eq!(h.chain.len(), 0);
+    let chain_r = h.chain_r;
+
+    assert!(chain_r.get_head_node().is_none());
 }
 
 #[test]
 fn chain_reader_sees_removal_after_publish() {
     let h = setup();
 
-    let entry_slot = {
+    {
         let chain = h.chain;
 
-        let a = chain.insert_node(1).unwrap();
-        let b = chain.insert_node_before(a, 2).unwrap();
+        let _a = chain.insert_node(1).unwrap();
+        let b = chain.insert_node(2).unwrap();
         // chain: b -> a
         chain.remove_node(b).unwrap();
         // chain: a
-        a
     };
     h.writer.publish();
     h.reader.swap();
 
     let chain_r = h.chain_r;
 
-    let head = chain_r.get_node(entry_slot);
+    let head = chain_r.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 1);
     assert_eq!(head.get_next_ptr(), 0, "only one node left");
 }
@@ -359,14 +359,17 @@ fn chain_reader_sees_removal_after_publish() {
 // ============ Capacity exhaustion ============
 
 #[test]
-fn insert_orphan_exhausts_capacity() {
+fn insert_head_exhausts_capacity() {
     let h = setup();
     let chain = h.chain;
 
     for i in 0..CAPACITY {
         assert!(chain.insert_node(i as i32).is_some());
     }
-    assert!(chain.insert_node(99).is_none(), "capacity exhausted");
+    assert!(
+        chain.insert_node(99).is_none(),
+        "capacity exhausted"
+    );
 }
 
 // ============ Pointer stability across operations ============
@@ -402,16 +405,14 @@ fn four_node_store_traversal_forward_and_backward() {
     let h = setup();
     let chain = h.chain;
 
-    let a = insert_node_with_tick(&chain, 1, 10);
-    let b = chain.insert_node_before(a, 2).unwrap();
-    chain.get_node(b).set_meta(0, 20);
-    let c = chain.insert_node_before(b, 3).unwrap();
-    chain.get_node(c).set_meta(0, 30);
-    let d = chain.insert_node_before(c, 4).unwrap();
-    chain.get_node(d).set_meta(0, 40);
+    // build chain via insert_head: d(head) -> c -> b -> a(tail)
+    let a = insert_head_with_tick(&chain, 1, 10);
+    let b = insert_head_with_tick(&chain, 2, 20);
+    let c = insert_head_with_tick(&chain, 3, 30);
+    let d = insert_head_with_tick(&chain, 4, 40);
 
     // forward: d -> c -> b -> a -> 0
-    let h0 = chain.get_node(d);
+    let h0 = chain.get_head_node().unwrap();
     assert_eq!(h0.get_kind(), 4);
     let n1 = chain.get_node(h0.get_next_ptr());
     assert_eq!(n1.get_kind(), 3);
@@ -425,7 +426,7 @@ fn four_node_store_traversal_forward_and_backward() {
     assert_eq!(chain.get_node(a).get_prev_ptr(), b);
     assert_eq!(chain.get_node(b).get_prev_ptr(), c);
     assert_eq!(chain.get_node(c).get_prev_ptr(), d);
-    assert_eq!(chain.get_node(d).get_prev_ptr(), 0, "start of sub-chain");
+    assert_eq!(chain.get_node(d).get_prev_ptr(), 0, "start of chain");
 }
 
 // ============ insert_after / insert_before exhaustion ============
@@ -494,9 +495,9 @@ fn remove_tail_first_then_middle_then_head() {
     let chain = h.chain;
 
     let a = chain.insert_node(1).unwrap();
-    let b = chain.insert_node_before(a, 2).unwrap();
-    let c = chain.insert_node_before(b, 3).unwrap();
-    let d = chain.insert_node_before(c, 4).unwrap();
+    let b = chain.insert_node(2).unwrap();
+    let c = chain.insert_node(3).unwrap();
+    let d = chain.insert_node(4).unwrap();
     // chain: d -> c -> b -> a
 
     // remove tail
@@ -513,10 +514,10 @@ fn remove_tail_first_then_middle_then_head() {
     // remove head
     chain.remove_node(d).unwrap();
     // chain: b
-    let nb = chain.get_node(b);
-    assert_eq!(nb.get_kind(), 2);
-    assert_eq!(nb.get_prev_ptr(), 0);
-    assert_eq!(nb.get_next_ptr(), 0);
+    let head = chain.get_head_node().unwrap();
+    assert_eq!(head.get_kind(), 2);
+    assert_eq!(head.get_prev_ptr(), 0);
+    assert_eq!(head.get_next_ptr(), 0);
 }
 
 #[test]
@@ -525,10 +526,10 @@ fn remove_arbitrary_order_on_five_node_chain() {
     let chain = h.chain;
 
     let a = chain.insert_node(1).unwrap();
-    let b = chain.insert_node_before(a, 2).unwrap();
-    let c = chain.insert_node_before(b, 3).unwrap();
-    let d = chain.insert_node_before(c, 4).unwrap();
-    let e = chain.insert_node_before(d, 5).unwrap();
+    let b = chain.insert_node(2).unwrap();
+    let c = chain.insert_node(3).unwrap();
+    let d = chain.insert_node(4).unwrap();
+    let e = chain.insert_node(5).unwrap();
     // chain: e -> d -> c -> b -> a
 
     // remove c (middle)
@@ -540,7 +541,8 @@ fn remove_arbitrary_order_on_five_node_chain() {
     // remove e (head)
     chain.remove_node(e).unwrap();
     // chain: d -> b -> a
-    assert_eq!(chain.get_node(d).get_kind(), 4);
+    let head = chain.get_head_node().unwrap();
+    assert_eq!(head.get_kind(), 4);
     assert_eq!(chain.get_node(d).get_prev_ptr(), 0);
 
     // remove a (tail)
@@ -551,14 +553,14 @@ fn remove_arbitrary_order_on_five_node_chain() {
     // remove d (head again)
     chain.remove_node(d).unwrap();
     // chain: b
-    let nb = chain.get_node(b);
-    assert_eq!(nb.get_kind(), 2);
-    assert_eq!(nb.get_prev_ptr(), 0);
-    assert_eq!(nb.get_next_ptr(), 0);
+    let head = chain.get_head_node().unwrap();
+    assert_eq!(head.get_kind(), 2);
+    assert_eq!(head.get_prev_ptr(), 0);
+    assert_eq!(head.get_next_ptr(), 0);
 
     // remove last
     chain.remove_node(b).unwrap();
-    assert_eq!(chain.len(), 0);
+    assert!(chain.get_head_node().is_none());
 }
 
 // ============ Remove then traverse via reader ============
@@ -567,29 +569,25 @@ fn remove_arbitrary_order_on_five_node_chain() {
 fn reader_traverses_chain_after_mid_chain_removal() {
     let h = setup();
 
-    let head_slot = {
+    {
         let chain = h.chain;
 
-        let a = insert_node_with_tick(&chain, 1, 10);
-        let b = chain.insert_node_before(a, 2).unwrap();
-        chain.get_node(b).set_meta(0, 20);
-        let c = chain.insert_node_before(b, 3).unwrap();
-        chain.get_node(c).set_meta(0, 30);
-        let d = chain.insert_node_before(c, 4).unwrap();
-        chain.get_node(d).set_meta(0, 40);
+        let _a = insert_head_with_tick(&chain, 1, 10);
+        let b = insert_head_with_tick(&chain, 2, 20);
+        let _c = insert_head_with_tick(&chain, 3, 30);
+        let _d = insert_head_with_tick(&chain, 4, 40);
         // chain: d -> c -> b -> a
 
         chain.remove_node(b).unwrap();
         // chain: d -> c -> a
-        d
-    };
+    }
     h.writer.publish();
     h.reader.swap();
 
     let chain_r = h.chain_r;
 
     // forward traversal: d -> c -> a -> 0
-    let head = chain_r.get_node(head_slot);
+    let head = chain_r.get_head_node().unwrap();
     assert_eq!(head.get_kind(), 4);
     assert_eq!(head.get_meta(0), 40);
 
@@ -607,12 +605,13 @@ fn reader_traverses_chain_after_mid_chain_removal() {
 fn copy_from_preserves_topology_and_deep_data() {
     let src_h = setup();
     let src = src_h.chain;
-
-    let a = insert_node_with_tick(&src, 1, 10);
-    let b = insert_node_with_tick(&src, 2, 20);
-
+    
+    let _a = insert_head_with_tick(&src, 1, 10);
+    let b = insert_head_with_tick(&src, 2, 20);
+    
+    
     src.remove_node(b).unwrap(); // b deferred
-
+    
     let dst_mem = create_mem(MEM_SIZE);
     let dst_tb = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
     let dst = NodeStoreWriter::new(
@@ -626,22 +625,23 @@ fn copy_from_preserves_topology_and_deep_data() {
         FL_START,
         NODE_START_OFFSET,
     );
-
+    
     dst.copy_from(&src);
-
+    
     assert_eq!(dst.len(), 2);
-    let node_a = dst.get_node(a);
-    assert_eq!(node_a.get_kind(), 1);
-    assert_eq!(node_a.get_meta(0), 10);
-    assert_eq!(node_a.get_next_ptr(), 0);
-
+    let head = dst.get_head_node().unwrap();
+    assert_eq!(head.get_kind(), 1);
+    assert_eq!(head.get_meta(0), 10);
+    assert_eq!(head.get_next_ptr(), 0);
+    
+    
     dst.publish();
-
+    
     // Simulate reader acknowledging the publish
     dst.to_reader().ack_generation();
-
+    
     dst.publish();
-
+    
     assert_eq!(dst.len(), 1);
     assert_eq!(dst.capacity(), CAPACITY * 2);
 }
@@ -662,7 +662,7 @@ fn copy_from_panics_if_source_larger() {
         FL_START,
         NODE_START_OFFSET,
     );
-
+    
     let dst_mem = create_mem(MEM_SIZE);
     let dst_tb = TripleBufferWriter::new(Arc::clone(&dst_mem), TB_START, TB_BUF_CAP);
     let dst = NodeStoreWriter::new(
@@ -676,6 +676,6 @@ fn copy_from_panics_if_source_larger() {
         FL_START,
         NODE_START_OFFSET,
     );
-
+    
     dst.copy_from(&src);
 }

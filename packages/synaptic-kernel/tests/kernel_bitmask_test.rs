@@ -106,12 +106,7 @@ fn uninvolved_node_data_survives_sibling_mutations() {
     assert_eq!(node.attr_read(0), 1000);
     assert_eq!(node.attr_read(15), -999);
     for offset in 1..15 {
-        assert_eq!(
-            node.attr_read(offset),
-            0,
-            "attr[{}] unexpectedly touched",
-            offset
-        );
+        assert_eq!(node.attr_read(offset), 0, "attr[{}] unexpectedly touched", offset);
     }
 }
 
@@ -124,14 +119,15 @@ fn consumer_sees_producer_values_after_publish_swap() {
     use synaptic_kernel::epoch_consumer::EpochConsumer;
 
     let mut kernel = TestKernel::new(config());
-    let mut consumer = EpochConsumer::<1, 1, 1>::new(kernel.get_control_plane());
+    let mut consumer =
+        EpochConsumer::<1, 1, 1>::new(kernel.get_control_plane());
 
     let slot = kernel.insert_node(12).unwrap();
     kernel.get_node(slot).attr_write(0, 99);
     kernel.publish();
 
     let mirror = consumer.acquire_mirror();
-    let node = mirror.get_node(slot);
-    assert_eq!(node.get_kind(), 12);
-    assert_eq!(node.attr_read(0), 99);
+    let head = mirror.get_head_node().expect("head visible after swap");
+    assert_eq!(head.get_kind(), 12);
+    assert_eq!(head.attr_read(0), 99);
 }

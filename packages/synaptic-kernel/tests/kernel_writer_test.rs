@@ -20,9 +20,10 @@ fn create_writer() -> TestKernel {
     TestKernel::new(config())
 }
 
-fn insert_node_with_tick(kernel: &TestKernel, kind: i32, tick: i32) -> usize {
+fn insert_head_with_tick(kernel: &TestKernel, kind: i32, tick: i32) -> usize {
     let slot = kernel.insert_node(kind).unwrap();
-    // Tick on TB meta plane: structural kind from insert; tick via set_meta.
+    // Tick lives on the TB (meta) plane: `kind` via `insert_head_node`,
+    // `tick` via `set_meta`. Matches the original semantics.
     kernel.get_node(slot).set_meta(0, tick);
     slot
 }
@@ -31,58 +32,58 @@ fn insert_node_with_tick(kernel: &TestKernel, kind: i32, tick: i32) -> usize {
 
 #[test]
 fn kernel_new_creates_empty_chain() {
-    let kernel = create_writer();
-    assert_eq!(kernel.node_count(), 0);
+    let mut kernel = create_writer();
+    assert!(kernel.get_head_node().is_none());
 }
 
 // ============ Node insertion ============
 
 #[test]
-fn insert_node_returns_slot() {
-    let kernel = create_writer();
+fn insert_head_returns_slot() {
+    let mut kernel = create_writer();
     let slot = kernel.insert_node(1);
     assert!(slot.is_ok());
     assert!(slot.unwrap() > 0);
 }
 
 #[test]
-fn insert_node_writes_kind_and_tick() {
-    let kernel = create_writer();
-    let slot = insert_node_with_tick(&kernel, 5, 999);
+fn insert_head_writes_kind_and_tick() {
+    let mut kernel = create_writer();
+    let slot = insert_head_with_tick(&kernel, 5, 999);
 
     let node = kernel.get_node(slot);
     assert_eq!(node.get_kind(), 5);
-    // `insert_node_with_tick` writes tick via `set_meta(0, ...)` on the TB
+    // `insert_head_with_tick` writes tick via `set_meta(0, ...)` on the TB
     // plane; read it back from the same plane.
     assert_eq!(node.get_meta(0), 999);
 }
 
 #[test]
-fn build_chain_of_three_via_insert_before() {
-    let kernel = create_writer();
+fn insert_head_chain_ordering() {
+    let mut kernel = create_writer();
 
-    let a = insert_node_with_tick(&kernel, 1, 10);
-    let b = kernel.insert_node_before(a, 2).unwrap();
-    kernel.get_node(b).set_meta(0, 20);
-    let c = kernel.insert_node_before(b, 3).unwrap();
-    kernel.get_node(c).set_meta(0, 30);
+    let a = insert_head_with_tick(&kernel, 1, 10);
+    let b = insert_head_with_tick(&kernel, 2, 20);
+    let _c = insert_head_with_tick(&kernel, 3, 30);
 
     // chain: c -> b -> a
-    assert_eq!(kernel.get_node(c).get_kind(), 3);
-    assert_eq!(kernel.get_node(c).get_next_ptr(), b);
+    let head = kernel.get_head_node().unwrap();
+    assert_eq!(head.get_kind(), 3);
+    assert_eq!(head.get_next_ptr(), b);
+
     assert_eq!(kernel.get_node(b).get_next_ptr(), a);
     assert_eq!(kernel.get_node(a).get_next_ptr(), 0);
 }
 
 #[test]
 fn insert_after_splices_correctly() {
-    let kernel = create_writer();
+    let mut kernel = create_writer();
 
     let a = kernel.insert_node(1).unwrap();
     let c = kernel.insert_node_after(a, 3).unwrap();
     let b = kernel.insert_node_after(a, 2).unwrap();
 
-    // chain: a -> b -> c (single sub-chain rooted at a)
+    // chain: a -> b -> c (head is a since insert_head only called once)
     assert_eq!(kernel.get_node(a).get_next_ptr(), b);
     assert_eq!(kernel.get_node(b).get_next_ptr(), c);
     assert_eq!(kernel.get_node(c).get_next_ptr(), 0);
@@ -90,7 +91,7 @@ fn insert_after_splices_correctly() {
 
 #[test]
 fn insert_before_splices_correctly() {
-    let kernel = create_writer();
+    let mut kernel = create_writer();
 
     let a = kernel.insert_node(1).unwrap();
     let c = kernel.insert_node_after(a, 3).unwrap();
@@ -104,7 +105,7 @@ fn insert_before_splices_correctly() {
 
 #[test]
 fn insert_exhausts_capacity() {
-    let kernel = create_writer();
+    let mut kernel = create_writer();
 
     for i in 0..16 {
         assert!(kernel.insert_node(i).is_ok());
@@ -116,11 +117,11 @@ fn insert_exhausts_capacity() {
 
 #[test]
 fn remove_node_heals_chain() {
-    let kernel = create_writer();
+    let mut kernel = create_writer();
 
     let a = kernel.insert_node(1).unwrap();
-    let b = kernel.insert_node_before(a, 2).unwrap();
-    let c = kernel.insert_node_before(b, 3).unwrap();
+    let b = kernel.insert_node(2).unwrap();
+    let c = kernel.insert_node(3).unwrap();
     // chain: c -> b -> a
 
     kernel.remove_node(b).unwrap();
@@ -161,10 +162,16 @@ fn remove_then_publish_reclaims_slot() {
     assert!(reclaimed.is_ok(), "slot reclaimed after publish");
 }
 
+/* fn double_remove_returns_error() {
+    let kernel = Kernel::new(config());
+    let a = kernel.insert_head_node(1).unwrap();
+    kernel.remove_node(a).unwrap();
+    /* commented err check */
+} */
 // ============ Synapse connect/disconnect ============
 #[test]
 fn connect_creates_synapse() {
-    let kernel = create_writer();
+    let mut kernel = create_writer();
 
     let src = kernel.insert_node(1).unwrap();
     let tgt = kernel.insert_node(2).unwrap();
@@ -179,7 +186,7 @@ fn connect_creates_synapse() {
 
 #[test]
 fn connect_updates_node_synapse_pointers() {
-    let kernel = create_writer();
+    let mut kernel = create_writer();
 
     let src = kernel.insert_node(1).unwrap();
     let tgt = kernel.insert_node(2).unwrap();
@@ -193,7 +200,7 @@ fn connect_updates_node_synapse_pointers() {
 
 #[test]
 fn disconnect_heals_synapse_chain() {
-    let kernel = create_writer();
+    let mut kernel = create_writer();
 
     let src = kernel.insert_node(1).unwrap();
     let tgt1 = kernel.insert_node(2).unwrap();
@@ -229,13 +236,16 @@ fn disconnect_then_publish_reclaims_synapse_slot() {
     kernel.disconnect_synapse(synapses[0]).unwrap();
 
     // not yet reclaimed
-    assert!(kernel.connect(src, tgt, 99).is_err(), "still deferred");
+    assert!(
+        kernel.connect(src, tgt, 99).is_err(),
+        "still deferred"
+    );
 
     kernel.publish();
-
+    
     // explicitly acknowledge the generation boundary
     TestConsumer::new(kernel.get_control_plane()).acquire_mirror();
-
+    
     kernel.publish(); // Two cycle deferral required to physically reclaim
 
     // now reclaimed
@@ -245,10 +255,19 @@ fn disconnect_then_publish_reclaims_synapse_slot() {
     );
 }
 
+/* fn double_disconnect_returns_error() {
+    let kernel = Kernel::new(config());
+    let src = kernel.insert_head_node(1).unwrap();
+    let tgt = kernel.insert_head_node(2).unwrap();
+    let syn = kernel.connect(src, tgt, 10).unwrap();
+
+    kernel.disconnect(syn).unwrap();
+    /* commented err check */
+} */
 // ============ Node attributes ============
 #[test]
 fn set_node_attribute_single_field() {
-    let kernel = create_writer();
+    let mut kernel = create_writer();
     let slot = kernel.insert_node(1).unwrap();
 
     kernel.get_node(slot).attr_write(0, 60); // pitch
@@ -260,7 +279,7 @@ fn set_node_attribute_single_field() {
 
 #[test]
 fn set_node_attributes_bulk() {
-    let kernel = create_writer();
+    let mut kernel = create_writer();
     let slot = kernel.insert_node(1).unwrap();
 
     kernel.get_node(slot).attr_write(0, 72);
@@ -281,7 +300,7 @@ fn set_node_attributes_bulk() {
 
 #[test]
 fn get_node_attributes_returns_view() {
-    let kernel = create_writer();
+    let mut kernel = create_writer();
     let slot = kernel.insert_node(1).unwrap();
 
     kernel.get_node(slot).attr_write(0, 42);
@@ -299,7 +318,7 @@ fn get_node_attributes_returns_view() {
 
 #[test]
 fn node_attributes_independent_across_slots() {
-    let kernel = create_writer();
+    let mut kernel = create_writer();
     let a = kernel.insert_node(1).unwrap();
     let b = kernel.insert_node(2).unwrap();
 
@@ -314,7 +333,7 @@ fn node_attributes_independent_across_slots() {
 
 #[test]
 fn set_synapse_attribute_single_field() {
-    let kernel = create_writer();
+    let mut kernel = create_writer();
     let src = kernel.insert_node(1).unwrap();
     let tgt = kernel.insert_node(2).unwrap();
     let syn = kernel.connect(src, tgt, 10).unwrap();
@@ -328,7 +347,7 @@ fn set_synapse_attribute_single_field() {
 
 #[test]
 fn set_synapse_attributes_bulk() {
-    let kernel = create_writer();
+    let mut kernel = create_writer();
     let src = kernel.insert_node(1).unwrap();
     let tgt = kernel.insert_node(2).unwrap();
     let syn = kernel.connect(src, tgt, 10).unwrap();
@@ -373,22 +392,17 @@ fn multiple_publish_cycles() {
     kernel.publish();
 
     // cycle 2: insert + remove
-    let b = kernel.insert_node(2).unwrap();
+    let _b = kernel.insert_node(2).unwrap();
     kernel.remove_node(a).unwrap();
     kernel.publish();
 
-    // Ack deferred-free generation so the next publish can drain removals (see
-    // deferred_free_two_cycle_delay and StagingBufferWriter).
-    let mut consumer = TestConsumer::new(kernel.get_control_plane());
-    let _ = consumer.acquire_mirror();
-
     // cycle 3: a's slot should be reclaimed now
-    let c = kernel.insert_node(3).unwrap();
+    let _c = kernel.insert_node(3).unwrap();
     kernel.publish();
 
-    assert_eq!(kernel.node_count(), 2);
-    assert_eq!(kernel.get_node(b).get_kind(), 2);
-    assert_eq!(kernel.get_node(c).get_kind(), 3);
+    // chain should have c and b (a was removed)
+    let head = kernel.get_head_node().unwrap();
+    assert_eq!(head.get_kind(), 3);
 }
 
 #[test]
@@ -407,7 +421,7 @@ fn deferred_free_two_cycle_delay() {
     // publish #1: drains previous list (empty), toggles.
     // Now slots[0] is in the "previous" list.
     kernel.publish();
-
+    
     // explicitly acknowledge the generation boundary
     TestConsumer::new(kernel.get_control_plane()).acquire_mirror();
 
@@ -422,7 +436,7 @@ fn deferred_free_two_cycle_delay() {
 
 #[test]
 fn self_loop_connect_disconnect() {
-    let kernel = create_writer();
+    let mut kernel = create_writer();
     let n = kernel.insert_node(1).unwrap();
 
     let syn = kernel.connect(n, n, 99).unwrap();

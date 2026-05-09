@@ -22,14 +22,8 @@ fn config() -> KernelConfig<1, 1, 1> {
 
 #[test]
 fn multi_threaded_topology_fuzzer() {
-    let mut writer = TestKernel::new(config());
-    // Pinned entry slot: consumer always enters here; never removed for test duration.
-    // Sentinel kind must be in-bounds for NodeWriter (see node_writer kind range).
-    let pinned_slot = writer.insert_node(0).unwrap();
-    writer.publish();
-
+    let writer = TestKernel::new(config());
     let cp = writer.get_control_plane();
-    let pinned_for_reader = pinned_slot;
 
     let is_running = Arc::new(AtomicBool::new(true));
     let is_running_writer = Arc::clone(&is_running);
@@ -43,19 +37,14 @@ fn multi_threaded_topology_fuzzer() {
         let mut writer = writer;
 
         for round in 0..iterations {
-            let mut nodes = vec![pinned_slot];
-            let mut tail = pinned_slot;
+            let mut nodes = Vec::new();
             let mut synapses = Vec::new();
 
-            // 1. Allocate a burst of nodes (linear chain from pinned via insert_node_after)
+            // 1. Allocate a burst of nodes
             for i in 0..64 {
-                match writer.insert_node_after(tail, i) {
-                    Ok(slot) => {
-                        nodes.push(slot);
-                        tail = slot;
-                        writer.get_node(slot).attr_write(0, round);
-                    }
-                    Err(_) => break,
+                if let Ok(slot) = writer.insert_node(i) {
+                    nodes.push(slot);
+                    writer.get_node(slot).attr_write(0, round); // mark with round
                 }
             }
 
@@ -87,11 +76,9 @@ fn multi_threaded_topology_fuzzer() {
             // 6. Publish partial teardown
             writer.publish();
 
-            // 7. Tear down all nodes except pinned (cascades remaining synapses)
-            for &n in nodes.iter().rev() {
-                if n != pinned_slot {
-                    let _ = writer.remove_node(n);
-                }
+            // 7. Tear down all nodes (this implicitly cascades all remaining synapses)
+            for &n in &nodes {
+                let _ = writer.remove_node(n);
             }
 
             // 8. Publish complete teardown
@@ -102,6 +89,9 @@ fn multi_threaded_topology_fuzzer() {
     });
 
     // --- READER THREAD ---
+    // Continuously transverses the dynamic graph memory on-the-fly, simulating a consumer thread.
+    // Proves that structural pointers NEVER point to stale memory, freed memory,
+    // and that the garbage collection boundaries physically prevent topology tearing.
     let reader_handle = thread::spawn(move || {
         let mut consumer = TestConsumer::new(cp);
         let mut total_iterations = 0u64;
@@ -111,7 +101,7 @@ fn multi_threaded_topology_fuzzer() {
             let reader = consumer.acquire_mirror();
             total_iterations += 1;
 
-            let mut node_opt = Some(reader.get_node(pinned_for_reader));
+            let mut node_opt = reader.get_head_node();
             let mut node_count = 0;
 
             while let Some(node) = node_opt {
@@ -174,4 +164,8 @@ fn multi_threaded_topology_fuzzer() {
 
     writer_handle.join().unwrap();
     let (_iters, _max_nodes) = reader_handle.join().unwrap();
+
+    // We expect the reader to have successfully traversed the dynamic graph multiple times
+    // without ever crashing or triggering the anti-cycle bounds — proving data integrity
+    // across staging-buffer generation boundaries.
 }
