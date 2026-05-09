@@ -445,6 +445,10 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize> Dr
     for Kernel<TB_COUNT, STORE_COUNT, LUT_COUNT>
 {
     fn drop(&mut self) {
-        debug_assert!(self.control_plane.get_writer_generation() == self.control_plane.get_reader_ack_generation(), "Kernel::drop | ")
+        debug_assert_eq!(
+            Arc::strong_count(&self.control_plane),
+            1,
+            "Kernel::drop | Consumer must be quiesced before dropping kernel"
+        )
     }
 }
