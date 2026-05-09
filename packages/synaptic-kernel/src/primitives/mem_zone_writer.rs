@@ -19,7 +19,7 @@ impl<'a> MemZoneWriter<'a> {
     pub fn new(mem: &'a AtomicBuffer, stride: usize, mem_start_offset: usize) -> Self {
         let mem_end_offset = mem_start_offset + stride;
 
-        debug_assert!(
+        assert!(
             mem_end_offset <= mem.len(),
             "MemZoneWriter::new | range [{}..{}] exceeds AtomicBuffer boundaries",
             mem_start_offset,

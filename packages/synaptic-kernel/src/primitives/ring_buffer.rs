@@ -55,18 +55,18 @@ impl<const STRIDE: usize> RingBuffer<STRIDE> {
         let len = 3 + capacity * STRIDE;
         let mem_end_offset = mem_start_offset + len;
 
-        debug_assert!(
+        assert!(
             mem_end_offset <= mem.len(),
             "RingBuffer::create | range [{}..{}] exceeds AtomicBuffer boundaries",
             mem_start_offset,
             len
         );
-        debug_assert!(
+        assert!(
             capacity > 0,
             "RingBuffer::create | capacity {} must be positive",
             capacity
         );
-        debug_assert_eq!(
+        assert_eq!(
             capacity & (capacity - 1),
             0,
             "RingBuffer::create | capacity {} must be power of 2",

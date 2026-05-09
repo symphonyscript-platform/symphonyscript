@@ -73,7 +73,7 @@ impl SlotAllocator {
         );
         let mem_end_offset = deferred_frees_list.mem_end_offset();
 
-        debug_assert!(
+        assert!(
             mem_end_offset <= mem.len(),
             "SlotAllocator::create | range [{}..{}] exceeds AtomicBuffer boundaries",
             mem_start_offset,

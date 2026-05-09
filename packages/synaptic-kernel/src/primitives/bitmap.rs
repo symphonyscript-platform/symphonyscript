@@ -40,12 +40,12 @@ impl Bitmap {
     }
 
     pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
-        debug_assert!(
+        assert!(
             capacity > 0,
             "Bitmap::create | capacity {} must be positive",
             capacity
         );
-        debug_assert_eq!(
+        assert_eq!(
             capacity & (capacity - 1),
             0,
             "Bitmap::create | capacity {} must be power of 2",

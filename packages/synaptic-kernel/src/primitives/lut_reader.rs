@@ -14,7 +14,7 @@ impl LutReader {
         tb_start_offset: usize,
         tb_end_offset: usize,
     ) -> Self {
-        debug_assert!(
+        assert!(
             tb_end_offset <= tb.buffer_capacity(),
             "EntryStoreReader::bind | range [{}..{}] exceeds buffer capacity {}",
             tb_start_offset,

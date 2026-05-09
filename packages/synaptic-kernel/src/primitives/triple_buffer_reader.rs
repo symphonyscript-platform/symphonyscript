@@ -32,7 +32,7 @@ pub struct TripleBufferReader {
 
 impl TripleBufferReader {
     pub(crate) fn bind(mem: AtomicBuffer, mem_start_offset: usize, buffer_capacity: usize) -> Self {
-        debug_assert!(
+        assert!(
             buffer_capacity > 0,
             "TripleBufferReader::bind | buffer_capacity {} must be positive",
             buffer_capacity

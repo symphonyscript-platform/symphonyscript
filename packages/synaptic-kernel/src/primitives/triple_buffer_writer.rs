@@ -72,7 +72,7 @@ impl TripleBufferWriter {
         buffer_capacity: usize,
         bind: bool,
     ) -> Self {
-        debug_assert!(
+        assert!(
             buffer_capacity > 0,
             "TripleBufferWriter::new | buffer_capacity {} must be positive",
             buffer_capacity
@@ -90,7 +90,7 @@ impl TripleBufferWriter {
         ];
         let mem_end_offset = mem_buffers_base + buffer_capacity * 3;
 
-        debug_assert!(
+        assert!(
             mem_end_offset <= mem.len(),
             "TripleBufferWriter::new | range [{}..{}] exceeds AtomicBuffer boundaries",
             mem_start_offset,

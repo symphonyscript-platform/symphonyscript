@@ -26,12 +26,12 @@ pub struct MemMetadataReader {
 
 impl MemMetadataReader {
     pub(crate) fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
-        debug_assert!(
+        assert!(
             capacity > 0,
             "MemMetadataReader::create | capacity {} must be positive",
             capacity
         );
-        debug_assert_eq!(
+        assert_eq!(
             capacity & (capacity - 1),
             0,
             "MemMetadataReader::create | capacity {} must be power of 2",
@@ -40,7 +40,7 @@ impl MemMetadataReader {
 
         let mem_end_offset = mem_start_offset + capacity;
 
-        debug_assert!(
+        assert!(
             mem_end_offset <= mem.len(),
             "MemMetadataReader::create | range [{}..{}] exceeds AtomicBuffer boundaries",
             mem_start_offset,

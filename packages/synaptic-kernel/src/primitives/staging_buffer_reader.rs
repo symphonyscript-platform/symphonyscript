@@ -29,12 +29,12 @@ pub struct StagingBufferReader {
 
 impl StagingBufferReader {
     pub(crate) fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
-        debug_assert!(
+        assert!(
             capacity > 0,
             "StagingBufferReader::bind | capacity {} must be positive",
             capacity
         );
-        debug_assert_eq!(
+        assert_eq!(
             capacity & (capacity - 1),
             0,
             "StagingBufferReader::bind | capacity {} must be power of 2",

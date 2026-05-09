@@ -77,7 +77,7 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
             cursor += TripleBufferWriter::calculate_size_on_mem(defs[i].buffer_capacity);
         }
 
-        debug_assert!(
+        assert!(
             cursor <= mem.len(),
             "TripleBufferWriterRegistry::create | range [{}..{}] out of AtomicBuffer bounds [0; {}]",
             mem_start_offset,
@@ -90,15 +90,16 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
         for i in 0..N {
             let id = defs[i].id;
 
-            debug_assert!(
+            assert!(
                 (id.0 as usize) < N,
                 "TripleBufferWriterRegistry::create | id {} out of bounds [0-{}]",
                 id,
                 N - 1,
             );
 
-            debug_assert!(
-                id_index[id.0 as usize] == u16::MAX,
+            assert_eq!(
+                id_index[id.0 as usize],
+                u16::MAX,
                 "TripleBufferWriterRegistry::create | duplicate id {}",
                 id
             );

@@ -73,15 +73,16 @@ impl<const TB_COUNT: usize, const LUT_COUNT: usize> LutWriterRegistry<TB_COUNT, 
             let def = defs[i];
             let id = defs[i].id;
 
-            debug_assert!(
+            assert!(
                 (id.0 as usize) < LUT_COUNT,
                 "LutWriterRegistry::create | id {} out of bounds [0-{}]",
                 id,
                 LUT_COUNT - 1,
             );
 
-            debug_assert!(
-                id_index[id.0 as usize] == u16::MAX,
+            assert_eq!(
+                id_index[id.0 as usize],
+                u16::MAX,
                 "LutWriterRegistry::create | duplicate id {}",
                 id
             );
@@ -92,7 +93,7 @@ impl<const TB_COUNT: usize, const LUT_COUNT: usize> LutWriterRegistry<TB_COUNT, 
                 tb_start_offsets[i] = default_tb_cursor;
                 default_tb_cursor += def.len();
 
-                debug_assert!(
+                assert!(
                     default_tb_cursor <= tb_registry.get(def.tb_id).buffer_capacity(),
                     "LutWriterRegistry::create | LUT {} out of Triple Buffer {} bounds [0; {}]",
                     def.id,
@@ -104,7 +105,7 @@ impl<const TB_COUNT: usize, const LUT_COUNT: usize> LutWriterRegistry<TB_COUNT, 
                 tb_start_offsets[i] = extra_tb_cursors[index];
                 extra_tb_cursors[index] += def.len();
 
-                debug_assert!(
+                assert!(
                     extra_tb_cursors[index] <= tb_registry.get(def.tb_id).buffer_capacity(),
                     "LutWriterRegistry::create | LUT {} out of Triple Buffer {} bounds [0; {}]",
                     def.id,

@@ -21,7 +21,7 @@ impl LutWriter {
     pub fn create(tb: TripleBufferWriter, size: usize, tb_start_offset: usize, bind: bool) -> Self {
         let tb_end_offset = tb_start_offset + Self::calculate_size_on_tb(size);
 
-        debug_assert!(
+        assert!(
             tb_end_offset <= tb.buffer_capacity(),
             "EntryStoreWriter::new | range [{}..{}] exceeds buffer capacity {}",
             tb_start_offset,

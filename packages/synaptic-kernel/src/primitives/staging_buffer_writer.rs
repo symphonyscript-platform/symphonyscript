@@ -79,12 +79,12 @@ impl StagingBufferWriter {
     }
 
     pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
-        debug_assert!(
+        assert!(
             capacity > 0,
             "StagingBufferWriter::create | capacity {} must be positive",
             capacity
         );
-        debug_assert_eq!(
+        assert_eq!(
             capacity & (capacity - 1),
             0,
             "StagingBufferWriter::create | capacity {} must be power of 2",
@@ -97,7 +97,7 @@ impl StagingBufferWriter {
         let mem_end_offset =
             mem_list_start_offset + RingBuffer::<2>::calculate_size_on_mem(capacity);
 
-        debug_assert!(
+        assert!(
             mem_end_offset <= mem.len(),
             "StagingBufferWriter::create | range [{}..{}] exceeds AtomicBuffer boundaries",
             mem_start_offset,

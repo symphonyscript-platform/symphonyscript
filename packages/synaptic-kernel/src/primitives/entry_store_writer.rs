@@ -58,13 +58,13 @@ impl EntryStoreWriter {
         let mem_end_offset = mem_start_offset + Self::calculate_size_on_mem(&config);
         let tb_end_offset = tb_start_offset + Self::calculate_size_on_tb(&config);
 
-        debug_assert!(
+        assert!(
             mem_end_offset <= mem.len(),
             "EntryStoreWriter::create | range [{}..{}] exceeds AtomicBuffer boundaries",
             mem_start_offset,
             mem.len(),
         );
-        debug_assert!(
+        assert!(
             tb_end_offset <= tb.buffer_capacity(),
             "EntryStoreWriter::new | range [{}..{}] exceeds buffer capacity {}",
             tb_start_offset,

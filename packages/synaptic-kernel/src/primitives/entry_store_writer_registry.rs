@@ -91,15 +91,16 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
             let def = defs[i];
             let id = defs[i].id;
 
-            debug_assert!(
+            assert!(
                 (id.0 as usize) < STORE_COUNT,
                 "EntryStoreWriterRegistry::create | id {} out of bounds [0-{}]",
                 id,
                 STORE_COUNT - 1,
             );
 
-            debug_assert!(
-                id_index[id.0 as usize] == u16::MAX,
+            assert_eq!(
+                id_index[id.0 as usize],
+                u16::MAX,
                 "EntryStoreWriterRegistry::create | duplicate id {}",
                 id
             );
@@ -112,7 +113,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
                 tb_start_offsets[i] = default_tb_cursor;
                 default_tb_cursor += def.size_on_tb();
 
-                debug_assert!(
+                assert!(
                     default_tb_cursor <= tb_registry.get(def.tb_id).buffer_capacity(),
                     "EntryStoreWriterRegistry::create | Store {} out of Triple Buffer {} bounds [0; {}]",
                     def.id,
@@ -124,7 +125,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
                 tb_start_offsets[i] = extra_tb_cursors[index];
                 extra_tb_cursors[index] += def.size_on_tb();
 
-                debug_assert!(
+                assert!(
                     extra_tb_cursors[index] <= tb_registry.get(def.tb_id).buffer_capacity(),
                     "EntryStoreWriterRegistry::create | Store {} out of Triple Buffer {} bounds [0; {}]",
                     def.id,
@@ -134,7 +135,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
             }
         }
 
-        debug_assert!(
+        assert!(
             mem_cursor <= mem.len(),
             "EntryStoreWriterRegistry::create | range [{}..{}] out of AtomicBuffer bounds [0; {}]",
             mem_start_offset,

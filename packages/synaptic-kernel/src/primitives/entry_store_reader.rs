@@ -31,13 +31,13 @@ impl EntryStoreReader {
         tb_start_offset: usize,
         tb_end_offset: usize,
     ) -> Self {
-        debug_assert!(
+        assert!(
             mem_end_offset <= mem.len(),
             "EntryStoreReader::bind | range [{}..{}] exceeds AtomicBuffer boundaries",
             mem_start_offset,
             mem.len(),
         );
-        debug_assert!(
+        assert!(
             tb_end_offset <= tb.buffer_capacity(),
             "EntryStoreReader::bind | range [{}..{}] exceeds buffer capacity {}",
             tb_start_offset,

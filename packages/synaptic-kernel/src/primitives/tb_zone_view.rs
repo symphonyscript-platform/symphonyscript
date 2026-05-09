@@ -20,7 +20,7 @@ impl<'a> TbZoneView<'a> {
     pub fn new(tb: &'a TripleBufferWriter, stride: usize, tb_start_offset: usize) -> Self {
         let tb_end_offset = tb_start_offset + stride;
 
-        debug_assert!(
+        assert!(
             tb_end_offset <= tb.buffer_capacity(),
             "TbZoneView::new | range [{}..{}] exceeds buffer capacity {}",
             tb_start_offset,
