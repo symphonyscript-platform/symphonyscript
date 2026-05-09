@@ -1,0 +1,22 @@
+fn C4(input, meta, attributes)
+  c(6000)
+
+melody C1 {
+  C4/4          | vel:80
+  C4'/4         | vel:90
+  C4-/4         | vel:100 + sine_wobble(Intensity) * 40
+  C4'-/4        | vel:70
+  rest/4
+  [C4 E4 G4]/2  | vel:80
+  Cmaj/2        | vel:90
+  Cmaj/E/2      | vel:85
+  6000c/4       | vel:80
+  261hz/4       | vel:75
+  sus/1.0
+  filter/0.6 + sine_wobble(Phase) * 0.3
+  E4/8
+    | vel: 100 + sine_wobble(Phase) * 20
+    | pan: -0.2
+  then/C2 | vel:0.8 | tempo:1.2
+  also/C3 | vel:0.5
+}
