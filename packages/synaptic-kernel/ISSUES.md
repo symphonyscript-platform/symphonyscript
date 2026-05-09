@@ -80,3 +80,99 @@ invariants will fail in production.
 The first thing I'd fix: turn the "traverse from head" rule into a type-level constraint. Make `get_node(slot)` private;
 make `NodeReader` only constructible by walking from `get_head_node()` and following `next_ptr`. That alone would
 eliminate the most likely class of real-world bug.
+
+___
+
+I was thinking at least constructors should have regular asserts. method calls can be debug_asserts as they are in
+hotpath and once constructed correctly, it's user's responsibility to not abuse methods.
+you overunderstood the invarinat. when consumer thread wakes up INITIALLY it must start reading from the head, but
+during subsequent reads it should take off from where it left. am I wrong?
+what do you have in mind, other than letting user grow() on error (which we already do)? removal path is something that
+happens rarely, and deliberately. user is responsible to call publish(), what else we can really do?
+yes, that was a deliberate choice. future version might introduce shrink(), but it's not high priority.
+incremental migration? how would that even work? grow() is an escape-hatch, not a hot-path method. user should think
+really well beforehand kernel's initial configuration. grow() is just patting user on the head when they fail, instead
+of punishing them. It's kernels 'Don't worry, we got you'
+What do you mean "one indirection too many" ? AtomicBuffer is shared between two threads, without Arc how would it work?
+The kernel is NOT i64, period. we don't support that. If I think of a reason we should, or if you can give me a good
+one, I am going to think about it.
+what do you mean by "u16::MAX is overloaded" ? it has two meanings? how can we fix that?
+good point
+how can we fix that?
+good point
+have you read tests/ folder?
+___
+
+1. Agreed. Construction is rare and one-shot — `assert!` cost is invisible. The line you actually want isn't "
+   constructor vs method," it's "called per-graph-mutation vs called per-frame." `insert_node`, `connect`, `remove_node`
+   are not hot — they're domain operations the user issues deliberately. Promoting their slot-validity checks to
+   `assert!` would catch a lot of caller bugs without measurable cost. Pure read/write-by-offset on `EntryWriter`/
+   `MemZoneWriter` are hot — those should stay `debug_assert!`.
+
+2. You're partly wrong, and the documentation in `network_reader.rs` is stricter than you described. The invariant is *
+   *per-swap**, not per-wakeup.
+
+   Within one cycle (between two `swap()` calls): traversal-from-head once, then cached pointers are safe. The TB the
+   consumer is reading is private until next swap, so structural pointers are stable.
+
+   Across cycles: you **must re-traverse from head every swap**. Reason: after `swap()`, the consumer ACKs a generation.
+   After ACK, the producer is permitted to reclaim deferred slots and reallocate them. A slot the consumer cached in
+   cycle N may, by cycle N+1, hold a *different entity* than it did. The pointer is still valid — it points into live
+   memory — but the entity identity is gone.
+
+   So "take off from where it left off across cycles" is broken. If that's actually what consumers do, the kernel will
+   silently feed them stale identities. If your real consumers re-traverse every cycle, the docs match reality and we're
+   fine — but the phrasing "INITIALLY" suggests you might be picturing a one-shot wakeup, and that's unsafe.
+
+3. Walking through it: defer_free requires `is_allocated(slot)`. Allocated count ≤ capacity. Between consumer acks, a
+   slot can be deferred at most once (it's stuck in "deferred" state until drained). So pending staging entries ≤
+   capacity = staging ring capacity. The Full error is structurally unreachable under correct usage. I withdraw the
+   concern. The error path is defensive and that's fine.
+
+   What's still missing: telemetry. `deferred_count()` exists, but there's no way for an external observer to know the
+   consumer is falling behind until things break elsewhere. That's a "nice to have," not a flaw in the protocol.
+
+4. Acknowledged. Document the asymmetry prominently — long-term users will assume symmetric resize.
+
+5. Withdrawn. I was reaching. `grow()` is correctly framed as a safety net, not a steady-state mechanism. Incremental
+   migration would mean making the consumer aware of two epochs simultaneously, which destroys the "one mirror, traverse
+   it" model. Not worth it.
+
+6. The TODO in `types.rs` already names the fix: `Arc<[AtomicI32]>`. That's not "no Arc" — it's still shared between
+   threads. The difference is layout.
+
+   `Arc<Vec<AtomicI32>>`: Arc heap cell holds `Vec { ptr, len, cap }`. Vec's `ptr` points to a *separate* heap
+   allocation containing the atomics. Two heap allocations, two pointer chases.
+
+   `Arc<[AtomicI32]>`: Arc heap cell holds `len` and the atomics inline. One heap allocation. One pointer chase.
+
+   The Arc itself stays. The Vec is what's gone — it adds an indirection and a capacity field you don't need (the buffer
+   is fixed-size after construction). Same threading model, fewer cache misses.
+
+7. Fine. The reason the kernel might want i64 is timestamps (sample counts, monotonic clocks, position pointers in audio
+   streams). If your domain doesn't need it, skip it. But `wide_atomic.rs` exists in the kernel — somebody thought
+   there'd be a use. If nothing uses it, delete it; an unused public API is a future foot-gun.
+
+8. Both `TripleBufferId::DEFAULT` and the `id_index` "unassigned" sentinel use `u16::MAX`. They never collide because
+   user IDs are in `[0, N-1]` with `N < u16::MAX`, and the public `DEFAULT` is a separate ID space the registry handles
+   via an explicit `if id == DEFAULT` branch. Today, fine. Tomorrow, if someone refactors and forgets the branch,
+   `DEFAULT` would index `id_index[u16::MAX as usize]` — out of bounds, but on debug only. In release, undefined.
+
+   Fix: separate the types nominally. The internal `id_index` array stores a `RegistryIndex(u16)` or `Option<u16>`. The
+   public `TripleBufferId(u16)` is its own type. They cannot be mixed up at compile time. The sentinel for the internal
+   type is its own concern — `Option::None` is the cleanest. The performance cost is zero (`Option<u16>` is 4 bytes via
+   niche optimization on a non-MAX value, or you reserve a different sentinel).
+
+10. The mixing has two layers. The wire format (i32 in core fields) is fixed by the TB plane being `i32`-typed. That's
+    structural. The API mixing (`as usize` everywhere) is what's fragile.
+
+    Fix: typed slot. Define `SlotId(NonZeroU32)`. `NonZeroU32` bakes in "0 means undefined" as a type invariant. The
+    `Option<SlotId>` representation is one i32 with niche optimization — same wire format. Public APIs take and return
+    `SlotId` / `Option<SlotId>`. The `as i32` and `as usize` casts move into one place: the boundary where `SlotId` is
+    stored to / loaded from the TB. Add a const-time check at registry construction that capacity ≤ `i32::MAX`. After
+    that, every internal site is statically safe.
+
+    Cost: an API churn. Worth it if this kernel has external users; not urgent if it's internal-only.
+
+12. No, I haven't read `tests/`. I should not have implied otherwise — that was sloppy. The doc covers `src/` only. If
+    you want tests reviewed for coverage gaps, say so and I'll read them.
