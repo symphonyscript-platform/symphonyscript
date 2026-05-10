@@ -1,6 +1,6 @@
 # Symphony Language — Formal Grammar
 
-**Status:** Draft v0.1. Authoritative source for the lexical and syntactic structure of the language. Semantics — name resolution, type inference, reactive propagation, evaluation order — are out of scope for this document and live in a separate semantics specification.
+**Status:** Draft v0.2. Authoritative source for the lexical and syntactic structure of the language. Semantics — name resolution, type inference, reactive propagation, evaluation order — are out of scope for this document and live in a separate semantics specification.
 
 ---
 
@@ -21,6 +21,7 @@ Productions are EBNF with the following operators:
 | `A?`          | Zero or one                          |
 | `A*`          | Zero or more                         |
 | `A+`          | One or more                          |
+| `A{N,M}`      | Repetition: between N and M times    |
 | `( A )`       | Grouping                             |
 | `-- text`     | Comment within productions           |
 
@@ -35,6 +36,8 @@ The language is indent-sensitive. The lexer emits three layout-significant token
 - `DEDENT`  — indent level decreased; emitted once per dedent step
 
 Inside paired delimiters `(...)`, `[...]`, layout tokens are suppressed. This permits free continuation of multi-line argument lists, generics, and tuples without indent constraints. Layout resumes at the matching closer.
+
+Inside string literals (between matching `"` or `r"` delimiters), indentation tracking is also suspended; literal newlines and indentation become part of the string content.
 
 Productions throughout this document refer to these tokens by name.
 
@@ -96,18 +99,19 @@ The character `?` is **not** a valid identifier character; it is exclusively the
 The following are reserved and cannot be used as identifiers:
 
 ```
-Construct:       node  type  enum  trait  connection  fn
-Reactive:        signal  derived  attr
-Composition:     parts  in  out  from  to
-Conformance:     satisfies  requires  where
-Visibility:      pub
-Imports:         use  as  extend  root
-Self-reference:  Self  self
-Type:            dyn  alias
-Bindings:        let
-Control:         if  else  match
-Logical:         and  or  not  is
-Literal:         true  false
+Construct:        node  type  enum  trait  connection  fn
+Reactive:         signal  derived  attr
+Composition:      parts  in  out  from  to
+Conformance:      satisfies  requires  where
+Visibility:       pub
+Imports:          use  as  root
+Module compose:   extend
+Self-reference:   Self  self
+Type:             dyn  alias
+Bindings:         let
+Control:          if  else  match
+Logical:          and  or  not  is
+Literal:          true  false
 ```
 
 The contextual identifier `index` is **not** reserved; it has meaning only in module-resolution rules (see §3.2).
@@ -163,13 +167,13 @@ BoolLit      := 'true' | 'false'
 CharLit      := "'" CharBody "'"
 ByteLit      := "b'" ByteBody "'"
 
-CharBody     := UnicodeScalarChar | EscapeSeq
-ByteBody     := AsciiPrintable    | EscapeSeq
+CharBody     := UnicodeScalarChar | CharEscapeSeq
+ByteBody     := AsciiPrintable    | CharEscapeSeq
 
-EscapeSeq    := '\' EscapeSpec
-EscapeSpec   := 'n' | 'r' | 't' | '0' | '\\' | "'" | '"' | '{'
-              | 'x' HexDigit HexDigit
-              | 'u' '{' HexDigit{1,6} '}'
+CharEscapeSeq  := '\' CharEscapeSpec
+CharEscapeSpec := 'n' | 'r' | 't' | '0' | '\\' | "'" | '"'
+                | 'x' HexDigit HexDigit
+                | 'u' '{' HexDigit{1,6} '}'
 ```
 
 `CharLit` produces a value of type `char` (a Unicode scalar value, 32-bit, range `0..=0x10FFFF` excluding surrogates).
@@ -178,14 +182,21 @@ EscapeSpec   := 'n' | 'r' | 't' | '0' | '\\' | "'" | '"' | '{'
 
 `UnicodeScalarChar` is any Unicode scalar value other than `'`, `\`, or unescaped `LINE_END`.
 
+The interpolation-escape sequence `\{` is **not** valid in `CharLit` or `ByteLit`; it is meaningful only in string literals (see §2.5.5).
+
 #### 2.5.5 String Literals
 
 ```
 StringLit    := PlainString | RawString
 
 PlainString  := '"' StringPart* '"'
-StringPart   := PlainStringChar | EscapeSeq | Interpolation
+StringPart   := PlainStringChar | StringEscapeSeq | Interpolation
 PlainStringChar := UnicodeScalar except '"' or '\' or unescaped '{'
+
+StringEscapeSeq  := '\' StringEscapeSpec
+StringEscapeSpec := 'n' | 'r' | 't' | '0' | '\\' | "'" | '"' | '{'
+                  | 'x' HexDigit HexDigit
+                  | 'u' '{' HexDigit{1,6} '}'
 
 RawString    := 'r"' RawStringChar* '"'
               | 'r#"' RawStringChar* '"#'
@@ -202,18 +213,6 @@ Interpolation := '{' Expr '}'
 **Interpolation** (`{expr}`) evaluates `expr` and converts to string via the `Display` trait. Nested string literals are allowed inside interpolation expressions.
 
 **Raw strings** (`r"..."`, `r#"..."#`, …) perform no escape processing and no interpolation. All characters are literal. The `#`-padding form lets the literal contain `"`: `r#"contains "quotes""#`.
-
-#### 2.5.6 Duration Literals
-
-```
-DurationLit  := DurationNumber DurationUnit
-DurationNumber := IntPart | (DecInt '.' DecInt)
-DurationUnit := 'ns' | 'us' | 'ms' | 's' | 'min' | 'hr'
-```
-
-Duration literals produce values of stdlib type `Duration`. They are not numeric — there is no implicit conversion to or from `Duration` and integer/float types.
-
-The lexer recognizes a duration literal only when the unit suffix is immediately adjacent (no whitespace) to the numeric part.
 
 ### 2.6 Operators and Punctuation
 
@@ -268,16 +267,31 @@ In placement context, a flag is a single-character modifier that aliases a boole
 - `'` is the character-literal delimiter
 - `@` is the annotation prefix
 - `?` is the postfix Try operator
-- `!` is reserved for attribute-pipe negation (`| !attr`); it is otherwise unused as an operator
+- `!` is the attribute-pipe negation prefix (`| !attr`); not used as an expression operator
 - `&` is type intersection
 - `%` is the modulo operator
 - `~`, `^`, `$`, `` ` `` have no other meaning and are reserved for flags only
 
-Flags are tokenized as a contiguous run of `FlagChar`s adjacent to a preceding type identifier. Lexer sketch:
+#### 2.6.2 Tokenization
 
-> When the lexer has just produced an identifier token whose first character is `IdentStart` and that identifier is followed (with no intervening whitespace) by one or more `FlagChar`s, those characters are emitted as a `FLAGS` token whose lexeme is the contiguous flag run.
+Flag tokenization is **context-driven**. The lexer does not pre-emit a dedicated `FLAGS` token. Instead:
 
-This rule only fires in placement context, which is determined parsing-side; lexically, the rule is "ident immediately followed by flag chars produces a `FLAGS` token." Disambiguation of intent is the parser's responsibility.
+- Every non-whitespace token records whether it is preceded by inline whitespace (an `adjacent` bit on the token).
+- In placement context (after the parser has committed to a `TypeRef` in a placement position), the parser may consume a contiguous run of `FlagChar`s with **no intervening whitespace** as a single flags-run on that `TypeRef`.
+- Outside placement context, those same characters tokenize by their normal operator/punctuation rules.
+
+The "no intervening whitespace" constraint distinguishes flags from operators uniformly, regardless of which characters are in `FlagChar`. Examples:
+
+- `Foo & Bar` (whitespace) → type intersection of `Foo` and `Bar`.
+- `Foo&` adjacent in placement context → flags-run `&` on `Foo`.
+- `n % m` (whitespace) → modulo of `n` and `m`.
+- `Foo%` adjacent in placement context → flags-run `%` on `Foo`.
+- `x?` in expression context → postfix Try on `x`.
+- `Foo?` adjacent in placement context → flags-run `?` on `Foo`.
+
+This rule is extensible: adding new operators that share characters with the flag set requires no lexer changes; the no-whitespace constraint continues to disambiguate.
+
+Each character in the flags-run is a separate flag and must alias a boolean `attr` declared on the type's trait closure. Flag-to-attr resolution is a semantic concern.
 
 ### 2.7 Tokens Summary
 
@@ -285,12 +299,14 @@ The lexer produces the following token kinds:
 
 ```
 NEWLINE  INDENT  DEDENT
-IDENT  KEYWORD  FLAGS
-INT_LIT  FLOAT_LIT  BOOL_LIT  CHAR_LIT  BYTE_LIT  STRING_LIT  DURATION_LIT
+IDENT  KEYWORD
+INT_LIT  FLOAT_LIT  BOOL_LIT  CHAR_LIT  BYTE_LIT  STRING_LIT
 DOC_COMMENT
 PUNCT_*  OP_*
 EOF
 ```
+
+Note: there is no discrete `FLAGS` token. Flag runs are recognized by the parser in placement context per §2.6.2; the contributing characters tokenize as their normal operator/punctuation tokens with the `adjacent` bit set.
 
 ---
 
@@ -305,9 +321,9 @@ Module       := ModuleItem*
 
 ModuleItem   := UseItem
               | ExtendItem
-              | DeclItem
+              | AnnotatedDecl
 
-DeclItem     := Annotation* DocComment? Decl
+AnnotatedDecl := Annotation* DocComment? Decl
 
 Decl         := SignalDecl
               | DerivedDecl
@@ -329,7 +345,7 @@ Each `ModuleItem` is followed by a `NEWLINE`. The grammar does not represent the
 UseItem      := 'use' UsePath NEWLINE
 
 UsePath      := PathBase ('::' PathSegment)* UseTail?
-PathBase     := 'root' | Ident
+PathBase     := 'root' | 'Self' | 'self' | Ident
 PathSegment  := Ident
 UseTail      := '::' UseGroup
               | '::' '*'
@@ -348,22 +364,23 @@ use root::audio::synth::{Oscillator, Filter}
 use root::audio::synth::*
 use root::audio::Pin as MusicPin
 use root::core::{time, prior, Duration}
+use self::sibling::Foo
 ```
 
-`PathBase` is `root` for absolute paths from the project root, the literal name of an external dependency for cross-package imports, or `Ident` referring to a sibling module in the current folder.
+`PathBase` is `root` for absolute paths from the project root, `self` for the current module, `Self` for the enclosing type (within `extend`/method contexts), the literal name of an external dependency for cross-package imports, or `Ident` referring to a sibling module in the current folder. Semantic restrictions on `Self`/`self` in `use` paths live in the semantics document.
 
 Files in the same folder are auto-visible to one another without `use`. Cross-folder visibility is gated by `pub` and routed through optional `index` files (see semantics document; not part of grammar).
 
 ### 3.3 Annotations
 
 ```
-Annotation   := '@' Ident AnnotationArgs? NEWLINE
+Annotation     := '@' Ident AnnotationArgs? NEWLINE
 AnnotationArgs := '(' (AnnotationArg (',' AnnotationArg)* ','?)? ')'
 AnnotationArg  := Expr
                 | Ident ':' Expr
 ```
 
-Annotations precede declarations and stack across lines. Examples:
+Annotations precede declarations and stack across lines. They may attach to top-level declarations (via `AnnotatedDecl`) and to inner declarations within type/enum/trait/node/connection/extend bodies (the body-item productions admit `Annotation*` prefixes; see §3.5–§3.12). Examples:
 
 ```
 @inline
@@ -371,6 +388,12 @@ Annotations precede declarations and stack across lines. Examples:
 @deprecated("use new_compute instead")
 fn old_compute() -> i32:
   ...
+
+type Vec3:
+  @derive(Equal)
+  pub x: f32
+  pub y: f32
+  pub z: f32
 ```
 
 Annotation interpretation is compiler/tooling-defined; the grammar does not constrain which annotation names are valid.
@@ -389,13 +412,13 @@ ModifierLine := '>>' Ident ':' Expr NEWLINE
 Pub          := 'pub'
 ```
 
-The optional `ModifierTail` is sugar for read-side method composition, equivalent to wrapping the right-hand-side expression in chained `>>` calls. See §3.13 for desugaring.
+The optional `ModifierTail` is sugar for read-side method composition, equivalent to wrapping the right-hand-side expression in chained `>>` calls. See §3.15.3 for desugaring.
 
 `signal` declarations always carry an initial value. `derived` declarations are read-only; the compiler rejects any attempt to assign to a `derived` binding (assignment forms in user code are limited; see §3.4.1).
 
 #### 3.4.1 Assignability
 
-User code in `.symph` source has no syntactic form for assigning to a `signal`, `derived`, or `attr` after declaration. Signal mutation is performed by the runtime through its host-language API, not from within source. The grammar therefore contains no signal-write statement.
+User code has no syntactic form for assigning to a `signal`, `derived`, or `attr` after declaration. Signal mutation is performed by the runtime through its host-language API, not from within source. The grammar therefore contains no signal-write statement.
 
 The token `=` appears only as:
 - the initial-value separator in `signal`/`derived`/`attr`/`let` declarations
@@ -406,30 +429,28 @@ The token `=` appears only as:
 ```
 TypeDecl     := Pub? 'type' Ident GenericParams? TypeBody
 
-TypeBody     := '=' TypeExpr NEWLINE                            -- alias / sum
-              | NEWLINE INDENT TypeBodyItem+ DEDENT             -- record / extension
+TypeBody     := '=' TypeExpr NEWLINE                            -- alias / nominal newtype
+              | '=' InlineSumType NEWLINE                       -- payload-less sum
+              | NEWLINE INDENT TypeBodyItem+ DEDENT             -- record / structured
+              | NEWLINE                                          -- empty (phantom marker)
 
-TypeBodyItem := SatisfiesClause
-              | TypeFieldDecl
-              | FnDecl
-              | DocComment
+InlineSumType := Ident '|' Ident ('|' Ident)+
+
+TypeBodyItem := Annotation* DocComment? (SatisfiesClause | TypeFieldDecl | FnDecl)
 
 TypeFieldDecl := Pub? Ident TypeAnno ('=' Expr)? NEWLINE
 
 SatisfiesClause := 'satisfies' TypeExpr (',' TypeExpr)* NEWLINE
 ```
 
-The `=` form covers two cases:
+The four `TypeBody` alternatives:
 
 ```
-type Pitch = i8                       -- nominal newtype
-type Direction = North | South | East | West   -- inline tagged sum, no payloads
-```
+type Pitch = i8                              -- nominal newtype (alias-shaped, but new identity)
+type Direction = Up | Down | Left | Right    -- payload-less sum
+type Open                                    -- empty / phantom marker (no body)
 
-The block form covers records and types with bodies:
-
-```
-type Vec3:
+type Vec3:                                   -- record / structured
   x: f32
   y: f32
   z: f32
@@ -459,11 +480,9 @@ EnumDecl     := Pub? 'enum' Ident GenericParams? EnumBody
 
 EnumBody     := '=' VariantInline ('|' VariantInline)+ NEWLINE   -- inline form, payloads forbidden
               | NEWLINE INDENT EnumBodyItem+ DEDENT
+              | NEWLINE                                           -- empty enum
 
-EnumBodyItem := VariantDecl
-              | SatisfiesClause
-              | FnDecl
-              | DocComment
+EnumBodyItem := Annotation* DocComment? (VariantDecl | SatisfiesClause | FnDecl)
 
 VariantInline := Ident
 VariantDecl  := Ident VariantPayload? NEWLINE
@@ -497,11 +516,12 @@ enum Result[T, E]:
 TraitDecl    := Pub? 'trait' Ident GenericParams? TraitBody
 
 TraitBody    := NEWLINE INDENT TraitBodyItem+ DEDENT
+              | NEWLINE                                            -- empty trait (phantom marker)
 
-TraitBodyItem := RequiresClause
-               | AssocTypeDecl
-               | TraitFnDecl
-               | DocComment
+TraitBodyItem := Annotation* DocComment? (RequiresClause
+                                       | AssocTypeDecl
+                                       | TraitFnDecl
+                                       | AttrDecl)
 
 RequiresClause := 'requires' TypeExpr (',' TypeExpr)* NEWLINE
 
@@ -523,13 +543,17 @@ trait Iterable:
   type Item
   fn next(self) -> Option[Item]
 
+trait Notable:
+  attr pitch: Pitch
+  attr velocity: Number
+
 trait Student:
   requires Person
   attr school: String
   attr gpa: Number
-```
 
-> **Open**: `attr` declarations inside trait bodies — the conversation introduced these for capability declarations (`trait Notable: attr pitch: Pitch`). The grammar permits them via a uniform `TypeFieldDecl`/`AttrDecl` rule; final placement deferred to the semantics document.
+trait Marker                                   -- empty / phantom-style trait
+```
 
 ### 3.8 Node Declarations
 
@@ -537,15 +561,15 @@ trait Student:
 NodeDecl     := Pub? 'node' Ident GenericParams? NodeBody
 
 NodeBody     := NEWLINE INDENT NodeDeclItem+ DEDENT
+              | NEWLINE                                            -- empty node
 
-NodeDeclItem := SatisfiesClause
-              | PartsClause
-              | InClause
-              | OutClause
-              | AttrDecl
-              | DerivedAttrDecl
-              | FnDecl
-              | DocComment
+NodeDeclItem := Annotation* DocComment? (SatisfiesClause
+                                      | PartsClause
+                                      | InClause
+                                      | OutClause
+                                      | AttrDecl
+                                      | DerivedAttrDecl
+                                      | FnDecl)
 
 PartsClause  := 'parts' ':' TypeExpr (',' TypeExpr)* NEWLINE
 InClause     := 'in'    ':' TypeExpr (',' TypeExpr)* NEWLINE
@@ -576,11 +600,7 @@ ConnectionDecl := Pub? 'connection' Ident GenericParams? ConnectionBody
 
 ConnectionBody := NEWLINE INDENT ConnectionBodyItem+ DEDENT
 
-ConnectionBodyItem := FromClause
-                    | ToClause
-                    | AttrDecl
-                    | FnDecl
-                    | DocComment
+ConnectionBodyItem := Annotation* DocComment? (FromClause | ToClause | AttrDecl | FnDecl)
 
 FromClause   := 'from' ':' TypeExpr NEWLINE
 ToClause     := 'to'   ':' TypeExpr NEWLINE
@@ -607,10 +627,10 @@ connection Contains[T]:
 
 ### 3.10 Placement (Construction in Node/Module Context)
 
-Placement is the syntax used for instantiating nodes, parts, and connections. It is distinct from value construction (§3.13.4) and never appears in expression position.
+Placement is the syntax used for instantiating nodes, parts, and connections. It is distinct from value construction (§3.15.4) and never appears in expression position.
 
 ```
-NodeInstantiation := TypeRef Ident PlacementInline? PlacementBody?
+NodeInstantiation := Pub? TypeRef Ident PlacementInline? PlacementBody?
 
 PlacementForm := TypeRef Ident? PlacementInline? PlacementBody?
 
@@ -622,18 +642,17 @@ AttrPipeBody    := Ident ':' Expr      -- set attribute to value
                  | Ident                -- set boolean attribute to true
                  | '!' Ident            -- set boolean attribute to false
 
-TypeRef         := Path FLAGS?         -- type identifier with optional adjacent flags
+TypeRef         := Path FlagsRun?      -- type identifier with optional adjacent flags
+                                       -- FlagsRun is recognized per §2.6.2
 
 PlacementBody   := ':' NEWLINE INDENT NodeBodyContent+ DEDENT
 
-NodeBodyContent := AttrSetting
-                 | PlacementForm        -- nested part / connection
-                 | DocComment
+NodeBodyContent := Annotation* DocComment? (AttrSetting | PlacementForm)
 
 AttrSetting     := Ident ':' Expr NEWLINE
 ```
 
-`NodeInstantiation` is a top-level form; the bound `Ident` becomes a module-scope name for the instance.
+`NodeInstantiation` is a top-level form; the bound `Ident` becomes a module-scope name for the instance. `Pub?` controls export visibility.
 
 `PlacementForm` is the recursive form used inside a node's body for parts, connections, and nested constructions. It permits an optional name (`Ident`); if absent, the part is anonymous.
 
@@ -641,11 +660,10 @@ AttrSetting     := Ident ':' Expr NEWLINE
 
 #### 3.10.1 Disambiguation
 
-Within a placement-body line, the parser commits to one of three forms by lookahead:
+Within a placement-body line, the parser commits to one of two forms by lookahead:
 
-1. `Ident ':' Expr` → `AttrSetting`
-2. `TypeRef Ident? PlacementInline?` (no `:` following the leading `TypeRef` directly, or `:` only at end-of-line introducing an indented body) → `PlacementForm`
-3. Anything else in placement context is a parse error.
+1. `Ident ':' Expr` → `AttrSetting`.
+2. `TypeRef Ident? PlacementInline?` → `PlacementForm` (no `:` directly after the leading identifier, or `:` only at end-of-line introducing an indented body).
 
 The first identifier on a line is checked: if it is followed by `:` and an expression on the same line, it is an attribute setting. Otherwise it is a `TypeRef` for a placement form.
 
@@ -670,11 +688,11 @@ Inside `Component chip_b`'s body:
 - `Pin out1` is a `PlacementForm` declaring a named part of type `Pin`.
 - The two `WiresTo/...` lines under `Pin out1` are `PlacementForm`s declaring connections originating from `out1`.
 - `Pin in1` is another part.
-- `Pin'! pwr | direction: In` is a part of type `Pin` with one flag `!`, named `pwr`, with attribute `direction` set to `In`.
+- `Pin'! pwr | direction: In` is a part of type `Pin` with two flags `'` and `!`, named `pwr`, with attribute `direction` set to `In`.
 
-#### 3.10.3 Flag Tokenization in Placement
+#### 3.10.3 Flag Recognition in Placement
 
-`FLAGS` is a lexer token produced when an identifier is followed without whitespace by one or more `FlagChar`s. Each character in the `FLAGS` lexeme is a separate flag, and each must alias a boolean `attr` declared on the type's trait closure. Flag-to-attr resolution is a semantic concern.
+Flag recognition is parser-driven per §2.6.2. After committing to a `TypeRef` in placement position, the parser may consume a contiguous run of `FlagChar`s with no intervening whitespace as a flags-run on the `TypeRef`. Each character is one flag, aliasing a boolean `attr` on the type's trait closure.
 
 ### 3.11 Function Declarations
 
@@ -697,7 +715,7 @@ FnBody       := ':' BlockBody
               | ':' Expr NEWLINE       -- single-expression body
 ```
 
-`SelfParam` is permitted only as the first parameter, only when the `fn` is declared inside a `type`/`enum`/`trait`/`node`/`connection` body. Top-level functions cannot use `self`.
+`SelfParam` is permitted only as the first parameter, only when the `fn` is declared inside a `type`/`enum`/`trait`/`node`/`connection`/`extend` body. Top-level functions cannot use `self`.
 
 `SelfParam` carries no type annotation; its type is `Self` (the enclosing type), passed by immutable reference. Mutation through `self` is forbidden.
 
@@ -759,9 +777,7 @@ ExtendItem   := 'extend' TypeExpr ExtendBody
 
 ExtendBody   := NEWLINE INDENT ExtendBodyItem+ DEDENT
 
-ExtendBodyItem := SatisfiesClause
-                | FnDecl
-                | DocComment
+ExtendBodyItem := Annotation* DocComment? (SatisfiesClause | FnDecl)
 ```
 
 `extend` adds methods and trait conformance to an existing type. It is the only mechanism by which the standard library declares trait conformance on primitives (`extend i32: satisfies Number, Equal, Ord`).
@@ -789,7 +805,15 @@ A function body is a sequence of statements followed optionally by a final expre
 
 `;` is permitted as a same-line statement separator; it is interchangeable with `NEWLINE` for terminating a statement, though by convention statements are one per line.
 
-#### 3.13.1 Let Bindings
+#### 3.13.1 ExprStmt vs FinalExpr Disambiguation
+
+Both `ExprStmt` and `FinalExpr` are an `Expr` followed by a line terminator. The parser disambiguates positionally:
+
+> An `Expr NEWLINE` immediately followed by `DEDENT` (i.e., the block closes after this line) is parsed as `FinalExpr`. An `Expr NEWLINE` followed by another `Stmt` is parsed as `ExprStmt`.
+
+Consequence: the final expression of a block is the function's return value if not followed by a statement. To force a non-returning final line (yield unit instead), terminate it with `;` — `expr;\n` is `ExprStmt`, and the block returns unit.
+
+#### 3.13.2 Let Bindings
 
 ```
 LetStmt      := 'let' Pattern TypeAnno? '=' Expr StmtEnd
@@ -811,7 +835,7 @@ Pattern      := WildcardPat
               | OrPat
 
 WildcardPat  := '_'
-LiteralPat   := IntLit | FloatLit | BoolLit | CharLit | StringLit
+LiteralPat   := IntLit | FloatLit | BoolLit | CharLit | ByteLit | StringLit
 IdentPat     := Ident                       -- bind value to Ident
 
 TuplePat     := '(' (Pattern (',' Pattern)* ','?)? ')'
@@ -830,6 +854,8 @@ OrPat        := Pattern ('|' Pattern)+      -- only legal in match-arm position
 Patterns appear in `let`, `match` arms, and function parameters of `match`-shaped destructuring (none yet defined; see open issues).
 
 `OrPat` permits multiple patterns to share an arm body in `match`. All branches must bind the same set of identifiers with the same types.
+
+`RecordPat` and `VariantPat` share the surface form `Path '(' ... ')'`; the parser commits based on argument shape, and the semantic layer enforces target-kind constraints (records: named/shorthand only; variants: per declaration).
 
 #### 3.14.1 Pattern Guards
 
@@ -872,7 +898,7 @@ PostfixExpr  := PrimaryExpr Postfix*
 Postfix      := '?'
               | '.' Ident
               | '.' IntLit                         -- tuple field access
-              | '(' ArgList? ')'                   -- function call
+              | '(' ArgList? ')'                   -- function/constructor call
               | '[' Expr ']'                       -- indexing
 
 PrimaryExpr  := Literal
@@ -880,13 +906,11 @@ PrimaryExpr  := Literal
               | 'self'
               | 'Self'
               | ParenOrTupleExpr
-              | RecordExpr
               | LambdaExpr
               | IfExpr
               | MatchExpr
-              | BlockExpr
 
-Literal      := IntLit | FloatLit | BoolLit | CharLit | ByteLit | StringLit | DurationLit
+Literal      := IntLit | FloatLit | BoolLit | CharLit | ByteLit | StringLit
 
 Path         := PathBase ('::' PathSegment)*
 ParenOrTupleExpr := '(' ')'                                  -- unit
@@ -894,16 +918,11 @@ ParenOrTupleExpr := '(' ')'                                  -- unit
                   | '(' Expr ',' ')'                         -- 1-tuple
                   | '(' Expr (',' Expr)+ ','? ')'            -- n-tuple
 
-RecordExpr   := Path '(' (RecordExprField (',' RecordExprField)* ','?)? ')'
-RecordExprField := Ident ':' Expr
-                 | Expr                            -- positional, only when all fields are positional
-                 | Ident                           -- shorthand: { x } means { x: x }
-
 ArgList      := Arg (',' Arg)* ','?
 Arg          := Ident ':' Expr                    -- named
-              | Expr                              -- positional
-
-BlockExpr    := ':' BlockBody                     -- only legal as RHS of certain forms
+              | Expr                              -- positional (a bare Ident here is an expression
+                                                  -- which the semantics may reinterpret as a
+                                                  -- record-shorthand when the call target is a record)
 ```
 
 > **Note**: Comparison chaining (`a < b < c`) is not permitted; only one comparison per `CmpExpr` step. The `(CmpOp PipeExpr)*` in the grammar admits multi-step chains syntactically, but the type system rejects boolean-returning operands except on the last step. Final rule deferred to semantics.
@@ -972,26 +991,28 @@ Chains are left-associative: `x >> a: 1 >> b: 2` means `b(a(x, 1), 2)`.
 
 Within a `signal`/`derived`/`attr` declaration, a `ModifierTail` (§3.4) is sugar over the same form, splitting the declaration into a hidden inner cell plus a derived projection. The exact desugaring is a semantics concern.
 
-#### 3.15.4 Value Construction
+#### 3.15.4 Construction (Records, Variants, Function Calls)
+
+Construction shares one syntactic form: a `Path` followed by the call-postfix `'(' ArgList? ')'`. There is no dedicated `RecordExpr` production — records, enum variants, and ordinary function calls all use the same surface, distinguished by what `Path` resolves to:
 
 ```
-RecordExpr   := Path '(' (RecordExprField (',' RecordExprField)* ','?)? ')'
+Vec3(x: 1.0, y: 2.0, z: 3.0)         -- record (named)
+Vec3(x, y, z)                        -- record (shorthand: each Ident is field-name = Ident)
+Some(42)                             -- enum variant with positional payload
+Click(at: Vec3(x: 0.0, y: 0.0, z: 0.0))   -- enum variant with named payload
+print("hello")                       -- function call (positional)
+parse(input: src, strict: true)      -- function call (named)
 ```
 
-Construction of `type` records and `enum` variant payloads uses parens with named or positional arguments:
+Semantic rules (enforced after name resolution, not by the parser):
 
-```
-Vec3(x: 1.0, y: 2.0, z: 3.0)
-Vec3(1.0, 2.0, 3.0)
-Some(42)
-Click(at: Vec3(0.0, 0.0, 0.0))
-```
+- **Records** accept only named or shorthand args. Positional args are rejected. A bare `Ident` in arg position is interpreted as field-name shorthand (`Ident` ≡ `Ident: Ident`).
+- **Enum variants** accept the form their declaration specifies (positional payload → positional args; named payload → named args).
+- **Functions** accept positional and/or named args per their parameter list, subject to overloading/inference rules in the semantics.
 
-Named and positional forms cannot be mixed within a single call. This is enforced at parse time.
+Mixing named and positional within a single call is rejected (parse-level for the `Arg` alternation if both forms appear, or semantic, depending on resolution; the rule is consistent: one call is all-named or all-positional).
 
-Trailing commas are permitted but not required.
-
-Multi-line construction is permitted inside the parens, with layout suspended:
+Trailing commas are permitted but not required. Multi-line construction is permitted inside the parens, with layout suspended:
 
 ```
 Contact(
@@ -1001,13 +1022,16 @@ Contact(
 )
 ```
 
+For tuple values (positional, anonymous), use `ParenOrTupleExpr` directly: `(1, "hello", 3.14)`.
+
 #### 3.15.5 Functional Update
 
 ```
-WithExpr     := PostfixExpr 'with' '(' (RecordExprField (',' RecordExprField)* ','?)? ')'
+WithExpr     := PostfixExpr 'with' '(' (NamedArg (',' NamedArg)* ','?)? ')'
+NamedArg     := Ident ':' Expr | Ident
 ```
 
-> **Open**: `with` syntax for record functional update (`contact with(age: 26)`) was discussed but not pinned. Productions above show one candidate; alternative is `contact with age: 26 | name: "..."` using attribute pipes. Defer to semantics review.
+> **Open**: `with` syntax for record functional update (`contact with(age: 26)`) is a placeholder. Records are immutable, so functional update produces a new record sharing all unchanged fields. Final placement of `with` (keyword vs. method, positional within precedence table) deferred to semantics review.
 
 ### 3.16 Type Expressions
 
@@ -1018,6 +1042,7 @@ TypeIntersection := TypePostfix ('&' TypePostfix)*
 
 TypePostfix  := TypeAtom TypePostfixOp*
 TypePostfixOp := '[' TypeArg (',' TypeArg)* ','? ']'      -- generic instantiation
+              | '.' Ident                                   -- associated type access
 
 TypeArg      := TypeExpr
               | Expr                                        -- value generic (e.g., usize)
@@ -1042,6 +1067,8 @@ ParenType    := '(' TypeExpr ')'
 
 `TypeIntersection` (`A & B`) is permitted at use sites for endpoint constraints and bounds (`fn pick[T: Drivable & Insurable](...)`). Intersection at type definition (`type X = A & B`) is permitted only for record types; intersection across kinds is a semantic error.
 
+`TypePostfixOp` includes `.` for associated-type access — e.g., `I.Item` reads the `Item` associated type of generic parameter `I`. The `.` is the member-access operator from value-position, lifted to type position with associated-type resolution semantics.
+
 #### 3.16.1 Type Path Disambiguation
 
 A path followed by `[...]` is a generic instantiation in type position. In expression position, the same syntax is parsed as indexing.
@@ -1055,6 +1082,8 @@ let first = xs[0]                            -- indexing: same brackets, differe
 ### 3.17 Top-Level Forms — Summary
 
 ```
+Module       := ModuleItem*
+
 ModuleItem   := UseItem
               | ExtendItem
               | AnnotatedDecl
@@ -1107,7 +1136,7 @@ Notes:
 
 The following items are syntactically permitted by this grammar but require pinning in the semantics document:
 
-1. **Trait `attr` declarations**: §3.7 permits `attr` inside trait bodies. Whether these are required for trait conformance, optional, or carry default values is unspecified at the grammar level.
+1. **Trait `attr` semantics**: §3.7 grammatically permits `attr` inside trait bodies. Whether these are required by conformers, optional, or carry default values is unspecified at the grammar level.
 2. **Trait method dispatch**: `dyn Trait` syntax is recognized; object-safety rules are semantic.
 3. **`with` functional update**: §3.15.5 sketches a placeholder syntax; final form pending review.
 4. **Comparison chaining**: §3.15 admits `a < b < c` syntactically; the type system must reject it.
@@ -1115,6 +1144,8 @@ The following items are syntactically permitted by this grammar but require pinn
 6. **`else` requirement on `if`-as-expression**: enforced by type system, not grammar.
 7. **Numeric suffix on float-only types**: `120number` and `120int` — the grammar treats `number` and `int` as suffixes but their applicability to integer-shaped vs float-shaped literals needs semantic precision (currently `number` implies float context, `int` implies integer context).
 8. **File extension and module manifest**: outside the scope of this grammar.
+9. **Construction shape resolution**: `Path '(' ArgList ')'` is the unified construction surface; rejection of positional args for record targets, interpretation of bare-Ident positional as record shorthand, and overload/inference resolution for function calls all live in semantics.
+10. **`RecordPat` vs `VariantPat` resolution**: §3.14 surfaces share `Path '(' ... ')'` form; semantics distinguishes by target-kind.
 
 ---
 
@@ -1132,3 +1163,4 @@ The following are intentionally not part of this grammar and are reserved for po
 - Range literal syntax (`a..b`) — provided as stdlib `range(...)` only
 - `==` / `!=` symbolic equality — replaced by `is` / `is not` keywords
 - Bitwise-or symbolic operator — `|` is reserved for placement attribute pipes
+- Duration literals (e.g. `100ms`) — durations are passed as plain numbers; consuming functions interpret units
