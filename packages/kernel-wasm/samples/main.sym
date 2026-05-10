@@ -1,0 +1,18 @@
+
+
+pipe velocity
+
+node Clip:
+    attr tempo: number
+    attr time_signature: string
+
+node Note:
+    default attr dur: number
+    attr pitch: number
+
+node C4: Note/4 | pitch: 6000
+
+Clip verse:
+    tempo = 120
+    time_signature = '4/4'
+
