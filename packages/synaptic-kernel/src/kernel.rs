@@ -381,8 +381,8 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
             return Err(KernelError::SchemaMismatch);
         }
 
-        if config.network_config.node_capacity < self.node_capacity()
-            || config.network_config.synapse_capacity < self.synapse_capacity()
+        if config.network_config.node_capacity < self.node_capacity() as u32
+            || config.network_config.synapse_capacity < self.synapse_capacity() as u32
             || config.mem_metadata_size < self.config.mem_metadata_size
         {
             return Err(KernelError::InsufficientCapacity);

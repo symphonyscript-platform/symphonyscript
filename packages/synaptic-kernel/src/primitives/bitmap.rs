@@ -31,15 +31,15 @@ pub struct Bitmap {
 }
 
 impl Bitmap {
-    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32) -> Self {
         Self::create(mem, mem_start_offset, capacity, false)
     }
 
-    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32) -> Self {
         Self::create(mem, mem_start_offset, capacity, true)
     }
 
-    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
+    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32, bind: bool) -> Self {
         assert!(
             capacity > 0,
             "Bitmap::create | capacity {} must be positive",
@@ -51,7 +51,7 @@ impl Bitmap {
             "Bitmap::create | capacity {} must be power of 2",
             capacity
         );
-        let word_count = Self::calculate_size_on_mem(capacity);
+        let word_count = Self::calculate_size_on_mem(capacity as usize);
         let mem_end_offset = mem_start_offset + word_count;
 
         if !bind {
@@ -64,7 +64,7 @@ impl Bitmap {
             mem,
             mem_start_offset,
             mem_end_offset,
-            capacity,
+            capacity: capacity as usize,
             word_count,
         }
     }

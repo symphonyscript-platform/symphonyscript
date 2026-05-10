@@ -89,11 +89,12 @@ impl EntryStoreWriter {
     }
 
     pub fn calculate_size_on_mem(config: &EntryStoreConfig) -> usize {
-        SlotAllocator::calculate_size_on_mem(config.capacity) + config.capacity * config.attr_stride
+        SlotAllocator::calculate_size_on_mem(config.capacity as usize)
+            + config.capacity as usize * config.attr_stride
     }
 
     pub fn calculate_size_on_tb(config: &EntryStoreConfig) -> usize {
-        config.capacity * (config.core_stride + config.meta_stride)
+        config.capacity as usize * (config.core_stride + config.meta_stride)
     }
 
     #[inline]
@@ -168,7 +169,7 @@ impl EntryStoreWriter {
     }
 
     pub fn capacity(&self) -> usize {
-        self.config.capacity
+        self.config.capacity as usize
     }
 
     pub fn utilization(&self) -> f32 {
@@ -271,7 +272,7 @@ impl EntryStoreWriter {
             Self::calculate_size_on_tb(&source.config),
         );
 
-        for i in 0..source.config.capacity * source.config.attr_stride {
+        for i in 0..source.config.capacity as usize * source.config.attr_stride {
             self.mem[self.mem_attrs_start_offset + i].store(
                 source.mem[source.mem_attrs_start_offset + i].load(Ordering::Relaxed),
                 Ordering::Relaxed,

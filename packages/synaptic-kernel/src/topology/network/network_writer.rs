@@ -128,7 +128,7 @@ impl NetworkWriter {
 
     pub fn calculate_size_on_tb(config: &NetworkConfig) -> usize {
         NodeStoreWriter::calculate_size_on_tb(&config.to_node_store_config())
-            + config.synapse_capacity * (SYNAPSE_STRIDE + config.synapse_meta_stride)
+            + config.synapse_capacity as usize * (SYNAPSE_STRIDE + config.synapse_meta_stride)
     }
 
     pub fn to_reader(&self) -> NetworkReader {

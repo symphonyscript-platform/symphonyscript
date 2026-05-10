@@ -5,7 +5,7 @@ use crate::primitives::entry_store_config::EntryStoreConfig;
 pub struct NodeStoreConfig {
     pub meta_stride: usize,
     pub attr_stride: usize,
-    pub capacity: usize,
+    pub capacity: u32,
 }
 
 impl NodeStoreConfig {

@@ -5,15 +5,16 @@ pub struct EntryStoreConfig {
     pub core_stride: usize,
     pub meta_stride: usize,
     pub attr_stride: usize,
-    pub capacity: usize,
+    pub capacity: u32,
 }
 
 impl EntryStoreConfig {
     pub fn size_on_mem(&self) -> usize {
-        SlotAllocator::calculate_size_on_mem(self.capacity) + self.capacity * self.attr_stride
+        SlotAllocator::calculate_size_on_mem(self.capacity as usize)
+            + self.capacity as usize * self.attr_stride
     }
 
     pub fn size_on_tb(&self) -> usize {
-        self.capacity * (self.core_stride + self.meta_stride)
+        self.capacity as usize * (self.core_stride + self.meta_stride)
     }
 }

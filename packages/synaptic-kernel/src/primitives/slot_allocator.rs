@@ -53,15 +53,15 @@ pub struct SlotAllocator {
  * SPSC Slot Allocator
  */
 impl SlotAllocator {
-    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32) -> Self {
         Self::create(mem, mem_start_offset, capacity, false)
     }
 
-    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32) -> Self {
         Self::create(mem, mem_start_offset, capacity, true)
     }
 
-    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
+    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32, bind: bool) -> Self {
         let bitmap = Bitmap::create(Arc::clone(&mem), mem_start_offset, capacity, bind);
         let free_list =
             SimpleFreeList::create(Arc::clone(&mem), bitmap.mem_end_offset(), capacity, bind);
@@ -84,7 +84,7 @@ impl SlotAllocator {
             mem,
             mem_start_offset,
             mem_end_offset,
-            capacity,
+            capacity: capacity as usize,
             staging_bitmap: bitmap,
             free_list,
             staging_buffer: deferred_frees_list,
@@ -101,7 +101,7 @@ impl SlotAllocator {
         StagingBufferReader::bind(
             Arc::clone(&self.mem),
             self.staging_buffer.mem_start_offset(),
-            self.capacity,
+            self.capacity as u32,
         )
     }
 

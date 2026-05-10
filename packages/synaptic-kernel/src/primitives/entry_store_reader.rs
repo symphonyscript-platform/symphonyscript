@@ -59,7 +59,8 @@ impl EntryStoreReader {
     }
 
     pub fn calculate_size_on_mem(config: &EntryStoreConfig) -> usize {
-        SlotAllocator::calculate_size_on_mem(config.capacity) + config.capacity * config.attr_stride
+        SlotAllocator::calculate_size_on_mem(config.capacity as usize)
+            + config.capacity as usize * config.attr_stride
     }
 
     #[inline]
@@ -91,7 +92,7 @@ impl EntryStoreReader {
     }
 
     pub fn calculate_size_on_tb(config: &EntryStoreConfig) -> usize {
-        config.capacity * (config.core_stride + config.meta_stride)
+        config.capacity as usize * (config.core_stride + config.meta_stride)
     }
 
     pub fn mem_start_offset(&self) -> usize {
@@ -111,7 +112,7 @@ impl EntryStoreReader {
     }
 
     pub fn capacity(&self) -> usize {
-        self.config.capacity
+        self.config.capacity as usize
     }
 
     #[inline]

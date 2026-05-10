@@ -8,8 +8,8 @@ use std::sync::atomic::Ordering;
 /// # Threading
 /// Consumer thread only. All atomic operations use `Relaxed` ordering.
 pub struct MemZoneReader<'a> {
-    mem: &'a AtomicBuffer,
     pub stride: usize,
+    mem: &'a AtomicBuffer,
     mem_start_offset: usize,
     mem_end_offset: usize,
 }

@@ -58,18 +58,18 @@ pub struct TripleBufferWriter {
 }
 
 impl TripleBufferWriter {
-    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, buffer_capacity: usize) -> Self {
+    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, buffer_capacity: u32) -> Self {
         TripleBufferWriter::create(mem, mem_start_offset, buffer_capacity, false)
     }
 
-    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, buffer_capacity: usize) -> Self {
+    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, buffer_capacity: u32) -> Self {
         TripleBufferWriter::create(mem, mem_start_offset, buffer_capacity, true)
     }
 
     pub fn create(
         mem: AtomicBuffer,
         mem_start_offset: usize,
-        buffer_capacity: usize,
+        buffer_capacity: u32,
         bind: bool,
     ) -> Self {
         assert!(
@@ -85,10 +85,10 @@ impl TripleBufferWriter {
         let mem_buffers_base = mem_start_offset + 4;
         let buffer_bases: [usize; 3] = [
             mem_buffers_base,
-            mem_buffers_base + buffer_capacity,
-            mem_buffers_base + buffer_capacity * 2,
+            mem_buffers_base + buffer_capacity as usize,
+            mem_buffers_base + buffer_capacity as usize * 2,
         ];
-        let mem_end_offset = mem_buffers_base + buffer_capacity * 3;
+        let mem_end_offset = mem_buffers_base + buffer_capacity as usize * 3;
 
         assert!(
             mem_end_offset <= mem.len(),
@@ -105,7 +105,7 @@ impl TripleBufferWriter {
             mem_reader_offset,
             mem_published_offset,
             buffer_bases,
-            buffer_capacity,
+            buffer_capacity: buffer_capacity as usize,
             mem_end_offset,
         };
 
