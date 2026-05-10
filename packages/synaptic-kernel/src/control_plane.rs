@@ -70,6 +70,14 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
     ) -> (Box<EpochMirror<TB_COUNT, STORE_COUNT, LUT_COUNT>>, i32) {
         let new_epoch_ptr = Box::into_raw(new_epoch);
         let old_epoch_ptr = self.mirror_ptr.swap(new_epoch_ptr, Ordering::AcqRel);
+        // Two separate atomic operations (pointer swap + generation bump),
+        // not one combined atomic. Loom-verified (see tests/loom_control_plane.rs).
+        // The AcqRel on the swap above pairs with the Acquire load in
+        // `acquire_mirror()`. The Release on the fetch_add below pairs with
+        // the Acquire load of `writer_generation` in `ack()`. The two pairs
+        // together guarantee: any consumer that observes the bumped generation
+        // must also see the new mirror_ptr. These should not be combined, orderings
+        // should not be weakened or reordered.
         let prev_gen = self.writer_generation.fetch_add(1, Ordering::Release);
 
         // SAFETY: old_epoch_ptr was originally created by Box::into_raw() in a prior

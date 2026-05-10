@@ -168,6 +168,7 @@ impl StagingBufferWriter {
             "StagingBufferWriter.push | buffer overflow",
         );
 
+        // Relaxed: same reasoning as in `publish()` below: loom-verified.
         let generation_id = self.mem[self.mem_writer_generation_offset].load(Ordering::Relaxed);
 
         self.buffer.write([slot.to_i32(), generation_id])?;
@@ -175,6 +176,15 @@ impl StagingBufferWriter {
         Ok(())
     }
 
+    // `Relaxed` on the writer_generation read/write is intentional and
+    // loom-verified (see tests/loom_staging_buffer.rs). Cross-thread
+    // synchronization between writer and reader rides on the
+    // reader_ack_generation Release (in StagingBufferReader::ack) /
+    // Acquire (in `reader_ack_generation()` above) pair. The
+    // writer_generation cell itself is a scalar i32 with no associated
+    // payload that must become visible alongside it - torn reads cannot
+    // occur, and a stale read just delays a drain by one cycle.
+    // No need to be "tightened" to AcqRel: the cost is real, the benefit is zero.
     pub fn publish(&self) {
         self.mem[self.mem_writer_generation_offset].fetch_add(1, Ordering::Relaxed);
     }
