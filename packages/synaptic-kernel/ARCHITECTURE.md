@@ -131,6 +131,21 @@ published state.
 `swap()` (consumer): if NEW_DATA is unset, return false. Otherwise swap producer's old buffer back, clear NEW_DATA,
 return true.
 
+State machine on the NEW_DATA bit (the gate that decides whether a `swap()` succeeds):
+
+```mermaid
+stateDiagram-v2
+    [*] --> NoData : init (state = 0b001)
+    NoData --> HasData : producer publish()<br/>(swap shared with writer, set NEW_DATA)
+    HasData --> HasData : producer publish()<br/>(replace shared with newer frame, NEW_DATA stays)
+    HasData --> NoData : consumer swap()<br/>(swap shared with reader, clear NEW_DATA)
+    NoData --> NoData : consumer swap()<br/>(returns false, no transition)
+```
+
+Two publishes between consumer swaps coalesce — the consumer only ever sees the latest published frame, never an
+intermediate one. This is the trade triple-buffering makes for no producer blocking: at most one frame of staleness,
+intermediate frames may be skipped under producer pressure.
+
 Atomic ordering:
 
 - Writer publish: `AcqRel` swap on state.
@@ -182,12 +197,15 @@ arithmetic and indexing; exposed as `usize` via `capacity()` accessors to match 
 
 Lifecycle:
 
-```
-free → alloc() → active → defer_free() → deferred
-     → publish()           (writer stages the generation)
-     → consumer ack        (via swap() / acquire_mirror() on the EpochConsumer)
-     → publish()           (writer drains acknowledged entries)
-     → free
+```mermaid
+stateDiagram-v2
+    [*] --> Free
+    Free --> Active : alloc()
+    Active --> Active : read / write
+    Active --> Deferred : defer_free()
+    Deferred --> Deferred : publish() — writer_gen++
+    Deferred --> Deferred : consumer ack via swap()
+    Deferred --> Free : publish() drains<br/>(when reader_ack_gen >= retirement_gen)
 ```
 
 A single `publish()` after `defer_free()` does **not** reclaim the slot. Reclamation requires the consumer to have
@@ -400,6 +418,39 @@ EpochConsumer::acquire_mirror()
 
 User TB swaps are explicit: the consumer must call `EpochMirror::swap_tb(id)` per cycle if it cares about that TB.
 `acquire_mirror()` only handles the default TB.
+
+Cross-thread interaction over a deferred-reclamation cycle:
+
+```mermaid
+sequenceDiagram
+    participant P as Producer
+    participant SB as StagingBuffer
+    participant TB as TripleBuffer
+    participant C as Consumer
+
+    Note over P,C: writer_gen=1, reader_ack=0, slot_X is active
+
+    P->>P: remove_node(slot_X)
+    P->>SB: push (slot_X, gen=1)
+    Note over SB: slot_X deferred at gen 1
+
+    P->>P: publish()
+    P->>SB: writer_gen → 2
+    P->>TB: hand off frame (state.NEW_DATA = 1)
+
+    Note over P,C: slot_X NOT yet reclaimed:<br/>reader_ack still 0, retirement_gen is 1
+
+    C->>TB: acquire_mirror() → swap()
+    TB->>C: new frame
+    C->>SB: ack() → reader_ack = writer_gen - 1 = 1
+    Note over SB: consumer caught up to gen 1
+
+    P->>P: publish() (next cycle)
+    P->>SB: drain entries with gen <= reader_ack(1)
+    SB->>P: yields (slot_X, 1)
+    P->>P: free_list.free(slot_X)
+    Note over P: slot_X reclaimed and reusable
+```
 
 Two independent generation tracks:
 
