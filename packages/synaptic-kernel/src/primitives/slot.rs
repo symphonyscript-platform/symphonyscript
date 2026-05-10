@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::num::NonZeroU32;
 
-/// Typed identifier for slots..
+/// Typed identifier for slots.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SlotId(NonZeroU32);

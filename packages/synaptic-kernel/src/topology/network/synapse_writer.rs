@@ -59,7 +59,7 @@ impl<'a> SynapseWriter<'a> {
 
     #[inline]
     pub(crate) fn set_source_ptr(&self, value: SlotId) {
-        self.entry.core_write(1, SlotId::option_to_i32(Some(value)))
+        self.entry.core_write(1, value.to_i32())
     }
 
     #[inline]
@@ -70,7 +70,7 @@ impl<'a> SynapseWriter<'a> {
 
     #[inline]
     pub(crate) fn set_target_ptr(&self, value: SlotId) {
-        self.entry.core_write(2, SlotId::option_to_i32(Some(value)))
+        self.entry.core_write(2, value.to_i32())
     }
 
     #[inline]
