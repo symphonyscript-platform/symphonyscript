@@ -1,5 +1,6 @@
 use crate::errors::ring_buffer_error::RingBufferError;
 use crate::primitives::ring_buffer::RingBuffer;
+use crate::primitives::slot::SlotId;
 use crate::primitives::staging_buffer_reader::StagingBufferReader;
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
@@ -52,7 +53,7 @@ pub struct StagingBufferWriterIterator<'a> {
 }
 
 impl<'a> Iterator for StagingBufferWriterIterator<'a> {
-    type Item = usize;
+    type Item = SlotId;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.buffer.peek() {
@@ -62,7 +63,7 @@ impl<'a> Iterator for StagingBufferWriterIterator<'a> {
                 }
 
                 self.buffer.read();
-                Some(data as usize)
+                SlotId::new(data as u32)
             }
             None => None,
         }
@@ -70,15 +71,15 @@ impl<'a> Iterator for StagingBufferWriterIterator<'a> {
 }
 
 impl StagingBufferWriter {
-    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32) -> Self {
         Self::create(mem, mem_start_offset, capacity, false)
     }
 
-    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32) -> Self {
         Self::create(mem, mem_start_offset, capacity, true)
     }
 
-    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
+    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32, bind: bool) -> Self {
         assert!(
             capacity > 0,
             "StagingBufferWriter::create | capacity {} must be positive",
@@ -95,7 +96,7 @@ impl StagingBufferWriter {
         let mem_reader_ack_generation_offset = mem_start_offset + 1;
         let mem_list_start_offset = mem_start_offset + 2;
         let mem_end_offset =
-            mem_list_start_offset + RingBuffer::<2>::calculate_size_on_mem(capacity);
+            mem_list_start_offset + RingBuffer::<2>::calculate_size_on_mem(capacity as usize);
 
         assert!(
             mem_end_offset <= mem.len(),
@@ -119,7 +120,7 @@ impl StagingBufferWriter {
             mem_writer_generation_offset,
             mem_reader_ack_generation_offset,
             mem_end_offset,
-            capacity,
+            capacity: capacity as usize,
         }
     }
 
@@ -128,7 +129,11 @@ impl StagingBufferWriter {
     }
 
     pub fn to_reader(&self) -> StagingBufferReader {
-        StagingBufferReader::bind(Arc::clone(&self.mem), self.mem_start_offset, self.capacity)
+        StagingBufferReader::bind(
+            Arc::clone(&self.mem),
+            self.mem_start_offset,
+            self.capacity as u32,
+        )
     }
 
     pub fn len(&self) -> usize {
@@ -155,14 +160,17 @@ impl StagingBufferWriter {
         self.mem[self.mem_reader_ack_generation_offset].load(Ordering::Acquire)
     }
 
-    pub fn push(&self, slot: usize) -> Result<(), RingBufferError> {
+    pub fn push(&self, slot: SlotId) -> Result<(), RingBufferError> {
         let len = self.len();
 
-        debug_assert!(len < self.capacity, "StagingBufferWriter.push | buffer overflow",);
+        debug_assert!(
+            len < self.capacity,
+            "StagingBufferWriter.push | buffer overflow",
+        );
 
         let generation_id = self.mem[self.mem_writer_generation_offset].load(Ordering::Relaxed);
 
-        self.buffer.write([slot as i32, generation_id])?;
+        self.buffer.write([slot.to_i32(), generation_id])?;
 
         Ok(())
     }

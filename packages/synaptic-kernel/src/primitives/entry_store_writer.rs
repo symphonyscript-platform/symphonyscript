@@ -4,6 +4,7 @@ use crate::primitives::entry_store_config::EntryStoreConfig;
 use crate::primitives::entry_store_reader::EntryStoreReader;
 use crate::primitives::entry_writer::EntryWriter;
 use crate::primitives::mem_zone_writer::MemZoneWriter;
+use crate::primitives::slot::SlotId;
 use crate::primitives::slot_allocator::SlotAllocator;
 use crate::primitives::tb_zone_view::TbZoneView;
 use crate::primitives::tb_zone_writer::TbZoneWriter;
@@ -89,40 +90,41 @@ impl EntryStoreWriter {
     }
 
     pub fn calculate_size_on_mem(config: &EntryStoreConfig) -> usize {
-        SlotAllocator::calculate_size_on_mem(config.capacity) + config.capacity * config.attr_stride
+        SlotAllocator::calculate_size_on_mem(config.capacity as usize)
+            + config.capacity as usize * config.attr_stride
     }
 
     pub fn calculate_size_on_tb(config: &EntryStoreConfig) -> usize {
-        config.capacity * (config.core_stride + config.meta_stride)
+        config.capacity as usize * (config.core_stride + config.meta_stride)
     }
 
     #[inline]
     pub(crate) fn calculate_struct_zone_base(
         tb_start_offset: usize,
-        slot: usize,
+        slot: SlotId,
         core_stride: usize,
         meta_stride: usize,
     ) -> usize {
         debug_assert!(
-            slot > 0,
+            slot.to_usize() > 0,
             "EntryStoreWriter::calculate_struct_zone_base | slot {} out of bounds",
             slot
         );
-        tb_start_offset + (slot - 1) * (core_stride + meta_stride)
+        tb_start_offset + (slot.to_usize() - 1) * (core_stride + meta_stride)
     }
 
     #[inline]
     pub(crate) fn calculate_attr_zone_base(
         mem_attrs_start_offset: usize,
-        slot: usize,
+        slot: SlotId,
         attr_stride: usize,
     ) -> usize {
         debug_assert!(
-            slot > 0,
+            slot.to_usize() > 0,
             "EntryStoreWriter::calculate_attr_zone_base | slot {} out of bounds",
             slot
         );
-        mem_attrs_start_offset + ((slot - 1) * attr_stride)
+        mem_attrs_start_offset + ((slot.to_usize() - 1) * attr_stride)
     }
 
     pub fn to_reader(&self) -> EntryStoreReader {
@@ -168,19 +170,19 @@ impl EntryStoreWriter {
     }
 
     pub fn capacity(&self) -> usize {
-        self.config.capacity
+        self.config.capacity as usize
     }
 
     pub fn utilization(&self) -> f32 {
         self.allocator.utilization()
     }
 
-    pub fn is_active_slot(&self, slot: usize) -> bool {
+    pub fn is_active_slot(&self, slot: SlotId) -> bool {
         self.allocator.is_active(slot)
     }
 
     #[inline]
-    pub fn get(&'_ self, slot: usize) -> EntryWriter<'_> {
+    pub fn get(&'_ self, slot: SlotId) -> EntryWriter<'_> {
         debug_assert!(
             self.allocator.is_active(slot),
             "EntryStoreWriter.get | attempted to read inactive slot {}",
@@ -202,7 +204,7 @@ impl EntryStoreWriter {
     }
 
     #[inline]
-    pub fn get_handle(&'_ self, slot: usize) -> EntryHandle<'_> {
+    pub fn get_handle(&'_ self, slot: SlotId) -> EntryHandle<'_> {
         debug_assert!(
             self.allocator.is_active(slot),
             "EntryStoreWriter.get | attempted to read inactive slot {}",
@@ -223,7 +225,7 @@ impl EntryStoreWriter {
         )
     }
 
-    pub fn insert(&self) -> Option<usize> {
+    pub fn insert(&self) -> Option<SlotId> {
         let result = self.allocator.alloc();
 
         if result.is_none() {
@@ -247,7 +249,7 @@ impl EntryStoreWriter {
         Some(new_slot)
     }
 
-    pub fn remove(&self, slot: usize) -> Result<(), SlotAllocatorError> {
+    pub fn remove(&self, slot: SlotId) -> Result<(), SlotAllocatorError> {
         self.allocator.defer_free(slot)
     }
 
@@ -271,7 +273,7 @@ impl EntryStoreWriter {
             Self::calculate_size_on_tb(&source.config),
         );
 
-        for i in 0..source.config.capacity * source.config.attr_stride {
+        for i in 0..source.config.capacity as usize * source.config.attr_stride {
             self.mem[self.mem_attrs_start_offset + i].store(
                 source.mem[source.mem_attrs_start_offset + i].load(Ordering::Relaxed),
                 Ordering::Relaxed,
@@ -279,7 +281,7 @@ impl EntryStoreWriter {
         }
     }
 
-    fn get_entry_tb_base(&self, slot: usize) -> usize {
+    fn get_entry_tb_base(&self, slot: SlotId) -> usize {
         let tb_start_offset = Self::calculate_struct_zone_base(
             self.tb_start_offset,
             slot,
@@ -299,7 +301,7 @@ impl EntryStoreWriter {
         tb_start_offset
     }
 
-    fn get_entry_mem_base(&self, slot: usize) -> usize {
+    fn get_entry_mem_base(&self, slot: SlotId) -> usize {
         let mem_start_offset = Self::calculate_attr_zone_base(
             self.mem_attrs_start_offset,
             slot,

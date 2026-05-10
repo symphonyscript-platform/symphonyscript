@@ -1,5 +1,6 @@
 use crate::errors::free_list_error::FreeListError;
 use crate::primitives::bitmap::Bitmap;
+use crate::primitives::slot::SlotId;
 use crate::primitives::types::AtomicBuffer;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -41,15 +42,15 @@ pub struct SimpleFreeList {
 }
 
 impl SimpleFreeList {
-    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32) -> Self {
         Self::create(mem, mem_start_offset, capacity, false)
     }
 
-    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32) -> Self {
         Self::create(mem, mem_start_offset, capacity, true)
     }
 
-    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
+    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32, bind: bool) -> Self {
         assert!(
             capacity > 0,
             "SimpleFreeList::create | capacity {} must be positive",
@@ -65,12 +66,12 @@ impl SimpleFreeList {
         let free_count_slot_index = mem_start_offset + 1;
         let alloc_bitmap = Bitmap::create(Arc::clone(&mem), mem_start_offset + 2, capacity, bind);
         let slots_start_index = alloc_bitmap.mem_end_offset();
-        let slots_end_index = slots_start_index + capacity;
+        let slots_end_index = slots_start_index + capacity as usize;
 
         assert!(slots_end_index <= mem.len(), "SimpleFreeList out of bounds");
 
         if !bind {
-            for i in 0..capacity {
+            for i in 0..capacity as usize {
                 mem[slots_start_index + i].store((i as i32) + 1, Ordering::Relaxed);
             }
 
@@ -86,7 +87,7 @@ impl SimpleFreeList {
             mem_free_count_offset: free_count_slot_index,
             slots_start_index,
             mem_end_offset: slots_end_index,
-            capacity,
+            capacity: capacity as usize,
         }
     }
 
@@ -118,38 +119,38 @@ impl SimpleFreeList {
         self.alloc_count() as f32 / self.capacity as f32
     }
 
-    pub fn is_allocated(&self, slot: usize) -> bool {
-        self.alloc_bitmap.is_on(slot - 1)
+    pub fn is_allocated(&self, slot: SlotId) -> bool {
+        self.alloc_bitmap.is_on(slot.to_usize() - 1)
     }
 
-    pub fn is_free(&self, slot: usize) -> bool {
-        self.alloc_bitmap.is_off(slot - 1)
+    pub fn is_free(&self, slot: SlotId) -> bool {
+        self.alloc_bitmap.is_off(slot.to_usize() - 1)
     }
 
-    pub fn alloc(&self) -> Option<usize> {
+    pub fn alloc(&self) -> Option<SlotId> {
         let head_index = self.mem[self.mem_head_offset].load(Ordering::Relaxed);
 
         if head_index >= self.capacity as i32 {
             return None;
         }
 
-        let slot_index = head_index as usize;
+        let slot_index = head_index as u32;
         let next_index =
             self.mem[self.slots_start_index + head_index as usize].load(Ordering::Relaxed);
         self.mem[self.mem_head_offset].store(next_index, Ordering::Relaxed);
         self.mem[self.mem_free_count_offset].fetch_sub(1, Ordering::Relaxed);
 
-        self.alloc_bitmap.on(slot_index);
+        self.alloc_bitmap.on(slot_index as usize);
 
-        Some(slot_index + 1)
+        SlotId::new(slot_index + 1)
     }
 
-    pub fn free(&self, slot_number: usize) -> Result<(), FreeListError> {
-        let slot_index = slot_number - 1;
+    pub fn free(&self, slot: SlotId) -> Result<(), FreeListError> {
+        let slot_index = slot.to_usize() - 1;
         debug_assert!(
             slot_index < self.capacity,
             "SimpleFreeList.free | slot_number {} out of bounds",
-            slot_number
+            slot
         );
 
         if self.alloc_bitmap.is_off(slot_index) {
@@ -185,7 +186,7 @@ impl SimpleFreeList {
 
         self.alloc_bitmap.copy_from(&source.alloc_bitmap);
 
-        for i in 0..source.capacity {
+        for i in 0..source.capacity as usize {
             self.mem[self.slots_start_index + i].store(
                 source.mem[source.slots_start_index + i].load(Ordering::Relaxed),
                 Ordering::Relaxed,

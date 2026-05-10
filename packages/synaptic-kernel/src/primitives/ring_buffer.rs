@@ -43,16 +43,16 @@ pub struct RingBuffer<const STRIDE: usize> {
 }
 
 impl<const STRIDE: usize> RingBuffer<STRIDE> {
-    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32) -> Self {
         Self::create(mem, mem_start_offset, capacity, false)
     }
 
-    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32) -> Self {
         Self::create(mem, mem_start_offset, capacity, true)
     }
 
-    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
-        let len = 3 + capacity * STRIDE;
+    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32, bind: bool) -> Self {
+        let len = 3 + capacity as usize * STRIDE;
         let mem_end_offset = mem_start_offset + len;
 
         assert!(
@@ -85,7 +85,7 @@ impl<const STRIDE: usize> RingBuffer<STRIDE> {
 
         RingBuffer {
             mem: Arc::clone(&mem),
-            capacity,
+            capacity: capacity as usize,
             mod_mask: (capacity as i32) - 1,
             mem_read_offset,
             mem_write_offset,

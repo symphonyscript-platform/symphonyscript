@@ -28,7 +28,7 @@ pub struct StagingBufferReader {
 }
 
 impl StagingBufferReader {
-    pub(crate) fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub(crate) fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32) -> Self {
         assert!(
             capacity > 0,
             "StagingBufferReader::bind | capacity {} must be positive",
@@ -43,7 +43,8 @@ impl StagingBufferReader {
 
         let mem_writer_generation_offset = mem_start_offset;
         let mem_reader_ack_generation_offset = mem_start_offset + 1;
-        let mem_end_offset = mem_start_offset + StagingBufferWriter::calculate_size_on_mem(capacity);
+        let mem_end_offset =
+            mem_start_offset + StagingBufferWriter::calculate_size_on_mem(capacity as usize);
 
         debug_assert!(
             mem_end_offset <= mem.len(),
@@ -58,7 +59,7 @@ impl StagingBufferReader {
             mem_writer_generation_offset,
             mem_reader_ack_generation_offset,
             mem_end_offset,
-            capacity,
+            capacity: capacity as usize,
         }
     }
 

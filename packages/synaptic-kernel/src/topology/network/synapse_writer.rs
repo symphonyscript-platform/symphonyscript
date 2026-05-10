@@ -1,4 +1,5 @@
 use crate::primitives::entry_writer::EntryWriter;
+use crate::primitives::slot::SlotId;
 
 /// Producer-side structural facade for a graph synapse on the triple buffer.
 ///
@@ -51,63 +52,65 @@ impl<'a> SynapseWriter<'a> {
     }
 
     #[inline]
-    pub fn get_source_ptr(&self) -> usize {
-        self.entry.core_read(1) as usize
+    pub fn get_source_ptr(&self) -> SlotId {
+        SlotId::from_i32(self.entry.core_read(1))
+            .expect("SynapseWriter::get_source_ptr | synapse is mid-construction or corrupted")
     }
 
     #[inline]
-    pub(crate) fn set_source_ptr(&self, value: usize) {
-        self.entry.core_write(1, value as i32)
+    pub(crate) fn set_source_ptr(&self, value: SlotId) {
+        self.entry.core_write(1, SlotId::option_to_i32(Some(value)))
     }
 
     #[inline]
-    pub fn get_target_ptr(&self) -> usize {
-        self.entry.core_read(2) as usize
+    pub fn get_target_ptr(&self) -> SlotId {
+        SlotId::from_i32(self.entry.core_read(2))
+            .expect("SynapseWriter::get_target_ptr | synapse is mid-construction or corrupted")
     }
 
     #[inline]
-    pub(crate) fn set_target_ptr(&self, value: usize) {
-        self.entry.core_write(2, value as i32)
+    pub(crate) fn set_target_ptr(&self, value: SlotId) {
+        self.entry.core_write(2, SlotId::option_to_i32(Some(value)))
     }
 
     #[inline]
-    pub fn get_outgoing_next_ptr(&self) -> usize {
-        self.entry.core_read(3) as usize
+    pub fn get_outgoing_next_ptr(&self) -> Option<SlotId> {
+        SlotId::from_i32(self.entry.core_read(3))
     }
 
     #[inline]
-    pub(crate) fn set_outgoing_next_ptr(&self, value: usize) {
-        self.entry.core_write(3, value as i32)
+    pub(crate) fn set_outgoing_next_ptr(&self, value: Option<SlotId>) {
+        self.entry.core_write(3, SlotId::option_to_i32(value))
     }
 
     #[inline]
-    pub fn get_outgoing_prev_ptr(&self) -> usize {
-        self.entry.core_read(4) as usize
+    pub fn get_outgoing_prev_ptr(&self) -> Option<SlotId> {
+        SlotId::from_i32(self.entry.core_read(4))
     }
 
     #[inline]
-    pub(crate) fn set_outgoing_prev_ptr(&self, value: usize) {
-        self.entry.core_write(4, value as i32)
+    pub(crate) fn set_outgoing_prev_ptr(&self, value: Option<SlotId>) {
+        self.entry.core_write(4, SlotId::option_to_i32(value))
     }
 
     #[inline]
-    pub fn get_incoming_next_ptr(&self) -> usize {
-        self.entry.core_read(5) as usize
+    pub fn get_incoming_next_ptr(&self) -> Option<SlotId> {
+        SlotId::from_i32(self.entry.core_read(5))
     }
 
     #[inline]
-    pub(crate) fn set_incoming_next_ptr(&self, value: usize) {
-        self.entry.core_write(5, value as i32)
+    pub(crate) fn set_incoming_next_ptr(&self, value: Option<SlotId>) {
+        self.entry.core_write(5, SlotId::option_to_i32(value))
     }
 
     #[inline]
-    pub fn get_incoming_prev_ptr(&self) -> usize {
-        self.entry.core_read(6) as usize
+    pub fn get_incoming_prev_ptr(&self) -> Option<SlotId> {
+        SlotId::from_i32(self.entry.core_read(6))
     }
 
     #[inline]
-    pub(crate) fn set_incoming_prev_ptr(&self, value: usize) {
-        self.entry.core_write(6, value as i32)
+    pub(crate) fn set_incoming_prev_ptr(&self, value: Option<SlotId>) {
+        self.entry.core_write(6, SlotId::option_to_i32(value))
     }
 
     #[inline]

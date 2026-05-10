@@ -99,7 +99,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
             Arc::clone(&mem),
             config.tb_defs,
             mem_metadata.mem_end_offset(),
-            Self::calculate_size_on_default_tb(&config),
+            Self::calculate_size_on_default_tb(&config) as u32,
             bind,
         );
         let network = NetworkWriter::create(

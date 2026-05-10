@@ -1,4 +1,5 @@
 use crate::primitives::entry_reader::EntryReader;
+use crate::primitives::slot::SlotId;
 
 /// Consumer-side structural facade for a graph synapse on the triple buffer.
 ///
@@ -30,33 +31,35 @@ impl<'a> SynapseReader<'a> {
     }
 
     #[inline]
-    pub fn get_source_ptr(&self) -> usize {
-        self.entry.core_read(1) as usize
+    pub fn get_source_ptr(&self) -> SlotId {
+        SlotId::from_i32(self.entry.core_read(1))
+            .expect("SynapseReader::get_source_ptr | synapse is mid-construction or corrupted")
     }
 
     #[inline]
-    pub fn get_target_ptr(&self) -> usize {
-        self.entry.core_read(2) as usize
+    pub fn get_target_ptr(&self) -> SlotId {
+        SlotId::from_i32(self.entry.core_read(2))
+            .expect("SynapseReader::get_target_ptr | synapse is mid-construction or corrupted")
     }
 
     #[inline]
-    pub fn get_outgoing_next_ptr(&self) -> usize {
-        self.entry.core_read(3) as usize
+    pub fn get_outgoing_next_ptr(&self) -> Option<SlotId> {
+        SlotId::from_i32(self.entry.core_read(3))
     }
 
     #[inline]
-    pub fn get_outgoing_prev_ptr(&self) -> usize {
-        self.entry.core_read(4) as usize
+    pub fn get_outgoing_prev_ptr(&self) -> Option<SlotId> {
+        SlotId::from_i32(self.entry.core_read(4))
     }
 
     #[inline]
-    pub fn get_incoming_next_ptr(&self) -> usize {
-        self.entry.core_read(5) as usize
+    pub fn get_incoming_next_ptr(&self) -> Option<SlotId> {
+        SlotId::from_i32(self.entry.core_read(5))
     }
 
     #[inline]
-    pub fn get_incoming_prev_ptr(&self) -> usize {
-        self.entry.core_read(6) as usize
+    pub fn get_incoming_prev_ptr(&self) -> Option<SlotId> {
+        SlotId::from_i32(self.entry.core_read(6))
     }
 
     #[inline]

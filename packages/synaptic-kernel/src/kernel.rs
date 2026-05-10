@@ -9,6 +9,7 @@ use crate::primitives::entry_store_def::{EntryStoreDef, EntryStoreId};
 use crate::primitives::entry_store_writer::EntryStoreWriter;
 use crate::primitives::lut_def::{LutDef, LutId};
 use crate::primitives::lut_writer::LutWriter;
+use crate::primitives::slot::SlotId;
 use crate::primitives::tb_writer::TbWriter;
 use crate::primitives::triple_buffer_def::{TripleBufferDef, TripleBufferId};
 use crate::primitives::types::AtomicBuffer;
@@ -257,30 +258,30 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
     }
 
     #[inline]
-    pub fn get_node(&'_ self, slot: usize) -> NodeHandle<'_> {
+    pub fn get_node(&'_ self, slot: SlotId) -> NodeHandle<'_> {
         self.active_epoch.network.get_node_handle(slot)
     }
 
     #[inline]
-    pub fn get_synapse(&'_ self, slot: usize) -> SynapseView<'_> {
+    pub fn get_synapse(&'_ self, slot: SlotId) -> SynapseView<'_> {
         self.active_epoch.network.get_synapse_handle(slot)
     }
 
-    pub fn insert_node(&self, kind: i32) -> Result<usize, KernelError> {
+    pub fn insert_node(&self, kind: i32) -> Result<SlotId, KernelError> {
         match self.active_epoch.network.insert_node(kind) {
             Some(slot) => Ok(slot),
             None => Err(KernelError::CapacityExhausted),
         }
     }
 
-    pub fn insert_node_after(&self, prev_slot: usize, kind: i32) -> Result<usize, KernelError> {
+    pub fn insert_node_after(&self, prev_slot: SlotId, kind: i32) -> Result<SlotId, KernelError> {
         match self.active_epoch.network.insert_node_after(prev_slot, kind) {
             Some(slot) => Ok(slot),
             None => Err(KernelError::CapacityExhausted),
         }
     }
 
-    pub fn insert_node_before(&self, next_slot: usize, kind: i32) -> Result<usize, KernelError> {
+    pub fn insert_node_before(&self, next_slot: SlotId, kind: i32) -> Result<SlotId, KernelError> {
         match self
             .active_epoch
             .network
@@ -291,20 +292,20 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
         }
     }
 
-    pub fn remove_node(&self, slot: usize) -> Result<(), SlotAllocatorError> {
+    pub fn remove_node(&self, slot: SlotId) -> Result<(), SlotAllocatorError> {
         self.active_epoch.network.remove_node(slot)
     }
 
-    pub fn remove_chain(&self, head_slot: usize) -> Result<(), SlotAllocatorError> {
+    pub fn remove_chain(&self, head_slot: SlotId) -> Result<(), SlotAllocatorError> {
         self.active_epoch.network.remove_chain(head_slot)
     }
 
     pub fn connect(
         &self,
-        source_slot: usize,
-        target_slot: usize,
+        source_slot: SlotId,
+        target_slot: SlotId,
         kind: i32,
-    ) -> Result<usize, KernelError> {
+    ) -> Result<SlotId, KernelError> {
         match self
             .active_epoch
             .network
@@ -315,11 +316,17 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
         }
     }
 
-    pub fn disconnect(&self, source: usize, target: usize) -> Result<(), SlotAllocatorError> {
-        self.active_epoch.network.disconnect(source, target)
+    pub fn disconnect(
+        &self,
+        source_slot: SlotId,
+        target_slot: SlotId,
+    ) -> Result<(), SlotAllocatorError> {
+        self.active_epoch
+            .network
+            .disconnect(source_slot, target_slot)
     }
 
-    pub fn disconnect_synapse(&self, slot: usize) -> Result<(), SlotAllocatorError> {
+    pub fn disconnect_synapse(&self, slot: SlotId) -> Result<(), SlotAllocatorError> {
         self.active_epoch.network.disconnect_synapse(slot)
     }
 
@@ -381,8 +388,8 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
             return Err(KernelError::SchemaMismatch);
         }
 
-        if config.network_config.node_capacity < self.node_capacity()
-            || config.network_config.synapse_capacity < self.synapse_capacity()
+        if config.network_config.node_capacity < self.node_capacity() as u32
+            || config.network_config.synapse_capacity < self.synapse_capacity() as u32
             || config.mem_metadata_size < self.config.mem_metadata_size
         {
             return Err(KernelError::InsufficientCapacity);

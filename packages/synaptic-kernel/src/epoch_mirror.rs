@@ -5,6 +5,7 @@ use crate::primitives::entry_store_reader_registry::EntryStoreReaderRegistry;
 use crate::primitives::lut_def::LutId;
 use crate::primitives::lut_reader::LutReader;
 use crate::primitives::lut_reader_registry::LutReaderRegistry;
+use crate::primitives::slot::SlotId;
 use crate::primitives::tb_reader::TbReader;
 use crate::primitives::triple_buffer_def::TripleBufferId;
 use crate::primitives::triple_buffer_reader_registry::TripleBufferReaderRegistry;
@@ -96,12 +97,12 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
     }
 
     #[inline]
-    pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_> {
+    pub fn get_node(&'_ self, slot: SlotId) -> NodeReader<'_> {
         self.network.get_node(slot)
     }
 
     #[inline]
-    pub fn get_synapse(&'_ self, slot: usize) -> SynapseReader<'_> {
+    pub fn get_synapse(&'_ self, slot: SlotId) -> SynapseReader<'_> {
         self.network.get_synapse(slot)
     }
 

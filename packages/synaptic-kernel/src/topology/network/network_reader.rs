@@ -1,4 +1,5 @@
 use crate::primitives::entry_store_reader::EntryStoreReader;
+use crate::primitives::slot::SlotId;
 use crate::topology::network::synapse_reader::SynapseReader;
 use crate::topology::node::node_reader::NodeReader;
 use crate::topology::node::node_store_reader::NodeStoreReader;
@@ -67,12 +68,12 @@ impl NetworkReader {
     }
 
     #[inline]
-    pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_> {
+    pub fn get_node(&'_ self, slot: SlotId) -> NodeReader<'_> {
         self.node_chain.get_node(slot)
     }
 
     #[inline]
-    pub fn get_synapse(&'_ self, slot: usize) -> SynapseReader<'_> {
+    pub fn get_synapse(&'_ self, slot: SlotId) -> SynapseReader<'_> {
         SynapseReader::new(self.synapses.get(slot))
     }
 

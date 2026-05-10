@@ -45,7 +45,7 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
         mem: AtomicBuffer,
         defs: [TripleBufferDef; N],
         mem_start_offset: usize,
-        default_tb_capacity: usize,
+        default_tb_capacity: u32,
     ) -> Self {
         Self::create(mem, defs, mem_start_offset, default_tb_capacity, false)
     }
@@ -54,7 +54,7 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
         mem: AtomicBuffer,
         defs: [TripleBufferDef; N],
         mem_start_offset: usize,
-        default_tb_capacity: usize,
+        default_tb_capacity: u32,
     ) -> Self {
         Self::create(mem, defs, mem_start_offset, default_tb_capacity, true)
     }
@@ -63,14 +63,14 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
         mem: AtomicBuffer,
         defs: [TripleBufferDef; N],
         mem_start_offset: usize,
-        default_tb_capacity: usize,
+        default_tb_capacity: u32,
         bind: bool,
     ) -> Self {
         const { assert!(N > 0 && N < u16::MAX as usize) };
 
         let mut offsets: [usize; N] = [0; N];
-        let mut cursor =
-            mem_start_offset + TripleBufferWriter::calculate_size_on_mem(default_tb_capacity);
+        let mut cursor = mem_start_offset
+            + TripleBufferWriter::calculate_size_on_mem(default_tb_capacity as usize);
 
         for i in 0..N {
             offsets[i] = cursor;
@@ -113,7 +113,12 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
             bind,
         );
         let tbs: [TripleBufferWriter; N] = std::array::from_fn(|i| {
-            TripleBufferWriter::create(Arc::clone(&mem), offsets[i], defs[i].buffer_capacity, bind)
+            TripleBufferWriter::create(
+                Arc::clone(&mem),
+                offsets[i],
+                defs[i].buffer_capacity as u32,
+                bind,
+            )
         });
 
         let mem_end_offset = tbs[N - 1].mem_end_offset();

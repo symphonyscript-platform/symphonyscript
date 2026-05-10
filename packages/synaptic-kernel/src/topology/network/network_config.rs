@@ -4,10 +4,10 @@ use crate::topology::node::node_store_config::NodeStoreConfig;
 
 #[derive(Clone, Copy)]
 pub struct NetworkConfig {
-    pub node_capacity: usize,
+    pub node_capacity: u32,
     pub node_meta_stride: usize,
     pub node_attr_stride: usize,
-    pub synapse_capacity: usize,
+    pub synapse_capacity: u32,
     pub synapse_meta_stride: usize,
     pub synapse_attr_stride: usize,
 }

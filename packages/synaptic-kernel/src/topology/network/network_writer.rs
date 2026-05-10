@@ -1,6 +1,7 @@
 use crate::constants::SYNAPSE_STRIDE;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::entry_store_writer::EntryStoreWriter;
+use crate::primitives::slot::SlotId;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
 use crate::topology::network::network_config::NetworkConfig;
@@ -128,7 +129,7 @@ impl NetworkWriter {
 
     pub fn calculate_size_on_tb(config: &NetworkConfig) -> usize {
         NodeStoreWriter::calculate_size_on_tb(&config.to_node_store_config())
-            + config.synapse_capacity * (SYNAPSE_STRIDE + config.synapse_meta_stride)
+            + config.synapse_capacity as usize * (SYNAPSE_STRIDE + config.synapse_meta_stride)
     }
 
     pub fn to_reader(&self) -> NetworkReader {
@@ -180,72 +181,75 @@ impl NetworkWriter {
     }
 
     #[inline]
-    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_> {
+    pub fn get_node(&'_ self, slot: SlotId) -> NodeWriter<'_> {
         self.node_chain.get_node(slot)
     }
 
-    pub fn get_synapse(&'_ self, slot: usize) -> SynapseWriter<'_> {
+    pub fn get_synapse(&'_ self, slot: SlotId) -> SynapseWriter<'_> {
         SynapseWriter::new(self.synapses.get(slot))
     }
 
     #[inline]
-    pub fn get_node_handle(&'_ self, slot: usize) -> NodeHandle<'_> {
+    pub fn get_node_handle(&'_ self, slot: SlotId) -> NodeHandle<'_> {
         self.node_chain.get_node_handle(slot)
     }
 
-    pub fn get_synapse_handle(&'_ self, slot: usize) -> SynapseView<'_> {
+    pub fn get_synapse_handle(&'_ self, slot: SlotId) -> SynapseView<'_> {
         SynapseView::new(self.synapses.get_handle(slot))
     }
 
-    pub fn insert_node(&self, kind: i32) -> Option<usize> {
+    pub fn insert_node(&self, kind: i32) -> Option<SlotId> {
         self.node_chain.insert_node(kind)
     }
 
-    pub fn insert_node_after(&self, prev_slot: usize, kind: i32) -> Option<usize> {
+    pub fn insert_node_after(&self, prev_slot: SlotId, kind: i32) -> Option<SlotId> {
         self.node_chain.insert_node_after(prev_slot, kind)
     }
 
-    pub fn insert_node_before(&self, next_slot: usize, kind: i32) -> Option<usize> {
+    pub fn insert_node_before(&self, next_slot: SlotId, kind: i32) -> Option<SlotId> {
         self.node_chain.insert_node_before(next_slot, kind)
     }
 
-    pub fn remove_node(&self, slot: usize) -> Result<(), SlotAllocatorError> {
+    pub fn remove_node(&self, slot: SlotId) -> Result<(), SlotAllocatorError> {
         loop {
             let head = self.node_chain.get_node(slot).get_outgoing_synapse_head();
 
-            if head == 0 {
+            if head.is_none() {
                 break;
             }
 
-            self.disconnect_synapse(head)?;
+            self.disconnect_synapse(head.unwrap())?;
         }
 
         loop {
             let head = self.node_chain.get_node(slot).get_incoming_synapse_head();
 
-            if head == 0 {
+            if head.is_none() {
                 break;
             }
 
-            self.disconnect_synapse(head)?;
+            self.disconnect_synapse(head.unwrap())?;
         }
 
         self.node_chain.remove_node(slot)
     }
 
-    pub fn remove_chain(&self, head_slot: usize) -> Result<(), SlotAllocatorError> {
-        let mut current_slot = head_slot;
+    pub fn remove_chain(&self, head_slot: SlotId) -> Result<(), SlotAllocatorError> {
+        let mut current_slot = Some(head_slot);
 
-        while current_slot != 0 {
-            let next_slot = self.node_chain.get_node(current_slot).get_next_ptr();
-            self.remove_node(current_slot)?;
+        while current_slot.is_some() {
+            let next_slot = self
+                .node_chain
+                .get_node(current_slot.unwrap())
+                .get_next_ptr();
+            self.remove_node(current_slot.unwrap())?;
             current_slot = next_slot;
         }
 
         Ok(())
     }
 
-    pub fn connect(&self, source_slot: usize, target_slot: usize, kind: i32) -> Option<usize> {
+    pub fn connect(&self, source_slot: SlotId, target_slot: SlotId, kind: i32) -> Option<SlotId> {
         let source = self.node_chain.get_node(source_slot);
         let target = self.node_chain.get_node(target_slot);
         let source_current_tail_ptr = source.get_outgoing_synapse_tail();
@@ -262,49 +266,49 @@ impl NetworkWriter {
         synapse.set_kind(kind);
         synapse.set_source_ptr(source_slot);
         synapse.set_target_ptr(target_slot);
-        synapse.set_outgoing_next_ptr(0);
+        synapse.set_outgoing_next_ptr(None);
         synapse.set_outgoing_prev_ptr(source_current_tail_ptr);
-        synapse.set_incoming_next_ptr(0);
+        synapse.set_incoming_next_ptr(None);
         synapse.set_incoming_prev_ptr(target_current_tail_ptr);
 
-        if source.get_outgoing_synapse_head() == 0 {
-            source.set_outgoing_synapse_head(new_slot);
+        if source.get_outgoing_synapse_head().is_none() {
+            source.set_outgoing_synapse_head(Some(new_slot));
         }
 
-        if target.get_incoming_synapse_head() == 0 {
-            target.set_incoming_synapse_head(new_slot);
+        if target.get_incoming_synapse_head().is_none() {
+            target.set_incoming_synapse_head(Some(new_slot));
         }
 
-        if source_current_tail_ptr != 0 {
-            self.get_synapse(source_current_tail_ptr)
-                .set_outgoing_next_ptr(new_slot);
+        if source_current_tail_ptr.is_some() {
+            self.get_synapse(source_current_tail_ptr.unwrap())
+                .set_outgoing_next_ptr(Some(new_slot));
         }
 
-        if target_current_tail_ptr != 0 {
-            self.get_synapse(target_current_tail_ptr)
-                .set_incoming_next_ptr(new_slot);
+        if target_current_tail_ptr.is_some() {
+            self.get_synapse(target_current_tail_ptr.unwrap())
+                .set_incoming_next_ptr(Some(new_slot));
         }
 
-        source.set_outgoing_synapse_tail(new_slot);
-        target.set_incoming_synapse_tail(new_slot);
+        source.set_outgoing_synapse_tail(Some(new_slot));
+        target.set_incoming_synapse_tail(Some(new_slot));
 
         Some(new_slot)
     }
 
     pub fn disconnect(
         &self,
-        source_ptr: usize,
-        target_ptr: usize,
+        source_slot: SlotId,
+        target_slot: SlotId,
     ) -> Result<(), SlotAllocatorError> {
-        let source = self.node_chain.get_node(source_ptr);
+        let source = self.node_chain.get_node(source_slot);
         let mut synapse = source.get_outgoing_synapse_head();
 
-        while synapse != 0 {
-            let synapse_handle = self.get_synapse(synapse);
+        while synapse.is_some() {
+            let synapse_handle = self.get_synapse(synapse.unwrap());
             let next_synapse = synapse_handle.get_outgoing_next_ptr();
 
-            if synapse_handle.get_target_ptr() == target_ptr {
-                self.disconnect_synapse(synapse)?;
+            if synapse_handle.get_target_ptr() == target_slot {
+                self.disconnect_synapse(synapse.unwrap())?;
             }
 
             synapse = next_synapse;
@@ -313,7 +317,7 @@ impl NetworkWriter {
         Ok(())
     }
 
-    pub fn disconnect_synapse(&self, synapse_slot: usize) -> Result<(), SlotAllocatorError> {
+    pub fn disconnect_synapse(&self, synapse_slot: SlotId) -> Result<(), SlotAllocatorError> {
         let synapse = self.get_synapse(synapse_slot);
         let source = self.node_chain.get_node(synapse.get_source_ptr());
         let target = self.node_chain.get_node(synapse.get_target_ptr());
@@ -324,29 +328,29 @@ impl NetworkWriter {
 
         self.synapses.remove(synapse_slot)?;
 
-        if synapse_outgoing_prev_ptr != 0 {
-            self.get_synapse(synapse_outgoing_prev_ptr)
+        if synapse_outgoing_prev_ptr.is_some() {
+            self.get_synapse(synapse_outgoing_prev_ptr.unwrap())
                 .set_outgoing_next_ptr(synapse_outgoing_next_ptr);
         } else {
             source.set_outgoing_synapse_head(synapse_outgoing_next_ptr);
         }
 
-        if synapse_outgoing_next_ptr != 0 {
-            self.get_synapse(synapse_outgoing_next_ptr)
+        if synapse_outgoing_next_ptr.is_some() {
+            self.get_synapse(synapse_outgoing_next_ptr.unwrap())
                 .set_outgoing_prev_ptr(synapse_outgoing_prev_ptr);
         } else {
             source.set_outgoing_synapse_tail(synapse_outgoing_prev_ptr);
         }
 
-        if synapse_incoming_prev_ptr != 0 {
-            self.get_synapse(synapse_incoming_prev_ptr)
+        if synapse_incoming_prev_ptr.is_some() {
+            self.get_synapse(synapse_incoming_prev_ptr.unwrap())
                 .set_incoming_next_ptr(synapse_incoming_next_ptr);
         } else {
             target.set_incoming_synapse_head(synapse_incoming_next_ptr);
         }
 
-        if synapse_incoming_next_ptr != 0 {
-            self.get_synapse(synapse_incoming_next_ptr)
+        if synapse_incoming_next_ptr.is_some() {
+            self.get_synapse(synapse_incoming_next_ptr.unwrap())
                 .set_incoming_prev_ptr(synapse_incoming_prev_ptr);
         } else {
             target.set_incoming_synapse_tail(synapse_incoming_prev_ptr);

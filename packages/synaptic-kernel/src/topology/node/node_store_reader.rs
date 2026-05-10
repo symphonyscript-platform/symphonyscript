@@ -1,4 +1,5 @@
 use crate::primitives::entry_store_reader::EntryStoreReader;
+use crate::primitives::slot::SlotId;
 use crate::topology::node::node_reader::NodeReader;
 
 /// Consumer-side doubly-linked list of nodes.
@@ -41,7 +42,7 @@ impl NodeStoreReader {
     }
 
     #[inline]
-    pub fn get_node(&'_ self, slot: usize) -> NodeReader<'_> {
+    pub fn get_node(&'_ self, slot: SlotId) -> NodeReader<'_> {
         NodeReader::new(self.nodes.get(slot))
     }
 

@@ -1,6 +1,7 @@
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::bitmap::Bitmap;
 use crate::primitives::simple_free_list::SimpleFreeList;
+use crate::primitives::slot::SlotId;
 use crate::primitives::staging_buffer_reader::StagingBufferReader;
 use crate::primitives::staging_buffer_writer::StagingBufferWriter;
 use crate::primitives::types::AtomicBuffer;
@@ -53,15 +54,15 @@ pub struct SlotAllocator {
  * SPSC Slot Allocator
  */
 impl SlotAllocator {
-    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub fn new(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32) -> Self {
         Self::create(mem, mem_start_offset, capacity, false)
     }
 
-    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize) -> Self {
+    pub fn bind(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32) -> Self {
         Self::create(mem, mem_start_offset, capacity, true)
     }
 
-    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: usize, bind: bool) -> Self {
+    pub fn create(mem: AtomicBuffer, mem_start_offset: usize, capacity: u32, bind: bool) -> Self {
         let bitmap = Bitmap::create(Arc::clone(&mem), mem_start_offset, capacity, bind);
         let free_list =
             SimpleFreeList::create(Arc::clone(&mem), bitmap.mem_end_offset(), capacity, bind);
@@ -84,7 +85,7 @@ impl SlotAllocator {
             mem,
             mem_start_offset,
             mem_end_offset,
-            capacity,
+            capacity: capacity as usize,
             staging_bitmap: bitmap,
             free_list,
             staging_buffer: deferred_frees_list,
@@ -101,7 +102,7 @@ impl SlotAllocator {
         StagingBufferReader::bind(
             Arc::clone(&self.mem),
             self.staging_buffer.mem_start_offset(),
-            self.capacity,
+            self.capacity as u32,
         )
     }
 
@@ -137,38 +138,38 @@ impl SlotAllocator {
         self.free_list.utilization()
     }
 
-    pub fn is_allocated(&self, slot: usize) -> bool {
+    pub fn is_allocated(&self, slot: SlotId) -> bool {
         self.free_list.is_allocated(slot)
     }
 
-    pub fn is_active(&self, slot: usize) -> bool {
+    pub fn is_active(&self, slot: SlotId) -> bool {
         self.is_allocated(slot) && !self.is_deferred(slot)
     }
 
-    pub fn is_deferred(&self, slot: usize) -> bool {
-        self.staging_bitmap.is_on(slot - 1)
+    pub fn is_deferred(&self, slot: SlotId) -> bool {
+        self.staging_bitmap.is_on(slot.to_usize() - 1)
     }
 
-    pub fn is_free(&self, slot: usize) -> bool {
+    pub fn is_free(&self, slot: SlotId) -> bool {
         self.free_list.is_free(slot)
     }
 
-    pub fn alloc(&self) -> Option<usize> {
+    pub fn alloc(&self) -> Option<SlotId> {
         self.free_list.alloc()
     }
 
-    pub fn defer_free(&self, slot_number: usize) -> Result<(), SlotAllocatorError> {
-        if !self.is_allocated(slot_number) {
+    pub fn defer_free(&self, slot: SlotId) -> Result<(), SlotAllocatorError> {
+        if !self.is_allocated(slot) {
             return Err(SlotAllocatorError::InvalidSlot);
         }
 
-        let slot_index = slot_number - 1;
+        let slot_index = slot.to_usize() - 1;
 
         if self.staging_bitmap.is_on(slot_index) {
             return Err(SlotAllocatorError::DoubleFree);
         }
 
-        self.staging_buffer.push(slot_number)?;
+        self.staging_buffer.push(slot)?;
         self.staging_bitmap.on(slot_index);
 
         Ok(())
@@ -176,7 +177,7 @@ impl SlotAllocator {
 
     pub fn publish(&self) {
         for slot in self.staging_buffer.drain() {
-            self.staging_bitmap.off(slot - 1);
+            self.staging_bitmap.off(slot.to_usize() - 1);
             let result = self.free_list.free(slot);
             debug_assert!(
                 result.is_ok(),

@@ -1,5 +1,6 @@
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::primitives::entry_store_writer::EntryStoreWriter;
+use crate::primitives::slot::SlotId;
 use crate::primitives::triple_buffer_writer::TripleBufferWriter;
 use crate::primitives::types::AtomicBuffer;
 use crate::topology::node::node_handle::NodeHandle;
@@ -145,23 +146,23 @@ impl NodeStoreWriter {
     }
 
     #[inline]
-    pub fn get_node(&'_ self, slot: usize) -> NodeWriter<'_> {
+    pub fn get_node(&'_ self, slot: SlotId) -> NodeWriter<'_> {
         NodeWriter::new(self.nodes.get(slot))
     }
 
     #[inline]
-    pub fn get_node_handle(&'_ self, slot: usize) -> NodeHandle<'_> {
+    pub fn get_node_handle(&'_ self, slot: SlotId) -> NodeHandle<'_> {
         NodeHandle::new(self.nodes.get_handle(slot))
     }
 
-    pub fn insert_node(&self, kind: i32) -> Option<usize> {
-        self.insert_orphaned_node(kind, 0, 0)
+    pub fn insert_node(&self, kind: i32) -> Option<SlotId> {
+        self.insert_orphaned_node(kind, None, None)
     }
 
-    pub fn insert_node_after(&self, prev_slot: usize, kind: i32) -> Option<usize> {
+    pub fn insert_node_after(&self, prev_slot: SlotId, kind: i32) -> Option<SlotId> {
         let prev = self.get_node(prev_slot);
         let prev_next_slot = prev.get_next_ptr();
-        let result = self.insert_orphaned_node(kind, prev_next_slot, prev_slot);
+        let result = self.insert_orphaned_node(kind, prev_next_slot, Some(prev_slot));
 
         if result.is_none() {
             return None;
@@ -169,19 +170,20 @@ impl NodeStoreWriter {
 
         let new_slot = result.unwrap();
 
-        prev.set_next_ptr(new_slot);
+        prev.set_next_ptr(Some(new_slot));
 
-        if prev_next_slot != 0 {
-            self.get_node(prev_next_slot).set_prev_ptr(new_slot);
+        if prev_next_slot.is_some() {
+            self.get_node(prev_next_slot.unwrap())
+                .set_prev_ptr(Some(new_slot));
         }
 
         Some(new_slot)
     }
 
-    pub fn insert_node_before(&self, next_slot: usize, kind: i32) -> Option<usize> {
+    pub fn insert_node_before(&self, next_slot: SlotId, kind: i32) -> Option<SlotId> {
         let next = self.get_node(next_slot);
         let next_prev_slot = next.get_prev_ptr();
-        let result = self.insert_orphaned_node(kind, next_slot, next_prev_slot);
+        let result = self.insert_orphaned_node(kind, Some(next_slot), next_prev_slot);
 
         if result.is_none() {
             return None;
@@ -189,28 +191,29 @@ impl NodeStoreWriter {
 
         let new_slot = result.unwrap();
 
-        next.set_prev_ptr(new_slot);
+        next.set_prev_ptr(Some(new_slot));
 
-        if next_prev_slot != 0 {
-            self.get_node(next_prev_slot).set_next_ptr(new_slot);
+        if next_prev_slot.is_some() {
+            self.get_node(next_prev_slot.unwrap())
+                .set_next_ptr(Some(new_slot));
         }
 
         Some(new_slot)
     }
 
-    pub fn remove_node(&self, slot: usize) -> Result<(), SlotAllocatorError> {
+    pub fn remove_node(&self, slot: SlotId) -> Result<(), SlotAllocatorError> {
         let node = self.get_node(slot);
         let prev_slot = node.get_prev_ptr();
         let next_slot = node.get_next_ptr();
 
         self.nodes.remove(slot)?;
 
-        if prev_slot != 0 {
-            self.get_node(prev_slot).set_next_ptr(next_slot);
+        if prev_slot.is_some() {
+            self.get_node(prev_slot.unwrap()).set_next_ptr(next_slot);
         }
 
-        if next_slot != 0 {
-            self.get_node(next_slot).set_prev_ptr(prev_slot);
+        if next_slot.is_some() {
+            self.get_node(next_slot.unwrap()).set_prev_ptr(prev_slot);
         }
 
         Ok(())
@@ -231,7 +234,12 @@ impl NodeStoreWriter {
         self.nodes.copy_from(&source.nodes);
     }
 
-    fn insert_orphaned_node(&self, kind: i32, next_ptr: usize, prev_ptr: usize) -> Option<usize> {
+    fn insert_orphaned_node(
+        &self,
+        kind: i32,
+        next_ptr: Option<SlotId>,
+        prev_ptr: Option<SlotId>,
+    ) -> Option<SlotId> {
         let result = self.nodes.insert();
 
         if result.is_none() {
@@ -244,10 +252,10 @@ impl NodeStoreWriter {
         node.set_kind(kind);
         node.set_next_ptr(next_ptr);
         node.set_prev_ptr(prev_ptr);
-        node.set_outgoing_synapse_head(0);
-        node.set_outgoing_synapse_tail(0);
-        node.set_incoming_synapse_head(0);
-        node.set_incoming_synapse_tail(0);
+        node.set_outgoing_synapse_head(None);
+        node.set_outgoing_synapse_tail(None);
+        node.set_incoming_synapse_head(None);
+        node.set_incoming_synapse_tail(None);
 
         Some(new_slot)
     }
