@@ -39,9 +39,18 @@
 use loom::sync::atomic::{AtomicI32, Ordering};
 use loom::sync::Arc;
 use loom::thread;
+use std::sync::atomic::{AtomicBool, Ordering as StdOrdering};
 
 const NEW_DATA: i32 = 0b100;
 const ID_MASK: i32 = 0b011;
+
+/// Loom permits std atomics for tracking outside the model-under-test.
+/// This flag accumulates "consumer's swap returned true" across every
+/// interleaving loom explores during one `loom::model` call, then we
+/// assert it. Without it, a model where `swap()` always returned false
+/// (because the protocol was buggy in that direction) would pass the
+/// per-iteration sentinel and value-range assertions silently.
+static SAW_PUBLISH: AtomicBool = AtomicBool::new(false);
 
 /// Per-frame sentinel: a producer-written frame is two equal halves; the
 /// consumer asserts both halves match. If the protocol races, the consumer
@@ -118,7 +127,11 @@ fn read_frame(buf: &TripleBuffer) -> i32 {
 #[test]
 fn loom_triple_buffer_publish_swap_no_torn_frames() {
     // Two publishes, two swaps: every interleaving where the consumer's
-    // swap returns true must read a self-consistent frame.
+    // swap returns true must read a self-consistent frame. The
+    // SAW_PUBLISH cross-iteration flag asserts that at least one
+    // explored interleaving actually observed a publish — without it,
+    // a "swap always returns false" bug would pass silently.
+    SAW_PUBLISH.store(false, StdOrdering::Relaxed);
     loom::model(|| {
         let buf = Arc::new(TripleBuffer::new());
 
@@ -139,6 +152,7 @@ fn loom_triple_buffer_publish_swap_no_torn_frames() {
             let mut last = 0;
             for _ in 0..3 {
                 if buf_swap_loop(&consumer_buf) {
+                    SAW_PUBLISH.store(true, StdOrdering::Relaxed);
                     let v = read_frame(&consumer_buf);
                     assert!(
                         v == 1 || v == 2,
@@ -154,6 +168,10 @@ fn loom_triple_buffer_publish_swap_no_torn_frames() {
         producer.join().unwrap();
         consumer.join().unwrap();
     });
+    assert!(
+        SAW_PUBLISH.load(StdOrdering::Relaxed),
+        "no loom interleaving had swap() return true — protocol model is stuck"
+    );
 }
 
 /// Helper kept inline so the loop body doesn't need to capture a clone.
@@ -179,15 +197,16 @@ fn loom_triple_buffer_swap_returns_false_without_publish() {
 
 #[test]
 fn loom_triple_buffer_drives_observable_publishes() {
-    // Concurrent producer + consumer. Loom is free to schedule the
-    // consumer entirely before, during, or after the producer's two
-    // publishes. The contract checked here:
-    //   - If swap() returns true, the read frame value is one we wrote
-    //     (1 or 2) — never garbage from another buffer slot.
-    //   - The two cells of any frame the consumer observes match — i.e.
-    //     no torn writes regardless of interleaving.
-    // We do NOT require the consumer to observe any publish, since loom
-    // is allowed to schedule consumer-only-then-producer-only orders.
+    // Concurrent producer + consumer. Per-iteration: if swap() returns
+    // true, the read frame value is one we wrote (1 or 2), never garbage
+    // from another buffer slot, and the two cells match (no torn write).
+    // Across iterations: SAW_PUBLISH must flip in at least one explored
+    // interleaving — guards against a "swap always returns false"
+    // protocol bug. Some individual iterations may legitimately observe
+    // nothing (loom can schedule consumer-only-before-producer); the
+    // cross-iteration assertion only requires the path exists somewhere
+    // in the search space.
+    SAW_PUBLISH.store(false, StdOrdering::Relaxed);
     loom::model(|| {
         let buf = Arc::new(TripleBuffer::new());
 
@@ -203,6 +222,7 @@ fn loom_triple_buffer_drives_observable_publishes() {
         let consumer = thread::spawn(move || {
             for _ in 0..3 {
                 if consumer_buf.swap() {
+                    SAW_PUBLISH.store(true, StdOrdering::Relaxed);
                     let v = read_frame(&consumer_buf);
                     assert!(
                         v == 1 || v == 2,
@@ -216,4 +236,8 @@ fn loom_triple_buffer_drives_observable_publishes() {
         producer.join().unwrap();
         consumer.join().unwrap();
     });
+    assert!(
+        SAW_PUBLISH.load(StdOrdering::Relaxed),
+        "no loom interleaving had swap() return true — protocol model is stuck"
+    );
 }

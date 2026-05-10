@@ -113,7 +113,7 @@ Grouped by where the work happens.
 
 ### Tests — gaps to fill
 
-**T1. Add loom tests for the SPSC handshakes.**
+**T1. Add loom tests for the SPSC handshakes.** — DONE.
 
 - *What:* Add a `cfg(loom)` test target. Re-implement the three handshake protocols against `loom::sync::atomic`:
   triple-buffer publish/swap, staging-buffer generation gate, ControlPlane epoch swap. Each as a small loom test that
@@ -122,6 +122,12 @@ Grouped by where the work happens.
 - *Why:* All current concurrency tests run on x86 TSO. Memory-ordering bugs that depend on weaker-memory-model
   interleavings (ARM, RISC-V) will pass on x86 forever and ship broken. Loom exhaustively explores. Single biggest gap
   in the test suite.
+- *Status:* All three handshakes covered. `tests/loom_triple_buffer.rs` (3 tests, publish/swap), `tests/loom_staging_buffer.rs`
+  (3 tests, generation gate), `tests/loom_control_plane.rs` (4 tests, epoch swap). `Cargo.toml` carries the `loom_tests`
+  feature gating + `loom = "0.7"` dev-dep. Each positive test uses a static `AtomicBool` (`SAW_PUBLISH` / `SAW_DRAIN` /
+  `SAW_NEW_MIRROR` / `SAW_GEN_BUMP`) reset before `loom::model` and asserted after, so a model where the protocol gets
+  stuck in a "nothing observed" state would fail loudly instead of passing vacuously. Run with
+  `cargo test -p synaptic-kernel --features loom_tests`.
 
 **T2. Add multi-config (non-`<1,1,1>`) registry tests.**
 
