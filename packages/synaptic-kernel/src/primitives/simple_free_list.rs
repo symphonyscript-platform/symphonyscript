@@ -148,7 +148,7 @@ impl SimpleFreeList {
     pub fn free(&self, slot: SlotId) -> Result<(), FreeListError> {
         let slot_index = slot.to_usize() - 1;
         debug_assert!(
-            slot_index < self.capacity,
+            slot_index < self.capacity as usize,
             "SimpleFreeList.free | slot_number {} out of bounds",
             slot
         );
