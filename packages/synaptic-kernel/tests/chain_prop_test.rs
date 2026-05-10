@@ -16,11 +16,7 @@ const NODE_START_OFFSET: usize = 0;
 const CAPACITY: usize = 64;
 
 fn create_mem(size: usize) -> AtomicBuffer {
-    let mut vec = Vec::with_capacity(size);
-    for _ in 0..size {
-        vec.push(AtomicI32::new(0));
-    }
-    Arc::new(vec)
+    (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
 fn setup_chain() -> NodeStoreWriter {
@@ -39,117 +35,96 @@ fn setup_chain() -> NodeStoreWriter {
     )
 }
 
+/// Test-side model of a single sub-chain. The kernel does not track "the head"
+/// — these tests pin one explicitly so they can assert structural integrity
+/// of a particular sub-chain. `slots` is in chain order: slots[0] is head,
+/// slots[len-1] is tail.
+#[derive(Default)]
+struct ChainModel {
+    slots: Vec<usize>,
+}
+
+impl ChainModel {
+    fn head(&self) -> Option<usize> {
+        self.slots.first().copied()
+    }
+}
+
 #[derive(Debug, Clone)]
 enum ChainOp {
-    InsertHead,
-    InsertAfter(usize),  // index into active slots
-    InsertBefore(usize), // index into active slots
-    Remove(usize),       // index into active slots
+    PushFront,
+    InsertAfter(usize),
+    InsertBefore(usize),
+    Remove(usize),
 }
 
 fn chain_op_strategy() -> impl Strategy<Value = ChainOp> {
     prop_oneof![
-        3 => Just(ChainOp::InsertHead),
+        3 => Just(ChainOp::PushFront),
         2 => (0..64usize).prop_map(ChainOp::InsertAfter),
         2 => (0..64usize).prop_map(ChainOp::InsertBefore),
         2 => (0..64usize).prop_map(ChainOp::Remove),
     ]
 }
 
-/// Verify that a chain is a valid doubly-linked list:
-/// - get_head() returns the actual first node (prev == 0)
-/// - Forward traversal from head visits every active node exactly once
+/// Walk from the model's head and verify:
+/// - Head's prev == 0; tail's next == 0
 /// - Backward links are consistent (node.next.prev == node)
-/// - Head's prev == 0, tail's next == 0
-fn verify_chain_integrity(chain: &NodeStoreWriter, active_slots: &[usize]) {
-    if active_slots.is_empty() {
-        assert!(chain.get_head_node().is_none(), "empty active set but chain has head");
+/// - Traversal visits exactly the model's slots, in the same order
+fn verify_chain_integrity(chain: &NodeStoreWriter, model: &ChainModel) {
+    let Some(head_slot) = model.head() else {
         return;
-    }
+    };
 
-    // get_head() must return a valid node
-    let head = chain.get_head_node();
-    assert!(head.is_some(), "non-empty active set but chain has no head");
-    let head = head.unwrap();
-
-    // Head's prev must be 0
+    let head = chain.get_node(head_slot);
     assert_eq!(head.get_prev_ptr(), 0, "head's prev must be 0");
 
-    // Find the head slot from active_slots
-    let head_slot = chain.get_head_slot();
-    assert!(
-        active_slots.contains(&head_slot),
-        "head slot {} not in active slots {:?}",
-        head_slot, active_slots
-    );
-
-    // Forward traversal from head
-    let mut visited = Vec::new();
-    let mut current_slot = head_slot;
+    let mut visited = Vec::with_capacity(model.slots.len());
+    let mut current = head_slot;
     let mut guard = 0;
     loop {
-        visited.push(current_slot);
-        let node = chain.get_node(current_slot);
+        visited.push(current);
+        let node = chain.get_node(current);
         let next: usize = node.get_next_ptr();
 
         if next == 0 {
             break;
         }
 
-        // Verify backward link consistency
         let next_node = chain.get_node(next);
         assert_eq!(
-            next_node.get_prev_ptr(), current_slot,
-            "backward link broken: node {}'s next is {}, but {}'s prev is {}",
-            current_slot, next, next, next_node.get_prev_ptr()
+            next_node.get_prev_ptr(),
+            current,
+            "backward link broken: {}->{}, but {}.prev = {}",
+            current,
+            next,
+            next,
+            next_node.get_prev_ptr()
         );
 
-        current_slot = next;
+        current = next;
         guard += 1;
         assert!(guard <= CAPACITY, "cycle detected in chain traversal");
     }
 
-    // Every active slot should be visited exactly once
     assert_eq!(
-        visited.len(), active_slots.len(),
-        "traversal visited {} nodes but {} are active. visited: {:?}, active: {:?}",
-        visited.len(), active_slots.len(), visited, active_slots
+        visited, model.slots,
+        "traversal order mismatch: visited {:?}, expected {:?}",
+        visited, model.slots
     );
-
-    let mut visited_sorted = visited.clone();
-    visited_sorted.sort();
-    visited_sorted.dedup();
-    assert_eq!(
-        visited_sorted.len(), visited.len(),
-        "duplicate nodes in traversal"
-    );
-
-    for &s in active_slots {
-        assert!(
-            visited.contains(&s),
-            "active slot {} not visited during traversal",
-            s
-        );
-    }
 }
 
-// ============ Explicit insert_before on head tests ============
+// ============ Explicit insert_before on chain head ============
 
 #[test]
-fn insert_before_head_updates_head_pointer() {
+fn insert_before_chain_head_makes_new_head() {
     let chain = setup_chain();
 
     let a = chain.insert_node(1).unwrap();
-    assert_eq!(chain.get_head_slot(), a);
-
     let b = chain.insert_node_before(a, 2).unwrap();
 
-    // Head pointer must now point to b
-    assert_eq!(chain.get_head_slot(), b, "insert_before head must update head pointer");
-    assert_eq!(chain.get_head_node().unwrap().get_kind(), 2);
-
     // Chain: b -> a
-    assert_eq!(chain.get_node(b).get_prev_ptr(), 0, "new head's prev must be 0");
+    assert_eq!(chain.get_node(b).get_prev_ptr(), 0, "b is now the head");
     assert_eq!(chain.get_node(b).get_next_ptr(), a);
     assert_eq!(chain.get_node(a).get_prev_ptr(), b);
     assert_eq!(chain.get_node(a).get_next_ptr(), 0);
@@ -164,7 +139,6 @@ fn insert_before_head_twice_builds_correct_chain() {
     let c = chain.insert_node_before(b, 3).unwrap();
 
     // Chain: c -> b -> a
-    assert_eq!(chain.get_head_slot(), c);
     assert_eq!(chain.get_node(c).get_prev_ptr(), 0);
     assert_eq!(chain.get_node(c).get_next_ptr(), b);
     assert_eq!(chain.get_node(b).get_prev_ptr(), c);
@@ -172,30 +146,11 @@ fn insert_before_head_twice_builds_correct_chain() {
     assert_eq!(chain.get_node(a).get_prev_ptr(), b);
     assert_eq!(chain.get_node(a).get_next_ptr(), 0);
 
-    verify_chain_integrity(&chain, &[a, b, c]);
+    verify_chain_integrity(&chain, &ChainModel { slots: vec![c, b, a] });
 }
 
 #[test]
-fn insert_before_head_then_insert_head_interleaved() {
-    let chain = setup_chain();
-
-    let a = chain.insert_node(1).unwrap();
-    let b = chain.insert_node_before(a, 2).unwrap();
-    // chain: b -> a
-    let c = chain.insert_node(3).unwrap();
-    // chain: c -> b -> a
-
-    assert_eq!(chain.get_head_slot(), c);
-    assert_eq!(chain.get_node(c).get_prev_ptr(), 0);
-    assert_eq!(chain.get_node(c).get_next_ptr(), b);
-    assert_eq!(chain.get_node(b).get_prev_ptr(), c);
-    assert_eq!(chain.get_node(b).get_next_ptr(), a);
-
-    verify_chain_integrity(&chain, &[a, b, c]);
-}
-
-#[test]
-fn remove_node_inserted_before_head() {
+fn remove_chain_head_promotes_successor() {
     let chain = setup_chain();
 
     let a = chain.insert_node(1).unwrap();
@@ -203,13 +158,12 @@ fn remove_node_inserted_before_head() {
     // chain: b -> a
 
     chain.remove_node(b).unwrap();
-    // chain: a (head should revert to a)
+    // chain: a (a is the new head)
 
-    assert_eq!(chain.get_head_slot(), a);
     assert_eq!(chain.get_node(a).get_prev_ptr(), 0);
     assert_eq!(chain.get_node(a).get_next_ptr(), 0);
 
-    verify_chain_integrity(&chain, &[a]);
+    verify_chain_integrity(&chain, &ChainModel { slots: vec![a] });
 }
 
 // ============ Property-based tests ============
@@ -220,48 +174,54 @@ proptest! {
         ops in proptest::collection::vec(chain_op_strategy(), 1..100)
     ) {
         let chain = setup_chain();
-        let mut active_slots: Vec<usize> = Vec::new();
+        let mut model = ChainModel::default();
         let mut kind_counter = 0i32;
 
         for op in ops {
             match op {
-                ChainOp::InsertHead => {
-                    if active_slots.len() < CAPACITY {
+                ChainOp::PushFront => {
+                    if model.slots.len() < CAPACITY {
                         kind_counter += 1;
-                        if let Some(slot) = chain.insert_node(kind_counter) {
-                            active_slots.push(slot);
+                        let new_slot = if let Some(head) = model.head() {
+                            chain.insert_node_before(head, kind_counter)
+                        } else {
+                            chain.insert_node(kind_counter)
+                        };
+                        if let Some(slot) = new_slot {
+                            model.slots.insert(0, slot);
                         }
                     }
                 }
                 ChainOp::InsertAfter(idx) => {
-                    if !active_slots.is_empty() && active_slots.len() < CAPACITY {
-                        let target = active_slots[idx % active_slots.len()];
+                    if !model.slots.is_empty() && model.slots.len() < CAPACITY {
+                        let i = idx % model.slots.len();
+                        let target = model.slots[i];
                         kind_counter += 1;
                         if let Some(slot) = chain.insert_node_after(target, kind_counter) {
-                            active_slots.push(slot);
+                            model.slots.insert(i + 1, slot);
                         }
                     }
                 }
                 ChainOp::InsertBefore(idx) => {
-                    if !active_slots.is_empty() && active_slots.len() < CAPACITY {
-                        let target = active_slots[idx % active_slots.len()];
+                    if !model.slots.is_empty() && model.slots.len() < CAPACITY {
+                        let i = idx % model.slots.len();
+                        let target = model.slots[i];
                         kind_counter += 1;
                         if let Some(slot) = chain.insert_node_before(target, kind_counter) {
-                            active_slots.push(slot);
+                            model.slots.insert(i, slot);
                         }
                     }
                 }
                 ChainOp::Remove(idx) => {
-                    if !active_slots.is_empty() {
-                        let actual_idx = idx % active_slots.len();
-                        let slot = active_slots.remove(actual_idx);
+                    if !model.slots.is_empty() {
+                        let i = idx % model.slots.len();
+                        let slot = model.slots.remove(i);
                         let _ = chain.remove_node(slot);
                     }
                 }
             }
 
-            // INVARIANT: chain is a valid doubly-linked list after every operation
-            verify_chain_integrity(&chain, &active_slots);
+            verify_chain_integrity(&chain, &model);
         }
     }
 
@@ -278,11 +238,17 @@ proptest! {
             }
         }
 
-        // Remove all in random-ish order (reverse)
+        // Remove all in reverse order. remove_node defers frees, so a single
+        // publish leaves them on the previous-list; reclaim takes a full
+        // publish + ack + publish cycle.
         while let Some(s) = slots.pop() {
             let _ = chain.remove_node(s);
         }
 
-        prop_assert!(chain.get_head_node().is_none(), "chain should be empty after removing all nodes");
+        chain.publish();
+        chain.to_reader().ack_generation();
+        chain.publish();
+
+        prop_assert_eq!(chain.len(), 0, "store should be empty after removing all nodes");
     }
 }

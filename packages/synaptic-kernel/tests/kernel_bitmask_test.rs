@@ -127,7 +127,7 @@ fn consumer_sees_producer_values_after_publish_swap() {
     kernel.publish();
 
     let mirror = consumer.acquire_mirror();
-    let head = mirror.get_head_node().expect("head visible after swap");
-    assert_eq!(head.get_kind(), 12);
-    assert_eq!(head.attr_read(0), 99);
+    let node = mirror.get_node(slot);
+    assert_eq!(node.get_kind(), 12);
+    assert_eq!(node.attr_read(0), 99);
 }

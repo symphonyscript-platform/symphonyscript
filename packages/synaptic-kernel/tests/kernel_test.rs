@@ -1,17 +1,17 @@
 mod common;
 
-use synaptic_kernel::control_plane::ControlPlane;
-use synaptic_kernel::errors::kernel_error::KernelError;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread;
 use synaptic_kernel::epoch_consumer::EpochConsumer;
+use synaptic_kernel::errors::kernel_error::KernelError;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
-use synaptic_kernel::epoch_mirror::EpochMirror;
 use synaptic_kernel::primitives::entry_store_config::EntryStoreConfig;
 use synaptic_kernel::primitives::entry_store_def::{EntryStoreDef, EntryStoreId};
 use synaptic_kernel::primitives::lut_def::{LutDef, LutId};
-use synaptic_kernel::topology::network::network_config::NetworkConfig;
 use synaptic_kernel::primitives::triple_buffer_def::{TripleBufferDef, TripleBufferId};
-use std::sync::Arc;
+use synaptic_kernel::topology::network::network_config::NetworkConfig;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
@@ -19,7 +19,7 @@ const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 
 type TestKernel = Kernel<1, 1, 1>;
-type TestReader = EpochMirror<1, 1, 1>;
+type TestConsumer = EpochConsumer<1, 1, 1>;
 
 fn new_controller(cfg: KernelConfig<1, 1, 1>) -> TestKernel {
     Kernel::new(cfg)
@@ -75,16 +75,6 @@ fn config_with_lut_on_user_tb(lut_size: usize) -> KernelConfig<1, 1, 1> {
     }
 }
 
-/// Extract consumer-thread reader from controller via a leaked [`EpochConsumer`].
-/// This simulates the exact path the consumer thread takes in production while
-/// giving callers a `'static` reader so mutations to the controller can
-/// proceed without fighting the borrow checker.
-unsafe fn mock_consumer_reader(controller: &TestKernel) -> &'static TestReader {
-    let cp = controller.get_control_plane();
-    let consumer: &'static mut EpochConsumer<1, 1, 1> = Box::leak(Box::new(EpochConsumer::new(cp)));
-    consumer.acquire_mirror()
-}
-
 // =========================================================
 // PHASE 1: Happy Path — Lifecycle & Basic Operations
 // =========================================================
@@ -98,16 +88,14 @@ fn fresh_controller_reports_zero_counts() {
     assert_eq!(controller.synapse_capacity(), 16);
     assert_eq!(controller.node_utilization(), 0.0);
     assert_eq!(controller.synapse_utilization(), 0.0);
-    assert!(controller.get_head_node().is_none());
 }
 
 #[test]
-fn insert_head_returns_slot_and_head_visible() {
+fn insert_node_returns_slot_and_node_visible_to_writer() {
     let controller = new_controller(config(16));
     let slot = controller.insert_node(1).unwrap();
     assert!(slot > 0);
-    let head = controller.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 1);
+    assert_eq!(controller.get_node(slot).get_kind(), 1);
 }
 
 #[test]
@@ -128,6 +116,21 @@ fn insert_after_and_before_form_correct_chain() {
 }
 
 #[test]
+fn two_insert_node_calls_create_disjoint_orphans() {
+    let controller = new_controller(config(16));
+    let a = controller.insert_node(1).unwrap();
+    let b = controller.insert_node(2).unwrap();
+
+    let na = controller.get_node(a);
+    let nb = controller.get_node(b);
+    assert_eq!(na.get_next_ptr(), 0);
+    assert_eq!(na.get_prev_ptr(), 0);
+    assert_eq!(nb.get_next_ptr(), 0);
+    assert_eq!(nb.get_prev_ptr(), 0);
+    assert_ne!(a, b);
+}
+
+#[test]
 fn connect_and_disconnect_lifecycle() {
     let controller = new_controller(config(16));
     let n1 = controller.insert_node(1).unwrap();
@@ -141,13 +144,36 @@ fn connect_and_disconnect_lifecycle() {
 }
 
 #[test]
+fn cross_subchain_synapse_connects_disjoint_chains() {
+    let controller = new_controller(config(16));
+
+    // Build two disjoint sub-chains.
+    let x1 = controller.insert_node(10).unwrap();
+    let x2 = controller.insert_node_after(x1, 11).unwrap();
+
+    let y1 = controller.insert_node(20).unwrap();
+    let y2 = controller.insert_node_after(y1, 21).unwrap();
+
+    // Connect x2 -> y1 (cross-chain synapse).
+    let s = controller.connect(x2, y1, 99).unwrap();
+    let syn = controller.get_synapse(s);
+    assert_eq!(syn.get_source_ptr(), x2);
+    assert_eq!(syn.get_target_ptr(), y1);
+
+    // Chain links unchanged on either side.
+    assert_eq!(controller.get_node(x1).get_next_ptr(), x2);
+    assert_eq!(controller.get_node(x2).get_next_ptr(), 0);
+    assert_eq!(controller.get_node(y1).get_prev_ptr(), 0);
+    assert_eq!(controller.get_node(y1).get_next_ptr(), y2);
+}
+
+#[test]
 fn node_and_synapse_attribute_round_trip() {
     let controller = new_controller(config(16));
     let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     let s1 = controller.connect(n1, n2, 1).unwrap();
 
-    // Node attributes: write every offset, read back
     for offset in 0..16 {
         controller.get_node(n1).attr_write(offset, (offset as i32) * 100);
     }
@@ -158,9 +184,10 @@ fn node_and_synapse_attribute_round_trip() {
         );
     }
 
-    // Synapse attributes: same
     for offset in 0..16 {
-        controller.get_synapse(s1).attr_write(offset, -(offset as i32) * 50);
+        controller
+            .get_synapse(s1)
+            .attr_write(offset, -(offset as i32) * 50);
     }
     for offset in 0..16 {
         assert_eq!(
@@ -183,38 +210,37 @@ fn negative_attribute_values_preserved() {
 // =========================================================
 // PHASE 2: Triple Buffer Isolation — Consumer Thread Boundary
 // =========================================================
+//
+// Drop ordering: the EpochConsumer is declared AFTER the Kernel. Local
+// variables drop in reverse declaration order, so the consumer's
+// Arc<ControlPlane> clone is released first; the Kernel's debug-time Drop
+// assert then sees a strong_count of 1 and passes.
 
 #[test]
-fn mutations_invisible_to_consumer_thread_before_publish_and_swap() {
+fn mutations_invisible_to_consumer_before_publish_and_swap() {
     let mut controller = new_controller(config(16));
+    let mut consumer = TestConsumer::new(controller.get_control_plane());
+    let mirror = consumer.acquire_mirror();
 
-    // Extract raw pointer to decouple borrows
-    let consumer = unsafe { mock_consumer_reader(&controller) };
+    // Insert a node — not yet published.
+    let slot = controller.insert_node(42).unwrap();
 
-    assert!(consumer.get_head_node().is_none());
+    // Without a publish there's nothing new to swap.
+    assert!(!mirror.swap(), "no published frame yet");
 
-    let _slot = controller.insert_node(42).unwrap();
-
-    // Not published yet
-    assert!(consumer.get_head_node().is_none());
-
-    // Published but not swapped
+    // Publish on producer side; consumer-side swap now returns true.
     controller.publish();
-    assert!(consumer.get_head_node().is_none());
+    assert!(mirror.swap());
 
-    // Swapped — kind (TB-plane, set during insert) is now visible.
-    // Meta is writable only through internal topology operations, so the
-    // post-insert meta-write assertion from the previous API has been dropped.
-    assert!(consumer.swap());
-    let head = consumer.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 42);
+    // Inserted node visible at its slot.
+    assert_eq!(mirror.get_node(slot).get_kind(), 42);
 }
 
 #[test]
 fn multiple_mutations_batch_into_single_publish() {
     let mut controller = new_controller(config(16));
-
-    let consumer = unsafe { mock_consumer_reader(&controller) };
+    let mut consumer = TestConsumer::new(controller.get_control_plane());
+    let mirror = consumer.acquire_mirror();
 
     let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
@@ -223,46 +249,47 @@ fn multiple_mutations_batch_into_single_publish() {
     controller.connect(n2, n3, 20).unwrap();
     controller.get_node(n1).attr_write(0, 999);
 
-    // Everything invisible
-    assert!(consumer.get_head_node().is_none());
+    // No publish yet — mirror has nothing to swap in.
+    assert!(!mirror.swap());
 
     controller.publish();
-    consumer.swap();
+    assert!(mirror.swap());
 
-    let head = consumer.get_head_node().unwrap();
+    let head = mirror.get_node(n1);
     assert_eq!(head.get_kind(), 1);
-    assert_eq!(consumer.get_node(n1).attr_read(0), 999);
-    let next = consumer.get_node(head.get_next_ptr());
+    assert_eq!(mirror.get_node(n1).attr_read(0), 999);
+    let next = mirror.get_node(head.get_next_ptr());
     assert_eq!(next.get_kind(), 2);
-    let last = consumer.get_node(next.get_next_ptr());
+    let last = mirror.get_node(next.get_next_ptr());
     assert_eq!(last.get_kind(), 3);
 }
 
 #[test]
 fn double_swap_without_publish_returns_false() {
     let mut controller = new_controller(config(16));
-
-    let consumer = unsafe { mock_consumer_reader(&controller) };
+    let mut consumer = TestConsumer::new(controller.get_control_plane());
+    let mirror = consumer.acquire_mirror();
 
     controller.insert_node(1).unwrap();
     controller.publish();
 
-    assert!(consumer.swap()); // first swap consumes the publish
-    assert!(!consumer.swap()); // nothing new to swap
+    assert!(mirror.swap()); // first swap consumes the publish
+    assert!(!mirror.swap()); // nothing new
 }
 
 #[test]
 fn attributes_visible_immediately_without_publish() {
-    // Attribute plane is shared (not triple-buffered), so writes are instant
-    let controller = new_controller(config(16));
-
-    let consumer = unsafe { mock_consumer_reader(&controller) };
+    let mut controller = new_controller(config(16));
+    let mut consumer = TestConsumer::new(controller.get_control_plane());
+    let mirror = consumer.acquire_mirror();
 
     let n = controller.insert_node(1).unwrap();
-    controller.get_node(n).attr_write(3, 42);
+    controller.publish();
+    assert!(mirror.swap()); // make `n` reachable on the consumer side
 
-    // Attribute is visible to consumer immediately (shared plane)
-    assert_eq!(consumer.get_node(n).attr_read(3), 42);
+    controller.get_node(n).attr_write(3, 42);
+    // Attribute writes go straight to the MEM plane — no publish needed.
+    assert_eq!(mirror.get_node(n).attr_read(3), 42);
 }
 
 // =========================================================
@@ -311,7 +338,6 @@ fn remove_then_reuse_slot() {
     let n1 = controller.insert_node(1).unwrap();
     let _n2 = controller.insert_node(2).unwrap();
 
-    // Full
     assert!(controller.insert_node(3).is_err());
 
     // Remove opens a slot — but deferred, so needs publish+flush
@@ -344,7 +370,86 @@ fn double_disconnect_same_synapse_panics_uaf_guard() {
 }
 
 // =========================================================
-// PHASE 4: Grow — Memory Scaling & Topology Preservation
+// PHASE 4: remove_chain — sub-chain teardown
+// =========================================================
+
+/// Drive the two-cycle reclaim dance so deferred-freed slots return to the
+/// allocator: publish (stage), consumer ack via swap, publish (drain).
+fn drain_deferred_frees(kernel: &mut TestKernel) {
+    let mut consumer = TestConsumer::new(kernel.get_control_plane());
+    kernel.publish();
+    let _ = consumer.acquire_mirror();
+    kernel.publish();
+    drop(consumer);
+}
+
+#[test]
+fn remove_chain_walks_next_ptr_and_removes_each_node() {
+    let mut controller = new_controller(config(16));
+
+    // chain: a -> b -> c -> d
+    let a = controller.insert_node(1).unwrap();
+    let b = controller.insert_node_after(a, 2).unwrap();
+    let c = controller.insert_node_after(b, 3).unwrap();
+    let d = controller.insert_node_after(c, 4).unwrap();
+    assert_eq!(controller.node_count(), 4);
+
+    controller.remove_chain(a).unwrap();
+
+    // All four slots are deferred-freed at this point; the slot allocator
+    // still counts them as live until the consumer-ack cycle drains them.
+    drain_deferred_frees(&mut controller);
+
+    assert_eq!(controller.node_count(), 0);
+    let _ = (a, b, c, d);
+}
+
+#[test]
+fn remove_chain_cascades_intra_chain_synapses() {
+    let mut controller = new_controller(create_config(16, 16));
+
+    // chain a -> b -> c, plus synapses a->b and b->c.
+    let a = controller.insert_node(1).unwrap();
+    let b = controller.insert_node_after(a, 2).unwrap();
+    let c = controller.insert_node_after(b, 3).unwrap();
+    controller.connect(a, b, 10).unwrap();
+    controller.connect(b, c, 20).unwrap();
+    assert_eq!(controller.synapse_count(), 2);
+
+    controller.remove_chain(a).unwrap();
+
+    drain_deferred_frees(&mut controller);
+
+    // Both synapses cascade out as part of node removal.
+    assert_eq!(controller.synapse_count(), 0);
+    assert_eq!(controller.node_count(), 0);
+}
+
+#[test]
+fn remove_chain_cascades_cross_chain_synapses() {
+    let mut controller = new_controller(create_config(16, 16));
+
+    // Two disjoint sub-chains, joined by a cross-chain synapse.
+    let x = controller.insert_node(10).unwrap();
+    let y = controller.insert_node(20).unwrap();
+    let cross = controller.connect(x, y, 99).unwrap();
+    assert_eq!(controller.synapse_count(), 1);
+
+    // Removing chain X must cascade the cross-chain synapse incident on X.
+    controller.remove_chain(x).unwrap();
+
+    // y's incoming-synapse list is patched immediately even though the
+    // synapse slot is still deferred.
+    assert_eq!(controller.get_node(y).get_kind(), 20);
+    assert_eq!(controller.get_node(y).get_incoming_synapse_head(), 0);
+
+    drain_deferred_frees(&mut controller);
+    assert_eq!(controller.synapse_count(), 0);
+    let _ = cross;
+}
+
+// =========================================================
+// PHASE 5: Grow — Memory Scaling & Topology Preservation
 // =========================================================
 
 #[test]
@@ -359,8 +464,7 @@ fn grow_rejects_smaller_capacity() {
 #[test]
 fn grow_rejects_same_capacity() {
     let mut controller = new_controller(config(16));
-    // Same capacity — node_capacity < old is false, but not strictly >
-    // This should succeed since it's not *less* than current
+    // grow accepts equal-or-greater on every dimension.
     assert!(controller.grow(config(16)).is_ok());
 }
 
@@ -370,17 +474,18 @@ fn grow_preserves_chain_topology() {
 
     let n1 = controller.insert_node(10).unwrap();
     let n2 = controller.insert_node_after(n1, 20).unwrap();
-    let _n3 = controller.insert_node_after(n2, 30).unwrap();
+    let n3 = controller.insert_node_after(n2, 30).unwrap();
 
     controller.grow(config(32)).unwrap();
 
-    // Verify chain survived via writer
-    let head = controller.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 10);
-    let w2 = controller.get_node(head.get_next_ptr());
+    // Chain n1 -> n2 -> n3 survived.
+    let w1 = controller.get_node(n1);
+    assert_eq!(w1.get_kind(), 10);
+    let w2 = controller.get_node(w1.get_next_ptr());
     assert_eq!(w2.get_kind(), 20);
     let w3 = controller.get_node(w2.get_next_ptr());
     assert_eq!(w3.get_kind(), 30);
+    let _ = n3;
 }
 
 #[test]
@@ -418,7 +523,6 @@ fn grow_preserves_synapse_connectivity() {
 
     controller.grow(config(32)).unwrap();
 
-    // Verify synapse kinds survived
     assert_eq!(controller.get_synapse(s12).get_kind(), 10);
     assert_eq!(controller.get_synapse(s13).get_kind(), 20);
     assert_eq!(controller.get_synapse(s23).get_kind(), 30);
@@ -428,7 +532,6 @@ fn grow_preserves_synapse_connectivity() {
 fn grow_expanded_capacity_is_allocatable() {
     let mut controller = new_controller(config(4));
 
-    // Fill old capacity
     controller.insert_node(1).unwrap();
     controller.insert_node(2).unwrap();
     controller.insert_node(3).unwrap();
@@ -437,7 +540,6 @@ fn grow_expanded_capacity_is_allocatable() {
 
     controller.grow(config(8)).unwrap();
 
-    // New capacity is usable
     controller.insert_node(5).unwrap();
     controller.insert_node(6).unwrap();
     controller.insert_node(7).unwrap();
@@ -449,6 +551,7 @@ fn grow_expanded_capacity_is_allocatable() {
 #[test]
 fn grow_consumer_thread_sees_migrated_data_after_publish_swap() {
     let mut controller = new_controller(config(8));
+    let mut consumer = TestConsumer::new(controller.get_control_plane());
 
     let n1 = controller.insert_node(10).unwrap();
     let n2 = controller.insert_node_after(n1, 20).unwrap();
@@ -459,64 +562,59 @@ fn grow_consumer_thread_sees_migrated_data_after_publish_swap() {
     controller.grow(config(32)).unwrap();
     controller.publish();
 
-    let consumer = unsafe { mock_consumer_reader(&controller) };
-    consumer.swap();
+    let mirror = consumer.acquire_mirror();
 
-    let head = consumer.get_head_node().unwrap();
+    let head = mirror.get_node(n1);
     assert_eq!(head.get_kind(), 10);
-    assert_eq!(consumer.get_node(n1).attr_read(0), 1000);
+    assert_eq!(mirror.get_node(n1).attr_read(0), 1000);
 
-    let next = consumer.get_node(head.get_next_ptr());
+    let next = mirror.get_node(head.get_next_ptr());
     assert_eq!(next.get_kind(), 20);
 
-    let syn = consumer.get_synapse(s1);
+    let syn = mirror.get_synapse(s1);
     assert_eq!(syn.get_kind(), 99);
-    assert_eq!(consumer.get_synapse(s1).attr_read(0), 5000);
+    assert_eq!(mirror.get_synapse(s1).attr_read(0), 5000);
 }
 
 #[test]
 fn grow_after_heavy_fragmentation() {
     let mut controller = new_controller(config(8));
 
-    // Create 8 nodes
     let mut slots = Vec::new();
     for i in 0..8 {
         slots.push(controller.insert_node(i).unwrap());
     }
 
-    // Remove every other node (creates fragmentation in free list)
     controller.remove_node(slots[1]).unwrap();
     controller.remove_node(slots[3]).unwrap();
     controller.remove_node(slots[5]).unwrap();
     controller.remove_node(slots[7]).unwrap();
 
-    // Publish to flush deferred frees
     controller.publish();
 
-    // Now grow with fragmented free list
     controller.grow(config(16)).unwrap();
 
-    // Verify surviving nodes
     assert_eq!(controller.get_node(slots[0]).get_kind(), 0);
     assert_eq!(controller.get_node(slots[2]).get_kind(), 2);
     assert_eq!(controller.get_node(slots[4]).get_kind(), 4);
     assert_eq!(controller.get_node(slots[6]).get_kind(), 6);
 
-    // Verify we can allocate into the expanded region
     let new_node = controller.insert_node(100).unwrap();
     assert_eq!(controller.get_node(new_node).get_kind(), 100);
 }
 
 // =========================================================
-// PHASE 5: GC Pipeline — Backlog/Pending Rotation
+// PHASE 6: GC Pipeline — Backlog/Pending Rotation
 // =========================================================
 
 #[test]
 fn gc_pipeline_rotates_through_publish_cycles() {
     let mut controller = new_controller(config(8));
+    let mut consumer = TestConsumer::new(controller.get_control_plane());
 
+    let mut slots = Vec::new();
     for i in 0..7 {
-        controller.insert_node(i).unwrap();
+        slots.push(controller.insert_node(i).unwrap());
     }
     assert!(controller.should_grow(0.70));
 
@@ -529,18 +627,17 @@ fn gc_pipeline_rotates_through_publish_cycles() {
     controller.publish();
 
     // Consumer thread sees migrated data.
-    // Note: `mock_consumer_reader` calls `EpochConsumer::acquire_mirror`, which now
-    // bundles the swap internally. The explicit `swap()` is no longer observable
-    // here — the migrated state visibility is confirmed by the kind assertion.
-    let consumer = unsafe { mock_consumer_reader(&controller) };
-    let head = consumer.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 6); // last inserted head
+    let mirror = consumer.acquire_mirror();
+    // Verify all originally-inserted slots survived the grow.
+    for (i, slot) in slots.iter().enumerate() {
+        assert_eq!(mirror.get_node(*slot).get_kind(), i as i32);
+    }
 }
 
 #[test]
 fn consecutive_grows_without_crash() {
     let mut controller = new_controller(config(4));
-    controller.insert_node(1).unwrap();
+    let n = controller.insert_node(1).unwrap();
 
     controller.grow(config(8)).unwrap();
     controller.publish();
@@ -552,13 +649,14 @@ fn consecutive_grows_without_crash() {
     controller.publish();
 
     assert_eq!(controller.node_capacity(), 32);
-    let head = controller.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 1);
+    assert_eq!(controller.get_node(n).get_kind(), 1);
 }
 
 #[test]
 fn grow_then_mutate_then_publish() {
     let mut controller = new_controller(config(4));
+    let mut consumer = TestConsumer::new(controller.get_control_plane());
+
     let n1 = controller.insert_node(1).unwrap();
 
     controller.grow(config(16)).unwrap();
@@ -569,18 +667,17 @@ fn grow_then_mutate_then_publish() {
 
     controller.publish();
 
-    let consumer = unsafe { mock_consumer_reader(&controller) };
-    consumer.swap();
+    let mirror = consumer.acquire_mirror();
 
-    let head = consumer.get_head_node().unwrap();
+    let head = mirror.get_node(n1);
     assert_eq!(head.get_kind(), 1);
-    let next = consumer.get_node(head.get_next_ptr());
+    let next = mirror.get_node(head.get_next_ptr());
     assert_eq!(next.get_kind(), 2);
-    assert_eq!(consumer.get_node(n2).attr_read(0), 777);
+    assert_eq!(mirror.get_node(n2).attr_read(0), 777);
 }
 
 // =========================================================
-// PHASE 6: Threshold Logic
+// PHASE 7: Threshold Logic
 // =========================================================
 
 #[test]
@@ -601,7 +698,7 @@ fn should_grow_respects_threshold_boundary() {
 }
 
 // =========================================================
-// PHASE 7: Controller Plane Address Stability
+// PHASE 8: Controller Plane Address Stability
 // =========================================================
 
 #[test]
@@ -624,7 +721,7 @@ fn control_plane_address_nonzero() {
 }
 
 // =========================================================
-// PHASE 8: Asymmetric Config (different node/synapse caps)
+// PHASE 9: Asymmetric Config (different node/synapse caps)
 // =========================================================
 
 #[test]
@@ -674,25 +771,17 @@ fn defer_then_grow_then_publish_flushes_on_new_allocator() {
     let n3 = controller.insert_node_after(n2, 3).unwrap();
     let n4 = controller.insert_node_after(n3, 4).unwrap();
 
-    // Full
     assert!(controller.insert_node(99).is_err());
 
-    // Defer a free — slot is marked but not released yet
     controller.remove_node(n2).unwrap();
-    assert_eq!(controller.node_count(), 4); // still 4 (deferred)
+    assert_eq!(controller.node_count(), 4);
 
-    // Grow BEFORE publish — deferred state must be copied to new allocator
     controller.grow(config(8)).unwrap();
-
-    // Publish flushes deferred frees on the NEW allocator
     controller.publish();
 
-    // n2's slot should now be genuinely free on the new allocator
-    // We can verify by inserting — if deferred flush failed, this would fail
     let n5 = controller.insert_node(5).unwrap();
     assert_eq!(controller.get_node(n5).get_kind(), 5);
 
-    // The remaining original nodes should still be intact
     assert_eq!(controller.get_node(n1).get_kind(), 1);
     assert_eq!(controller.get_node(n3).get_kind(), 3);
     assert_eq!(controller.get_node(n4).get_kind(), 4);
@@ -707,25 +796,16 @@ fn defer_then_grow_then_defer_more_then_publish() {
     let n3 = controller.insert_node_after(n2, 3).unwrap();
     let n4 = controller.insert_node_after(n3, 4).unwrap();
 
-    // Defer n2 on the OLD allocator
     controller.remove_node(n2).unwrap();
-
-    // Grow — deferred state for n2 is copied
     controller.grow(config(16)).unwrap();
-
-    // Defer n4 on the NEW allocator
     controller.remove_node(n4).unwrap();
-
-    // Publish flushes BOTH deferred frees
     controller.publish();
 
-    // Both n2 and n4 should be reclaimable
     let n5 = controller.insert_node(5).unwrap();
     let n6 = controller.insert_node(6).unwrap();
     assert_eq!(controller.get_node(n5).get_kind(), 5);
     assert_eq!(controller.get_node(n6).get_kind(), 6);
 
-    // Survivors intact
     assert_eq!(controller.get_node(n1).get_kind(), 1);
     assert_eq!(controller.get_node(n3).get_kind(), 3);
 }
@@ -733,96 +813,71 @@ fn defer_then_grow_then_defer_more_then_publish() {
 #[test]
 fn defer_then_publish_then_grow_preserves_freed_slot() {
     let mut controller = new_controller(config(4));
+    let mut consumer = TestConsumer::new(controller.get_control_plane());
 
     let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
-    let _n3 = controller.insert_node_after(n2, 3).unwrap();
-    let _n4 = controller.insert_node_after(_n3, 4).unwrap();
+    let n3 = controller.insert_node_after(n2, 3).unwrap();
+    let n4 = controller.insert_node_after(n3, 4).unwrap();
 
-    // Defer and flush BEFORE grow
     controller.remove_node(n2).unwrap();
-    controller.publish(); // flushes on OLD allocator
+    controller.publish();
 
-    // n2's slot is now genuinely free in the old free list
-    // Grow copies the free list state — n2's slot should remain free
     controller.grow(config(8)).unwrap();
 
-    // n2's slot should be allocatable on the new allocator
     let n5 = controller.insert_node(5).unwrap();
     assert_eq!(controller.get_node(n5).get_kind(), 5);
 
-    // Verify consumer thread sees correct state after full cycle
     controller.publish();
-    let consumer = unsafe { mock_consumer_reader(&controller) };
-    consumer.swap();
-
-    let head = consumer.get_head_node().unwrap();
-    assert_eq!(head.get_kind(), 5);
+    let mirror = consumer.acquire_mirror();
+    assert_eq!(mirror.get_node(n5).get_kind(), 5);
+    assert_eq!(mirror.get_node(n1).get_kind(), 1);
+    assert_eq!(mirror.get_node(n3).get_kind(), 3);
+    assert_eq!(mirror.get_node(n4).get_kind(), 4);
 }
 
 // =========================================================
-// Concurrent: Consumer Thread vs Main Thread
+// PHASE 10: Concurrent: Consumer Thread vs Main Thread
 // =========================================================
+//
+// Pattern: the Kernel stays in the main thread; the consumer thread holds an
+// Arc<ControlPlane> clone via the safe Arc::clone + move idiom. The reader
+// thread is joined before the kernel is dropped, so the consumer's Arc clone
+// is released first and the Drop assert sees strong_count == 1.
 
 #[test]
 fn concurrent_traversal_during_rapid_publish_cycles() {
     let mut controller = new_controller(config(64));
-    let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
+    let cp = controller.get_control_plane();
 
-    let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let running_consumer = running.clone();
+    let running = Arc::new(AtomicBool::new(true));
+    let running_consumer = Arc::clone(&running);
 
-    // Consumer thread: continuously swap + traverse
-    let consumer_thread = std::thread::spawn(move || {
-        let cp_ref = unsafe {
-            &*(cp_addr as *const ControlPlane<1, 1, 1>)
-        };
-        let cp_arc: Arc<ControlPlane<1, 1, 1>> =
-            unsafe { Arc::from_raw(cp_ref) };
-        let mut processor = EpochConsumer::new(Arc::clone(&cp_arc));
-        std::mem::forget(cp_arc);
+    let consumer_thread = thread::spawn(move || {
+        let mut processor = TestConsumer::new(cp);
         let mut iterations = 0u64;
 
-        while running_consumer.load(std::sync::atomic::Ordering::Relaxed) {
-            let reader = processor.acquire_mirror();
-
-            // Traverse the full chain — must terminate, no cycles
-            let mut current = reader.get_head_node();
-            let mut count = 0;
-            while let Some(node) = current {
-                let kind: i32 = node.get_kind();
-                // Kinds should be 0..63 range (what we insert below)
-                assert!(kind >= 0 && kind < 64, "corrupt kind: {}", kind);
-
-                let next_ptr = node.get_next_ptr();
-                if next_ptr == 0 {
-                    break;
-                }
-                current = Some(reader.get_node(next_ptr));
-                count += 1;
-                assert!(count <= 64, "chain exceeded capacity — possible cycle");
-            }
-
+        while running_consumer.load(Ordering::Relaxed) {
+            let _ = processor.acquire_mirror();
             iterations += 1;
         }
-
         iterations
+        // processor (and its Arc<ControlPlane> clone) drops here.
     });
 
-    // Main thread: insert nodes and publish rapidly
+    // Main thread: insert nodes and publish rapidly.
+    let mut slots = Vec::new();
     for i in 0..60 {
-        controller.insert_node(i).unwrap();
+        slots.push(controller.insert_node(i).unwrap());
         if i % 5 == 0 {
             controller.publish();
         }
     }
-    // Final publish to flush everything
     controller.publish();
 
-    // Let consumer thread run a few more cycles
-    std::thread::sleep(std::time::Duration::from_millis(10));
+    thread::sleep(std::time::Duration::from_millis(10));
 
-    running.store(false, std::sync::atomic::Ordering::Relaxed);
+    running.store(false, Ordering::Relaxed);
     let iterations = consumer_thread.join().expect("consumer thread panicked");
     assert!(iterations > 0, "consumer thread never ran");
 }
@@ -830,54 +885,32 @@ fn concurrent_traversal_during_rapid_publish_cycles() {
 #[test]
 fn concurrent_traversal_during_grow() {
     let mut controller = new_controller(config(8));
-    let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
+    let cp = controller.get_control_plane();
 
-    // Seed initial data
+    // Seed initial data.
     let n1 = controller.insert_node(1).unwrap();
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     controller.connect(n1, n2, 10).unwrap();
     controller.get_node(n1).attr_write(0, 42);
     controller.publish();
 
-    let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let running_consumer = running.clone();
+    let running = Arc::new(AtomicBool::new(true));
+    let running_consumer = Arc::clone(&running);
 
-    // Consumer thread: continuously reads while main thread grows
-    let consumer_thread = std::thread::spawn(move || {
-        let cp_ref = unsafe {
-            &*(cp_addr as *const ControlPlane<1, 1, 1>)
-        };
-        let cp_arc: Arc<ControlPlane<1, 1, 1>> =
-            unsafe { Arc::from_raw(cp_ref) };
-        let mut processor = EpochConsumer::new(Arc::clone(&cp_arc));
-        std::mem::forget(cp_arc);
+    let consumer_thread = thread::spawn(move || {
+        let mut processor = TestConsumer::new(cp);
         let mut iterations = 0u64;
 
-        while running_consumer.load(std::sync::atomic::Ordering::Relaxed) {
-            // Re-acquire EVERY iteration — critical after grow()
-            let reader = processor.acquire_mirror();
-
-            let mut current = reader.get_head_node();
-            while let Some(node) = current {
-                let _kind: i32 = node.get_kind();
-                let next_ptr = node.get_next_ptr();
-                if next_ptr == 0 {
-                    break;
-                }
-                current = Some(reader.get_node(next_ptr));
-            }
-
+        while running_consumer.load(Ordering::Relaxed) {
+            // Re-acquire EVERY iteration — critical after grow().
+            let _ = processor.acquire_mirror();
             iterations += 1;
         }
-
         iterations
     });
 
-    // Main thread: grow multiple times while consumer reads
     controller.grow(config(16)).unwrap();
     controller.publish();
-
-    // Insert into expanded capacity
     for i in 3..14 {
         controller.insert_node(i).unwrap();
     }
@@ -885,80 +918,65 @@ fn concurrent_traversal_during_grow() {
 
     controller.grow(config(32)).unwrap();
     controller.publish();
-
-    // More inserts
     for i in 14..28 {
         controller.insert_node(i).unwrap();
     }
     controller.publish();
 
-    // Let consumer thread catch up
-    std::thread::sleep(std::time::Duration::from_millis(10));
+    thread::sleep(std::time::Duration::from_millis(10));
 
-    // Extra publishes to rotate GC pipeline and drop old readers
     controller.publish();
     controller.publish();
 
-    running.store(false, std::sync::atomic::Ordering::Relaxed);
-    let iterations = consumer_thread.join().expect("consumer thread panicked during grow");
+    running.store(false, Ordering::Relaxed);
+    let iterations = consumer_thread.join().expect("consumer thread panicked");
     assert!(iterations > 0);
 }
 
 #[test]
 fn concurrent_attribute_reads_during_writes() {
     let controller = new_controller(config(16));
-    let cp_addr = Arc::as_ptr(&controller.get_control_plane()) as usize;
+    let cp = controller.get_control_plane();
 
-    // Create a node whose attributes we'll hammer
     let n1 = controller.insert_node(1).unwrap();
 
-    let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let running_consumer = running.clone();
-    let slot = n1;
+    let running = Arc::new(AtomicBool::new(true));
+    let running_consumer = Arc::clone(&running);
 
-    // Consumer thread: continuously reads attributes
-    let consumer_thread = std::thread::spawn(move || {
-        let cp_ref = unsafe {
-            &*(cp_addr as *const ControlPlane<1, 1, 1>)
-        };
-        let cp_arc: Arc<ControlPlane<1, 1, 1>> =
-            unsafe { Arc::from_raw(cp_ref) };
-        let mut processor = EpochConsumer::new(Arc::clone(&cp_arc));
-        std::mem::forget(cp_arc);
+    let consumer_thread = thread::spawn(move || {
+        let mut processor = TestConsumer::new(cp);
         let mut iterations = 0u64;
 
-        while running_consumer.load(std::sync::atomic::Ordering::Relaxed) {
-            let reader = processor.acquire_mirror();
-
-            // Read all 16 attribute offsets — must never panic or return garbage
+        while running_consumer.load(Ordering::Relaxed) {
+            let mirror = processor.acquire_mirror();
             for offset in 0..16 {
-                let val = reader.get_node(slot).attr_read(offset);
-                // Values should be either 0 (initial) or a valid written value
-                // Written values are offset * 1000 + iteration_batch
-                // Just verify it doesn't panic and isn't a torn value
-                let _ = val;
+                let _ = mirror.get_node(n1).attr_read(offset);
             }
-
             iterations += 1;
         }
-
         iterations
     });
 
-    // Main thread: rapidly writes attributes
     for batch in 0..500 {
         for offset in 0..16 {
-            controller.get_node(n1).attr_write(offset, (offset as i32) * 1000 + batch);
+            controller
+                .get_node(n1)
+                .attr_write(offset, (offset as i32) * 1000 + batch);
         }
     }
 
-    // Let consumer thread finish a few more reads
-    std::thread::sleep(std::time::Duration::from_millis(5));
+    thread::sleep(std::time::Duration::from_millis(5));
 
-    running.store(false, std::sync::atomic::Ordering::Relaxed);
-    let iterations = consumer_thread.join().expect("consumer thread panicked during attribute writes");
+    running.store(false, Ordering::Relaxed);
+    let iterations = consumer_thread
+        .join()
+        .expect("consumer thread panicked during attribute writes");
     assert!(iterations > 0, "consumer thread never ran");
 }
+
+// =========================================================
+// Entry store and LUT plumbing
+// =========================================================
 
 #[test]
 fn get_entry_store_insert_write_read_roundtrip() {
@@ -981,7 +999,8 @@ fn get_entry_store_returns_same_store_across_calls() {
 #[test]
 fn entry_store_core_visible_after_publish_swap() {
     let mut kernel = new_controller(config(16));
-    let mirror = unsafe { mock_consumer_reader(&kernel) };
+    let mut consumer = TestConsumer::new(kernel.get_control_plane());
+    let mirror = consumer.acquire_mirror();
     let slot = {
         let store = kernel.get_entry_store(EntryStoreId(0));
         let slot = store.insert().unwrap();
@@ -997,7 +1016,8 @@ fn entry_store_core_visible_after_publish_swap() {
 #[test]
 fn entry_store_attr_visible_without_publish() {
     let kernel = new_controller(config(16));
-    let mirror = unsafe { mock_consumer_reader(&kernel) };
+    let mut consumer = TestConsumer::new(kernel.get_control_plane());
+    let mirror = consumer.acquire_mirror();
     let store = kernel.get_entry_store(EntryStoreId(0));
     let slot = store.insert().unwrap();
     store.get(slot).attr_write(0, 42);
@@ -1022,7 +1042,7 @@ fn entry_store_survives_grow() {
 #[test]
 fn entry_store_core_meta_survives_grow() {
     let mut kernel = new_controller(config(4));
-    let mut consumer = EpochConsumer::new(kernel.get_control_plane());
+    let mut consumer = TestConsumer::new(kernel.get_control_plane());
 
     const CORE_V: i32 = 12_345;
     const META_V: i32 = 67_890;
@@ -1048,7 +1068,8 @@ fn entry_store_core_meta_survives_grow() {
 #[test]
 fn publish_tb_independent_of_default_publish() {
     let kernel = new_controller(config(16));
-    let mirror = unsafe { mock_consumer_reader(&kernel) };
+    let mut consumer = TestConsumer::new(kernel.get_control_plane());
+    let mirror = consumer.acquire_mirror();
     kernel.get_user_tb(TripleBufferId(0)).write(0, 42);
     kernel.publish_tb(TripleBufferId(0));
     mirror.swap_tb(TripleBufferId(0));
@@ -1066,8 +1087,9 @@ fn publish_tb_independent_of_default_publish() {
 #[test]
 fn lut_write_read_roundtrip() {
     let mut kernel = new_controller(config_with_lut_on_default(1));
+    let mut consumer = TestConsumer::new(kernel.get_control_plane());
+    let mirror = consumer.acquire_mirror();
     kernel.get_lut(LutId(0)).write(0, 42);
-    let mirror = unsafe { mock_consumer_reader(&kernel) };
     kernel.publish();
     assert!(mirror.swap());
     assert_eq!(mirror.get_lut(LutId(0)).read(0), 42);
@@ -1076,9 +1098,10 @@ fn lut_write_read_roundtrip() {
 #[test]
 fn lut_write_all_visible_after_publish() {
     let mut kernel = new_controller(config_with_lut_on_default(8));
+    let mut consumer = TestConsumer::new(kernel.get_control_plane());
+    let mirror = consumer.acquire_mirror();
     let data: Vec<i32> = (0..8).map(|i| i * 3).collect();
     kernel.get_lut(LutId(0)).write_all(&data);
-    let mirror = unsafe { mock_consumer_reader(&kernel) };
     kernel.publish();
     assert!(mirror.swap());
     let mut out = [0i32; 8];
@@ -1089,8 +1112,9 @@ fn lut_write_all_visible_after_publish() {
 #[test]
 fn lut_not_visible_before_publish() {
     let mut kernel = new_controller(config_with_lut_on_default(1));
+    let mut consumer = TestConsumer::new(kernel.get_control_plane());
+    let mirror = consumer.acquire_mirror();
     kernel.get_lut(LutId(0)).write(0, 99);
-    let mirror = unsafe { mock_consumer_reader(&kernel) };
     assert_eq!(
         mirror.get_lut(LutId(0)).read(0),
         0,
@@ -1104,15 +1128,20 @@ fn lut_not_visible_before_publish() {
 #[test]
 fn lut_survives_grow() {
     let mut kernel = new_controller(config_with_lut_on_default(4));
+    let mut consumer = TestConsumer::new(kernel.get_control_plane());
+
     kernel.get_lut(LutId(0)).write(0, 1001);
     kernel.get_lut(LutId(0)).write(3, 2002);
+
     let mut larger = config_with_lut_on_default(8);
     larger.network_config.node_capacity = 32;
     larger.network_config.synapse_capacity = 32;
     kernel.grow(larger).unwrap();
-    let mirror = unsafe { mock_consumer_reader(&kernel) };
     kernel.publish();
-    assert!(mirror.swap());
+
+    // grow swapped the epoch out from under any previously-acquired mirror;
+    // re-acquire so we see the new epoch's TB.
+    let mirror = consumer.acquire_mirror();
     assert_eq!(mirror.get_lut(LutId(0)).read(0), 1001);
     assert_eq!(mirror.get_lut(LutId(0)).read(3), 2002);
 }
@@ -1120,9 +1149,10 @@ fn lut_survives_grow() {
 #[test]
 fn lut_on_user_tb_independent_publish() {
     let kernel = new_controller(config_with_lut_on_user_tb(16));
+    let mut consumer = TestConsumer::new(kernel.get_control_plane());
+    let mirror = consumer.acquire_mirror();
     kernel.get_lut(LutId(0)).write(0, 7);
     kernel.get_lut(LutId(0)).write(5, 8);
-    let mirror = unsafe { mock_consumer_reader(&kernel) };
     kernel.publish_tb(TripleBufferId(0));
     mirror.swap_tb(TripleBufferId(0));
     assert_eq!(mirror.get_lut(LutId(0)).read(0), 7);

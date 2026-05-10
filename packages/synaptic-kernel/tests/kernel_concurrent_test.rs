@@ -22,133 +22,68 @@ fn config() -> KernelConfig<1, 1, 1> {
 
 #[test]
 fn multi_threaded_topology_fuzzer() {
-    let writer = TestKernel::new(config());
+    // The Kernel stays in the main thread; only an Arc<ControlPlane> clone is
+    // shipped to the reader thread. The reader is joined before the kernel
+    // drops, so the kernel's debug-time Drop assert sees strong_count == 1.
+    let mut writer = TestKernel::new(config());
     let cp = writer.get_control_plane();
 
     let is_running = Arc::new(AtomicBool::new(true));
-    let is_running_writer = Arc::clone(&is_running);
+    let is_running_reader = Arc::clone(&is_running);
 
     let iterations = 100_000;
 
-    // --- WRITER THREAD ---
-    // Violently allocates, connects, disconnects, and frees structural memory layout,
-    // constantly sweeping the generation-based staging buffer boundary.
-    let writer_handle = thread::spawn(move || {
-        let mut writer = writer;
-
-        for round in 0..iterations {
-            let mut nodes = Vec::new();
-            let mut synapses = Vec::new();
-
-            // 1. Allocate a burst of nodes
-            for i in 0..64 {
-                if let Ok(slot) = writer.insert_node(i) {
-                    nodes.push(slot);
-                    writer.get_node(slot).attr_write(0, round); // mark with round
-                }
-            }
-
-            // 2. Publish nodes
-            writer.publish();
-
-            // 3. Connect them randomly (linear chain + some star topology)
-            if nodes.len() > 1 {
-                for i in 0..nodes.len() - 1 {
-                    if let Ok(s) = writer.connect(nodes[i], nodes[i + 1], 99) {
-                        synapses.push(s);
-                    }
-                    if let Ok(s) = writer.connect(nodes[0], nodes[i + 1], 88) {
-                        synapses.push(s);
-                    }
-                }
-            }
-
-            // 4. Publish connections
-            writer.publish();
-
-            // 5. Tear down half the synapses
-            for (i, &s) in synapses.iter().enumerate() {
-                if i % 2 == 0 {
-                    let _ = writer.disconnect_synapse(s);
-                }
-            }
-
-            // 6. Publish partial teardown
-            writer.publish();
-
-            // 7. Tear down all nodes (this implicitly cascades all remaining synapses)
-            for &n in &nodes {
-                let _ = writer.remove_node(n);
-            }
-
-            // 8. Publish complete teardown
-            writer.publish();
-        }
-
-        is_running_writer.store(false, Ordering::Release);
-    });
-
     // --- READER THREAD ---
-    // Continuously transverses the dynamic graph memory on-the-fly, simulating a consumer thread.
-    // Proves that structural pointers NEVER point to stale memory, freed memory,
-    // and that the garbage collection boundaries physically prevent topology tearing.
+    // Continuously traverses whatever entry point the writer just published,
+    // proving that structural pointers never point to stale or freed memory
+    // across staging-buffer generation boundaries. The reader does not know
+    // the writer's chain head a priori — it walks from each node it can
+    // reach via the entry slot the writer leaves in `mem_metadata[0]`.
     let reader_handle = thread::spawn(move || {
         let mut consumer = TestConsumer::new(cp);
         let mut total_iterations = 0u64;
-        let mut max_nodes_seen = 0;
+        let mut max_nodes_seen = 0usize;
 
-        while is_running.load(Ordering::Acquire) {
+        while is_running_reader.load(Ordering::Acquire) {
             let reader = consumer.acquire_mirror();
             total_iterations += 1;
 
-            let mut node_opt = reader.get_head_node();
-            let mut node_count = 0;
+            let head_slot = reader.mem_read_meta(0) as usize;
+            if head_slot == 0 {
+                continue;
+            }
 
-            while let Some(node) = node_opt {
+            let mut current = Some(reader.get_node(head_slot));
+            let mut node_count = 0usize;
+
+            while let Some(node) = current {
                 node_count += 1;
                 assert!(node_count <= 128, "Node loop");
-                let _attr = node.get_meta(0);
+                let _attr: i32 = node.get_meta(0);
 
-                let mut syn_opt = if node.get_outgoing_synapse_head() != 0 {
-                    Some(reader.get_synapse(node.get_outgoing_synapse_head()))
-                } else {
-                    None
-                };
-
-                let mut syn_count = 0;
-                while let Some(syn) = syn_opt {
+                let mut syn_slot = node.get_outgoing_synapse_head();
+                let mut syn_count = 0usize;
+                while syn_slot != 0 {
                     syn_count += 1;
                     assert!(syn_count <= 256, "Out syn loop");
+                    let syn = reader.get_synapse(syn_slot);
                     assert!(syn.get_target_ptr() > 0, "Invalid target");
-
-                    syn_opt = if syn.get_outgoing_next_ptr() != 0 {
-                        Some(reader.get_synapse(syn.get_outgoing_next_ptr()))
-                    } else {
-                        None
-                    };
+                    syn_slot = syn.get_outgoing_next_ptr();
                 }
 
-                let mut in_syn_opt = if node.get_incoming_synapse_head() != 0 {
-                    Some(reader.get_synapse(node.get_incoming_synapse_head()))
-                } else {
-                    None
-                };
-
-                let mut in_syn_count = 0;
-                while let Some(syn) = in_syn_opt {
-                    in_syn_count += 1;
-                    assert!(in_syn_count <= 256, "In syn loop");
+                let mut in_slot = node.get_incoming_synapse_head();
+                let mut in_count = 0usize;
+                while in_slot != 0 {
+                    in_count += 1;
+                    assert!(in_count <= 256, "In syn loop");
+                    let syn = reader.get_synapse(in_slot);
                     assert!(syn.get_source_ptr() > 0, "Invalid source");
-
-                    in_syn_opt = if syn.get_incoming_next_ptr() != 0 {
-                        Some(reader.get_synapse(syn.get_incoming_next_ptr()))
-                    } else {
-                        None
-                    };
+                    in_slot = syn.get_incoming_next_ptr();
                 }
 
-                node_opt = if node.get_next_ptr() != 0 {
-                    Some(reader.get_node(node.get_next_ptr()))
+                let next_ptr = node.get_next_ptr();
+                current = if next_ptr != 0 {
+                    Some(reader.get_node(next_ptr))
                 } else {
                     None
                 };
@@ -160,12 +95,67 @@ fn multi_threaded_topology_fuzzer() {
         }
 
         (total_iterations, max_nodes_seen)
+        // consumer drops here, releasing its Arc<ControlPlane> clone.
     });
 
-    writer_handle.join().unwrap();
-    let (_iters, _max_nodes) = reader_handle.join().unwrap();
+    // --- WRITER WORK (main thread) ---
+    for round in 0..iterations {
+        let mut nodes = Vec::new();
+        let mut synapses = Vec::new();
 
-    // We expect the reader to have successfully traversed the dynamic graph multiple times
-    // without ever crashing or triggering the anti-cycle bounds — proving data integrity
-    // across staging-buffer generation boundaries.
+        // Build a fresh chain so the reader has a valid entry to walk.
+        let head = match writer.insert_node(0) {
+            Ok(slot) => slot,
+            Err(_) => break, // capacity will eventually exhaust if reader stalls
+        };
+        nodes.push(head);
+        writer.get_node(head).attr_write(0, round);
+        writer.mem_write_meta(0, head as i32);
+        let mut prev = head;
+        for i in 1..64 {
+            match writer.insert_node_after(prev, i) {
+                Ok(slot) => {
+                    writer.get_node(slot).attr_write(0, round);
+                    nodes.push(slot);
+                    prev = slot;
+                }
+                Err(_) => break,
+            }
+        }
+
+        writer.publish();
+
+        // Synapses: linear chain + star from head.
+        if nodes.len() > 1 {
+            for i in 0..nodes.len() - 1 {
+                if let Ok(s) = writer.connect(nodes[i], nodes[i + 1], 99) {
+                    synapses.push(s);
+                }
+                if let Ok(s) = writer.connect(nodes[0], nodes[i + 1], 88) {
+                    synapses.push(s);
+                }
+            }
+        }
+
+        writer.publish();
+
+        // Tear down half the synapses.
+        for (i, &s) in synapses.iter().enumerate() {
+            if i % 2 == 0 {
+                let _ = writer.disconnect_synapse(s);
+            }
+        }
+
+        writer.publish();
+
+        // Tear down the chain — also marks the entry slot stale.
+        writer.mem_write_meta(0, 0);
+        let _ = writer.remove_chain(head);
+
+        writer.publish();
+    }
+
+    is_running.store(false, Ordering::Release);
+    let (_iters, _max_nodes) = reader_handle.join().expect("reader thread panicked");
+    // writer (the kernel) drops here. Arc count is now 1.
 }

@@ -168,5 +168,5 @@ fn metadata_coexists_with_node_mutations() {
 
     assert_eq!(controller.mem_read_meta(0), 10);
     // Node intact
-    assert_eq!(controller.get_head_node().unwrap().get_kind(), 1);
+    assert_eq!(controller.get_node(n).get_kind(), 1);
 }
