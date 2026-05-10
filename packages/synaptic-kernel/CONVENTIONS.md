@@ -170,6 +170,38 @@ change this type, every primitive has to be touched — that's why it hasn't hap
 - A new SPSC primitive needs at minimum: a single-threaded behavioral test, an oracle prop test, and a multi-threaded
   stress test.
 
+### Test patterns
+
+**Transient ack.** When a producer-side test needs to drive a generation
+ack — usually to drain a deferred-free queue or close out a publish cycle
+— but doesn't care about the mirror's contents and doesn't want to hold a
+consumer across subsequent kernel mutations, use the one-line idiom:
+
+```rust
+TestConsumer::new(kernel.get_control_plane()).acquire_mirror();
+```
+
+This constructs the consumer, performs `acquire_mirror()` (which acks the
+current generation), discards the returned `&EpochMirror`, and drops the
+consumer at the end of the expression statement — all on a single line.
+The consumer's `Arc<ControlPlane>` clone is released before the next
+statement runs, so the kernel's debug-time Drop assert sees
+`strong_count == 1` at scope end.
+
+Use it inside the canonical two-cycle reclaim dance:
+
+```rust
+kernel.publish();
+TestConsumer::new(kernel.get_control_plane()).acquire_mirror(); // ack
+kernel.publish();
+// deferred slots are now reclaimed
+```
+
+Don't use it when the test actually needs to read the mirror or sustain
+the consumer across multiple kernel mutations — for those, declare the
+consumer after the kernel as a normal binding so it lives for the rest of
+the scope and drops first by reverse-declaration order.
+
 ## Files you'll touch together
 
 When changing the shape of any of these, expect to touch the corresponding writer + reader + handle/view + their
