@@ -12,7 +12,7 @@ use crate::primitives::lut_reader::LutReader;
 /// Consumer-side only. The producer uses `LutWriterRegistry`.
 #[derive(Clone)]
 pub struct LutReaderRegistry<const TB_COUNT: usize, const LUT_COUNT: usize> {
-    id_index: [u16; LUT_COUNT],
+    id_index: [Option<u16>; LUT_COUNT],
     tables: [LutReader; LUT_COUNT],
     default_tb_start_offset: usize,
     default_tb_end_offset: usize,
@@ -22,7 +22,7 @@ pub struct LutReaderRegistry<const TB_COUNT: usize, const LUT_COUNT: usize> {
 
 impl<const TB_COUNT: usize, const LUT_COUNT: usize> LutReaderRegistry<TB_COUNT, LUT_COUNT> {
     pub fn bind(
-        id_index: [u16; LUT_COUNT],
+        id_index: [Option<u16>; LUT_COUNT],
         tables: [LutReader; LUT_COUNT],
         default_tb_start_offset: usize,
         default_tb_end_offset: usize,
@@ -70,7 +70,9 @@ impl<const TB_COUNT: usize, const LUT_COUNT: usize> LutReaderRegistry<TB_COUNT, 
             LUT_COUNT - 1,
         );
 
-        let index = self.id_index[id.0 as usize];
+        let index = self.id_index[id.0 as usize].expect(
+            "LutReaderRegistry::get | id_index entry was None - construction invariant violated",
+        );
         &self.tables[index as usize]
     }
 }

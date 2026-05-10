@@ -17,7 +17,7 @@ use crate::primitives::triple_buffer_reader::TripleBufferReader;
 /// Shares backing region with `TripleBufferWriterRegistry`. See its layout.
 #[derive(Clone)]
 pub struct TripleBufferReaderRegistry<const N: usize> {
-    id_index: [u16; N],
+    id_index: [Option<u16>; N],
     default_tb: TripleBufferReader,
     tbs: [TripleBufferReader; N],
     mem_start_offset: usize,
@@ -26,7 +26,7 @@ pub struct TripleBufferReaderRegistry<const N: usize> {
 
 impl<const N: usize> TripleBufferReaderRegistry<N> {
     pub(crate) fn bind(
-        id_index: [u16; N],
+        id_index: [Option<u16>; N],
         default_tb: TripleBufferReader,
         tbs: [TripleBufferReader; N],
         mem_start_offset: usize,
@@ -61,6 +61,10 @@ impl<const N: usize> TripleBufferReaderRegistry<N> {
 
     #[inline]
     pub fn get(&self, id: TripleBufferId) -> &TripleBufferReader {
+        if id == TripleBufferId::DEFAULT {
+            return &self.default_tb;
+        }
+
         debug_assert!(
             (id.0 as usize) < N || id == TripleBufferId::DEFAULT,
             "TripleBufferReaderRegistry::get | id {} out of bounds [0-{}]",
@@ -68,11 +72,8 @@ impl<const N: usize> TripleBufferReaderRegistry<N> {
             N - 1,
         );
 
-        if id == TripleBufferId::DEFAULT {
-            return &self.default_tb;
-        }
-
-        let index = self.id_index[id.0 as usize];
+        let index = self.id_index[id.0 as usize]
+            .expect("TripleBufferReaderRegistry::get | id_index entry was None - construction invariant violated");
         &self.tbs[index as usize]
     }
 }

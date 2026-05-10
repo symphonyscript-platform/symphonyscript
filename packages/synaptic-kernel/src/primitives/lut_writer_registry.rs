@@ -15,7 +15,7 @@ use crate::primitives::triple_buffer_writer_registry::TripleBufferWriterRegistry
 /// Producer-side only. The consumer uses `LutReaderRegistry`.
 #[derive(Clone)]
 pub struct LutWriterRegistry<const TB_COUNT: usize, const LUT_COUNT: usize> {
-    id_index: [u16; LUT_COUNT],
+    id_index: [Option<u16>; LUT_COUNT],
     defs: [LutDef; LUT_COUNT],
     tables: [LutWriter; LUT_COUNT],
     default_tb_start_offset: usize,
@@ -67,7 +67,7 @@ impl<const TB_COUNT: usize, const LUT_COUNT: usize> LutWriterRegistry<TB_COUNT, 
         let mut tb_start_offsets: [usize; LUT_COUNT] = [0; LUT_COUNT];
         let mut default_tb_cursor: usize = default_tb_start_offset;
         let mut extra_tb_cursors: [usize; TB_COUNT] = extra_tb_start_offsets;
-        let mut id_index: [u16; LUT_COUNT] = [u16::MAX; LUT_COUNT];
+        let mut id_index: [Option<u16>; LUT_COUNT] = [None; LUT_COUNT];
 
         for i in 0..LUT_COUNT {
             let def = defs[i];
@@ -82,12 +82,12 @@ impl<const TB_COUNT: usize, const LUT_COUNT: usize> LutWriterRegistry<TB_COUNT, 
 
             assert_eq!(
                 id_index[id.0 as usize],
-                u16::MAX,
+                None,
                 "LutWriterRegistry::create | duplicate id {}",
                 id
             );
 
-            id_index[id.0 as usize] = i as u16;
+            id_index[id.0 as usize] = Some(i as u16);
 
             if def.tb_id == TripleBufferId::DEFAULT {
                 tb_start_offsets[i] = default_tb_cursor;
@@ -191,7 +191,8 @@ impl<const TB_COUNT: usize, const LUT_COUNT: usize> LutWriterRegistry<TB_COUNT, 
             LUT_COUNT - 1,
         );
 
-        let index = self.id_index[id.0 as usize];
+        let index = self.id_index[id.0 as usize]
+            .expect("LutWriterRegistry::get | id_index entry was None - construction invariant violated");
         &self.tables[index as usize]
     }
 

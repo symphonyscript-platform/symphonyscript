@@ -34,7 +34,7 @@ use std::sync::Arc;
 pub struct TripleBufferWriterRegistry<const N: usize> {
     mem_start_offset: usize,
     mem_end_offset: usize,
-    id_index: [u16; N],
+    id_index: [Option<u16>; N],
     defs: [TripleBufferDef; N],
     default_tb: TripleBufferWriter,
     tbs: [TripleBufferWriter; N],
@@ -85,7 +85,7 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
             mem.len(),
         );
 
-        let mut id_index: [u16; N] = [u16::MAX; N];
+        let mut id_index: [Option<u16>; N] = [None; N];
 
         for i in 0..N {
             let id = defs[i].id;
@@ -98,13 +98,12 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
             );
 
             assert_eq!(
-                id_index[id.0 as usize],
-                u16::MAX,
+                id_index[id.0 as usize], None,
                 "TripleBufferWriterRegistry::create | duplicate id {}",
                 id
             );
 
-            id_index[id.0 as usize] = i as u16;
+            id_index[id.0 as usize] = Some(i as u16);
         }
 
         let default_tb = TripleBufferWriter::create(
@@ -164,16 +163,11 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
     }
 
     #[inline]
-    pub fn index_of(&self, id: TripleBufferId) -> u16 {
-        debug_assert!(
-            id != TripleBufferId::DEFAULT,
-            "TripleBufferWriterRegistry::index_of | index_of may not be called on TripleBufferId::DEFAULT"
-        );
-        self.id_index[id.0 as usize]
-    }
-
-    #[inline]
     pub fn get(&self, id: TripleBufferId) -> &TripleBufferWriter {
+        if id == TripleBufferId::DEFAULT {
+            return &self.default_tb;
+        }
+
         debug_assert!(
             (id.0 as usize) < N || id == TripleBufferId::DEFAULT,
             "TripleBufferWriterRegistry::get | id {} out of bounds [0-{}]",
@@ -181,11 +175,8 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
             N - 1,
         );
 
-        if id == TripleBufferId::DEFAULT {
-            return &self.default_tb;
-        }
-
-        let index = self.id_index[id.0 as usize];
+        let index = self.id_index[id.0 as usize]
+            .expect("TripleBufferWriterRegistry::get | id_index entry was None - construction invariant violated");
         &self.tbs[index as usize]
     }
 
@@ -226,5 +217,15 @@ impl<const N: usize> TripleBufferWriterRegistry<N> {
             let id = source.defs[i].id;
             self.get(id).copy_metadata_from(&source.get(id));
         }
+    }
+
+    #[inline]
+    pub(crate) fn index_of(&self, id: TripleBufferId) -> u16 {
+        debug_assert!(
+            id != TripleBufferId::DEFAULT,
+            "TripleBufferWriterRegistry::index_of | index_of may not be called on TripleBufferId::DEFAULT"
+        );
+        self.id_index[id.0 as usize]
+            .expect("TripleBufferWriterRegistry::index_of | id_index entry was None - construction invariant violated")
     }
 }

@@ -17,7 +17,7 @@ use std::sync::Arc;
 /// Producer-side only. The consumer uses `EntryStoreReaderRegistry`.
 #[derive(Clone)]
 pub struct EntryStoreWriterRegistry<const TB_COUNT: usize, const STORE_COUNT: usize> {
-    id_index: [u16; STORE_COUNT],
+    id_index: [Option<u16>; STORE_COUNT],
     defs: [EntryStoreDef; STORE_COUNT],
     stores: [EntryStoreWriter; STORE_COUNT],
     mem_start_offset: usize,
@@ -85,7 +85,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
         let mut mem_cursor = mem_start_offset;
         let mut default_tb_cursor: usize = default_tb_start_offset;
         let mut extra_tb_cursors: [usize; TB_COUNT] = extra_tb_start_offsets;
-        let mut id_index: [u16; STORE_COUNT] = [u16::MAX; STORE_COUNT];
+        let mut id_index: [Option<u16>; STORE_COUNT] = [None; STORE_COUNT];
 
         for i in 0..STORE_COUNT {
             let def = defs[i];
@@ -99,15 +99,14 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
             );
 
             assert_eq!(
-                id_index[id.0 as usize],
-                u16::MAX,
+                id_index[id.0 as usize], None,
                 "EntryStoreWriterRegistry::create | duplicate id {}",
                 id
             );
 
             mem_start_offsets[i] = mem_cursor;
             mem_cursor += def.size_on_mem();
-            id_index[id.0 as usize] = i as u16;
+            id_index[id.0 as usize] = Some(i as u16);
 
             if def.tb_id == TripleBufferId::DEFAULT {
                 tb_start_offsets[i] = default_tb_cursor;
@@ -258,7 +257,8 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
             STORE_COUNT - 1,
         );
 
-        let index = self.id_index[id.0 as usize];
+        let index = self.id_index[id.0 as usize]
+            .expect("EntryStoreWriterRegistry::get | id_index entry was None - construction invariant violated");
         &self.stores[index as usize]
     }
 

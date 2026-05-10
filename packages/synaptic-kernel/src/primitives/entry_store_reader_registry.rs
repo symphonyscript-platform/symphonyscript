@@ -12,7 +12,7 @@ use crate::primitives::entry_store_reader::EntryStoreReader;
 /// Consumer-side only. The producer uses `EntryStoreWriterRegistry`.
 #[derive(Clone)]
 pub struct EntryStoreReaderRegistry<const TB_COUNT: usize, const STORE_COUNT: usize> {
-    id_index: [u16; STORE_COUNT],
+    id_index: [Option<u16>; STORE_COUNT],
     stores: [EntryStoreReader; STORE_COUNT],
     mem_start_offset: usize,
     mem_end_offset: usize,
@@ -26,7 +26,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
     EntryStoreReaderRegistry<TB_COUNT, STORE_COUNT>
 {
     pub fn bind(
-        id_index: [u16; STORE_COUNT],
+        id_index: [Option<u16>; STORE_COUNT],
         stores: [EntryStoreReader; STORE_COUNT],
         mem_start_offset: usize,
         mem_end_offset: usize,
@@ -93,7 +93,8 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize>
             STORE_COUNT - 1,
         );
 
-        let index = self.id_index[id.0 as usize];
+        let index = self.id_index[id.0 as usize]
+            .expect("EntryStoreReaderRegistry::get | id_index entry was None - construction invariant violated");
         &self.stores[index as usize]
     }
 }
