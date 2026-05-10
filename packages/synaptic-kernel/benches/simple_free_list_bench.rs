@@ -129,33 +129,6 @@ fn bench_high_fragmentation(c: &mut Criterion) {
     });
 }
 
-fn bench_vs_old_freelist_comparison(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Comparison/alloc+free");
-
-    // SimpleFreeList
-    group.bench_function("SimpleFreeList", |b| {
-        let mem = create_mem(1_000_000);
-        let fl = SimpleFreeList::new(mem, 0, 131072);
-        b.iter(|| {
-            let slot = fl.alloc().unwrap();
-            black_box(fl.free(slot).unwrap());
-        });
-    });
-
-    // Old FreeList<1> (closest to SimpleFreeList — minimal slot size)
-    group.bench_function("FreeList<1>", |b| {
-        use kernel_wasm::free_list::FreeList;
-        let mem = create_mem(1_000_000);
-        let fl: FreeList<1> = FreeList::new(mem, 0, 131072);
-        b.iter(|| {
-            let slot = fl.alloc().unwrap();
-            black_box(fl.free(slot).unwrap());
-        });
-    });
-
-    group.finish();
-}
-
 criterion_group!(
     benches,
     bench_alloc,
@@ -165,6 +138,5 @@ criterion_group!(
     bench_batch_free,
     bench_double_free_check,
     bench_high_fragmentation,
-    bench_vs_old_freelist_comparison,
 );
 criterion_main!(benches);
