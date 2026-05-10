@@ -235,7 +235,6 @@ fn spsc_pending_count_consistency() {
 
         while received < message_count {
             let pending = ring.pending_count();
-            assert!(pending >= 0, "pending count went negative: {}", pending);
             assert!(
                 pending <= 32,
                 "pending count exceeded capacity: {}",
