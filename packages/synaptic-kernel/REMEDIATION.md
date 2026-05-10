@@ -180,6 +180,77 @@ Grouped by where the work happens.
 
 ---
 
+D3. Clarify the consumer-side slot-read contract.
+
+What:  In ARCHITECTURE.md ("Random-access reads from arbitrary slot
+indices are unsafe...") and CLAUDE.md (the "Consumer must enter
+the graph at a known-live slot" rule), explicitly distinguish:
+
+         (a) reading a slot the consumer has reached by traversal from
+             a user-designated entry slot — always safe within the
+             current cycle.
+         (b) reading a slot whose liveness the producer-side test code
+             knows directly (e.g. just allocated, never removed, no
+             epoch rotation in progress) — also safe, because the
+             reclamation prerequisites haven't been met.
+         (c) reading a slot the consumer cached across `swap()` calls,
+             or whose liveness can't be locally proven — UNSAFE,
+             because the slot may have been reclaimed and reassigned
+             to a different entity.
+
+       The current docs read as if (b) is unsafe, which is what made
+       Opus surface this as a judgment call. Tightening the docs to
+       distinguish all three (or explicitly endorsing (b) as a "test
+       and same-thread" exception) closes the ambiguity.
+
+Where: ARCHITECTURE.md "Entry store — the universal slotted container"
+section (the "Random-access reads..." paragraph), and CLAUDE.md
+hard rule about consumer entry.
+
+Why:   This is the single most ambiguous part of the consumer-side
+contract. Future agents and contributors will keep re-deriving
+Opus's call. Documenting it once stops the re-derivation.
+
+D4. Document the reclamation cycle.
+
+What:  Update the lifecycle diagram in ARCHITECTURE.md from:
+
+         free → alloc() → active → defer_free() → deferred → publish() → free
+
+       to the actual sequence:
+
+         free → alloc() → active → defer_free() → deferred
+              → publish() (stages the gen)
+              → consumer ack (via swap/acquire_mirror)
+              → publish() (drains acked entries)
+              → free
+
+       Add one paragraph explaining: a single publish() does NOT
+       reclaim. Reclamation requires the consumer to have acknowledged
+       the generation in which the slot was deferred — typically two
+       publish-cycles bracketed by a consumer ack.
+
+Where: ARCHITECTURE.md "Slot allocation and deferred deletion" section.
+
+Why:   The current diagram lies. Opus discovered the truth through
+test failures, then dropped a wrong assertion. The next
+contributor will hit the same wall.
+
+D5. Document `len()` / `node_count()` / `synapse_count()` semantics.
+
+What:  Add a one-line note next to wherever these are documented (or
+in the "Slot allocation" section): these counts include deferred
+slots. They drop only after a publish-ack-publish reclaim cycle.
+For "is this slot active and safe to read?", use `is_active(slot)`
+— not the count.
+
+Where: ARCHITECTURE.md, plus rustdoc on the methods themselves.
+
+Why:   The natural reading of `node_count()` is "currently live nodes."
+The actual semantics is "slots not yet returned to the free
+list, including deferred." This bit Opus and will bite anyone
+writing a metric or assertion against the count.
+
 ## Recommended order
 
 If you want to slot this into a priority sequence:
