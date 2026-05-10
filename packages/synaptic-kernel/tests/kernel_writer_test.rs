@@ -416,6 +416,114 @@ fn deferred_free_two_cycle_delay() {
     assert!(kernel.insert_node(99).is_ok());
 }
 
+// ============ Capacity-saturation cycling (REMEDIATION T5) ============
+//
+// The full saturation lifecycle: alloc to capacity, defer-free every
+// allocation, drive the two-cycle reclaim, alloc to capacity again. This
+// catches off-by-one errors in the deferred-reclamation path where some
+// slots get stuck in the previous-list and never come back.
+
+#[test]
+fn full_capacity_saturation_cycle_reclaims_all_slots() {
+    let mut kernel = create_writer();
+    const CAP: usize = 16;
+
+    // Round 1: fill to capacity.
+    let mut slots = Vec::with_capacity(CAP);
+    for i in 0..CAP {
+        slots.push(kernel.insert_node(i as i32).unwrap());
+    }
+    assert!(
+        kernel.insert_node(99).is_err(),
+        "must be at capacity after CAP inserts"
+    );
+
+    // Defer-free every slot.
+    for slot in &slots {
+        kernel.remove_node(*slot).unwrap();
+    }
+
+    // Drive the two-cycle reclaim.
+    kernel.publish();
+    TestConsumer::new(kernel.get_control_plane()).acquire_mirror();
+    kernel.publish();
+
+    // All slots must have returned to the free list.
+    assert_eq!(
+        kernel.node_count(),
+        0,
+        "expected 0 live slots after full saturation/drain cycle"
+    );
+
+    // Round 2: must accept CAP fresh inserts again.
+    let mut new_slots = Vec::with_capacity(CAP);
+    for i in 0..CAP {
+        new_slots.push(
+            kernel
+                .insert_node((i + 100) as i32)
+                .expect("post-drain insert must succeed up to capacity"),
+        );
+    }
+    assert!(
+        kernel.insert_node(99).is_err(),
+        "must hit capacity again after re-filling"
+    );
+
+    // The new entries must read back the values we just wrote — proves
+    // the reclaimed slots were properly cleared, not left with stale
+    // round-1 data that survived the publish/swap dance.
+    for (i, slot) in new_slots.iter().enumerate() {
+        assert_eq!(kernel.get_node(*slot).get_kind(), (i + 100) as i32);
+    }
+}
+
+#[test]
+fn synapse_capacity_saturation_cycle_reclaims_all_slots() {
+    // Same shape as above, but exercises the synapse store's deferred
+    // reclamation. Synapses share the staging-buffer protocol with nodes
+    // but live in their own EntryStoreWriter, so a bug in one wouldn't
+    // necessarily surface in the other.
+    let mut kernel = create_writer();
+    const SYN_CAP: usize = 32;
+
+    let src = kernel.insert_node(1).unwrap();
+    let tgt = kernel.insert_node(2).unwrap();
+
+    let mut synapses = Vec::with_capacity(SYN_CAP);
+    for i in 0..SYN_CAP {
+        synapses.push(kernel.connect(src, tgt, i as i32).unwrap());
+    }
+    assert!(
+        kernel.connect(src, tgt, 999).is_err(),
+        "must be at synapse capacity"
+    );
+
+    for s in &synapses {
+        kernel.disconnect_synapse(*s).unwrap();
+    }
+
+    kernel.publish();
+    TestConsumer::new(kernel.get_control_plane()).acquire_mirror();
+    kernel.publish();
+
+    assert_eq!(
+        kernel.synapse_count(),
+        0,
+        "expected 0 live synapses after full saturation/drain cycle"
+    );
+
+    // Re-saturate.
+    for i in 0..SYN_CAP {
+        kernel
+            .connect(src, tgt, (i + 100) as i32)
+            .expect("post-drain connect must succeed");
+    }
+    assert!(
+        kernel.connect(src, tgt, 999).is_err(),
+        "must hit synapse capacity after re-saturating"
+    );
+}
+
 // ============ Self-loop ============
 
 #[test]
@@ -511,4 +619,110 @@ fn grow_rejects_smaller_capacity() {
         SYNAPSE_ATTR,
     ));
     assert!(matches!(result, Err(KernelError::InsufficientCapacity)));
+}
+
+// ============ Kind boundary tests (REMEDIATION T6) ============
+//
+// `kind` lives in the high 8 bits of `core[0]`; the low 24 bits are
+// reserved for future internal flags. `set_kind` must round-trip 0..=255
+// and reject 256 in debug builds. The bitmask preservation invariant
+// (low 24 bits unchanged after `set_kind`) is structural — the only way
+// to corrupt it would be `kind << 24` accidentally OR-ing into the wider
+// region or shifting wrong, both of which surface as wrong `get_kind`.
+
+#[test]
+fn node_kind_zero_round_trips() {
+    let kernel = create_writer();
+    let slot = kernel.insert_node(0).unwrap();
+    assert_eq!(kernel.get_node(slot).get_kind(), 0);
+}
+
+#[test]
+fn node_kind_255_round_trips() {
+    let kernel = create_writer();
+    let slot = kernel.insert_node(255).unwrap();
+    assert_eq!(kernel.get_node(slot).get_kind(), 255);
+}
+
+#[test]
+fn node_kind_survives_neighbor_pointer_mutations() {
+    // Inserting siblings overwrites `next_ptr` / `prev_ptr` on the
+    // watched node. If `set_kind`'s bitmask shift is ever broken so that
+    // it overlaps with neighbouring core slots, that mutation could
+    // bleed into kind. Test all sibling-pointer mutations leave the
+    // watched node's high-edge kind value (0xFF) intact.
+    let kernel = create_writer();
+    let watched = kernel.insert_node(255).unwrap();
+
+    // Mutate next_ptr / prev_ptr by inserting siblings.
+    let _before = kernel.insert_node_before(watched, 1).unwrap();
+    let _after = kernel.insert_node_after(watched, 2).unwrap();
+
+    assert_eq!(
+        kernel.get_node(watched).get_kind(),
+        255,
+        "kind must survive neighbour-pointer mutations"
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "out of bounds [0, 256)")]
+fn node_kind_256_debug_panics() {
+    // 256 overflows the 8-bit kind slot. In debug builds, the
+    // `debug_assert!(value >= 0 && value < 256, ...)` in
+    // `NodeWriter::set_kind` (called from `insert_node`) fires. Release
+    // builds skip this check — by design — so the test is gated.
+    let kernel = create_writer();
+    let _ = kernel.insert_node(256);
+}
+
+#[test]
+fn synapse_kind_zero_round_trips() {
+    let kernel = create_writer();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt = kernel.insert_node(2).unwrap();
+    let s = kernel.connect(src, tgt, 0).unwrap();
+    assert_eq!(kernel.get_synapse(s).get_kind(), 0);
+}
+
+#[test]
+fn synapse_kind_255_round_trips() {
+    let kernel = create_writer();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt = kernel.insert_node(2).unwrap();
+    let s = kernel.connect(src, tgt, 255).unwrap();
+    assert_eq!(kernel.get_synapse(s).get_kind(), 255);
+}
+
+#[test]
+fn synapse_kind_survives_peer_synapse_mutations() {
+    // Peer synapses on the same source/target lists mutate the watched
+    // synapse's outgoing/incoming next/prev pointers. Same bitmask
+    // preservation invariant as the node test.
+    let kernel = create_writer();
+    let src = kernel.insert_node(1).unwrap();
+    let t1 = kernel.insert_node(2).unwrap();
+    let t2 = kernel.insert_node(3).unwrap();
+
+    let watched = kernel.connect(src, t1, 255).unwrap();
+
+    // Append a peer synapse: rewrites `outgoing_next_ptr` on watched.
+    let _peer = kernel.connect(src, t2, 7).unwrap();
+
+    assert_eq!(
+        kernel.get_synapse(watched).get_kind(),
+        255,
+        "synapse kind must survive peer synapse list mutations"
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "out of bounds [0, 256)")]
+fn synapse_kind_256_debug_panics() {
+    let kernel = create_writer();
+    let src = kernel.insert_node(1).unwrap();
+    let tgt = kernel.insert_node(2).unwrap();
+    let _ = kernel.connect(src, tgt, 256);
 }
