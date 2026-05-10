@@ -792,3 +792,97 @@ fn store_defs_preserved_in_serialized_config() {
     assert_eq!(serialized.config.store_defs[0].id, EntryStoreId(0));
     assert_eq!(serialized.config.store_defs[0].config.capacity, 4);
 }
+
+// =========================================================
+// PHASE 14: Bind-mid-publish round-trip (REMEDIATION T4)
+// =========================================================
+//
+// Producer publishes (writer_index advanced, NEW_DATA set on the default
+// TB) but no consumer ever swaps. Then serialize -> load_serialized.
+// The rebound writer's `TripleBufferWriter::create(bind=true)` path runs
+// its `Acquire` load on `state` and sync-from-published step. The freshly-
+// loaded kernel should see the most recent published frame, not the
+// initial empty buffer.
+
+#[test]
+fn bind_after_unconsumed_publish_recovers_published_state() {
+    let mut kernel = TestKernel::new(config(16));
+
+    let n1 = kernel.insert_node(7).unwrap();
+    let n2 = kernel.insert_node_after(n1, 8).unwrap();
+    let s = kernel.connect(n1, n2, 99).unwrap();
+    kernel.get_node(n1).set_meta(0, 1234);
+
+    // Publish but do NOT touch the consumer side. The TB has NEW_DATA
+    // set; no swap has happened.
+    kernel.publish();
+
+    let serialized = kernel.serialize();
+    let loaded = TestKernel::load_serialized(serialized);
+
+    // The rebound kernel must be able to expose the topology that was
+    // published just before serialize, which only works if the bind path
+    // pulled the latest published buffer into the writer's working slot.
+    let head = loaded.get_node(n1);
+    assert_eq!(head.get_kind(), 7);
+    assert_eq!(head.get_next_ptr(), Some(n2));
+    assert_eq!(head.get_meta(0), 1234);
+
+    let tail = loaded.get_node(n2);
+    assert_eq!(tail.get_kind(), 8);
+    assert_eq!(tail.get_prev_ptr(), Some(n1));
+
+    let syn = loaded.get_synapse(s);
+    assert_eq!(syn.get_kind(), 99);
+    assert_eq!(syn.get_source_ptr(), n1);
+    assert_eq!(syn.get_target_ptr(), n2);
+}
+
+#[test]
+fn bind_after_unconsumed_publish_supports_further_mutation() {
+    // After bind-mid-publish, the loaded kernel must accept new writes
+    // and surface them to a fresh consumer. If the bind path produced a
+    // half-initialized writer that started from buffer 0, the next
+    // publish would land in the wrong slot and the consumer would see
+    // stale data.
+    let mut kernel = TestKernel::new(config(16));
+    let n1 = kernel.insert_node(1).unwrap();
+    kernel.publish();
+
+    let serialized = kernel.serialize();
+    let mut loaded = TestKernel::load_serialized(serialized);
+    let mut consumer = EpochConsumer::<1, 1, 1>::new(loaded.get_control_plane());
+
+    // n1 is preserved. Add n2 after the bind, publish, and read both via
+    // the consumer.
+    let n2 = loaded.insert_node_after(n1, 2).unwrap();
+    loaded.get_node(n2).attr_write(0, 999);
+    loaded.publish();
+
+    let mirror = consumer.acquire_mirror();
+    assert_eq!(mirror.get_node(n1).get_kind(), 1);
+    assert_eq!(mirror.get_node(n2).get_kind(), 2);
+    assert_eq!(mirror.get_node(n2).attr_read(0), 999);
+    assert_eq!(mirror.get_node(n1).get_next_ptr(), Some(n2));
+}
+
+#[test]
+fn bind_after_two_unconsumed_publishes_recovers_latest() {
+    // Two consecutive publishes without a swap in between: the second
+    // publish overwrites the first as the "latest published". The bind
+    // path must sync from the most recent published index, not the
+    // first one.
+    let mut kernel = TestKernel::new(config(16));
+    let n = kernel.insert_node(1).unwrap();
+    kernel.get_node(n).set_meta(0, 100);
+    kernel.publish();
+
+    kernel.get_node(n).set_meta(0, 200);
+    kernel.publish();
+
+    let serialized = kernel.serialize();
+    let loaded = TestKernel::load_serialized(serialized);
+
+    // Latest meta value (200) must be visible on the loaded kernel.
+    assert_eq!(loaded.get_node(n).get_meta(0), 200);
+}
