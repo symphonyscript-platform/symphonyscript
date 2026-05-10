@@ -8,6 +8,7 @@ mod common;
 use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
+use synaptic_kernel::primitives::slot::SlotId;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
@@ -17,7 +18,7 @@ const SYNAPSE_ATTR: usize = 16;
 type TestKernel = Kernel<1, 1, 1>;
 type TestProcessor = EpochConsumer<1, 1, 1>;
 
-fn config(n: usize, s: usize) -> KernelConfig<1, 1, 1> {
+fn config(n: u32, s: u32) -> KernelConfig<1, 1, 1> {
     common::kernel_config_1_1(n, s, NODE_META, NODE_ATTR, SYNAPSE_META, SYNAPSE_ATTR)
 }
 
@@ -41,7 +42,7 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
     let n2 = controller.insert_node_after(n1, 2).unwrap();
     controller.connect(n1, n2, 10).unwrap();
     controller.get_node(n1).attr_write(0, 42);
-    controller.mem_write_meta(0, n1 as i32);
+    controller.mem_write_meta(0, n1.to_i32());
     controller.publish();
 
     let running = Arc::new(AtomicBool::new(true));
@@ -55,11 +56,13 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
         while running_consumer.load(Ordering::Relaxed) {
             let graph = processor.acquire_mirror();
 
-            let head_slot = graph.mem_read_meta(0) as usize;
-            if head_slot == 0 {
-                iterations += 1;
-                continue;
-            }
+            let head_slot = match SlotId::from_i32(graph.mem_read_meta(0)) {
+                Some(s) => s,
+                None => {
+                    iterations += 1;
+                    continue;
+                }
+            };
 
             let mut current = Some(graph.get_node(head_slot));
             let mut count = 0usize;
@@ -72,17 +75,18 @@ fn epoch_stress_grow_under_consumer_load_with_ack() {
                     iterations
                 );
 
-                let next_ptr = node.get_next_ptr();
-                if next_ptr == 0 {
-                    break;
+                match node.get_next_ptr() {
+                    Some(next_ptr) => {
+                        current = Some(graph.get_node(next_ptr));
+                        count += 1;
+                        assert!(
+                            count <= 128,
+                            "chain exceeded max length — possible cycle at iteration {}",
+                            iterations
+                        );
+                    }
+                    None => break,
                 }
-                current = Some(graph.get_node(next_ptr));
-                count += 1;
-                assert!(
-                    count <= 128,
-                    "chain exceeded max length — possible cycle at iteration {}",
-                    iterations
-                );
             }
 
             if count > max_chain_len {
@@ -145,7 +149,7 @@ fn epoch_stress_random_mutations_under_consumer_load() {
         node_slots.push(s);
         prev = s;
     }
-    controller.mem_write_meta(0, head as i32);
+    controller.mem_write_meta(0, head.to_i32());
 
     let mut synapse_slots = Vec::new();
     for i in 0..node_slots.len() - 1 {
@@ -166,11 +170,13 @@ fn epoch_stress_random_mutations_under_consumer_load() {
         while running_consumer.load(Ordering::Relaxed) {
             let graph = processor.acquire_mirror();
 
-            let head_slot = graph.mem_read_meta(0) as usize;
-            if head_slot == 0 {
-                iterations += 1;
-                continue;
-            }
+            let head_slot = match SlotId::from_i32(graph.mem_read_meta(0)) {
+                Some(s) => s,
+                None => {
+                    iterations += 1;
+                    continue;
+                }
+            };
 
             let mut current = Some(graph.get_node(head_slot));
             let mut node_count = 0usize;
@@ -178,12 +184,12 @@ fn epoch_stress_random_mutations_under_consumer_load() {
                 let kind: i32 = node.get_kind();
                 assert!(kind >= 0, "negative kind: {}", kind);
 
-                let mut syn_slot = node.get_outgoing_synapse_head();
+                let mut syn_slot_opt = node.get_outgoing_synapse_head();
                 let mut syn_count = 0;
-                while syn_slot > 0 {
+                while let Some(syn_slot) = syn_slot_opt {
                     let syn = graph.get_synapse(syn_slot);
                     let _syn_kind: i32 = syn.get_kind();
-                    syn_slot = syn.get_outgoing_next_ptr();
+                    syn_slot_opt = syn.get_outgoing_next_ptr();
                     syn_count += 1;
                     assert!(
                         syn_count <= 64,
@@ -191,13 +197,14 @@ fn epoch_stress_random_mutations_under_consumer_load() {
                     );
                 }
 
-                let next_ptr = node.get_next_ptr();
-                if next_ptr == 0 {
-                    break;
+                match node.get_next_ptr() {
+                    Some(next_ptr) => {
+                        current = Some(graph.get_node(next_ptr));
+                        node_count += 1;
+                        assert!(node_count <= 128, "chain too long");
+                    }
+                    None => break,
                 }
-                current = Some(graph.get_node(next_ptr));
-                node_count += 1;
-                assert!(node_count <= 128, "chain too long");
             }
             iterations += 1;
         }
@@ -274,7 +281,7 @@ fn epoch_stress_slow_ack_does_not_crash() {
     let cp = controller.get_control_plane();
 
     let head = controller.insert_node(1).unwrap();
-    controller.mem_write_meta(0, head as i32);
+    controller.mem_write_meta(0, head.to_i32());
     controller.publish();
 
     let running = Arc::new(AtomicBool::new(true));
@@ -287,15 +294,13 @@ fn epoch_stress_slow_ack_does_not_crash() {
         while running_consumer.load(Ordering::Relaxed) {
             let graph = processor.acquire_mirror();
 
-            let head_slot = graph.mem_read_meta(0) as usize;
-            if head_slot != 0 {
+            if let Some(head_slot) = SlotId::from_i32(graph.mem_read_meta(0)) {
                 let mut current = Some(graph.get_node(head_slot));
                 while let Some(node) = current {
-                    let next: usize = node.get_next_ptr();
-                    if next == 0 {
-                        break;
+                    match node.get_next_ptr() {
+                        Some(next) => current = Some(graph.get_node(next)),
+                        None => break,
                     }
-                    current = Some(graph.get_node(next));
                 }
             }
 

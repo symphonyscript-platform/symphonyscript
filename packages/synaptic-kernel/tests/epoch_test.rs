@@ -26,8 +26,8 @@ fn make_mem(size: usize) -> AtomicBuffer {
 }
 
 fn mk_config(
-    node_capacity: usize,
-    synapse_capacity: usize,
+    node_capacity: u32,
+    synapse_capacity: u32,
     mem_metadata_size: usize,
     _tb_metadata_size_removed: usize,
 ) -> KernelConfig<1, 1, 1> {
@@ -89,8 +89,8 @@ fn bind_preserves_topology_written_by_new_through_kernel_driver() {
 
     let node = mirror.get_node(slot);
     assert_eq!(node.get_kind(), 42);
-    // slot numbering is 1-based.
-    assert!(slot > 0);
+    // slot numbering is 1-based: SlotId is NonZeroU32.
+    assert!(slot.get() > 0);
 }
 
 #[test]
@@ -313,19 +313,19 @@ fn copy_from_migrates_chain_synapses_and_metadata_to_larger() {
     assert_eq!(head.attr_read(0), 1001);
     assert_eq!(head.get_meta(0), 100);
 
-    let mid = mirror.get_node(head.get_next_ptr());
+    let mid = mirror.get_node(head.get_next_ptr().unwrap());
     assert_eq!(mid.get_kind(), 20);
     assert_eq!(mid.attr_read(0), 2002);
     assert_eq!(mid.get_meta(0), 200);
 
-    let tail = mirror.get_node(mid.get_next_ptr());
+    let tail = mirror.get_node(mid.get_next_ptr().unwrap());
     assert_eq!(tail.get_kind(), 30);
     assert_eq!(tail.attr_read(0), 3003);
     assert_eq!(tail.get_meta(0), 300);
-    assert_eq!(tail.get_next_ptr(), 0);
+    assert!(tail.get_next_ptr().is_none());
 
     // Synapses via source node's outgoing chain.
-    assert_eq!(head.get_outgoing_synapse_head(), s12);
+    assert_eq!(head.get_outgoing_synapse_head(), Some(s12));
     let syn12 = mirror.get_synapse(s12);
     assert_eq!(syn12.get_kind(), 40);
     assert_eq!(syn12.get_source_ptr(), n1);
@@ -333,7 +333,7 @@ fn copy_from_migrates_chain_synapses_and_metadata_to_larger() {
     assert_eq!(syn12.attr_read(0), 4000);
     assert_eq!(syn12.get_meta(0), 400);
 
-    assert_eq!(mid.get_outgoing_synapse_head(), s23);
+    assert_eq!(mid.get_outgoing_synapse_head(), Some(s23));
     let syn23 = mirror.get_synapse(s23);
     assert_eq!(syn23.get_kind(), 50);
     assert_eq!(syn23.get_source_ptr(), n2);
@@ -397,9 +397,9 @@ fn copy_from_with_holes_preserves_chain_only() {
 
     let head = mirror.get_node(n1);
     assert_eq!(head.get_kind(), 1);
-    let next = mirror.get_node(head.get_next_ptr());
+    let next = mirror.get_node(head.get_next_ptr().unwrap());
     assert_eq!(next.get_kind(), 4);
-    assert_eq!(next.get_next_ptr(), 0);
+    assert!(next.get_next_ptr().is_none());
 
     // Surviving slots preserve their original ids.
     assert!(n1 != n4);
@@ -499,7 +499,7 @@ fn epoch_works_with_zero_user_zones() {
     let mem = make_mem(TestEpoch::calculate_size_on_mem(&config));
     let epoch = TestEpoch::new(mem, config, 0);
     let slot = epoch.network.insert_node(7).unwrap();
-    assert!(slot > 0);
+    assert!(slot.get() > 0);
 
     epoch.publish();
     let mirror = epoch.to_mirror();

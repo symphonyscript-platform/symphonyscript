@@ -16,9 +16,9 @@ fn create_mem(size: usize) -> AtomicBuffer {
 
 const MEM_SIZE: usize = 65536;
 const TB_START: usize = 0;
-const TB_BUF_CAP: usize = 16384;
-const NODE_CAPACITY: usize = 16;
-const SYNAPSE_CAPACITY: usize = 32;
+const TB_BUF_CAP: u32 = 16384;
+const NODE_CAPACITY: u32 = 16;
+const SYNAPSE_CAPACITY: u32 = 32;
 const NODE_START_OFFSET: usize = 0;
 const NODE_FL_START: usize = 50000;
 
@@ -26,7 +26,7 @@ fn net_config() -> NetworkConfig {
     net_config_syn(SYNAPSE_CAPACITY)
 }
 
-fn net_config_syn(synapse_capacity: usize) -> NetworkConfig {
+fn net_config_syn(synapse_capacity: u32) -> NetworkConfig {
     NetworkConfig {
         node_capacity: NODE_CAPACITY,
         node_meta_stride: NODE_META,
@@ -91,20 +91,20 @@ fn connect_single_synapse_between_two_nodes() {
     assert_eq!(s.get_kind(), 10);
     assert_eq!(s.get_source_ptr(), src);
     assert_eq!(s.get_target_ptr(), tgt);
-    assert_eq!(s.get_outgoing_next_ptr(), 0, "only synapse: no next");
-    assert_eq!(s.get_outgoing_prev_ptr(), 0, "only synapse: no prev");
-    assert_eq!(s.get_incoming_next_ptr(), 0);
-    assert_eq!(s.get_incoming_prev_ptr(), 0);
+    assert!(s.get_outgoing_next_ptr().is_none(), "only synapse: no next");
+    assert!(s.get_outgoing_prev_ptr().is_none(), "only synapse: no prev");
+    assert!(s.get_incoming_next_ptr().is_none());
+    assert!(s.get_incoming_prev_ptr().is_none());
 
     // source node should have this synapse as outgoing head AND tail
     let src_node = node_chain.get_node(src);
-    assert_eq!(src_node.get_outgoing_synapse_head(), syn);
-    assert_eq!(src_node.get_outgoing_synapse_tail(), syn);
+    assert_eq!(src_node.get_outgoing_synapse_head(), Some(syn));
+    assert_eq!(src_node.get_outgoing_synapse_tail(), Some(syn));
 
     // target node should have this synapse as incoming head AND tail
     let tgt_node = node_chain.get_node(tgt);
-    assert_eq!(tgt_node.get_incoming_synapse_head(), syn);
-    assert_eq!(tgt_node.get_incoming_synapse_tail(), syn);
+    assert_eq!(tgt_node.get_incoming_synapse_head(), Some(syn));
+    assert_eq!(tgt_node.get_incoming_synapse_tail(), Some(syn));
 }
 
 // ============ connect: multiple synapses from same source ============
@@ -126,12 +126,12 @@ fn connect_two_synapses_from_same_source() {
     let src_node = node_chain.get_node(src);
     assert_eq!(
         src_node.get_outgoing_synapse_head(),
-        s1,
+        Some(s1),
         "head is first connected"
     );
     assert_eq!(
         src_node.get_outgoing_synapse_tail(),
-        s2,
+        Some(s2),
         "tail is last connected"
     );
 
@@ -140,10 +140,10 @@ fn connect_two_synapses_from_same_source() {
     // s2 outgoing links
 
     // each target sees its own synapse independently
-    assert_eq!(node_chain.get_node(tgt1).get_incoming_synapse_head(), s1);
-    assert_eq!(node_chain.get_node(tgt1).get_incoming_synapse_tail(), s1);
-    assert_eq!(node_chain.get_node(tgt2).get_incoming_synapse_head(), s2);
-    assert_eq!(node_chain.get_node(tgt2).get_incoming_synapse_tail(), s2);
+    assert_eq!(node_chain.get_node(tgt1).get_incoming_synapse_head(), Some(s1));
+    assert_eq!(node_chain.get_node(tgt1).get_incoming_synapse_tail(), Some(s1));
+    assert_eq!(node_chain.get_node(tgt2).get_incoming_synapse_head(), Some(s2));
+    assert_eq!(node_chain.get_node(tgt2).get_incoming_synapse_tail(), Some(s2));
 }
 
 // ============ connect: multiple synapses to same target ============
@@ -163,16 +163,16 @@ fn connect_two_synapses_to_same_target() {
 
     // target's incoming chain: s1 -> s2
     let tgt_node = node_chain.get_node(tgt);
-    assert_eq!(tgt_node.get_incoming_synapse_head(), s1);
-    assert_eq!(tgt_node.get_incoming_synapse_tail(), s2);
+    assert_eq!(tgt_node.get_incoming_synapse_head(), Some(s1));
+    assert_eq!(tgt_node.get_incoming_synapse_tail(), Some(s2));
 
     // s1 incoming links
 
     // s2 incoming links
 
     // each source sees its own synapse independently
-    assert_eq!(node_chain.get_node(src1).get_outgoing_synapse_head(), s1);
-    assert_eq!(node_chain.get_node(src2).get_outgoing_synapse_head(), s2);
+    assert_eq!(node_chain.get_node(src1).get_outgoing_synapse_head(), Some(s1));
+    assert_eq!(node_chain.get_node(src2).get_outgoing_synapse_head(), Some(s2));
 }
 
 // ============ disconnect: single synapse ============
@@ -191,13 +191,13 @@ fn disconnect_only_synapse_clears_node_pointers() {
 
     // source's outgoing chain completely empty
     let src_node = node_chain.get_node(src);
-    assert_eq!(src_node.get_outgoing_synapse_head(), 0);
-    assert_eq!(src_node.get_outgoing_synapse_tail(), 0);
+    assert!(src_node.get_outgoing_synapse_head().is_none());
+    assert!(src_node.get_outgoing_synapse_tail().is_none());
 
     // target's incoming chain completely empty
     let tgt_node = node_chain.get_node(tgt);
-    assert_eq!(tgt_node.get_incoming_synapse_head(), 0);
-    assert_eq!(tgt_node.get_incoming_synapse_tail(), 0);
+    assert!(tgt_node.get_incoming_synapse_head().is_none());
+    assert!(tgt_node.get_incoming_synapse_tail().is_none());
 }
 
 // ============ disconnect: head of chain ============
@@ -222,10 +222,10 @@ fn disconnect_head_of_outgoing_chain() {
     let src_node = node_chain.get_node(src);
     assert_eq!(
         src_node.get_outgoing_synapse_head(),
-        s2,
+        Some(s2),
         "head promoted to s2"
     );
-    assert_eq!(src_node.get_outgoing_synapse_tail(), s2, "tail unchanged");
+    assert_eq!(src_node.get_outgoing_synapse_tail(), Some(s2), "tail unchanged");
 }
 
 // ============ disconnect: tail of chain ============
@@ -248,10 +248,10 @@ fn disconnect_tail_of_outgoing_chain() {
     // src outgoing: s1
 
     let src_node = node_chain.get_node(src);
-    assert_eq!(src_node.get_outgoing_synapse_head(), s1);
+    assert_eq!(src_node.get_outgoing_synapse_head(), Some(s1));
     assert_eq!(
         src_node.get_outgoing_synapse_tail(),
-        s1,
+        Some(s1),
         "tail demoted to s1"
     );
 }
@@ -278,8 +278,8 @@ fn disconnect_middle_of_outgoing_chain() {
     // src outgoing: s1 -> s3
 
     let src_node = node_chain.get_node(src);
-    assert_eq!(src_node.get_outgoing_synapse_head(), s1);
-    assert_eq!(src_node.get_outgoing_synapse_tail(), s3);
+    assert_eq!(src_node.get_outgoing_synapse_head(), Some(s1));
+    assert_eq!(src_node.get_outgoing_synapse_tail(), Some(s3));
 }
 
 // ============ disconnect: incoming chain healing ============
@@ -304,8 +304,8 @@ fn disconnect_heals_incoming_chain() {
     // tgt incoming: s1 -> s3
 
     let tgt_node = node_chain.get_node(tgt);
-    assert_eq!(tgt_node.get_incoming_synapse_head(), s1);
-    assert_eq!(tgt_node.get_incoming_synapse_tail(), s3);
+    assert_eq!(tgt_node.get_incoming_synapse_head(), Some(s1));
+    assert_eq!(tgt_node.get_incoming_synapse_tail(), Some(s3));
 }
 
 // ============ dual-chain independence ============
@@ -335,13 +335,13 @@ fn disconnect_heals_both_chains_independently() {
 
     // src outgoing: s2 (head and tail)
     let src_node = node_chain.get_node(src);
-    assert_eq!(src_node.get_outgoing_synapse_head(), s2);
-    assert_eq!(src_node.get_outgoing_synapse_tail(), s2);
+    assert_eq!(src_node.get_outgoing_synapse_head(), Some(s2));
+    assert_eq!(src_node.get_outgoing_synapse_tail(), Some(s2));
 
     // tgt1 incoming: s3 (head and tail)
     let tgt1_node = node_chain.get_node(tgt1);
-    assert_eq!(tgt1_node.get_incoming_synapse_head(), s3);
-    assert_eq!(tgt1_node.get_incoming_synapse_tail(), s3);
+    assert_eq!(tgt1_node.get_incoming_synapse_head(), Some(s3));
+    assert_eq!(tgt1_node.get_incoming_synapse_tail(), Some(s3));
 }
 
 // ============ double disconnect ============
@@ -373,12 +373,12 @@ fn full_connect_disconnect_reconnect_cycle() {
 
     // connect
     let s1 = synapse_chain.connect(src, tgt, 10).unwrap();
-    assert_eq!(node_chain.get_node(src).get_outgoing_synapse_head(), s1);
+    assert_eq!(node_chain.get_node(src).get_outgoing_synapse_head(), Some(s1));
 
     // disconnect
     synapse_chain.disconnect_synapse(s1).unwrap();
-    assert_eq!(node_chain.get_node(src).get_outgoing_synapse_head(), 0);
-    assert_eq!(node_chain.get_node(tgt).get_incoming_synapse_head(), 0);
+    assert!(node_chain.get_node(src).get_outgoing_synapse_head().is_none());
+    assert!(node_chain.get_node(tgt).get_incoming_synapse_head().is_none());
 
     synapse_chain.publish();
 
@@ -391,8 +391,8 @@ fn full_connect_disconnect_reconnect_cycle() {
     // reconnect (slot should be reused)
     let s2 = synapse_chain.connect(src, tgt, 20).unwrap();
     assert_eq!(s2, s1, "freed synapse slot should be reused");
-    assert_eq!(node_chain.get_node(src).get_outgoing_synapse_head(), s2);
-    assert_eq!(node_chain.get_node(tgt).get_incoming_synapse_head(), s2);
+    assert_eq!(node_chain.get_node(src).get_outgoing_synapse_head(), Some(s2));
+    assert_eq!(node_chain.get_node(tgt).get_incoming_synapse_head(), Some(s2));
 }
 
 // ============ self-loop: source == target ============
@@ -407,10 +407,10 @@ fn connect_self_loop() {
     let syn = synapse_chain.connect(n, n, 99).unwrap();
 
     let node_handle = node_chain.get_node(n);
-    assert_eq!(node_handle.get_outgoing_synapse_head(), syn);
-    assert_eq!(node_handle.get_outgoing_synapse_tail(), syn);
-    assert_eq!(node_handle.get_incoming_synapse_head(), syn);
-    assert_eq!(node_handle.get_incoming_synapse_tail(), syn);
+    assert_eq!(node_handle.get_outgoing_synapse_head(), Some(syn));
+    assert_eq!(node_handle.get_outgoing_synapse_tail(), Some(syn));
+    assert_eq!(node_handle.get_incoming_synapse_head(), Some(syn));
+    assert_eq!(node_handle.get_incoming_synapse_tail(), Some(syn));
 
     let s = synapse_chain.get_synapse(syn);
     assert_eq!(s.get_source_ptr(), n);
@@ -428,10 +428,10 @@ fn disconnect_self_loop_clears_both_chains() {
     synapse_chain.disconnect_synapse(syn).unwrap();
 
     let node_handle = node_chain.get_node(n);
-    assert_eq!(node_handle.get_outgoing_synapse_head(), 0);
-    assert_eq!(node_handle.get_outgoing_synapse_tail(), 0);
-    assert_eq!(node_handle.get_incoming_synapse_head(), 0);
-    assert_eq!(node_handle.get_incoming_synapse_tail(), 0);
+    assert!(node_handle.get_outgoing_synapse_head().is_none());
+    assert!(node_handle.get_outgoing_synapse_tail().is_none());
+    assert!(node_handle.get_incoming_synapse_head().is_none());
+    assert!(node_handle.get_incoming_synapse_tail().is_none());
 }
 
 // ============ reader: verify via publish/swap ============
@@ -457,8 +457,8 @@ fn synapse_chain_reader_sees_connections_after_publish() {
 
     // verify node reader sees the synapse pointers
     let src_r = node_store_r.get_node(src);
-    assert_eq!(src_r.get_outgoing_synapse_head(), syn);
-    assert_eq!(src_r.get_outgoing_synapse_tail(), syn);
+    assert_eq!(src_r.get_outgoing_synapse_head(), Some(syn));
+    assert_eq!(src_r.get_outgoing_synapse_tail(), Some(syn));
 }
 
 // ============ disconnect: incoming chain head ============
@@ -485,13 +485,12 @@ fn disconnect_head_of_incoming_chain() {
     let tgt_node = node_chain.get_node(tgt);
     assert_eq!(
         tgt_node.get_incoming_synapse_head(),
-        s2,
+        Some(s2),
         "head promoted to s2"
     );
-    assert_eq!(tgt_node.get_incoming_synapse_tail(), s3, "tail unchanged");
-    assert_eq!(
-        synapse_chain.get_synapse(s2).get_incoming_prev_ptr(),
-        0,
+    assert_eq!(tgt_node.get_incoming_synapse_tail(), Some(s3), "tail unchanged");
+    assert!(
+        synapse_chain.get_synapse(s2).get_incoming_prev_ptr().is_none(),
         "s2 is now head"
     );
 }
@@ -518,15 +517,14 @@ fn disconnect_tail_of_incoming_chain() {
     // tgt incoming: s1 -> s2
 
     let tgt_node = node_chain.get_node(tgt);
-    assert_eq!(tgt_node.get_incoming_synapse_head(), s1, "head unchanged");
+    assert_eq!(tgt_node.get_incoming_synapse_head(), Some(s1), "head unchanged");
     assert_eq!(
         tgt_node.get_incoming_synapse_tail(),
-        s2,
+        Some(s2),
         "tail demoted to s2"
     );
-    assert_eq!(
-        synapse_chain.get_synapse(s2).get_incoming_next_ptr(),
-        0,
+    assert!(
+        synapse_chain.get_synapse(s2).get_incoming_next_ptr().is_none(),
         "s2 is now tail"
     );
 }
@@ -550,29 +548,33 @@ fn outgoing_chain_traversal_order_is_insertion_order() {
     let s3 = synapse_chain.connect(src, tgt3, 30).unwrap();
     let s4 = synapse_chain.connect(src, tgt4, 40).unwrap();
 
-    // walk forward: head -> next -> next -> next -> null
-    let head = node_chain.get_node(src).get_outgoing_synapse_head();
+    // walk forward: head -> next -> next -> next -> None
+    let head = node_chain.get_node(src).get_outgoing_synapse_head().unwrap();
     assert_eq!(head, s1);
-    let n1 = synapse_chain.get_synapse(head).get_outgoing_next_ptr();
+    let n1 = synapse_chain.get_synapse(head).get_outgoing_next_ptr().unwrap();
     assert_eq!(n1, s2);
-    let n2 = synapse_chain.get_synapse(n1).get_outgoing_next_ptr();
+    let n2 = synapse_chain.get_synapse(n1).get_outgoing_next_ptr().unwrap();
     assert_eq!(n2, s3);
-    let n3 = synapse_chain.get_synapse(n2).get_outgoing_next_ptr();
+    let n3 = synapse_chain.get_synapse(n2).get_outgoing_next_ptr().unwrap();
     assert_eq!(n3, s4);
-    let n4 = synapse_chain.get_synapse(n3).get_outgoing_next_ptr();
-    assert_eq!(n4, 0, "end of chain");
+    assert!(
+        synapse_chain.get_synapse(n3).get_outgoing_next_ptr().is_none(),
+        "end of chain"
+    );
 
-    // walk backward: tail -> prev -> prev -> prev -> null
-    let tail = node_chain.get_node(src).get_outgoing_synapse_tail();
+    // walk backward: tail -> prev -> prev -> prev -> None
+    let tail = node_chain.get_node(src).get_outgoing_synapse_tail().unwrap();
     assert_eq!(tail, s4);
-    let p1 = synapse_chain.get_synapse(tail).get_outgoing_prev_ptr();
+    let p1 = synapse_chain.get_synapse(tail).get_outgoing_prev_ptr().unwrap();
     assert_eq!(p1, s3);
-    let p2 = synapse_chain.get_synapse(p1).get_outgoing_prev_ptr();
+    let p2 = synapse_chain.get_synapse(p1).get_outgoing_prev_ptr().unwrap();
     assert_eq!(p2, s2);
-    let p3 = synapse_chain.get_synapse(p2).get_outgoing_prev_ptr();
+    let p3 = synapse_chain.get_synapse(p2).get_outgoing_prev_ptr().unwrap();
     assert_eq!(p3, s1);
-    let p4 = synapse_chain.get_synapse(p3).get_outgoing_prev_ptr();
-    assert_eq!(p4, 0, "start of chain");
+    assert!(
+        synapse_chain.get_synapse(p3).get_outgoing_prev_ptr().is_none(),
+        "start of chain"
+    );
 }
 
 #[test]
@@ -590,13 +592,13 @@ fn incoming_chain_traversal_order_is_insertion_order() {
     let _s2 = synapse_chain.connect(src2, tgt, 20).unwrap();
     let s3 = synapse_chain.connect(src3, tgt, 30).unwrap();
 
-    // walk forward: head -> next -> next -> null
+    // walk forward: head -> next -> next -> None
     let head = node_chain.get_node(tgt).get_incoming_synapse_head();
-    assert_eq!(head, s1);
+    assert_eq!(head, Some(s1));
 
     // walk backward
     let tail = node_chain.get_node(tgt).get_incoming_synapse_tail();
-    assert_eq!(tail, s3);
+    assert_eq!(tail, Some(s3));
 }
 
 // ============ fan-in + fan-out isolation ============
@@ -620,15 +622,15 @@ fn disconnect_outgoing_does_not_affect_incoming() {
 
     // B's outgoing should be empty
     let b_node = node_chain.get_node(b);
-    assert_eq!(b_node.get_outgoing_synapse_head(), 0);
-    assert_eq!(b_node.get_outgoing_synapse_tail(), 0);
+    assert!(b_node.get_outgoing_synapse_head().is_none());
+    assert!(b_node.get_outgoing_synapse_tail().is_none());
 
     // B's incoming (A->B) must be completely untouched
-    assert_eq!(b_node.get_incoming_synapse_head(), s_ab);
-    assert_eq!(b_node.get_incoming_synapse_tail(), s_ab);
+    assert_eq!(b_node.get_incoming_synapse_head(), Some(s_ab));
+    assert_eq!(b_node.get_incoming_synapse_tail(), Some(s_ab));
 
     // A's outgoing must also be untouched
-    assert_eq!(node_chain.get_node(a).get_outgoing_synapse_head(), s_ab);
+    assert_eq!(node_chain.get_node(a).get_outgoing_synapse_head(), Some(s_ab));
 }
 
 #[test]
@@ -649,12 +651,12 @@ fn disconnect_incoming_does_not_affect_outgoing() {
 
     // B's incoming should be empty
     let b_node = node_chain.get_node(b);
-    assert_eq!(b_node.get_incoming_synapse_head(), 0);
-    assert_eq!(b_node.get_incoming_synapse_tail(), 0);
+    assert!(b_node.get_incoming_synapse_head().is_none());
+    assert!(b_node.get_incoming_synapse_tail().is_none());
 
     // B's outgoing (B->C) must be completely untouched
-    assert_eq!(b_node.get_outgoing_synapse_head(), s_bc);
-    assert_eq!(b_node.get_outgoing_synapse_tail(), s_bc);
+    assert_eq!(b_node.get_outgoing_synapse_head(), Some(s_bc));
+    assert_eq!(b_node.get_outgoing_synapse_tail(), Some(s_bc));
 }
 
 // ============ complex topology ============
@@ -680,23 +682,23 @@ fn triangle_topology_disconnect_one_edge() {
     synapse_chain.disconnect_synapse(s_ab).unwrap();
 
     // A outgoing: s_ac only
-    assert_eq!(node_chain.get_node(a).get_outgoing_synapse_head(), s_ac);
-    assert_eq!(node_chain.get_node(a).get_outgoing_synapse_tail(), s_ac);
-    assert_eq!(synapse_chain.get_synapse(s_ac).get_outgoing_prev_ptr(), 0);
-    assert_eq!(synapse_chain.get_synapse(s_ac).get_outgoing_next_ptr(), 0);
+    assert_eq!(node_chain.get_node(a).get_outgoing_synapse_head(), Some(s_ac));
+    assert_eq!(node_chain.get_node(a).get_outgoing_synapse_tail(), Some(s_ac));
+    assert!(synapse_chain.get_synapse(s_ac).get_outgoing_prev_ptr().is_none());
+    assert!(synapse_chain.get_synapse(s_ac).get_outgoing_next_ptr().is_none());
 
     // B incoming: empty (was only s_ab)
-    assert_eq!(node_chain.get_node(b).get_incoming_synapse_head(), 0);
-    assert_eq!(node_chain.get_node(b).get_incoming_synapse_tail(), 0);
+    assert!(node_chain.get_node(b).get_incoming_synapse_head().is_none());
+    assert!(node_chain.get_node(b).get_incoming_synapse_tail().is_none());
 
     // B outgoing: s_bc still intact
-    assert_eq!(node_chain.get_node(b).get_outgoing_synapse_head(), s_bc);
+    assert_eq!(node_chain.get_node(b).get_outgoing_synapse_head(), Some(s_bc));
 
     // C incoming: s_ac -> s_bc still intact
-    assert_eq!(node_chain.get_node(c).get_incoming_synapse_head(), s_ac);
-    assert_eq!(node_chain.get_node(c).get_incoming_synapse_tail(), s_bc);
-    assert_eq!(synapse_chain.get_synapse(s_ac).get_incoming_next_ptr(), s_bc);
-    assert_eq!(synapse_chain.get_synapse(s_bc).get_incoming_prev_ptr(), s_ac);
+    assert_eq!(node_chain.get_node(c).get_incoming_synapse_head(), Some(s_ac));
+    assert_eq!(node_chain.get_node(c).get_incoming_synapse_tail(), Some(s_bc));
+    assert_eq!(synapse_chain.get_synapse(s_ac).get_incoming_next_ptr(), Some(s_bc));
+    assert_eq!(synapse_chain.get_synapse(s_bc).get_incoming_prev_ptr(), Some(s_ac));
 }
 
 // ============ capacity exhaustion ============
@@ -747,10 +749,10 @@ fn disconnect_all_synapses_leaves_node_clean() {
 
     // A must be completely clean
     let a_node = node_chain.get_node(a);
-    assert_eq!(a_node.get_outgoing_synapse_head(), 0);
-    assert_eq!(a_node.get_outgoing_synapse_tail(), 0);
-    assert_eq!(a_node.get_incoming_synapse_head(), 0);
-    assert_eq!(a_node.get_incoming_synapse_tail(), 0);
+    assert!(a_node.get_outgoing_synapse_head().is_none());
+    assert!(a_node.get_outgoing_synapse_tail().is_none());
+    assert!(a_node.get_incoming_synapse_head().is_none());
+    assert!(a_node.get_incoming_synapse_tail().is_none());
 }
 
 // ============ multiple self-loops ============
@@ -767,10 +769,10 @@ fn two_self_loops_on_same_node() {
 
     // both outgoing and incoming chains: s1 -> s2
     let nv = node_chain.get_node(n);
-    assert_eq!(nv.get_outgoing_synapse_head(), s1);
-    assert_eq!(nv.get_outgoing_synapse_tail(), s2);
-    assert_eq!(nv.get_incoming_synapse_head(), s1);
-    assert_eq!(nv.get_incoming_synapse_tail(), s2);
+    assert_eq!(nv.get_outgoing_synapse_head(), Some(s1));
+    assert_eq!(nv.get_outgoing_synapse_tail(), Some(s2));
+    assert_eq!(nv.get_incoming_synapse_head(), Some(s1));
+    assert_eq!(nv.get_incoming_synapse_tail(), Some(s2));
 
     // outgoing links
 
@@ -780,10 +782,10 @@ fn two_self_loops_on_same_node() {
     synapse_chain.disconnect_synapse(s1).unwrap();
 
     let nv = node_chain.get_node(n);
-    assert_eq!(nv.get_outgoing_synapse_head(), s2);
-    assert_eq!(nv.get_outgoing_synapse_tail(), s2);
-    assert_eq!(nv.get_incoming_synapse_head(), s2);
-    assert_eq!(nv.get_incoming_synapse_tail(), s2);
+    assert_eq!(nv.get_outgoing_synapse_head(), Some(s2));
+    assert_eq!(nv.get_outgoing_synapse_tail(), Some(s2));
+    assert_eq!(nv.get_incoming_synapse_head(), Some(s2));
+    assert_eq!(nv.get_incoming_synapse_tail(), Some(s2));
 }
 
 // ============ copy_from deep data integrity ============
@@ -825,7 +827,7 @@ fn copy_from_preserves_topology_and_deep_data() {
     dst_synapse_chain.publish();
 
     assert_eq!(dst_synapse_chain.synapse_count(), 1);
-    assert_eq!(dst_synapse_chain.synapse_capacity(), SYNAPSE_CAPACITY * 2);
+    assert_eq!(dst_synapse_chain.synapse_capacity(), (SYNAPSE_CAPACITY * 2) as usize);
 }
 
 #[test]

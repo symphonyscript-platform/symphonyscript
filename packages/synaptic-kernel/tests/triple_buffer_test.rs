@@ -556,14 +556,14 @@ fn state_encoding_new_data_flag() {
 
 #[test]
 fn large_buffer_data_integrity() {
-    let buffer_size = 1024;
-    let mem = create_mem(4 + buffer_size * 3 + 100);
+    let buffer_size: u32 = 1024;
+    let mem = create_mem(4 + buffer_size as usize * 3 + 100);
     let writer = TripleBufferWriter::new(mem.clone(), 0, buffer_size);
     let reader = writer.to_reader();
 
     // Write a pattern to all slots
     let base = writer.mem_writer_base();
-    for i in 0..buffer_size {
+    for i in 0..buffer_size as usize {
         mem[base + i].store((i as i32) * 7 + 3, Ordering::Relaxed);
     }
     writer.publish();
@@ -571,7 +571,7 @@ fn large_buffer_data_integrity() {
     // Reader should see the exact pattern
     assert!(reader.swap());
     let rbase = reader.mem_reader_base();
-    for i in 0..buffer_size {
+    for i in 0..buffer_size as usize {
         assert_eq!(
             mem[rbase + i].load(Ordering::Relaxed),
             (i as i32) * 7 + 3,
@@ -615,8 +615,8 @@ fn sync_preserves_data_through_all_three_buffers() {
 
 #[test]
 fn concurrent_writer_reader_stress() {
-    let buffer_size = 64;
-    let mem = create_mem(4 + buffer_size * 3 + 100);
+    let buffer_size: u32 = 64;
+    let mem = create_mem(4 + buffer_size as usize * 3 + 100);
 
     let writer = TripleBufferWriter::new(mem.clone(), 0, buffer_size);
     let reader = writer.to_reader();
@@ -630,7 +630,7 @@ fn concurrent_writer_reader_stress() {
         for i in 0..iterations {
             let base = writer.mem_writer_base();
             // Write a sentinel pattern: [i, i, i, ..., i]
-            for j in 0..buffer_size {
+            for j in 0..buffer_size as usize {
                 mem_writer[base + j].store(i as i32, Ordering::Relaxed);
             }
             writer.publish();
@@ -657,7 +657,7 @@ fn concurrent_writer_reader_stress() {
                 last_val = first;
 
                 // All values in the frame should be the same (consistency)
-                for j in 1..buffer_size {
+                for j in 1..buffer_size as usize {
                     let val = mem_reader[rbase + j].load(Ordering::Relaxed);
                     assert_eq!(
                         val, first,
@@ -685,8 +685,8 @@ fn concurrent_writer_reader_stress() {
 
 #[test]
 fn concurrent_high_frequency_publish() {
-    let buffer_size = 8;
-    let mem = create_mem(4 + buffer_size * 3 + 100);
+    let buffer_size: u32 = 8;
+    let mem = create_mem(4 + buffer_size as usize * 3 + 100);
     let writer = TripleBufferWriter::new(mem.clone(), 0, buffer_size);
     let reader = writer.to_reader();
 
@@ -838,10 +838,10 @@ fn publish_swap_publish_swap_never_corrupts() {
 
 #[test]
 fn publish_does_not_corrupt_surrounding_mem_memory() {
-    let padding = 100;
-    let buffer_size = 64;
+    let padding: usize = 100;
+    let buffer_size: u32 = 64;
     // Layout: padding + 4 metadata slots + 3*64 buffer slots + padding
-    let mem = create_mem(padding + 4 + buffer_size * 3 + padding);
+    let mem = create_mem(padding + 4 + buffer_size as usize * 3 + padding);
 
     // Fill the ENTIRE AtomicBuffer with a sentinel value
     for i in 0..mem.len() {
@@ -857,7 +857,7 @@ fn publish_does_not_corrupt_surrounding_mem_memory() {
         let base = writer.mem_writer_base();
 
         // Write pattern into the writer buffer
-        for i in 0..buffer_size {
+        for i in 0..buffer_size as usize {
             mem[base + i].store((round as i32) * 100 + (i as i32), Ordering::Relaxed);
         }
 
@@ -934,21 +934,21 @@ fn writer_write_read_offset_middle() {
 #[test]
 fn writer_write_read_offset_last() {
     let mem = create_mem(4096);
-    let capacity = 10;
+    let capacity: u32 = 10;
     let writer = TripleBufferWriter::new(mem, 0, capacity);
-    writer.write(capacity - 1, -123);
-    assert_eq!(writer.read(capacity - 1), -123);
+    writer.write(capacity as usize - 1, -123);
+    assert_eq!(writer.read(capacity as usize - 1), -123);
 }
 
 #[test]
 fn writer_write_read_roundtrip_every_index() {
     let mem = create_mem(4096);
-    let capacity = 16;
+    let capacity: u32 = 16;
     let writer = TripleBufferWriter::new(mem, 0, capacity);
-    for i in 0..capacity {
+    for i in 0..capacity as usize {
         writer.write(i, (i as i32) * 3 - 7);
     }
-    for i in 0..capacity {
+    for i in 0..capacity as usize {
         assert_eq!(writer.read(i), (i as i32) * 3 - 7);
     }
 }
@@ -977,15 +977,15 @@ fn writer_read_returns_synced_values_after_publish() {
 #[test]
 fn reader_read_returns_published_at_every_offset() {
     let mem = create_mem(4096);
-    let capacity = 8;
+    let capacity: u32 = 8;
     let writer = TripleBufferWriter::new(mem, 0, capacity);
     let reader = writer.to_reader();
-    for i in 0..capacity {
+    for i in 0..capacity as usize {
         writer.write(i, (i as i32 + 1) * 5);
     }
     writer.publish();
     assert!(reader.swap());
-    for i in 0..capacity {
+    for i in 0..capacity as usize {
         assert_eq!(reader.read(i), (i as i32 + 1) * 5);
     }
 }
@@ -1052,13 +1052,14 @@ fn writer_write_batch_nonzero_offset_regression() {
 #[test]
 fn writer_write_batch_offset_matrix() {
     let mem = create_mem(4096);
-    let capacity = 16;
+    let capacity: u32 = 16;
     let writer = TripleBufferWriter::new(mem, 0, capacity);
     let t = 4usize;
+    let cap = capacity as usize;
 
-    for &offset in &[0usize, 1, capacity / 2, capacity - t] {
+    for &offset in &[0usize, 1, cap / 2, cap - t] {
         // Reset buffer to zero before each iteration.
-        for i in 0..capacity {
+        for i in 0..cap {
             writer.write(i, 0);
         }
         let batch = [
@@ -1071,7 +1072,7 @@ fn writer_write_batch_offset_matrix() {
         let mut rb = [0i32; 4];
         writer.read_batch(offset, &mut rb);
         assert_eq!(rb, batch, "roundtrip failed at offset {offset}");
-        for i in 0..capacity {
+        for i in 0..cap {
             if i >= offset && i < offset + t {
                 continue;
             }
@@ -1088,13 +1089,14 @@ fn writer_write_batch_offset_matrix() {
 fn writer_write_batch_fills_exact_remainder() {
     // offset + T == capacity.
     let mem = create_mem(4096);
-    let capacity = 10;
+    let capacity: u32 = 10;
+    let cap = capacity as usize;
     let writer = TripleBufferWriter::new(mem, 0, capacity);
-    writer.write_batch(capacity - 4, &[1, 2, 3, 4]);
+    writer.write_batch(cap - 4, &[1, 2, 3, 4]);
     let mut out = [0i32; 4];
-    writer.read_batch(capacity - 4, &mut out);
+    writer.read_batch(cap - 4, &mut out);
     assert_eq!(out, [1, 2, 3, 4]);
-    assert_eq!(writer.read(capacity - 1), 4);
+    assert_eq!(writer.read(cap - 1), 4);
 }
 
 #[test]
@@ -1167,13 +1169,14 @@ fn reader_read_batch_nonzero_offset_regression() {
 #[test]
 fn reader_read_batch_offset_matrix() {
     let mem = create_mem(4096);
-    let capacity = 16;
+    let capacity: u32 = 16;
+    let cap = capacity as usize;
     let t = 4usize;
     let writer = TripleBufferWriter::new(mem, 0, capacity);
     let reader = writer.to_reader();
 
-    for &offset in &[0usize, 1, capacity / 2, capacity - t] {
-        for i in 0..capacity {
+    for &offset in &[0usize, 1, cap / 2, cap - t] {
+        for i in 0..cap {
             writer.write(i, 0);
         }
         writer.write_batch(offset, &[1, 2, 3, 4]);
@@ -1188,14 +1191,15 @@ fn reader_read_batch_offset_matrix() {
 #[test]
 fn reader_read_batch_fills_exact_remainder() {
     let mem = create_mem(4096);
-    let capacity = 10;
+    let capacity: u32 = 10;
+    let cap = capacity as usize;
     let writer = TripleBufferWriter::new(mem, 0, capacity);
     let reader = writer.to_reader();
-    writer.write_batch(capacity - 4, &[21, 22, 23, 24]);
+    writer.write_batch(cap - 4, &[21, 22, 23, 24]);
     writer.publish();
     assert!(reader.swap());
     let mut out = [0i32; 4];
-    reader.read_batch(capacity - 4, &mut out);
+    reader.read_batch(cap - 4, &mut out);
     assert_eq!(out, [21, 22, 23, 24]);
 }
 
@@ -1330,11 +1334,12 @@ fn copy_metadata_from_panics_when_source_capacity_larger() {
 
 #[test]
 fn copy_region_from_copies_all_three_buffer_planes() {
-    let capacity = 8;
+    let capacity: u32 = 8;
+    let cap = capacity as usize;
     let a_start = 0usize;
-    let a_end = 4 + capacity * 3;
+    let a_end = 4 + cap * 3;
     let b_start = a_end;
-    let total = b_start + 4 + capacity * 3;
+    let total = b_start + 4 + cap * 3;
     let mem = create_mem(total);
 
     let writer_a = TripleBufferWriter::new(mem.clone(), a_start, capacity);
@@ -1343,14 +1348,14 @@ fn copy_region_from_copies_all_three_buffer_planes() {
     // Fill each of A's three buffer planes with a distinct pattern.
     // Layout: A's buffer_bases = [a_start+4, a_start+4+cap, a_start+4+2*cap]
     for plane in 0..3 {
-        let base = a_start + 4 + plane * capacity;
-        for i in 0..capacity {
+        let base = a_start + 4 + plane * cap;
+        for i in 0..cap {
             mem[base + i].store(1000 + (plane as i32) * 100 + (i as i32), Ordering::Relaxed);
         }
     }
 
     // Pre-fill ALL of B's buffer region with a sentinel 7777.
-    for i in (b_start + 4)..(b_start + 4 + capacity * 3) {
+    for i in (b_start + 4)..(b_start + 4 + cap * 3) {
         mem[i].store(7777, Ordering::Relaxed);
     }
 
@@ -1361,8 +1366,8 @@ fn copy_region_from_copies_all_three_buffer_planes() {
     writer_b.copy_region_from(&writer_a, source_offset, destination_offset, count);
 
     for plane in 0..3 {
-        let a_plane_base = a_start + 4 + plane * capacity;
-        let b_plane_base = b_start + 4 + plane * capacity;
+        let a_plane_base = a_start + 4 + plane * cap;
+        let b_plane_base = b_start + 4 + plane * cap;
 
         // Copied range: values match A.
         for k in 0..count {
@@ -1375,7 +1380,7 @@ fn copy_region_from_copies_all_three_buffer_planes() {
         }
 
         // Outside the destination range, B must still hold the sentinel.
-        for i in 0..capacity {
+        for i in 0..cap {
             if i >= destination_offset && i < destination_offset + count {
                 continue;
             }
@@ -1390,29 +1395,30 @@ fn copy_region_from_copies_all_three_buffer_planes() {
 
 #[test]
 fn copy_region_from_source_offset_zero_destination_offset_zero_full_capacity() {
-    let capacity = 8;
+    let capacity: u32 = 8;
+    let cap = capacity as usize;
     let a_start = 0usize;
-    let a_end = 4 + capacity * 3;
+    let a_end = 4 + cap * 3;
     let b_start = a_end;
-    let total = b_start + 4 + capacity * 3;
+    let total = b_start + 4 + cap * 3;
     let mem = create_mem(total);
 
     let writer_a = TripleBufferWriter::new(mem.clone(), a_start, capacity);
     let writer_b = TripleBufferWriter::new(mem.clone(), b_start, capacity);
 
     for plane in 0..3 {
-        let base = a_start + 4 + plane * capacity;
-        for i in 0..capacity {
+        let base = a_start + 4 + plane * cap;
+        for i in 0..cap {
             mem[base + i].store((plane as i32) * 10 + (i as i32) + 1, Ordering::Relaxed);
         }
     }
 
-    writer_b.copy_region_from(&writer_a, 0, 0, capacity);
+    writer_b.copy_region_from(&writer_a, 0, 0, cap);
 
     for plane in 0..3 {
-        let a_plane_base = a_start + 4 + plane * capacity;
-        let b_plane_base = b_start + 4 + plane * capacity;
-        for i in 0..capacity {
+        let a_plane_base = a_start + 4 + plane * cap;
+        let b_plane_base = b_start + 4 + plane * cap;
+        for i in 0..cap {
             assert_eq!(
                 mem[b_plane_base + i].load(Ordering::Relaxed),
                 mem[a_plane_base + i].load(Ordering::Relaxed),
@@ -1424,7 +1430,7 @@ fn copy_region_from_source_offset_zero_destination_offset_zero_full_capacity() {
 
 #[test]
 fn copy_region_from_panics_on_destination_out_of_bounds() {
-    let capacity = 8;
+    let capacity: u32 = 8;
     let mem = create_mem(4096);
     let writer_a = TripleBufferWriter::new(mem.clone(), 0, capacity);
     let writer_b = TripleBufferWriter::new(mem.clone(), 100, capacity);
@@ -1437,7 +1443,7 @@ fn copy_region_from_panics_on_destination_out_of_bounds() {
 
 #[test]
 fn copy_region_from_panics_on_source_out_of_bounds() {
-    let capacity = 8;
+    let capacity: u32 = 8;
     let mem = create_mem(4096);
     let writer_a = TripleBufferWriter::new(mem.clone(), 0, capacity);
     let writer_b = TripleBufferWriter::new(mem.clone(), 100, capacity);

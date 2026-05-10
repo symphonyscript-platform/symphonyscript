@@ -2,6 +2,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion, Benchmark
 use std::sync::atomic::AtomicI32;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::primitives::simple_free_list::SimpleFreeList;
+use synaptic_kernel::primitives::slot::SlotId;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     (0..size).map(|_| AtomicI32::new(0)).collect()
@@ -73,7 +74,7 @@ fn bench_batch_free(c: &mut Criterion) {
                 || {
                     let mem = create_mem(1_000_000);
                     let fl = SimpleFreeList::new(mem, 0, 16384);
-                    let slots: Vec<usize> = (0..batch).map(|_| fl.alloc().unwrap()).collect();
+                    let slots: Vec<SlotId> = (0..batch).map(|_| fl.alloc().unwrap()).collect();
                     (fl, slots)
                 },
                 |(fl, slots)| {
@@ -109,9 +110,9 @@ fn bench_high_fragmentation(c: &mut Criterion) {
                 let mem = create_mem(1_000_000);
                 let fl = SimpleFreeList::new(mem, 0, 4096);
                 // Alloc all, free odd slots → 50% fragmented
-                let slots: Vec<usize> = (0..4096).map(|_| fl.alloc().unwrap()).collect();
+                let slots: Vec<SlotId> = (0..4096).map(|_| fl.alloc().unwrap()).collect();
                 for s in &slots {
-                    if s % 2 == 1 {
+                    if s.to_usize() % 2 == 1 {
                         fl.free(*s).unwrap();
                     }
                 }

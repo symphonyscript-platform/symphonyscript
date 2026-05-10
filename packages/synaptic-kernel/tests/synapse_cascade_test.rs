@@ -32,8 +32,8 @@ fn remove_node_with_single_outgoing_synapse() {
 
     // Target node's incoming chain must be clean
     let node_b = kernel.get_node(b);
-    assert_eq!(node_b.get_incoming_synapse_head(), 0);
-    assert_eq!(node_b.get_incoming_synapse_tail(), 0);
+    assert!(node_b.get_incoming_synapse_head().is_none());
+    assert!(node_b.get_incoming_synapse_tail().is_none());
 }
 
 #[test]
@@ -48,8 +48,8 @@ fn remove_node_with_single_incoming_synapse() {
 
     // Source node's outgoing chain must be clean
     let node_a = kernel.get_node(a);
-    assert_eq!(node_a.get_outgoing_synapse_head(), 0);
-    assert_eq!(node_a.get_outgoing_synapse_tail(), 0);
+    assert!(node_a.get_outgoing_synapse_head().is_none());
+    assert!(node_a.get_outgoing_synapse_tail().is_none());
 }
 
 #[test]
@@ -69,13 +69,13 @@ fn remove_node_with_multiple_outgoing_synapses() {
     // All targets must have clean incoming chains
     for &slot in &[b, c, d] {
         let node = kernel.get_node(slot);
-        assert_eq!(
-            node.get_incoming_synapse_head(), 0,
-            "node {} incoming head should be 0 after cascade", slot
+        assert!(
+            node.get_incoming_synapse_head().is_none(),
+            "node {} incoming head should be empty after cascade", slot
         );
-        assert_eq!(
-            node.get_incoming_synapse_tail(), 0,
-            "node {} incoming tail should be 0 after cascade", slot
+        assert!(
+            node.get_incoming_synapse_tail().is_none(),
+            "node {} incoming tail should be empty after cascade", slot
         );
     }
 }
@@ -97,13 +97,13 @@ fn remove_node_with_multiple_incoming_synapses() {
     // All sources must have clean outgoing chains
     for &slot in &[a, b, c] {
         let node = kernel.get_node(slot);
-        assert_eq!(
-            node.get_outgoing_synapse_head(), 0,
-            "node {} outgoing head should be 0 after cascade", slot
+        assert!(
+            node.get_outgoing_synapse_head().is_none(),
+            "node {} outgoing head should be empty after cascade", slot
         );
-        assert_eq!(
-            node.get_outgoing_synapse_tail(), 0,
-            "node {} outgoing tail should be 0 after cascade", slot
+        assert!(
+            node.get_outgoing_synapse_tail().is_none(),
+            "node {} outgoing tail should be empty after cascade", slot
         );
     }
 }
@@ -123,13 +123,13 @@ fn remove_node_with_both_outgoing_and_incoming_synapses() {
 
     // upstream's outgoing must be clean
     let node_up = kernel.get_node(upstream);
-    assert_eq!(node_up.get_outgoing_synapse_head(), 0);
-    assert_eq!(node_up.get_outgoing_synapse_tail(), 0);
+    assert!(node_up.get_outgoing_synapse_head().is_none());
+    assert!(node_up.get_outgoing_synapse_tail().is_none());
 
     // downstream's incoming must be clean
     let node_down = kernel.get_node(downstream);
-    assert_eq!(node_down.get_incoming_synapse_head(), 0);
-    assert_eq!(node_down.get_incoming_synapse_tail(), 0);
+    assert!(node_down.get_incoming_synapse_head().is_none());
+    assert!(node_down.get_incoming_synapse_tail().is_none());
 }
 
 #[test]
@@ -181,12 +181,12 @@ fn remove_node_preserves_unrelated_synapses() {
 
     // c -> d synapse must still be intact
     let node_c = kernel.get_node(c);
-    assert_eq!(node_c.get_outgoing_synapse_head(), surviving_syn);
-    assert_eq!(node_c.get_outgoing_synapse_tail(), surviving_syn);
+    assert_eq!(node_c.get_outgoing_synapse_head(), Some(surviving_syn));
+    assert_eq!(node_c.get_outgoing_synapse_tail(), Some(surviving_syn));
 
     let node_d = kernel.get_node(d);
-    assert_eq!(node_d.get_incoming_synapse_head(), surviving_syn);
-    assert_eq!(node_d.get_incoming_synapse_tail(), surviving_syn);
+    assert_eq!(node_d.get_incoming_synapse_head(), Some(surviving_syn));
+    assert_eq!(node_d.get_incoming_synapse_tail(), Some(surviving_syn));
 
     let syn = kernel.get_synapse(surviving_syn);
     assert_eq!(syn.get_source_ptr(), c);
@@ -221,10 +221,10 @@ fn remove_hub_node_in_star_topology() {
     // All spokes must have completely clean synapse pointers
     for &spoke in &spokes {
         let node = kernel.get_node(spoke);
-        assert_eq!(node.get_outgoing_synapse_head(), 0, "spoke {} outgoing head", spoke);
-        assert_eq!(node.get_outgoing_synapse_tail(), 0, "spoke {} outgoing tail", spoke);
-        assert_eq!(node.get_incoming_synapse_head(), 0, "spoke {} incoming head", spoke);
-        assert_eq!(node.get_incoming_synapse_tail(), 0, "spoke {} incoming tail", spoke);
+        assert!(node.get_outgoing_synapse_head().is_none(), "spoke {} outgoing head", spoke);
+        assert!(node.get_outgoing_synapse_tail().is_none(), "spoke {} outgoing tail", spoke);
+        assert!(node.get_incoming_synapse_head().is_none(), "spoke {} incoming head", spoke);
+        assert!(node.get_incoming_synapse_tail().is_none(), "spoke {} incoming tail", spoke);
     }
 }
 
@@ -244,15 +244,15 @@ fn remove_middle_node_in_linear_chain_with_synapses() {
 
     // a's outgoing should be clean
     let node_a = kernel.get_node(a);
-    assert_eq!(node_a.get_outgoing_synapse_head(), 0);
+    assert!(node_a.get_outgoing_synapse_head().is_none());
 
     // c's incoming should be clean
     let node_c = kernel.get_node(c);
-    assert_eq!(node_c.get_incoming_synapse_head(), 0);
+    assert!(node_c.get_incoming_synapse_head().is_none());
 
     // Node chain should be healed: a -> c
-    assert_eq!(node_a.get_next_ptr(), c);
-    assert_eq!(node_c.get_prev_ptr(), a);
+    assert_eq!(node_a.get_next_ptr(), Some(c));
+    assert_eq!(node_c.get_prev_ptr(), Some(a));
 }
 
 #[test]
@@ -267,8 +267,8 @@ fn remove_node_without_synapses_still_works() {
     // b is now the only node (head and tail).
     let node_b = kernel.get_node(b);
     assert_eq!(node_b.get_kind(), 2);
-    assert_eq!(node_b.get_prev_ptr(), 0);
-    assert_eq!(node_b.get_next_ptr(), 0);
+    assert!(node_b.get_prev_ptr().is_none());
+    assert!(node_b.get_next_ptr().is_none());
 }
 
 #[test]
@@ -296,6 +296,6 @@ fn cascade_frees_synapse_slots_for_reuse() {
     // We don't have direct flush at this level — the publish cycle handles it.
     // But we can verify the node store is intact.
     let node_b = kernel.get_node(b);
-    assert_eq!(node_b.get_incoming_synapse_head(), 0);
-    assert_eq!(node_b.get_incoming_synapse_tail(), 0);
+    assert!(node_b.get_incoming_synapse_head().is_none());
+    assert!(node_b.get_incoming_synapse_tail().is_none());
 }

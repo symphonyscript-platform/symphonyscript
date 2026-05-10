@@ -8,9 +8,9 @@ fn create_mem(size: usize) -> AtomicBuffer {
 }
 
 fn bench_writer_publish(c: &mut Criterion) {
-    let buffer_size = 64;
+    let buffer_size: usize = 64;
     let mem = create_mem(4 + buffer_size * 3 + 100);
-    let writer = TripleBufferWriter::new(mem.clone(), 0, buffer_size);
+    let writer = TripleBufferWriter::new(mem.clone(), 0, buffer_size as u32);
 
     let base = writer.mem_writer_base();
     for i in 0..buffer_size {
@@ -25,9 +25,9 @@ fn bench_writer_publish(c: &mut Criterion) {
 }
 
 fn bench_reader_swap_with_data(c: &mut Criterion) {
-    let buffer_size = 64;
+    let buffer_size: usize = 64;
     let mem = create_mem(4 + buffer_size * 3 + 100);
-    let writer = TripleBufferWriter::new(mem.clone(), 0, buffer_size);
+    let writer = TripleBufferWriter::new(mem.clone(), 0, buffer_size as u32);
     let reader = writer.to_reader();
 
     c.bench_function("TripleBuffer/reader_swap_with_data", |b| {
@@ -39,9 +39,9 @@ fn bench_reader_swap_with_data(c: &mut Criterion) {
 }
 
 fn bench_reader_swap_no_data(c: &mut Criterion) {
-    let buffer_size = 64;
+    let buffer_size: usize = 64;
     let mem = create_mem(4 + buffer_size * 3 + 100);
-    let writer = TripleBufferWriter::new(mem, 0, buffer_size);
+    let writer = TripleBufferWriter::new(mem, 0, buffer_size as u32);
     let reader = writer.to_reader();
 
     c.bench_function("TripleBuffer/reader_swap_no_data", |b| {
@@ -54,10 +54,10 @@ fn bench_reader_swap_no_data(c: &mut Criterion) {
 fn bench_publish_varying_buffer_size(c: &mut Criterion) {
     let mut group = c.benchmark_group("TripleBuffer/publish_by_size");
 
-    for &size in &[8, 64, 256, 1024, 4096, 26000] {
+    for &size in &[8usize, 64, 256, 1024, 4096, 26000] {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             let mem = create_mem(4 + size * 3 + 100);
-            let writer = TripleBufferWriter::new(mem.clone(), 0, size);
+            let writer = TripleBufferWriter::new(mem.clone(), 0, size as u32);
 
             let base = writer.mem_writer_base();
             for i in 0..size {
@@ -74,9 +74,9 @@ fn bench_publish_varying_buffer_size(c: &mut Criterion) {
 }
 
 fn bench_full_cycle(c: &mut Criterion) {
-    let buffer_size = 64;
+    let buffer_size: usize = 64;
     let mem = create_mem(4 + buffer_size * 3 + 100);
-    let writer = TripleBufferWriter::new(mem.clone(), 0, buffer_size);
+    let writer = TripleBufferWriter::new(mem.clone(), 0, buffer_size as u32);
     let reader = writer.to_reader();
 
     c.bench_function("TripleBuffer/full_cycle_64", |b| {
@@ -95,10 +95,10 @@ fn bench_full_cycle(c: &mut Criterion) {
 fn bench_write_then_publish(c: &mut Criterion) {
     let mut group = c.benchmark_group("TripleBuffer/write+publish");
 
-    for &size in &[8, 64, 256, 1024, 4096, 26000] {
+    for &size in &[8usize, 64, 256, 1024, 4096, 26000] {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             let mem = create_mem(4 + size * 3 + 100);
-            let writer = TripleBufferWriter::new(mem.clone(), 0, size);
+            let writer = TripleBufferWriter::new(mem.clone(), 0, size as u32);
 
             b.iter(|| {
                 let base = writer.mem_writer_base();
@@ -114,9 +114,9 @@ fn bench_write_then_publish(c: &mut Criterion) {
 }
 
 fn bench_rapid_publish_no_reader(c: &mut Criterion) {
-    let buffer_size = 64;
+    let buffer_size: usize = 64;
     let mem = create_mem(4 + buffer_size * 3 + 100);
-    let writer = TripleBufferWriter::new(mem, 0, buffer_size);
+    let writer = TripleBufferWriter::new(mem, 0, buffer_size as u32);
 
     c.bench_function("TripleBuffer/rapid_publish_no_reader", |b| {
         b.iter(|| {
@@ -128,9 +128,9 @@ fn bench_rapid_publish_no_reader(c: &mut Criterion) {
 }
 
 fn bench_reader_swap_after_many_publishes(c: &mut Criterion) {
-    let buffer_size = 64;
+    let buffer_size: usize = 64;
     let mem = create_mem(4 + buffer_size * 3 + 100);
-    let writer = TripleBufferWriter::new(mem, 0, buffer_size);
+    let writer = TripleBufferWriter::new(mem, 0, buffer_size as u32);
     let reader = writer.to_reader();
 
     c.bench_function("TripleBuffer/swap_after_10_publishes", |b| {

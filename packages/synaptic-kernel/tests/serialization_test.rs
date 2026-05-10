@@ -5,6 +5,7 @@ use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
 use synaptic_kernel::primitives::entry_store_def::EntryStoreId;
 use synaptic_kernel::primitives::lut_def::LutId;
+use synaptic_kernel::primitives::slot::SlotId;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
@@ -13,7 +14,7 @@ const SYNAPSE_ATTR: usize = 16;
 
 type TestKernel = Kernel<1, 1, 1>;
 
-fn create_config(nodes: usize, synapses: usize) -> KernelConfig<1, 1, 1> {
+fn create_config(nodes: u32, synapses: u32) -> KernelConfig<1, 1, 1> {
     common::kernel_config_1_1(
         nodes,
         synapses,
@@ -24,7 +25,7 @@ fn create_config(nodes: usize, synapses: usize) -> KernelConfig<1, 1, 1> {
     )
 }
 
-fn config(capacity: usize) -> KernelConfig<1, 1, 1> {
+fn config(capacity: u32) -> KernelConfig<1, 1, 1> {
     create_config(capacity, capacity)
 }
 
@@ -96,16 +97,16 @@ fn node_store_order_preserved() {
     let w3 = loaded.get_node(n3);
 
     assert_eq!(w1.get_kind(), 10);
-    assert_eq!(w1.get_next_ptr(), n2);
-    assert_eq!(w1.get_prev_ptr(), 0);
+    assert_eq!(w1.get_next_ptr(), Some(n2));
+    assert!(w1.get_prev_ptr().is_none());
 
     assert_eq!(w2.get_kind(), 20);
-    assert_eq!(w2.get_prev_ptr(), n1);
-    assert_eq!(w2.get_next_ptr(), n3);
+    assert_eq!(w2.get_prev_ptr(), Some(n1));
+    assert_eq!(w2.get_next_ptr(), Some(n3));
 
     assert_eq!(w3.get_kind(), 30);
-    assert_eq!(w3.get_prev_ptr(), n2);
-    assert_eq!(w3.get_next_ptr(), 0);
+    assert_eq!(w3.get_prev_ptr(), Some(n2));
+    assert!(w3.get_next_ptr().is_none());
 }
 
 #[test]
@@ -120,13 +121,13 @@ fn chain_head_position_preserved() {
 
     let head = loaded.get_node(n1);
     assert_eq!(head.get_kind(), 1);
-    assert_eq!(head.get_prev_ptr(), 0, "n1 is still the chain head");
-    assert_eq!(head.get_next_ptr(), n2);
+    assert!(head.get_prev_ptr().is_none(), "n1 is still the chain head");
+    assert_eq!(head.get_next_ptr(), Some(n2));
 
     let tail = loaded.get_node(n2);
     assert_eq!(tail.get_kind(), 2);
-    assert_eq!(tail.get_prev_ptr(), n1);
-    assert_eq!(tail.get_next_ptr(), 0);
+    assert_eq!(tail.get_prev_ptr(), Some(n1));
+    assert!(tail.get_next_ptr().is_none());
 }
 
 // =========================================================
@@ -174,16 +175,16 @@ fn outgoing_synapse_chain_preserved() {
     let loaded = TestKernel::load_serialized(serialized);
 
     let node1 = loaded.get_node(n1);
-    assert_eq!(node1.get_outgoing_synapse_head(), s12);
-    assert_eq!(node1.get_outgoing_synapse_tail(), s13);
+    assert_eq!(node1.get_outgoing_synapse_head(), Some(s12));
+    assert_eq!(node1.get_outgoing_synapse_tail(), Some(s13));
 
     let syn12 = loaded.get_synapse(s12);
-    assert_eq!(syn12.get_outgoing_next_ptr(), s13);
-    assert_eq!(syn12.get_outgoing_prev_ptr(), 0);
+    assert_eq!(syn12.get_outgoing_next_ptr(), Some(s13));
+    assert!(syn12.get_outgoing_prev_ptr().is_none());
 
     let syn13 = loaded.get_synapse(s13);
-    assert_eq!(syn13.get_outgoing_next_ptr(), 0);
-    assert_eq!(syn13.get_outgoing_prev_ptr(), s12);
+    assert!(syn13.get_outgoing_next_ptr().is_none());
+    assert_eq!(syn13.get_outgoing_prev_ptr(), Some(s12));
 }
 
 #[test]
@@ -200,14 +201,14 @@ fn incoming_synapse_chain_preserved() {
     let loaded = TestKernel::load_serialized(serialized);
 
     let node3 = loaded.get_node(n3);
-    assert_eq!(node3.get_incoming_synapse_head(), s13);
-    assert_eq!(node3.get_incoming_synapse_tail(), s23);
+    assert_eq!(node3.get_incoming_synapse_head(), Some(s13));
+    assert_eq!(node3.get_incoming_synapse_tail(), Some(s23));
 
     let syn13 = loaded.get_synapse(s13);
-    assert_eq!(syn13.get_incoming_next_ptr(), s23);
+    assert_eq!(syn13.get_incoming_next_ptr(), Some(s23));
 
     let syn23 = loaded.get_synapse(s23);
-    assert_eq!(syn23.get_incoming_prev_ptr(), s13);
+    assert_eq!(syn23.get_incoming_prev_ptr(), Some(s13));
 }
 
 // =========================================================
@@ -534,7 +535,7 @@ fn topology_preserved_after_grow_and_serialize() {
 
     let head = loaded.get_node(n1);
     assert_eq!(head.get_kind(), 1);
-    assert_eq!(head.get_next_ptr(), n2);
+    assert_eq!(head.get_next_ptr(), Some(n2));
 
     assert_eq!(loaded.get_node(n2).get_kind(), 2);
     assert_eq!(loaded.get_synapse(s1).get_kind(), 50);
@@ -698,7 +699,7 @@ fn serialize_load_serialize_preserves_semantic_content() {
     assert_eq!(reloaded.synapse_count(), 1);
     assert_eq!(reloaded.get_node(n1).get_kind(), 1);
     assert_eq!(reloaded.get_node(n2).get_kind(), 2);
-    assert_eq!(reloaded.get_node(n1).get_next_ptr(), n2);
+    assert_eq!(reloaded.get_node(n1).get_next_ptr(), Some(n2));
     assert_eq!(reloaded.get_synapse(s1).get_kind(), 10);
     assert_eq!(reloaded.get_node(n1).attr_read(0), 999);
     assert_eq!(reloaded.get_node(n2).attr_read(5), -42);
@@ -729,10 +730,10 @@ fn consumer_thread_sees_loaded_state_after_publish_swap() {
     assert_eq!(head.get_kind(), 1);
     assert_eq!(graph.get_node(n1).attr_read(0), 42);
 
-    let next = graph.get_node(head.get_next_ptr());
+    let next = graph.get_node(head.get_next_ptr().unwrap());
     assert_eq!(next.get_kind(), 2);
 
-    let syn = graph.get_synapse(1);
+    let syn = graph.get_synapse(SlotId::new(1).unwrap());
     assert_eq!(syn.get_kind(), 10);
 }
 

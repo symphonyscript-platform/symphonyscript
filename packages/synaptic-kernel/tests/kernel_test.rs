@@ -25,7 +25,7 @@ fn new_controller(cfg: KernelConfig<1, 1, 1>) -> TestKernel {
     Kernel::new(cfg)
 }
 
-fn create_config(nodes: usize, synapses: usize) -> KernelConfig<1, 1, 1> {
+fn create_config(nodes: u32, synapses: u32) -> KernelConfig<1, 1, 1> {
     common::kernel_config_1_1(
         nodes,
         synapses,
@@ -36,7 +36,7 @@ fn create_config(nodes: usize, synapses: usize) -> KernelConfig<1, 1, 1> {
     )
 }
 
-fn config(capacity: usize) -> KernelConfig<1, 1, 1> {
+fn config(capacity: u32) -> KernelConfig<1, 1, 1> {
     create_config(capacity, capacity)
 }
 
@@ -45,6 +45,7 @@ fn config_with_lut_on_default(lut_size: usize) -> KernelConfig<1, 1, 1> {
     c.lut_defs = [LutDef::new(LutId(0), TripleBufferId::DEFAULT, lut_size)];
     c
 }
+
 
 fn config_with_lut_on_user_tb(lut_size: usize) -> KernelConfig<1, 1, 1> {
     KernelConfig {
@@ -94,7 +95,7 @@ fn fresh_controller_reports_zero_counts() {
 fn insert_node_returns_slot_and_node_visible_to_writer() {
     let controller = new_controller(config(16));
     let slot = controller.insert_node(1).unwrap();
-    assert!(slot > 0);
+    // SlotId is non-zero by construction.
     assert_eq!(controller.get_node(slot).get_kind(), 1);
 }
 
@@ -109,10 +110,10 @@ fn insert_after_and_before_form_correct_chain() {
     let w1 = controller.get_node(n1);
     let w2 = controller.get_node(n2);
     let w3 = controller.get_node(n3);
-    assert_eq!(w1.get_next_ptr(), n2);
-    assert_eq!(w2.get_prev_ptr(), n1);
-    assert_eq!(w2.get_next_ptr(), n3);
-    assert_eq!(w3.get_prev_ptr(), n2);
+    assert_eq!(w1.get_next_ptr(), Some(n2));
+    assert_eq!(w2.get_prev_ptr(), Some(n1));
+    assert_eq!(w2.get_next_ptr(), Some(n3));
+    assert_eq!(w3.get_prev_ptr(), Some(n2));
 }
 
 #[test]
@@ -123,10 +124,10 @@ fn two_insert_node_calls_create_disjoint_orphans() {
 
     let na = controller.get_node(a);
     let nb = controller.get_node(b);
-    assert_eq!(na.get_next_ptr(), 0);
-    assert_eq!(na.get_prev_ptr(), 0);
-    assert_eq!(nb.get_next_ptr(), 0);
-    assert_eq!(nb.get_prev_ptr(), 0);
+    assert!(na.get_next_ptr().is_none());
+    assert!(na.get_prev_ptr().is_none());
+    assert!(nb.get_next_ptr().is_none());
+    assert!(nb.get_prev_ptr().is_none());
     assert_ne!(a, b);
 }
 
@@ -161,10 +162,10 @@ fn cross_subchain_synapse_connects_disjoint_chains() {
     assert_eq!(syn.get_target_ptr(), y1);
 
     // Chain links unchanged on either side.
-    assert_eq!(controller.get_node(x1).get_next_ptr(), x2);
-    assert_eq!(controller.get_node(x2).get_next_ptr(), 0);
-    assert_eq!(controller.get_node(y1).get_prev_ptr(), 0);
-    assert_eq!(controller.get_node(y1).get_next_ptr(), y2);
+    assert_eq!(controller.get_node(x1).get_next_ptr(), Some(x2));
+    assert!(controller.get_node(x2).get_next_ptr().is_none());
+    assert!(controller.get_node(y1).get_prev_ptr().is_none());
+    assert_eq!(controller.get_node(y1).get_next_ptr(), Some(y2));
 }
 
 #[test]
@@ -258,9 +259,9 @@ fn multiple_mutations_batch_into_single_publish() {
     let head = mirror.get_node(n1);
     assert_eq!(head.get_kind(), 1);
     assert_eq!(mirror.get_node(n1).attr_read(0), 999);
-    let next = mirror.get_node(head.get_next_ptr());
+    let next = mirror.get_node(head.get_next_ptr().unwrap());
     assert_eq!(next.get_kind(), 2);
-    let last = mirror.get_node(next.get_next_ptr());
+    let last = mirror.get_node(next.get_next_ptr().unwrap());
     assert_eq!(last.get_kind(), 3);
 }
 
@@ -299,7 +300,7 @@ fn attributes_visible_immediately_without_publish() {
 #[test]
 fn node_capacity_exhaustion_returns_error() {
     let controller = new_controller(config(2));
-    controller.insert_node(1).unwrap();
+    let n1 = controller.insert_node(1).unwrap();
     controller.insert_node(2).unwrap();
 
     assert!(matches!(
@@ -307,11 +308,11 @@ fn node_capacity_exhaustion_returns_error() {
         Err(KernelError::CapacityExhausted)
     ));
     assert!(matches!(
-        controller.insert_node_after(1, 3),
+        controller.insert_node_after(n1, 3),
         Err(KernelError::CapacityExhausted)
     ));
     assert!(matches!(
-        controller.insert_node_before(1, 3),
+        controller.insert_node_before(n1, 3),
         Err(KernelError::CapacityExhausted)
     ));
 }
@@ -441,7 +442,7 @@ fn remove_chain_cascades_cross_chain_synapses() {
     // y's incoming-synapse list is patched immediately even though the
     // synapse slot is still deferred.
     assert_eq!(controller.get_node(y).get_kind(), 20);
-    assert_eq!(controller.get_node(y).get_incoming_synapse_head(), 0);
+    assert!(controller.get_node(y).get_incoming_synapse_head().is_none());
 
     drain_deferred_frees(&mut controller);
     assert_eq!(controller.synapse_count(), 0);
@@ -481,9 +482,9 @@ fn grow_preserves_chain_topology() {
     // Chain n1 -> n2 -> n3 survived.
     let w1 = controller.get_node(n1);
     assert_eq!(w1.get_kind(), 10);
-    let w2 = controller.get_node(w1.get_next_ptr());
+    let w2 = controller.get_node(w1.get_next_ptr().unwrap());
     assert_eq!(w2.get_kind(), 20);
-    let w3 = controller.get_node(w2.get_next_ptr());
+    let w3 = controller.get_node(w2.get_next_ptr().unwrap());
     assert_eq!(w3.get_kind(), 30);
     let _ = n3;
 }
@@ -568,7 +569,7 @@ fn grow_consumer_thread_sees_migrated_data_after_publish_swap() {
     assert_eq!(head.get_kind(), 10);
     assert_eq!(mirror.get_node(n1).attr_read(0), 1000);
 
-    let next = mirror.get_node(head.get_next_ptr());
+    let next = mirror.get_node(head.get_next_ptr().unwrap());
     assert_eq!(next.get_kind(), 20);
 
     let syn = mirror.get_synapse(s1);
@@ -671,7 +672,7 @@ fn grow_then_mutate_then_publish() {
 
     let head = mirror.get_node(n1);
     assert_eq!(head.get_kind(), 1);
-    let next = mirror.get_node(head.get_next_ptr());
+    let next = mirror.get_node(head.get_next_ptr().unwrap());
     assert_eq!(next.get_kind(), 2);
     assert_eq!(mirror.get_node(n2).attr_read(0), 777);
 }

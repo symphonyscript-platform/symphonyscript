@@ -1,11 +1,12 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
+use synaptic_kernel::primitives::slot::SlotId;
 use synaptic_kernel::primitives::slot_allocator::SlotAllocator;
 use synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
-fn create_allocator(capacity: usize) -> (SlotAllocator, StagingBufferReader, AtomicBuffer) {
-    let size = SlotAllocator::calculate_size_on_mem(capacity);
+fn create_allocator(capacity: u32) -> (SlotAllocator, StagingBufferReader, AtomicBuffer) {
+    let size = SlotAllocator::calculate_size_on_mem(capacity as usize);
     let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
     let alloc = SlotAllocator::new(Arc::clone(&mem), 0, capacity);
 
@@ -20,9 +21,10 @@ fn create_allocator(capacity: usize) -> (SlotAllocator, StagingBufferReader, Ato
 fn fresh_allocator_all_slots_free() {
     let (alloc, _, _) = create_allocator(4);
     // Slots are 1-based
-    for i in 1..=4 {
-        assert!(alloc.is_free(i), "slot {} should be free", i);
-        assert!(!alloc.is_allocated(i), "slot {} should not be allocated", i);
+    for i in 1u32..=4 {
+        let slot = SlotId::new(i).unwrap();
+        assert!(alloc.is_free(slot), "slot {} should be free", i);
+        assert!(!alloc.is_allocated(slot), "slot {} should not be allocated", i);
     }
 }
 
@@ -227,7 +229,7 @@ fn stress_alloc_defer_flush_cycles() {
 fn stress_interleaved_alloc_defer_with_partial_flush() {
     let (alloc, reader, _) = create_allocator(32);
 
-    let mut active: Vec<usize> = Vec::new();
+    let mut active: Vec<SlotId> = Vec::new();
 
     for i in 0..200 {
         if active.len() < 32 && i % 3 != 0 {

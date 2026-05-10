@@ -1,6 +1,7 @@
 use proptest::prelude::*;
 use std::sync::atomic::AtomicI32;
 use synaptic_kernel::primitives::simple_free_list::SimpleFreeList;
+use synaptic_kernel::primitives::slot::SlotId;
 use synaptic_kernel::primitives::slot_allocator::SlotAllocator;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
@@ -29,10 +30,10 @@ proptest! {
     fn free_list_invariant_free_plus_alloc_equals_capacity(
         ops in proptest::collection::vec(free_list_op_strategy(), 1..200)
     ) {
-        let capacity = 32;
+        let capacity: u32 = 32;
         let mem = create_mem(65536);
         let fl = SimpleFreeList::new(mem, 0, capacity);
-        let mut active: Vec<usize> = Vec::new();
+        let mut active: Vec<SlotId> = Vec::new();
 
         for op in ops {
             match op {
@@ -53,7 +54,7 @@ proptest! {
             // INVARIANT: free_count + active.len() == capacity
             prop_assert_eq!(
                 fl.free_count() + active.len(),
-                capacity,
+                capacity as usize,
                 "invariant violated: free={} active={} capacity={}",
                 fl.free_count(), active.len(), capacity
             );
@@ -64,7 +65,7 @@ proptest! {
     fn free_list_all_allocated_slots_are_unique(
         alloc_count in 1..64usize
     ) {
-        let capacity = 64;
+        let capacity: u32 = 64;
         let mem = create_mem(65536);
         let fl = SimpleFreeList::new(mem, 0, capacity);
 
@@ -83,7 +84,7 @@ proptest! {
 
         // All should be in valid range [1, capacity]
         for s in &slots {
-            prop_assert!(*s >= 1 && *s <= capacity, "slot {} out of range", s);
+            prop_assert!(s.get() >= 1 && s.get() <= capacity, "slot {} out of range", s);
         }
     }
 
@@ -91,10 +92,10 @@ proptest! {
     fn free_list_no_double_alloc_without_free(
         ops in proptest::collection::vec(free_list_op_strategy(), 1..300)
     ) {
-        let capacity = 16;
+        let capacity: u32 = 16;
         let mem = create_mem(65536);
         let fl = SimpleFreeList::new(mem, 0, capacity);
-        let mut active: std::collections::HashSet<usize> = std::collections::HashSet::new();
+        let mut active: std::collections::HashSet<SlotId> = std::collections::HashSet::new();
 
         for op in ops {
             match op {
@@ -109,7 +110,7 @@ proptest! {
                 }
                 FreeListOp::Free(idx) => {
                     if !active.is_empty() {
-                        let slots_vec: Vec<usize> = active.iter().cloned().collect();
+                        let slots_vec: Vec<SlotId> = active.iter().cloned().collect();
                         let actual_idx = idx % slots_vec.len();
                         let slot = slots_vec[actual_idx];
                         active.remove(&slot);
@@ -143,11 +144,11 @@ proptest! {
     fn allocator_invariant_counts_are_consistent(
         ops in proptest::collection::vec(allocator_op_strategy(), 1..200)
     ) {
-        let capacity = 32;
-        let size = SlotAllocator::calculate_size_on_mem(capacity);
+        let capacity: u32 = 32;
+        let size = SlotAllocator::calculate_size_on_mem(capacity as usize);
         let mem = create_mem(size);
         let alloc = SlotAllocator::new(mem, 0, capacity);
-        let mut active: Vec<usize> = Vec::new();
+        let mut active: Vec<SlotId> = Vec::new();
 
         for op in ops {
             match op {
@@ -171,7 +172,7 @@ proptest! {
             // INVARIANT: free_count + alloc_count == capacity
             prop_assert_eq!(
                 alloc.free_count() + alloc.alloc_count(),
-                capacity,
+                capacity as usize,
                 "invariant violated: free={} alloc={} capacity={}",
                 alloc.free_count(), alloc.alloc_count(), capacity
             );
@@ -182,11 +183,11 @@ proptest! {
     fn allocator_active_slots_are_unique(
         ops in proptest::collection::vec(allocator_op_strategy(), 1..200)
     ) {
-        let capacity = 32;
-        let size = SlotAllocator::calculate_size_on_mem(capacity);
+        let capacity: u32 = 32;
+        let size = SlotAllocator::calculate_size_on_mem(capacity as usize);
         let mem = create_mem(size);
         let alloc = SlotAllocator::new(mem, 0, capacity);
-        let mut active: std::collections::HashSet<usize> = std::collections::HashSet::new();
+        let mut active: std::collections::HashSet<SlotId> = std::collections::HashSet::new();
 
         for op in ops {
             match op {
@@ -200,7 +201,7 @@ proptest! {
                 }
                 AllocatorOp::DeferFree(idx) => {
                     if !active.is_empty() {
-                        let slots_vec: Vec<usize> = active.iter().cloned().collect();
+                        let slots_vec: Vec<SlotId> = active.iter().cloned().collect();
                         let actual_idx = idx % slots_vec.len();
                         let slot = slots_vec[actual_idx];
                         active.remove(&slot);

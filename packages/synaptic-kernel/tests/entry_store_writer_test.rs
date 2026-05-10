@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
 use synaptic_kernel::primitives::entry_store_config::EntryStoreConfig;
 use synaptic_kernel::primitives::entry_store_writer::EntryStoreWriter;
+use synaptic_kernel::primitives::slot::SlotId;
 use synaptic_kernel::primitives::slot_allocator::SlotAllocator;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
@@ -10,10 +11,14 @@ fn create_mem(size: usize) -> AtomicBuffer {
     (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
+fn sid(value: u32) -> SlotId {
+    SlotId::new(value).unwrap()
+}
+
 /// Default mem/tb offsets used in most tests. Pick an offset past the TB
 /// region so allocator + attribute plane data never overlaps the buffers.
-const TB_BUFFER_CAPACITY: usize = 4096;
-const TB_MEM_RESERVED: usize = 4 + TB_BUFFER_CAPACITY * 3; // TripleBufferWriter::calculate_size_on_mem
+const TB_BUFFER_CAPACITY: u32 = 4096;
+const TB_MEM_RESERVED: usize = 4 + TB_BUFFER_CAPACITY as usize * 3; // TripleBufferWriter::calculate_size_on_mem
 const DEFAULT_MEM_START_OFFSET: usize = TB_MEM_RESERVED + 8;
 const MEM_SIZE: usize = 24576;
 
@@ -24,7 +29,7 @@ fn make_tb(mem: &AtomicBuffer) -> TripleBufferWriter {
 fn make_store(
     core_stride: usize,
     attr_stride: usize,
-    capacity: usize,
+    capacity: u32,
 ) -> (AtomicBuffer, TripleBufferWriter, EntryStoreWriter) {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
@@ -151,14 +156,13 @@ fn insert_struct_returns_one_based_slots_in_order() {
     let s4 = store.insert().expect("slot 4 should allocate");
 
     // 1-based invariant: slot 0 is reserved as the null sentinel.
-    assert_eq!(s1, 1);
-    assert_eq!(s2, 2);
-    assert_eq!(s3, 3);
-    assert_eq!(s4, 4);
+    assert_eq!(s1, sid(1));
+    assert_eq!(s2, sid(2));
+    assert_eq!(s3, sid(3));
+    assert_eq!(s4, sid(4));
 
     for s in [s1, s2, s3, s4] {
-        assert!(s > 0);
-        assert!(s <= store.capacity());
+        assert!(s.to_usize() <= store.capacity());
         assert!(store.is_active_slot(s));
     }
 }
@@ -834,7 +838,7 @@ fn get_struct_returns_writer_handle_for_repeated_access() {
 fn get_struct_panics_on_inactive_slot() {
     let (_mem, _tb, store) = make_store(8, 16, 4);
     // slot 1 is in the valid 1-based range but has never been allocated.
-    let _ = store.get(1);
+    let _ = store.get(sid(1));
 }
 
 #[cfg(debug_assertions)]
@@ -917,7 +921,7 @@ fn struct_write_lands_at_expected_tb_offset_slot_1() {
     const S: usize = 8;
     let (_mem, tb, store) = make_store(S, 16, 4);
     let slot = store.insert().unwrap();
-    assert_eq!(slot, 1);
+    assert_eq!(slot, sid(1));
 
     store.get(slot).core_write(0, 111);
     store.get(slot).core_write(3, 222);
@@ -936,7 +940,7 @@ fn struct_write_lands_at_expected_tb_offset_slot_3() {
     let _ = store.insert().unwrap();
     let _ = store.insert().unwrap();
     let slot = store.insert().unwrap();
-    assert_eq!(slot, 3);
+    assert_eq!(slot, sid(3));
 
     store.get(slot).core_write(0, 444);
     store.get(slot).core_write(3, 555);
@@ -967,7 +971,7 @@ fn struct_write_respects_nonzero_tb_start_offset() {
         TB_START,
     );
     let slot = store.insert().unwrap();
-    assert_eq!(slot, 1);
+    assert_eq!(slot, sid(1));
 
     store.get(slot).core_write(0, 1001);
     store.get(slot).core_write(7, 1007);
@@ -982,7 +986,7 @@ fn struct_read_sees_value_written_via_tb_directly() {
     const S: usize = 8;
     let (_mem, tb, store) = make_store(S, 16, 4);
     let slot = store.insert().unwrap();
-    assert_eq!(slot, 1);
+    assert_eq!(slot, sid(1));
 
     // Write directly through TripleBufferWriter at the externally-computed
     // absolute offset, and verify EntryStoreWriter.struct_read sees it.
@@ -1005,7 +1009,7 @@ fn struct_writes_to_different_slots_occupy_distinct_tb_regions() {
     let s1 = store.insert().unwrap();
     let s2 = store.insert().unwrap();
     let s3 = store.insert().unwrap();
-    assert_eq!((s1, s2, s3), (1, 2, 3));
+    assert_eq!((s1, s2, s3), (sid(1), sid(2), sid(3)));
 
     store.get(s1).core_write(0, 10_001);
     store.get(s2).core_write(0, 20_002);
@@ -1028,16 +1032,16 @@ fn struct_writes_to_different_slots_occupy_distinct_tb_regions() {
 #[test]
 fn attr_write_lands_at_expected_mem_offset_slot_1() {
     const A: usize = 16;
-    const CAP: usize = 4;
+    const CAP: u32 = 4;
     let (mem, _tb, store) = make_store(8, A, CAP);
     let slot = store.insert().unwrap();
-    assert_eq!(slot, 1);
+    assert_eq!(slot, sid(1));
 
     store.get(slot).attr_write(0, 999);
     store.get(slot).attr_write(7, 888);
     store.get(slot).attr_write(15, 777);
 
-    let attr_base = DEFAULT_MEM_START_OFFSET + SlotAllocator::calculate_size_on_mem(CAP);
+    let attr_base = DEFAULT_MEM_START_OFFSET + SlotAllocator::calculate_size_on_mem(CAP as usize);
     assert_eq!(mem[attr_base + 0 * A + 0].load(Ordering::Relaxed), 999);
     assert_eq!(mem[attr_base + 0 * A + 7].load(Ordering::Relaxed), 888);
     assert_eq!(mem[attr_base + 0 * A + 15].load(Ordering::Relaxed), 777);
@@ -1046,18 +1050,18 @@ fn attr_write_lands_at_expected_mem_offset_slot_1() {
 #[test]
 fn attr_write_lands_at_expected_mem_offset_slot_3() {
     const A: usize = 16;
-    const CAP: usize = 4;
+    const CAP: u32 = 4;
     let (mem, _tb, store) = make_store(8, A, CAP);
     let _ = store.insert().unwrap();
     let _ = store.insert().unwrap();
     let slot = store.insert().unwrap();
-    assert_eq!(slot, 3);
+    assert_eq!(slot, sid(3));
 
     store.get(slot).attr_write(0, 3000);
     store.get(slot).attr_write(5, 3005);
     store.get(slot).attr_write(15, 3015);
 
-    let attr_base = DEFAULT_MEM_START_OFFSET + SlotAllocator::calculate_size_on_mem(CAP);
+    let attr_base = DEFAULT_MEM_START_OFFSET + SlotAllocator::calculate_size_on_mem(CAP as usize);
     assert_eq!(mem[attr_base + 2 * A + 0].load(Ordering::Relaxed), 3000);
     assert_eq!(mem[attr_base + 2 * A + 5].load(Ordering::Relaxed), 3005);
     assert_eq!(mem[attr_base + 2 * A + 15].load(Ordering::Relaxed), 3015);
@@ -1066,7 +1070,7 @@ fn attr_write_lands_at_expected_mem_offset_slot_3() {
 #[test]
 fn attr_write_respects_nonzero_mem_start_offset() {
     const A: usize = 16;
-    const CAP: usize = 4;
+    const CAP: u32 = 4;
     const MEM_START: usize = DEFAULT_MEM_START_OFFSET + 128;
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
@@ -1083,12 +1087,12 @@ fn attr_write_respects_nonzero_mem_start_offset() {
         0,
     );
     let slot = store.insert().unwrap();
-    assert_eq!(slot, 1);
+    assert_eq!(slot, sid(1));
 
     store.get(slot).attr_write(0, 42);
     store.get(slot).attr_write(15, 43);
 
-    let attr_base = MEM_START + SlotAllocator::calculate_size_on_mem(CAP);
+    let attr_base = MEM_START + SlotAllocator::calculate_size_on_mem(CAP as usize);
     assert_eq!(mem[attr_base + 0 * A + 0].load(Ordering::Relaxed), 42);
     assert_eq!(mem[attr_base + 0 * A + 15].load(Ordering::Relaxed), 43);
 }
@@ -1096,12 +1100,12 @@ fn attr_write_respects_nonzero_mem_start_offset() {
 #[test]
 fn attr_read_sees_value_written_via_raw_mem() {
     const A: usize = 16;
-    const CAP: usize = 4;
+    const CAP: u32 = 4;
     let (mem, _tb, store) = make_store(8, A, CAP);
     let slot = store.insert().unwrap();
-    assert_eq!(slot, 1);
+    assert_eq!(slot, sid(1));
 
-    let attr_base = DEFAULT_MEM_START_OFFSET + SlotAllocator::calculate_size_on_mem(CAP);
+    let attr_base = DEFAULT_MEM_START_OFFSET + SlotAllocator::calculate_size_on_mem(CAP as usize);
     // Write directly into the raw AtomicBuffer at externally-computed offsets,
     // bypassing EntryStoreWriter.attr_write entirely.
     mem[attr_base + 0 * A + 0].store(5001, Ordering::Relaxed);
@@ -1116,18 +1120,18 @@ fn attr_read_sees_value_written_via_raw_mem() {
 #[test]
 fn attr_writes_to_different_slots_occupy_distinct_mem_regions() {
     const A: usize = 16;
-    const CAP: usize = 4;
+    const CAP: u32 = 4;
     let (mem, _tb, store) = make_store(8, A, CAP);
     let s1 = store.insert().unwrap();
     let s2 = store.insert().unwrap();
     let s3 = store.insert().unwrap();
-    assert_eq!((s1, s2, s3), (1, 2, 3));
+    assert_eq!((s1, s2, s3), (sid(1), sid(2), sid(3)));
 
     store.get(s1).attr_write(0, 11_111);
     store.get(s2).attr_write(0, 22_222);
     store.get(s3).attr_write(0, 33_333);
 
-    let attr_base = DEFAULT_MEM_START_OFFSET + SlotAllocator::calculate_size_on_mem(CAP);
+    let attr_base = DEFAULT_MEM_START_OFFSET + SlotAllocator::calculate_size_on_mem(CAP as usize);
     assert_eq!(mem[attr_base + 0 * A].load(Ordering::Relaxed), 11_111);
     assert_eq!(mem[attr_base + 1 * A].load(Ordering::Relaxed), 22_222);
     assert_eq!(mem[attr_base + 2 * A].load(Ordering::Relaxed), 33_333);
@@ -1145,7 +1149,7 @@ fn attr_writes_to_different_slots_occupy_distinct_mem_regions() {
 fn mem_layout_matches_declared_sizes() {
     const S: usize = 8;
     const A: usize = 16;
-    const CAP: usize = 4;
+    const CAP: u32 = 4;
     let (_mem, _tb, store) = make_store(S, A, CAP);
 
     // mem_start_offset matches what we passed at construction.
@@ -1154,11 +1158,11 @@ fn mem_layout_matches_declared_sizes() {
     // Mem plane must be exactly: SlotAllocator size + ATTR_STRIDE * capacity.
     assert_eq!(
         store.mem_end_offset() - store.mem_start_offset(),
-        SlotAllocator::calculate_size_on_mem(CAP) + CAP * A,
+        SlotAllocator::calculate_size_on_mem(CAP as usize) + CAP as usize * A,
     );
 
     // TB plane must be exactly: STRUCT_STRIDE * capacity.
-    assert_eq!(store.tb_end_offset() - store.tb_start_offset(), CAP * S,);
+    assert_eq!(store.tb_end_offset() - store.tb_start_offset(), CAP as usize * S,);
 }
 
 // ============ META_STRIDE > 0 ============
@@ -1177,7 +1181,7 @@ fn make_store_cma(
     core_stride: usize,
     meta_stride: usize,
     attr_stride: usize,
-    capacity: usize,
+    capacity: u32,
 ) -> (AtomicBuffer, TripleBufferWriter, EntryStoreWriter) {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
@@ -1394,7 +1398,7 @@ fn core_meta_cross_slot_isolation() {
     let s1 = store.insert().unwrap();
     let s2 = store.insert().unwrap();
     let s3 = store.insert().unwrap();
-    assert_eq!((s1, s2, s3), (1, 2, 3));
+    assert_eq!((s1, s2, s3), (sid(1), sid(2), sid(3)));
 
     let c1: [i32; C] = [1, 1, 1, 1];
     let c2: [i32; C] = [2, 2, 2, 2];
@@ -1470,7 +1474,7 @@ fn core_meta_lands_at_expected_interleaved_tb_offsets_slot_1() {
     const M: usize = 4;
     let (_mem, tb, store) = make_store_cma(C, M, 16, 4);
     let slot = store.insert().unwrap();
-    assert_eq!(slot, 1);
+    assert_eq!(slot, sid(1));
 
     // Per layout invariant, start = tb_start_offset + (slot - 1) * (C + M) = 0.
     let start = 0usize;
@@ -1496,10 +1500,10 @@ fn core_meta_lands_at_expected_interleaved_tb_offsets_slot_3() {
     let _ = store.insert().unwrap();
     let _ = store.insert().unwrap();
     let slot = store.insert().unwrap();
-    assert_eq!(slot, 3);
+    assert_eq!(slot, sid(3));
 
     // start = 0 + (3 - 1) * (4 + 4) = 16.
-    let start: usize = (slot - 1) * (C + M);
+    let start: usize = (slot.to_usize() - 1) * (C + M);
 
     store.get(slot).core_write(0, 7_001);
     store.get(slot).core_write(3, 7_003);
@@ -1534,7 +1538,7 @@ fn core_meta_respects_nonzero_tb_start_offset() {
 
     let s1 = store.insert().unwrap();
     let s2 = store.insert().unwrap();
-    assert_eq!((s1, s2), (1, 2));
+    assert_eq!((s1, s2), (sid(1), sid(2)));
 
     store.get(s1).core_write_all(&[1, 2, 3, 4]);
     store.get(s1).meta_write_all(&[5, 6, 7, 8]);

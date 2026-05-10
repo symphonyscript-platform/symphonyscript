@@ -1,10 +1,11 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
+use synaptic_kernel::primitives::slot::SlotId;
 use synaptic_kernel::primitives::slot_allocator::SlotAllocator;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
-fn create_allocator(capacity: usize) -> (SlotAllocator, AtomicBuffer) {
-    let size = SlotAllocator::calculate_size_on_mem(capacity);
+fn create_allocator(capacity: u32) -> (SlotAllocator, AtomicBuffer) {
+    let size = SlotAllocator::calculate_size_on_mem(capacity as usize);
     let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
     let alloc = SlotAllocator::new(Arc::clone(&mem), 0, capacity);
     (alloc, mem)
@@ -39,7 +40,7 @@ fn unallocated_deferral_timebomb_is_disarmed() {
     let (alloc, _mem) = create_allocator(4);
 
     // Attempting to defer slot 1 which has NOT been allocated
-    let res = alloc.defer_free(1);
+    let res = alloc.defer_free(SlotId::new(1).unwrap());
     assert!(matches!(
         res,
         Err(synaptic_kernel::errors::slot_allocator_error::SlotAllocatorError::InvalidSlot)
@@ -67,19 +68,20 @@ fn double_defer_returns_error() {
 #[should_panic]
 fn is_allocated_panics_if_out_of_bounds() {
     let (alloc, _mem) = create_allocator(4);
-    alloc.is_allocated(5); // panics natively via Bitmap bounds
+    alloc.is_allocated(SlotId::new(5).unwrap()); // panics natively via Bitmap bounds
 }
 
 #[test]
-#[should_panic]
-fn defer_free_panics_if_zero() {
-    let (alloc, _mem) = create_allocator(4);
-    let _ = alloc.defer_free(0);
+fn slot_id_zero_is_unrepresentable() {
+    // SlotId is a NonZeroU32; constructing one from 0 yields None, so the
+    // "defer_free of slot 0" panic is now compile-impossible.
+    assert!(SlotId::new(0).is_none());
+    assert!(SlotId::from_i32(0).is_none());
 }
 
 #[test]
 #[should_panic]
 fn defer_free_panics_if_beyond_capacity() {
     let (alloc, _mem) = create_allocator(4);
-    let _ = alloc.defer_free(5);
+    let _ = alloc.defer_free(SlotId::new(5).unwrap());
 }

@@ -1,5 +1,6 @@
 use std::sync::atomic::AtomicI32;
 use synaptic_kernel::primitives::simple_free_list::SimpleFreeList;
+use synaptic_kernel::primitives::slot::SlotId;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 fn create_mem(size: usize) -> AtomicBuffer {
@@ -16,7 +17,7 @@ fn alloc_returns_logical_slot_index() {
     let slot = fl.alloc();
     assert!(slot.is_some());
     let idx = slot.unwrap();
-    assert!(idx >= 1 && idx <= 4); // 1-based slot index within capacity
+    assert!(idx.get() >= 1 && idx.get() <= 4); // 1-based slot index within capacity
 }
 
 #[test]
@@ -57,10 +58,10 @@ fn alloc_returns_sequential_indices() {
     let fl = SimpleFreeList::new(mem, 0, 4);
 
     // Free chain is initialized as 0 → 1 → 2 → 3, alloc returns slot_index + 1
-    assert_eq!(fl.alloc().unwrap(), 1);
-    assert_eq!(fl.alloc().unwrap(), 2);
-    assert_eq!(fl.alloc().unwrap(), 3);
-    assert_eq!(fl.alloc().unwrap(), 4);
+    assert_eq!(fl.alloc().unwrap(), SlotId::new(1).unwrap());
+    assert_eq!(fl.alloc().unwrap(), SlotId::new(2).unwrap());
+    assert_eq!(fl.alloc().unwrap(), SlotId::new(3).unwrap());
+    assert_eq!(fl.alloc().unwrap(), SlotId::new(4).unwrap());
 }
 
 #[test]
@@ -118,7 +119,7 @@ fn nonzero_start_index() {
     assert_eq!(fl.free_count(), 8);
 
     let slot = fl.alloc().unwrap();
-    assert!(slot >= 1 && slot <= 8); // 1-based slot index
+    assert!(slot.get() >= 1 && slot.get() <= 8); // 1-based slot index
     assert_eq!(fl.free_count(), 7);
 
     fl.free(slot).unwrap();
@@ -144,7 +145,7 @@ fn capacity_of_one() {
     assert_eq!(fl.free_count(), 1);
 
     let slot = fl.alloc().unwrap();
-    assert_eq!(slot, 1);
+    assert_eq!(slot, SlotId::new(1).unwrap());
     assert!(fl.alloc().is_none());
     assert_eq!(fl.free_count(), 0);
 
@@ -152,7 +153,7 @@ fn capacity_of_one() {
     assert_eq!(fl.free_count(), 1);
 
     let slot2 = fl.alloc().unwrap();
-    assert_eq!(slot2, 1);
+    assert_eq!(slot2, SlotId::new(1).unwrap());
 }
 
 #[test]
@@ -273,13 +274,13 @@ fn slot_31_and_32_bitmap_boundary() {
 
     // Free slot 32 (1-based: internal index 31, last bit of word 0)
     // and slot 33 (1-based: internal index 32, first bit of word 1)
-    fl.free(32).unwrap();
-    fl.free(33).unwrap();
+    fl.free(SlotId::new(32).unwrap()).unwrap();
+    fl.free(SlotId::new(33).unwrap()).unwrap();
     assert_eq!(fl.free_count(), 2);
 
     // Double-free on boundary slots
-    assert!(fl.free(32).is_err());
-    assert!(fl.free(33).is_err());
+    assert!(fl.free(SlotId::new(32).unwrap()).is_err());
+    assert!(fl.free(SlotId::new(33).unwrap()).is_err());
 }
 
 // ============ Bind (Attach to Existing AtomicBuffer) ============
@@ -322,7 +323,7 @@ fn stress_alloc_free_all_256() {
     let fl = SimpleFreeList::new(mem, 0, 256);
 
     // Alloc all
-    let mut slots: Vec<usize> = (0..256).map(|_| fl.alloc().unwrap()).collect();
+    let mut slots: Vec<SlotId> = (0..256).map(|_| fl.alloc().unwrap()).collect();
     assert!(fl.alloc().is_none());
     assert_eq!(fl.free_count(), 0);
 
@@ -333,7 +334,7 @@ fn stress_alloc_free_all_256() {
     assert_eq!(fl.free_count(), 256);
 
     // Alloc all again
-    let slots: Vec<usize> = (0..256).map(|_| fl.alloc().unwrap()).collect();
+    let slots: Vec<SlotId> = (0..256).map(|_| fl.alloc().unwrap()).collect();
     assert!(fl.alloc().is_none());
 
     // Free every other one
@@ -379,7 +380,7 @@ fn stress_unique_indices() {
     let mem = create_mem(65536);
     let fl = SimpleFreeList::new(mem, 0, 256);
 
-    let slots: Vec<usize> = (0..256).map(|_| fl.alloc().unwrap()).collect();
+    let slots: Vec<SlotId> = (0..256).map(|_| fl.alloc().unwrap()).collect();
 
     // All indices should be unique
     let mut sorted = slots.clone();
@@ -389,7 +390,7 @@ fn stress_unique_indices() {
 
     // All should be in [1, 256] (1-based)
     for s in &slots {
-        assert!(*s >= 1 && *s <= 256);
+        assert!(s.get() >= 1 && s.get() <= 256);
     }
 }
 
@@ -399,10 +400,10 @@ fn stress_free_chain_integrity_after_mixed_ops() {
     let fl = SimpleFreeList::new(mem, 0, 64);
 
     // Alloc 64, free odd indices, alloc 32, free all
-    let slots: Vec<usize> = (0..64).map(|_| fl.alloc().unwrap()).collect();
+    let slots: Vec<SlotId> = (0..64).map(|_| fl.alloc().unwrap()).collect();
 
     for s in &slots {
-        if s % 2 == 0 {
+        if s.get() % 2 == 0 {
             fl.free(*s).unwrap();
         }
     }
@@ -418,7 +419,7 @@ fn stress_free_chain_integrity_after_mixed_ops() {
 
     // Free everything
     for s in &slots {
-        if s % 2 == 1 {
+        if s.get() % 2 == 1 {
             fl.free(*s).unwrap();
         }
     }
@@ -457,15 +458,15 @@ fn copy_from_preserves_state_and_adds_capacity() {
     assert_eq!(d, b);
 
     // Then the remaining old chain drains: slots 4..16 (13 slots)
-    for expected in 4..=16 {
+    for expected in 4u32..=16 {
         let got = large_fl.alloc().unwrap();
-        assert_eq!(got, expected);
+        assert_eq!(got, SlotId::new(expected).unwrap());
     }
 
     // Then the expanded region follows sequentially: slots 17..32
-    for expected in 17..=32 {
+    for expected in 17u32..=32 {
         let got = large_fl.alloc().unwrap();
-        assert_eq!(got, expected);
+        assert_eq!(got, SlotId::new(expected).unwrap());
     }
 
     // All 30 free slots consumed

@@ -1,15 +1,20 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
+use synaptic_kernel::primitives::slot::SlotId;
 use synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader;
 use synaptic_kernel::primitives::staging_buffer_writer::StagingBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
-fn create_staging(capacity: usize) -> (StagingBufferWriter, StagingBufferReader, AtomicBuffer) {
-    let size = StagingBufferWriter::calculate_size_on_mem(capacity);
+fn create_staging(capacity: u32) -> (StagingBufferWriter, StagingBufferReader, AtomicBuffer) {
+    let size = StagingBufferWriter::calculate_size_on_mem(capacity as usize);
     let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
     let buffer = StagingBufferWriter::new(Arc::clone(&mem), 0, capacity);
     let reader = buffer.to_reader();
     (buffer, reader, mem)
+}
+
+fn s(n: u32) -> SlotId {
+    SlotId::new(n).unwrap()
 }
 
 // ============ Basic push / len ============
@@ -23,8 +28,8 @@ fn empty_buffer_has_zero_len() {
 #[test]
 fn push_increments_len() {
     let (buf, _, _) = create_staging(4);
-    buf.push(1).unwrap();
-    buf.push(2).unwrap();
+    buf.push(s(1)).unwrap();
+    buf.push(s(2)).unwrap();
     assert_eq!(buf.len(), 2);
 }
 
@@ -50,9 +55,9 @@ fn publish_increments_writer_generation() {
 #[test]
 fn push_does_not_increment_writer_generation() {
     let (buf, _, _) = create_staging(4);
-    buf.push(1).unwrap();
-    buf.push(2).unwrap();
-    buf.push(3).unwrap();
+    buf.push(s(1)).unwrap();
+    buf.push(s(2)).unwrap();
+    buf.push(s(3)).unwrap();
     assert_eq!(buf.writer_generation(), 1);
 }
 
@@ -61,12 +66,12 @@ fn push_does_not_increment_writer_generation() {
 #[test]
 fn drain_without_ack_yields_nothing() {
     let (buf, _, _) = create_staging(4);
-    buf.push(10).unwrap();
-    buf.push(20).unwrap();
+    buf.push(s(10)).unwrap();
+    buf.push(s(20)).unwrap();
     buf.publish();
 
     // No ack — drain should yield nothing (ack_generation is 0, entries stamped with gen 1)
-    let drained: Vec<usize> = buf.drain().collect();
+    let drained: Vec<SlotId> = buf.drain().collect();
     assert!(drained.is_empty());
 }
 
@@ -77,12 +82,12 @@ fn drain_only_yields_acked_generations() {
     let (buf, reader, _) = create_staging(8);
 
     // Publish cycle 1: push A, B (stamped gen 1)
-    buf.push(10).unwrap();
-    buf.push(20).unwrap();
+    buf.push(s(10)).unwrap();
+    buf.push(s(20)).unwrap();
     buf.publish(); // writer_gen becomes 2
 
     // Publish cycle 2: push C (stamped gen 2)
-    buf.push(30).unwrap();
+    buf.push(s(30)).unwrap();
     buf.publish(); // writer_gen becomes 3
 
     // Reader acks gen 1 (writer_gen - 1 = 2 - 1 = 1... but we simulate seeing 2)
@@ -97,8 +102,8 @@ fn drain_only_yields_acked_generations() {
     reader.ack(); // reads writer_gen=3, acks 3-1=2
 
     // Drain: yields entries with gen <= 2 → A(1), B(1), C(2)
-    let drained: Vec<usize> = buf.drain().collect();
-    assert_eq!(drained, vec![10, 20, 30]);
+    let drained: Vec<SlotId> = buf.drain().collect();
+    assert_eq!(drained, vec![s(10), s(20), s(30)]);
     assert_eq!(buf.len(), 0);
 }
 
@@ -107,12 +112,12 @@ fn drain_preserves_unacked_entries() {
     let (buf, _, mem) = create_staging(8);
 
     // Push A, B with gen 1
-    buf.push(10).unwrap();
-    buf.push(20).unwrap();
+    buf.push(s(10)).unwrap();
+    buf.push(s(20)).unwrap();
     buf.publish(); // writer_gen → 2
 
     // Push C with gen 2
-    buf.push(30).unwrap();
+    buf.push(s(30)).unwrap();
     buf.publish(); // writer_gen → 3
 
     // Manually ack only gen 1
@@ -120,12 +125,12 @@ fn drain_preserves_unacked_entries() {
     mem[buf.mem_start_offset() + 1].store(1, std::sync::atomic::Ordering::Relaxed);
 
     // Drain yields gen <= 1
-    let drained: Vec<usize> = buf.drain().collect();
-    assert_eq!(drained, vec![10, 20]); // A, B (gen 1)
+    let drained: Vec<SlotId> = buf.drain().collect();
+    assert_eq!(drained, vec![s(10), s(20)]); // A, B (gen 1)
     assert_eq!(buf.len(), 1); // C still in buffer
 
     // Now nothing more to drain (C is gen 2, ack is still 1)
-    let empty: Vec<usize> = buf.drain().collect();
+    let empty: Vec<SlotId> = buf.drain().collect();
     assert!(empty.is_empty());
 }
 
@@ -134,18 +139,18 @@ fn multiple_publish_cycles_with_incremental_acks() {
     let (buf, reader, _) = create_staging(16);
 
     // Cycle 1: push slots 1, 2 (gen 1)
-    buf.push(1).unwrap();
-    buf.push(2).unwrap();
+    buf.push(s(1)).unwrap();
+    buf.push(s(2)).unwrap();
     buf.publish(); // gen → 2
 
     // Cycle 2: push slots 3, 4 (gen 2)
-    buf.push(3).unwrap();
-    buf.push(4).unwrap();
+    buf.push(s(3)).unwrap();
+    buf.push(s(4)).unwrap();
     buf.publish(); // gen → 3
 
     // Cycle 3: push slots 5, 6 (gen 3)
-    buf.push(5).unwrap();
-    buf.push(6).unwrap();
+    buf.push(s(5)).unwrap();
+    buf.push(s(6)).unwrap();
     buf.publish(); // gen → 4
 
     assert_eq!(buf.len(), 6);
@@ -154,8 +159,8 @@ fn multiple_publish_cycles_with_incremental_acks() {
     reader.ack();
 
     // Drain: yields gen <= 3
-    let drained: Vec<usize> = buf.drain().collect();
-    assert_eq!(drained, vec![1, 2, 3, 4, 5, 6]);
+    let drained: Vec<SlotId> = buf.drain().collect();
+    assert_eq!(drained, vec![s(1), s(2), s(3), s(4), s(5), s(6)]);
     assert_eq!(buf.len(), 0);
 }
 
@@ -164,18 +169,18 @@ fn partial_drain_then_full_drain() {
     let (buf, reader, _) = create_staging(8);
 
     // Push A (gen 1)
-    buf.push(10).unwrap();
+    buf.push(s(10)).unwrap();
     buf.publish(); // gen → 2
 
     // Push B (gen 2)
-    buf.push(20).unwrap();
+    buf.push(s(20)).unwrap();
     buf.publish(); // gen → 3
 
     // Push C (gen 3) — not published yet
-    buf.push(30).unwrap();
+    buf.push(s(30)).unwrap();
 
     // ack_gen defaults to 0 → drain yields gen <= 0 (nothing)
-    let d1: Vec<usize> = buf.drain().collect();
+    let d1: Vec<SlotId> = buf.drain().collect();
     assert!(d1.is_empty());
     assert_eq!(buf.len(), 3);
 
@@ -183,8 +188,8 @@ fn partial_drain_then_full_drain() {
     reader.ack();
 
     // Drain yields gen <= 2 → A(1), B(2)
-    let d2: Vec<usize> = buf.drain().collect();
-    assert_eq!(d2, vec![10, 20]);
+    let d2: Vec<SlotId> = buf.drain().collect();
+    assert_eq!(d2, vec![s(10), s(20)]);
     assert_eq!(buf.len(), 1); // C remains (gen 3, not published, not acked)
 
     // Publish C
@@ -194,8 +199,8 @@ fn partial_drain_then_full_drain() {
     reader.ack();
 
     // Drain yields gen <= 3 → C(3)
-    let d3: Vec<usize> = buf.drain().collect();
-    assert_eq!(d3, vec![30]);
+    let d3: Vec<SlotId> = buf.drain().collect();
+    assert_eq!(d3, vec![s(30)]);
     assert_eq!(buf.len(), 0);
 }
 
@@ -204,7 +209,7 @@ fn partial_drain_then_full_drain() {
 #[test]
 fn drain_on_empty_is_safe() {
     let (buf, _, _) = create_staging(4);
-    let d: Vec<usize> = buf.drain().collect();
+    let d: Vec<SlotId> = buf.drain().collect();
     assert!(d.is_empty());
 
     // Multiple drains on empty
@@ -231,8 +236,8 @@ fn publish_without_push_advances_generation() {
 #[test]
 fn copy_from_preserves_pending_entries() {
     let (src, _, _) = create_staging(4);
-    src.push(10).unwrap();
-    src.push(20).unwrap();
+    src.push(s(10)).unwrap();
+    src.push(s(20)).unwrap();
     src.publish(); // gen → 2
 
     let (dst, reader, _) = create_staging(8);
@@ -243,16 +248,16 @@ fn copy_from_preserves_pending_entries() {
 
     // Ack and drain from destination
     reader.ack(); // reads writer_gen=2, acks 1
-    let drained: Vec<usize> = dst.drain().collect();
-    assert_eq!(drained, vec![10, 20]);
+    let drained: Vec<SlotId> = dst.drain().collect();
+    assert_eq!(drained, vec![s(10), s(20)]);
 }
 
 #[test]
 fn copy_from_preserves_generation_state() {
     let (src, src_reader, _) = create_staging(4);
-    src.push(1).unwrap();
+    src.push(s(1)).unwrap();
     src.publish(); // gen -> 2
-    src.push(2).unwrap();
+    src.push(s(2)).unwrap();
     src.publish(); // gen -> 3
 
     // Ack gen 1 (assuming reader lags) - wait, src_reader.ack() will ack 2.
@@ -279,10 +284,10 @@ fn copy_from_panics_if_source_larger() {
 #[test]
 fn push_to_capacity_succeeds() {
     let (buf, _, _) = create_staging(4);
-    buf.push(1).unwrap();
-    buf.push(2).unwrap();
-    buf.push(3).unwrap();
-    buf.push(4).unwrap();
+    buf.push(s(1)).unwrap();
+    buf.push(s(2)).unwrap();
+    buf.push(s(3)).unwrap();
+    buf.push(s(4)).unwrap();
     assert_eq!(buf.len(), 4);
 }
 
@@ -290,11 +295,11 @@ fn push_to_capacity_succeeds() {
 #[should_panic]
 fn push_beyond_capacity_returns_error() {
     let (buf, _, _) = create_staging(4);
-    buf.push(1).unwrap();
-    buf.push(2).unwrap();
-    buf.push(3).unwrap();
-    buf.push(4).unwrap();
-    assert!(buf.push(5).is_err());
+    buf.push(s(1)).unwrap();
+    buf.push(s(2)).unwrap();
+    buf.push(s(3)).unwrap();
+    buf.push(s(4)).unwrap();
+    assert!(buf.push(s(5)).is_err());
 }
 
 // ============ Nonzero start offset ============
@@ -311,12 +316,12 @@ fn nonzero_start_offset_works() {
     let buf = StagingBufferWriter::new(Arc::clone(&mem), offset, 4);
     let reader = buf.to_reader();
 
-    buf.push(42).unwrap();
+    buf.push(s(42)).unwrap();
     buf.publish();
     reader.ack();
 
-    let drained: Vec<usize> = buf.drain().collect();
-    assert_eq!(drained, vec![42]);
+    let drained: Vec<SlotId> = buf.drain().collect();
+    assert_eq!(drained, vec![s(42)]);
 }
 
 // ============ Bind ============
@@ -329,8 +334,8 @@ fn bind_reads_existing_state() {
     mem[0].store(1, std::sync::atomic::Ordering::Relaxed);
 
     let buf1 = StagingBufferWriter::new(Arc::clone(&mem), 0, 4);
-    buf1.push(42).unwrap();
-    buf1.push(99).unwrap();
+    buf1.push(s(42)).unwrap();
+    buf1.push(s(99)).unwrap();
 
     let buf2 = StagingBufferWriter::bind(Arc::clone(&mem), 0, 4);
     assert_eq!(buf2.len(), 2);
@@ -343,12 +348,12 @@ fn ring_buffer_wraps_correctly() {
     let (buf, reader, _) = create_staging(4);
 
     // Fill, ack, drain, refill — exercises wrap-around
-    for cycle in 0..3 {
-        buf.push(cycle * 10 + 1).unwrap();
-        buf.push(cycle * 10 + 2).unwrap();
+    for cycle in 0u32..3 {
+        buf.push(s(cycle * 10 + 1)).unwrap();
+        buf.push(s(cycle * 10 + 2)).unwrap();
         buf.publish();
         reader.ack();
-        let drained: Vec<usize> = buf.drain().collect();
+        let drained: Vec<SlotId> = buf.drain().collect();
         assert_eq!(drained.len(), 2, "cycle {} should drain 2", cycle);
     }
     assert_eq!(buf.len(), 0);
@@ -361,39 +366,39 @@ fn entries_stamped_with_correct_generation() {
     let (buf, reader, mem) = create_staging(8);
 
     // Gen 1: push A
-    buf.push(100).unwrap();
+    buf.push(s(100)).unwrap();
     buf.publish(); // gen → 2
 
     // Gen 2: push B
-    buf.push(200).unwrap();
+    buf.push(s(200)).unwrap();
     buf.publish(); // gen → 3
 
     // Manually ack only gen 1
     mem[1].store(1, std::sync::atomic::Ordering::Relaxed);
 
-    let d: Vec<usize> = buf.drain().collect();
-    assert_eq!(d, vec![100]); // Only A (gen 1 <= ack 1)
+    let d: Vec<SlotId> = buf.drain().collect();
+    assert_eq!(d, vec![s(100)]); // Only A (gen 1 <= ack 1)
 
     // Now ack gen 2
     reader.ack(); // acks writer_gen-1 = 2
-    let d2: Vec<usize> = buf.drain().collect();
-    assert_eq!(d2, vec![200]); // B (gen 2 <= ack 2)
+    let d2: Vec<SlotId> = buf.drain().collect();
+    assert_eq!(d2, vec![s(200)]); // B (gen 2 <= ack 2)
 }
 
 #[test]
 fn unpublished_entries_are_never_drained_even_with_full_ack() {
     let (buf, reader, _) = create_staging(8);
 
-    buf.push(10).unwrap();
+    buf.push(s(10)).unwrap();
     buf.publish(); // gen → 2
 
-    buf.push(20).unwrap(); // gen 2, NOT published
+    buf.push(s(20)).unwrap(); // gen 2, NOT published
 
     // Reader acks published Gen 1
     reader.ack(); // acks writer_gen-1 = 1
 
-    let drained: Vec<usize> = buf.drain().collect();
-    assert_eq!(drained, vec![10]); // Only the pre-publish entry
+    let drained: Vec<SlotId> = buf.drain().collect();
+    assert_eq!(drained, vec![s(10)]); // Only the pre-publish entry
 
     // Entry 20 (gen 2) is NOT drained because ack=1 < gen=2
     assert_eq!(buf.len(), 1);

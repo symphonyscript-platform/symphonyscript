@@ -3,6 +3,7 @@ mod common;
 use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
+use synaptic_kernel::primitives::slot::SlotId;
 
 const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
@@ -20,7 +21,7 @@ fn create_writer() -> TestKernel {
     TestKernel::new(config())
 }
 
-fn insert_with_tick(kernel: &TestKernel, kind: i32, tick: i32) -> usize {
+fn insert_with_tick(kernel: &TestKernel, kind: i32, tick: i32) -> SlotId {
     let slot = kernel.insert_node(kind).unwrap();
     kernel.get_node(slot).set_meta(0, tick);
     slot
@@ -42,7 +43,8 @@ fn insert_node_returns_slot() {
     let kernel = create_writer();
     let slot = kernel.insert_node(1);
     assert!(slot.is_ok());
-    assert!(slot.unwrap() > 0);
+    // SlotId is non-zero by construction; just verify insert succeeded.
+    let _ = slot.unwrap();
 }
 
 #[test]
@@ -61,13 +63,13 @@ fn insert_node_creates_orphan() {
     let a = kernel.insert_node(1).unwrap();
     let b = kernel.insert_node(2).unwrap();
 
-    // Both are orphans: prev_ptr = next_ptr = 0, no chain links.
+    // Both are orphans: prev_ptr = next_ptr = None, no chain links.
     let na = kernel.get_node(a);
     let nb = kernel.get_node(b);
-    assert_eq!(na.get_next_ptr(), 0);
-    assert_eq!(na.get_prev_ptr(), 0);
-    assert_eq!(nb.get_next_ptr(), 0);
-    assert_eq!(nb.get_prev_ptr(), 0);
+    assert!(na.get_next_ptr().is_none());
+    assert!(na.get_prev_ptr().is_none());
+    assert!(nb.get_next_ptr().is_none());
+    assert!(nb.get_prev_ptr().is_none());
     assert_ne!(a, b);
 }
 
@@ -80,9 +82,9 @@ fn insert_after_splices_correctly() {
     let b = kernel.insert_node_after(a, 2).unwrap();
 
     // chain: a -> b -> c
-    assert_eq!(kernel.get_node(a).get_next_ptr(), b);
-    assert_eq!(kernel.get_node(b).get_next_ptr(), c);
-    assert_eq!(kernel.get_node(c).get_next_ptr(), 0);
+    assert_eq!(kernel.get_node(a).get_next_ptr(), Some(b));
+    assert_eq!(kernel.get_node(b).get_next_ptr(), Some(c));
+    assert!(kernel.get_node(c).get_next_ptr().is_none());
 }
 
 #[test]
@@ -94,9 +96,9 @@ fn insert_before_splices_correctly() {
     let b = kernel.insert_node_before(c, 2).unwrap();
 
     // a -> b -> c
-    assert_eq!(kernel.get_node(a).get_next_ptr(), b);
-    assert_eq!(kernel.get_node(b).get_next_ptr(), c);
-    assert_eq!(kernel.get_node(c).get_prev_ptr(), b);
+    assert_eq!(kernel.get_node(a).get_next_ptr(), Some(b));
+    assert_eq!(kernel.get_node(b).get_next_ptr(), Some(c));
+    assert_eq!(kernel.get_node(c).get_prev_ptr(), Some(b));
 }
 
 #[test]
@@ -123,8 +125,8 @@ fn remove_node_heals_chain() {
     kernel.remove_node(b).unwrap();
     // chain: a -> c
 
-    assert_eq!(kernel.get_node(a).get_next_ptr(), c);
-    assert_eq!(kernel.get_node(c).get_prev_ptr(), a);
+    assert_eq!(kernel.get_node(a).get_next_ptr(), Some(c));
+    assert_eq!(kernel.get_node(c).get_prev_ptr(), Some(a));
 }
 
 #[test]
@@ -182,10 +184,10 @@ fn connect_updates_node_synapse_pointers() {
     let tgt = kernel.insert_node(2).unwrap();
     let syn = kernel.connect(src, tgt, 10).unwrap();
 
-    assert_eq!(kernel.get_node(src).get_outgoing_synapse_head(), syn);
-    assert_eq!(kernel.get_node(src).get_outgoing_synapse_tail(), syn);
-    assert_eq!(kernel.get_node(tgt).get_incoming_synapse_head(), syn);
-    assert_eq!(kernel.get_node(tgt).get_incoming_synapse_tail(), syn);
+    assert_eq!(kernel.get_node(src).get_outgoing_synapse_head(), Some(syn));
+    assert_eq!(kernel.get_node(src).get_outgoing_synapse_tail(), Some(syn));
+    assert_eq!(kernel.get_node(tgt).get_incoming_synapse_head(), Some(syn));
+    assert_eq!(kernel.get_node(tgt).get_incoming_synapse_tail(), Some(syn));
 }
 
 #[test]
@@ -201,9 +203,9 @@ fn disconnect_heals_synapse_chain() {
 
     kernel.disconnect_synapse(s1).unwrap();
 
-    assert_eq!(kernel.get_node(src).get_outgoing_synapse_head(), s2);
-    assert_eq!(kernel.get_node(src).get_outgoing_synapse_tail(), s2);
-    assert_eq!(kernel.get_synapse(s2).get_outgoing_prev_ptr(), 0);
+    assert_eq!(kernel.get_node(src).get_outgoing_synapse_head(), Some(s2));
+    assert_eq!(kernel.get_node(src).get_outgoing_synapse_tail(), Some(s2));
+    assert!(kernel.get_synapse(s2).get_outgoing_prev_ptr().is_none());
 }
 
 #[test]
@@ -423,13 +425,13 @@ fn self_loop_connect_disconnect() {
 
     let syn = kernel.connect(n, n, 99).unwrap();
 
-    assert_eq!(kernel.get_node(n).get_outgoing_synapse_head(), syn);
-    assert_eq!(kernel.get_node(n).get_incoming_synapse_head(), syn);
+    assert_eq!(kernel.get_node(n).get_outgoing_synapse_head(), Some(syn));
+    assert_eq!(kernel.get_node(n).get_incoming_synapse_head(), Some(syn));
 
     kernel.disconnect_synapse(syn).unwrap();
 
-    assert_eq!(kernel.get_node(n).get_outgoing_synapse_head(), 0);
-    assert_eq!(kernel.get_node(n).get_incoming_synapse_head(), 0);
+    assert!(kernel.get_node(n).get_outgoing_synapse_head().is_none());
+    assert!(kernel.get_node(n).get_incoming_synapse_head().is_none());
 }
 
 // ============ compute_mem_size ============
@@ -483,8 +485,8 @@ fn grow_scales_full_topology_graph() {
     assert_eq!(s_syn.get_target_ptr(), tgt);
 
     // Structural links intact
-    assert_eq!(n_src.get_outgoing_synapse_head(), syn);
-    assert_eq!(n_tgt.get_incoming_synapse_head(), syn);
+    assert_eq!(n_src.get_outgoing_synapse_head(), Some(syn));
+    assert_eq!(n_tgt.get_incoming_synapse_head(), Some(syn));
 
     // Attributes survived
     assert_eq!(kernel.get_node(src).attr_read(0), 60);

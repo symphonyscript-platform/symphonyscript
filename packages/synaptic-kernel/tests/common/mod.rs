@@ -40,8 +40,8 @@ pub fn kernel_config_1_1_network(
 /// `dummy_store_capacity` keeps the registry layout valid; tests that never touch the user store
 /// can use a small positive value.
 pub fn kernel_config_1_1(
-    node_capacity: usize,
-    synapse_capacity: usize,
+    node_capacity: u32,
+    synapse_capacity: u32,
     node_meta_stride: usize,
     node_attr_stride: usize,
     synapse_meta_stride: usize,
@@ -60,8 +60,8 @@ pub fn kernel_config_1_1(
 }
 
 pub fn kernel_config_1_1_with_tb(
-    node_capacity: usize,
-    synapse_capacity: usize,
+    node_capacity: u32,
+    synapse_capacity: u32,
     node_meta_stride: usize,
     node_attr_stride: usize,
     synapse_meta_stride: usize,
@@ -82,8 +82,8 @@ pub fn kernel_config_1_1_with_tb(
 
 pub fn kernel_config_1_1_full(
     mem_metadata_size: usize,
-    node_capacity: usize,
-    synapse_capacity: usize,
+    node_capacity: u32,
+    synapse_capacity: u32,
     node_meta_stride: usize,
     node_attr_stride: usize,
     synapse_meta_stride: usize,

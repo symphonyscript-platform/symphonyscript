@@ -1,6 +1,7 @@
 use proptest::prelude::*;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
+use synaptic_kernel::primitives::slot::SlotId;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::node::node_store_config::NodeStoreConfig;
@@ -10,10 +11,10 @@ const NODE_META: usize = 8;
 const NODE_ATTR: usize = 16;
 const MEM_SIZE: usize = 65536;
 const TB_START: usize = 0;
-const TB_BUF_CAP: usize = 16384;
+const TB_BUF_CAP: u32 = 16384;
 const FL_START: usize = 50000;
 const NODE_START_OFFSET: usize = 0;
-const CAPACITY: usize = 64;
+const CAPACITY: u32 = 64;
 
 fn create_mem(size: usize) -> AtomicBuffer {
     (0..size).map(|_| AtomicI32::new(0)).collect()
@@ -41,11 +42,11 @@ fn setup_chain() -> NodeStoreWriter {
 /// slots[len-1] is tail.
 #[derive(Default)]
 struct ChainModel {
-    slots: Vec<usize>,
+    slots: Vec<SlotId>,
 }
 
 impl ChainModel {
-    fn head(&self) -> Option<usize> {
+    fn head(&self) -> Option<SlotId> {
         self.slots.first().copied()
     }
 }
@@ -68,7 +69,7 @@ fn chain_op_strategy() -> impl Strategy<Value = ChainOp> {
 }
 
 /// Walk from the model's head and verify:
-/// - Head's prev == 0; tail's next == 0
+/// - Head's prev is None; tail's next is None
 /// - Backward links are consistent (node.next.prev == node)
 /// - Traversal visits exactly the model's slots, in the same order
 fn verify_chain_integrity(chain: &NodeStoreWriter, model: &ChainModel) {
@@ -77,7 +78,7 @@ fn verify_chain_integrity(chain: &NodeStoreWriter, model: &ChainModel) {
     };
 
     let head = chain.get_node(head_slot);
-    assert_eq!(head.get_prev_ptr(), 0, "head's prev must be 0");
+    assert!(head.get_prev_ptr().is_none(), "head's prev must be None");
 
     let mut visited = Vec::with_capacity(model.slots.len());
     let mut current = head_slot;
@@ -85,26 +86,26 @@ fn verify_chain_integrity(chain: &NodeStoreWriter, model: &ChainModel) {
     loop {
         visited.push(current);
         let node = chain.get_node(current);
-        let next: usize = node.get_next_ptr();
+        let next = node.get_next_ptr();
 
-        if next == 0 {
+        let Some(next_slot) = next else {
             break;
-        }
+        };
 
-        let next_node = chain.get_node(next);
+        let next_node = chain.get_node(next_slot);
         assert_eq!(
             next_node.get_prev_ptr(),
+            Some(current),
+            "backward link broken: {}->{}, but {}.prev = {:?}",
             current,
-            "backward link broken: {}->{}, but {}.prev = {}",
-            current,
-            next,
-            next,
+            next_slot,
+            next_slot,
             next_node.get_prev_ptr()
         );
 
-        current = next;
+        current = next_slot;
         guard += 1;
-        assert!(guard <= CAPACITY, "cycle detected in chain traversal");
+        assert!(guard <= CAPACITY as usize, "cycle detected in chain traversal");
     }
 
     assert_eq!(
@@ -124,10 +125,10 @@ fn insert_before_chain_head_makes_new_head() {
     let b = chain.insert_node_before(a, 2).unwrap();
 
     // Chain: b -> a
-    assert_eq!(chain.get_node(b).get_prev_ptr(), 0, "b is now the head");
-    assert_eq!(chain.get_node(b).get_next_ptr(), a);
-    assert_eq!(chain.get_node(a).get_prev_ptr(), b);
-    assert_eq!(chain.get_node(a).get_next_ptr(), 0);
+    assert!(chain.get_node(b).get_prev_ptr().is_none(), "b is now the head");
+    assert_eq!(chain.get_node(b).get_next_ptr(), Some(a));
+    assert_eq!(chain.get_node(a).get_prev_ptr(), Some(b));
+    assert!(chain.get_node(a).get_next_ptr().is_none());
 }
 
 #[test]
@@ -139,12 +140,12 @@ fn insert_before_head_twice_builds_correct_chain() {
     let c = chain.insert_node_before(b, 3).unwrap();
 
     // Chain: c -> b -> a
-    assert_eq!(chain.get_node(c).get_prev_ptr(), 0);
-    assert_eq!(chain.get_node(c).get_next_ptr(), b);
-    assert_eq!(chain.get_node(b).get_prev_ptr(), c);
-    assert_eq!(chain.get_node(b).get_next_ptr(), a);
-    assert_eq!(chain.get_node(a).get_prev_ptr(), b);
-    assert_eq!(chain.get_node(a).get_next_ptr(), 0);
+    assert!(chain.get_node(c).get_prev_ptr().is_none());
+    assert_eq!(chain.get_node(c).get_next_ptr(), Some(b));
+    assert_eq!(chain.get_node(b).get_prev_ptr(), Some(c));
+    assert_eq!(chain.get_node(b).get_next_ptr(), Some(a));
+    assert_eq!(chain.get_node(a).get_prev_ptr(), Some(b));
+    assert!(chain.get_node(a).get_next_ptr().is_none());
 
     verify_chain_integrity(&chain, &ChainModel { slots: vec![c, b, a] });
 }
@@ -160,8 +161,8 @@ fn remove_chain_head_promotes_successor() {
     chain.remove_node(b).unwrap();
     // chain: a (a is the new head)
 
-    assert_eq!(chain.get_node(a).get_prev_ptr(), 0);
-    assert_eq!(chain.get_node(a).get_next_ptr(), 0);
+    assert!(chain.get_node(a).get_prev_ptr().is_none());
+    assert!(chain.get_node(a).get_next_ptr().is_none());
 
     verify_chain_integrity(&chain, &ChainModel { slots: vec![a] });
 }
@@ -180,7 +181,7 @@ proptest! {
         for op in ops {
             match op {
                 ChainOp::PushFront => {
-                    if model.slots.len() < CAPACITY {
+                    if model.slots.len() < CAPACITY as usize {
                         kind_counter += 1;
                         let new_slot = if let Some(head) = model.head() {
                             chain.insert_node_before(head, kind_counter)
@@ -193,7 +194,7 @@ proptest! {
                     }
                 }
                 ChainOp::InsertAfter(idx) => {
-                    if !model.slots.is_empty() && model.slots.len() < CAPACITY {
+                    if !model.slots.is_empty() && model.slots.len() < CAPACITY as usize {
                         let i = idx % model.slots.len();
                         let target = model.slots[i];
                         kind_counter += 1;
@@ -203,7 +204,7 @@ proptest! {
                     }
                 }
                 ChainOp::InsertBefore(idx) => {
-                    if !model.slots.is_empty() && model.slots.len() < CAPACITY {
+                    if !model.slots.is_empty() && model.slots.len() < CAPACITY as usize {
                         let i = idx % model.slots.len();
                         let target = model.slots[i];
                         kind_counter += 1;
@@ -230,7 +231,7 @@ proptest! {
         count in 1..32usize
     ) {
         let chain = setup_chain();
-        let mut slots = Vec::new();
+        let mut slots: Vec<SlotId> = Vec::new();
 
         for i in 0..count {
             if let Some(s) = chain.insert_node(i as i32) {

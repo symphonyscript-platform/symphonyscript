@@ -1,14 +1,15 @@
 use proptest::prelude::*;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
+use synaptic_kernel::primitives::slot::SlotId;
 use synaptic_kernel::primitives::staging_buffer_reader::StagingBufferReader;
 use synaptic_kernel::primitives::staging_buffer_writer::StagingBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
-const STAGING_CAPACITY: usize = 1024;
+const STAGING_CAPACITY: u32 = 1024;
 
-fn create_staging(capacity: usize) -> (StagingBufferWriter, StagingBufferReader, AtomicBuffer) {
-    let size = StagingBufferWriter::calculate_size_on_mem(capacity);
+fn create_staging(capacity: u32) -> (StagingBufferWriter, StagingBufferReader, AtomicBuffer) {
+    let size = StagingBufferWriter::calculate_size_on_mem(capacity as usize);
     let mem: AtomicBuffer = (0..size).map(|_| AtomicI32::new(0)).collect();
     let buffer = StagingBufferWriter::new(Arc::clone(&mem), 0, capacity);
     let reader = buffer.to_reader();
@@ -17,7 +18,7 @@ fn create_staging(capacity: usize) -> (StagingBufferWriter, StagingBufferReader,
 
 #[derive(Debug, Clone)]
 enum SpscOp {
-    Push(usize),
+    Push(SlotId),
     Publish,
     ReaderAck,
     Drain,
@@ -26,8 +27,8 @@ enum SpscOp {
 struct Oracle {
     writer_generation: i32,
     reader_ack_generation: i32,
-    buffer_state: Vec<(usize, i32)>, // (item, generation_stamp)
-    drained_history: Vec<usize>,
+    buffer_state: Vec<(SlotId, i32)>, // (item, generation_stamp)
+    drained_history: Vec<SlotId>,
 }
 
 impl Oracle {
@@ -40,8 +41,8 @@ impl Oracle {
         }
     }
 
-    fn push(&mut self, item: usize) {
-        if self.buffer_state.len() < STAGING_CAPACITY {
+    fn push(&mut self, item: SlotId) {
+        if self.buffer_state.len() < STAGING_CAPACITY as usize {
             self.buffer_state.push((item, self.writer_generation));
         }
     }
@@ -56,7 +57,7 @@ impl Oracle {
         self.reader_ack_generation = self.writer_generation - 1;
     }
 
-    fn drain(&mut self) -> Vec<usize> {
+    fn drain(&mut self) -> Vec<SlotId> {
         let mut drained = Vec::new();
         let mut kept = Vec::new();
 
@@ -80,7 +81,8 @@ proptest! {
     fn staging_buffer_spsc_generation_fuzz(
         ops in prop::collection::vec(
             prop_oneof![
-                4 => (0..1000usize).prop_map(SpscOp::Push),
+                // SlotId is NonZeroU32, so we sample 1..=1000.
+                4 => (1u32..=1000).prop_map(|n| SpscOp::Push(SlotId::new(n).unwrap())),
                 2 => Just(SpscOp::Publish),
                 2 => Just(SpscOp::ReaderAck),
                 3 => Just(SpscOp::Drain),
@@ -94,7 +96,7 @@ proptest! {
         for op in ops {
             match op {
                 SpscOp::Push(item) => {
-                    if buf.len() < STAGING_CAPACITY {
+                    if buf.len() < STAGING_CAPACITY as usize {
                         buf.push(item).unwrap();
                         oracle.push(item);
                     }
@@ -112,7 +114,7 @@ proptest! {
                     assert_eq!(buf.reader_ack_generation(), oracle.reader_ack_generation);
                 }
                 SpscOp::Drain => {
-                    let actual_drained: Vec<usize> = buf.drain().collect();
+                    let actual_drained: Vec<SlotId> = buf.drain().collect();
                     let oracle_drained = oracle.drain();
 
                     assert_eq!(actual_drained.len(), oracle_drained.len(), "Drain count mismatch");
@@ -130,7 +132,7 @@ proptest! {
         reader.ack();
         oracle.reader_ack();
 
-        let final_actual_drained: Vec<usize> = buf.drain().collect();
+        let final_actual_drained: Vec<SlotId> = buf.drain().collect();
         let final_oracle_drained = oracle.drain();
 
         assert_eq!(final_actual_drained, final_oracle_drained);

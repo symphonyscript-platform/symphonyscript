@@ -16,7 +16,7 @@ fn create_mem(size: usize) -> AtomicBuffer {
     (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
-fn sdef(id: u16, core: usize, meta: usize, attr: usize, cap: usize) -> EntryStoreDef {
+fn sdef(id: u16, core: usize, meta: usize, attr: usize, cap: u32) -> EntryStoreDef {
     EntryStoreDef::new(
         EntryStoreId(id),
         TripleBufferId::DEFAULT,

@@ -1,5 +1,6 @@
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
+use synaptic_kernel::primitives::slot::SlotId;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::node::node_store_config::NodeStoreConfig;
@@ -15,9 +16,9 @@ fn create_mem(size: usize) -> AtomicBuffer {
 
 const MEM_SIZE: usize = 16384;
 const TB_START: usize = 0;
-const TB_BUF_CAP: usize = 4096;
+const TB_BUF_CAP: u32 = 4096;
 const FL_START: usize = 13000;
-const CAPACITY: usize = 16;
+const CAPACITY: u32 = 16;
 const NODE_START_OFFSET: usize = 0;
 
 struct TestHarness {
@@ -55,7 +56,7 @@ fn setup() -> TestHarness {
 }
 
 /// Insert an orphan with `kind` and stash `tick` in meta[0]. Returns the slot.
-fn insert_with_tick(chain: &NodeStoreWriter, kind: i32, tick: i32) -> usize {
+fn insert_with_tick(chain: &NodeStoreWriter, kind: i32, tick: i32) -> SlotId {
     let slot = chain.insert_node(kind).unwrap();
     chain.get_node(slot).set_meta(0, tick);
     slot
@@ -65,7 +66,7 @@ fn insert_with_tick(chain: &NodeStoreWriter, kind: i32, tick: i32) -> usize {
 /// followed by `n-1` `insert_node_after` extensions. Returns the per-node slots
 /// in iteration order: index 0 is head, index n-1 is tail. Each slot's kind
 /// equals its 1-based index (1, 2, 3, ...).
-fn build_chain(chain: &NodeStoreWriter, n: usize) -> Vec<usize> {
+fn build_chain(chain: &NodeStoreWriter, n: usize) -> Vec<SlotId> {
     assert!(n > 0);
     let mut slots = Vec::with_capacity(n);
     let head = chain.insert_node(1).unwrap();
@@ -86,12 +87,12 @@ fn insert_node_creates_orphan_with_zero_pointers() {
     let chain = &h.chain;
 
     let slot = chain.insert_node(7).unwrap();
-    assert_eq!(slot, 1, "first alloc returns slot 1");
+    assert_eq!(slot.get(), 1, "first alloc returns slot 1");
 
     let node = chain.get_node(slot);
     assert_eq!(node.get_kind(), 7);
-    assert_eq!(node.get_next_ptr(), 0, "orphan has no next");
-    assert_eq!(node.get_prev_ptr(), 0, "orphan has no prev");
+    assert!(node.get_next_ptr().is_none(), "orphan has no next");
+    assert!(node.get_prev_ptr().is_none(), "orphan has no prev");
 }
 
 #[test]
@@ -108,10 +109,10 @@ fn two_insert_node_calls_produce_disjoint_orphans() {
     let nb = chain.get_node(b);
 
     // Each orphan stands alone.
-    assert_eq!(na.get_next_ptr(), 0);
-    assert_eq!(na.get_prev_ptr(), 0);
-    assert_eq!(nb.get_next_ptr(), 0);
-    assert_eq!(nb.get_prev_ptr(), 0);
+    assert!(na.get_next_ptr().is_none());
+    assert!(na.get_prev_ptr().is_none());
+    assert!(nb.get_next_ptr().is_none());
+    assert!(nb.get_prev_ptr().is_none());
 }
 
 #[test]
@@ -125,8 +126,8 @@ fn three_disjoint_orphans_remain_disconnected() {
 
     for slot in [a, b, c] {
         let n = chain.get_node(slot);
-        assert_eq!(n.get_next_ptr(), 0);
-        assert_eq!(n.get_prev_ptr(), 0);
+        assert!(n.get_next_ptr().is_none());
+        assert!(n.get_prev_ptr().is_none());
     }
     assert_eq!(chain.len(), 3);
 }
@@ -142,10 +143,10 @@ fn insert_after_tail() {
     let b = chain.insert_node_after(a, 2).unwrap();
 
     // chain: a -> b
-    assert_eq!(chain.get_node(a).get_next_ptr(), b);
-    assert_eq!(chain.get_node(a).get_prev_ptr(), 0, "a is head");
-    assert_eq!(chain.get_node(b).get_prev_ptr(), a);
-    assert_eq!(chain.get_node(b).get_next_ptr(), 0, "b is tail");
+    assert_eq!(chain.get_node(a).get_next_ptr(), Some(b));
+    assert!(chain.get_node(a).get_prev_ptr().is_none(), "a is head");
+    assert_eq!(chain.get_node(b).get_prev_ptr(), Some(a));
+    assert!(chain.get_node(b).get_next_ptr().is_none(), "b is tail");
 }
 
 #[test]
@@ -159,11 +160,11 @@ fn insert_after_middle() {
     let b = chain.insert_node_after(a, 2).unwrap();
     // chain: a -> b -> c
 
-    assert_eq!(chain.get_node(a).get_next_ptr(), b);
-    assert_eq!(chain.get_node(b).get_prev_ptr(), a);
-    assert_eq!(chain.get_node(b).get_next_ptr(), c);
-    assert_eq!(chain.get_node(c).get_prev_ptr(), b);
-    assert_eq!(chain.get_node(c).get_next_ptr(), 0);
+    assert_eq!(chain.get_node(a).get_next_ptr(), Some(b));
+    assert_eq!(chain.get_node(b).get_prev_ptr(), Some(a));
+    assert_eq!(chain.get_node(b).get_next_ptr(), Some(c));
+    assert_eq!(chain.get_node(c).get_prev_ptr(), Some(b));
+    assert!(chain.get_node(c).get_next_ptr().is_none());
 }
 
 // ============ NodeStoreWriter: insert_before ============
@@ -176,11 +177,11 @@ fn insert_before_chain_head_makes_new_head() {
     let a = chain.insert_node(1).unwrap();
     let b = chain.insert_node_before(a, 2).unwrap();
 
-    // a was head (prev_ptr=0); b should now be head.
-    assert_eq!(chain.get_node(b).get_prev_ptr(), 0, "b is the new head");
-    assert_eq!(chain.get_node(b).get_next_ptr(), a);
-    assert_eq!(chain.get_node(a).get_prev_ptr(), b);
-    assert_eq!(chain.get_node(a).get_next_ptr(), 0);
+    // a was head (prev_ptr=None); b should now be head.
+    assert!(chain.get_node(b).get_prev_ptr().is_none(), "b is the new head");
+    assert_eq!(chain.get_node(b).get_next_ptr(), Some(a));
+    assert_eq!(chain.get_node(a).get_prev_ptr(), Some(b));
+    assert!(chain.get_node(a).get_next_ptr().is_none());
 }
 
 #[test]
@@ -194,10 +195,10 @@ fn insert_before_middle_node() {
     let b = chain.insert_node_before(c, 2).unwrap();
     // chain: a -> b -> c
 
-    assert_eq!(chain.get_node(a).get_next_ptr(), b);
-    assert_eq!(chain.get_node(b).get_prev_ptr(), a);
-    assert_eq!(chain.get_node(b).get_next_ptr(), c);
-    assert_eq!(chain.get_node(c).get_prev_ptr(), b);
+    assert_eq!(chain.get_node(a).get_next_ptr(), Some(b));
+    assert_eq!(chain.get_node(b).get_prev_ptr(), Some(a));
+    assert_eq!(chain.get_node(b).get_next_ptr(), Some(c));
+    assert_eq!(chain.get_node(c).get_prev_ptr(), Some(b));
 }
 
 // ============ NodeStoreWriter: remove ============
@@ -229,11 +230,11 @@ fn remove_chain_head_promotes_successor_to_head() {
 
     chain.remove_node(a).unwrap();
 
-    // b is now the head (prev_ptr=0).
+    // b is now the head (prev_ptr=None).
     let nb = chain.get_node(b);
     assert_eq!(nb.get_kind(), 2);
-    assert_eq!(nb.get_prev_ptr(), 0);
-    assert_eq!(nb.get_next_ptr(), 0);
+    assert!(nb.get_prev_ptr().is_none());
+    assert!(nb.get_next_ptr().is_none());
 }
 
 #[test]
@@ -249,8 +250,8 @@ fn remove_tail_patches_predecessor() {
     // chain: a (now both head and tail)
 
     let na = chain.get_node(a);
-    assert_eq!(na.get_next_ptr(), 0);
-    assert_eq!(na.get_prev_ptr(), 0);
+    assert!(na.get_next_ptr().is_none());
+    assert!(na.get_prev_ptr().is_none());
 }
 
 #[test]
@@ -265,8 +266,8 @@ fn remove_middle_heals_chain() {
 
     chain.remove_node(b).unwrap();
 
-    assert_eq!(chain.get_node(a).get_next_ptr(), c);
-    assert_eq!(chain.get_node(c).get_prev_ptr(), a);
+    assert_eq!(chain.get_node(a).get_next_ptr(), Some(c));
+    assert_eq!(chain.get_node(c).get_prev_ptr(), Some(a));
 }
 
 #[test]
@@ -293,8 +294,8 @@ fn remove_all_then_reinsert_yields_fresh_orphan() {
     let d = chain.insert_node(99).unwrap();
     let nd = chain.get_node(d);
     assert_eq!(nd.get_kind(), 99);
-    assert_eq!(nd.get_next_ptr(), 0);
-    assert_eq!(nd.get_prev_ptr(), 0);
+    assert!(nd.get_next_ptr().is_none());
+    assert!(nd.get_prev_ptr().is_none());
 }
 
 #[test]
@@ -335,12 +336,12 @@ fn reader_traverses_chain_built_via_insert_after() {
     assert_eq!(head.get_kind(), 1);
     assert_eq!(head.get_meta(0), 10);
 
-    let nb = chain_r.get_node(head.get_next_ptr());
+    let nb = chain_r.get_node(head.get_next_ptr().unwrap());
     assert_eq!(nb.get_kind(), 2);
 
-    let nc = chain_r.get_node(nb.get_next_ptr());
+    let nc = chain_r.get_node(nb.get_next_ptr().unwrap());
     assert_eq!(nc.get_kind(), 3);
-    assert_eq!(nc.get_next_ptr(), 0, "end of chain");
+    assert!(nc.get_next_ptr().is_none(), "end of chain");
 }
 
 #[test]
@@ -349,7 +350,7 @@ fn reader_capacity_matches_writer_after_publish() {
     h.writer.publish();
     h.reader.swap();
 
-    assert_eq!(h.chain_r.capacity(), CAPACITY);
+    assert_eq!(h.chain_r.capacity(), CAPACITY as usize);
 }
 
 #[test]
@@ -372,7 +373,7 @@ fn reader_sees_removal_after_publish() {
     let chain_r = &h.chain_r;
     let head = chain_r.get_node(a);
     assert_eq!(head.get_kind(), 1);
-    assert_eq!(head.get_next_ptr(), 0, "only one node left");
+    assert!(head.get_next_ptr().is_none(), "only one node left");
 }
 
 // ============ Capacity exhaustion ============
@@ -408,13 +409,13 @@ fn insert_after_does_not_mutate_unrelated_nodes() {
     // chain: a -> d -> b -> c
 
     // c must not be touched
-    assert_eq!(chain.get_node(c).get_prev_ptr(), b, "c's prev unchanged");
-    assert_eq!(chain.get_node(c).get_next_ptr(), 0, "c's next unchanged");
+    assert_eq!(chain.get_node(c).get_prev_ptr(), Some(b), "c's prev unchanged");
+    assert!(chain.get_node(c).get_next_ptr().is_none(), "c's next unchanged");
 
     // b's prev updated to d
-    assert_eq!(chain.get_node(b).get_prev_ptr(), d);
+    assert_eq!(chain.get_node(b).get_prev_ptr(), Some(d));
     // b's next unchanged
-    assert_eq!(chain.get_node(b).get_next_ptr(), c);
+    assert_eq!(chain.get_node(b).get_next_ptr(), Some(c));
 }
 
 // ============ Forward + backward traversal ============
@@ -428,23 +429,23 @@ fn four_node_chain_traverses_forward_and_backward() {
     let slots = build_chain(chain, 4);
     let (a, b, c, d) = (slots[0], slots[1], slots[2], slots[3]);
 
-    // forward: a -> b -> c -> d -> 0
+    // forward: a -> b -> c -> d -> None
     let n0 = chain.get_node(a);
     assert_eq!(n0.get_kind(), 1);
-    assert_eq!(n0.get_prev_ptr(), 0, "head");
-    let n1 = chain.get_node(n0.get_next_ptr());
+    assert!(n0.get_prev_ptr().is_none(), "head");
+    let n1 = chain.get_node(n0.get_next_ptr().unwrap());
     assert_eq!(n1.get_kind(), 2);
-    let n2 = chain.get_node(n1.get_next_ptr());
+    let n2 = chain.get_node(n1.get_next_ptr().unwrap());
     assert_eq!(n2.get_kind(), 3);
-    let n3 = chain.get_node(n2.get_next_ptr());
+    let n3 = chain.get_node(n2.get_next_ptr().unwrap());
     assert_eq!(n3.get_kind(), 4);
-    assert_eq!(n3.get_next_ptr(), 0, "tail");
+    assert!(n3.get_next_ptr().is_none(), "tail");
 
-    // backward: d -> c -> b -> a -> 0
-    assert_eq!(chain.get_node(d).get_prev_ptr(), c);
-    assert_eq!(chain.get_node(c).get_prev_ptr(), b);
-    assert_eq!(chain.get_node(b).get_prev_ptr(), a);
-    assert_eq!(chain.get_node(a).get_prev_ptr(), 0);
+    // backward: d -> c -> b -> a -> None
+    assert_eq!(chain.get_node(d).get_prev_ptr(), Some(c));
+    assert_eq!(chain.get_node(c).get_prev_ptr(), Some(b));
+    assert_eq!(chain.get_node(b).get_prev_ptr(), Some(a));
+    assert!(chain.get_node(a).get_prev_ptr().is_none());
 }
 
 // ============ insert_after / insert_before exhaustion ============
@@ -495,11 +496,11 @@ fn insert_before_tail_in_three_node_chain() {
     let e = chain.insert_node_before(d, 5).unwrap();
     // chain: a -> c -> e -> d
 
-    assert_eq!(chain.get_node(c).get_next_ptr(), e);
-    assert_eq!(chain.get_node(e).get_prev_ptr(), c);
-    assert_eq!(chain.get_node(e).get_next_ptr(), d);
-    assert_eq!(chain.get_node(d).get_prev_ptr(), e);
-    assert_eq!(chain.get_node(d).get_next_ptr(), 0, "d is still tail");
+    assert_eq!(chain.get_node(c).get_next_ptr(), Some(e));
+    assert_eq!(chain.get_node(e).get_prev_ptr(), Some(c));
+    assert_eq!(chain.get_node(e).get_next_ptr(), Some(d));
+    assert_eq!(chain.get_node(d).get_prev_ptr(), Some(e));
+    assert!(chain.get_node(d).get_next_ptr().is_none(), "d is still tail");
 }
 
 // ============ Multi-order removal ============
@@ -516,21 +517,21 @@ fn remove_tail_first_then_middle_then_head() {
     // remove tail
     chain.remove_node(d).unwrap();
     // chain: a -> b -> c
-    assert_eq!(chain.get_node(c).get_next_ptr(), 0);
+    assert!(chain.get_node(c).get_next_ptr().is_none());
 
     // remove middle
     chain.remove_node(b).unwrap();
     // chain: a -> c
-    assert_eq!(chain.get_node(a).get_next_ptr(), c);
-    assert_eq!(chain.get_node(c).get_prev_ptr(), a);
+    assert_eq!(chain.get_node(a).get_next_ptr(), Some(c));
+    assert_eq!(chain.get_node(c).get_prev_ptr(), Some(a));
 
     // remove head
     chain.remove_node(a).unwrap();
     // chain: c (now head + tail)
     let nc = chain.get_node(c);
     assert_eq!(nc.get_kind(), 3);
-    assert_eq!(nc.get_prev_ptr(), 0);
-    assert_eq!(nc.get_next_ptr(), 0);
+    assert!(nc.get_prev_ptr().is_none());
+    assert!(nc.get_next_ptr().is_none());
 }
 
 #[test]
@@ -545,27 +546,27 @@ fn remove_arbitrary_order_on_five_node_chain() {
     // remove c (middle)
     chain.remove_node(c).unwrap();
     // chain: a -> b -> d -> e
-    assert_eq!(chain.get_node(b).get_next_ptr(), d);
-    assert_eq!(chain.get_node(d).get_prev_ptr(), b);
+    assert_eq!(chain.get_node(b).get_next_ptr(), Some(d));
+    assert_eq!(chain.get_node(d).get_prev_ptr(), Some(b));
 
     // remove a (head)
     chain.remove_node(a).unwrap();
     // chain: b -> d -> e
-    assert_eq!(chain.get_node(b).get_prev_ptr(), 0);
+    assert!(chain.get_node(b).get_prev_ptr().is_none());
     assert_eq!(chain.get_node(b).get_kind(), 2);
 
     // remove e (tail)
     chain.remove_node(e).unwrap();
     // chain: b -> d
-    assert_eq!(chain.get_node(d).get_next_ptr(), 0);
+    assert!(chain.get_node(d).get_next_ptr().is_none());
 
     // remove b (head)
     chain.remove_node(b).unwrap();
     // chain: d
     let nd = chain.get_node(d);
     assert_eq!(nd.get_kind(), 4);
-    assert_eq!(nd.get_prev_ptr(), 0);
-    assert_eq!(nd.get_next_ptr(), 0);
+    assert!(nd.get_prev_ptr().is_none());
+    assert!(nd.get_next_ptr().is_none());
 
     // remove last
     chain.remove_node(d).unwrap();
@@ -595,20 +596,20 @@ fn two_disjoint_subchains_coexist_in_one_store() {
     let y3 = chain.insert_node_after(y2, 22).unwrap();
 
     // Each chain self-consistent.
-    assert_eq!(chain.get_node(x1).get_prev_ptr(), 0);
-    assert_eq!(chain.get_node(x1).get_next_ptr(), x2);
-    assert_eq!(chain.get_node(x2).get_prev_ptr(), x1);
-    assert_eq!(chain.get_node(x2).get_next_ptr(), 0);
+    assert!(chain.get_node(x1).get_prev_ptr().is_none());
+    assert_eq!(chain.get_node(x1).get_next_ptr(), Some(x2));
+    assert_eq!(chain.get_node(x2).get_prev_ptr(), Some(x1));
+    assert!(chain.get_node(x2).get_next_ptr().is_none());
 
-    assert_eq!(chain.get_node(y1).get_prev_ptr(), 0);
-    assert_eq!(chain.get_node(y1).get_next_ptr(), y2);
-    assert_eq!(chain.get_node(y2).get_prev_ptr(), y1);
-    assert_eq!(chain.get_node(y2).get_next_ptr(), y3);
-    assert_eq!(chain.get_node(y3).get_prev_ptr(), y2);
-    assert_eq!(chain.get_node(y3).get_next_ptr(), 0);
+    assert!(chain.get_node(y1).get_prev_ptr().is_none());
+    assert_eq!(chain.get_node(y1).get_next_ptr(), Some(y2));
+    assert_eq!(chain.get_node(y2).get_prev_ptr(), Some(y1));
+    assert_eq!(chain.get_node(y2).get_next_ptr(), Some(y3));
+    assert_eq!(chain.get_node(y3).get_prev_ptr(), Some(y2));
+    assert!(chain.get_node(y3).get_next_ptr().is_none());
 
-    // The two chains are independent: each chain's tail.next == 0 and each
-    // chain's head.prev == 0 (asserted above), so neither walks into the
+    // The two chains are independent: each chain's tail.next == None and each
+    // chain's head.prev == None (asserted above), so neither walks into the
     // other in either direction.
 
     assert_eq!(chain.len(), 5);
@@ -646,12 +647,12 @@ fn reader_traverses_chain_after_mid_chain_removal() {
     assert_eq!(head.get_kind(), 1);
     assert_eq!(head.get_meta(0), 10);
 
-    let n1 = chain_r.get_node(head.get_next_ptr());
+    let n1 = chain_r.get_node(head.get_next_ptr().unwrap());
     assert_eq!(n1.get_kind(), 3);
 
-    let n2 = chain_r.get_node(n1.get_next_ptr());
+    let n2 = chain_r.get_node(n1.get_next_ptr().unwrap());
     assert_eq!(n2.get_kind(), 4);
-    assert_eq!(n2.get_next_ptr(), 0, "end of chain");
+    assert!(n2.get_next_ptr().is_none(), "end of chain");
 }
 
 // ============ copy_from ============
@@ -688,8 +689,8 @@ fn copy_from_preserves_topology_and_deep_data() {
     let head = dst.get_node(a);
     assert_eq!(head.get_kind(), 1);
     assert_eq!(head.get_meta(0), 10);
-    // a's next_ptr was patched to 0 when b was unlinked.
-    assert_eq!(head.get_next_ptr(), 0);
+    // a's next_ptr was patched to None when b was unlinked.
+    assert!(head.get_next_ptr().is_none());
 
     // Drive the reclamation cycle: publish, ack, publish to reclaim b.
     dst.publish();
@@ -697,7 +698,7 @@ fn copy_from_preserves_topology_and_deep_data() {
     dst.publish();
 
     assert_eq!(dst.len(), 1);
-    assert_eq!(dst.capacity(), CAPACITY * 2);
+    assert_eq!(dst.capacity(), (CAPACITY * 2) as usize);
 }
 
 #[test]

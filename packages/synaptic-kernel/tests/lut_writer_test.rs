@@ -10,7 +10,7 @@ fn create_mem(size: usize) -> AtomicBuffer {
     (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
-const TB_BUFFER_CAPACITY: usize = 4096;
+const TB_BUFFER_CAPACITY: u32 = 4096;
 
 fn make_tb(mem: &AtomicBuffer) -> TripleBufferWriter {
     TripleBufferWriter::new(Arc::clone(mem), 0, TB_BUFFER_CAPACITY)

@@ -4,6 +4,7 @@ use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
 use synaptic_kernel::primitives::entry_store_def::EntryStoreId;
+use synaptic_kernel::primitives::slot::SlotId;
 use synaptic_kernel::primitives::triple_buffer_def::TripleBufferId;
 
 const NODE_META: usize = 8;
@@ -29,7 +30,7 @@ fn setup() -> (TestKernel, TestConsumer) {
     (kernel, consumer)
 }
 
-fn insert_with_tick(kernel: &TestKernel, kind: i32, tick: i32) -> usize {
+fn insert_with_tick(kernel: &TestKernel, kind: i32, tick: i32) -> SlotId {
     let slot = kernel.insert_node(kind).unwrap();
     kernel.get_node(slot).set_meta(0, tick);
     slot
@@ -101,12 +102,12 @@ fn reader_traverses_full_chain() {
     let head = mirror.get_node(a);
     assert_eq!(head.get_kind(), 1);
 
-    let n_b = mirror.get_node(head.get_next_ptr());
+    let n_b = mirror.get_node(head.get_next_ptr().unwrap());
     assert_eq!(n_b.get_kind(), 2);
 
-    let n_c = mirror.get_node(n_b.get_next_ptr());
+    let n_c = mirror.get_node(n_b.get_next_ptr().unwrap());
     assert_eq!(n_c.get_kind(), 3);
-    assert_eq!(n_c.get_next_ptr(), 0);
+    assert!(n_c.get_next_ptr().is_none());
 }
 
 // ============ Reader sees removal after publish ============
@@ -128,7 +129,7 @@ fn reader_sees_removal_after_publish_swap() {
 
     let na = mirror.get_node(a);
     assert_eq!(na.get_kind(), 1);
-    assert_eq!(na.get_next_ptr(), 0);
+    assert!(na.get_next_ptr().is_none());
 }
 
 // ============ Reader snapshot isolation ============
@@ -209,19 +210,19 @@ fn reader_traverses_synapse_chain() {
     assert!(mirror.swap());
 
     let src_node = mirror.get_node(src);
-    assert_eq!(src_node.get_outgoing_synapse_head(), s1);
+    assert_eq!(src_node.get_outgoing_synapse_head(), Some(s1));
 
     let r1 = mirror.get_synapse(s1);
     assert_eq!(r1.get_kind(), 10);
-    assert_eq!(r1.get_outgoing_next_ptr(), s2);
+    assert_eq!(r1.get_outgoing_next_ptr(), Some(s2));
 
     let r2 = mirror.get_synapse(s2);
     assert_eq!(r2.get_kind(), 20);
-    assert_eq!(r2.get_outgoing_next_ptr(), s3);
+    assert_eq!(r2.get_outgoing_next_ptr(), Some(s3));
 
     let r3 = mirror.get_synapse(s3);
     assert_eq!(r3.get_kind(), 30);
-    assert_eq!(r3.get_outgoing_next_ptr(), 0);
+    assert!(r3.get_outgoing_next_ptr().is_none());
 }
 
 #[test]
@@ -242,11 +243,11 @@ fn reader_sees_disconnect_after_publish_swap() {
     assert!(mirror.swap());
 
     let src_node = mirror.get_node(src);
-    assert_eq!(src_node.get_outgoing_synapse_head(), s2);
+    assert_eq!(src_node.get_outgoing_synapse_head(), Some(s2));
 
     let r2 = mirror.get_synapse(s2);
-    assert_eq!(r2.get_outgoing_prev_ptr(), 0, "s2 is now head");
-    assert_eq!(r2.get_outgoing_next_ptr(), 0, "s2 is now tail");
+    assert!(r2.get_outgoing_prev_ptr().is_none(), "s2 is now head");
+    assert!(r2.get_outgoing_next_ptr().is_none(), "s2 is now tail");
 }
 
 // ============ Reader sees attributes (shared plane) ============
@@ -359,11 +360,11 @@ fn multi_cycle_insert_remove_connect_disconnect() {
 
     assert_eq!(mirror.get_node(c).get_kind(), 3);
     let b_node = mirror.get_node(b);
-    assert_eq!(b_node.get_outgoing_synapse_head(), s2);
+    assert_eq!(b_node.get_outgoing_synapse_head(), Some(s2));
     assert_eq!(mirror.get_synapse(s2).get_source_ptr(), b);
     assert_eq!(mirror.get_synapse(s2).get_target_ptr(), c);
 
-    assert_eq!(mirror.get_node(a).get_outgoing_synapse_head(), 0);
+    assert!(mirror.get_node(a).get_outgoing_synapse_head().is_none());
 }
 
 // ============ swap() return value ============

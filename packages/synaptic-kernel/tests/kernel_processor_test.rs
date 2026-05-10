@@ -12,7 +12,7 @@ const SYNAPSE_ATTR: usize = 16;
 type TestKernel = Kernel<1, 1, 1>;
 type TestConsumer = EpochConsumer<1, 1, 1>;
 
-fn config(capacity: usize) -> KernelConfig<1, 1, 1> {
+fn config(capacity: u32) -> KernelConfig<1, 1, 1> {
     common::kernel_config_1_1(
         capacity,
         capacity,
@@ -23,7 +23,7 @@ fn config(capacity: usize) -> KernelConfig<1, 1, 1> {
     )
 }
 
-fn setup(capacity: usize) -> TestKernel {
+fn setup(capacity: u32) -> TestKernel {
     Kernel::new(config(capacity))
 }
 
@@ -174,19 +174,17 @@ fn full_traversal_nodes_and_synapses() {
     let mut current = Some(mirror.get_node(n1));
     while let Some(node) = current {
         kinds.push(node.get_kind() as i32);
-        let next: usize = node.get_next_ptr();
-        if next == 0 {
-            break;
+        match node.get_next_ptr() {
+            Some(next) => current = Some(mirror.get_node(next)),
+            None => break,
         }
-        current = Some(mirror.get_node(next));
     }
     assert_eq!(kinds, vec![10, 20, 30]);
 
     assert_eq!(mirror.get_node(n1).attr_read(0), 1000);
 
     let src_node = mirror.get_node(n1);
-    let syn_slot = src_node.get_outgoing_synapse_head();
-    assert!(syn_slot > 0);
+    let syn_slot = src_node.get_outgoing_synapse_head().expect("synapse exists");
     let syn = mirror.get_synapse(syn_slot);
     assert_eq!(syn.get_kind(), 99);
 }

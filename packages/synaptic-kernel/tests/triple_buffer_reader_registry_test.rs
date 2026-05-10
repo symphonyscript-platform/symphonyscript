@@ -7,10 +7,10 @@ use synaptic_kernel::primitives::triple_buffer_writer_registry::TripleBufferWrit
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 /// Default TB in the registry must have strictly positive `buffer_capacity` (`TripleBufferWriter` invariant).
-const DEFAULT_TB_CAP: usize = 1;
+const DEFAULT_TB_CAP: u32 = 1;
 
 fn default_tb_mem() -> usize {
-    TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP)
+    TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP as usize)
 }
 
 fn create_mem(size: usize) -> AtomicBuffer {
@@ -49,7 +49,7 @@ fn construct_via_to_reader_matches_writer_offsets() {
     assert_eq!(r.mem_start_offset(), 100);
     assert_eq!(
         r.mem_end_offset(),
-        100 + TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP) + 2 * (4 + 4 * 3)
+        100 + TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP as usize) + 2 * (4 + 4 * 3)
     );
 }
 
@@ -62,7 +62,7 @@ fn construct_via_to_reader_n_eq_one() {
     assert_eq!(r.mem_start_offset(), 0);
     assert_eq!(
         r.mem_end_offset(),
-        TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP) + (4 + 8 * 3)
+        TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP as usize) + (4 + 8 * 3)
     );
 }
 
@@ -75,7 +75,7 @@ fn construct_via_to_reader_varying_capacities() {
     assert_eq!(r.mem_start_offset(), 17);
     assert_eq!(
         r.mem_end_offset(),
-        17 + TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP)
+        17 + TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP as usize)
             + (4 + 30)
             + (4 + 150)
             + (4 + 24)

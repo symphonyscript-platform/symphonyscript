@@ -3,6 +3,7 @@ mod common;
 use synaptic_kernel::epoch_consumer::EpochConsumer;
 use synaptic_kernel::kernel::Kernel;
 use synaptic_kernel::kernel_config::KernelConfig;
+use synaptic_kernel::primitives::slot::SlotId;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -48,10 +49,10 @@ fn multi_threaded_topology_fuzzer() {
             let reader = consumer.acquire_mirror();
             total_iterations += 1;
 
-            let head_slot = reader.mem_read_meta(0) as usize;
-            if head_slot == 0 {
-                continue;
-            }
+            let head_slot = match SlotId::from_i32(reader.mem_read_meta(0)) {
+                Some(s) => s,
+                None => continue,
+            };
 
             let mut current = Some(reader.get_node(head_slot));
             let mut node_count = 0usize;
@@ -63,30 +64,27 @@ fn multi_threaded_topology_fuzzer() {
 
                 let mut syn_slot = node.get_outgoing_synapse_head();
                 let mut syn_count = 0usize;
-                while syn_slot != 0 {
+                while let Some(s) = syn_slot {
                     syn_count += 1;
                     assert!(syn_count <= 256, "Out syn loop");
-                    let syn = reader.get_synapse(syn_slot);
-                    assert!(syn.get_target_ptr() > 0, "Invalid target");
+                    let syn = reader.get_synapse(s);
+                    // get_target_ptr returns SlotId (always non-zero by construction).
+                    let _ = syn.get_target_ptr();
                     syn_slot = syn.get_outgoing_next_ptr();
                 }
 
                 let mut in_slot = node.get_incoming_synapse_head();
                 let mut in_count = 0usize;
-                while in_slot != 0 {
+                while let Some(s) = in_slot {
                     in_count += 1;
                     assert!(in_count <= 256, "In syn loop");
-                    let syn = reader.get_synapse(in_slot);
-                    assert!(syn.get_source_ptr() > 0, "Invalid source");
+                    let syn = reader.get_synapse(s);
+                    // get_source_ptr returns SlotId (always non-zero by construction).
+                    let _ = syn.get_source_ptr();
                     in_slot = syn.get_incoming_next_ptr();
                 }
 
-                let next_ptr = node.get_next_ptr();
-                current = if next_ptr != 0 {
-                    Some(reader.get_node(next_ptr))
-                } else {
-                    None
-                };
+                current = node.get_next_ptr().map(|next| reader.get_node(next));
             }
 
             if node_count > max_nodes_seen {
@@ -110,7 +108,7 @@ fn multi_threaded_topology_fuzzer() {
         };
         nodes.push(head);
         writer.get_node(head).attr_write(0, round);
-        writer.mem_write_meta(0, head as i32);
+        writer.mem_write_meta(0, head.to_i32());
         let mut prev = head;
         for i in 1..64 {
             match writer.insert_node_after(prev, i) {

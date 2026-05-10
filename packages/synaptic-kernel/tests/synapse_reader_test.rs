@@ -17,9 +17,9 @@ fn create_mem(size: usize) -> AtomicBuffer {
 
 const MEM_SIZE: usize = 65536;
 const TB_START: usize = 0;
-const TB_BUF_CAP: usize = 16384;
-const NODE_CAPACITY: usize = 16;
-const SYNAPSE_CAPACITY: usize = 32;
+const TB_BUF_CAP: u32 = 16384;
+const NODE_CAPACITY: u32 = 16;
+const SYNAPSE_CAPACITY: u32 = 32;
 const NODE_START_OFFSET: usize = 0;
 const NODE_FL_START: usize = 50000;
 
@@ -93,10 +93,10 @@ fn reader_sees_all_synapse_fields_after_publish() {
     assert_eq!(s.get_kind(), 42);
     assert_eq!(s.get_source_ptr(), src);
     assert_eq!(s.get_target_ptr(), tgt);
-    assert_eq!(s.get_outgoing_next_ptr(), 0);
-    assert_eq!(s.get_outgoing_prev_ptr(), 0);
-    assert_eq!(s.get_incoming_next_ptr(), 0);
-    assert_eq!(s.get_incoming_prev_ptr(), 0);
+    assert!(s.get_outgoing_next_ptr().is_none());
+    assert!(s.get_outgoing_prev_ptr().is_none());
+    assert!(s.get_incoming_next_ptr().is_none());
+    assert!(s.get_incoming_prev_ptr().is_none());
 }
 
 #[test]
@@ -126,18 +126,18 @@ fn reader_sees_chain_pointers_with_multiple_synapses() {
     let r1 = reader.get_synapse(s1);
     assert_eq!(r1.get_kind(), 10);
     assert_eq!(r1.get_source_ptr(), src);
-    assert_eq!(r1.get_outgoing_prev_ptr(), 0, "s1 is head");
-    assert_eq!(r1.get_outgoing_next_ptr(), s2);
+    assert!(r1.get_outgoing_prev_ptr().is_none(), "s1 is head");
+    assert_eq!(r1.get_outgoing_next_ptr(), Some(s2));
 
     let r2 = reader.get_synapse(s2);
     assert_eq!(r2.get_kind(), 20);
-    assert_eq!(r2.get_outgoing_prev_ptr(), s1);
-    assert_eq!(r2.get_outgoing_next_ptr(), s3);
+    assert_eq!(r2.get_outgoing_prev_ptr(), Some(s1));
+    assert_eq!(r2.get_outgoing_next_ptr(), Some(s3));
 
     let r3 = reader.get_synapse(s3);
     assert_eq!(r3.get_kind(), 30);
-    assert_eq!(r3.get_outgoing_prev_ptr(), s2);
-    assert_eq!(r3.get_outgoing_next_ptr(), 0, "s3 is tail");
+    assert_eq!(r3.get_outgoing_prev_ptr(), Some(s2));
+    assert!(r3.get_outgoing_next_ptr().is_none(), "s3 is tail");
 }
 
 #[test]
@@ -168,9 +168,8 @@ fn reader_does_not_see_unpublished_changes() {
     let reader = h.synapse_chain_r;
     let r1 = reader.get_synapse(s1);
     assert_eq!(r1.get_kind(), 10);
-    assert_eq!(
-        r1.get_outgoing_next_ptr(),
-        0,
+    assert!(
+        r1.get_outgoing_next_ptr().is_none(),
         "reader still sees s1 as tail"
     );
 }
@@ -201,10 +200,9 @@ fn reader_sees_disconnect_after_publish() {
     let reader = h.synapse_chain_r;
     let r2 = reader.get_synapse(s2);
     assert_eq!(r2.get_kind(), 20);
-    assert_eq!(
-        r2.get_outgoing_prev_ptr(),
-        0,
+    assert!(
+        r2.get_outgoing_prev_ptr().is_none(),
         "s2 is now head after disconnect"
     );
-    assert_eq!(r2.get_outgoing_next_ptr(), 0, "s2 is also tail");
+    assert!(r2.get_outgoing_next_ptr().is_none(), "s2 is also tail");
 }

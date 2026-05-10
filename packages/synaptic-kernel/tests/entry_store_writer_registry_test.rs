@@ -5,6 +5,7 @@ use synaptic_kernel::primitives::entry_store_def::{EntryStoreDef, EntryStoreId};
 #[allow(unused_imports)]
 use synaptic_kernel::primitives::entry_store_writer::EntryStoreWriter;
 use synaptic_kernel::primitives::entry_store_writer_registry::EntryStoreWriterRegistry;
+use synaptic_kernel::primitives::slot::SlotId;
 use synaptic_kernel::primitives::slot_allocator::SlotAllocator;
 use synaptic_kernel::primitives::triple_buffer_def::{TripleBufferDef, TripleBufferId};
 use synaptic_kernel::primitives::triple_buffer_writer_registry::TripleBufferWriterRegistry;
@@ -23,7 +24,7 @@ fn sdef(
     core: usize,
     meta: usize,
     attr: usize,
-    cap: usize,
+    cap: u32,
 ) -> EntryStoreDef {
     EntryStoreDef::new(
         EntryStoreId(id),
@@ -229,10 +230,10 @@ fn heterogeneous_strides_3_stores_layout_correctness() {
         let id = EntryStoreId(i as u16);
         let st = reg.get(id);
         let cfg = defs[i].config();
-        let tb_span = cfg.capacity * (cfg.core_stride + cfg.meta_stride);
+        let tb_span = cfg.capacity as usize * (cfg.core_stride + cfg.meta_stride);
         assert_eq!(st.tb_end_offset() - st.tb_start_offset(), tb_span);
-        let mem_span =
-            SlotAllocator::calculate_size_on_mem(cfg.capacity) + cfg.capacity * cfg.attr_stride;
+        let mem_span = SlotAllocator::calculate_size_on_mem(cfg.capacity as usize)
+            + cfg.capacity as usize * cfg.attr_stride;
         assert_eq!(st.mem_end_offset() - st.mem_start_offset(), mem_span);
     }
     assert_eq!(
@@ -312,28 +313,28 @@ fn heterogeneous_strides_fill_to_capacity() {
         0,
         [0; 1],
     );
-    let mut slots0 = [0usize; 4];
-    let mut slots1 = [0usize; 16];
+    let mut slots0: [Option<SlotId>; 4] = [None; 4];
+    let mut slots1: [Option<SlotId>; 16] = [None; 16];
     for i in 0..4 {
-        slots0[i] = reg.get(EntryStoreId(0)).insert().unwrap();
+        slots0[i] = Some(reg.get(EntryStoreId(0)).insert().unwrap());
         reg.get(EntryStoreId(0))
-            .get(slots0[i])
+            .get(slots0[i].unwrap())
             .core_write(0, (100 + i) as i32);
         reg.get(EntryStoreId(0))
-            .get(slots0[i])
+            .get(slots0[i].unwrap())
             .attr_write(0, (1000 + i) as i32);
     }
     for i in 0..16 {
-        slots1[i] = reg.get(EntryStoreId(1)).insert().unwrap();
+        slots1[i] = Some(reg.get(EntryStoreId(1)).insert().unwrap());
         reg.get(EntryStoreId(1))
-            .get(slots1[i])
+            .get(slots1[i].unwrap())
             .core_write(0, (200 + i) as i32);
         reg.get(EntryStoreId(1))
-            .get(slots1[i])
+            .get(slots1[i].unwrap())
             .attr_write(0, (2000 + i) as i32);
     }
     for i in 0..4 {
-        let s = slots0[i];
+        let s = slots0[i].unwrap();
         assert_eq!(
             reg.get(EntryStoreId(0)).get(s).core_read(0),
             (100 + i) as i32
@@ -344,7 +345,7 @@ fn heterogeneous_strides_fill_to_capacity() {
         );
     }
     for i in 0..16 {
-        let s = slots1[i];
+        let s = slots1[i].unwrap();
         assert_eq!(
             reg.get(EntryStoreId(1)).get(s).core_read(0),
             (200 + i) as i32
@@ -472,20 +473,29 @@ fn id_shuffled_permutation_data_roundtrip() {
         0,
         [0; 1],
     );
-    let mut slots = [0usize; 3];
+    let mut slots: [Option<SlotId>; 3] = [None; 3];
     for i in 0..3 {
         let id = EntryStoreId([2u16, 0, 1][i]);
         let slot = reg.get(id).insert().unwrap();
-        slots[i] = slot;
+        slots[i] = Some(slot);
         reg.get(id).get(slot).core_write(0, (300 + i as i32) * 17);
     }
     tb_reg.get(D).publish();
     let tb_r = tb_reg.to_reader();
     tb_r.get(D).swap();
     let rr = reg.to_reader();
-    assert_eq!(rr.get(EntryStoreId(2)).get(slots[0]).core_read(0), 300 * 17);
-    assert_eq!(rr.get(EntryStoreId(0)).get(slots[1]).core_read(0), 301 * 17);
-    assert_eq!(rr.get(EntryStoreId(1)).get(slots[2]).core_read(0), 302 * 17);
+    assert_eq!(
+        rr.get(EntryStoreId(2)).get(slots[0].unwrap()).core_read(0),
+        300 * 17
+    );
+    assert_eq!(
+        rr.get(EntryStoreId(0)).get(slots[1].unwrap()).core_read(0),
+        301 * 17
+    );
+    assert_eq!(
+        rr.get(EntryStoreId(1)).get(slots[2].unwrap()).core_read(0),
+        302 * 17
+    );
 }
 
 // ============ Group 4: Multi-TB SPSC ============
@@ -953,32 +963,36 @@ fn copy_from_with_heterogeneous_strides() {
         0,
         [0; 1],
     );
-    let mut slots0 = [0usize; 4];
-    let mut slots1 = [0usize; 8];
+    let mut slots0: [Option<SlotId>; 4] = [None; 4];
+    let mut slots1: [Option<SlotId>; 8] = [None; 8];
     for i in 0..4 {
-        slots0[i] = source.get(EntryStoreId(0)).insert().unwrap();
+        slots0[i] = Some(source.get(EntryStoreId(0)).insert().unwrap());
         source
             .get(EntryStoreId(0))
-            .get(slots0[i])
+            .get(slots0[i].unwrap())
             .core_write(0, i as i32);
     }
     for i in 0..8 {
-        slots1[i] = source.get(EntryStoreId(1)).insert().unwrap();
+        slots1[i] = Some(source.get(EntryStoreId(1)).insert().unwrap());
         source
             .get(EntryStoreId(1))
-            .get(slots1[i])
+            .get(slots1[i].unwrap())
             .core_write(0, (100 + i) as i32);
     }
     dest.copy_from(&source);
     for i in 0..4 {
         assert_eq!(
-            dest.get(EntryStoreId(0)).get(slots0[i]).core_read(0),
+            dest.get(EntryStoreId(0))
+                .get(slots0[i].unwrap())
+                .core_read(0),
             i as i32
         );
     }
     for i in 0..8 {
         assert_eq!(
-            dest.get(EntryStoreId(1)).get(slots1[i]).core_read(0),
+            dest.get(EntryStoreId(1))
+                .get(slots1[i].unwrap())
+                .core_read(0),
             (100 + i) as i32
         );
     }
@@ -1162,15 +1176,17 @@ fn stress_fill_all_stores_to_capacity_then_verify() {
         0,
         [0; 2],
     );
-    let mut slots: [[usize; 128]; 4] = [[0; 128]; 4];
+    let mut slots: [[Option<SlotId>; 128]; 4] = [[None; 128]; 4];
     let caps = [32usize, 16, 64, 8];
     for si in 0..4usize {
         let id = EntryStoreId(si as u16);
         for j in 0..caps[si] {
-            slots[si][j] = reg.get(id).insert().unwrap();
+            slots[si][j] = Some(reg.get(id).insert().unwrap());
             let v = (si * 100000 + j * 17 + 3) as i32;
-            reg.get(id).get(slots[si][j]).core_write(0, v);
-            reg.get(id).get(slots[si][j]).attr_write(0, v + 9000);
+            reg.get(id).get(slots[si][j].unwrap()).core_write(0, v);
+            reg.get(id)
+                .get(slots[si][j].unwrap())
+                .attr_write(0, v + 9000);
         }
     }
     tb_reg.get(D).publish();
@@ -1185,7 +1201,7 @@ fn stress_fill_all_stores_to_capacity_then_verify() {
         let id = EntryStoreId(si as u16);
         for j in 0..caps[si] {
             let v = (si * 100000 + j * 17 + 3) as i32;
-            let s = slots[si][j];
+            let s = slots[si][j].unwrap();
             assert_eq!(rr.get(id).get(s).core_read(0), v);
             assert_eq!(rr.get(id).get(s).attr_read(0), v + 9000);
         }
@@ -1210,21 +1226,21 @@ fn stress_interleaved_insert_write_across_stores() {
         0,
         [0; 1],
     );
-    let mut slots = [[0usize; 8]; 3];
+    let mut slots: [[Option<SlotId>; 8]; 3] = [[None; 8]; 3];
     for round in 0..8 {
-        slots[0][round] = reg.get(EntryStoreId(0)).insert().unwrap();
-        slots[1][round] = reg.get(EntryStoreId(1)).insert().unwrap();
-        slots[2][round] = reg.get(EntryStoreId(2)).insert().unwrap();
+        slots[0][round] = Some(reg.get(EntryStoreId(0)).insert().unwrap());
+        slots[1][round] = Some(reg.get(EntryStoreId(1)).insert().unwrap());
+        slots[2][round] = Some(reg.get(EntryStoreId(2)).insert().unwrap());
     }
     for round in 0..8 {
         reg.get(EntryStoreId(0))
-            .get(slots[0][round])
+            .get(slots[0][round].unwrap())
             .core_write(0, (round * 10 + 1) as i32);
         reg.get(EntryStoreId(1))
-            .get(slots[1][round])
+            .get(slots[1][round].unwrap())
             .core_write(0, (round * 10 + 2) as i32);
         reg.get(EntryStoreId(2))
-            .get(slots[2][round])
+            .get(slots[2][round].unwrap())
             .core_write(0, (round * 10 + 3) as i32);
     }
     tb_reg.get(D).publish();
@@ -1233,15 +1249,21 @@ fn stress_interleaved_insert_write_across_stores() {
     let rr = reg.to_reader();
     for round in 0..8 {
         assert_eq!(
-            rr.get(EntryStoreId(0)).get(slots[0][round]).core_read(0),
+            rr.get(EntryStoreId(0))
+                .get(slots[0][round].unwrap())
+                .core_read(0),
             (round * 10 + 1) as i32
         );
         assert_eq!(
-            rr.get(EntryStoreId(1)).get(slots[1][round]).core_read(0),
+            rr.get(EntryStoreId(1))
+                .get(slots[1][round].unwrap())
+                .core_read(0),
             (round * 10 + 2) as i32
         );
         assert_eq!(
-            rr.get(EntryStoreId(2)).get(slots[2][round]).core_read(0),
+            rr.get(EntryStoreId(2))
+                .get(slots[2][round].unwrap())
+                .core_read(0),
             (round * 10 + 3) as i32
         );
     }
@@ -1263,16 +1285,16 @@ fn stress_remove_reuse_across_stores() {
     );
     let st0 = reg.get(EntryStoreId(0));
     let st1 = reg.get(EntryStoreId(1));
-    let mut slots = [0usize; 4];
+    let mut slots: [Option<SlotId>; 4] = [None; 4];
     for i in 0..4 {
-        slots[i] = st0.insert().unwrap();
-        st0.get(slots[i]).core_write(0, (100 + i) as i32);
-        st0.get(slots[i]).attr_write(0, (200 + i) as i32);
+        slots[i] = Some(st0.insert().unwrap());
+        st0.get(slots[i].unwrap()).core_write(0, (100 + i) as i32);
+        st0.get(slots[i].unwrap()).attr_write(0, (200 + i) as i32);
     }
     let s1 = st1.insert().unwrap();
     st1.get(s1).core_write(0, 999);
     st1.get(s1).attr_write(0, 888);
-    let removed = slots[2];
+    let removed = slots[2].unwrap();
     st0.remove(removed).unwrap();
     let reader_ack = st0.to_reader();
     st0.publish();

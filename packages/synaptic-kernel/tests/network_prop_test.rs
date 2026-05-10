@@ -1,6 +1,7 @@
 use proptest::prelude::*;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
+use synaptic_kernel::primitives::slot::SlotId;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
 use synaptic_kernel::topology::network::network_config::NetworkConfig;
@@ -12,9 +13,9 @@ const SYNAPSE_META: usize = 8;
 const SYNAPSE_ATTR: usize = 16;
 const MEM_SIZE: usize = 131072;
 const TB_START: usize = 0;
-const TB_BUF_CAP: usize = 32768;
-const NODE_CAPACITY: usize = 32;
-const SYNAPSE_CAPACITY: usize = 64;
+const TB_BUF_CAP: u32 = 32768;
+const NODE_CAPACITY: u32 = 32;
+const SYNAPSE_CAPACITY: u32 = 64;
 const NODE_START_OFFSET: usize = 0;
 const NODE_FL_START: usize = 80000;
 
@@ -61,9 +62,9 @@ fn setup() -> TestHarness {
 
 /// Tracks the graph state for verification
 struct GraphState {
-    node_slots: Vec<usize>,
+    node_slots: Vec<SlotId>,
     /// (synapse_slot, source_node, target_node)
-    synapse_edges: Vec<(usize, usize, usize)>,
+    synapse_edges: Vec<(SlotId, SlotId, SlotId)>,
 }
 
 impl GraphState {
@@ -79,12 +80,12 @@ impl GraphState {
 /// - For each node: outgoing chain is a valid doubly-linked list
 /// - For each node: incoming chain is a valid doubly-linked list
 /// - Every active synapse is reachable from its source's outgoing chain AND target's incoming chain
-/// - head/tail pointers are consistent: head.prev == 0, tail.next == 0
+/// - head/tail pointers are consistent: head.prev is None, tail.next is None
 fn verify_synapse_integrity(h: &TestHarness, state: &GraphState) {
     // Collect all active synapses by source and by target
-    let mut outgoing_by_node: std::collections::HashMap<usize, Vec<usize>> =
+    let mut outgoing_by_node: std::collections::HashMap<SlotId, Vec<SlotId>> =
         std::collections::HashMap::new();
-    let mut incoming_by_node: std::collections::HashMap<usize, Vec<usize>> =
+    let mut incoming_by_node: std::collections::HashMap<SlotId, Vec<SlotId>> =
         std::collections::HashMap::new();
 
     for &(syn_slot, src, tgt) in &state.synapse_edges {
@@ -99,42 +100,36 @@ fn verify_synapse_integrity(h: &TestHarness, state: &GraphState) {
         let expected_count = expected_out.map_or(0, |v| v.len());
 
         if expected_count == 0 {
-            assert_eq!(
-                node.get_outgoing_synapse_head(),
-                0,
-                "node {} has no outgoing synapses but head != 0",
+            assert!(
+                node.get_outgoing_synapse_head().is_none(),
+                "node {} has no outgoing synapses but head is set",
                 node_slot
             );
-            assert_eq!(
-                node.get_outgoing_synapse_tail(),
-                0,
-                "node {} has no outgoing synapses but tail != 0",
+            assert!(
+                node.get_outgoing_synapse_tail().is_none(),
+                "node {} has no outgoing synapses but tail is set",
                 node_slot
             );
             continue;
         }
 
         // Walk outgoing chain
-        let head = node.get_outgoing_synapse_head();
-        assert!(
-            head > 0,
-            "node {} has outgoing synapses but head == 0",
-            node_slot
+        let head = node.get_outgoing_synapse_head().expect(
+            "node has outgoing synapses but head is None",
         );
 
         let head_syn = h.synapse_chain.get_synapse(head);
-        assert_eq!(
-            head_syn.get_outgoing_prev_ptr(),
-            0,
-            "outgoing head synapse {}'s prev must be 0",
+        assert!(
+            head_syn.get_outgoing_prev_ptr().is_none(),
+            "outgoing head synapse {}'s prev must be None",
             head
         );
 
         let mut visited = Vec::new();
-        let mut current = head;
-        let mut last = 0;
+        let mut current_opt: Option<SlotId> = Some(head);
+        let mut last: Option<SlotId> = None;
         let mut guard = 0;
-        while current != 0 {
+        while let Some(current) = current_opt {
             visited.push(current);
             let syn = h.synapse_chain.get_synapse(current);
 
@@ -148,23 +143,23 @@ fn verify_synapse_integrity(h: &TestHarness, state: &GraphState) {
                 syn.get_source_ptr()
             );
 
-            last = current;
-            current = syn.get_outgoing_next_ptr();
+            last = Some(current);
+            current_opt = syn.get_outgoing_next_ptr();
 
             // Verify backward link
-            if current != 0 {
-                let next_syn = h.synapse_chain.get_synapse(current);
+            if let Some(next) = current_opt {
+                let next_syn = h.synapse_chain.get_synapse(next);
                 assert_eq!(
                     next_syn.get_outgoing_prev_ptr(),
-                    last,
+                    Some(current),
                     "outgoing backward link broken at synapse {}",
-                    current
+                    next
                 );
             }
 
             guard += 1;
             assert!(
-                guard <= SYNAPSE_CAPACITY,
+                guard <= SYNAPSE_CAPACITY as usize,
                 "cycle in outgoing chain of node {}",
                 node_slot
             );
@@ -174,16 +169,16 @@ fn verify_synapse_integrity(h: &TestHarness, state: &GraphState) {
         assert_eq!(
             node.get_outgoing_synapse_tail(),
             last,
-            "node {} outgoing tail should be {} but is {}",
+            "node {} outgoing tail should be {:?} but is {:?}",
             node_slot,
             last,
             node.get_outgoing_synapse_tail()
         );
 
         // All expected synapses should be visited
-        let expected_set: std::collections::HashSet<usize> =
+        let expected_set: std::collections::HashSet<SlotId> =
             expected_out.unwrap().iter().cloned().collect();
-        let visited_set: std::collections::HashSet<usize> = visited.iter().cloned().collect();
+        let visited_set: std::collections::HashSet<SlotId> = visited.iter().cloned().collect();
         assert_eq!(
             expected_set, visited_set,
             "node {} outgoing: expected {:?} but visited {:?}",
@@ -198,41 +193,35 @@ fn verify_synapse_integrity(h: &TestHarness, state: &GraphState) {
         let expected_count = expected_in.map_or(0, |v| v.len());
 
         if expected_count == 0 {
-            assert_eq!(
-                node.get_incoming_synapse_head(),
-                0,
-                "node {} has no incoming synapses but head != 0",
+            assert!(
+                node.get_incoming_synapse_head().is_none(),
+                "node {} has no incoming synapses but head is set",
                 node_slot
             );
-            assert_eq!(
-                node.get_incoming_synapse_tail(),
-                0,
-                "node {} has no incoming synapses but tail != 0",
+            assert!(
+                node.get_incoming_synapse_tail().is_none(),
+                "node {} has no incoming synapses but tail is set",
                 node_slot
             );
             continue;
         }
 
-        let head = node.get_incoming_synapse_head();
-        assert!(
-            head > 0,
-            "node {} has incoming synapses but head == 0",
-            node_slot
+        let head = node.get_incoming_synapse_head().expect(
+            "node has incoming synapses but head is None",
         );
 
         let head_syn = h.synapse_chain.get_synapse(head);
-        assert_eq!(
-            head_syn.get_incoming_prev_ptr(),
-            0,
-            "incoming head synapse {}'s prev must be 0",
+        assert!(
+            head_syn.get_incoming_prev_ptr().is_none(),
+            "incoming head synapse {}'s prev must be None",
             head
         );
 
         let mut visited = Vec::new();
-        let mut current = head;
-        let mut last = 0;
+        let mut current_opt: Option<SlotId> = Some(head);
+        let mut last: Option<SlotId> = None;
         let mut guard = 0;
-        while current != 0 {
+        while let Some(current) = current_opt {
             visited.push(current);
             let syn = h.synapse_chain.get_synapse(current);
 
@@ -246,22 +235,22 @@ fn verify_synapse_integrity(h: &TestHarness, state: &GraphState) {
                 syn.get_target_ptr()
             );
 
-            last = current;
-            current = syn.get_incoming_next_ptr();
+            last = Some(current);
+            current_opt = syn.get_incoming_next_ptr();
 
-            if current != 0 {
-                let next_syn = h.synapse_chain.get_synapse(current);
+            if let Some(next) = current_opt {
+                let next_syn = h.synapse_chain.get_synapse(next);
                 assert_eq!(
                     next_syn.get_incoming_prev_ptr(),
-                    last,
+                    Some(current),
                     "incoming backward link broken at synapse {}",
-                    current
+                    next
                 );
             }
 
             guard += 1;
             assert!(
-                guard <= SYNAPSE_CAPACITY,
+                guard <= SYNAPSE_CAPACITY as usize,
                 "cycle in incoming chain of node {}",
                 node_slot
             );
@@ -270,15 +259,15 @@ fn verify_synapse_integrity(h: &TestHarness, state: &GraphState) {
         assert_eq!(
             node.get_incoming_synapse_tail(),
             last,
-            "node {} incoming tail should be {} but is {}",
+            "node {} incoming tail should be {:?} but is {:?}",
             node_slot,
             last,
             node.get_incoming_synapse_tail()
         );
 
-        let expected_set: std::collections::HashSet<usize> =
+        let expected_set: std::collections::HashSet<SlotId> =
             expected_in.unwrap().iter().cloned().collect();
-        let visited_set: std::collections::HashSet<usize> = visited.iter().cloned().collect();
+        let visited_set: std::collections::HashSet<SlotId> = visited.iter().cloned().collect();
         assert_eq!(
             expected_set, visited_set,
             "node {} incoming: expected {:?} but visited {:?}",
@@ -323,7 +312,7 @@ proptest! {
         for op in ops {
             match op {
                 SynapseOp::AddNode => {
-                    if state.node_slots.len() < NODE_CAPACITY {
+                    if state.node_slots.len() < NODE_CAPACITY as usize {
                         kind_counter += 1;
                         if let Some(slot) = h.node_chain.insert_node(kind_counter) {
                             state.node_slots.push(slot);
@@ -332,7 +321,7 @@ proptest! {
                 }
                 SynapseOp::Connect(src_idx, tgt_idx) => {
                     if state.node_slots.len() >= 2
-                        && state.synapse_edges.len() < SYNAPSE_CAPACITY
+                        && state.synapse_edges.len() < SYNAPSE_CAPACITY as usize
                     {
                         let src = state.node_slots[src_idx % state.node_slots.len()];
                         let tgt = state.node_slots[tgt_idx % state.node_slots.len()];
@@ -388,10 +377,10 @@ proptest! {
         // All nodes should have clean synapse pointers
         for &node_slot in &state.node_slots {
             let node = h.node_chain.get_node(node_slot);
-            prop_assert_eq!(node.get_outgoing_synapse_head(), 0);
-            prop_assert_eq!(node.get_outgoing_synapse_tail(), 0);
-            prop_assert_eq!(node.get_incoming_synapse_head(), 0);
-            prop_assert_eq!(node.get_incoming_synapse_tail(), 0);
+            prop_assert!(node.get_outgoing_synapse_head().is_none());
+            prop_assert!(node.get_outgoing_synapse_tail().is_none());
+            prop_assert!(node.get_incoming_synapse_head().is_none());
+            prop_assert!(node.get_incoming_synapse_tail().is_none());
         }
     }
 
@@ -420,10 +409,10 @@ proptest! {
         }
 
         let n = h.node_chain.get_node(node);
-        prop_assert_eq!(n.get_outgoing_synapse_head(), 0);
-        prop_assert_eq!(n.get_outgoing_synapse_tail(), 0);
-        prop_assert_eq!(n.get_incoming_synapse_head(), 0);
-        prop_assert_eq!(n.get_incoming_synapse_tail(), 0);
+        prop_assert!(n.get_outgoing_synapse_head().is_none());
+        prop_assert!(n.get_outgoing_synapse_tail().is_none());
+        prop_assert!(n.get_incoming_synapse_head().is_none());
+        prop_assert!(n.get_incoming_synapse_tail().is_none());
     }
 }
 
@@ -447,14 +436,14 @@ fn disconnect_middle_of_outgoing_chain() {
     let syn1 = h.synapse_chain.get_synapse(s1);
     let syn3 = h.synapse_chain.get_synapse(s3);
 
-    assert_eq!(syn1.get_outgoing_next_ptr(), s3);
-    assert_eq!(syn3.get_outgoing_prev_ptr(), s1);
-    assert_eq!(syn1.get_outgoing_prev_ptr(), 0);
-    assert_eq!(syn3.get_outgoing_next_ptr(), 0);
+    assert_eq!(syn1.get_outgoing_next_ptr(), Some(s3));
+    assert_eq!(syn3.get_outgoing_prev_ptr(), Some(s1));
+    assert!(syn1.get_outgoing_prev_ptr().is_none());
+    assert!(syn3.get_outgoing_next_ptr().is_none());
 
     let node_a = h.node_chain.get_node(a);
-    assert_eq!(node_a.get_outgoing_synapse_head(), s1);
-    assert_eq!(node_a.get_outgoing_synapse_tail(), s3);
+    assert_eq!(node_a.get_outgoing_synapse_head(), Some(s1));
+    assert_eq!(node_a.get_outgoing_synapse_tail(), Some(s3));
 }
 
 #[test]
@@ -473,12 +462,12 @@ fn disconnect_head_of_incoming_chain() {
     h.synapse_chain.disconnect_synapse(s1).unwrap();
 
     let node_b = h.node_chain.get_node(b);
-    assert_eq!(node_b.get_incoming_synapse_head(), s2);
-    assert_eq!(node_b.get_incoming_synapse_tail(), s2);
+    assert_eq!(node_b.get_incoming_synapse_head(), Some(s2));
+    assert_eq!(node_b.get_incoming_synapse_tail(), Some(s2));
 
     let syn2 = h.synapse_chain.get_synapse(s2);
-    assert_eq!(syn2.get_incoming_prev_ptr(), 0);
-    assert_eq!(syn2.get_incoming_next_ptr(), 0);
+    assert!(syn2.get_incoming_prev_ptr().is_none());
+    assert!(syn2.get_incoming_next_ptr().is_none());
 }
 
 #[test]
@@ -527,7 +516,7 @@ fn fan_out_and_fan_in_topology() {
 
     // Hub should have no outgoing but still have incoming
     let hub_node = h.node_chain.get_node(hub);
-    assert_eq!(hub_node.get_outgoing_synapse_head(), 0);
-    assert_eq!(hub_node.get_outgoing_synapse_tail(), 0);
-    assert!(hub_node.get_incoming_synapse_head() > 0);
+    assert!(hub_node.get_outgoing_synapse_head().is_none());
+    assert!(hub_node.get_outgoing_synapse_tail().is_none());
+    assert!(hub_node.get_incoming_synapse_head().is_some());
 }

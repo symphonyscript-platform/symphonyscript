@@ -3,6 +3,7 @@ use std::sync::Arc;
 use synaptic_kernel::primitives::entry_store_config::EntryStoreConfig;
 use synaptic_kernel::primitives::entry_store_reader::EntryStoreReader;
 use synaptic_kernel::primitives::entry_store_writer::EntryStoreWriter;
+use synaptic_kernel::primitives::slot::SlotId;
 use synaptic_kernel::primitives::slot_allocator::SlotAllocator;
 use synaptic_kernel::primitives::triple_buffer_writer::TripleBufferWriter;
 use synaptic_kernel::primitives::types::AtomicBuffer;
@@ -11,13 +12,17 @@ fn create_mem(size: usize) -> AtomicBuffer {
     (0..size).map(|_| AtomicI32::new(0)).collect()
 }
 
-const TB_BUFFER_CAPACITY: usize = 1024;
-const TB_MEM_RESERVED: usize = 4 + TB_BUFFER_CAPACITY * 3;
+const TB_BUFFER_CAPACITY: u32 = 1024;
+const TB_MEM_RESERVED: usize = 4 + TB_BUFFER_CAPACITY as usize * 3;
 const DEFAULT_MEM_START_OFFSET: usize = TB_MEM_RESERVED + 8;
 const MEM_SIZE: usize = 16384;
 
 fn make_tb(mem: &AtomicBuffer) -> TripleBufferWriter {
     TripleBufferWriter::new(Arc::clone(mem), 0, TB_BUFFER_CAPACITY)
+}
+
+fn slot(value: u32) -> SlotId {
+    SlotId::new(value).unwrap()
 }
 
 // ============ Construction via writer.to_reader() ============
@@ -419,18 +424,18 @@ fn reader_struct_read_sees_value_written_via_tb_at_expected_offset() {
     );
 
     let _s1 = store.insert().unwrap();
-    let slot = store.insert().unwrap();
-    assert_eq!(slot, 2);
+    let slot_id = store.insert().unwrap();
+    assert_eq!(slot_id, slot(2));
 
-    let expected_abs = (slot - 1) * S + 3; // tb_start_offset=0
-    store.get(slot).core_write(3, 4242);
+    let expected_abs = (slot_id.to_usize() - 1) * S + 3; // tb_start_offset=0
+    store.get(slot_id).core_write(3, 4242);
 
     tb.publish();
     assert!(tb_reader.swap());
 
     let reader = store.to_reader();
     // EntryStoreReader API resolves the offset...
-    assert_eq!(reader.get(slot).core_read(3), 4242);
+    assert_eq!(reader.get(slot_id).core_read(3), 4242);
     // ...and the raw TripleBufferReader at the externally-computed absolute
     // offset sees the same value. If either side miscomputes the offset, these
     // two reads disagree.
@@ -459,7 +464,7 @@ fn reader_struct_reads_distinct_slots_at_distinct_tb_offsets() {
     let s1 = store.insert().unwrap();
     let s2 = store.insert().unwrap();
     let s3 = store.insert().unwrap();
-    assert_eq!((s1, s2, s3), (1, 2, 3));
+    assert_eq!((s1, s2, s3), (slot(1), slot(2), slot(3)));
 
     store.get(s1).core_write(0, 91);
     store.get(s2).core_write(0, 92);
@@ -484,7 +489,7 @@ fn reader_struct_reads_distinct_slots_at_distinct_tb_offsets() {
 #[test]
 fn reader_attr_read_sees_value_written_at_expected_mem_offset() {
     const A: usize = 16;
-    const CAP: usize = 4;
+    const CAP: u32 = 4;
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let store = EntryStoreWriter::new(
@@ -501,17 +506,17 @@ fn reader_attr_read_sees_value_written_at_expected_mem_offset() {
     );
 
     let _s1 = store.insert().unwrap();
-    let slot = store.insert().unwrap();
-    assert_eq!(slot, 2);
+    let slot_id = store.insert().unwrap();
+    assert_eq!(slot_id, slot(2));
 
-    store.get(slot).attr_write(5, 7777);
+    store.get(slot_id).attr_write(5, 7777);
 
-    let attr_base = DEFAULT_MEM_START_OFFSET + SlotAllocator::calculate_size_on_mem(CAP);
-    let expected_abs = attr_base + (slot - 1) * A + 5;
+    let attr_base = DEFAULT_MEM_START_OFFSET + SlotAllocator::calculate_size_on_mem(CAP as usize);
+    let expected_abs = attr_base + (slot_id.to_usize() - 1) * A + 5;
 
     let reader = store.to_reader();
     // Reader API resolves slot -> field-5.
-    assert_eq!(reader.get(slot).attr_read(5), 7777);
+    assert_eq!(reader.get(slot_id).attr_read(5), 7777);
     // Raw mem at the externally-computed absolute offset must agree.
     assert_eq!(mem[expected_abs].load(Ordering::Relaxed), 7777);
 }
@@ -519,7 +524,7 @@ fn reader_attr_read_sees_value_written_at_expected_mem_offset() {
 #[test]
 fn reader_attr_reads_distinct_slots_at_distinct_mem_offsets() {
     const A: usize = 16;
-    const CAP: usize = 4;
+    const CAP: u32 = 4;
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let store = EntryStoreWriter::new(
@@ -538,13 +543,13 @@ fn reader_attr_reads_distinct_slots_at_distinct_mem_offsets() {
     let s1 = store.insert().unwrap();
     let s2 = store.insert().unwrap();
     let s3 = store.insert().unwrap();
-    assert_eq!((s1, s2, s3), (1, 2, 3));
+    assert_eq!((s1, s2, s3), (slot(1), slot(2), slot(3)));
 
     store.get(s1).attr_write(0, 501);
     store.get(s2).attr_write(0, 502);
     store.get(s3).attr_write(0, 503);
 
-    let attr_base = DEFAULT_MEM_START_OFFSET + SlotAllocator::calculate_size_on_mem(CAP);
+    let attr_base = DEFAULT_MEM_START_OFFSET + SlotAllocator::calculate_size_on_mem(CAP as usize);
     let reader = store.to_reader();
 
     assert_eq!(reader.get(s1).attr_read(0), 501);
@@ -561,7 +566,7 @@ fn reader_attr_reads_distinct_slots_at_distinct_mem_offsets() {
 fn reader_layout_sizes_match_writer_layout() {
     const S: usize = 8;
     const A: usize = 16;
-    const CAP: usize = 4;
+    const CAP: u32 = 4;
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
     let store = EntryStoreWriter::new(
@@ -581,11 +586,14 @@ fn reader_layout_sizes_match_writer_layout() {
     // Mem plane span as predicted by the layout formula: allocator + attr plane.
     assert_eq!(
         reader.mem_end_offset() - reader.mem_start_offset(),
-        SlotAllocator::calculate_size_on_mem(CAP) + CAP * A,
+        SlotAllocator::calculate_size_on_mem(CAP as usize) + CAP as usize * A,
     );
 
     // TB plane span as predicted by the layout formula: capacity * STRUCT_STRIDE.
-    assert_eq!(reader.tb_end_offset() - reader.tb_start_offset(), CAP * S,);
+    assert_eq!(
+        reader.tb_end_offset() - reader.tb_start_offset(),
+        CAP as usize * S,
+    );
 }
 
 // ============ META_STRIDE > 0 ============
@@ -603,7 +611,7 @@ fn make_store_cma(
     core_stride: usize,
     meta_stride: usize,
     attr_stride: usize,
-    capacity: usize,
+    capacity: u32,
 ) -> (AtomicBuffer, TripleBufferWriter, EntryStoreWriter) {
     let mem = create_mem(MEM_SIZE);
     let tb = make_tb(&mem);
@@ -673,7 +681,7 @@ fn meta_reader_calculate_size_on_tb_is_capacity_times_core_plus_meta() {
     );
 
     // Reader and writer formulas must agree across several combinations.
-    for cap in [1usize, 4, 16, 32] {
+    for cap in [1u32, 4, 16, 32] {
         assert_eq!(
             EntryStoreReader::calculate_size_on_tb(&EntryStoreConfig {
                 core_stride: 4,
@@ -812,13 +820,13 @@ fn core_meta_roundtrip_with_large_strides() {
     // CORE=64, META=64, capacity=4 => 4 * 128 = 512 <= TB_BUFFER_CAPACITY (1024).
     const C: usize = 64;
     const M: usize = 64;
-    const CAP: usize = 4;
+    const CAP: u32 = 4;
     let (_mem, tb, store) = make_store_cma(C, M, 16, CAP);
     let tb_reader = tb.to_reader();
 
     let s1 = store.insert().unwrap();
     let s2 = store.insert().unwrap();
-    assert_eq!((s1, s2), (1, 2));
+    assert_eq!((s1, s2), (slot(1), slot(2)));
 
     let mut c1 = [0i32; C];
     let mut m1 = [0i32; M];
@@ -867,7 +875,7 @@ fn reader_core_meta_sees_tb_at_expected_interleaved_offsets() {
     let s1 = store.insert().unwrap();
     let s2 = store.insert().unwrap();
     let s3 = store.insert().unwrap();
-    assert_eq!((s1, s2, s3), (1, 2, 3));
+    assert_eq!((s1, s2, s3), (slot(1), slot(2), slot(3)));
 
     store.get(s1).core_write_all(&[1, 2, 3, 4]);
     store.get(s1).meta_write_all(&[5, 6, 7, 8]);
@@ -889,13 +897,13 @@ fn reader_core_meta_sees_tb_at_expected_interleaved_offsets() {
     .iter()
     .enumerate()
     {
-        let slot = k + 1;
+        let slot_id = slot((k + 1) as u32);
         let mut cr = [0i32; C];
         let mut mr = [0i32; M];
-        reader.get(slot).core_read_all(&mut cr);
-        reader.get(slot).meta_read_all(&mut mr);
-        assert_eq!(cr, *core_exp, "reader core slot {}", slot);
-        assert_eq!(mr, *meta_exp, "reader meta slot {}", slot);
+        reader.get(slot_id).core_read_all(&mut cr);
+        reader.get(slot_id).meta_read_all(&mut mr);
+        assert_eq!(cr, *core_exp, "reader core slot {}", slot_id);
+        assert_eq!(mr, *meta_exp, "reader meta slot {}", slot_id);
 
         // Raw TripleBufferReader at externally-computed absolute offsets.
         let start = k * (C + M); // tb_start_offset = 0
@@ -904,7 +912,7 @@ fn reader_core_meta_sees_tb_at_expected_interleaved_offsets() {
                 tb_reader.read(start + i),
                 core_exp[i],
                 "tb core slot {} [{}]",
-                slot,
+                slot_id,
                 i
             );
         }
@@ -913,7 +921,7 @@ fn reader_core_meta_sees_tb_at_expected_interleaved_offsets() {
                 tb_reader.read(start + C + j),
                 meta_exp[j],
                 "tb meta slot {} [{}]",
-                slot,
+                slot_id,
                 j
             );
         }
@@ -929,7 +937,7 @@ fn reader_core_meta_distinct_slots_do_not_overlap() {
 
     let s1 = store.insert().unwrap();
     let s2 = store.insert().unwrap();
-    assert_eq!((s1, s2), (1, 2));
+    assert_eq!((s1, s2), (slot(1), slot(2)));
 
     // Write only slot 1. Slot 2's core+meta zone must remain zero.
     store.get(s1).core_write_all(&[0xAA_AA_AA_AAu32 as i32; C]);
@@ -971,5 +979,5 @@ fn reader_meta_read_at_stride_panics() {
 
     let reader = store.to_reader();
     // One past the last valid meta offset.
-    let _ = reader.get(1).meta_read(M);
+    let _ = reader.get(slot(1)).meta_read(M);
 }

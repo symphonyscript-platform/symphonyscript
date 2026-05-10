@@ -7,11 +7,11 @@ use synaptic_kernel::primitives::triple_buffer_writer_registry::TripleBufferWrit
 use synaptic_kernel::primitives::types::AtomicBuffer;
 
 /// Default TB in the registry must have strictly positive `buffer_capacity` (`TripleBufferWriter` invariant).
-const DEFAULT_TB_CAP: usize = 1;
+const DEFAULT_TB_CAP: u32 = 1;
 
 /// MEM footprint of the default triple buffer in `TripleBufferWriterRegistry` (before user TBs).
 fn default_tb_mem() -> usize {
-    TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP)
+    TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP as usize)
 }
 
 fn create_mem(size: usize) -> AtomicBuffer {
@@ -280,10 +280,10 @@ fn get_arbitrary_permutation_no_leakage() {
 #[test]
 fn calculate_size_on_mem_single_def() {
     let defs = [def(0, 7)];
-    let size = TripleBufferWriterRegistry::<1>::calculate_size_on_mem(DEFAULT_TB_CAP, &defs);
+    let size = TripleBufferWriterRegistry::<1>::calculate_size_on_mem(DEFAULT_TB_CAP as usize, &defs);
     assert_eq!(
         size,
-        TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP)
+        TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP as usize)
             + TripleBufferWriter::calculate_size_on_mem(7)
     );
 }
@@ -291,20 +291,20 @@ fn calculate_size_on_mem_single_def() {
 #[test]
 fn calculate_size_on_mem_n_defs_uniform_capacity() {
     let defs = [def(0, 4), def(1, 4), def(2, 4)];
-    let size = TripleBufferWriterRegistry::<3>::calculate_size_on_mem(DEFAULT_TB_CAP, &defs);
+    let size = TripleBufferWriterRegistry::<3>::calculate_size_on_mem(DEFAULT_TB_CAP as usize, &defs);
     assert_eq!(
         size,
-        TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP) + 3 * (4 + 4 * 3)
+        TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP as usize) + 3 * (4 + 4 * 3)
     );
 }
 
 #[test]
 fn calculate_size_on_mem_n_defs_varying_capacity() {
     let defs = [def(0, 10), def(1, 50), def(2, 8)];
-    let size = TripleBufferWriterRegistry::<3>::calculate_size_on_mem(DEFAULT_TB_CAP, &defs);
+    let size = TripleBufferWriterRegistry::<3>::calculate_size_on_mem(DEFAULT_TB_CAP as usize, &defs);
     assert_eq!(
         size,
-        TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP) + (4 + 30) + (4 + 150) + (4 + 24)
+        TripleBufferWriter::calculate_size_on_mem(DEFAULT_TB_CAP as usize) + (4 + 30) + (4 + 150) + (4 + 24)
     );
 }
 
@@ -312,8 +312,8 @@ fn calculate_size_on_mem_n_defs_varying_capacity() {
 fn calculate_size_on_mem_takes_reference() {
     // Verify we can call it with a borrow and defs stays usable afterwards.
     let defs = [def(0, 4), def(1, 8)];
-    let size1 = TripleBufferWriterRegistry::<2>::calculate_size_on_mem(DEFAULT_TB_CAP, &defs);
-    let size2 = TripleBufferWriterRegistry::<2>::calculate_size_on_mem(DEFAULT_TB_CAP, &defs);
+    let size1 = TripleBufferWriterRegistry::<2>::calculate_size_on_mem(DEFAULT_TB_CAP as usize, &defs);
+    let size2 = TripleBufferWriterRegistry::<2>::calculate_size_on_mem(DEFAULT_TB_CAP as usize, &defs);
     assert_eq!(size1, size2);
     // defs is still usable:
     assert_eq!(defs[0].buffer_capacity, 4);
@@ -329,7 +329,7 @@ fn mem_offsets_at_zero_start() {
     assert_eq!(reg.mem_start_offset(), 0);
     assert_eq!(
         reg.mem_end_offset(),
-        TripleBufferWriterRegistry::<2>::calculate_size_on_mem(DEFAULT_TB_CAP, &defs)
+        TripleBufferWriterRegistry::<2>::calculate_size_on_mem(DEFAULT_TB_CAP as usize, &defs)
     );
 }
 
@@ -342,7 +342,7 @@ fn mem_offsets_at_nonzero_start() {
     assert_eq!(reg.mem_start_offset(), start);
     assert_eq!(
         reg.mem_end_offset(),
-        start + TripleBufferWriterRegistry::<3>::calculate_size_on_mem(DEFAULT_TB_CAP, &defs)
+        start + TripleBufferWriterRegistry::<3>::calculate_size_on_mem(DEFAULT_TB_CAP as usize, &defs)
     );
 }
 
