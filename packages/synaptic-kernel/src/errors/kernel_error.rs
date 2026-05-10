@@ -3,4 +3,5 @@ pub enum KernelError {
     MemoryLimitExceeded,
     CapacityExhausted,
     InsufficientCapacity,
+    SchemaMismatch,
 }

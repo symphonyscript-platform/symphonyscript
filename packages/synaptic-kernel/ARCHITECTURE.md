@@ -220,13 +220,13 @@ The kernel provides two orthogonal organizing structures over the same node pool
 
 Users build whatever shape they need with these two primitives:
 
-| Topology | How |
-|---|---|
-| Single linear sequence | One sub-chain via `insert_node` then `insert_node_after`. No synapses. |
-| Forest of sub-chains | Multiple `insert_node` calls; extend each with `insert_node_after`. Optional synapses to connect them. |
-| Pure synaptic graph | Each node a singleton (no chain links). Use `connect` to wire them. |
-| SymphonyScript clip graph | Each clip = one sub-chain. Clip-to-clip connections = synapses between clip-head nodes. |
-| Singleton + adjacency lookup | Single sub-chain plus cross-references via synapses between non-adjacent nodes. |
+| Topology                     | How                                                                                                    |
+|------------------------------|--------------------------------------------------------------------------------------------------------|
+| Single linear sequence       | One sub-chain via `insert_node` then `insert_node_after`. No synapses.                                 |
+| Forest of sub-chains         | Multiple `insert_node` calls; extend each with `insert_node_after`. Optional synapses to connect them. |
+| Pure synaptic graph          | Each node a singleton (no chain links). Use `connect` to wire them.                                    |
+| SymphonyScript clip graph    | Each clip = one sub-chain. Clip-to-clip connections = synapses between clip-head nodes.                |
+| Singleton + adjacency lookup | Single sub-chain plus cross-references via synapses between non-adjacent nodes.                        |
 
 The kernel is indifferent. Reachability, "where to start," cycle detection, traversal order, component count — all
 domain concerns owned by the consumer.
@@ -329,15 +329,17 @@ epoch generation keeps the entire memory layout safe across `grow()`.
 
 1. Validate that every dimension in `new_config` is `>= current` (capacities, mem_metadata_size, all TB capacities, all
    store capacities, all LUT sizes). Return `InsufficientCapacity` otherwise.
-2. Allocate a new `AtomicBuffer` sized for the new config; stamp the magic and version headers.
-3. `Epoch::new` on the new buffer.
-4. `Epoch::copy_from(old)` — element-wise atomic copy of mem_metadata, TB metadata regions, network MEM+TB, all entry
+2. All schema fields (strides, tb_id assignments) must match between old and new config; only capacities may grow.
+   Schema mismatch returns KernelError::SchemaMismatch; capacity shrinkage returns KernelError::InsufficientCapacity.
+3. Allocate a new `AtomicBuffer` sized for the new config; stamp the magic and version headers.
+4. `Epoch::new` on the new buffer.
+5. `Epoch::copy_from(old)` — element-wise atomic copy of mem_metadata, TB metadata regions, network MEM+TB, all entry
    stores, all LUTs.
-5. `EpochMirror::bind` on the new epoch.
-6. `ControlPlane::swap_epoch(new_mirror)` atomically swaps the `AtomicPtr` and increments writer_generation. Returns the
+6. `EpochMirror::bind` on the new epoch.
+7. `ControlPlane::swap_epoch(new_mirror)` atomically swaps the `AtomicPtr` and increments writer_generation. Returns the
    old mirror with its retirement generation.
-7. Push `(old_mirror, gen)` onto `readers_pending_deletion`.
-8. Subsequent `publish()` calls drain `readers_pending_deletion` once `reader_ack_generation` has caught up.
+8. Push `(old_mirror, gen)` onto `readers_pending_deletion`.
+9. Subsequent `publish()` calls drain `readers_pending_deletion` once `reader_ack_generation` has caught up.
 
 The old `AtomicBuffer` is held only via `Arc` clones inside the old `Epoch`/`EpochMirror`. Once the mirror is dropped
 from the deletion queue, the `Arc` count drops to zero and the buffer is freed.

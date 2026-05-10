@@ -5,12 +5,12 @@ use crate::epoch_mirror::EpochMirror;
 use crate::errors::kernel_error::KernelError;
 use crate::errors::slot_allocator_error::SlotAllocatorError;
 use crate::kernel_config::KernelConfig;
-use crate::primitives::entry_store_def::EntryStoreId;
+use crate::primitives::entry_store_def::{EntryStoreDef, EntryStoreId};
 use crate::primitives::entry_store_writer::EntryStoreWriter;
-use crate::primitives::lut_def::LutId;
+use crate::primitives::lut_def::{LutDef, LutId};
 use crate::primitives::lut_writer::LutWriter;
 use crate::primitives::tb_writer::TbWriter;
-use crate::primitives::triple_buffer_def::TripleBufferId;
+use crate::primitives::triple_buffer_def::{TripleBufferDef, TripleBufferId};
 use crate::primitives::types::AtomicBuffer;
 use crate::serialized_kernel::SerializedKernel;
 use crate::topology::network::synapse_handle::SynapseView;
@@ -349,51 +349,7 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
         &mut self,
         config: KernelConfig<TB_COUNT, STORE_COUNT, LUT_COUNT>,
     ) -> Result<(), KernelError> {
-        if config.network_config.node_capacity < self.node_capacity()
-            || config.network_config.synapse_capacity < self.synapse_capacity()
-            || config.mem_metadata_size < self.config.mem_metadata_size
-        {
-            return Err(KernelError::InsufficientCapacity);
-        }
-
-        for i in 0..self.config.tb_defs.len() {
-            let old_def = &self.config.tb_defs[i];
-            let new_def = &config
-                .tb_defs
-                .iter()
-                .find(|d| d.id == old_def.id)
-                .ok_or(KernelError::InsufficientCapacity)?;
-
-            if new_def.buffer_capacity < old_def.buffer_capacity {
-                return Err(KernelError::InsufficientCapacity);
-            }
-        }
-
-        for i in 0..self.config.store_defs.len() {
-            let old_def = &self.config.store_defs[i];
-            let new_def = &config
-                .store_defs
-                .iter()
-                .find(|d| d.id == old_def.id)
-                .ok_or(KernelError::InsufficientCapacity)?;
-
-            if new_def.config.capacity < old_def.config.capacity {
-                return Err(KernelError::InsufficientCapacity);
-            }
-        }
-
-        for i in 0..self.config.lut_defs.len() {
-            let old_def = &self.config.lut_defs[i];
-            let new_def = &config
-                .lut_defs
-                .iter()
-                .find(|d| d.id == old_def.id)
-                .ok_or(KernelError::InsufficientCapacity)?;
-
-            if new_def.size < old_def.size {
-                return Err(KernelError::InsufficientCapacity);
-            }
-        }
+        self.validate_config_compatibility(&config)?;
 
         self.mem = Self::create_mem_stamp(Self::calculate_size_on_mem(&config));
         let new_writer = Epoch::new(Arc::clone(&self.mem), config.clone(), Self::HEADERS_SIZE);
@@ -406,6 +362,104 @@ impl<const TB_COUNT: usize, const STORE_COUNT: usize, const LUT_COUNT: usize>
         self.active_epoch = new_writer;
         let old_reader = self.control_plane.swap_epoch(new_reader);
         self.readers_pending_deletion.push_back(old_reader);
+
+        Ok(())
+    }
+
+    fn validate_config_compatibility(
+        &self,
+        config: &KernelConfig<TB_COUNT, STORE_COUNT, LUT_COUNT>,
+    ) -> Result<(), KernelError> {
+        let new_nc = &config.network_config;
+        let old_nc = &self.config.network_config;
+
+        if new_nc.node_meta_stride != old_nc.node_meta_stride
+            || new_nc.node_attr_stride != old_nc.node_attr_stride
+            || new_nc.synapse_meta_stride != old_nc.synapse_meta_stride
+            || new_nc.synapse_attr_stride != old_nc.synapse_attr_stride
+        {
+            return Err(KernelError::SchemaMismatch);
+        }
+
+        if config.network_config.node_capacity < self.node_capacity()
+            || config.network_config.synapse_capacity < self.synapse_capacity()
+            || config.mem_metadata_size < self.config.mem_metadata_size
+        {
+            return Err(KernelError::InsufficientCapacity);
+        }
+
+        self.validate_store_defs_compatibility(&config.store_defs)?;
+        self.validate_tb_defs_compatibility(&config.tb_defs)?;
+        self.validate_lut_defs_compatibility(&config.lut_defs)?;
+
+        Ok(())
+    }
+
+    fn validate_tb_defs_compatibility(
+        &self,
+        tb_defs: &[TripleBufferDef; TB_COUNT],
+    ) -> Result<(), KernelError> {
+        for i in 0..self.config.tb_defs.len() {
+            let old_def = &self.config.tb_defs[i];
+            let new_def = tb_defs
+                .iter()
+                .find(|d| d.id == old_def.id)
+                .ok_or(KernelError::SchemaMismatch)?;
+
+            if new_def.buffer_capacity < old_def.buffer_capacity {
+                return Err(KernelError::InsufficientCapacity);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_store_defs_compatibility(
+        &self,
+        store_defs: &[EntryStoreDef; STORE_COUNT],
+    ) -> Result<(), KernelError> {
+        for i in 0..self.config.store_defs.len() {
+            let old_def = &self.config.store_defs[i];
+            let new_def = store_defs
+                .iter()
+                .find(|d| d.id == old_def.id)
+                .ok_or(KernelError::SchemaMismatch)?;
+
+            if new_def.tb_id != old_def.tb_id
+                || new_def.config.core_stride != old_def.config.core_stride
+                || new_def.config.meta_stride != old_def.config.meta_stride
+                || new_def.config.attr_stride != old_def.config.attr_stride
+            {
+                return Err(KernelError::SchemaMismatch);
+            }
+
+            if new_def.config.capacity < old_def.config.capacity {
+                return Err(KernelError::InsufficientCapacity);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_lut_defs_compatibility(
+        &self,
+        lut_defs: &[LutDef; LUT_COUNT],
+    ) -> Result<(), KernelError> {
+        for i in 0..self.config.lut_defs.len() {
+            let old_def = &self.config.lut_defs[i];
+            let new_def = lut_defs
+                .iter()
+                .find(|d| d.id == old_def.id)
+                .ok_or(KernelError::SchemaMismatch)?;
+
+            if new_def.tb_id != old_def.tb_id {
+                return Err(KernelError::SchemaMismatch);
+            }
+
+            if new_def.size < old_def.size {
+                return Err(KernelError::InsufficientCapacity);
+            }
+        }
 
         Ok(())
     }
