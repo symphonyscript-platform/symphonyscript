@@ -416,7 +416,7 @@ fn deferred_free_two_cycle_delay() {
     assert!(kernel.insert_node(99).is_ok());
 }
 
-// ============ Capacity-saturation cycling (REMEDIATION T5) ============
+// ============ Capacity-saturation cycling ============
 //
 // The full saturation lifecycle: alloc to capacity, defer-free every
 // allocation, drive the two-cycle reclaim, alloc to capacity again. This
@@ -621,7 +621,7 @@ fn grow_rejects_smaller_capacity() {
     assert!(matches!(result, Err(KernelError::InsufficientCapacity)));
 }
 
-// ============ Kind boundary tests (REMEDIATION T6) ============
+// ============ Kind boundary tests ============
 //
 // `kind` lives in the high 8 bits of `core[0]`; the low 24 bits are
 // reserved for future internal flags. `set_kind` must round-trip 0..=255

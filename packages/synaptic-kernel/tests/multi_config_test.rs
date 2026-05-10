@@ -1,4 +1,4 @@
-//! Multi-config (non-`<1, 1, 1>`) registry tests covering REMEDIATION T2.
+//! Multi-config (non-`<1, 1, 1>`) registry tests.
 //!
 //! The `EntryStoreWriterRegistry::create` cursor math stacks stores within
 //! a single triple buffer: when N stores share TB X, store K's tb_start is

@@ -794,7 +794,7 @@ fn store_defs_preserved_in_serialized_config() {
 }
 
 // =========================================================
-// PHASE 14: Bind-mid-publish round-trip (REMEDIATION T4)
+// PHASE 14: Bind-mid-publish round-trip
 // =========================================================
 //
 // Producer publishes (writer_index advanced, NEW_DATA set on the default

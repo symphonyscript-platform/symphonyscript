@@ -388,12 +388,11 @@ fn grow_with_no_changes_succeeds() {
 }
 
 // =========================================================
-// CAPACITY SHRINK (T7) — InsufficientCapacity
+// CAPACITY SHRINK — InsufficientCapacity
 // =========================================================
 //
-// These extend coverage from REMEDIATION.md item T7. Each one shrinks
-// exactly one capacity field, with every schema field left untouched, and
-// asserts `Err(KernelError::InsufficientCapacity)`.
+// Each one shrinks exactly one capacity field, with every schema field
+// left untouched, and asserts `Err(KernelError::InsufficientCapacity)`.
 
 #[test]
 fn grow_rejects_shrunk_mem_metadata_size() {
