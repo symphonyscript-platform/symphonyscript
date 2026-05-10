@@ -3,7 +3,7 @@
 ## Purpose
 
 A wait-free, lock-free SPSC (single-producer / single-consumer) graph kernel. One thread mutates a graph of nodes and
-synapses; another thread traverses a consistent snapshot. Backing memory is a single flat `Vec<AtomicI32>`, addressed
+synapses; another thread traverses a consistent snapshot. Backing memory is a single flat `Arc<[AtomicI32]>`, addressed
 entirely by integer offsets — no boxed nodes, no per-entity allocation. The whole kernel is bind-able onto pre-existing
 memory and serializable to a flat `Vec<i32>`.
 
@@ -19,7 +19,8 @@ additional triple buffers, entry stores, and LUTs alongside the kernel-internal 
 SymphonyScript uses the kernel to back its reactive music graph. Domain → kernel mapping:
 
 - **Clip** (a sequence of musical events) → a sub-chain of nodes linked by `next_ptr` / `prev_ptr`. The clip's head
-  has `prev_ptr=0`; its tail has `next_ptr=0`. Multiple clips coexist as disjoint sub-chains in the same node store.
+  has `prev_ptr` of `None`; its tail has `next_ptr` of `None`. Multiple clips coexist as disjoint sub-chains in the
+  same node store.
 - **Clip-to-clip connection** → a kernel synapse from one clip's head node to another clip's head node. Synapse
   attributes carry tempo scaling, velocity weight, timing offset.
 - **Synapse `kind`** (top 8 bits of synapse `core[0]`) → SymphonyScript uses this to distinguish *synchronous*
@@ -141,7 +142,36 @@ is at most one frame old; consumer never reads a torn frame.
 
 ## Slot allocation and deferred deletion
 
-Topology entities (nodes, synapses, entry-store entries) live at fixed slot indices, 1-based. Slot 0 means "undefined."
+Topology entities (nodes, synapses, entry-store entries) live at fixed slot indices, 1-based.
+
+### Slot identity — `SlotId`
+
+The public API uses `SlotId(NonZeroU32)` for every slot reference. The wrapped `NonZeroU32` makes "slot 0" literally
+unrepresentable at the type level — the compiler enforces that any `SlotId` you hold is a real slot. The Option
+sentinel for "no slot here" is `None`, naturally niche-optimized: `Option<SlotId>` is one `u32` (4 bytes), with `0`
+encoding `None` and any non-zero value encoding `Some(SlotId)`.
+
+Wire format remains i32 in the AtomicBuffer cells. Conversion is a bit-cast at the API boundary
+(`SlotId::from_i32` on read, `SlotId::option_to_i32` on write). Neither direction loses information.
+
+API typing of slot fields is asymmetric, matching what each field can legitimately hold:
+
+| Field | Type | Why |
+|---|---|---|
+| Node `next_ptr`, `prev_ptr` | `Option<SlotId>` | None = end of sub-chain (real, valid state) |
+| Node `outgoing_synapse_head` / `tail`, `incoming_synapse_head` / `tail` | `Option<SlotId>` | None = node has no synapses on that side |
+| Synapse `outgoing_next_ptr` / `prev_ptr`, `incoming_next_ptr` / `prev_ptr` | `Option<SlotId>` | None = head/tail of node's synapse list |
+| Synapse `source_ptr`, `target_ptr` | `SlotId` | Active synapse always has both wired; reading 0 indicates corruption (the getter `.expect()`s) |
+
+The "always Some" fields use bare `SlotId` so callers don't write `.unwrap()` for an invariant the kernel already
+guarantees. The "may be None" fields use `Option<SlotId>` so the type signature reflects what the field can actually
+hold. The principle: return `Option<SlotId>` only where None is a meaningful, valid state.
+
+Capacity throughout the slot allocator and entry stores is bounded by `u32::MAX` (`SlotId`'s natural range).
+Constructors take `capacity: u32` so the bound is enforced at compile time. Stored internally as `usize` for
+arithmetic and indexing; exposed as `usize` via `capacity()` accessors to match Rust stdlib idioms.
+
+### Allocator structure
 
 `SlotAllocator` composes three primitives:
 
@@ -153,11 +183,20 @@ Topology entities (nodes, synapses, entry-store entries) live at fixed slot indi
 Lifecycle:
 
 ```
-free → alloc() → active → defer_free() → deferred → publish() → free
+free → alloc() → active → defer_free() → deferred
+     → publish()           (writer stages the generation)
+     → consumer ack        (via swap() / acquire_mirror() on the EpochConsumer)
+     → publish()           (writer drains acknowledged entries)
+     → free
 ```
 
-`defer_free(slot)` does NOT return the slot to the free list. It pushes `(slot, current_writer_generation)` to the
-staging buffer and sets the staging bit. The slot is unreachable for new allocations until two events happen:
+A single `publish()` after `defer_free()` does **not** reclaim the slot. Reclamation requires the consumer to have
+acknowledged the generation in which the slot was deferred — which is bracketed by *two* publish calls with a
+consumer ack in between. Tests and downstream code that need slots actually returned to the free pool must drive
+this full cycle, not just call `publish()` once.
+
+`defer_free(slot)` itself pushes `(slot, current_writer_generation)` to the staging buffer and sets the staging bit.
+The slot is unreachable for new allocations until:
 
 1. `StagingBufferWriter::publish()` advances `writer_generation`.
 2. The consumer's `StagingBufferReader::ack()` (called from `EpochMirror::swap()` via `NetworkReader::ack_generation()`)
@@ -170,6 +209,30 @@ given back to `alloc()` until the consumer has acknowledged a generation strictl
 was retired.
 
 Generations are i32 with wrapping arithmetic (`wrapping_sub`).
+
+### Counts include deferred slots
+
+`SlotAllocator::alloc_count()`, `EntryStoreWriter::len()`, `NodeStoreWriter::len()`, and the kernel-level
+`Kernel::node_count()` / `Kernel::synapse_count()` all reflect the slot allocator's notion of "not currently in the
+free list." That includes **slots in the deferred state**. After `remove_node(slot)` returns, the slot is deferred
+but still counts. To assert "all slots are actually free again," drive a full publish → ack → publish reclamation
+cycle and then check the count.
+
+For "is this specific slot safe to read right now?" use `is_active(slot)` (or `is_allocated(slot)` for the broader
+"has been handed out and not yet reclaimed" question). Counts answer a different question — accounting, not liveness.
+
+### Staging buffer telemetry — `deferred_count()`
+
+`SlotAllocator::deferred_count()` returns the number of slots currently sitting in the staging buffer waiting for
+the consumer to acknowledge their retirement generation. Under steady state with a healthy consumer, this number
+stays low (slots flow through deferred quickly). Under a stalled or slow consumer, it climbs — and continues climbing
+until the consumer catches up via `acquire_mirror()` / `swap()`.
+
+Use `deferred_count()` as a health metric. A persistently rising deferred count signals the consumer thread is
+falling behind, even before any error surfaces. The `RingBufferError::Full` failure path on `defer_free` is
+structurally unreachable under correct usage (proven by the bound `deferred_count ≤ allocated_count ≤ capacity`),
+so by the time the producer would fail, things are already deeply wrong. Watch the metric instead of waiting for
+the error.
 
 ## Entry store — the universal slotted container
 
@@ -191,12 +254,28 @@ Per-entry sizing on disk:
 - MEM: `SlotAllocator::calculate_size_on_mem(capacity) + capacity * attr_stride`
 - TB:  `capacity * (core_stride + meta_stride)`
 
-Random-access reads from arbitrary slot indices are unsafe on the consumer side. Consumers must enter the graph at a
-slot they know is currently live (typically a user-designated entry slot stored in `mem_metadata`) and reach all
-other slots by traversing chain links and synapse adjacency from there. Reading an arbitrary slot — including one
-the consumer cached across cycles — risks landing on a freed-and-reallocated slot whose content now belongs to a
-different entity. The slot allocator's deferred-free protocol guarantees safety only for slots reached through the
-current cycle's traversal.
+### Consumer-side slot-read contract
+
+Reading slots from the consumer side has three cases. Two are safe; one is not.
+
+1. **Slot reached by traversal from a known-live entry slot, within the current cycle.** Safe. The consumer enters
+   the graph at a slot it trusts (typically a user-designated root stored in `mem_metadata`) and walks chain links
+   and synapse adjacency from there. Slots reached this way during one cycle (between two `swap()` calls) are stable
+   for the remainder of that cycle.
+
+2. **Slot whose liveness the producer-side code can prove locally.** Safe. In single-threaded test code that has
+   *just allocated* a slot and has not called `remove_node` / `disconnect` / `grow` in between, no reclamation
+   event has occurred — so the slot cannot have been reallocated to a different entity. Reading it directly via
+   `get_node(slot)` is safe even though no traversal happened. This is the common pattern in unit tests.
+
+3. **Slot cached across `swap()` calls, or any slot whose liveness cannot be locally proven.** **Unsafe.** After a
+   `swap()`, the consumer has acknowledged a generation. The producer is then permitted to reclaim deferred slots
+   and reallocate them. A slot index the consumer cached in cycle N may, by cycle N+1, refer to a different entity.
+   The kernel cannot detect this — the read returns whatever bytes are now at that slot. Re-traverse from the entry
+   slot every cycle.
+
+The slot allocator's deferred-free protocol guarantees safety for cases (1) and (2). It does not protect (3); that's
+caller discipline.
 
 ## Network — graph topology
 
@@ -233,29 +312,39 @@ domain concerns owned by the consumer.
 
 ### Node core layout (8 i32 per slot)
 
+Wire format (what's stored in the AtomicBuffer cells):
+
 ```
 0: kind (high 8 bits)  | reserved flags (low 24 bits)
-1: next_ptr            (chain)
-2: prev_ptr            (chain)
-3: outgoing_synapse_head
-4: outgoing_synapse_tail
-5: incoming_synapse_head
-6: incoming_synapse_tail
+1: next_ptr            (chain)            — 0 wire = None at API
+2: prev_ptr            (chain)            — 0 wire = None at API
+3: outgoing_synapse_head                  — 0 wire = None at API
+4: outgoing_synapse_tail                  — 0 wire = None at API
+5: incoming_synapse_head                  — 0 wire = None at API
+6: incoming_synapse_tail                  — 0 wire = None at API
 7: reserved
 ```
+
+API typing: every slot field above is `Option<SlotId>`. `kind` is `i32` (top 8 bits, range `[0, 256)`).
 
 ### Synapse core layout (8 i32 per slot)
 
+Wire format:
+
 ```
 0: kind (high 8 bits)  | reserved flags (low 24 bits)
-1: source_ptr          (node slot)
-2: target_ptr          (node slot)
-3: outgoing_next_ptr   (in source's outgoing list)
-4: outgoing_prev_ptr
-5: incoming_next_ptr   (in target's incoming list)
-6: incoming_prev_ptr
+1: source_ptr          (node slot)        — never 0 on an active synapse
+2: target_ptr          (node slot)        — never 0 on an active synapse
+3: outgoing_next_ptr   (in source's outgoing list)  — 0 wire = None at API
+4: outgoing_prev_ptr                      — 0 wire = None at API
+5: incoming_next_ptr   (in target's incoming list)  — 0 wire = None at API
+6: incoming_prev_ptr                      — 0 wire = None at API
 7: reserved
 ```
+
+API typing: `source_ptr` and `target_ptr` return bare `SlotId` (the getter `.expect()`s — reading 0 indicates a
+mid-construction or corrupted synapse). The four adjacency fields return `Option<SlotId>` (None = head/tail of
+the per-node synapse list). `kind` is `i32`.
 
 ### Topology invariants
 
@@ -344,6 +433,18 @@ epoch generation keeps the entire memory layout safe across `grow()`.
 The old `AtomicBuffer` is held only via `Arc` clones inside the old `Epoch`/`EpochMirror`. Once the mirror is dropped
 from the deletion queue, the `Arc` count drops to zero and the buffer is freed.
 
+### `grow()` is monotonic — there is no `shrink()`
+
+Every dimension in the new config must be `>=` the old: `node_capacity`, `synapse_capacity`, `mem_metadata_size`,
+each per-TB `buffer_capacity`, each per-store `capacity`, each per-LUT `size`. Passing a smaller value for any of
+these returns `KernelError::InsufficientCapacity` and the kernel is unchanged. Schema fields (strides, `tb_id`
+assignments) must be identical between old and new — see step 2 above.
+
+This is intentional. `grow()` is an escape hatch for cases where the user under-sized the initial config; it is not
+a steady-state resize mechanism. There is no plan to add `shrink()`. Long-running kernels with churn accumulate
+capacity they paid for once and cannot release. Size the initial config with this in mind: pick a capacity that
+covers your steady-state working set, and leave headroom only as much as you might need on a single grow event.
+
 ## Const-generic registries
 
 `TripleBufferWriterRegistry<N>`, `EntryStoreWriterRegistry<TB_COUNT, STORE_COUNT>`,
@@ -383,6 +484,11 @@ These are not enforced by the type system; they are documented contracts. Violat
 - The `Arc<ControlPlane>` is the *only* object passed between threads. Producer drops its handle last.
 - The consumer must be fully quiesced before `Kernel` is dropped or `serialize()` is called. Drop unconditionally frees
   the deletion queue; serialize captures memory mid-flight.
+- In debug builds, `Kernel::drop` asserts `Arc::strong_count(&control_plane) == 1` and panics if any
+  `EpochConsumer` (or external `Arc<ControlPlane>` clone) is still alive. Release builds skip the check; the contract
+  still applies and violating it is undefined behavior. The recommended pattern is `consumer_thread.join()` before
+  `drop(kernel)`, or declare the consumer after the kernel so reverse-declaration drop order handles it
+  automatically.
 
 The atomic ordering choices:
 
@@ -417,7 +523,12 @@ ControlPlane.writer_generation     ← whole-epoch handoff (grow)
 - `RingBufferError::Full` from `defer_free` → staging buffer overflow. Means the producer is retiring slots faster than
   the consumer is acknowledging, and the staging buffer's capacity (= entry store capacity) was exceeded. Should not
   happen if entity count ≤ store capacity.
-- `KernelError::InsufficientCapacity` from `grow` → `new_config` shrinks something. `grow` is monotonic — only expansion
-  is supported.
+- `KernelError::InsufficientCapacity` from `grow` → some capacity dimension in `new_config` is smaller than the old
+  (`node_capacity`, `synapse_capacity`, `mem_metadata_size`, per-TB `buffer_capacity`, per-store `capacity`, or
+  per-LUT `size`). `grow` is monotonic — only expansion is supported.
+- `KernelError::SchemaMismatch` from `grow` → `new_config` differs from old in a non-capacity field: any
+  `NetworkConfig` stride (`node_meta_stride`, `node_attr_stride`, `synapse_meta_stride`, `synapse_attr_stride`); any
+  per-store `tb_id`, `core_stride`, `meta_stride`, or `attr_stride`; any per-LUT `tb_id`; or any TB / store / LUT
+  ID present in old but missing from new. Schema must match exactly between old and new; only capacities may grow.
 - Torn writes — if `serialize()` is called concurrently with consumer `swap()`, the snapshot may capture a triple buffer
   mid-rotation. The doc explicitly requires consumer quiescence before `serialize()` or drop.

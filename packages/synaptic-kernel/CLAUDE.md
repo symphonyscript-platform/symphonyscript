@@ -16,7 +16,10 @@
   Re-enter from the user-designated entry slot every cycle.
 
 - **Consumer must be quiesced before `Kernel` drop or `serialize()`.** Drop unconditionally frees the deferred-deletion
-  queue. Serialize captures memory mid-flight. Either while the consumer is active is undefined behavior.
+  queue. Serialize captures memory mid-flight. Either while the consumer is active is undefined behavior. In debug
+  builds, `Kernel::drop` asserts `Arc::strong_count(&control_plane) == 1` and panics on violation; release skips the
+  check. The recommended pattern is `consumer_thread.join()` before `drop(kernel)`, or declare the consumer after
+  the kernel so reverse-declaration drop order handles it.
 
 - **No allocation on the producer hot path.** Allocation is permitted only inside `Kernel::new`, `load_serialized`,
   `grow`, and the internal `Box`/`Box::from_raw` for mirror swap. Anywhere else, you've broken wait-freedom.
@@ -31,14 +34,19 @@
   the staging-buffer generation handshake, and the `ControlPlane` epoch handshake. If you reach for `SeqCst` on a
   payload read, you've misunderstood the protocol — surface the question first.
 
-- **Slot 0 is "undefined."** Slot APIs are 1-based throughout. Storing or comparing against 0 is the convention for "no
-  slot."
+- **Slots are typed as `SlotId(NonZeroU32)`.** Slot 0 is unrepresentable at the API layer — the type prevents it.
+  "No slot" is `None` in `Option<SlotId>`, niche-optimized to a 0 wire value. The wire format (i32 cells in
+  `AtomicBuffer`) still uses `0 = no slot`; conversion happens in `SlotId::from_i32` / `SlotId::option_to_i32` at
+  the API boundary. Slot APIs are 1-based.
 
 - **Producer thread / consumer thread separation is a contract, not enforced by types.** Every `*Writer` / `Epoch` /
   `Kernel` method is producer-only. Every `*Reader` / `EpochMirror` / `EpochConsumer` method is consumer-only. The
   `Arc<ControlPlane>` is the only legal cross-thread bridge.
 
-- **`grow()` is monotonic.** Every dimension in the new config must be `>= current`. There is no shrink path.
+- **`grow()` is monotonic and schema-preserving.** Every capacity dimension in the new config must be `>= current`
+  (returns `KernelError::InsufficientCapacity` otherwise). Every schema field — strides, `tb_id` assignments,
+  ID sets — must match exactly between old and new config (returns `KernelError::SchemaMismatch` otherwise).
+  There is no shrink path. Only capacities may grow.
 
 - **No domain concepts in the kernel.** The kernel is topology-agnostic. It does not know what a root, clip, group,
   component, or entry point is. Sub-chains and synaptic components are emergent from the link structure, not first-class
