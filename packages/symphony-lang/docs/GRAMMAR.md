@@ -1,6 +1,6 @@
 # Symphony Language — Formal Grammar
 
-**Status:** Draft v0.2. Authoritative source for the lexical and syntactic structure of the language. Semantics — name resolution, type inference, reactive propagation, evaluation order — are out of scope for this document and live in a separate semantics specification.
+**Status:** Draft v0.3. Authoritative source for the lexical and syntactic structure of the language. Semantics — name resolution, type inference, reactive propagation, evaluation order — are out of scope for this document and live in a separate semantics specification.
 
 ---
 
@@ -123,10 +123,10 @@ The contextual identifier `index` is **not** reserved; it has meaning only in mo
 ```
 IntLit       := IntPart IntSuffix?
 IntPart      := DecInt | HexInt | OctInt | BinInt
-DecInt       := DecDigit (DecDigit | '_')*
-HexInt       := '0x' HexDigit (HexDigit | '_')*
-OctInt       := '0o' OctDigit (OctDigit | '_')*
-BinInt       := '0b' BinDigit (BinDigit | '_')*
+DecInt       := DecDigit ('_'? DecDigit)*
+HexInt       := '0x' HexDigit ('_'? HexDigit)*
+OctInt       := '0o' OctDigit ('_'? OctDigit)*
+BinInt       := '0b' BinDigit ('_'? BinDigit)*
 
 DecDigit     := '0'..'9'
 HexDigit     := DecDigit | 'a'..'f' | 'A'..'F'
@@ -264,7 +264,7 @@ FlagChar     := "'" | '@' | '$' | '`' | '?' | '!' | '~' | '^' | '%' | '&'
 
 In placement context, a flag is a single-character modifier that aliases a boolean attribute of the surrounding type. Outside placement context, each character carries its primary meaning:
 
-- `'` is the character-literal delimiter
+- `'` is the character-literal delimiter (see §2.5.4 and §2.6.3 for disambiguation)
 - `@` is the annotation prefix
 - `?` is the postfix Try operator
 - `!` is the attribute-pipe negation prefix (`| !attr`); not used as an expression operator
@@ -292,6 +292,32 @@ The "no intervening whitespace" constraint distinguishes flags from operators un
 This rule is extensible: adding new operators that share characters with the flag set requires no lexer changes; the no-whitespace constraint continues to disambiguate.
 
 Each character in the flags-run is a separate flag and must alias a boolean `attr` declared on the type's trait closure. Flag-to-attr resolution is a semantic concern.
+
+#### 2.6.3 Disambiguating `'` — Flag vs Char-Literal Delimiter
+
+The apostrophe is both a flag character (§2.6.1) and the char-/byte-literal delimiter (§2.5.4). The lexer resolves this with a one-character lookback rule at the source level:
+
+> A `'` is the start of a `CharLit` **unless** the character immediately preceding it is an identifier-continuation character (`IdentCont`, per §2.4) with no intervening whitespace. When that adjacency holds, the `'` is treated as a flag character — the lexer does not attempt char-literal recognition.
+
+The rule captures every real case correctly:
+
+| Source              | Preceding char       | Verdict                      |
+| ------------------- | -------------------- | ---------------------------- |
+| `let c = 'a'`       | space (after `=`)    | char literal                 |
+| `xs.push('a')`      | `(`                  | char literal                 |
+| `match c: 'x': ...` | space (after `:`)    | char literal                 |
+| `G5'/4`             | `5` (IdentCont)      | flag `'` on `G5`             |
+| `Pin'! pwr`         | `n` (IdentCont)      | flag `'` (then flag `!`)     |
+| `is 'a'`            | space (after `is`)   | char literal                 |
+| start-of-line `'a'` | line start           | char literal                 |
+
+Consequence for byte literals: `b'a'` is recognized as a byte-literal token when the lexer encounters `b` followed immediately by `'`. The two-character starter `b'` is preferred over identifier-then-flag whenever `b` is itself not preceded by an identifier-continuation character (i.e., `b` is starting a fresh token). Examples:
+
+- `let v = b'a'` — `b` starts a fresh token (preceded by space). Byte literal recognized.
+- `Foo b'a'` — same.
+- `Foob'a'` — `Foob` is one identifier (the `b` is part of it); the trailing `'` is then adjacent to `b` ∈ IdentCont and parses as a flag, not a byte literal. To write a byte literal here, separate with whitespace: `Foo b'a'`.
+
+This lookback rule is local (one character of source), context-free, and adds no parser dependency. Char literals at every conventional position (after operators, parens, commas, whitespace, line starts) are recognized normally. Flags adjacent to type identifiers in placement context are recognized normally. The unambiguous middle case — `'` directly after a non-keyword identifier with no whitespace — routes to flag interpretation.
 
 ### 2.7 Tokens Summary
 
@@ -351,7 +377,7 @@ UseTail      := '::' UseGroup
               | '::' '*'
               | 'as' Ident
 
-UseGroup     := '{' UseGroupItem (',' UseGroupItem)* ','? '}'
+UseGroup     := '(' UseGroupItem (',' UseGroupItem)* ','? ')'
 UseGroupItem := PathSegment ('::' PathSegment)* UseTail?
               | '*'
 ```
@@ -360,10 +386,10 @@ Examples:
 
 ```
 use root::audio::synth::Oscillator
-use root::audio::synth::{Oscillator, Filter}
+use root::audio::synth::(Oscillator, Filter)
 use root::audio::synth::*
 use root::audio::Pin as MusicPin
-use root::core::{time, prior, Duration}
+use root::core::(time, prior, Duration)
 use self::sibling::Foo
 ```
 
@@ -412,7 +438,12 @@ ModifierLine := '>>' Ident ':' Expr NEWLINE
 Pub          := 'pub'
 ```
 
-The optional `ModifierTail` is sugar for read-side method composition, equivalent to wrapping the right-hand-side expression in chained `>>` calls. See §3.15.3 for desugaring.
+The `ModifierTail` desugaring depends on declaration kind:
+
+- For **`signal`**, the modifier chain splits the declaration into a hidden raw signal cell holding the assigned value plus a `derived` projection that applies the chain. Reads of the declared name return the projected value; runtime writes still target the raw cell. This preserves the writable surface while applying read-side transforms.
+- For **`derived`** and **`attr`**, the modifier chain is inline-rewritten into the right-hand-side expression: `derived x = expr >> a: 1 >> b: 2` is equivalent to `derived x = b(a(expr, 1), 2)`. No split is needed — these forms have no user-writable side to preserve.
+
+See §3.15.3 for the underlying `>>` mechanics.
 
 `signal` declarations always carry an initial value. `derived` declarations are read-only; the compiler rejects any attempt to assign to a `derived` binding (assignment forms in user code are limited; see §3.4.1).
 
@@ -600,7 +631,7 @@ ConnectionDecl := Pub? 'connection' Ident GenericParams? ConnectionBody
 
 ConnectionBody := NEWLINE INDENT ConnectionBodyItem+ DEDENT
 
-ConnectionBodyItem := Annotation* DocComment? (FromClause | ToClause | AttrDecl | FnDecl)
+ConnectionBodyItem := Annotation* DocComment? (FromClause | ToClause | AttrDecl | DerivedAttrDecl | FnDecl)
 
 FromClause   := 'from' ':' TypeExpr NEWLINE
 ToClause     := 'to'   ':' TypeExpr NEWLINE
@@ -618,6 +649,7 @@ connection Drives:
   to: Drivable
   attr enhanced_handling: bool
   attr aggressiveness: f32 = 0.5
+  derived effective_speed: f32 = to.top_speed * (from.expertise_level as f32 / 10.0)
 
 connection Contains[T]:
   from: Container
@@ -688,7 +720,7 @@ Inside `Component chip_b`'s body:
 - `Pin out1` is a `PlacementForm` declaring a named part of type `Pin`.
 - The two `WiresTo/...` lines under `Pin out1` are `PlacementForm`s declaring connections originating from `out1`.
 - `Pin in1` is another part.
-- `Pin'! pwr | direction: In` is a part of type `Pin` with two flags `'` and `!`, named `pwr`, with attribute `direction` set to `In`.
+- `Pin'! pwr | direction: In` is a part of type `Pin` with two flags `'` and `!`, named `pwr`, with attribute `direction` set to `In`. The `'` adjacent to `Pin` is recognized as a flag (not a char-literal start) per the lookback rule in §2.6.3.
 
 #### 3.10.3 Flag Recognition in Placement
 
@@ -709,7 +741,7 @@ SelfParam    := 'self'
 ReturnType   := '->' TypeExpr
 
 WhereClause  := 'where' WhereBound (',' WhereBound)*
-WhereBound   := TypeExpr ':' TypeExpr ('+' TypeExpr)*
+WhereBound   := TypeExpr ':' TypeExpr ('&' TypeExpr)*
 
 FnBody       := ':' BlockBody
               | ':' Expr NEWLINE       -- single-expression body
@@ -728,7 +760,7 @@ GenericParams   := '[' GenericParam (',' GenericParam)* ','? ']'
 GenericParam    := Ident GenericBound? GenericDefault?
                  | Ident ':' 'usize' GenericDefault?       -- value-generic over usize
 
-GenericBound    := ':' TypeExpr ('+' TypeExpr)*
+GenericBound    := ':' TypeExpr ('&' TypeExpr)*
 GenericDefault  := '=' (TypeExpr | Expr)
 ```
 
@@ -738,7 +770,7 @@ Examples:
 fn average[T: Number](xs: Array[T]) -> T:
   ...
 
-fn sort[T: Number + Ord](xs: Array[T]) -> Array[T]:
+fn sort[T: Number & Ord](xs: Array[T]) -> Array[T]:
   ...
 
 trait Add[Rhs = Self]:
@@ -751,7 +783,7 @@ type Buffer[T, N: usize = 1024]:
 
 `Array[T, N: usize]` declares a value-generic. The compiler treats `N` as a `usize` value, not a type, and distinguishes `Array[i32, 4]` from `Array[i32, 5]` as distinct types.
 
-> **Open**: precise interaction between trait-bound `+` (multiple bounds) and `&` (intersection at use site). Currently `+` for declaration-site multi-bound on a single parameter; `&` for intersection at use sites. Document in semantics.
+Trait conjunction is `&` everywhere it appears: declaration-site bounds (`T: A & B`), `where`-clause bounds (`where T: A & B`), and use-site intersections (`fn pick[T: A & B](...)`, `to: A & B` on connections, `type X = A & B` for record intersection). One operator, one meaning across all positions.
 
 #### 3.11.2 Anonymous Functions
 
@@ -989,7 +1021,7 @@ PipeExpr     := AsExpr ('>>' Ident ':' AsExpr)*
 
 Chains are left-associative: `x >> a: 1 >> b: 2` means `b(a(x, 1), 2)`.
 
-Within a `signal`/`derived`/`attr` declaration, a `ModifierTail` (§3.4) is sugar over the same form, splitting the declaration into a hidden inner cell plus a derived projection. The exact desugaring is a semantics concern.
+Within a declaration's `ModifierTail` (§3.4), the modifier chain desugars per declaration kind: `signal` declarations split into a hidden raw cell plus a `derived` projection (preserving the runtime-writable surface); `derived` and `attr` declarations rewrite the chain inline into the right-hand-side expression. See §3.4 for the per-kind rule.
 
 #### 3.15.4 Construction (Records, Variants, Function Calls)
 
@@ -1026,12 +1058,7 @@ For tuple values (positional, anonymous), use `ParenOrTupleExpr` directly: `(1, 
 
 #### 3.15.5 Functional Update
 
-```
-WithExpr     := PostfixExpr 'with' '(' (NamedArg (',' NamedArg)* ','?)? ')'
-NamedArg     := Ident ':' Expr | Ident
-```
-
-> **Open**: `with` syntax for record functional update (`contact with(age: 26)`) is a placeholder. Records are immutable, so functional update produces a new record sharing all unchanged fields. Final placement of `with` (keyword vs. method, positional within precedence table) deferred to semantics review.
+> **Open**: `with` syntax for record functional update (e.g. `contact with(age: 26)`) is deferred. Records are immutable, so functional update produces a new record sharing all unchanged fields. The final form — keyword vs. method, positional within the precedence table, exact production — is pending semantics review. **No grammar production is provided in this version**; once decided, it will be slotted into `PostfixExpr`.
 
 ### 3.16 Type Expressions
 
