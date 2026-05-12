@@ -7682,7 +7682,7 @@ Characteristics:
 - Sub-second compilation time, suitable for live editing.
 - Performance lower than native (a typical interpretation overhead is
   5–20× slower in tight loops; acceptable for development).
-- Supports hot reload (§14.12): individual behaviors can be replaced
+- Supports hot reload (§14.11): individual behaviors can be replaced
   in a running kernel without restarting.
 - The bytecode format is implementation-internal and not stable across
   Symphony versions. It is not a distribution format.
@@ -7704,7 +7704,7 @@ Characteristics:
   change the program.
 
 The emitted Rust source is **fully monomorphic and trait-free**. Per
-§14.11, the Rust emitter produces concrete struct definitions and
+§14.10, the Rust emitter produces concrete struct definitions and
 specialized function definitions per Symphony instantiation. Symphony's
 trait system is not exported into the emitted Rust; trait dispatch
 sites are resolved to direct function calls during frontend processing.
@@ -7725,7 +7725,7 @@ required.
 - **`symphony watch <file>`** — interpreter mode with file watching
   and hot reload. The kernel runs continuously; saved changes to the
   source trigger recompilation and reload of affected behaviors per
-  §14.12.
+  §14.11.
 
 - **`symphony build <file> [--release]`** — invokes native mode.
   Compiles via Rust to a native executable. `--release` enables
@@ -7825,32 +7825,33 @@ within the enclosing record's allocation.
 
 The reactive state buffer is **triple-buffered** to provide:
 - Snapshot consistency across multiple cells for multi-cell values.
-- Per-tick reactive batching: all writes within a tick commit
-  atomically at the tick boundary.
+- Batched publication: writes accumulated in the back buffer commit
+  atomically when the producer publishes.
 - Wait-free reads from the consumer.
 
 The arrangement is **single-producer, single-consumer (SPSC)**: one
 *producer role* writes, one *consumer role* reads, mediated by three
 buffer copies and an atomic current-pointer swap. The mapping of
-these roles to physical threads is specified in §13 (reactive
-system), not §14; §14 specifies only the mechanism.
+these roles to physical threads, and the trigger that initiates a
+publish, are specified in §13 (reactive system); §14 specifies only
+the mechanism.
 
 The kernel maintains three copies of the buffer:
 
 - **Current**: the most recently published snapshot. Read by the
-  consumer. Not written by anyone.
+  consumer. Not written while serving as current.
 - **Back**: actively being written by the producer. Not read by the
   consumer.
 - **Pending**: a third buffer used to allow the producer to begin
-  writing the next tick's state without waiting for the consumer.
+  writing the next batch of state without waiting for the consumer.
   Rotation among the three is producer-managed.
 
 ##### 14.3.3.1 Publish operation
 
-At a tick boundary, the producer performs **publish**:
-1. The producer finalizes writes to the back buffer.
-2. The producer atomically swaps the "current" pointer to point at
-   the newly-written back buffer. The previous "current" rotates to
+To publish accumulated writes, the producer performs:
+1. Finalizes writes to the back buffer.
+2. Atomically swaps the "current" pointer to point at the
+   newly-written back buffer. The previous "current" rotates to
    become the next available back/pending buffer.
 
 The publish operation runs on the producer role's thread. Its cost
@@ -7858,9 +7859,12 @@ is O(N) where N is the buffer size — the producer copies the
 publishable state into the back buffer before the swap. The atomic
 swap itself is O(1).
 
-The producer's per-tick cost is therefore O(N) memcpy + one atomic
-operation. This cost is paid on the producer side, not on the
-consumer side; consumers are unaffected.
+The producer's per-publish cost is therefore O(N) memcpy + one
+atomic operation. This cost is paid on the producer side, not on
+the consumer side; consumers are unaffected.
+
+When the producer chooses to publish (the trigger for which is
+specified in §13) is outside the scope of this section.
 
 ##### 14.3.3.2 Swap operation
 
@@ -7885,12 +7889,12 @@ producer-side blocking.
 
 ##### 14.3.3.4 Multiple cross-thread observers
 
-If a deployment requires multiple cross-thread observers (e.g., one
-consumer for audio, another for UI display, another for a debugger),
-the SPSC triple buffer can be replicated — each observer maintains
-its own SPSC channel against the producer. SPMC variants are
-possible but not required for the language's basic operation; the
-specification defines SPSC as the canonical mechanism.
+If a deployment requires multiple cross-thread observers (multiple
+consumers reading the same producer's published state), the SPSC
+triple buffer can be replicated — each observer maintains its own
+SPSC channel against the producer. SPMC variants are possible but
+not required for the language's basic operation; the specification
+defines SPSC as the canonical mechanism.
 
 #### 14.3.4 Wide-atomic optimization (optional)
 
@@ -7904,7 +7908,7 @@ triple-buffer mechanism provides correct semantics on all platforms.
 Platforms without wide-atomic support (WebAssembly, ARM32, etc.) rely
 exclusively on the triple-buffer mechanism. Programs using `i128` or
 `u128` reactive cells on such platforms function correctly; they pay
-the full per-tick publish cost for those cells.
+the full per-publish cost for those cells.
 
 ### 14.4 What Lives in the Reactive State Buffer
 
@@ -8031,17 +8035,20 @@ semantics terminate the current evaluation; in the kernel's
 implementation, traps surface as Rust panics that the kernel
 isolates via `catch_unwind` (in the reference Rust implementation).
 
-When a behavior traps during reactive evaluation, the kernel does
-not abort the program. Instead:
+When a behavior traps during invocation, the kernel does not abort
+the program. Instead:
 
 - The kernel logs the trap with the behavior's debug name and the
   instance ID.
 - The behavior's output cells are marked as "errored" (a sentinel
   state).
-- Downstream behaviors that read errored cells either propagate the
-  error or substitute defaults, per the per-cell configuration.
-- The kernel continues processing. Subsequent behaviors within the
-  same tick and subsequent ticks are unaffected.
+- The kernel returns control from the failed behavior invocation
+  without further side effects.
+
+How errored cells affect subsequent invocations of dependent
+behaviors — whether the error propagates, or a default is
+substituted, or invocation of dependents is skipped — is specified
+in §13.
 
 This is a deliberate departure from §4.6's "process abort on trap"
 behavior, scoped to the reactive evaluation context. Reactive
@@ -8049,7 +8056,7 @@ behaviors run in a long-lived kernel process; aborting on every
 arithmetic trap would make the system fragile. Isolating per-
 behavior traps preserves overall system continuity.
 
-The exception is `Drop` (§14.10.4): if a `drop` method traps, the
+The exception is `Drop` (§14.9.4): if a `drop` method traps, the
 kernel cannot recover safely (the value is mid-destruction); the
 process aborts. Drop traps are the one exit path from the kernel's
 isolation.
@@ -8071,8 +8078,8 @@ declarations, renaming local bindings — do not perturb the ID.
 Semantic changes — different operations, different inputs, different
 output type — produce different IDs.
 
-The hash algorithm is fixed per Symphony toolchain version (§14.13)
-so that hot reload (§14.12) within one version reliably matches
+The hash algorithm is fixed per Symphony toolchain version (§14.12)
+so that hot reload (§14.11) within one version reliably matches
 unchanged behaviors across recompilations. Across major toolchain
 versions the canonicalization may change; cross-version hot reload
 is not supported.
@@ -8085,10 +8092,9 @@ for human consumption.
 #### 14.6.5 Thread invocation
 
 Behaviors are invoked by the kernel; the specific thread that
-invokes each behavior is determined by the kernel's role assignment
+invokes each behavior is determined by the role assignment
 specified in §13 (reactive system). Symphony source does not
-specify thread roles; the kernel determines them based on the
-behavior's role in the reactive graph.
+specify thread roles.
 
 Symphony source code does not encounter cross-thread concerns:
 behaviors are thread-safe by construction (no shared mutable state
@@ -8164,26 +8170,26 @@ manages bits in cells and invokes functions by ID.
 
 The triple-buffer mechanism (§14.3.3) operates in terms of two roles:
 
-- **Producer**: writes the back buffer and performs the publish
-  operation. There is exactly one producer per kernel instance
-  (SPSC).
-- **Consumer**: reads the current buffer via the swap operation.
-  There is one consumer per SPSC channel; if multiple cross-thread
+- **Producer**: the role that writes the back buffer and performs
+  the publish operation. There is exactly one producer per kernel
+  instance (SPSC). The producer may also read the back buffer it is
+  writing; such reads are local to the producer and do not go
+  through the triple-buffer publish cycle. What the producer writes
+  (signal updates from host API, derived expression results, etc.)
+  and what triggers it to publish are specified in §13.
+- **Consumer**: the role that reads the current buffer via the swap
+  operation. Loads the current pointer and reads cells from the
+  buffer it points to. Never writes; never invokes behaviors. There
+  is one consumer per SPSC channel; if multiple cross-thread
   observers are needed, each maintains its own SPSC channel
   (§14.3.3.4).
 
-§14 specifies only the mechanism of these roles — what they do, how
-they coordinate via the triple buffer, what the costs are. The
-mapping of these roles to physical threads (which thread is producer,
-which is consumer, when ticks happen, what triggers a publish) is
+§14 specifies only the mechanism of these roles — what each role is
+permitted to do, how the two coordinate via the triple buffer, and
+the costs of the swap and publish operations. The mapping of roles
+to physical threads, the choreography of what the producer does
+between publishes, and the trigger that initiates a publish are all
 specified in §13 (reactive system).
-
-For example: in an audio deployment, §13 specifies that the audio
-thread plays the producer role (it both evaluates reactive
-expressions and publishes new state), while a host UI thread polling
-for display purposes plays the consumer role. In a non-audio
-deployment, §13 may specify a different mapping. The §14 mechanism
-is identical in all cases.
 
 #### 14.8.1 Thread-safety properties of the mechanism
 
@@ -8202,16 +8208,16 @@ specified in §13.
 
 #### 14.8.2 Behaviors invoked by the mechanism
 
-Reactive behaviors (derived expression bodies, modulation functions
-called from reactive contexts) are invoked by the producer as part
-of its publish cycle, in topological order over the dirty set
-maintained from dependency edges in the graph metadata. The exact
-trigger and ordering of these invocations is specified in §13.
+Reactive behaviors (derived expression bodies, functions called
+from reactive contexts) are invoked by the producer. The trigger,
+the selection of which behaviors are invoked, and the ordering of
+invocations within a publish cycle are all specified in §13.
 
 The behavior ABI (§14.6) is the contract between the producer and
-each invoked behavior. Each invocation receives a kernel handle and
-an instance ID; behavior bodies read from and write to cells via
-the handle. Behaviors are thread-safe by construction (§14.8.3).
+each invoked behavior. Each invocation receives a kernel handle
+and an instance ID; behavior bodies read from and write to cells
+via the handle. Behaviors are thread-safe by construction
+(§14.8.3).
 
 #### 14.8.3 Why Symphony behaviors are thread-safe by construction
 
@@ -8228,12 +8234,12 @@ A Symphony program does not declare thread affinity; it does not
 need to. The kernel determines (per §13) which thread plays which
 role.
 
-### 14.10 Drop Semantics
+### 14.9 Drop Semantics
 
 Symphony's user-facing `Drop` trait (referenced as deferred in §11.3.3
 and §12.9.3) is specified here.
 
-#### 14.10.1 The Drop trait
+#### 14.9.1 The Drop trait
 
 ```
 trait Drop:
@@ -8246,7 +8252,7 @@ value by `mut` (the only place in the language where a `mut`
 parameter is permitted — internally generated by the compiler at the
 scope-exit point).
 
-#### 14.10.2 When drop runs
+#### 14.9.2 When drop runs
 
 The compiler inserts drop calls at:
 
@@ -8261,20 +8267,20 @@ The compiler inserts drop calls at:
 Compound values (records, enums) drop in **reverse declaration
 order** of their fields: the last-declared field drops first.
 
-#### 14.10.3 Partial moves
+#### 14.9.3 Partial moves
 
 If only some fields of a record have been moved out when the binding
 goes out of scope, only the un-moved fields drop. The compiler tracks
 per-binding move flags during semantic analysis.
 
-#### 14.10.4 Drop and panic
+#### 14.9.4 Drop and panic
 
 If a `drop` method panics, the process aborts (the standard trap
 behavior per §4.6.1). This prevents double-drop hazards from
 mid-drop panics that would otherwise leave the program in an
 inconsistent state.
 
-#### 14.10.5 Drop on reactive cells
+#### 14.9.5 Drop on reactive cells
 
 The kernel manages drop for reactive cells. When a node or connection
 instance is removed (deferred to §13's evolution model), its attr and
@@ -8282,12 +8288,12 @@ derived cells are dropped per their type's `Drop` impl. Initial
 declarations (signals declared at program startup) live for the
 program's lifetime; their cells are dropped at program shutdown.
 
-### 14.11 Symphony → Rust Lowering
+### 14.10 Symphony → Rust Lowering
 
 The Rust emitter (§14.1.3) lowers the typed IR to Rust source per
 the following rules.
 
-#### 14.11.1 Type lowering
+#### 14.10.1 Type lowering
 
 | Symphony | Rust |
 |---|---|
@@ -8295,14 +8301,14 @@ the following rules.
 | `i128`, `u128` | Same Rust types (on supporting targets). |
 | `f32`, `f64` | Same Rust types. |
 | `bool`, `char` | `bool`, `char`. |
-| `string` | A newtype wrapping a kernel string handle (see §14.11.1.1). |
+| `string` | A newtype wrapping a kernel string handle (see §14.10.1.1). |
 | Tuples | Rust tuples. |
 | Arrays `T[N]` | Rust arrays `[T; N]`. |
 | Records | Rust structs with same field order. |
 | Enums | Rust enums with same variant order. |
 | Newtypes (§6.3) | Rust newtype structs. |
 
-##### 14.11.1.1 String storage uniformity
+##### 14.10.1.1 String storage uniformity
 
 The `string` type lowers to the same Rust representation regardless
 of whether the binding is reactive or non-reactive: a newtype around
@@ -8316,7 +8322,7 @@ Non-reactive context (local `let s = "hello"`, function parameter,
 record field outside reactive declaration): the handle lives in
 ordinary Rust memory. The pool entry is still refcounted; ownership
 of the handle increments the refcount, dropping the handle (per
-§14.10) decrements it. Strings created in non-reactive scopes are
+§14.9) decrements it. Strings created in non-reactive scopes are
 reclaimed when their last handle is dropped — typically when the
 function returns and locals go out of scope.
 
@@ -8330,7 +8336,7 @@ points to.
 The §11.6 "refcount-shared immutable backing" model maps directly
 onto the kernel pool. The pool *is* the shared backing.
 
-#### 14.11.2 Function and trait lowering
+#### 14.10.2 Function and trait lowering
 
 Symphony resolves all generic instantiations and trait dispatch
 during frontend processing (§14.1.1). Emitted Rust is fully
@@ -8353,7 +8359,7 @@ generates an explicit `impl std::ops::Add for Vec3` block in Rust so
 that `+` works on the type at the Rust level. This is a narrow
 mechanical emission, not a full trait export.
 
-#### 14.11.3 Ownership lowering
+#### 14.10.3 Ownership lowering
 
 Symphony's ownership rules map directly to Rust's:
 
@@ -8373,7 +8379,7 @@ parameter borrow `&T` compiles to Rust's `&T`. Rust's borrow checker
 enforces the same rules that Symphony's frontend already verified;
 any code that passed Symphony's checks passes Rust's.
 
-#### 14.11.4 Iterator lowering
+#### 14.10.4 Iterator lowering
 
 Symphony's `Iterator` trait (§12.7) has signature `fn next(iter:
 Self) -> (Option[Item], Self)`. Rust's standard `Iterator` trait has
@@ -8391,7 +8397,7 @@ the `&mut self` form remains.
 This translation is invisible to Symphony source code. Symphony users
 never see `&mut` in their code or in error messages.
 
-#### 14.11.5 Reactive primitive lowering
+#### 14.10.5 Reactive primitive lowering
 
 Symphony's `signal`, `attr`, `derived` declarations do not lower to
 Rust types directly. They lower to:
@@ -8406,12 +8412,12 @@ The lowered Rust code contains no syntactic trace of `signal`/`attr`/
 `derived` keywords. They are pure graph-construction directives,
 encoded into the metadata and behavior table.
 
-### 14.12 Hot Reload
+### 14.11 Hot Reload
 
 Interpreter mode (§14.1.2) supports hot reload of individual
 behaviors in a running kernel.
 
-#### 14.12.1 Granularity
+#### 14.11.1 Granularity
 
 The unit of hot reload is the **behavior**. When a Symphony source
 file changes:
@@ -8426,13 +8432,13 @@ file changes:
       bytecode reference) for that behavior's ID.
    c. The next invocation uses the new behavior.
 
-#### 14.12.2 State preservation
+#### 14.11.2 State preservation
 
 Reactive cell values persist across hot reload. Signal values, attr
 values, and derived cached values are unchanged unless the source
 explicitly changes them. The graph topology persists.
 
-#### 14.12.3 Reload-safe and reload-unsafe changes
+#### 14.11.3 Reload-safe and reload-unsafe changes
 
 Changes safe to hot reload:
 - Body of an existing behavior (same signature, different
@@ -8449,7 +8455,7 @@ The implementation diagnoses unsafe changes at reload time and
 either rejects them (kernel keeps running old version) or restarts
 the kernel cleanly. The choice is implementation-defined.
 
-#### 14.12.4 Reload failure
+#### 14.11.4 Reload failure
 
 If the new source fails to compile (parse error, type error,
 ownership error), the reload is abandoned. The kernel keeps running
@@ -8460,7 +8466,7 @@ Hot reload never produces a kernel in an inconsistent state. Either
 the old version continues running, or the new version is fully
 applied, never a mix.
 
-### 14.13 Versioning
+### 14.12 Versioning
 
 Symphony's source format, graph metadata format, behavior ABI, and
 kernel build are versioned together. Each Symphony release is a
