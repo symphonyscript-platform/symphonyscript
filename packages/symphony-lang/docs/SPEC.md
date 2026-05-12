@@ -390,16 +390,115 @@ evaluable. The propagation rule is mechanical:
 Since all user-defined functions are pure (§1.3) and all bindings are
 immutable, compile-time-knowability propagates freely through the expression
 graph. The compiler determines compile-time-knowability automatically; users do
-not annotate it.
+not annotate it for `let` bindings.
 
-There is no separate `const` keyword. `let` is the only binding form and covers
-both compile-time constants and runtime-immutable bindings. The distinction
-between the two is structural — determined by whether the binding's expression
-is compile-time evaluable — not lexical. A `let` bound to a literal or a pure
-expression over compile-time-known values is itself compile-time known; a `let`
-bound to a signal or to an expression involving runtime input is a runtime
-value. Purity plus immutability collapse the const/let distinction that other
-languages require.
+#### 2.4.1.1 `let` and `const` binding forms
+
+The language has two binding forms:
+
+- **`let`** — the general binding form. Immutable. The compiler determines
+  compile-time-knowability automatically from the expression. A `let` bound
+  to a non-reactive expression is compile-time known and may be tree-shaken,
+  inlined, or otherwise optimized; a `let` bound to a reactive or runtime
+  expression participates in the reactive graph and exists at runtime.
+- **`const`** — a stricter binding form. The user *asserts* that the binding
+  is compile-time-only; the compiler enforces this assertion and additionally
+  guarantees the binding has no runtime existence whatsoever.
+
+```
+const PI = 3.14159
+const TAU = 2.0 * PI            // derived from another const, also compile-time
+const MAX_ITEMS: usize = 1024
+
+let x = 5                       // compile-time known, but compiler decides what to do
+let y = compute(input)          // compile-time known iff input is non-reactive
+let z = read_sensor()           // reactive, runtime
+```
+
+#### 2.4.1.2 Semantics of `const`
+
+A `const` binding has three properties beyond what `let` provides:
+
+1. **Non-reactive guarantee.** The RHS must not involve any signal, derived
+   value, external input, or reactive expression. Violation is a compile error
+   at the `const` declaration site, identifying the source of reactivity. This
+   makes intent visible at the binding site: readers see `const` and know,
+   without scanning the RHS, that the value is purely compile-time.
+
+2. **No runtime existence.** A `const` does not occupy a runtime memory
+   location. Wherever it is referenced from non-`const` code, the value is
+   inlined directly. Wherever it is referenced from another `const` or from
+   type-level context, the value is used at compile time only. A `const` that
+   is unreferenced (or referenced only from compile-time contexts whose results
+   are themselves unused) does not appear in the compiled output at all.
+
+3. **No addressability.** Because a `const` has no runtime location, it has
+   no address. Operations that would require a runtime address (passing by
+   reference, storing a pointer, FFI sharing) are compile errors. The `const`
+   is a *value*, not a *location*.
+
+#### 2.4.1.3 `const`-eligible types
+
+A type is `const`-eligible if all of its values can be fully represented at
+compile time, with no runtime allocation and no runtime state. The set
+includes:
+
+- All primitive types: `i8`–`i128`, `u8`–`u128`, `isize`, `usize`, `f32`,
+  `f64`, `bool`, `char`, `string`, `never`.
+- Fixed-size arrays whose element type is `const`-eligible.
+- Records whose field types are all `const`-eligible.
+- Enums (including payload-carrying) whose payload types are all
+  `const`-eligible.
+- Tuples whose component types are all `const`-eligible.
+- Newtypes wrapping `const`-eligible types.
+
+Types not `const`-eligible:
+
+- Heap-allocated collection types (`Vec`, `HashMap`, etc.).
+- Signal-bearing or reactive types.
+- Types containing function references or closures with captured runtime state.
+- `dyn` trait objects.
+
+The compiler checks `const`-eligibility at the declaration site. A `const`
+declaration whose RHS produces a non-`const`-eligible type is rejected with a
+clear error identifying the offending type.
+
+#### 2.4.1.4 `const` declaration sites
+
+`const` is permitted at:
+
+- Module top level — for shared constants and configuration values.
+- Inside function bodies — for local compile-time-only values used in
+  type-level positions (e.g., array sizes computed from arguments to a
+  generic function).
+- Inside type, trait, node, and connection bodies — for type-associated
+  constants accessible via path syntax (`Vec3::ZERO`, `Color::WHITE`).
+
+`const` declarations follow the same visibility model as other declarations
+(§10): `public const TAU = ...`, `private const INTERNAL_THRESHOLD = ...`,
+default `shared`.
+
+#### 2.4.1.5 Relationship between `const` and `let`
+
+The two forms coexist:
+
+- A `let` bound to a non-reactive expression is *effectively* eligible for
+  `const`-style optimization (tree-shaking, inlining), but the user has not
+  asserted this and the compiler has not enforced it. The binding may or may
+  not exist at runtime depending on whether anything observes it.
+- A `const` is *guaranteed* not to exist at runtime, and the compiler enforces
+  the non-reactive constraint. Users choose `const` to encode their intent
+  and obtain the enforcement.
+
+A `let` bound to an expression that uses `const` values is itself
+compile-time known (constants propagate through pure expressions per §2.4.1).
+There is no need to "promote" `let` to `const` for downstream `const` use; the
+propagation rule covers it.
+
+Tooling may suggest converting an eligible `let` to `const` as a stylistic
+hint, but the compiler does not require it. The choice between the two forms
+is the user's assertion about intent; the language does not infer the
+assertion.
 
 #### 2.4.2 Breaks in propagation
 
@@ -662,6 +761,15 @@ that would require defaulting through it ("no default available for trait
 X"). This treats missing defaults as a deliberate choice by the trait author:
 some traits are too domain-specific to pick a default for.
 
+Trait-declared defaults are the only defaulting mechanism in the language.
+There are no compiler-internal defaults, no module-level pragmas, no
+use-site overrides via alternative defaulting paths. When the default
+mechanism does not fire (no constraining trait declares a default, multiple
+incomparable defaults conflict per §3.5.2, or the user wants a non-default
+type), the user resolves through explicit annotation, not through another
+defaulting knob. This preserves the principle that defaults are discoverable
+at the trait's declaration site and nowhere else.
+
 #### 3.1.6 Generic traits
 
 Traits may declare type parameters (grammar §3.7's `GenericParams`):
@@ -724,11 +832,39 @@ fulfill Display for Person:
     "{value.first_name} {value.last_name}"
 ```
 
-The block lives in some module (subject to the orphan rule from §3.7), not
+The block lives in some module (subject to the orphan rule from §3.6), not
 necessarily in the same module as either the trait or the type. Multiple
 `fulfill` blocks for the same (trait, type) pair are rejected by the coherence
-rule (§3.7): exactly one implementation exists per pair, reachable through
+rule (§3.6): exactly one implementation exists per pair, reachable through
 the module graph.
+
+Functions defined inside a `fulfill Trait for Type` block live in a
+*(Trait, Type)-scoped namespace*, not in the enclosing module's free-function
+namespace. This is the key distinction from ordinary top-level function
+definitions:
+
+- A free function `fn display(p: Person)` defined at module level occupies a
+  name slot in that module's free-function namespace. Per § — Visibility and
+  Modules, function names are unique within their module; defining two free
+  functions with the same name in the same module is a compile error.
+- A function `fn display(value: Person)` defined inside `fulfill Display for
+  Person` does *not* occupy the module's free-function namespace. It lives
+  in the (`Display`, `Person`) trait-implementation namespace. The same
+  module can contain multiple `fulfill` blocks for different (trait, type)
+  pairs that each define functions named `display`; these do not conflict
+  because they are in different namespaces.
+
+This means stdlib (and user code) can define `fulfill Display for i32`,
+`fulfill Display for i64`, `fulfill Display for f32`, etc. — all in the same
+module — without name collisions, because each `display` is scoped to its
+own (`Display`, `Type`) pair.
+
+Coexistence with free functions: a module may simultaneously define a free
+function `fn display(p: Person)` *and* contain a `fulfill Display for Person`
+block whose method is also named `display`. The two functions live in
+different namespaces and do not conflict at the definition site. They may
+conflict at *call sites* under uniform-call-syntax dispatch — see §3.4 for
+resolution rules.
 
 The syntax (grammar addition):
 
@@ -741,28 +877,65 @@ AssocTypeBinding := 'type' Ident '=' TypeExpr NEWLINE
 
 `fulfill` is a reserved keyword.
 
-#### 3.3.1 Method signatures with `Self` substitution
+#### 3.3.1 Method signatures and `Self` usage
 
-Inside a `fulfill Trait for Type` block, `Self` resolves to `Type` for all
-method signatures inherited from the trait. The implementer writes the
-receiver parameter type either as `Self` or as `Type` directly; both are
-equivalent:
+`Self` is a type-level identifier that appears in trait declarations to refer
+to the implementing type. Its use is asymmetric across declaration contexts:
+
+- **In trait declarations**, `Self` is the standard way to refer to the
+  implementing type, because the implementing type is not yet known. Trait
+  authors write `fn display(value: Self) -> string`; there is no concrete
+  name available to substitute, so `Self` is necessary.
+
+- **In `fulfill` blocks**, the implementing type *is* known — it appears in
+  the `for Type` portion of the `fulfill` declaration. The recommended form
+  is to write the explicit type name in method signatures, not `Self`:
 
 ```
 fulfill Eq for Person:
   fn eq(a: Person, b: Person) -> bool:
     a.first_name is b.first_name and a.last_name is b.last_name
-
-// equivalent:
-fulfill Eq for Person:
-  fn eq(a: Self, b: Self) -> bool:
-    a.first_name is b.first_name and a.last_name is b.last_name
 ```
 
-The parameter name is the implementer's choice; the parameter type must match
-the trait's signature after `Self` substitution. Other type-level references
-(`Output`, `Item`, etc.) follow the same substitution rule when they are
-associated types of the trait being implemented.
+`Self` remains *permitted* inside `fulfill` blocks and is treated as a
+synonym for the implementing type (the compiler substitutes `Self` →
+`Person` during type checking). The two forms produce identical signatures
+and identical compiled code. The explicit-type-name form is preferred for
+readability: a reader sees concrete types at every position, without an extra
+indirection through `Self`.
+
+Generic implementing types may make `Self` more convenient by keeping the
+signature shorter:
+
+```
+fulfill Add for Vec3:
+  type Output = Vec3
+  fn add(left: Vec3, right: Vec3) -> Vec3:     // explicit
+    Vec3(x: left.x + right.x, y: left.y + right.y, z: left.z + right.z)
+
+fulfill Display for Result[T, E] where T: Display, E: Display:
+  fn display(result: Result[T, E]) -> string:   // explicit, verbose but clear
+    match result:
+      Ok(value): "Ok({value.display()})"
+      Err(error): "Err({error.display()})"
+```
+
+For generic types specifically, users may prefer `Self` to avoid repeating
+the parameterization (`fn display(result: Self) -> string`). Both forms are
+valid; the choice is stylistic.
+
+The receiver parameter name (`a`, `value`, `result`, `left`, etc.) is always
+the implementer's choice. There is no `self` keyword for trait method
+receivers — that lowercase form is reserved exclusively for reactive context
+inside node and connection bodies (§ — Reactive System, deferred). The
+explicit parameter naming is the language's general principle (§Topic 19's
+uniform function call syntax): every parameter has a chosen name, not an
+implicit one.
+
+Other type-level references in trait signatures (associated types like
+`Output`, `Item`, etc.) follow the same substitution rule: in `fulfill`
+blocks they may be written either with the trait's name (`Output`) or with
+the concrete type bound to them.
 
 #### 3.3.2 Associated type bindings
 
@@ -881,9 +1054,44 @@ imports, and disambiguates when multiple traits in scope declare methods with
 the same name. The other forms rely on name resolution per § — Visibility
 and Modules.
 
+#### 3.4.1 Resolution across free-function and trait-implementation namespaces
+
+A bare-name call `f(x)`, method-call `x.f()`, or pipe-forward `x >> f` may
+resolve to either a free function or a trait-implementation function, since
+both are reachable when a name appears at a call site. The resolution rule:
+
+1. The compiler searches the current scope's *free-function* namespace for a
+   function `f` whose first parameter type matches `x`'s type (or is reachable
+   via implicit widening per § — Numeric System).
+2. The compiler searches the *(Trait, Type)-scoped* namespaces reachable from
+   the current scope — that is, for each trait `T` in scope, the function `f`
+   inside `fulfill T for X` where `X` is `x`'s type (or compatible).
+3. If exactly one candidate matches across both searches, the call resolves to
+   that candidate.
+4. If multiple candidates match (e.g., a free function and a trait-impl
+   function, or trait-impl functions from multiple traits in scope), the call
+   is ambiguous; the compiler reports an error at the call site requiring
+   disambiguation.
+
+Disambiguation uses path-qualified call syntax:
+
+- `Display::display(person)` — explicitly the trait-impl function for `Display`.
+- `some_module::display(person)` — explicitly the free function in
+  `some_module`.
+
+The trait-path form is the canonical way to disambiguate when a free function
+and a trait-impl function with the same name coexist in scope. The free
+function does not get hidden by the trait-impl function (or vice versa);
+both remain callable, but ambiguous bare references require qualification.
+
+#### 3.4.2 Dispatch at monomorphization
+
 Trait method calls in monomorphized code resolve to direct function calls per
-§2.3.5; coherence (§3.7) guarantees there is exactly one implementation to
-dispatch to.
+§2.3.5; coherence (§3.6) guarantees there is exactly one implementation to
+dispatch to within a (trait, type) pair. The free-function vs trait-impl
+namespace distinction is purely for *name resolution at call sites* — once
+resolved, the call compiles to a direct function call to a specific function
+identified by its fully-qualified path (module-path-or-trait-path + name).
 
 ### 3.5 Trait Hierarchies
 
@@ -941,6 +1149,18 @@ trait Unsigned:
 Per §3.3.5, umbrella traits are automatically satisfied when their
 requirements are. Users implement the fine-grained traits for their types;
 umbrella satisfaction follows.
+
+Some fine-grained traits are deliberately *not* part of any numeric umbrella
+because they are not numeric-specific. `Ord` (ordering) and `Eq` (equality)
+are standalone fine-grained traits — non-numeric types (strings, enums,
+records, user-defined types) may also be ordered or compared, so binding
+`Ord` and `Eq` to the numeric hierarchy would either incorrectly require
+non-numeric types to be numeric or fragment the standalone traits into
+numeric and non-numeric versions. The clean answer: `Ord` and `Eq` stand on
+their own; built-in numeric types implement both; the numeric umbrella traits
+do not require them. A generic function needing both ordering and arithmetic
+constrains as `T: Numeric & Ord`, combining the umbrella with the standalone
+trait explicitly.
 
 This pattern serves three purposes:
 
