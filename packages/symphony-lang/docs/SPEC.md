@@ -799,7 +799,7 @@ Trait-declared defaults are the only defaulting mechanism in the language.
 There are no compiler-internal defaults, no module-level pragmas, no
 use-site overrides via alternative defaulting paths. When the default
 mechanism does not fire (no constraining trait declares a default, multiple
-incomparable defaults conflict per §3.5.2, or the user wants a non-default
+incomparable defaults conflict per §3.6.2, or the user wants a non-default
 type), the user resolves through explicit annotation, not through another
 defaulting knob. This preserves the principle that defaults are discoverable
 at the trait's declaration site and nowhere else.
@@ -923,10 +923,10 @@ fulfill Display for Person:
     "{value.first_name} {value.last_name}"
 ```
 
-The block lives in some module (subject to the orphan rule from §3.6), not
+The block lives in some module (subject to the orphan rule from §3.7), not
 necessarily in the same module as either the trait or the type. Multiple
 `fulfill` blocks for the same (trait, type) pair are rejected by the coherence
-rule (§3.6): exactly one implementation exists per pair, reachable through
+rule (§3.7): exactly one implementation exists per pair, reachable through
 the module graph.
 
 Functions defined inside a `fulfill Trait for Type` block live in a
@@ -1212,19 +1212,100 @@ Disambiguation forms:
 #### 3.4.2 Dispatch at monomorphization
 
 Trait method calls in monomorphized code resolve to direct function calls per
-§2.3.5; coherence (§3.6) guarantees there is exactly one implementation to
+§2.3.5; coherence (§3.7) guarantees there is exactly one implementation to
 dispatch to within a (trait, type) pair. The free-function vs trait-impl
 namespace distinction is purely for *name resolution at call sites* — once
 resolved, the call compiles to a direct function call to a specific function
 identified by its fully-qualified path (module-path-or-trait-path + name).
 
-### 3.5 Trait Hierarchies
+### 3.5 Argument Forms
+
+The language supports two forms for supplying arguments at any call site:
+*positional* and *named*. The choice is per-call, not per-callee, with one
+universal restriction: positional and named arguments cannot be mixed
+within a single call.
+
+#### 3.5.1 The two forms
+
+**Positional form** — arguments are listed in declaration order, without
+names:
+
+```
+let s = Shape::Rectangle(10.0, 20.0)
+let r = add(3, 4)
+person.display()
+```
+
+**Named form** — each argument is paired with its parameter name:
+
+```
+let s = Shape::Rectangle(width: 10.0, height: 20.0)
+let r = add(left: 3, right: 4)
+person.display()                          // no arguments — both forms trivially apply
+```
+
+The named form uses `name: value` syntax. Order does not matter in the
+named form; the compiler matches by name.
+
+#### 3.5.2 No mixing within one call
+
+A single call site uses either positional or named form throughout. Mixing
+is a compile error:
+
+```
+Rectangle(width: 10.0, 20.0)              // ✗ mixed — compile error
+add(3, right: 4)                          // ✗ mixed — compile error
+```
+
+The rule applies to every call: free functions, trait methods, variant
+constructors, and any other invocation. The compiler reports the error at
+the call site, identifying which argument breaks the pattern.
+
+#### 3.5.3 Per-callable form constraints
+
+Some declarations restrict the allowed form at their call sites:
+
+- **Records** (§6.1.3) are *always* constructed with named arguments.
+  Positional construction of records is a compile error.
+- **Tuples** (§9) are *always* constructed positionally. Named
+  construction of tuples is a compile error.
+- **Newtypes** (§6.3.2) are *always* constructed positionally with one
+  argument — the underlying value.
+- **Free functions, trait methods, and enum variants** accept either form
+  per-call.
+
+The constraints reflect the nature of each declaration: records have named
+fields with no canonical order, so positional construction would be
+ambiguous; tuples are anonymous products with positional identity, so
+named construction would be invented metadata; newtypes wrap a single
+value with no name, so a single positional argument is the only sensible
+form.
+
+For declarations that accept both forms, the choice between positional
+and named at a call site is a style decision driven by readability. Long
+argument lists, arguments with non-obvious meaning, or default arguments
+benefit from named form; short calls with self-evident argument meaning
+benefit from positional form.
+
+#### 3.5.4 Patterns parallel calls
+
+The same positional/named distinction applies to *patterns* that
+destructure compound values (§6.2.4). Variant patterns may be positional
+or named, parallel to variant construction; mixing within one pattern is
+a compile error. Record patterns are always named; tuple patterns are
+always positional.
+
+This parallelism is structural: a pattern is a "call site for
+destructuring," with the same argument-form rules as a call site for
+construction.
+
+### 3.6 Trait Hierarchies
 
 Traits compose into hierarchies via `requires` clauses. The recommended
 pattern, used pervasively in the language's standard library, is *fine-grained
 operator/capability traits combined into umbrella traits*.
 
-#### 3.5.1 The fine-grained-plus-umbrella pattern
+#### 3.6.1 The fine-grained-plus-umbrella pattern
 
 Fine-grained traits each declare exactly one method or one closely related
 group of methods, defining a single capability:
@@ -1300,7 +1381,7 @@ This pattern serves three purposes:
   defaulting policy (§3.1.5), because the default is a property of the
   domain-level abstraction, not of any individual operator.
 
-#### 3.5.2 Default trait selection in defaulting
+#### 3.6.2 Default trait selection in defaulting
 
 When a use site is constrained by multiple traits each with declared defaults,
 the most-specific trait in the hierarchy wins. "Most specific" is defined by
@@ -1315,13 +1396,13 @@ When multiple incomparable traits are in scope (neither requires the other)
 and each has a declared default, the defaulting is ambiguous and the compiler
 reports an error requiring an explicit annotation at the use site.
 
-### 3.6 Coherence and Orphan Rules
+### 3.7 Coherence and Orphan Rules
 
 Coherence is the property that for every (trait, type) pair, exactly one
 implementation exists, reachable through the module graph. The language
 enforces coherence structurally via the orphan rule.
 
-#### 3.6.1 The strict orphan rule
+#### 3.7.1 The strict orphan rule
 
 A `fulfill Trait for Type` block is permitted in module M if and only if:
 
@@ -1340,7 +1421,7 @@ interactions. The strict rule is the only model that composes cleanly with
 the language's separate compilation model (§2.3.2) and uniform call dispatch
 (§3.4).
 
-#### 3.6.2 Generic-parameter coverage
+#### 3.7.2 Generic-parameter coverage
 
 For impls involving type parameters, the orphan rule applies to the head of
 the type expression: at least one *concrete local type* must appear in the
@@ -1358,7 +1439,7 @@ The covering rule prevents two independent modules from each writing
 `fulfill ForeignTrait[T] for ForeignType` with different unspecified `T`,
 which would create conflicts at use sites.
 
-#### 3.6.3 Language-privileged implementations
+#### 3.7.3 Language-privileged implementations
 
 Certain implementations are provided by the language itself rather than by
 user modules, and are not subject to the orphan rule:
@@ -1376,7 +1457,7 @@ user modules, and are not subject to the orphan rule:
 These privileged implementations exist outside the user-writable
 `fulfill`-block space and cannot conflict with user code.
 
-#### 3.6.4 Newtype pattern as orphan-rule workaround
+#### 3.7.4 Newtype pattern as orphan-rule workaround
 
 When a user wants to implement a foreign trait for a foreign type, the
 canonical workaround is the newtype pattern: wrap the foreign type in a local
@@ -1394,14 +1475,14 @@ fulfill SomeForeignTrait for MyVec:
 `MyVec` is local to the user's module; the orphan rule is satisfied.
 Newtype semantics are specified in § — Newtypes.
 
-### 3.7 Automatic Derivation (`@derive`)
+### 3.8 Automatic Derivation (`@derive`)
 
 For a fixed set of common traits, the language provides automatic structural
 derivation via the `@derive` annotation (grammar §3.3). Applying `@derive` to
 a type generates the appropriate `fulfill` blocks structurally, saving the
 user from writing mechanical implementations.
 
-#### 3.7.1 Derivable traits
+#### 3.8.1 Derivable traits
 
 The traits eligible for automatic derivation are:
 
@@ -1416,7 +1497,7 @@ The set is fixed in the language; users cannot register new traits for
 `@derive`. Other traits require manual `fulfill` blocks. (A future extension
 may add user-definable derivation; not in v1.)
 
-#### 3.7.2 Structural derivation rules
+#### 3.8.2 Structural derivation rules
 
 For a record type, derivation operates field-by-field:
 
@@ -1446,7 +1527,7 @@ trait being derived. `@derive(Eq)` on `type Foo: x: SomeType` requires
 `SomeType: Eq`. If any component type does not satisfy the trait, derivation
 fails with a compile error identifying the offending component.
 
-#### 3.7.3 Overriding derived implementations
+#### 3.8.3 Overriding derived implementations
 
 A type may both `@derive` a trait and provide a manual `fulfill` block for
 the same trait. The manual `fulfill` block takes precedence; the derived
@@ -1661,7 +1742,7 @@ an integer.
 The mechanism is a language-level rule applied at the operator, distinct
 from direct trait dispatch:
 
-1. The compiler verifies both operands satisfy `Numeric` (per §3.5).
+1. The compiler verifies both operands satisfy `Numeric` (per §3.6).
 2. If either operand is `Integer`-kinded (or both are), the compiler
    inserts implicit widening conversions to lift them to the appropriate
    `Float` type per §4.5's lossless-widening rules. The pragmatic
@@ -1744,7 +1825,7 @@ error. Bit-level operations on floats require an explicit reinterpret cast
 through `as` to an integer type of the same width.
 
 The `&` and `|` characters are reused at the type level (`&` for trait
-intersection per §3.5, `|` for placement-attribute pipes per grammar §3.10
+intersection per §5, `|` for placement-attribute pipes per grammar §3.10
 and for enum sum types per grammar §3.6). At the value level — that is,
 inside expressions — they are bitwise operators. The grammar's context-based
 disambiguation determines which interpretation applies; user-visible
@@ -2173,7 +2254,7 @@ Available on `Float` types:
 | Inspection | `is_nan`, `is_infinite`, `is_finite`, `is_normal` |
 
 Each operation has its own trait (e.g., `Sqrt`, `Sin`, `Floor`). The
-`Float` umbrella requires all of them per the umbrella pattern in §3.5.
+`Float` umbrella requires all of them per the umbrella pattern in §3.6.
 
 Logarithm naming follows a deliberate convention to avoid the natural-vs-
 base-10 ambiguity that plagues other languages: no bare `log(x)` exists.
@@ -2244,7 +2325,7 @@ at use sites.
 
 This section provides the concrete shape of the trait hierarchy referenced
 throughout §3 and the preceding parts of §4. It instantiates the fine-
-grained-plus-umbrella pattern from §3.5 for the numeric domain.
+grained-plus-umbrella pattern from §3.6 for the numeric domain.
 
 #### 4.9.1 Fine-grained operator traits
 
@@ -2323,7 +2404,7 @@ This is the canonical fine-grained set. Stdlib may add additional fine-
 grained traits for specialized operations; the principle (one trait per
 capability) is what's normative, not the exact list above.
 
-`Ord` and `Eq` are standalone — not part of any numeric umbrella per §3.5.1.
+`Ord` and `Eq` are standalone — not part of any numeric umbrella per §3.6.1.
 Non-numeric types (strings, enums, records) may also be ordered or compared,
 so these traits live outside the numeric hierarchy.
 
@@ -2332,7 +2413,7 @@ declares no methods of its own. A type satisfies `Ord` automatically when it
 satisfies `Lt`, `Le`, `Gt`, `Ge`. In practice, implementers fulfill `Lt` and
 `Eq` only — the default bodies on `Le`, `Gt`, `Ge` derive their behavior from
 `Lt::lt` and `Eq::eq` per §3.1.3. Auto-derivation via `@derive(Ord)` per
-§3.7 generates the full set of fulfill blocks structurally; manual
+§3.8 generates the full set of fulfill blocks structurally; manual
 implementation requires only `fulfill Lt for X` and `fulfill Eq for X`.
 
 The `is not` operator does not have its own trait method. `a is not b`
@@ -2606,7 +2687,7 @@ When both operand records declare a field with the same name:
 #### 5.3.2 Trait inheritance via `@derive`
 
 Trait inheritance from the operand records is opt-in via `@derive` per
-§3.7. Each trait to be inherited is explicitly listed in the annotation,
+§3.8. Each trait to be inherited is explicitly listed in the annotation,
 and the compiler generates the `fulfill` block by delegating to the
 operand types' implementations:
 
@@ -2938,7 +3019,7 @@ more permissive than the outer is a compile error.
 
 #### 6.1.8 Trait auto-derivation
 
-Per §3.7, the `@derive` annotation generates structural trait
+Per §3.8, the `@derive` annotation generates structural trait
 implementations for a fixed set of traits:
 
 ```
@@ -2949,7 +3030,7 @@ type Person:
   age: i32
 ```
 
-Derivation operates field-by-field per §3.7.2: each field's type must
+Derivation operates field-by-field per §3.8.2: each field's type must
 itself satisfy the trait being derived. Derivation failure (a field whose
 type doesn't satisfy the trait) is a compile error identifying the
 offending field.
@@ -3098,13 +3179,20 @@ Unqualified variant names are not available by default. To bring variants
 into scope unqualified, the user explicitly imports them via `use`:
 
 ```
-use Result::{Ok, Err}
+use Result::(Ok, Err)
 use Direction::*
 
 let r = Ok(42)                                 // ✓ Result::Ok imported
 let e = Err("bad")                             // ✓ Result::Err imported
 let d = North                                  // ✓ all Direction variants imported
 ```
+
+Selection lists in `use` paths use parentheses. The language uses `()` for
+grouping uniformly — function arguments, generic arguments, tuple
+construction, expression grouping, trait intersection (`dyn (A & B)`) —
+and path selection follows the same convention. The context disambiguates
+the two uses of `()`: after `::` it is a selection list; after a value
+expression it is a call.
 
 Two enums imported into the same scope whose variants have colliding
 names produce an *import-time* conflict, not a call-site ambiguity:
@@ -3114,7 +3202,7 @@ use Direction::*       // brings North, South, East, West
 use Heading::*         // ERROR: Heading::North conflicts with Direction::North
 ```
 
-The user resolves by importing selectively (`use Heading::{East, West}` if
+The user resolves by importing selectively (`use Heading::(East, West)` if
 only some variants don't conflict) or by importing one enum's variants
 and keeping the other path-qualified.
 
@@ -3212,7 +3300,7 @@ visibility) and provide conversion functions between them.
 
 #### 6.2.7 Trait auto-derivation
 
-Per §3.7, enums support `@derive` for the same fixed set of traits as
+Per §3.8, enums support `@derive` for the same fixed set of traits as
 records:
 
 ```
@@ -3241,7 +3329,7 @@ offending payload field.
 A newtype is a wrapper type that creates a new nominal identity over an
 existing type. Newtypes are the standard way to add domain meaning to a
 primitive or stdlib type, satisfy the orphan rule for foreign-trait +
-foreign-type combinations (§3.6.4), or enforce invariants at construction.
+foreign-type combinations (§3.7.4), or enforce invariants at construction.
 
 #### 6.3.1 Declaration
 
@@ -3302,7 +3390,7 @@ fulfill TryFrom[string] for Email:
 ```
 
 The same `satisfies`/`fulfill` discipline from §3.2 applies. The
-`@derive` annotation per §3.7 is the shorthand for the common case where
+`@derive` annotation per §3.8 is the shorthand for the common case where
 trait conformance is structural over the underlying type.
 
 #### 6.3.2 Construction and extraction
@@ -3390,7 +3478,7 @@ Distance(2.0)` to dispatch to `f64`'s `Add::add`, producing
 Operators across different newtype identities require explicit
 implementation: `Distance + i32` is a compile error unless the user
 writes a `fulfill Add[i32] for Distance` block manually (with a matching
-`satisfies Add[i32]` in `Distance`'s body). The orphan rule (§3.6)
+`satisfies Add[i32]` in `Distance`'s body). The orphan rule (§3.7)
 permits this in the newtype's defining module.
 
 The `@derive` annotation implicitly declares `satisfies` for the listed
@@ -3428,7 +3516,7 @@ the constructor's visibility scope, which can enforce arbitrary checks.
 
 #### 6.3.5 Newtypes and the orphan rule
 
-A common use of newtypes is to work around the orphan rule (§3.6.1).
+A common use of newtypes is to work around the orphan rule (§3.7.1).
 Implementing a foreign trait for a foreign type is forbidden, but
 implementing a foreign trait for a *local newtype wrapping* the foreign
 type is permitted:
