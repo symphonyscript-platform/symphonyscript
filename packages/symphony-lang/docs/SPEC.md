@@ -735,9 +735,26 @@ compiler enforces this at the point `satisfies Student` is declared on the
 type: if `Person` is not in the type's `satisfies` set (directly or
 transitively), the declaration is rejected.
 
+A child trait may not redeclare a method already declared by any of its
+required traits (directly or transitively). If `Person` declares `fn display(
+value: Self) -> string`, then `Student` declaring its own `fn display(value:
+Self) -> string` is a compile error at the trait declaration site. The
+reasoning: any type satisfying `Student` would also satisfy `Person` via
+`requires`, so the type's effective method set would contain two `display`
+methods — exactly the conflict §3.2.1 forbids. Rejecting redeclaration at the
+trait level surfaces this problem at the trait author's site, not at the
+type author's site.
+
+This rule forecloses inheritance-style method override in trait hierarchies.
+Child traits compose by adding *new* methods to the required trait's
+interface, not by replacing existing ones. If a different behavior for an
+existing method name is needed, the right tool is a separate trait (with a
+different method name) or a newtype with its own conformance, not override
+through `requires`.
+
 The `requires` mechanism is how trait hierarchies are constructed (§3.6).
 
-#### 3.1.5 Trait-level default concrete type (§Topic 4)
+#### 3.1.5 Trait-level default concrete type
 
 A trait may declare a default concrete type used by the defaulting mechanism
 (§ — Numeric System, defaulting rules). When a use site is constrained solely
@@ -837,17 +854,42 @@ about what `display` (or whichever method) does. By forbidding overlap at the
 declaration site, the contract remains unambiguous: every method name on the
 type maps to exactly one trait-method origin.
 
-The rule is checked across all methods of all listed traits, including
-methods inherited transitively through `requires` chains. A trait `Student`
-that `requires Person` brings `Person`'s methods into `Student`'s effective
-method set; a type satisfying both `Student` and some unrelated `Trait3`
-with a method colliding with `Person`'s method is rejected.
+##### Algorithm: effective method-set computation
 
-When two traits a user wants both must have conflicting method names, the
+Given a type `T` with `satisfies T1, T2, ..., Tn`, the compiler computes
+`T`'s *effective method set* and checks for collisions:
+
+1. Initialize the effective set as empty.
+2. For each directly-satisfied trait `Ti`, compute the closure of `Ti` under
+   the `requires` relation: `Ti` itself plus every trait reachable through
+   any chain of `requires` clauses.
+3. Union the method declarations of all traits in the closure for all `Ti`s
+   into the effective set. Each entry is a (method-name, declaring-trait)
+   pair.
+4. If two entries share the same method name but originate from different
+   trait-method declarations (i.e., distinct (declaring-trait, method-name)
+   pairs collide on the name alone), the declaration is rejected. The error
+   identifies the conflicting name and the two source traits.
+5. Methods reached through multiple `requires` paths but originating from
+   the *same* trait-method declaration are not in conflict — they are the
+   same method, just reachable via multiple inheritance paths. This is the
+   "diamond" case (Topic 9's note on diamond inheritance being well-defined
+   in nominal trait systems) and is permitted.
+
+The §3.1.4 rule (traits cannot redeclare methods from required traits)
+guarantees that step 5's "same trait-method declaration reached multiple
+ways" case has a single origin: the original declaring trait. There is no
+ambiguity about which method is which when diamonds occur.
+
+##### Workaround for legitimate dual conformance
+
+When two traits a user wants both have conflicting method names, the
 canonical workaround is the newtype pattern: define separate newtype wrappers
 of the underlying type, each satisfying one of the conflicting traits.
 Distinct newtypes have distinct contract sheets and distinct method
 dispatches.
+
+##### Consequence for dispatch
 
 The rule simplifies dispatch (§3.4): because no type can satisfy two traits
 with overlapping method names, the case of "multiple trait impls match this
@@ -959,10 +1001,9 @@ valid; the choice is stylistic.
 The receiver parameter name (`a`, `value`, `result`, `left`, etc.) is always
 the implementer's choice. There is no `self` keyword for trait method
 receivers — that lowercase form is reserved exclusively for reactive context
-inside node and connection bodies (§ — Reactive System, deferred). The
-explicit parameter naming is the language's general principle (§Topic 19's
-uniform function call syntax): every parameter has a chosen name, not an
-implicit one.
+inside node and connection bodies (§ — Reactive System, deferred). Explicit
+parameter naming is the language's general principle under uniform function
+call syntax: every parameter has a chosen name, not an implicit one.
 
 Other type-level references in trait signatures (associated types like
 `Output`, `Item`, etc.) follow the same substitution rule: in `fulfill`
@@ -1068,11 +1109,11 @@ error at a site where the method clearly should exist.
 
 ### 3.4 Trait Method Dispatch
 
-Per §Topic 19/20, the language uses uniform function call syntax: a function
-whose first parameter is of type `T` is callable in three equivalent forms.
-Trait methods participate in this uniformly. Given a `fulfill Display for
-Person` block containing `fn display(value: Person) -> string`, any of the
-following are valid calls (and equivalent):
+The language uses uniform function call syntax: a function whose first
+parameter is of type `T` is callable in three equivalent forms. Trait methods
+participate in this uniformly. Given a `fulfill Display for Person` block
+containing `fn display(value: Person) -> string`, any of the following are
+valid calls (and equivalent):
 
 ```
 person.display()              // method-call form
@@ -1082,9 +1123,12 @@ Display::display(person)      // trait-path form, no import needed
 ```
 
 The trait-path form (`Trait::method`) is always available regardless of
-imports, and disambiguates when multiple traits in scope declare methods with
-the same name. The other forms rely on name resolution per § — Visibility
-and Modules.
+imports. Per §3.2.1 the bare-name forms are never ambiguous between traits
+(a type cannot satisfy two traits with overlapping method names), so the
+trait-path form is not needed for disambiguation — it remains available for
+stylistic clarity when a user wants the call's trait source visible at the
+call site. The other forms rely on name resolution per § — Visibility and
+Modules.
 
 #### 3.4.1 Resolution across free-function and trait-implementation namespaces
 
