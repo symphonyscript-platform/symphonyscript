@@ -3973,5 +3973,361 @@ elaborate happens through explicit `match` or method chains.
 
 ---
 
-*End of §7. Subsequent sections (§8 Error Handling, §9 Strings, Tuples,
-and Arrays, §10 Visibility and Modules) follow.*
+## 8. Error Handling
+
+The language uses a two-track failure model. The distinction is made *at
+the operation site* when writing code; once a failure has been encoded as
+one kind, it cannot be silently converted to the other.
+
+### 8.1 The Two-Track Model
+
+**Trap-track failures** represent bugs and invariant violations:
+arithmetic overflow on default operators per §4.6.1, integer division by
+zero, out-of-range `as` casts, out-of-range array indices, `abs` on
+signed minimum, negative integer exponent on integer base,
+`unwrap`/`expect` on `Option::None` or `Result::Err`, non-exhaustive
+match cases the compiler could not statically prove exhaustive, runtime
+stack overflow, allocation failure, and explicit `panic` calls. Traps
+halt execution and produce diagnostics. They are *not* catchable as
+values.
+
+**Value-track failures** represent recoverable conditions that flow
+through the type system: `Option[T]` for failures carrying no
+information beyond their occurrence, `Result[T, E]` for failures
+carrying contextual information, the `?` operator for short-circuit
+propagation (§8.4), the `Try` trait dispatching `?` to
+user-implementable types, the `From`-conversion of failure types during
+propagation (§7.9), and the arithmetic operator variants (`+?`, `-?`,
+etc.) per §4.6.4 for producing `Option`-typed results from operations
+that would otherwise trap.
+
+The two tracks are not interchangeable:
+
+- A trap does not become a `Result::Err` value.
+- A `Result::Err` does not abort the program.
+- There is no `try`/`catch` mechanism for traps.
+
+The user picks the mechanism based on the failure's nature when writing
+the code: traps for "this should never happen if the program is correct";
+`Option`/`Result` for "this might legitimately happen at runtime and the
+caller might want to handle it." The operator variants from §4.6 make
+this choice visible at the operation level itself: `+` traps on overflow
+(the "if this overflows, the program has a bug" choice); `+?` returns
+`Option[T]` (the "the caller wants to handle the overflow case" choice).
+
+### 8.2 The Trap Track
+
+#### 8.2.1 `panic` and the `never` type
+
+`panic` is a built-in function with the signature:
+
+```
+fn panic(message: string) -> never
+```
+
+It triggers an immediate trap with the given diagnostic message. The
+`never` return type allows `panic` to appear anywhere a value of any
+type is expected, including inside `match` arms, conditional branches,
+and function bodies that return non-unit types:
+
+```
+let value = match maybe_value:
+  Some(x): x
+  None: panic("expected Some, got None")
+```
+
+#### 8.2.2 The `never` type
+
+`never` is a built-in primitive type with no values, written in lowercase
+per the convention for primitive type keywords (§1.4). It is the return
+type of functions that do not return normally — `panic`, infinite loops,
+functions that always trap.
+
+The compiler treats `never` as unifiable with any type during
+type-checking: a value of type `never` can be used in any context
+expecting any other type, because such a value can never actually exist
+at runtime. This is the "bottom type" of type theory, exposed as an
+ordinary primitive.
+
+```
+fn unreachable() -> never:
+  panic("unreachable code reached")
+
+let x: i32 = if condition: 5 else: unreachable()
+                                    // unreachable() returns never;
+                                    // unifies with i32 ✓
+```
+
+#### 8.2.3 Trap behavior at runtime
+
+When a trap fires:
+
+1. A diagnostic is printed including the operation that triggered the
+   trap (with operand values where available), the source location
+   (file, line, column), and a stack trace through the call chain.
+2. The process exits.
+
+There is no recovery mechanism. No `try`/`catch` exists for traps. No
+unwinding hook can intercept and convert a trap to a value. The
+philosophy: a trap signals a bug; the program is in a state the
+programmer didn't anticipate; continuing risks further incorrect
+behavior. Process abort is the safe response.
+
+Once a trap fires, the program exits. The only way to handle a failure
+recoverably is to use `Result`/`Option` from the start — and the
+operator/method variants in §4.6 and §4.7 (e.g., `+?`, `as?`,
+`checked_div`) make this choice available where overflow or range
+violation is a possibility. The user decides at the operation site
+whether a failure is a bug to be trapped or a condition to be handled.
+Choosing wrong at that point cannot be retroactively patched by a
+`catch` block; the language forces the decision upfront, which is the
+principal mechanism for keeping the two failure tracks honest.
+
+#### 8.2.4 Diagnostic format
+
+The diagnostic format includes the operation name and operand values
+where the runtime has access to them:
+
+```
+panic: integer overflow: 2147483647 + 1
+  at compute_total, src/billing.symphony:42:8
+  called from main, src/main.symphony:7:3
+```
+
+For user-triggered `panic` calls, the diagnostic includes the
+user-supplied message:
+
+```
+panic: expected Some, got None
+  at process_input, src/handler.symphony:24:10
+```
+
+Format details are implementation-level. The semantic commitment is that
+diagnostics provide sufficient information to identify what trapped,
+where, and through what call chain.
+
+### 8.3 The Value Track: `Option` and `Result`
+
+`Option[T]` and `Result[T, E]` are standard library types built from the
+generic enum mechanism per §6.2. They are ordinary enums with no
+language-level special-casing of their identity. Their stdlib
+definitions:
+
+```
+enum Option[T]:
+  Some(T)
+  None
+
+enum Result[T, E]:
+  Ok(T)
+  Err(E)
+```
+
+The interactions that look special — the `?` operator (§8.4), the
+error-conversion chains via `From` (§8.5) — are mediated through a
+stdlib trait (`Try`), not through compiler knowledge of these specific
+types. Any user-defined type can participate in `?` propagation by
+implementing `Try` per §8.4.
+
+#### 8.3.1 Pattern matching
+
+`Option` and `Result` use standard exhaustive `match` per §6.2.4:
+
+```
+match maybe_value:
+  Some(x): use_it(x)
+  None: handle_absence()
+
+match operation:
+  Ok(value): proceed(value)
+  Err(error): handle_error(error)
+```
+
+No special `if let` or check-and-unwrap sugar is provided in v1. The
+combination of `match` (for full discrimination) and `?` (for
+short-circuit propagation) covers the common cases. The language
+surface is intentionally minimal; sugar may be added later if usage
+patterns reveal a sharp need.
+
+### 8.4 The `?` Operator and the `Try` Trait
+
+The `?` postfix operator (grammar §3.15) dispatches through a stdlib
+trait, `Try`, that decomposes a value into either a "continue with this
+success value" or "break with this failure value":
+
+```
+trait Try:
+  type Success
+  type Failure
+  fn branch(value: Self) -> TryBranch[Success, Failure]
+
+enum TryBranch[S, F]:
+  Continue(S)
+  Break(F)
+```
+
+`Option` and `Result` fulfill `Try` in stdlib:
+
+- `Try::branch(Some(x))` → `Continue(x)`; `Try::branch(None)` →
+  `Break(None)`.
+- `Try::branch(Ok(x))` → `Continue(x)`; `Try::branch(Err(e))` →
+  `Break(Err(e))`.
+
+User types may implement `Try` to make `?` available on their own
+optional-or-result-like types.
+
+#### 8.4.1 Desugaring
+
+The `?` operator desugars to a `match` on the trait method's result,
+with the failure branch returning from the enclosing function and
+applying `From`-conversion to bridge failure types:
+
+```
+expr?
+```
+
+desugars to:
+
+```
+match Try::branch(expr):
+  Continue(value): value
+  Break(failure): return From::from(failure)
+```
+
+The `From::from(failure)` automatically converts the failure value into
+the enclosing function's failure type. When the failure types are
+identical, `From::from` is the trivial identity conversion (§7.3); no
+special-case logic is needed for matching types.
+
+### 8.5 Error-Type Conversion via `From`
+
+The `From::from(failure)` step in `?` propagation enables error-type
+chains: a function returning `Result[T, MyError]` can use `?` on any
+`Result[U, OtherError]` provided `fulfill From[OtherError] for MyError`
+exists. The conversion is invisible at the call site but typed
+end-to-end; the compiler verifies the `From` impl exists at every `?`
+use site, rejecting with a clear error when no path is found.
+
+Full rules for the error-type relationship are specified in §7.9. In
+brief:
+
+- Same error type: trivially valid.
+- Source error convertible to destination error via `From`: implicit
+  conversion at the propagation site.
+- No relationship via `From`: compile error at the `?` site.
+
+The success type at the `?` site becomes the local expression's value
+and has no relationship to the function's return success type — the
+function's `Ok(...)` site satisfies that contract separately.
+
+### 8.6 No Cross-Type `?`
+
+Using `?` on an `Option` value inside a function returning `Result`, or
+on a `Result` value inside a function returning `Option`, is a compile
+error. The failure-type families are fundamentally different:
+
+- `Option`'s `None` carries *no information*.
+- `Result`'s `Err` carries *an error value*.
+
+Silently bridging them would require either fabricating an error value
+from `None` (which information is invented?) or discarding an error
+value when going to `Option` (information is lost). Both lose
+information that should be explicit at the call site.
+
+The user converts explicitly via stdlib methods (§8.7):
+
+- `option.ok_or(SomeError)` produces `Result[T, SomeError]` from
+  `Option[T]`. The user supplies the error value to use for `None`.
+- `result.ok()` produces `Option[T]` from `Result[T, E]`, discarding
+  the error.
+
+The conversion is visible at the call site; the failure-handling
+decision is explicit.
+
+### 8.7 Standard Methods
+
+Stdlib provides a standard set of methods on `Option` and `Result`.
+The non-exhaustive list:
+
+#### 8.7.1 `Option[T]`
+
+- `unwrap(value: Self) -> T` — returns the value or traps if `None`.
+- `expect(value: Self, msg: string) -> T` — like `unwrap` with custom
+  trap message.
+- `unwrap_or(value: Self, default: T) -> T` — returns the value or the
+  default.
+- `unwrap_or_else(value: Self, f: fn() -> T) -> T` — returns the value
+  or a computed default.
+- `map[U](value: Self, f: fn(T) -> U) -> Option[U]` — applies a
+  function to the success value.
+- `and_then[U](value: Self, f: fn(T) -> Option[U]) -> Option[U]` —
+  chains optional computations.
+- `or_else(value: Self, f: fn() -> Option[T]) -> Option[T]` — fallback
+  computation.
+- `ok_or[E](value: Self, err: E) -> Result[T, E]` — converts to
+  `Result` with the given error on `None`.
+- `is_some(value: Self) -> bool`, `is_none(value: Self) -> bool` —
+  discriminator predicates.
+
+#### 8.7.2 `Result[T, E]`
+
+- `unwrap(value: Self) -> T` — returns success or traps on `Err`.
+- `expect(value: Self, msg: string) -> T` — like `unwrap` with custom
+  trap message.
+- `unwrap_or(value: Self, default: T) -> T`,
+  `unwrap_or_else(value: Self, f: fn(E) -> T) -> T`.
+- `map[U](value: Self, f: fn(T) -> U) -> Result[U, E]` — transforms the
+  success value.
+- `map_err[F](value: Self, f: fn(E) -> F) -> Result[T, F]` — converts
+  the error type.
+- `and_then[U](value: Self, f: fn(T) -> Result[U, E]) -> Result[U, E]`
+  — chains fallible computations.
+- `or_else[F](value: Self, f: fn(E) -> Result[T, F]) -> Result[T, F]`
+  — error-recovery chain.
+- `ok(value: Self) -> Option[T]`, `err(value: Self) -> Option[E]` —
+  convert to `Option`, discarding the other arm.
+- `is_ok(value: Self) -> bool`, `is_err(value: Self) -> bool` —
+  discriminator predicates.
+
+All methods are implemented via `fulfill` blocks in stdlib and callable
+through uniform call syntax per §3.4. The following are equivalent:
+
+```
+option.unwrap()
+option >> unwrap
+unwrap(option)
+Option::unwrap(option)
+```
+
+### 8.8 Convention: `Option` vs `Result`
+
+The choice between `Option` and `Result` is convention, not a language
+rule:
+
+- Use `Option[T]` when the failure case carries no information beyond
+  its occurrence (e.g., `find_first(predicate)` — the element exists or
+  it doesn't; there's nothing more to say).
+- Use `Result[T, E]` when the failure case carries information the
+  caller may want to inspect or react to (e.g., `read_file(path)` —
+  the caller often wants to know whether the failure was missing-file,
+  permission-denied, or transient I/O error).
+
+When in doubt, prefer `Result`. Information about failure is rarely too
+much; the absence of information makes debugging harder. The compiler
+accepts either signature; users choose based on what callers need.
+
+### 8.9 Error Handling in the Reactive Context
+
+The reactive system (deferred to a later section) uses the same
+two-track failure model. A trap inside a `derived` expression's
+computation propagates as a normal trap — the reactive system does not
+catch traps. A `derived` declaration whose expression has type
+`Result[T, E]` or `Option[T]` produces a reactive value of that type;
+consumers of the derived value handle the failure case using standard
+`match` or `?` propagation. The reactive layer adds no special error
+mechanism beyond what already exists in the type system.
+
+---
+
+*End of §8. Subsequent sections (§9 Strings, Tuples, and Arrays, §10
+Visibility and Modules) follow.*
