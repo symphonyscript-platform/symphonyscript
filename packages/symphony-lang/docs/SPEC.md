@@ -2814,13 +2814,83 @@ also uses `.` but is followed by a function name and call syntax). The
 compiler disambiguates by the syntax following the dot.
 
 Field access is read-only. A record's fields cannot be reassigned after
-construction; the binding's immutability (§1.3) applies transitively to
-the fields. A "modified" record is produced by constructing a new record
-with the desired field values, typically via stdlib helper patterns like
-`record_with(field: new_value)` or via record-update syntax (deferred to
-the grammar; not v1).
+construction; the binding's immutability (§1.3) applies transitively to the
+fields. To produce a modified record, the user constructs a new record
+value, typically via the record-update expression `with` (§6.1.5).
 
-#### 6.1.5 Field visibility
+#### 6.1.5 Record update with `with`
+
+The `with` expression produces a new record value derived from an existing
+one with selected fields overridden or merged from other records:
+
+**Single-line form (comma-separated):**
+
+```
+let e2 = e1 with name: "new"
+let e2 = e1 with name: "new", age: 30
+let e2 = e1 with e2
+let e2 = e1 with e2, e3
+let e4 = e1 with e2, e3, name: "new", age: 30
+```
+
+**Multi-line form (colon-introduced body):**
+
+```
+let e2 = e1 with:
+  name: "new"
+  age: 30
+
+let e4 = e1 with e2, e3:
+  name: "new"
+  age: 30
+```
+
+These are the only two surface forms. Mixing single-line and multi-line in
+one expression is a parse error.
+
+The expression's components, evaluated left to right:
+
+- The *base* (`e1`) — a record value whose type defines the result type.
+- Zero or more *merge sources* (other record values like `e2`, `e3`) — each
+  must be of the same type as the base; fields are copied into the result.
+- Zero or more *field overrides* (`name: "new"`) — each override sets one
+  field of the result.
+
+The result is a new record of the base's type. Merge sources and field
+overrides are applied left-to-right; later assignments win on conflict.
+For `e1 with e2, e3, name: "new"`:
+
+1. Start with `e1`'s field values.
+2. Override with `e2`'s field values.
+3. Override with `e3`'s field values.
+4. Override `name` with `"new"`.
+
+A field unset in any source/override keeps the base's value. The result is
+always the same record type as the base.
+
+##### Same-type constraint
+
+All merge sources must have the *exact same type* as the base. Cross-type
+merge is a compile error. The `with` expression does not create new types
+at runtime; the language's type system is static.
+
+```
+let car_2: Car = car_1 with car_3        // ✓ both Car
+let bad = car with insured_record         // ✗ Car and Insured are different types
+```
+
+For combining different types' fields into a new type, the user constructs
+a record-intersection type per §5.3 and constructs values of it
+explicitly.
+
+##### Field-override constraints
+
+Every override field name must exist in the base's type. Overriding a
+non-existent field is a compile error. Override values must be type-
+compatible with the field's declared type (subject to the same widening
+and conversion rules as direct construction per §6.1.3).
+
+#### 6.1.6 Field visibility
 
 Each field carries an independent visibility specifier per §10:
 
@@ -2832,7 +2902,7 @@ type Account:
 ```
 
 Field visibility is independent from the enclosing type's visibility and
-from the constructor's visibility (§6.1.6). A field's visibility never
+from the constructor's visibility (§6.1.7). A field's visibility never
 exceeds the enclosing type's visibility — declaring a `public` field on a
 `private` type is a compile error, because no caller outside the type's
 visibility scope could observe the field.
@@ -2840,16 +2910,21 @@ visibility scope could observe the field.
 A field accessed from outside its visibility scope produces a compile
 error. The error is at the access site, not at the record's declaration.
 
-#### 6.1.6 Constructor visibility
+#### 6.1.7 Constructor visibility
 
 The constructor's visibility is independently controllable from the type's
 visibility per §10's `public(constructor_vis)` mechanism:
 
 ```
-public type Email = ...                       // both public
-public(private) type Email = ...              // type public, constructor private
-                                              // (smart-constructor pattern)
-shared(private) type SecretConfig = ...       // type shared, constructor private
+public type Email:                            // both public
+  wraps string
+
+public(private) type Email:                   // type public, constructor private
+  wraps string                                // (smart-constructor pattern)
+
+shared(private) type SecretConfig:            // type shared, constructor private
+  api_key: string
+  endpoint: string
 ```
 
 When the constructor is private, the type's name is visible but the
@@ -2861,7 +2936,7 @@ factory function (§7).
 Constructor visibility never exceeds type visibility; an inner specifier
 more permissive than the outer is a compile error.
 
-#### 6.1.7 Trait auto-derivation
+#### 6.1.8 Trait auto-derivation
 
 Per §3.7, the `@derive` annotation generates structural trait
 implementations for a fixed set of traits:
@@ -2879,7 +2954,14 @@ itself satisfy the trait being derived. Derivation failure (a field whose
 type doesn't satisfy the trait) is a compile error identifying the
 offending field.
 
-#### 6.1.8 Records and trait dispatch
+Some derivable traits have dependencies on others. Deriving `Ord` requires
+`Eq` to also be available on the same type — either by being derived in
+the same annotation or by being satisfied through a manual `fulfill`
+block. This dependency reflects the implementation: `Ord`'s default
+bodies for `Le`, `Gt`, `Ge` (per §4.9.1) call `Eq::eq`. Deriving `Ord`
+without `Eq` is a compile error identifying the missing dependency.
+
+#### 6.1.9 Records and trait dispatch
 
 A record's behavior — equality, hashing, display, comparison, conversion,
 domain-specific operations — is delivered through trait implementations,
@@ -2924,15 +3006,44 @@ enum Option[T]:
 ```
 
 Each variant declares a name (PascalCase, like a type name) and zero or
-more payload fields. Payload fields have named slots like record fields —
-positional payloads (`Circle(f64)` without a name) are not supported for
-the same reasons as record positional construction (§6.1.3).
+more payload fields. Payload fields are declared with named slots, parallel
+to record fields. The declarations serve two purposes simultaneously:
 
-A variant with no payload is a *unit variant*: `North`, `None`. A variant
-with payload is a *tuple variant* (positional access) or *struct variant*
-(named fields). The language uses *named-payload* form uniformly: every
-payload field has a name, accessed by that name in pattern matches and
-constructors.
+- As *positional slots* — the variant can be constructed and pattern-matched
+  positionally using the field declaration order.
+- As *named labels* — the variant can be constructed and pattern-matched
+  with named arguments using the declared field names.
+
+A variant with no payload is a *unit variant* (`North`, `None`).
+
+The choice of positional vs named is made at each construction or match
+site, not at the declaration. Mixing positional and named arguments within
+a single construction or pattern is a compile error.
+
+```
+enum Shape:
+  Circle(radius: f64)
+  Rectangle(width: f64, height: f64)
+
+// Construction — choose one style per call:
+let c1 = Shape::Circle(radius: 5.0)              // ✓ named
+let c2 = Shape::Circle(5.0)                      // ✓ positional
+let r1 = Shape::Rectangle(width: 10.0, height: 20.0)   // ✓ named
+let r2 = Shape::Rectangle(10.0, 20.0)            // ✓ positional
+let r3 = Shape::Rectangle(width: 10.0, 20.0)     // ✗ mixed — compile error
+```
+
+The same positional-or-named rule applies to function and constructor
+calls throughout the language: any call site may use all-positional
+arguments, all-named arguments, or (for variadic-like patterns) some
+other supported form, but never a mix of positional and named within the
+same call.
+
+Records (§6.1.3) are an exception: records are *always* constructed with
+named arguments. Tuples (§9) are an exception in the other direction:
+tuples are *always* constructed positionally. Enum variants are the only
+compound construction where both forms are interchangeable, because the
+variant declaration provides both information channels.
 
 Generic parameters on the enum are in scope within all variants' payload
 declarations, as illustrated by `Result[T, E]` and `Option[T]` above.
@@ -2966,26 +3077,50 @@ fulfill Display for Color:
       Custom(r, g, b): "rgb({r}, {g}, {b})"
 ```
 
-#### 6.2.3 Variant construction
+#### 6.2.3 Variant construction and resolution
 
-A variant value is constructed by naming the variant and supplying its
-payload fields:
+A variant value is constructed by naming the variant and (for payload
+variants) supplying its arguments:
 
 ```
 let d = Direction::North
-let s = Shape::Circle(radius: 5.0)
-let r: Result[i32, string] = Result::Ok(value: 42)
+let s1 = Shape::Circle(radius: 5.0)           // named
+let s2 = Shape::Circle(5.0)                   // positional (§6.2.1)
+let r: Result[i32, string] = Result::Ok(42)
 let n: Option[i32] = Option::None
 ```
 
-The variant name is qualified by the enum name via `::` path syntax (§3.4).
-For unit variants, no argument list is needed. For payload variants, fields
-are named exactly as in the variant's declaration.
+By default, every variant reference is *path-qualified* with the enum name
+via `::` (`Result::Ok`, `Direction::North`). The path qualification makes
+the variant's enum unambiguous at every use site.
 
-The fully-qualified form is always available. Whether the bare-name form
-(`Ok(value: 42)` without `Result::`) is usable depends on whether the
-variant is in scope — the enum's variants are imported as a set, not
-individually.
+Unqualified variant names are not available by default. To bring variants
+into scope unqualified, the user explicitly imports them via `use`:
+
+```
+use Result::{Ok, Err}
+use Direction::*
+
+let r = Ok(42)                                 // ✓ Result::Ok imported
+let e = Err("bad")                             // ✓ Result::Err imported
+let d = North                                  // ✓ all Direction variants imported
+```
+
+Two enums imported into the same scope whose variants have colliding
+names produce an *import-time* conflict, not a call-site ambiguity:
+
+```
+use Direction::*       // brings North, South, East, West
+use Heading::*         // ERROR: Heading::North conflicts with Direction::North
+```
+
+The user resolves by importing selectively (`use Heading::{East, West}` if
+only some variants don't conflict) or by importing one enum's variants
+and keeping the other path-qualified.
+
+Conflicts are surfaced where they originate (the `use` statements), not
+where the offending name would be used. This keeps call sites unambiguous
+and makes import-induced confusion visible at the import declarations.
 
 #### 6.2.4 Pattern matching
 
@@ -3004,10 +3139,29 @@ let area = match shape:
     (s * (s - a) * (s - b) * (s - c)).sqrt()
 ```
 
-Pattern names introduced in a variant pattern bind to the variant's payload
-fields. The pattern's field names must match the variant declaration's
-field names; the bound variable name may match the field name (as above) or
-be renamed inline (`Circle(radius: r)` binds `r` to the radius field).
+Variant patterns parallel variant construction (§6.2.3): they may use
+*positional* form binding payload fields by declaration order, or *named*
+form binding by field name. Mixing the two within one pattern is a
+compile error.
+
+```
+// Positional form — bindings in declaration order:
+Rectangle(width, height): ...
+
+// Named form — bindings by field name:
+Rectangle(width: w, height: h): ...
+
+// Named form with same name as field:
+Rectangle(width: width, height: height): ...    // equivalent to positional above
+
+// Mixed — error:
+Rectangle(width, height: h): ...                // ✗ compile error
+```
+
+In the named form, the syntax `field_name: bound_name` binds the variant's
+field value to a new local name. When the bound name matches the field
+name (`width: width`), the syntactic shorthand `Rectangle(width, height)`
+is the positional form with the same effect.
 
 Patterns may be nested for compound values:
 
@@ -3084,83 +3238,124 @@ offending payload field.
 
 ### 6.3 Newtypes
 
-A newtype is a wrapper type with a single field (or single conceptual
-"underlying value") used to create a new nominal identity over an existing
-type. Newtypes are the standard way to add domain meaning to a primitive
-or stdlib type, satisfy the orphan rule for foreign-trait + foreign-type
-combinations (§3.6.4), or enforce invariants beyond what the underlying
-type expresses.
+A newtype is a wrapper type that creates a new nominal identity over an
+existing type. Newtypes are the standard way to add domain meaning to a
+primitive or stdlib type, satisfy the orphan rule for foreign-trait +
+foreign-type combinations (§3.6.4), or enforce invariants at construction.
 
-#### 6.3.1 Two declaration forms
+#### 6.3.1 Declaration
 
-A newtype is declared in one of two shapes:
-
-**Alias-shaped form:**
-
-```
-type Email = string
-type UserId = i64
-type Distance = f64
-```
-
-The right-hand side is a single type. The newtype has one underlying value
-of that type, conceptually accessed as the entire value (no field name).
-
-**Record-style form:**
+A newtype is declared with the `type` keyword and a body containing a
+`wraps` clause naming the underlying type:
 
 ```
 type Email:
-  value: string
+  wraps string
 
-type Counter:
-  current: i64
-  limit: i64
+type UserId:
+  wraps i64
+
+type Distance:
+  wraps f64
+
+type MyVec[T]:
+  wraps Vec[T]
 ```
 
-The record-style form is an ordinary record declaration (§6.1) that
-happens to wrap one or more underlying values. The "newtype" framing
-applies when the record exists primarily to add identity over its fields,
-rather than to compose distinct domain concepts.
+The signature line matches ordinary record and enum declarations
+(`type Name[generics]:`) for uniformity. The `wraps` clause inside the
+body identifies the declaration as a newtype and names its underlying
+type. The body may include other clauses — `satisfies`, `@derive`
+(as an annotation above the type), `requires` — but it may not contain
+field declarations. A `wraps` body and a field-declaration body are
+mutually exclusive: a newtype wraps one underlying value; a record
+declares its own fields. The compiler rejects bodies that mix `wraps`
+with field declarations.
 
-Both forms produce a nominal type distinct from any other type. The
-alias-shaped form is the canonical newtype; the record-style form is used
-when the underlying value needs a field name for clarity or when the
-newtype carries multiple related values.
+The contrast with `alias type` from §4.2:
+
+```
+alias type byte = u8         // transparent alias; byte and u8 are the same type
+type UserId:                 // newtype; UserId is distinct from i64
+  wraps i64
+```
+
+`alias type` produces transparent substitution — no new identity. A
+`type` declaration with a `wraps` clause produces a *new* nominal
+identity. The two forms are syntactically distinct and serve opposite
+purposes.
+
+A newtype body may include `satisfies` clauses for explicitly implemented
+traits per §3.2:
+
+```
+type Email:
+  wraps string
+  satisfies TryFrom[string]
+
+fulfill TryFrom[string] for Email:
+  fn try_from(s: string) -> Result[Email, ValidationError]:
+    if is_valid_email(s):
+      Ok(Email(s))
+    else:
+      Err(ValidationError::Invalid)
+```
+
+The same `satisfies`/`fulfill` discipline from §3.2 applies. The
+`@derive` annotation per §3.7 is the shorthand for the common case where
+trait conformance is structural over the underlying type.
 
 #### 6.3.2 Construction and extraction
 
-A newtype is constructed by calling its type name. For the alias-shaped
-form, the call takes the underlying value directly:
+A newtype is constructed by calling its type name with the underlying
+value as a single positional argument:
 
 ```
 let email = Email("alice@example.com")
 let id = UserId(42)
+let distance = Distance(1.5)
 ```
 
-For the record-style form, construction uses named fields per §6.1.3:
+Construction is always positional with one argument — the underlying
+value. No named-argument form, no multi-argument form. The newtype wraps
+exactly one value; the constructor reflects that shape.
+
+Extraction of the underlying value uses the `as` operator:
 
 ```
-let email = Email(value: "alice@example.com")
-let counter = Counter(current: 0, limit: 100)
+let s: string = email as string      // unwraps Email to string
+let n: i64 = id as i64               // unwraps UserId to i64
+let d: f64 = distance as f64         // unwraps Distance to f64
 ```
 
-Extraction of the underlying value uses the `as` operator for the
-alias-shaped form, converting back to the underlying type explicitly:
+##### Note on `as` overloading
+
+The `as` operator has two distinct uses in the language, dispatched by
+operand kind:
+
+- **Numeric cast** (§4.7) — converts between numeric primitive types,
+  potentially with trap-on-range-violation. Both operand and target are
+  numeric primitives.
+- **Newtype extraction** (here) — unwraps a newtype to its underlying
+  type. The operand is a newtype; the target is its `wraps` type.
+
+The two uses are unambiguous because the operand types determine the
+applicable mode: `5_i32 as f64` is a numeric cast (both are numeric
+primitives); `email as string` is a newtype extraction (`Email` is a
+newtype, `string` is its wrapped type). Mixing — e.g., extracting and
+re-casting in one operation — requires two `as` applications:
 
 ```
-let s: string = email as string   // unwraps Email to string
-let n: i64 = id as i64            // unwraps UserId to i64
+let n_str: string = some_userid as i64 as string  // ERROR: i64 -> string isn't a numeric cast
+let n: i64 = some_userid as i64
+let s = n.to_string()                              // use stdlib conversion
 ```
-
-For the record-style form, field access provides the underlying values:
-`counter.current`. The `as` operator does not apply to record-style
-newtypes; field access is the extraction mechanism.
 
 The asymmetric construction/extraction interfaces are deliberate.
-Construction is a *creation* of new identity (typed call). Extraction is a
-*discarding* of identity (explicit cast or field access). The two
-operations are kept syntactically distinct so that a reader sees clearly
-when domain identity is being introduced versus removed.
+Construction is a *creation* of new identity (typed call). Extraction is
+a *discarding* of identity (explicit cast). The two operations are kept
+syntactically distinct so that a reader sees clearly when domain identity
+is being introduced versus removed.
 
 #### 6.3.3 Trait inheritance via `@derive`
 
@@ -3173,44 +3368,59 @@ Trait inheritance is opt-in via `@derive`:
 
 ```
 @derive(Eq, Hash, Display)
-type Email = string
+type Email:
+  wraps string
 
 @derive(Add, Sub, Mul)
-type Distance = f64
+type Distance:
+  wraps f64
 
 @derive(Eq, Ord, Clone)
-type UserId = i64
+type UserId:
+  wraps i64
 ```
 
 For each derived trait, the compiler generates a `fulfill` block that
 delegates to the underlying type's implementation. Operations on the
 newtype dispatch through this delegation to the underlying behavior. For
-example, `@derive(Add)` on `Distance` allows `Distance(1.0) + Distance(2.0)`
-to dispatch to `f64`'s `Add::add`, producing `Distance(3.0)`.
+example, `@derive(Add)` on `Distance` allows `Distance(1.0) +
+Distance(2.0)` to dispatch to `f64`'s `Add::add`, producing
+`Distance(3.0)`.
 
 Operators across different newtype identities require explicit
 implementation: `Distance + i32` is a compile error unless the user
-writes a `fulfill Add[i32] for Distance` block manually. The orphan rule
-(§3.6) permits this in the newtype's defining module.
+writes a `fulfill Add[i32] for Distance` block manually (with a matching
+`satisfies Add[i32]` in `Distance`'s body). The orphan rule (§3.6)
+permits this in the newtype's defining module.
+
+The `@derive` annotation implicitly declares `satisfies` for the listed
+traits — the user does not write `satisfies Eq, Hash, Display` separately
+when using `@derive(Eq, Hash, Display)`. Manual `fulfill` blocks still
+require their corresponding `satisfies` clauses in the body per §3.2.
 
 Derivation fails (compile error) if the underlying type does not satisfy
-the trait being derived — `@derive(Display) on type X = SomeNonDisplayType`
-is rejected.
+the trait being derived — `@derive(Display)` on a newtype wrapping a
+non-`Display` type is rejected at the annotation site.
+
+Deriving `Ord` requires the underlying type to satisfy `Eq`, parallel to
+records (§6.1.8).
 
 #### 6.3.4 Constructor visibility
 
-Like records (§6.1.6), a newtype's constructor visibility is independently
-controllable from its type visibility:
+Like records (§6.1.7), a newtype's constructor visibility is
+independently controllable from its type visibility:
 
 ```
-public(private) type Email = string
+public(private) type Email:
+  wraps string
+  satisfies TryFrom[string]
 ```
 
-This is the smart-constructor pattern: the type name is visible publicly
-(so other modules can use `Email` in signatures), but construction is
-restricted (so only the defining module can produce `Email` values,
-typically via a validating `From[string]` impl that checks the string is
-a valid email format).
+This is the smart-constructor pattern: the type name `Email` is visible
+publicly (so other modules can use `Email` in signatures), but
+construction `Email(...)` is restricted (so only the defining module can
+produce `Email` values, typically via a validating `From[string]` or
+`TryFrom[string]` impl that enforces invariants).
 
 The pattern is the language's mechanism for enforcing invariants at
 construction time: any path that produces an `Email` value passes through
@@ -3225,17 +3435,18 @@ type is permitted:
 
 ```
 // In user module:
-type MyVec:
-  inner: Vec[i32]
+type MyVec[T]:
+  wraps Vec[T]
+  satisfies SomeForeignTrait
 
-fulfill SomeForeignTrait for MyVec:
+fulfill SomeForeignTrait for MyVec[T]:
   ...
 ```
 
 `MyVec` is local to the user's module; the orphan rule's "trait or type
 defined locally" check is satisfied. The wrapping is structurally trivial
-but semantically meaningful: it creates a distinct identity over which the
-user has implementation authority.
+but semantically meaningful: it creates a distinct identity over which
+the user has implementation authority.
 
 ---
 
