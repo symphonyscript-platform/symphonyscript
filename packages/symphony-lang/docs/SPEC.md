@@ -7626,7 +7626,8 @@ when they change" without manually wiring update propagation.
 The reactive system is built on six load-bearing principles.
 
 **Declarative composition.** A reactive graph is built declaratively
-from signal, attr, derived, node, and connection declarations.
+from signal, attr, state, derived, node, and connection
+declarations.
 Placement syntax (§13.7) constructs instances. Composition is
 structural — the graph's shape is known at compile time.
 
@@ -7643,17 +7644,19 @@ loops, no statement-level imperative constructs. When imperative work
 is needed, the reactive expression calls a pure function (per §11),
 which may use `mut` internally.
 
-**Lazy, batched evaluation.** Signal writes mark dependent cells
-dirty without immediate recomputation. The kernel evaluates the
-dirty set in topological order only when the host explicitly calls
-`kernel.publish()` (§13.12.4). All writes since the previous publish
-commit atomically at the same instant.
+**Lazy, batched evaluation.** Writes (signal, attr, state) mark
+dependent cells dirty without immediate recomputation. The kernel
+evaluates the dirty set in topological order only when the host
+explicitly calls `kernel.tick()` (§13.12.5). The publish operation
+(§13.12.6) is a separate visibility event — it does no evaluation;
+it atomically swaps the back buffer for consumer-visible
+observation.
 
 **Cycles broken by time.** The static dependency graph may contain
-cycles (§13.9), but every cycle must pass through at least one attr
-acting as a time-delay element. The per-publish evaluation graph,
-obtained by treating attr reads as inputs-from-previous-publish, is
-a DAG.
+cycles (§13.9), but every cycle must pass through at least one
+`state` declaration (§13.2.4) acting as a time-delay element. The
+per-tick evaluation graph, obtained by treating state-cell reads as
+inputs-from-previous-tick, is a DAG.
 
 **Reactive vs imperative separation.** Reactive composition uses
 nodes, parts, and connections. Imperative data structures (`Vec`,
@@ -7663,8 +7666,8 @@ to types that fit single cells in the reactive state buffer (§14.3).
 
 ### 13.2 Reactive Declarations
 
-The reactive system has three declaration kinds, distinguished by who
-controls the value.
+The reactive system has four declaration kinds, distinguished by who
+controls the value and how it changes over time.
 
 #### 13.2.1 `signal`
 
@@ -7691,9 +7694,10 @@ signal volume: f32 = 0.5
 signal target_pitch: f32 = 440.0
 ```
 
-Signals may be declared at module top level (program-wide) or inside
-node/connection bodies (per-instance, though this form is uncommon —
-attrs are the standard per-instance choice; see §13.2.2).
+Signals are declared only at module top level. They are program-wide
+reactive entry points — inputs from outside the reactive graph.
+Per-instance writable cells are the role of `attr` (§13.2.2);
+per-instance self-advancing cells are the role of `state` (§13.2.4).
 
 #### 13.2.2 `attr`
 
@@ -7720,7 +7724,7 @@ node Synthesizer:
 The `default` expression provides the initial value used when an
 instance is constructed without an explicit value for that attr.
 Defaults may reference previously-declared attrs of the same node
-(declaration order is significant; see §13.2.4).
+(declaration order is significant; see §13.2.5).
 
 The default may be a constant expression, an expression involving
 other declared attrs, an expression involving signals visible in
@@ -7781,7 +7785,79 @@ including transitively through function calls — determines its
 dependency set. When any cell in the dependency set changes, the
 derived becomes dirty and is recomputed on the next publish.
 
-#### 13.2.4 Initial value rules
+#### 13.2.4 `state`
+
+```
+state name: Type = initial
+  next: expression
+```
+
+A `state` declares a *per-instance* writable cell that advances its
+value on each tick (§13.8). State cells are the mechanism for
+cyclic reactive patterns — IIR filters, sequencers, integrators,
+delay lines — to carry values across ticks.
+
+A state declaration has two required parts:
+
+- **`= initial`** — the value the cell holds before the first tick.
+- **`next:` expression** — a pure reactive expression evaluated each
+  tick whose result becomes the cell's value for the next tick.
+
+Both parts are required. A `state` without `next:` is a compile
+error; use `attr` instead if the cell is host-written only.
+
+```
+node Filter:
+  attr input: f32 = 0.0
+  state previous_output: f32 = 0.0
+    next: self.current_output
+  derived current_output: f32 =
+    0.5 * self.input + 0.5 * self.previous_output
+```
+
+##### 13.2.4.1 Lockstep advancement
+
+Within a tick, state cells advance in **lockstep**: all `next:`
+expressions read the *current* values of state cells (their
+end-of-previous-tick values), compute new values, and commit
+together at end-of-tick. No state cell sees another state cell's
+just-advanced value within the same tick.
+
+This is the standard synchronous-dataflow semantics (Lustre,
+Esterel, Verilog `<=` non-blocking assignment). It gives clean
+denotational semantics: state at the end of tick N is a pure
+function of state at the end of tick N-1 and the inputs received
+during tick N.
+
+##### 13.2.4.2 State vs attr
+
+`attr` and `state` are both per-instance writable cells. The
+distinction is who advances the value:
+
+- `attr` cells change only when the host writes via
+  `kernel.write_attr`. The kernel does not advance them.
+- `state` cells advance automatically each tick per the `next:`
+  expression. Hosts may also write them directly via
+  `kernel.write_state` (e.g., for resetting a filter).
+
+Use `attr` for parameters, configuration, and host-controlled
+inputs. Use `state` for cells that carry computed values across
+ticks autonomously.
+
+##### 13.2.4.3 State cells in cycles
+
+State cells are the only declarations whose participation in a
+dependency cycle is permitted. The cycle-validity rule (§13.9.2)
+requires every static cycle to pass through at least one `state`
+declaration. The state cell breaks the cycle via lockstep
+advancement: dependents read the cell's current value (set at end
+of previous tick); the cell's `next:` expression is computed this
+tick from those dependents' results.
+
+Instantaneous cycles (cycles consisting only of derived-to-derived
+edges, or attr-only cycles with no state cell) are compile errors.
+
+#### 13.2.5 Initial value rules
 
 Initial values are computed in a single startup pass:
 
@@ -7794,35 +7870,48 @@ Initial values are computed in a single startup pass:
    evaluated against the just-initialized attrs of the same instance
    (declaration order matters) and against signals (which are
    already initialized from step 1).
-3. **Deriveds** are evaluated last, in topological order over the
-   dependency graph. Each derived computes its initial value from
-   the now-initialized signals and attrs.
+3. **Per-instance state cells** are initialized similarly: each
+   `state X: T = initial` cell receives its `initial` value at
+   placement time. The `next:` expression is *not* evaluated at
+   startup — state cells hold their initial values until the first
+   tick.
+4. **Deriveds** are evaluated last, in topological order over the
+   per-tick DAG. Each derived computes its initial value from the
+   now-initialized signals, attrs, and state cells. State cells'
+   initial values serve as the "previous-tick" source for cyclic
+   reads during this startup evaluation.
 
 Bootstrap order:
 
-- Within a node's attr declarations, defaults may reference
-  previously-declared attrs of the same node. Referencing a
-  later-declared attr in a default is a compile error.
-- Across nodes (one node's attr default referencing another node's
-  attr), the references resolve to placed instances. Placement
-  topological order determines initialization order; cycles in
-  placement-time references are a compile error.
+- Within a node's attr or state declarations, defaults and initial
+  values may reference previously-declared cells of the same node.
+  Referencing a later-declared cell in a default is a compile
+  error.
+- At type-declaration time, attr defaults and state initial values
+  may reference only same-instance cells (via `self.X`), top-level
+  signals, and compile-time-evaluable expressions. They cannot
+  reference cells of other instances. Cross-instance references
+  are resolved only at placement time, not at type declaration.
 
-#### 13.2.5 No mutation of cells from Symphony source
+#### 13.2.6 No mutation of cells from Symphony source
 
 Symphony source has no syntactic form for assigning to a signal,
-attr, or derived after declaration. Source-level expressions read
-reactive cells; they do not write to them.
+attr, state, or derived after declaration. Source-level expressions
+read reactive cells; they do not write to them.
 
 Writes occur only through:
 
 - The host API (`kernel.write_signal`, `kernel.write_attr`,
-  `kernel.transaction`) per §13.12.
-- Placement-time initial values for attrs (per §13.7.2).
-- The kernel's own evaluation of `derived` expressions, which writes
-  the derived's output cell with the newly computed value.
+  `kernel.write_state`, `kernel.transaction`) per §13.12.
+- Placement-time initial values for attrs and state cells
+  (per §13.7.2).
+- The kernel's own evaluation of `derived` expressions, which
+  writes the derived's output cell with the newly computed value.
+- The kernel's own evaluation of `next:` expressions on `state`
+  cells, which commits the computed value at end-of-tick
+  (per §13.8.3 and §13.2.4.1).
 
-The "no source-level write" rule applies to all three declaration
+The "no source-level write" rule applies to all four declaration
 kinds uniformly. Symphony programs describe the reactive graph;
 they do not imperatively modify it from within.
 
@@ -8038,11 +8127,17 @@ of mixed types. In v1, this is supported only when:
 - All part types satisfy a common trait, AND
 - The iteration body accesses only that trait's methods/attrs.
 
-In other cases, the user accesses each part by name:
+In other cases, the user accesses each part by name. Parts are
+named at placement time (§13.7.3), not in the `parts:` clause:
 
 ```
 node Composite:
-  parts: Oscillator osc1, Filter flt1, Amplifier amp1
+  parts: Oscillator, Filter, Amplifier
+
+Composite c1:
+  Oscillator osc1
+  Filter flt1
+  Amplifier amp1
 
 fn process(c: Composite) -> f32:
   // Direct access by part name
@@ -8050,6 +8145,8 @@ fn process(c: Composite) -> f32:
   let filtered = c.flt1.filter(raw)
   c.amp1.amplify(filtered)
 ```
+
+The `parts:` clause lists only types; names appear at placement.
 
 ### 13.5 Connections
 
@@ -8068,8 +8165,11 @@ connection TypeName[GenericParams]?:
   derived name: Type = expr
 ```
 
-The `from` and `to` clauses declare the endpoint types. Exactly one
-of each is required.
+The `from` and `to` clauses declare the endpoint *types*. Exactly
+one of each is required. `from:` and `to:` are not attributes —
+they are endpoint slots, first-class structural elements of every
+connection. Attribute syntax (placement-time `name: expr` settings,
+inline pipes, flags) does not target them.
 
 ```
 connection Drives:
@@ -8093,9 +8193,10 @@ accessible via the usual `.` notation.
 
 `from` and `to` are bound at the connection's *placement* time —
 each connection placement specifies its source (the enclosing
-instance) and its destination (typically via the `/expr` form or the
-`to:` body attribute). Inside the connection's body, `from` and `to`
-resolve to those specific instances.
+instance) and its destination (typically via the `/expr` form or
+the `to:` endpoint-slot syntax in the connection's body). Inside
+the connection's body, `from` and `to` resolve to those specific
+instances.
 
 #### 13.5.3 Generic connections
 
@@ -8131,9 +8232,10 @@ declaration. Specifically, in:
 
 - Attr default expressions: `attr x: i32 = self.other_attr + 1`.
 - Derived expressions: `derived y: bool = self.x > 0`.
-- Iteration over parts: `for p in self.parts: ...` (in function
-  bodies that receive the node — used via `parent.parts` or
-  similar, not `self.parts` directly in such bodies).
+- Iteration over parts in reactive expressions inside a node body:
+  `for p in self.parts: ...`. Inside free functions that receive
+  the node as a parameter, the parameter name (developer-chosen)
+  is used to refer to the instance, not `self`.
 
 `self` is *not* available in:
 
@@ -8259,7 +8361,10 @@ A child placement whose type is a connection type creates a
 connection from the enclosing instance (which becomes the `from`
 endpoint) to some destination (the `to` endpoint). The destination
 is specified either via the `/expr` form (§13.7.5) or via an
-explicit `to:` attribute setting in the connection's body.
+explicit `to:` clause in the connection's body. `to:` (and `from:`,
+if explicitly specified) are endpoint-slot syntax — distinct from
+attribute settings — and target the connection's structural
+endpoints, not its attrs.
 
 ```
 Component chip_b:
@@ -8290,13 +8395,13 @@ with two attrs set inline. Equivalent body form:
 
 ```
 Drives:
-  to: some_car
-  enhanced_handling: true
-  aggressiveness: 0.8
+  to: some_car             // endpoint-slot syntax (not an attribute)
+  enhanced_handling: true  // attribute setting
+  aggressiveness: 0.8      // attribute setting
 ```
 
 The `/expr` form is the conventional choice for connection
-placements; it consolidates the most-set attribute (`to`) into a
+placements; it consolidates the endpoint slot (`to`) into a
 positional slot adjacent to the type.
 
 #### 13.7.6 Disambiguation summary
@@ -8462,8 +8567,12 @@ node placements it is a compile error.
 
 ### 13.8 Reactive Evaluation
 
-The kernel evaluates the reactive graph lazily, in batches, on
-host-triggered publish operations.
+The kernel separates two events: **tick** advances the program's
+semantic clock and performs all reactive evaluation; **publish**
+makes the latest evaluated state visible to consumers. Both events
+are host-triggered. They are independent — host code may tick many
+times before publishing, publish without ticking, or pair them
+one-to-one.
 
 #### 13.8.1 Lazy evaluation
 
@@ -8473,59 +8582,93 @@ all directly-dependent cells dirty. **No derived recomputation
 happens at write time.** The kernel maintains a dirty-set bitvector
 for the reactive graph; signal writes set bits.
 
-This decouples writes from evaluation. Multiple signal writes
-between publishes batch automatically: each write marks dirty
-cells; recomputation happens later for the union.
+The same lazy property applies to `kernel.write_attr` and
+`kernel.write_state`: write, mark dirty, defer recomputation.
 
-#### 13.8.2 Publish-triggered evaluation
+This decouples writes from evaluation. Multiple writes between
+ticks batch automatically: each write marks dirty cells;
+recomputation happens at the next tick for the union.
 
-The kernel evaluates dirty cells only when the host calls
-`kernel.publish()`. The host owns the cadence of publishes:
+#### 13.8.2 Tick-triggered evaluation
 
-- An audio host may call publish at every audio block boundary.
-- A UI host may call publish at every frame.
-- A batch processor may call publish once per batch.
-- A test harness may call publish manually between specific writes.
+The kernel evaluates dirty cells and advances state cells only
+when the host calls `kernel.tick()`. The host owns the tick
+cadence:
+
+- An audio host may tick once per audio sample or once per audio
+  block.
+- A UI host may tick once per frame.
+- A simulation host may tick once per simulation step.
+- A test harness may tick manually between specific writes.
 
 The kernel itself does not impose any cadence. It is fully passive
-with respect to time. (An optional auto-batching mode may be
-provided by some implementations as a configuration, but the
-default is host-driven.)
+with respect to time.
 
-#### 13.8.3 Publish cycle
+#### 13.8.3 Tick cycle
 
-On `kernel.publish()`, the kernel runs the following sequence on
-the producer thread:
+On `kernel.tick()`, the kernel runs the following sequence on the
+producer thread:
 
 1. **Snapshot the dirty set.** No new dirty bits are added during
-   the rest of the publish cycle (until the publish completes).
+   the rest of the tick cycle (until the tick completes).
 2. **Compute evaluation order.** Topologically sort the dirty cells
-   over the per-publish DAG (§13.9): cycles in the static graph
-   are broken by treating attr reads as inputs-from-previous-publish.
-3. **Invoke behaviors.** For each dirty derived in topological
-   order, invoke the behavior (per §14.6's ABI). The behavior reads
-   its inputs from the back buffer (which already contains this
-   publish's accumulated signal writes plus any earlier-evaluated
-   derived results) and writes its output to the back buffer.
-4. **Update state cells.** Any attrs that participate in cycles as
-   delay elements have their "next" value computed during this
-   evaluation; the kernel updates them in the back buffer for the
-   next publish to read.
-5. **Atomic swap publish.** The producer atomically swaps the
-   current pointer to the back buffer (§14.3.3.1). The previous
-   current rotates to become the next back/pending.
-6. **Clear dirty bits.** Ready for the next publish.
+   over the per-tick DAG (§13.9): cycles in the static graph are
+   broken by treating state-cell reads as inputs-from-previous-tick.
+3. **Evaluate `next:` expressions in lockstep.** For each `state`
+   cell, evaluate its `next:` expression against the *current*
+   values of all state cells (their end-of-previous-tick values).
+   The just-computed next values are held aside; they do *not*
+   become visible within this step. (Lockstep — §13.2.4.1.)
+4. **Invoke derived behaviors.** For each dirty derived in
+   topological order, invoke the behavior (per §14.6's ABI). The
+   behavior reads its inputs from the back buffer (which contains
+   accumulated signal/attr writes since the previous tick plus
+   any earlier-evaluated derived results in this tick) and writes
+   its output to the back buffer. State-cell reads return current
+   values (end-of-previous-tick).
+5. **Commit state advancement.** Write the next values computed
+   in step 3 into the state cells. After this step, state-cell
+   reads return their newly-advanced values.
+6. **Clear dirty bits.** Ready for the next tick.
 
-Consumers observing the kernel via swap see the previous publish's
-state until step 5 completes. After step 5, on their next swap,
-they see the just-published state.
+The tick cycle leaves the back buffer in a fully consistent state.
+It does not affect what consumers see; consumer visibility advances
+only at publish (§13.8.4).
 
-#### 13.8.4 Topological order and tiebreaker
+#### 13.8.4 Publish
 
-Within a publish cycle, dirty deriveds evaluate in topological
-order over the per-publish DAG. Topological order ensures that
-each derived's dependencies have stable values when the derived
-itself is evaluated.
+`kernel.publish()` performs an atomic swap of the current-buffer
+pointer (§14.3.3.1). It is a visibility-only operation: it performs
+no evaluation, no state advancement, no dirty-bit processing. Cost
+is one atomic pointer store.
+
+Consumers observing the kernel via `kernel.swap()` see the previous
+publish's state until publish completes. After publish, on their
+next swap, they see the most-recently-completed-tick's state.
+
+Three legal patterns:
+
+- **Tick then publish (typical).** One tick advances state and
+  evaluates dirty cells; publish exposes the result. Audio
+  applications, UI frames.
+- **Many ticks, one publish.** Batch simulation, fast-forwarding,
+  deterministic test scenarios. Consumers see only the final tick's
+  result; intermediate ticks are invisible.
+- **Publish without preceding tick.** Idempotent — consumer's next
+  swap returns the same state. Useful if consumer needs to refresh
+  a view without state having advanced.
+
+The "writes batch until tick" property combines with the
+"ticks batch until publish" property: programs can have arbitrary
+write/tick/publish patterns without affecting consumer-visible
+correctness.
+
+#### 13.8.5 Topological order and tiebreaker
+
+Within a tick cycle, dirty deriveds evaluate in topological order
+over the per-tick DAG. Topological order ensures that each
+derived's dependencies have stable values when the derived itself
+is evaluated.
 
 When two deriveds are at the same level (neither depends on the
 other), the compiler chooses a deterministic tiebreaker:
@@ -8538,10 +8681,13 @@ output trace).
 For deriveds across different node instances at the same level,
 the placement order at construction time is the tiebreaker.
 
-#### 13.8.5 Transactions
+`next:` expressions across multiple state cells evaluate in lockstep
+(§13.2.4.1); no internal ordering between them is observable.
 
-The host may opt into transactional batching of multiple signal
-writes that should commit as one logical change:
+#### 13.8.6 Transactions
+
+The host may opt into transactional batching of multiple writes
+that should commit as one logical change:
 
 ```
 kernel.transaction(|tx| {
@@ -8553,69 +8699,80 @@ kernel.transaction(|tx| {
 Writes within a transaction accumulate in the back buffer and
 commit atomically at transaction close. Properties:
 
-- **Failure mode:** if the transaction closure panics, the back
-  buffer rolls back to its pre-transaction state. No partial
-  commits.
+- **Panic during the closure:** trap-track semantics of §13.11.1
+  apply — the process aborts. There is no rollback; the back-buffer
+  state at the moment of abort is irrelevant because the process
+  is terminating. Atomicity of grouped writes is trivially
+  preserved by process death.
 - **Nesting:** nested transactions are flattened — only the
   outermost `kernel.transaction` commits. Inner `kernel.transaction`
   calls are no-ops with respect to publish. All writes since the
   outer transaction's start are committed together at outer close.
 - **Cancellation:** an explicit `tx.abort()` method rolls back the
-  transaction without panicking. The transaction closure returns
-  normally; the back buffer is restored.
-- **Relationship to publish:** transaction close does not in itself
-  publish. The transaction's accumulated writes are committed to
-  the back buffer, but visibility to consumers still requires a
-  subsequent `kernel.publish()`. Transactions provide *atomicity*
-  of grouped writes; publishes provide *visibility* to consumers.
+  transaction's accumulated writes. The closure returns normally;
+  the back buffer is restored to its pre-transaction state. This
+  is the only rollback path.
+- **Relationship to tick and publish:** transaction close commits
+  writes to the back buffer. It does not tick; dirty cells remain
+  dirty until the next `kernel.tick()`. It does not publish;
+  visibility to consumers waits on `kernel.publish()`.
+  Transactions provide *atomicity of grouped writes*; ticks
+  provide *evaluation*; publishes provide *visibility*.
 
-Outside transactions, individual `kernel.write_signal` calls
-behave as if each were its own one-write transaction.
+Outside transactions, individual `kernel.write_*` calls behave as
+if each were its own one-write transaction.
 
 ### 13.9 Cycle Handling
 
 Static cycles in the dependency graph are permitted, but only when
-broken by at least one state-delay element.
+broken by at least one `state` declaration (§13.2.4).
 
 #### 13.9.1 The static dependency graph
 
 The compiler constructs the static dependency graph by walking
-every `derived` expression's body and recording, for each derived,
-the set of cells it reads. Edges go from the read cells to the
-derived. Attr reads contribute the same kind of edge as signal and
-derived reads: a dependency.
+every `derived` expression's body and `next:` expression's body,
+recording for each the set of cells it reads. Edges go from the
+read cells to the derived (or to the state cell whose `next:`
+expression reads them). Signal, attr, derived, and state-cell
+reads all contribute edges.
 
 The graph may contain cycles. For example:
 
 ```
 node Filter:
-  attr previous_output: f32 = 0.0
-  derived current_output: f32 = compute(input_signal, self.previous_output)
+  attr input: f32 = 0.0
+  state previous_output: f32 = 0.0
+    next: self.current_output
+  derived current_output: f32 =
+    0.5 * self.input + 0.5 * self.previous_output
 ```
 
-`current_output` reads `previous_output`; `previous_output` is
-intended to be updated from `current_output` between publishes.
-This is a static cycle.
+`current_output` reads `previous_output`; `previous_output`'s
+`next:` expression reads `current_output`. This is a static cycle,
+broken by the state cell's lockstep advancement.
 
 #### 13.9.2 The cycle-validity rule
 
 > Every static cycle in the dependency graph must pass through at
-> least one attr that is read for its previous-publish value.
+> least one `state` declaration.
 
-Equivalently: every cycle must have at least one "state delay"
-element — an attr that the kernel updates between publishes,
-allowing reads in publish N to see values written in publish
-N-1.
+The state cell breaks the cycle: dependents read its current
+value (set at end of previous tick); the cell's `next:` expression
+is evaluated this tick from those dependents' results and commits
+at end-of-tick (§13.2.4.1).
 
-#### 13.9.3 The per-publish evaluation graph
+Cycles passing only through `attr` cells, or only through `derived`
+cells (or both, with no `state` cell anywhere), are not valid.
 
-To evaluate a publish cycle, the kernel constructs the *per-publish
-DAG* by treating every attr read that participates in a cycle as
-an *input* to this publish (its value is whatever was written in
-the previous publish, not what will be written this publish).
-This breaks all valid cycles, producing a DAG.
+#### 13.9.3 The per-tick evaluation graph
 
-The per-publish DAG is what gets topologically sorted in §13.8.3
+To evaluate a tick cycle, the kernel constructs the *per-tick DAG*
+by treating every state-cell read as an *input* to this tick — its
+value is whatever was committed at the end of the previous tick,
+not what will be committed at the end of this tick. This breaks
+all valid cycles, producing a DAG.
+
+The per-tick DAG is what gets topologically sorted in §13.8.3
 step 2.
 
 #### 13.9.4 Compile-time cycle detection
@@ -8623,45 +8780,40 @@ step 2.
 The compiler performs static cycle analysis on the dependency
 graph:
 
-- Cycles consisting only of derived→derived edges (no state delay
-  anywhere on the cycle) are *instantaneous cycles* and represent
-  the unsolvable "a depends on b depends on a" situation. These
-  are rejected at compile time with an error identifying the
-  cycle's members.
-- Cycles passing through one or more attrs are valid; the attr(s)
-  on the cycle act as delay elements.
+- Cycles passing through one or more `state` declarations are
+  valid; state cells act as delay elements via lockstep
+  advancement.
+- Cycles consisting only of derived→derived edges (or
+  attr→derived edges with no state cell on the cycle) are
+  *instantaneous cycles* and represent the unsolvable
+  "a depends on b depends on a" situation within a single tick.
+  These are rejected at compile time with an error identifying
+  the cycle's members.
 
 The compiler emits a diagnostic naming each instantaneous cycle
-and suggesting which derived should become an attr to break the
-cycle:
+and suggesting introduction of a state declaration:
 
 ```
 error: instantaneous cycle in reactive graph
   derived `a.x` depends on `b.y`
   derived `b.y` depends on `a.x`
-  hint: convert one of the deriveds to an attr to break the cycle
+  hint: introduce a `state` declaration on the cycle to break it
 ```
 
-#### 13.9.5 Attrs as delay elements
+#### 13.9.5 State cells as delay elements
 
-When an attr participates in a cycle, the kernel updates its value
-at the end of each publish cycle. The "next value" for the attr is
-computed during evaluation; the kernel writes it to the cell so
-that the next publish reads the freshly-computed value as input.
+A state cell on a cycle behaves as a z⁻¹ delay element: it always
+reads the previous tick's committed value, regardless of what its
+`next:` expression computes this tick. The end-of-tick commit
+(§13.8.3 step 5) is what advances the cell for the next tick to
+observe.
 
-The mechanism for specifying "the attr's next value" is part of the
-reactive declarations: an attr that participates in a cycle has its
-"next" expression declared via the same `= default` initializer
-form but computed each publish, OR the host writes its next value
-via `kernel.write_attr` (per §13.12.3). Implementations may support
-both; the simpler "host writes" form is the canonical mechanism.
-
-(The precise mechanism for declaring "this attr's next value is
-computed from these derived expressions" — IIR filter taps and
-similar — is a v1 design choice with multiple valid forms. The
-choice is implementation-conventional rather than language-required.
-A future v2+ may formalize a `state attr name: Type = next_expr`
-form or similar.)
+This is the same semantic primitive used by hardware registers
+(Verilog `<=` non-blocking assignment), synchronous-dataflow
+languages (Lustre `fby`), and signal-flow audio languages
+(Faust `~`). The kernel does not require any per-implementation
+convention beyond the language-level `state` declaration; the
+behavior is fully specified.
 
 ### 13.10 The Reactivity Boundary
 
@@ -8760,7 +8912,7 @@ are for live reactive semantics.
 
 #### 13.10.4 Restricted reactive cell types
 
-Reactive cells (signal, attr, derived values) are restricted to
+Reactive cells (signal, attr, state, derived values) are restricted to
 types that fit a single cell in the reactive state buffer (§14.3).
 Specifically:
 
@@ -8772,8 +8924,12 @@ Specifically:
   §14.5).
 - Tuples of all-`Copy` components whose total size fits one cell.
 - Records with `@derive(Copy)` whose total size fits one cell.
-- `Result[T, E]` and `Option[T]` where T and E satisfy the above
-  (for value-track error propagation per §13.11).
+- `Result[T, E]` and `Option[T]` where the total bit width (tag
+  discriminant + maximum payload variant) fits a single cell.
+  A `Result[i32, i32]` with a 1-bit discriminant fits 64 bits; a
+  `Result[i64, i64]` does not (discriminant pushes the total past
+  the cell). The compiler verifies the bit-width budget at
+  type-checking time.
 
 **Not permitted as reactive cell types in v1:**
 
@@ -8891,34 +9047,44 @@ The kernel's lifecycle proceeds in phases:
 4. Initialize attr cells with their declared defaults (per-instance,
    in declaration order within each instance, with placement
    order across instances).
-5. Run the initial derived evaluation in topological order over
-   the full dependency graph; each derived computes its initial
-   value from now-initialized signals and attrs.
-6. Perform the first publish (the first atomic current-pointer
+5. Initialize state cells with their declared initial values
+   (per-instance, in declaration order within each instance). The
+   `next:` expressions are *not* evaluated at startup; they run
+   only on the first `kernel.tick()`.
+6. Run the initial derived evaluation in topological order over
+   the per-tick DAG. Each derived computes its initial value from
+   the now-initialized signals, attrs, and state cells. State
+   cells' initial values serve as the "previous-tick" source for
+   cyclic reads during this pass.
+7. Perform the first publish (the first atomic current-pointer
    swap per §14.3.3.1). Consumers' subsequent swaps return real
    data.
 
-The kernel is "constructing" through steps 1–5; "live" after step
-6 completes. Consumer reads via swap before step 6 return a
+The kernel is "constructing" through steps 1–6; "live" after step
+7 completes. Consumer reads via swap before step 7 return a
 sentinel (or block, per implementation choice).
 
 **Steady-state operation:**
 
 - Host calls `kernel.write_signal(...)`, `kernel.write_attr(...)`,
-  `kernel.transaction(...)` to update reactive state.
-- Host calls `kernel.publish()` to commit accumulated writes and
-  trigger evaluation.
+  `kernel.write_state(...)`, `kernel.transaction(...)` to update
+  reactive state. Writes mark dirty bits; no evaluation runs.
+- Host calls `kernel.tick()` to advance the program's clock —
+  state cells advance their values (lockstep) and dirty deriveds
+  re-evaluate.
+- Host calls `kernel.publish()` to make the most-recently-ticked
+  state visible to consumers (atomic pointer swap).
 - Consumer threads call `kernel.swap(...)` to obtain the latest
   published state and read cell values.
 
 **Shutdown:**
-1. Stop accepting new signal/attr writes.
-2. Drain any in-flight evaluation (the current publish, if running,
-   completes).
+1. Stop accepting new signal/attr/state writes.
+2. Drain any in-flight tick (the current tick, if running,
+   completes; the kernel does not run an extra tick on shutdown).
 3. Drop reactive cells in reverse-of-construction order: connections
    drop before their endpoint instances; within each instance,
-   attrs and deriveds drop in reverse declaration order (per §14.9
-   Drop rules).
+   attrs, state cells, and deriveds drop in reverse declaration
+   order (per §14.9 Drop rules).
 4. Drop top-level signals.
 5. Drop string pool entries (per §14.5).
 6. Deallocate the reactive state buffer.
@@ -8958,23 +9124,63 @@ back-buffer-only, dirty-bit propagation, no evaluation.
 `instance_id` identifies the instance (assigned at compile time per
 placement); `attr_id` identifies the attr on that instance's type.
 
-#### 13.12.4 `kernel.publish`
+#### 13.12.4 `kernel.write_state`
+
+```
+kernel.write_state(instance_id, state_id, value)
+```
+
+Writes a new value to the cell of a specific instance's state
+declaration, overriding what its `next:` expression would have
+produced. Use cases: resetting filter state, snapping a sequencer
+to a specific step, scrubbing a delay line.
+
+Otherwise behaves identically to `kernel.write_attr`: synchronous,
+back-buffer-only, dirty-bit propagation, no evaluation. The next
+tick's `next:` expression evaluates against the host-written value
+(treating it as the previous-tick committed value).
+
+#### 13.12.5 `kernel.tick`
+
+```
+kernel.tick()
+```
+
+Advances the program's semantic clock by one step. Runs the tick
+cycle of §13.8.3 on the producer thread:
+
+- Evaluates `next:` expressions for all state cells in lockstep.
+- Re-evaluates dirty deriveds in topological order over the
+  per-tick DAG.
+- Commits state-cell advancements at end-of-tick.
+
+Synchronous; blocks until the tick completes. Does *not* publish;
+the new state remains in the back buffer until `kernel.publish()`
+exposes it to consumers.
+
+Cost is bounded by the size of the state-declaration set plus the
+size of the dirty-derived set.
+
+The host chooses the tick cadence per its domain: audio hosts tick
+per audio sample or block; UI hosts tick per frame; simulation
+hosts tick per simulation step. The kernel imposes no cadence and
+makes no assumptions about what one tick represents.
+
+#### 13.12.6 `kernel.publish`
 
 ```
 kernel.publish()
 ```
 
-Triggers a publish cycle as specified in §13.8.3. Runs synchronously
-on the producer thread, blocking until the publish completes (the
-atomic current-pointer swap is the visible end of the operation).
-Consumer threads see the new state on their next swap.
+Performs an atomic swap of the back buffer pointer (§14.3.3.1).
+Visibility-only: no evaluation, no state advancement, no dirty-bit
+processing. Cost is one atomic pointer store — O(1).
 
-The cost of `kernel.publish()` is bounded by the size of the dirty
-set (number of dirty deriveds to evaluate) plus the buffer-copy
-cost of the publish operation (O(N) where N is the reactive state
-buffer size, per §14.3.3.1).
+Consumer threads see the new state on their next swap. Calling
+publish without a preceding tick is idempotent (consumer's next
+swap returns the same state).
 
-#### 13.12.5 `kernel.transaction`
+#### 13.12.7 `kernel.transaction`
 
 ```
 kernel.transaction(|tx| {
@@ -8988,26 +9194,30 @@ Provides atomic grouping of writes. Properties:
 - The transaction's closure executes synchronously.
 - Writes within the closure accumulate in the back buffer; a
   snapshot of the pre-transaction back-buffer state is preserved
-  for potential rollback.
+  to support `tx.abort()`.
 - On successful completion, the writes are committed (the snapshot
-  is discarded); they are visible to subsequent reads on the
-  producer thread.
-- On panic within the closure, the back buffer is rolled back to
-  the pre-transaction snapshot. The panic propagates upward per
-  normal Symphony trap semantics.
-- On `tx.abort()` (called from within the closure), the back
-  buffer is rolled back; the closure returns normally; no panic
-  is raised.
-- Nested transactions flatten: only the outermost
-  `kernel.transaction` actually commits. Inner `kernel.transaction`
-  calls are no-ops with respect to publish; their writes
-  accumulate into the outer transaction and commit together at
-  outer close.
+  is discarded).
+- **On panic within the closure**, the trap-track semantics of
+  §13.11.1 apply: the process aborts. There is no rollback; the
+  back-buffer state at the moment of abort is irrelevant because
+  the process is terminating. Atomicity of grouped writes is
+  trivially preserved by process death. The savepoint mechanism
+  exists only for `tx.abort()`, not for panic recovery.
+- **On `tx.abort()`** (called from within the closure), the back
+  buffer is rolled back to the pre-transaction snapshot. The
+  closure returns normally; no panic is raised. This is the only
+  rollback path.
+- **Nesting:** nested transactions flatten — only the outermost
+  `kernel.transaction` commits. Inner `kernel.transaction` calls
+  are no-ops with respect to commit; their writes accumulate into
+  the outer transaction and commit together at outer close.
 
-Transactions provide *atomicity of grouped writes*. Visibility to
-consumers still requires a subsequent `kernel.publish()`.
+Transactions provide *atomicity of grouped writes*. They do not
+tick; dirty cells remain dirty until the next `kernel.tick()`.
+They do not publish; consumer visibility requires a subsequent
+`kernel.publish()`.
 
-#### 13.12.6 `kernel.swap`
+#### 13.12.8 `kernel.swap`
 
 ```
 kernel.swap() -> BufferView
@@ -9085,8 +9295,8 @@ in the following order:
    and initialize per the new source.
 6. For removed cells: invoke their Drop per §14.9, in
    reverse-declaration order. Connections drop before endpoint
-   instances; within each instance, attrs and deriveds drop in
-   reverse declaration order.
+   instances; within each instance, attrs, state cells, and
+   deriveds drop in reverse declaration order.
 7. Update the behavior table (§14.6.4): register behaviors with
    new content-addressed IDs; deregister behaviors no longer
    present. Behaviors with unchanged content-addressed IDs are
@@ -9109,9 +9319,6 @@ restart:
   require relocating live cells. The reload's diff-and-apply
   approach handles incremental changes but not whole-buffer
   reorganization.
-- Changes to fundamental graph properties that affect the kernel's
-  own data structures (dependency edge count beyond compiled
-  limits, etc.).
 
 Implementations detect these cases during the diff phase and
 either reject the reload or schedule it as a restart-required
@@ -9122,25 +9329,28 @@ reload. The kernel diagnoses which class of change occurred.
 §13 specifies the reactive system's source-level semantics; §14
 specifies the implementation model. Cross-references:
 
-- Reactive cells live in the triple-buffered reactive state buffer
-  per §14.3. Single-cell types (per §13.10.4) map to single
-  AtomicI64 cells.
+- Reactive cells (signal, attr, state, derived) live in the
+  triple-buffered reactive state buffer per §14.3. Single-cell
+  types (per §13.10.4) map to single AtomicI64 cells.
 - The producer role per §14.8 is the kernel's reactive evaluation
-  thread. It runs signal-write applications, derived behavior
-  invocations, and the publish operation. In the audio host model
-  (common deployment), the producer role is played by the main
-  thread; in other deployments, the kernel-configured thread
-  plays the role.
+  thread. It applies host writes to the back buffer, runs tick
+  cycles (state-cell `next:` evaluation, derived behavior
+  invocations), and performs the publish swap. In typical
+  deployments, the host's main thread plays the producer role;
+  in other deployments, a kernel-configured thread does.
 - The consumer role per §14.8 is any thread reading published
-  state via swap. Consumer threads do not invoke derived
-  behaviors; they read the results of past publishes.
-- Behaviors invoked during reactive evaluation conform to the
-  ABI of §14.6 — a uniform `fn(kernel: &KernelHandle, instance:
+  state via swap. Consumer threads do not invoke behaviors; they
+  read the results of past ticks made visible by the most recent
+  publish.
+- Behaviors invoked during reactive evaluation — both derived
+  expressions and state-cell `next:` expressions — conform to the
+  ABI of §14.6: a uniform `fn(kernel: &KernelHandle, instance:
   InstanceId) -> ()` signature, with stateless semantics and
   content-addressed identity (§14.6.4).
 - The graph metadata (§14.7) carries the structural information
   the kernel needs to construct the reactive state buffer, build
-  dependency edges, and dispatch behaviors.
+  dependency edges, distinguish attr cells from state cells, and
+  dispatch behaviors.
 - Hot reload at the source level (§13.13) maps to the §14.11
   mechanism: the kernel diffs behaviors and cells between old
   and new compiled output, applies the diff atomically, and
@@ -9715,13 +9925,14 @@ manages bits in cells and invokes functions by ID.
 
 The triple-buffer mechanism (§14.3.3) operates in terms of two roles:
 
-- **Producer**: the role that writes the back buffer and performs
-  the publish operation. There is exactly one producer per kernel
-  instance (SPSC). The producer may also read the back buffer it is
-  writing; such reads are local to the producer and do not go
-  through the triple-buffer publish cycle. What the producer writes
-  (signal updates from host API, derived expression results, etc.)
-  and what triggers it to publish are specified in §13.
+- **Producer**: the role that writes the back buffer, runs tick
+  cycles, and performs the publish operation. There is exactly one
+  producer per kernel instance (SPSC). The producer may also read
+  the back buffer it is writing; such reads are local to the
+  producer and do not go through the triple-buffer pointer swap.
+  What the producer writes (signal/attr/state updates from host
+  API, derived and `next:` expression results, etc.) and what
+  triggers it to tick and publish are specified in §13.
 - **Consumer**: the role that reads the current buffer via the swap
   operation. Loads the current pointer and reads cells from the
   buffer it points to. Never writes; never invokes behaviors. There
@@ -9753,10 +9964,11 @@ specified in §13.
 
 #### 14.8.2 Behaviors invoked by the mechanism
 
-Reactive behaviors (derived expression bodies, functions called
-from reactive contexts) are invoked by the producer. The trigger,
-the selection of which behaviors are invoked, and the ordering of
-invocations within a publish cycle are all specified in §13.
+Reactive behaviors (derived expression bodies, state-cell `next:`
+expressions, functions called from reactive contexts) are invoked
+by the producer. The trigger, the selection of which behaviors are
+invoked, and the ordering of invocations within a tick cycle are
+all specified in §13.
 
 The behavior ABI (§14.6) is the contract between the producer and
 each invoked behavior. Each invocation receives a kernel handle
