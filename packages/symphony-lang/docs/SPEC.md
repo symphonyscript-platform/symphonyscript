@@ -3738,13 +3738,21 @@ language automatically provides the reverse direction:
 The auto-derivation is language-built-in and not user-overridable. This
 forecloses the coherence problem of disagreeing manual `From`/`Into` pairs.
 
-Users do not need to (and cannot) write `fulfill Into[U] for T` directly.
-The compiler synthesizes it from the corresponding `From` impl. The
-auto-derived `Into` impl is language-privileged per §3.7.3: it does not
-require a `satisfies Into[U]` declaration on the source type `T` (which
-may not even be in the user's module). The `From` impl is the user's
-written contract; the `Into` impl is the language's mechanical
-counterpart.
+`Into` and `TryInto` are *sealed* traits: declared by the language for use
+in trait bounds (`T: Into[U]`) and method dispatch (`x.into::[U]()`), but
+not implementable by users. All `Into[U] for T` impls come from
+auto-derivation of a corresponding `From[T] for U` impl (plus the
+identity case per §7.3); all `TryInto[U] for T` impls come from
+auto-derivation of `TryFrom[T] for U`. Users do not write `fulfill
+Into[U] for T` or `fulfill TryInto[U] for T` directly — the compiler
+synthesizes the impl from the corresponding `From` or `TryFrom`. To
+expose a conversion from `T` to `U` to users, write the `From[T] for U`
+impl on the destination type; the `Into` direction follows automatically.
+
+The `From`/`TryFrom` impls are the user's written contract; the
+`Into`/`TryInto` impls are the language's mechanical counterparts.
+Neither auto-derived impl requires a `satisfies` declaration on its
+source type (per §3.7.3 — language-privileged implementations).
 
 ### 7.3 Identity Conversion
 
@@ -3762,15 +3770,32 @@ of the language-privileged implementations.
 ### 7.4 The Orphan Rule Applies to User Conversions
 
 User-written `fulfill From[T] for U` and `fulfill TryFrom[T] for U` are
-subject to the standard orphan rule per §3.7.1: at least one of `From`
-(the trait — defined in stdlib) or `U` (the destination type) must be
-local to the module declaring the impl. In practice, since the conversion
-traits are stdlib-defined, the destination type `U` must be local.
+subject to the standard orphan rule per §3.7.1, including the
+generic-parameter-coverage rule from §3.7.2: at least one concrete local
+type must appear in the impl declaration, in either the source type `T`
+(the trait's argument) or the destination type `U` (the for-type).
 
-The source type `T` may be foreign. A user can implement `From[i64] for
-MyMeasurement` (their type `MyMeasurement` is local; the source `i64` is
-foreign). A user cannot implement `From[i64] for f64` (both types are
-foreign — and the language already provides such impls anyway).
+Permitted:
+
+```
+fulfill From[i64] for MyMeasurement       // U is local ✓
+fulfill From[MyMeasurement] for i64       // T is local (covers via §3.7.2) ✓
+fulfill From[Vec[MyType]] for SomeType    // MyType is local, covering ✓
+```
+
+Rejected:
+
+```
+fulfill From[i64] for f64                  // ✗ neither type local — orphan
+                                           //   (and language already provides this)
+fulfill From[string] for Vec[i32]          // ✗ both string and Vec[i32] are foreign
+```
+
+The generic-parameter-coverage rule is particularly useful for conversions
+*from* a user's type *to* a foreign type. A user owning `MyMeasurement`
+can write `fulfill From[MyMeasurement] for i64` to define how their
+measurement converts to a plain integer. The corresponding
+`Into[i64] for MyMeasurement` auto-derives per §7.2.
 
 For implementing a conversion between two foreign types — a relatively
 rare need — the newtype pattern per §6.3.5 is the workaround: wrap one
@@ -3847,25 +3872,37 @@ the language and discoverable from §4.5; user types never silently
 participate in expression-level type adjustment.
 
 The auto-derivation of `Into` from `From` (§7.2) is *not* an implicit
-conversion — it is the auto-generation of a callable method. Calling that
-method requires explicit syntax at the call site.
+conversion — it is the auto-generation of a callable trait method.
+Calling that method requires explicit syntax at the call site, dispatched
+through uniform call syntax (§3.4).
 
 ### 7.8 Invocation Forms
 
 Conversion calls use the standard uniform call syntax per §3.4 and follow
-the argument-form rules per §3.5. The four equivalent forms for a
-conversion from `i32` to `f64`:
+the argument-form rules per §3.5. Three explicit forms are available
+universally; a fourth implicit form applies only to built-in lossless
+widenings.
 
 ```
 let x: f64 = (5_i32).into::[f64]()        // method form
 let x: f64 = 5_i32 >> Into::into          // pipe-forward through trait path
 let x: f64 = From::from(5_i32)            // free-function via trait path
-let x: f64 = 5_i32                        // implicit, since i32 → f64 is built-in lossless
+let x: f64 = 5_i32                        // implicit (built-in lossless widening only)
 ```
 
-The first three are explicit; the fourth works only because `i32` → `f64`
-is in the built-in lossless-widening set (§4.5.2). User-defined `From`
-impls have only the first three forms available.
+The first three forms are explicit invocations and are available for all
+`From`/`Into` impls — built-in and user-defined alike. The fourth is not
+an invocation at all but the absence of one: it works only because
+`i32` → `f64` is in the built-in lossless-widening set (§4.5.2), where
+the compiler inserts the conversion silently. User-defined `From` impls
+never participate in implicit conversion (§7.7).
+
+The pipe-forward form `value >> Trait::method` works with generic trait
+methods (like `Into::into`) when the target type can be inferred from
+context — typically from an annotation on the binding (`let x: f64 = ...`)
+or from a downstream constraint. When inference isn't sufficient, the
+method form with explicit turbofish (`x.into::[U]()`) is the clearer
+choice.
 
 Fallible conversions return `Result[T, Error]` and typically chain through
 the `?` operator (§8) for propagation:
@@ -3879,7 +3916,7 @@ fn parse_age(s: string) -> Result[Age, ParseError]:
 ```
 
 The `?` operator's interaction with `From` for error-type conversion is
-specified in §8.
+specified in §8 (and constrained per §7.9).
 
 ### 7.9 Error-Type Relationships in `?` Propagation
 
