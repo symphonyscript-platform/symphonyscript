@@ -1457,6 +1457,778 @@ implementations as needed without removing the `@derive` annotation.
 
 ---
 
-*End of §3. Subsequent sections (§4 Numeric System, §5 Type Intersection and
-dyn, §6 Records and Enums, §7 Conversion System, §8 Error Handling, §9
-Strings and Tuples, §10 Visibility and Modules) follow.*
+## 4. Numeric System
+
+This section specifies the language's numeric primitive types, literal forms,
+operator semantics, conversion rules, overflow handling, and the trait
+hierarchy that underpins generic numeric code. The trait machinery in §3
+provides the abstraction layer; this section provides the concrete numeric
+content.
+
+### 4.1 Numeric Primitive Types
+
+The built-in numeric primitive type set is fixed at fourteen types.
+
+**Signed integers:**
+
+| Type | Width | Range |
+|---|---|---|
+| `i8` | 8-bit | −128 to 127 |
+| `i16` | 16-bit | −32,768 to 32,767 |
+| `i32` | 32-bit | −2³¹ to 2³¹ − 1 |
+| `i64` | 64-bit | −2⁶³ to 2⁶³ − 1 |
+| `i128` | 128-bit | −2¹²⁷ to 2¹²⁷ − 1 |
+| `isize` | platform-pointer-sized | platform-dependent |
+
+**Unsigned integers:**
+
+| Type | Width | Range |
+|---|---|---|
+| `u8` | 8-bit | 0 to 255 |
+| `u16` | 16-bit | 0 to 65,535 |
+| `u32` | 32-bit | 0 to 2³² − 1 |
+| `u64` | 64-bit | 0 to 2⁶⁴ − 1 |
+| `u128` | 128-bit | 0 to 2¹²⁸ − 1 |
+| `usize` | platform-pointer-sized | platform-dependent |
+
+**Floating-point:**
+
+| Type | Format | Range/Precision |
+|---|---|---|
+| `f32` | IEEE 754 single | ~7 decimal digits, ±3.4 × 10³⁸ |
+| `f64` | IEEE 754 double | ~16 decimal digits, ±1.8 × 10³⁰⁸ |
+
+`i128` and `u128` are first-class. The performance overhead on platforms
+without native 128-bit hardware is bounded (software emulation, ~3–5× a
+64-bit op) and paid only when used; the alternatives — standard-library
+big-integer types or manual u64 pairs — are dramatically worse ergonomically
+for the legitimate use cases (UUIDs, cryptography, high-precision fixed-point,
+financial domains beyond 64-bit range).
+
+`isize` and `usize` are platform-sized integers. They are distinct types
+serving distinct roles: `isize` is the array-length and index type
+(§ — Arrays); `usize` exists for FFI compatibility with C-family `size_t`
+APIs, byte-count contexts where the non-negative invariant is load-bearing,
+and low-level memory layout work. Most code uses `isize`; `usize` appears in
+low-level corners.
+
+Half-precision (`f16`) and quadruple-precision (`f128`) floats are not
+included in v1. Hardware support for `f16` remains uneven across target
+platforms, and many of the special numeric operations (§4.6) would require
+fallback through `f32`. `f128` is highly specialized; the rare cases
+needing it are adequately served by standard-library arbitrary-precision
+types.
+
+### 4.2 Type Aliases
+
+The standard library provides convenience aliases using the `alias type`
+mechanism (§Topic 18 in the decision log; § — Newtypes for general alias
+semantics):
+
+```
+alias type byte = u8
+alias type short = i16
+alias type int = i32
+alias type long = i64
+alias type double = f64
+```
+
+These are true aliases — transparent substitution, shared identity, fully
+interchangeable with the underlying type at every use site. A value of type
+`int` *is* a value of type `i32`; the alias adds no new identity, no new
+trait impls, no conversion cost. Aliases are provided for users who prefer
+C-traditional names; the canonical explicit-width names remain the
+language's primary identifiers and appear unaltered throughout the standard
+library and documentation.
+
+No alias for `f32` is provided. The natural C-traditional name `float` would
+conflict with the lowercase `float` placeholder keyword (§2.2.4 and § —
+Placeholder Annotations) and would mislead users from C-family languages
+where `float` is single-precision. `double` is the canonical short name for
+`f64`; users wanting `f32` write `f32` directly.
+
+No alias is provided for `i128`, `u128`, `isize`, `usize`, `i8`, `u16`,
+`u32`, or `u64` — these types have no widely-shared traditional short name
+across language families, and the explicit-width names are clearer than any
+alias would be.
+
+Users may define their own aliases anywhere using the same `alias type`
+syntax. The built-in aliases are a stdlib convenience; nothing about them is
+privileged.
+
+### 4.3 Numeric Literals
+
+Literal forms follow grammar §2.5.
+
+#### 4.3.1 Integer literals
+
+Integer literals are written in decimal, hexadecimal (`0x` prefix), octal
+(`0o` prefix), or binary (`0b` prefix). Underscores are permitted between
+digits as visual separators:
+
+```
+42
+1_000_000
+0xFF_FF
+0b1010_1100
+0o755
+```
+
+An integer literal may carry an explicit type suffix, separated by an
+underscore:
+
+```
+5_i32
+255_u8
+1_000_000_u32
+0xFF_u8
+```
+
+The suffix forces the literal to the specified type, bypassing both the
+placeholder mechanism (§2.1) and the trait-level default (§3.1.5). The
+value-fits check from §2.4.3 still applies: a suffix specifying a type the
+value doesn't fit (`300_u8`) is a compile error.
+
+Without a suffix, an integer literal produces a value with the *integer
+placeholder*. Resolution proceeds per §2.1 (use-site resolution, with
+cross-kind permitted when the value fits exactly per §2.4.3).
+
+#### 4.3.2 Float literals
+
+Float literals require at least one of: a decimal point with digits, an
+exponent (`e` or `E`), or an explicit float suffix:
+
+```
+3.14
+1.0
+1e6
+2.5e-3
+6.022_e23
+```
+
+A bare `1` is an integer literal; `1.0`, `1e5`, `1_f32` are float literals.
+The grammar requires a digit on each side of the decimal point — leading-dot
+forms like `.5` are not permitted; write `0.5`.
+
+Float literals may carry suffixes:
+
+```
+3.14_f32
+3.14_f64
+1.0_f32
+6.022e23_f64
+```
+
+Without a suffix, a float literal produces a value with the *float
+placeholder*. Resolution proceeds per §2.1; the default per §3.1.5 is `f64`.
+
+#### 4.3.3 Boolean and character literals
+
+`true` and `false` are the two values of `bool` (§ — Bool and Char). They
+are not numeric; they do not participate in the numeric trait hierarchy.
+
+Character literals (`'a'`) produce values of type `char` (32-bit Unicode
+scalar value); byte literals (`b'a'`) produce values of type `u8`. Per
+§ — Bool and Char, `char` is not numeric; `u8` from a byte literal is
+fully numeric (it is u8 in every type-system sense).
+
+### 4.4 Operator Semantics
+
+Operators on numeric values follow the rules in this section. Each operator
+corresponds to one or more trait methods in §4.7's trait hierarchy.
+
+#### 4.4.1 Arithmetic operators
+
+| Operator | Operand Trait | Result | Notes |
+|---|---|---|---|
+| `+` | `Add` | same kind | mixed-kind promotes per §4.5 |
+| `-` (binary) | `Sub` | same kind | mixed-kind promotes per §4.5 |
+| `*` | `Mul` | same kind | mixed-kind promotes per §4.5 |
+| `/` | `Div` | **always Float** | mathematical division |
+| `//` | `IntDiv` | Integer | truncating integer division |
+| `%` | `Rem` | same kind | mixed-kind promotes per §4.5 |
+| `-` (unary) | `Neg` | same as operand | type error on unsigned |
+
+The `/` operator is mathematical division, divorced from machine
+representation. It accepts `Numeric` operands (integer, float, or mixed) and
+always produces `Float`. `5 / 2` produces `2.5`, not `2`. The result type is
+determined by the operator, not the operand types: even `10 / 5` produces a
+`Float`, not an integer.
+
+`//` is the truncating integer division operator. It accepts `Integer`
+operands and produces an `Integer` result. `5 // 2` produces `2`; `-5 // 2`
+produces `-3` (toward negative infinity). `Float` operands are a type error.
+
+`%` (remainder) accepts both kinds and produces a result of the same kind
+as its operands. Mixed-kind operands promote per §4.5.
+
+Unary `-` is defined on signed integers and floats only. Applying unary `-`
+to an unsigned integer is a type error at compile time — silent wrap on
+negation is rejected as a footgun source. To compute the additive inverse of
+an unsigned value, the user explicitly converts to a signed type via `as`
+or `From`/`Into` per §7.
+
+#### 4.4.2 Bitwise operators
+
+| Operator | Operand Trait | Result |
+|---|---|---|
+| `&` | `BitAnd` | Integer (same type) |
+| `\|` | `BitOr` | Integer (same type) |
+| `^` | `BitXor` | Integer (same type) |
+| `~` (unary) | `BitNot` | Integer (same type) |
+| `<<` | `Shl` | Integer (same type as left operand) |
+| `>>` | `Shr` | Integer (same type as left operand) |
+
+Bitwise operators are integer-only. Applying them to float values is a type
+error. Bit-level operations on floats require an explicit reinterpret cast
+through `as` to an integer type of the same width.
+
+The `&` and `|` characters are reused at the type level (`&` for trait
+intersection per §3.5, `|` for placement-attribute pipes per grammar §3.10
+and for enum sum types per grammar §3.6). At the value level — that is,
+inside expressions — they are bitwise operators. The grammar's context-based
+disambiguation determines which interpretation applies; user-visible
+overloading is avoided through positional context.
+
+The right-shift operator `>>` is a single operator whose behavior depends
+on the signedness of the left operand's type: signed types shift
+arithmetically (sign-extending); unsigned types shift logically (zero-
+extending). The compiler dispatches on the type via the `Shr` trait impl.
+No separate `>>>` operator exists.
+
+The grammar currently assigns `>>` to pipe-forward (§3.15.3). The
+expression-position bitwise meaning coexists with the pipe-forward meaning
+via context; a `>>` followed by an integer operand is bitwise, a `>>`
+followed by an identifier-then-colon is pipe-forward. This is the same
+mechanism that disambiguates `&` and `|` between type-level and value-level
+uses.
+
+#### 4.4.3 Comparison operators
+
+| Operator | Operand Trait | Result |
+|---|---|---|
+| `<` | `Ord` | bool |
+| `<=` | `Ord` | bool |
+| `>` | `Ord` | bool |
+| `>=` | `Ord` | bool |
+
+Comparison works on both integer and float kinds. Mixed-kind comparisons
+promote per §4.5 before comparing. Float comparison follows IEEE 754
+semantics including NaN behavior: `NaN < x` is `false`, `NaN > x` is `false`,
+`NaN == NaN` is `false` (via the `is` operator below). This is a property of
+IEEE 754, not a language design choice; user code working with potentially-
+NaN floats must handle the NaN cases explicitly.
+
+Comparison chaining (`a < b < c`) is not permitted (grammar §3.15 admits the
+syntax but the type system rejects it: only the rightmost comparison is
+typechecked as boolean-returning; intermediate comparisons in a chain would
+produce a bool which then doesn't compare meaningfully with the next
+operand).
+
+#### 4.4.4 Equality operators
+
+| Operator | Operand Trait | Result |
+|---|---|---|
+| `is` | `Eq` | bool |
+| `is not` | `Eq` | bool |
+
+Equality uses the keyword forms `is` and `is not`, not symbolic `==`/`!=`
+(grammar §3.15 and grammar §6 reserve symbolic equality for future
+deprecation). The keyword forms read more naturally in this language's
+expression syntax and avoid the visual collision with `=` used for
+binding-initialization.
+
+Equality works on both integer and float kinds. Mixed-kind equality
+promotes per §4.5 before comparing.
+
+Float equality is permitted despite the precision hazards of IEEE 754
+(`0.1 + 0.2 is not 0.3`). The alternative — removing `is`/`is not` from
+floats and forcing epsilon comparison — is paternalistic and breaks
+legitimate uses (NaN checks via `x is not x`, exact-zero comparisons,
+comparisons against known-exact values). The hazard is documented; users
+needing approximate comparison call stdlib `approx_eq(a, b, epsilon)` or
+similar.
+
+#### 4.4.5 Mixed-kind promotion
+
+When an expression mixes integer and float operands, the integer operand
+widens implicitly to the float type before the operation proceeds. The
+widening is *lossless or rejected*: if the integer's runtime range fits
+exactly in the float's mantissa, the widening is implicit; otherwise an
+explicit cast is required.
+
+Lossless integer-to-float widenings (always implicit):
+
+- `i8`, `u8`, `i16`, `u16` → `f32` (8/16-bit fits in f32's 24-bit mantissa).
+- `i32`, `u32` → `f64` (32-bit fits in f64's 53-bit mantissa).
+- All integer-to-`f64` widenings up to `i32`/`u32` are exact.
+
+Precision-losing widenings (require explicit cast, except for the pragmatic
+exception below):
+
+- `i32`, `u32` → `f32` (precision loss for values above 2²⁴).
+- `i64`, `u64` → `f64` (precision loss for values above 2⁵³).
+- `i128`, `u128` → any float (significant precision loss).
+
+**Pragmatic exception:** `i64`/`u64` → `f64` is permitted as an implicit
+widening despite the formal precision hazard for values above 2⁵³. The
+alternative — explicit casts on every common `i64 + f64` expression — is
+more friction than the bounded hazard justifies. The precision behavior is
+documented; users handling very large integer magnitudes in float contexts
+are expected to be aware.
+
+The general principle: implicit widening fires only when the conversion is
+provably lossless, with the single pragmatic exception above. All other
+widenings require explicit `as` (§7.1) or `From`/`Into` (§7).
+
+### 4.5 Implicit Widening Within Integer Kinds
+
+Implicit widening also applies between integer types when lossless. The full
+rules:
+
+| From | To | Implicit |
+|---|---|---|
+| `i8` → wider signed | `i16`, `i32`, `i64`, `i128`, `isize` | ✓ |
+| `u8` → wider unsigned | `u16`, `u32`, `u64`, `u128`, `usize` | ✓ |
+| `u8` → wider signed | `i16`, `i32`, `i64`, `i128`, `isize` | ✓ (always representable) |
+| same-width signed/unsigned (e.g. `i32` ↔ `u32`) | the other | ✗ (explicit cast) |
+| signed → wider unsigned (e.g. `i8` → `u16`) | wider unsigned | ✗ (negatives don't fit) |
+| any narrowing | narrower type | ✗ (range may not fit) |
+
+Conversions marked ✗ require `as` (§7.1) or `From`/`Into` (§7) — and for the
+fallible ones, `TryFrom`/`TryInto` (§7) returning `Result`.
+
+### 4.6 Overflow and Arithmetic Safety
+
+Arithmetic operators have four variants per operation, expressing four
+different policies for handling out-of-range results.
+
+#### 4.6.1 Default trap-on-overflow
+
+The default arithmetic operators (`+`, `-`, `*`, `/`, `//`, `%`, unary `-`)
+trap on overflow at runtime, in all build modes. There is no debug-traps/
+release-wraps distinction.
+
+When an operation produces a result outside the destination type's range, the
+runtime halts with a diagnostic identifying the operation, the operand
+values, and the source location. Traps cannot be caught as values — see §8.
+
+The performance cost of overflow checking on modern hardware is bounded
+(a well-predicted branch per operation). The cost is accepted in exchange
+for uniform semantics, safety in production, and the property that "this
+code worked in testing" implies "this code is correct in production" for
+overflow concerns.
+
+#### 4.6.2 Wrapping operators
+
+Wrapping operators perform modular two's-complement arithmetic, silently
+wrapping on overflow:
+
+| Operator | Trait | Behavior |
+|---|---|---|
+| `+%` | `WrappingAdd` | `255_u8 +% 1 == 0_u8` |
+| `-%` | `WrappingSub` | `0_u8 -% 1 == 255_u8` |
+| `*%` | `WrappingMul` | `200_u8 *% 2 == 144_u8` |
+| `%%` | `WrappingRem` | rare; defined for completeness |
+| unary `-%` | `WrappingNeg` | `(-128_i8) -% == -128_i8` (no overflow trap) |
+
+Wrapping is the right choice for hash functions, cryptographic primitives,
+counters where modular arithmetic is the intent, and bit-manipulation
+patterns where wrap is mathematically meaningful.
+
+There is no `/%` wrapping division — integer division has no sensible
+modular result for division by zero (the principal failure mode), so a
+wrapping variant adds no value. Use `/?` (§4.6.4) for the recoverable
+form.
+
+#### 4.6.3 Saturating operators
+
+Saturating operators clamp to the destination type's range bounds on
+overflow:
+
+| Operator | Trait | Behavior |
+|---|---|---|
+| `+|` | `SaturatingAdd` | `255_u8 +\| 1 == 255_u8` |
+| `-|` | `SaturatingSub` | `0_u8 -\| 1 == 0_u8` |
+| `*|` | `SaturatingMul` | `200_u8 *\| 2 == 255_u8` |
+| `%|` | `SaturatingRem` | rare; defined for completeness |
+| unary `-|` | `SaturatingNeg` | `(-128_i8) -\| == 127_i8` |
+
+Saturation is the right choice for DSP (audio sample clamping), image
+processing (pixel value clamping), and any context where producing a
+boundary value is preferable to either trapping or wrapping.
+
+There is no `/|` saturating division — same reasoning as `/%`.
+
+#### 4.6.4 Checked operators
+
+Checked operators return `Option[T]` rather than producing a value-or-trap:
+
+| Operator | Trait | Return | Behavior |
+|---|---|---|---|
+| `+?` | `CheckedAdd` | `Option[T]` | `Some(result)` or `None` |
+| `-?` | `CheckedSub` | `Option[T]` | `Some(result)` or `None` |
+| `*?` | `CheckedMul` | `Option[T]` | `Some(result)` or `None` |
+| `/?` | `CheckedDiv` | `Option[T]` | `None` on overflow or div-by-zero |
+| `//?` | `CheckedIntDiv` | `Option[T]` | `None` on overflow or div-by-zero |
+| `%?` | `CheckedRem` | `Option[T]` | `None` on overflow or zero divisor |
+| unary `-?` | `CheckedNeg` | `Option[T]` | `None` on overflow |
+
+The checked form is for cases where the caller wants to handle the overflow
+case explicitly without panicking. The `?` postfix operator (§8) propagates
+the `None` upward in a function returning `Option`-compatible types, making
+the recoverable-error chain ergonomic.
+
+#### 4.6.5 Compile-time constant overflow
+
+Compile-time constant overflow is always a compile error, regardless of
+which operator variant is used. The compiler evaluates constant expressions
+per §2.4 and rejects programs where a constant value provably doesn't fit
+its declared or inferred type:
+
+```
+const x: u8 = 200_u8 + 100_u8                 // compile error: 300 doesn't fit u8
+const x: u8 = 200_u8 +% 100_u8                // compile error: still doesn't fit
+let arr: i32[some_large_compile_time_value]   // compile error if value doesn't fit isize
+```
+
+This applies to `+%`, `+|`, `+?` and other variants too: the compile-time
+analysis happens before the runtime semantics of each variant matters.
+Compile-time-known overflow is a programmer error to be fixed in code, not
+a runtime condition to be handled.
+
+#### 4.6.6 Float overflow
+
+Float operations follow IEEE 754 semantics. Overflow produces signed
+infinity (`f64::INFINITY` or `f64::NEG_INFINITY`); underflow may produce
+subnormals or signed zero. NaN propagates through operations involving NaN
+operands.
+
+Float operators do not have wrapping or saturating variants — IEEE 754's
+infinity-and-NaN semantics already define the overflow behavior, and
+modular or clamping interpretations on float values would conflict with the
+established standard. The checked variant `+?` etc. on floats is defined for
+parity with integer checked operators and returns `None` if the operation
+produces NaN or infinity (implementation detail to be confirmed when stdlib
+is specified).
+
+#### 4.6.7 Integer division by zero
+
+Integer division by zero traps at runtime, per the default trap-on-overflow
+philosophy. There is no sensible mathematical result for `n / 0` or `n // 0`
+with integer types.
+
+The checked variant `/?` (and `//?`) returns `None` for division by zero,
+providing the recoverable form. There is no wrapping or saturating variant
+for division by zero — no modular or clamping value is meaningful.
+
+### 4.7 Explicit Casts
+
+The `as` operator performs explicit numeric conversion:
+
+```
+let x: i32 = 300
+let y: u8 = x as u8                     // explicit narrowing
+let f: f64 = x as f64                   // explicit widening (also possible implicitly)
+let z: i32 = some_float as i32          // explicit float-to-int (truncating)
+```
+
+`as` traps at runtime on out-of-range conversions for narrowing casts and
+signed/unsigned crossing casts. For widening casts that are lossless,
+`as` is the explicit-syntax equivalent of implicit widening — the same result,
+no runtime cost beyond the conversion itself.
+
+Method-based alternatives provide non-trapping behaviors:
+
+- `x.wrapping_as[u8]()` — wrap on overflow.
+- `x.saturating_as[u8]()` — clamp on overflow.
+- `x.checked_as[u8]()` — return `Option[u8]`, `None` on overflow.
+
+These method forms compose with `?` propagation for recoverable conversions
+in function bodies returning `Option`- or `Result`-compatible types.
+
+Float-to-integer casts via `as` truncate toward zero (matching most language
+conventions). Out-of-range float values (NaN, infinity, values larger than
+the integer's range) trap.
+
+User-defined conversions go through the `From`/`Into`/`TryFrom`/`TryInto`
+traits per §7. `as` is reserved for the built-in numeric conversions
+specified in this section; it does not extend to user-defined types.
+
+### 4.8 Special Numeric Operations
+
+Operations beyond the core arithmetic operators (mathematical functions,
+inspection methods, constants) are provided as trait methods on the relevant
+numeric traits. Per §3.4 they are callable via method-call, pipe-forward,
+conventional, and trait-path syntax.
+
+#### 4.8.1 General numeric operations
+
+Available on all `Numeric` types (both integer and float):
+
+| Operation | Trait | Signature |
+|---|---|---|
+| `abs` | `Abs` | `fn abs(value: Self) -> Self` |
+| `min` | `Min` | `fn min(a: Self, b: Self) -> Self` |
+| `max` | `Max` | `fn max(a: Self, b: Self) -> Self` |
+
+Note on `abs`: applying `abs` to the minimum value of a signed integer type
+(e.g., `i32::MIN.abs()`) traps on overflow per §4.6.1, because the
+mathematical result (`2³¹`) doesn't fit in `i32`. The wrapping and
+saturating variants are available as methods: `wrapping_abs`, `saturating_abs`.
+
+`min` and `max` on floats are NaN-suppressing by default: `min(x, NaN) = x`.
+NaN-propagating variants are available as `min_propagating` and
+`max_propagating` on `Float` for users who need strict IEEE 754 semantics.
+
+#### 4.8.2 Float-only operations
+
+Available on `Float` types:
+
+| Category | Operations |
+|---|---|
+| Square root | `sqrt` |
+| Trigonometric | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2` |
+| Logarithmic | `ln`, `log2`, `log10`, `log` (base, value) |
+| Exponential | `exp`, `exp2` |
+| Rounding | `floor`, `ceil`, `round`, `trunc` |
+| Inspection | `is_nan`, `is_infinite`, `is_finite`, `is_normal` |
+
+Each operation has its own trait (e.g., `Sqrt`, `Sin`, `Floor`). The
+`Float` umbrella requires all of them per the umbrella pattern in §3.5.
+
+Logarithm naming follows a deliberate convention to avoid the natural-vs-
+base-10 ambiguity that plagues other languages: no bare `log(x)` exists.
+Users write `ln(x)` for natural log, `log2(x)` for base-2, `log10(x)` for
+base-10, and `log(base, x)` for arbitrary base. The two-argument `log`
+takes the base as its first parameter.
+
+Rounding operations (`floor`, `ceil`, `round`, `trunc`) are defined only on
+floats. Integer ceiling division, floor division, and similar integer-domain
+operations are standard-library concerns (e.g., a `div_ceil` method on
+`Integer` if the stdlib provides it).
+
+#### 4.8.3 Power operation
+
+`pow` splits into two distinct traits based on operand kinds:
+
+- `IntPow` (on `Integer`): integer base, integer exponent, integer result.
+  Traps on overflow or on negative exponent (negative integer powers don't
+  have integer results).
+- `FloatPow` (on `Float`): float base, any-numeric exponent (integer
+  promotes to float per §4.4.5), float result.
+
+The typer picks the right trait based on the receiver's type. `2.pow(10)`
+where `2` resolves to `i32` uses `IntPow`; `2.0.pow(0.5)` uses `FloatPow`.
+The umbrella `Integer` includes `IntPow`; the umbrella `Float` includes
+`FloatPow`.
+
+A user calling `pow` with a negative integer exponent expecting a fractional
+result must explicitly convert to float first:
+
+```
+let x = 2.pow(-1)              // ✗ compile error or trap: negative exponent on IntPow
+let x = (2.0_f64).pow(-1)      // ✓ 0.5
+let x = (2 as f64).pow(-1)     // ✓ 0.5
+```
+
+#### 4.8.4 Numeric constants
+
+Constants live as associated values on the concrete numeric types, accessed
+via path syntax:
+
+```
+f64::PI
+f64::E
+f64::TAU
+f64::LN_2
+f64::LN_10
+f64::INFINITY
+f64::NEG_INFINITY
+f64::NAN
+f32::PI
+// ...
+i32::MIN
+i32::MAX
+u8::MAX
+i64::MIN
+i64::MAX
+// ...
+```
+
+Constants are associated with the concrete type rather than with traits
+because their exact values depend on the type's representation (e.g.,
+`f32::PI` and `f64::PI` differ in precision). Constants are `const`
+declarations per §2.4.1.1, so they have no runtime storage and are inlined
+at use sites.
+
+### 4.9 The Numeric Trait Hierarchy
+
+This section provides the concrete shape of the trait hierarchy referenced
+throughout §3 and the preceding parts of §4. It instantiates the fine-
+grained-plus-umbrella pattern from §3.5 for the numeric domain.
+
+#### 4.9.1 Fine-grained operator traits
+
+Each operator from §4.4 has its own trait, with the method name matching
+the conventional operator name:
+
+```
+trait Add:    fn add(a: Self, b: Self) -> Self
+trait Sub:    fn sub(a: Self, b: Self) -> Self
+trait Mul:    fn mul(a: Self, b: Self) -> Self
+trait Div:    fn div(a: Self, b: Self) -> Float    -- mathematical division
+trait IntDiv: fn intdiv(a: Self, b: Self) -> Self  -- truncating
+trait Rem:    fn rem(a: Self, b: Self) -> Self
+trait Neg:    fn neg(value: Self) -> Self
+
+trait BitAnd: fn bitand(a: Self, b: Self) -> Self
+trait BitOr:  fn bitor(a: Self, b: Self) -> Self
+trait BitXor: fn bitxor(a: Self, b: Self) -> Self
+trait BitNot: fn bitnot(value: Self) -> Self
+trait Shl:    fn shl(value: Self, n: u32) -> Self
+trait Shr:    fn shr(value: Self, n: u32) -> Self
+
+trait WrappingAdd:    fn wrapping_add(a: Self, b: Self) -> Self
+trait WrappingSub:    fn wrapping_sub(a: Self, b: Self) -> Self
+trait WrappingMul:    fn wrapping_mul(a: Self, b: Self) -> Self
+trait WrappingNeg:    fn wrapping_neg(value: Self) -> Self
+
+trait SaturatingAdd:  fn saturating_add(a: Self, b: Self) -> Self
+trait SaturatingSub:  fn saturating_sub(a: Self, b: Self) -> Self
+trait SaturatingMul:  fn saturating_mul(a: Self, b: Self) -> Self
+trait SaturatingNeg:  fn saturating_neg(value: Self) -> Self
+
+trait CheckedAdd:     fn checked_add(a: Self, b: Self) -> Option[Self]
+trait CheckedSub:     fn checked_sub(a: Self, b: Self) -> Option[Self]
+trait CheckedMul:     fn checked_mul(a: Self, b: Self) -> Option[Self]
+trait CheckedDiv:     fn checked_div(a: Self, b: Self) -> Option[Self]
+trait CheckedIntDiv:  fn checked_intdiv(a: Self, b: Self) -> Option[Self]
+trait CheckedRem:     fn checked_rem(a: Self, b: Self) -> Option[Self]
+trait CheckedNeg:     fn checked_neg(value: Self) -> Option[Self]
+
+trait Zero: fn zero() -> Self
+trait One:  fn one() -> Self
+
+trait Abs:  fn abs(value: Self) -> Self
+trait Min:  fn min(a: Self, b: Self) -> Self
+trait Max:  fn max(a: Self, b: Self) -> Self
+
+trait Sqrt: fn sqrt(value: Self) -> Self
+trait Sin:  fn sin(value: Self) -> Self
+trait Cos:  fn cos(value: Self) -> Self
+// ... and so on for the float-only operations from §4.8.2
+
+trait IntPow:   fn pow(base: Self, exp: Self) -> Self
+trait FloatPow: fn pow(base: Self, exp: Self) -> Self
+
+trait Ord: fn lt(a: Self, b: Self) -> bool
+           fn le(a: Self, b: Self) -> bool
+           fn gt(a: Self, b: Self) -> bool
+           fn ge(a: Self, b: Self) -> bool
+trait Eq:  fn eq(a: Self, b: Self) -> bool
+           fn ne(a: Self, b: Self) -> bool
+```
+
+This is the canonical fine-grained set. Stdlib may add additional fine-
+grained traits for specialized operations; the principle (one trait per
+capability) is what's normative, not the exact list above.
+
+`Ord` and `Eq` are standalone — not part of any numeric umbrella per §3.5.1.
+Non-numeric types (strings, enums, records) may also be ordered or compared,
+so these traits live outside the numeric hierarchy.
+
+#### 4.9.2 Umbrella traits
+
+Umbrella traits combine fine-grained traits via `requires` clauses (§3.1.4),
+introducing no new methods of their own. They are pure-requirement traits
+per §3.3.5: automatically satisfied when all required traits are satisfied.
+
+```
+@default(i32)
+trait Numeric:
+  requires Add, Sub, Mul, Neg, Zero, One,
+           WrappingAdd, WrappingSub, WrappingMul, WrappingNeg,
+           SaturatingAdd, SaturatingSub, SaturatingMul, SaturatingNeg,
+           CheckedAdd, CheckedSub, CheckedMul, CheckedNeg,
+           Abs, Min, Max
+
+@default(i32)
+trait Integer:
+  requires Numeric, Rem, IntDiv, BitAnd, BitOr, BitXor, BitNot, Shl, Shr,
+           WrappingRem, SaturatingRem,
+           CheckedDiv, CheckedIntDiv, CheckedRem,
+           IntPow
+
+@default(f64)
+trait Float:
+  requires Numeric, Div,
+           Sqrt, Sin, Cos, Tan, Asin, Acos, Atan, Atan2,
+           Ln, Log2, Log10, Exp, Exp2,
+           Floor, Ceil, Round, Trunc,
+           FloatPow
+
+@default(i32)
+trait Signed:
+  requires Integer
+  // Signed requires Integer, which includes Neg
+  // (Neg is satisfiable for signed integers but is a type error for unsigned;
+  // see §4.4.1)
+
+@default(u32)
+trait Unsigned:
+  requires Integer
+  // Unsigned does NOT require Neg; types satisfying Unsigned do not
+  // implement Neg, so unary `-` on them is a type error
+```
+
+The signed/unsigned distinction is enforced by the `Neg` trait's presence
+or absence in the type's effective method set. Types satisfying `Signed`
+implement `Neg`; types satisfying `Unsigned` do not.
+
+#### 4.9.3 Default mappings
+
+Defaults declared on the umbrella traits per §3.1.5 are confirmed against
+the final type set:
+
+| Trait | Default Type | Rationale |
+|---|---|---|
+| `Numeric` | `i32` | Workhorse general-purpose integer |
+| `Integer` | `i32` | Same |
+| `Float` | `f64` | Higher precision preferred when unconstrained |
+| `Signed` | `i32` | Workhorse signed integer |
+| `Unsigned` | `u32` | Symmetric counterpart to `i32` |
+
+The `i32` and `f64` defaults match modern language convention (Rust, Swift,
+Kotlin, C#) and reflect the types where the cost/precision tradeoffs are
+most balanced for general code.
+
+#### 4.9.4 Auto-implementations for built-in numeric types
+
+The fourteen built-in numeric types auto-implement the appropriate
+fine-grained traits per §3.3 (auto-impls of built-in numeric traits for
+built-in numeric types). Umbrella satisfaction follows transitively per
+§3.3.5.
+
+Specifically:
+
+- All integer types auto-implement: `Add`, `Sub`, `Mul`, `Rem`, `IntDiv`,
+  `BitAnd`, `BitOr`, `BitXor`, `BitNot`, `Shl`, `Shr`, the wrapping/
+  saturating/checked variants, `Zero`, `One`, `Abs`, `Min`, `Max`, `Ord`,
+  `Eq`, `IntPow`, and (for signed types) `Neg`. They satisfy `Integer`,
+  `Numeric`, and `Signed` or `Unsigned` accordingly.
+- Float types auto-implement: `Add`, `Sub`, `Mul`, `Div`, `Rem`, `Neg`,
+  the float-only operations (`Sqrt`, trig, log, exp, rounding), the
+  inspection methods, `Zero`, `One`, `Abs`, `Min`, `Max`, `Ord`, `Eq`,
+  `FloatPow`. They satisfy `Float`, `Numeric`, and `Signed` (floats are
+  signed by convention — they support `Neg`).
+
+User-defined numeric-like types (`Decimal` from stdlib, custom fixed-point
+types, etc.) implement whichever fine-grained traits are appropriate;
+umbrella satisfaction follows.
+
+---
+
+*End of §4. Subsequent sections (§5 Type Intersection and dyn, §6 Records
+and Enums, §7 Conversion System, §8 Error Handling, §9 Strings and Tuples,
+§10 Visibility and Modules) follow.*
