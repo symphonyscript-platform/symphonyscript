@@ -287,56 +287,87 @@ Dedicated operator variants provide explicit alternative policies:
   range, not "apply unary - to literal 5". This avoids the surprise that -5 would otherwise hit Topic 5's "unary - on
   unsigned" rule when the target type happened to be unsigned (Topic 5's rule still applies for runtime values).
   The propagation makes dependent-ish typing fall out for free: let arr: i32[fib(10) + 1] is a valid type because fib(
-  10) + 1 is compile-time evaluable. Compile-time array sizes, configuration-driven generics, and
-  bit-width-parameterized types all become first-class without separate const machinery.
-  The compiler tracks reactivity provenance through expressions to produce precise error messages — "value of x is
-  reactive because it depends on signal mouse_position at line 14" rather than "x is not constant."
-  Implementation details flagged but not part of the semantic decision: compile-time recursion depth limit (
-  configurable, per most languages with const eval); compile-time floating-point evaluation must use the target's float
-  format exactly so compile-time and runtime agree; compile-time evaluation cost limit (configurable, so a runaway pure
-  function doesn't hang the compiler indefinitely).
-  Rejected: literals-are-special with named values requiring casts (Position B/C — unnecessary asymmetry given purity
-  and immutability); strict literal-only flexibility (Position A — too much annotation noise on every literal in a typed
-  context); separate const vs let keywords (purity + immutability collapse the distinction — let covers both). Topic 12:
-  Array and index types.
-  Array length type is isize — signed, platform-sized. The signed choice avoids the length - 1 footgun (0 - 1 on an
-  empty array under unsigned would either freeze the loop or trap, while under signed it yields -1 and 0..-1 is
-  correctly empty). The platform-sized choice scales addressing capacity with the machine. The theoretical halving of
-  addressable size from usize to isize is not a real constraint on any current or near-future hardware: isize::MAX on
-  64-bit platforms is ~9.2 × 10^18 elements, far beyond any real array. Users needing the "must be non-negative"
-  invariant for low-level work (allocation sizes, FFI) can use usize explicitly; array lengths defaulting to isize does
-  not prevent that.
-  Array index type is any integer, implicitly widened to isize for indexing per Topic 6 lossless-widening rules. All
-  concrete integer types except u64 widen losslessly to isize; u64 indices require explicit cast since values above
-  i64::MAX don't fit. Users write indexing expressions with whichever integer type is natural for their context —
-  counter variables, sizes, computed offsets — and the compiler handles the widening.
-  Bounds checking on arr[i] traps at runtime if i < 0 || i >= length, consistent with Topic 10's trap-on-out-of-range
-  philosophy. When both the index and the length are compile-time known per Topic 11, bounds checking happens at compile
-  time and produces a compile error on out-of-range — arr[10] on i32[5] is rejected by the compiler, not at runtime.
-  Array type syntax is T[N] exclusively. There is no exposed canonical Array[T, N] form; the standard library's
-  underlying array type is internal and not addressable by name in user code. T[N] is dedicated syntax for the array
-  type, not sugar for a public generic. This matches how tuples are typically handled — dedicated syntax, no
-  namespace-level type name. Multi-dimensional arrays parse left-to-right: T[N][M] is an M-element array of T[N].
-  Zero-length arrays T[0] are valid types, useful for edge cases and generic code.
-  The dynamic-sized vector type (heap-allocated, growable) is a standard library concern, not a language-level type. Its
-  name and syntax (Vec[T], Vector[T], or whatever the standard library chooses) is outside this topic. Only fixed-size
-  arrays receive dedicated language syntax.
-  Resolution of T[args] in type position: the grammar's TypePostfixOp is uniformly [arg-list]. The typer interprets it
-  based on the syntactic-context's expectations. For array-type construction (e.g., i32[5]), the typer constructs the
-  array type directly. For generic instantiation (e.g., Vec[i32]), the typer instantiates the generic with the given
-  type arguments. The disambiguation is by what the TypeAtom resolves to — primitive types and other non-generic types
-  take array shorthand; generic types take instantiation.
-  Rejected: usize for length (the theoretical addressing capacity gain is unreachable on real hardware, and the length -
-  1 footgun is concrete and common — modern language design has converged on signed lengths for exactly this reason);
-  dual canonical-and-shorthand syntax for array types (introduces inconsistency and an unused Array[T, N] form that the
-  typer would have to recognize but users would not write); making indexing require a specific integer type (
-  isize-only) (would force casts on every common loop counter, contrary to Topic 6's convenience goal); language-level
-  dynamic arrays (collection types beyond fixed arrays belong in the standard library, not the language core). Topic 13:
-  Special numeric operations.
-  Operations beyond the core arithmetic operators (sqrt, sin, cos, tan, asin, acos, atan, atan2, ln, log2, log10, log,
-  exp, exp2, abs, min, max, pow, floor, ceil, round, trunc, etc.) are defined as trait methods, following the
-  fine-grained trait pattern from Topic 9.
-  Invocation forms (three syntaxes, one definition):
+    10)
+        + 1 is compile-time evaluable. Compile-time array sizes, configuration-driven generics, and
+          bit-width-parameterized types all become first-class without separate const machinery.
+          The compiler tracks reactivity provenance through expressions to produce precise error messages — "value of x
+          is
+          reactive because it depends on signal mouse_position at line 14" rather than "x is not constant."
+          Implementation details flagged but not part of the semantic decision: compile-time recursion depth limit (
+          configurable, per most languages with const eval); compile-time floating-point evaluation must use the
+          target's float
+          format exactly so compile-time and runtime agree; compile-time evaluation cost limit (configurable, so a
+          runaway pure
+          function doesn't hang the compiler indefinitely).
+          Rejected: literals-are-special with named values requiring casts (Position B/C — unnecessary asymmetry given
+          purity
+          and immutability); strict literal-only flexibility (Position A — too much annotation noise on every literal in
+          a typed
+          context); separate const vs let keywords (purity + immutability collapse the distinction — let covers both).
+          Topic 12:
+          Array and index types.
+          Array length type is isize — signed, platform-sized. The signed choice avoids the length - 1 footgun (0 - 1 on
+          an
+          empty array under unsigned would either freeze the loop or trap, while under signed it yields -1 and 0..-1 is
+          correctly empty). The platform-sized choice scales addressing capacity with the machine. The theoretical
+          halving of
+          addressable size from usize to isize is not a real constraint on any current or near-future hardware: isize::
+          MAX on
+          64-bit platforms is ~9.2 × 10^18 elements, far beyond any real array. Users needing the "must be non-negative"
+          invariant for low-level work (allocation sizes, FFI) can use usize explicitly; array lengths defaulting to
+          isize does
+          not prevent that.
+          Array index type is any integer, implicitly widened to isize for indexing per Topic 6 lossless-widening rules.
+          All
+          concrete integer types except u64 widen losslessly to isize; u64 indices require explicit cast since values
+          above
+          i64::MAX don't fit. Users write indexing expressions with whichever integer type is natural for their
+          context —
+          counter variables, sizes, computed offsets — and the compiler handles the widening.
+          Bounds checking on arr[i] traps at runtime if i < 0 || i >= length, consistent with Topic 10's
+          trap-on-out-of-range
+          philosophy. When both the index and the length are compile-time known per Topic 11, bounds checking happens at
+          compile
+          time and produces a compile error on out-of-range — arr[10] on i32[5] is rejected by the compiler, not at
+          runtime.
+          Array type syntax is T[N] exclusively. There is no exposed canonical Array[T, N] form; the standard library's
+          underlying array type is internal and not addressable by name in user code. T[N] is dedicated syntax for the
+          array
+          type, not sugar for a public generic. This matches how tuples are typically handled — dedicated syntax, no
+          namespace-level type name. Multi-dimensional arrays parse left-to-right: T[N][M] is an M-element array of
+          T[N].
+          Zero-length arrays T[0] are valid types, useful for edge cases and generic code.
+          The dynamic-sized vector type (heap-allocated, growable) is a standard library concern, not a language-level
+          type. Its
+          name and syntax (Vec[T], Vector[T], or whatever the standard library chooses) is outside this topic. Only
+          fixed-size
+          arrays receive dedicated language syntax.
+          Resolution of T[args] in type position: the grammar's TypePostfixOp is uniformly [arg-list]. The typer
+          interprets it
+          based on the syntactic-context's expectations. For array-type construction (e.g., i32[5]), the typer
+          constructs the
+          array type directly. For generic instantiation (e.g., Vec[i32]), the typer instantiates the generic with the
+          given
+          type arguments. The disambiguation is by what the TypeAtom resolves to — primitive types and other non-generic
+          types
+          take array shorthand; generic types take instantiation.
+          Rejected: usize for length (the theoretical addressing capacity gain is unreachable on real hardware, and the
+          length -
+          1 footgun is concrete and common — modern language design has converged on signed lengths for exactly this
+          reason);
+          dual canonical-and-shorthand syntax for array types (introduces inconsistency and an unused Array[T, N] form
+          that the
+          typer would have to recognize but users would not write); making indexing require a specific integer type (
+          isize-only) (would force casts on every common loop counter, contrary to Topic 6's convenience goal);
+          language-level
+          dynamic arrays (collection types beyond fixed arrays belong in the standard library, not the language core).
+          Topic 13:
+          Special numeric operations.
+          Operations beyond the core arithmetic operators (sqrt, sin, cos, tan, asin, acos, atan, atan2, ln, log2,
+          log10, log,
+          exp, exp2, abs, min, max, pow, floor, ceil, round, trunc, etc.) are defined as trait methods, following the
+          fine-grained trait pattern from Topic 9.
+          Invocation forms (three syntaxes, one definition):
 * Method-call: x.sqrt(), a.min(b).
 * Pipe-forward: x >> sqrt, a >> min: b per the grammar's x >> name: arg desugaring to name(x, arg).
 * Free-function via trait-path: Sqrt::sqrt(x), Min::min(a, b). The free function is the trait method accessed through
@@ -729,7 +760,9 @@ Topic 19a: Nodes, connections, and self for reactive context.
 Nodes and connections follow the same uniform-function-call rule as records: their declaration bodies are pure structure
 declarations and contain no fn definitions. Behavior on node and connection values is provided by free functions whose
 first parameter is the node or connection type, callable via method-call, pipe-forward, or conventional syntax per Topic
+
 19.
+
 The grammar revisions from Topic 19 apply: NodeDeclItem permits SatisfiesClause, PartsClause, InClause, OutClause,
 AttrDecl, DerivedAttrDecl but not FnDecl. ConnectionBodyItem permits FromClause, ToClause, AttrDecl, DerivedAttrDecl but
 not FnDecl. The extend mechanism does not exist for nodes or connections.
@@ -888,29 +921,36 @@ through the trait's namespace to the function inside the relevant fulfill block.
 namespace for its methods, accessible via the trait's path; the functions themselves are also reachable through ordinary
 name resolution if the trait is imported into scope.
 Generic functions (Topic 17) are identified by their fully-qualified path, same as non-generic. Monomorphization (Topic
+
 8) produces per-call-site instantiations tagged with the full path, ensuring instantiations across modules don't
-collide.
-Internal compiler representation: each function has a fully-qualified identifier (module path + local name). No name
-mangling for parameter types is required — the path already disambiguates, and there is no ad-hoc overloading to mangle.
-Generic monomorphization tags instantiations with the parameter types in the symbol, but this is a code-generation
-detail invisible to the type system.
-Rejected: ad-hoc overloading (Option A — creates complex interaction with generics, monomorphization, and uniform call
-syntax; modern systems languages have mostly converged against it); function-name uniqueness across the entire project (
-Option B without modules — verbose and unnecessary given the module system already provides namespacing); separate
-lookup rules for method-call vs conventional-call (Option C — breaks the uniform call syntax principle from Topic 19);
-type-scoped functions belonging to a type's namespace (Option D — resurrects something equivalent to methods, contrary
-to Topic 19's principle that records are pure data); bare module-name imports (use car_module alone) without specifying
-items (not supported by the grammar's use forms; the path-qualified call form covers the same use case without an
-import). Topic 21: Traits and enums.
-Enums participate in the trait system identically to records and other types. There is no enum-specific trait
-machinery — the satisfies clause from the type body and the fulfill block from Topic 19b operate on enums exactly as
-they do on any other nominal type. The natural implementation strategy for enum trait impls uses match inside the
-fulfill block's functions:
-type Event:
-satisfies Display
-KeyPress(key: string)
-Click(at: Vec3)
-Quit
+   collide.
+   Internal compiler representation: each function has a fully-qualified identifier (module path + local name). No name
+   mangling for parameter types is required — the path already disambiguates, and there is no ad-hoc overloading to
+   mangle.
+   Generic monomorphization tags instantiations with the parameter types in the symbol, but this is a code-generation
+   detail invisible to the type system.
+   Rejected: ad-hoc overloading (Option A — creates complex interaction with generics, monomorphization, and uniform
+   call
+   syntax; modern systems languages have mostly converged against it); function-name uniqueness across the entire
+   project (
+   Option B without modules — verbose and unnecessary given the module system already provides namespacing); separate
+   lookup rules for method-call vs conventional-call (Option C — breaks the uniform call syntax principle from Topic
+   19);
+   type-scoped functions belonging to a type's namespace (Option D — resurrects something equivalent to methods,
+   contrary
+   to Topic 19's principle that records are pure data); bare module-name imports (use car_module alone) without
+   specifying
+   items (not supported by the grammar's use forms; the path-qualified call form covers the same use case without an
+   import). Topic 21: Traits and enums.
+   Enums participate in the trait system identically to records and other types. There is no enum-specific trait
+   machinery — the satisfies clause from the type body and the fulfill block from Topic 19b operate on enums exactly as
+   they do on any other nominal type. The natural implementation strategy for enum trait impls uses match inside the
+   fulfill block's functions:
+   type Event:
+   satisfies Display
+   KeyPress(key: string)
+   Click(at: Vec3)
+   Quit
 
 fulfill Display for Event:
 fn display(event: Event) -> string:
