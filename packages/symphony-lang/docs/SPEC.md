@@ -1300,8 +1300,12 @@ Some declarations restrict the allowed form at their call sites:
   construction of tuples is a compile error.
 - **Newtypes** (§6.3.2) are *always* constructed positionally with one
   argument — the underlying value.
-- **Free functions, trait methods, and enum variants** accept either form
-  per-call.
+- **Free functions and trait methods** accept either form per-call.
+  Parameters always have names (per §3.1.1), so both forms are available
+  at every call site.
+- **Enum variants** depend on the variant's declaration (§6.2.1):
+  positionally-declared variants accept only positional form;
+  named-declared variants accept both forms per-call.
 
 The constraints reflect the nature of each declaration:
 
@@ -1317,6 +1321,10 @@ The constraints reflect the nature of each declaration:
   metadata that doesn't exist in the type.
 - *Newtypes* wrap a single underlying value. The constructor takes one
   argument; the name would be redundant with the type name itself.
+- *Enum variants* choose their available forms at the declaration site
+  (§6.2.1). A positional declaration (`Some(T)`) commits to
+  conciseness; a named declaration (`Rectangle(width: f64, height: f64)`)
+  enables both forms for readability at call sites where names help.
 
 For declarations that accept both forms, the choice between positional
 and named at a call site is a style decision driven by readability. Long
@@ -3223,61 +3231,105 @@ enum Direction:
   West
 
 enum Shape:
-  Circle(radius: f64)
-  Rectangle(width: f64, height: f64)
-  Triangle(a: f64, b: f64, c: f64)
+  Circle(f64)                              // positional payload
+  Rectangle(width: f64, height: f64)       // named payload
+  Triangle(f64, f64, f64)                  // positional payload
 
 enum Result[T, E]:
-  Ok(value: T)
-  Err(error: E)
+  Ok(T)
+  Err(E)
 
 enum Option[T]:
-  Some(value: T)
+  Some(T)
   None
 ```
 
 Each variant declares a name (PascalCase, like a type name) and zero or
-more payload fields. Payload fields are declared with named slots, parallel
-to record fields. The declarations serve two purposes simultaneously:
+more payload fields. Payload fields may be declared in two forms:
 
-- As *positional slots* — the variant can be constructed and pattern-matched
-  positionally using the field declaration order.
-- As *named labels* — the variant can be constructed and pattern-matched
-  with named arguments using the declared field names.
+- **Positional payload** — the type alone, with no name:
+  `Circle(f64)`, `Ok(T)`, `Triangle(f64, f64, f64)`.
+- **Named payload** — name and type, parallel to record fields:
+  `Rectangle(width: f64, height: f64)`.
 
 A variant with no payload is a *unit variant* (`North`, `None`).
 
-The choice of positional vs named is made at each construction or match
-site, not at the declaration. Mixing positional and named arguments within
-a single construction or pattern is a compile error.
+Within a single variant's payload declaration, the form is uniform: all
+positional or all named. Mixing within one variant declaration is a
+compile error:
+
+```
+enum Bad:
+  Mixed(width: f64, f64)         // ✗ compile error — mixed declaration
+```
+
+Different variants of the same enum may use different forms independently,
+as `Shape` above shows.
+
+##### 6.2.1.1 Implications for construction and patterns
+
+The declaration form determines which call/pattern forms are available
+for each variant:
+
+- A variant with **named payload** supports both positional and named
+  forms at construction sites and pattern matches. The choice is per-site
+  per §3.5.
+- A variant with **positional payload** supports only positional form at
+  construction sites and pattern matches. No names were declared; named
+  form is not available.
 
 ```
 enum Shape:
-  Circle(radius: f64)
+  Circle(f64)
   Rectangle(width: f64, height: f64)
 
-// Construction — choose one style per call:
-let c1 = Shape::Circle(radius: 5.0)              // ✓ named
-let c2 = Shape::Circle(5.0)                      // ✓ positional
+// Circle (positional declaration):
+let c1 = Shape::Circle(5.0)                            // ✓ positional
+let c2 = Shape::Circle(radius: 5.0)                    // ✗ no name "radius" declared
+
+// Rectangle (named declaration):
 let r1 = Shape::Rectangle(width: 10.0, height: 20.0)   // ✓ named
-let r2 = Shape::Rectangle(10.0, 20.0)            // ✓ positional
-let r3 = Shape::Rectangle(width: 10.0, 20.0)     // ✗ mixed — compile error
+let r2 = Shape::Rectangle(10.0, 20.0)                  // ✓ positional (always available)
+let r3 = Shape::Rectangle(width: 10.0, 20.0)           // ✗ mixed within call
+
+// Pattern matching mirrors construction:
+match shape:
+  Circle(r):                                            // ✓ positional binding
+    use_circle(r)
+  Rectangle(w, h):                                      // ✓ positional binding
+    use_rect(w, h)
+  Rectangle(width: w, height: h):                       // ✓ named binding
+    use_rect(w, h)
 ```
 
-The same positional-or-named rule applies to function and constructor
-calls throughout the language: any call site may use all-positional
-arguments, all-named arguments, or (for variadic-like patterns) some
-other supported form, but never a mix of positional and named within the
-same call.
+The form chosen at the declaration site is part of the variant's API.
+Adding names to a previously positional variant is a non-breaking change
+(both forms become valid); removing names from a previously named variant
+is a breaking change (named-form call sites stop compiling).
 
-Records (§6.1.3) are an exception: records are *always* constructed with
-named arguments. Tuples (§9) are an exception in the other direction:
-tuples are *always* constructed positionally. Enum variants are the only
-compound construction where both forms are interchangeable, because the
-variant declaration provides both information channels.
+##### 6.2.1.2 Choosing a form
+
+Positional declarations are appropriate when:
+
+- The variant has a single payload field with self-evident meaning
+  (`Some(T)`, `Ok(T)`, `Err(E)`).
+- The variant is conceptually a tuple with positional identity.
+- Conciseness matters and the type alone documents the payload.
+
+Named declarations are appropriate when:
+
+- The variant has multiple payload fields whose roles aren't
+  self-evident from order alone.
+- The variant has multiple fields of the same type and positional order
+  would be error-prone.
+- Documentation value of field names outweighs the verbosity.
+
+The stdlib uses positional payloads for `Option::Some`, `Result::Ok`, and
+`Result::Err` because each carries a single value whose role is captured
+by the variant name itself.
 
 Generic parameters on the enum are in scope within all variants' payload
-declarations, as illustrated by `Result[T, E]` and `Option[T]` above.
+declarations.
 
 #### 6.2.2 Conformance
 
@@ -3377,29 +3429,36 @@ let area = match shape:
     (s * (s - a) * (s - b) * (s - c)).sqrt()
 ```
 
-Variant patterns parallel variant construction (§6.2.3): they may use
-*positional* form binding payload fields by declaration order, or *named*
-form binding by field name. Mixing the two within one pattern is a
-compile error.
+Variant patterns parallel variant construction (§6.2.1.1): they may use
+*positional* form binding payload fields by declaration order, or
+*named* form binding by field name (when the variant declared field
+names). Mixing the two within one pattern is a compile error.
 
 ```
 // Positional form — bindings in declaration order:
 Rectangle(width, height): ...
 
-// Named form — bindings by field name:
+// Named form — bindings by field name (requires named declaration):
 Rectangle(width: w, height: h): ...
 
-// Named form with same name as field:
-Rectangle(width: width, height: height): ...    // equivalent to positional above
+// Named form with bound name matching field name:
+Rectangle(width: width, height: height): ...    // verbose; the positional form is equivalent
 
 // Mixed — error:
 Rectangle(width, height: h): ...                // ✗ compile error
 ```
 
-In the named form, the syntax `field_name: bound_name` binds the variant's
-field value to a new local name. When the bound name matches the field
-name (`width: width`), the syntactic shorthand `Rectangle(width, height)`
-is the positional form with the same effect.
+Named-form patterns are available only when the variant was declared with
+named payload fields (§6.2.1). Positionally-declared variants accept
+positional patterns only — there are no field names to match. For
+example, `Some(T)` (positionally declared) accepts `Some(x)` but not
+`Some(value: x)`.
+
+In the named form, the syntax `field_name: bound_name` binds the
+variant's field value to a new local name. The positional form
+`Rectangle(width, height)` (binding `width` and `height` as the local
+names) is the conventional terse choice when the field names happen to
+match the desired local names.
 
 Patterns may be nested for compound values:
 
@@ -3984,12 +4043,18 @@ one kind, it cannot be silently converted to the other.
 **Trap-track failures** represent bugs and invariant violations:
 arithmetic overflow on default operators per §4.6.1, integer division by
 zero, out-of-range `as` casts, out-of-range array indices, `abs` on
-signed minimum, negative integer exponent on integer base,
-`unwrap`/`expect` on `Option::None` or `Result::Err`, non-exhaustive
-match cases the compiler could not statically prove exhaustive, runtime
+signed minimum (§4.8), negative integer exponent on integer base
+(§4.8.3), `unwrap`/`expect` on `Option::None` or `Result::Err`, runtime
 stack overflow, allocation failure, and explicit `panic` calls. Traps
 halt execution and produce diagnostics. They are *not* catchable as
 values.
+
+Non-exhaustive `match` expressions are a separate concern: they are
+*compile errors* per §6.2.5, not runtime traps. The compiler statically
+verifies exhaustiveness at every `match`; a non-exhaustive match never
+compiles. If the user wants a runtime panic for "unreachable" cases,
+they write an explicit catch-all arm calling `panic` (which produces a
+trap via the standard mechanism).
 
 **Value-track failures** represent recoverable conditions that flow
 through the type system: `Option[T]` for failures carrying no
@@ -4019,7 +4084,8 @@ this choice visible at the operation level itself: `+` traps on overflow
 
 #### 8.2.1 `panic` and the `never` type
 
-`panic` is a built-in function with the signature:
+`panic` is a built-in function in the language prelude — available
+without qualification in every scope. It has the signature:
 
 ```
 fn panic(message: string) -> never
@@ -4236,8 +4302,8 @@ information that should be explicit at the call site.
 
 The user converts explicitly via stdlib methods (§8.7):
 
-- `option.ok_or(SomeError)` produces `Result[T, SomeError]` from
-  `Option[T]`. The user supplies the error value to use for `None`.
+- `option.ok_or(err)` — where `err: E` is the error value to use for
+  `None` — produces `Result[T, E]` from `Option[T]`.
 - `result.ok()` produces `Option[T]` from `Result[T, E]`, discarding
   the error.
 
@@ -4289,8 +4355,9 @@ The non-exhaustive list:
 - `is_ok(value: Self) -> bool`, `is_err(value: Self) -> bool` —
   discriminator predicates.
 
-All methods are implemented via `fulfill` blocks in stdlib and callable
-through uniform call syntax per §3.4. The following are equivalent:
+All methods listed above are *free functions* defined in stdlib, callable
+through uniform call syntax per §3.4 (records and enums carry no methods
+of their own per §6.1.9 and §6.2.6). The following are equivalent:
 
 ```
 option.unwrap()
@@ -4298,6 +4365,10 @@ option >> unwrap
 unwrap(option)
 Option::unwrap(option)
 ```
+
+The `Option::unwrap(option)` form uses path-qualification with the type
+name to disambiguate when multiple `unwrap` functions exist in scope
+(e.g., one for `Option` and one for `Result`).
 
 ### 8.8 Convention: `Option` vs `Result`
 
