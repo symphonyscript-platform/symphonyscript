@@ -1232,15 +1232,14 @@ names:
 
 ```
 let s = Shape::Rectangle(10.0, 20.0)
-let r = add(3, 4)
-let v = Vec3(1.0, 2.0, 3.0)             // (not a record — see §3.5.3)
+let c = clamp(temperature, 0, 100)
 ```
 
 **Named form** — each argument is paired with its parameter name:
 
 ```
 let s = Shape::Rectangle(width: 10.0, height: 20.0)
-let r = add(left: 3, right: 4)
+let c = clamp(value: temperature, lower: 0, upper: 100)
 ```
 
 The named form uses `name: value` syntax. In the named form, the order of
