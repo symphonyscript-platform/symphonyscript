@@ -7803,9 +7803,18 @@ For example, an `i128` value occupies two cells: the low 64 bits in
 cell N, the high 64 bits in cell N+1.
 
 A record `Vec3 { x: f32, y: f32, z: f32 }` used as a reactive cell
-value occupies one cell per field (each field is a Copy primitive of
-size ≤ 8 bytes, padded into one cell). Three consecutive cells per
-`Vec3` reactive value.
+value occupies one cell per field — three consecutive cells per
+`Vec3`, each padded from 4 bytes to 8 bytes. This per-field layout
+is the **canonical** layout; implementations conforming to the spec
+must support it.
+
+An implementation may optionally pack multiple sub-8-byte fields
+into a single cell as an optimization (e.g., three f32s into one
+8-byte slot with the fourth slot unused, or four `bool` fields into
+the low bits of one cell). Such packing is an implementation
+optimization and must not be observable from Symphony source — every
+cell read and write through the kernel API must produce results
+identical to the canonical per-field layout.
 
 Records whose fields total more than 8 bytes each (e.g., fields of
 type `i128` or nested non-Copy records) follow the same per-field
@@ -7817,27 +7826,71 @@ within the enclosing record's allocation.
 The reactive state buffer is **triple-buffered** to provide:
 - Snapshot consistency across multiple cells for multi-cell values.
 - Per-tick reactive batching: all writes within a tick commit
-  atomically at the tick boundary (§14.8).
-- Wait-free reads on the consumer thread.
+  atomically at the tick boundary.
+- Wait-free reads from the consumer.
+
+The arrangement is **single-producer, single-consumer (SPSC)**: one
+*producer role* writes, one *consumer role* reads, mediated by three
+buffer copies and an atomic current-pointer swap. The mapping of
+these roles to physical threads is specified in §13 (reactive
+system), not §14; §14 specifies only the mechanism.
 
 The kernel maintains three copies of the buffer:
-- **Current**: the published snapshot. Read by the consumer thread.
-- **Back**: actively being written by the main thread.
-- **Pending** (or third buffer in some triple-buffer schemes): an
-  additional copy used for clean swap semantics.
 
-At publish time (typically a tick boundary), the kernel performs an
-atomic swap of the "current" pointer/index to point at the just-
-completed back buffer. The consumer thread reads atomic state from
-"current" wait-free.
+- **Current**: the most recently published snapshot. Read by the
+  consumer. Not written by anyone.
+- **Back**: actively being written by the producer. Not read by the
+  consumer.
+- **Pending**: a third buffer used to allow the producer to begin
+  writing the next tick's state without waiting for the consumer.
+  Rotation among the three is producer-managed.
 
-Publish operation cost: O(N) where N is the buffer size — the main
-thread copies pending changes into the back buffer before swap.
+##### 14.3.3.1 Publish operation
 
-Swap operation cost: O(1) — single atomic pointer update.
+At a tick boundary, the producer performs **publish**:
+1. The producer finalizes writes to the back buffer.
+2. The producer atomically swaps the "current" pointer to point at
+   the newly-written back buffer. The previous "current" rotates to
+   become the next available back/pending buffer.
 
-Consumer-side reads: O(1) per cell — single atomic load against the
-published buffer.
+The publish operation runs on the producer role's thread. Its cost
+is O(N) where N is the buffer size — the producer copies the
+publishable state into the back buffer before the swap. The atomic
+swap itself is O(1).
+
+The producer's per-tick cost is therefore O(N) memcpy + one atomic
+operation. This cost is paid on the producer side, not on the
+consumer side; consumers are unaffected.
+
+##### 14.3.3.2 Swap operation
+
+The consumer, when it wants to read the latest published state,
+performs **swap**:
+1. Atomically load the current pointer.
+2. Read cells from the buffer it points to.
+
+The swap operation runs on the consumer role's thread. Its cost is
+O(1) — one atomic load. The consumer never copies data; it reads in
+place from the buffer the current pointer points to.
+
+##### 14.3.3.3 Why three buffers
+
+A two-buffer ping-pong would force the producer to wait for the
+consumer to finish reading before publishing the next state. With
+three buffers, the producer always has a buffer available to write
+to that the consumer is not currently reading, even when the
+consumer holds its reference into a snapshot for an extended period.
+This preserves wait-free reads on the consumer side without
+producer-side blocking.
+
+##### 14.3.3.4 Multiple cross-thread observers
+
+If a deployment requires multiple cross-thread observers (e.g., one
+consumer for audio, another for UI display, another for a debugger),
+the SPSC triple buffer can be replicated — each observer maintains
+its own SPSC channel against the producer. SPMC variants are
+possible but not required for the language's basic operation; the
+specification defines SPSC as the canonical mechanism.
 
 #### 14.3.4 Wide-atomic optimization (optional)
 
@@ -7906,7 +7959,7 @@ handles; the pool holds the data. This separation allows:
 
 #### 14.5.2 Pool operations
 
-- **Allocation**: main thread allocates a new string in the pool;
+- **Allocation**: the producer (§14.8) allocates a new string in the pool;
   pool returns a handle. Refcount initialized to 1 for the cell that
   will hold it.
 - **Refcount increment**: when a handle is copied into another cell,
@@ -7918,10 +7971,10 @@ handles; the pool holds the data. This separation allows:
   up the corresponding `Arc<str>` in the pool (wait-free with proper
   pool structure).
 
-The pool's allocation and refcount operations are atomic but may block
-briefly under contention. These operations occur on the main thread;
-the consumer thread (audio thread or equivalent) only reads via
-handles, which is wait-free.
+The pool's allocation and refcount operations are atomic but may
+block briefly under contention. These operations are performed by
+the producer role (§14.8); the consumer role only reads via handles,
+which is wait-free. The role-to-thread mapping is specified in §13.
 
 ### 14.6 The Behavior ABI
 
@@ -7971,28 +8024,58 @@ only within the behavior's invocation; they do not escape.
 
 #### 14.6.3 Error handling
 
-Behaviors may trap (§4.6) or return normally. The kernel invokes each
-behavior within a panic-isolation boundary (Rust's `catch_unwind` in
-the reference implementation). If a behavior panics:
+A behavior may **trap** (§4.6) during evaluation — e.g., from
+arithmetic overflow under the default `+` operator, division by
+zero, or an explicit `panic` call. Traps in Symphony source-level
+semantics terminate the current evaluation; in the kernel's
+implementation, traps surface as Rust panics that the kernel
+isolates via `catch_unwind` (in the reference Rust implementation).
 
-- The kernel logs the panic with the behavior's debug name and the
+When a behavior traps during reactive evaluation, the kernel does
+not abort the program. Instead:
+
+- The kernel logs the trap with the behavior's debug name and the
   instance ID.
 - The behavior's output cells are marked as "errored" (a sentinel
   state).
 - Downstream behaviors that read errored cells either propagate the
   error or substitute defaults, per the per-cell configuration.
-- The kernel continues processing. Subsequent behaviors and ticks
-  are unaffected.
+- The kernel continues processing. Subsequent behaviors within the
+  same tick and subsequent ticks are unaffected.
+
+This is a deliberate departure from §4.6's "process abort on trap"
+behavior, scoped to the reactive evaluation context. Reactive
+behaviors run in a long-lived kernel process; aborting on every
+arithmetic trap would make the system fragile. Isolating per-
+behavior traps preserves overall system continuity.
+
+The exception is `Drop` (§14.10.4): if a `drop` method traps, the
+kernel cannot recover safely (the value is mid-destruction); the
+process aborts. Drop traps are the one exit path from the kernel's
+isolation.
 
 User-level errors (`Option`, `Result`, `?`) flow through the type
-system and do not reach the panic path under normal program operation.
+system and do not reach the trap path under normal program
+operation. Authors expecting recoverable failure should use the
+value-track error model (§8) rather than relying on trap-isolation.
 
 #### 14.6.4 Behavior identity
 
 Each behavior is identified by a stable u32 ID assigned at compile
-time. IDs are content-addressed: identical behavior bodies (modulo
-position in source) produce the same ID. This enables hot reload
-(§14.12) to recognize unchanged behaviors across recompilations.
+time. IDs are **content-addressed**: a stable hash of the canonicalized
+typed IR of the behavior body. "Canonicalized" means the IR is
+normalized (alpha-renamed locals, sorted decl order where order is
+irrelevant, position information stripped) before hashing, so
+cosmetic changes — adding whitespace, reordering independent
+declarations, renaming local bindings — do not perturb the ID.
+Semantic changes — different operations, different inputs, different
+output type — produce different IDs.
+
+The hash algorithm is fixed per Symphony toolchain version (§14.13)
+so that hot reload (§14.12) within one version reliably matches
+unchanged behaviors across recompilations. Across major toolchain
+versions the canonicalization may change; cross-version hot reload
+is not supported.
 
 Each behavior also carries a debug name: the qualified source path
 (`module::path::clip_name::derived_name`). Names appear in
@@ -8001,21 +8084,16 @@ for human consumption.
 
 #### 14.6.5 Thread invocation
 
-The kernel determines which thread invokes each behavior. Behaviors
-are **strict-pinned** to a thread role:
-
-- Reactive evaluation behaviors (derived expression bodies) invoke on
-  the kernel's designated evaluation thread for the relevant context
-  (audio thread, frame thread, etc.).
-- Initialization behaviors invoke on the main thread.
-- Cleanup behaviors invoke on the main thread.
-
-Behaviors do not specify their thread role in Symphony source; the
-kernel determines the role from the behavior's role in the graph.
+Behaviors are invoked by the kernel; the specific thread that
+invokes each behavior is determined by the kernel's role assignment
+specified in §13 (reactive system). Symphony source does not
+specify thread roles; the kernel determines them based on the
+behavior's role in the reactive graph.
 
 Symphony source code does not encounter cross-thread concerns:
 behaviors are thread-safe by construction (no shared mutable state
-outside reactive cells, which are coordinated by the kernel).
+outside reactive cells, which are coordinated by the kernel per
+§14.3.3).
 
 ### 14.7 Graph Metadata
 
@@ -8082,104 +8160,73 @@ types, dependency edges, and behavior references. The kernel does
 not need to understand records as records, or traits as traits — it
 manages bits in cells and invokes functions by ID.
 
-### 14.8 Per-Tick Reactive Evaluation
+### 14.8 Producer and Consumer Roles
 
-The kernel evaluates the reactive graph in **discrete ticks**. A tick
-is a complete cycle of: collect pending writes, evaluate dirty
-behaviors, publish results.
+The triple-buffer mechanism (§14.3.3) operates in terms of two roles:
 
-#### 14.8.1 Tick boundaries
+- **Producer**: writes the back buffer and performs the publish
+  operation. There is exactly one producer per kernel instance
+  (SPSC).
+- **Consumer**: reads the current buffer via the swap operation.
+  There is one consumer per SPSC channel; if multiple cross-thread
+  observers are needed, each maintains its own SPSC channel
+  (§14.3.3.4).
 
-The kernel defines when ticks occur based on its host context:
+§14 specifies only the mechanism of these roles — what they do, how
+they coordinate via the triple buffer, what the costs are. The
+mapping of these roles to physical threads (which thread is producer,
+which is consumer, when ticks happen, what triggers a publish) is
+specified in §13 (reactive system).
 
-- Audio runtime: tick per audio block (typical: every 64–512 samples
-  at the configured sample rate).
-- UI runtime: tick per frame.
-- General-purpose: tick on demand via host API call.
+For example: in an audio deployment, §13 specifies that the audio
+thread plays the producer role (it both evaluates reactive
+expressions and publishes new state), while a host UI thread polling
+for display purposes plays the consumer role. In a non-audio
+deployment, §13 may specify a different mapping. The §14 mechanism
+is identical in all cases.
 
-Within a tick:
-1. The kernel accumulates pending writes from host API calls
-   (`kernel.write_signal(id, value)`). Writes update cells in the
-   back buffer.
-2. The kernel marks dependents of changed cells dirty (per the
-   dependency edges from graph metadata).
-3. The kernel evaluates dirty behaviors in topological order.
-   Each behavior invocation reads from current buffer, writes to
-   back buffer.
-4. At end of tick, the kernel publishes the back buffer (atomic
-   swap; current ← back).
-5. Dirty bits reset; ready for next tick.
+#### 14.8.1 Thread-safety properties of the mechanism
 
-#### 14.8.2 Snapshot consistency
+By construction of the SPSC triple buffer:
+- The producer writes the back buffer without interference; the
+  consumer never touches it.
+- The consumer reads the current buffer without interference; the
+  producer never touches it.
+- The atomic current-pointer swap is the synchronization point
+  between producer and consumer.
+- No locks are required, no spin-wait is required, and reads are
+  wait-free.
 
-Each behavior invocation within a tick reads from the **current**
-(previously published) buffer. All cell reads within one behavior see
-a consistent snapshot of state as it was at the previous tick's
-publish.
+These properties hold regardless of the role-to-thread mapping
+specified in §13.
 
-Behaviors write to the **back** buffer. Their writes are visible to
-later-evaluated behaviors within the same tick (the kernel updates
-the back buffer in-place during evaluation).
+#### 14.8.2 Behaviors invoked by the mechanism
 
-At end of tick, all back-buffer changes are published together via
-the triple-buffer swap. The consumer thread (if separate from the
-evaluation thread) sees only fully-committed snapshots.
+Reactive behaviors (derived expression bodies, modulation functions
+called from reactive contexts) are invoked by the producer as part
+of its publish cycle, in topological order over the dirty set
+maintained from dependency edges in the graph metadata. The exact
+trigger and ordering of these invocations is specified in §13.
 
-#### 14.8.3 Explicit transactions
+The behavior ABI (§14.6) is the contract between the producer and
+each invoked behavior. Each invocation receives a kernel handle and
+an instance ID; behavior bodies read from and write to cells via
+the handle. Behaviors are thread-safe by construction (§14.8.3).
 
-Host code may opt into explicit transactions for multi-signal writes
-that should commit as a single logical change:
+#### 14.8.3 Why Symphony behaviors are thread-safe by construction
 
-```
-kernel.transaction(|tx| {
-  tx.write_signal(a_id, new_a);
-  tx.write_signal(b_id, new_b);
-})
-```
-
-Writes inside a transaction are accumulated and committed atomically
-at the transaction close. Compared to per-tick batching, explicit
-transactions allow finer-grained "atomic update" semantics within
-host code without waiting for the next tick boundary.
-
-Outside transactions, individual `kernel.write_signal` calls are
-batched per tick automatically.
-
-### 14.9 Thread Pinning and Scheduling
-
-The kernel manages thread assignment for behaviors. Symphony source
-does not expose threading concerns.
-
-#### 14.9.1 Thread roles
-
-The kernel defines logical thread **roles**:
-
-- **Main thread**: hosts the user-facing event loop, performs signal
-  writes, manages graph mutations (placement of new instances
-  forbidden after startup; runtime additions deferred — see §14.13).
-- **Evaluation thread**: invokes reactive behaviors. For audio
-  applications, this is the audio callback thread. For other domains,
-  the kernel chooses based on context.
-- **Worker threads** (optional): used for parallel behavior
-  evaluation when behaviors are independent. v1 implementations may
-  run all evaluation on a single thread.
-
-A specific behavior is pinned to a specific role at graph
-construction time. The kernel guarantees that role's thread is the
-only invoker of that behavior.
-
-#### 14.9.2 Implications for behavior code
-
-Behaviors written in Symphony are thread-safe by construction:
+Regardless of the role-to-thread mapping in §13, Symphony source
+code never sees cross-thread concerns:
 
 - No shared mutable state outside reactive cells.
-- Reactive cells coordinated through the triple-buffer / kernel.
+- Reactive cells are coordinated through the triple-buffer
+  mechanism above.
 - Local `mut` bindings (§11) are stack-allocated and per-invocation.
 - Closure captures are by-value Copy (§11.10), no shared mutability.
 
 A Symphony program does not declare thread affinity; it does not
-need to. The kernel routes each behavior to the appropriate thread
-based on its role in the graph.
+need to. The kernel determines (per §13) which thread plays which
+role.
 
 ### 14.10 Drop Semantics
 
@@ -8248,12 +8295,40 @@ the following rules.
 | `i128`, `u128` | Same Rust types (on supporting targets). |
 | `f32`, `f64` | Same Rust types. |
 | `bool`, `char` | `bool`, `char`. |
-| `string` | A newtype wrapping a kernel string handle. |
+| `string` | A newtype wrapping a kernel string handle (see §14.11.1.1). |
 | Tuples | Rust tuples. |
 | Arrays `T[N]` | Rust arrays `[T; N]`. |
 | Records | Rust structs with same field order. |
 | Enums | Rust enums with same variant order. |
 | Newtypes (§6.3) | Rust newtype structs. |
+
+##### 14.11.1.1 String storage uniformity
+
+The `string` type lowers to the same Rust representation regardless
+of whether the binding is reactive or non-reactive: a newtype around
+a u64 handle into the kernel's string pool (§14.5).
+
+Reactive context (signal/attr/derived value of type `string`): the
+handle lives in a reactive cell. The pool entry's refcount tracks
+how many cells reference the string across all buffer copies.
+
+Non-reactive context (local `let s = "hello"`, function parameter,
+record field outside reactive declaration): the handle lives in
+ordinary Rust memory. The pool entry is still refcounted; ownership
+of the handle increments the refcount, dropping the handle (per
+§14.10) decrements it. Strings created in non-reactive scopes are
+reclaimed when their last handle is dropped — typically when the
+function returns and locals go out of scope.
+
+This uniformity means: all `string` values share one storage backend
+(the kernel pool), regardless of where their handles are held. There
+is no separate "Rust-local string" representation distinct from the
+"kernel string" representation; the only difference is *where the
+handle is stored* (cell vs ordinary memory), not what the handle
+points to.
+
+The §11.6 "refcount-shared immutable backing" model maps directly
+onto the kernel pool. The pool *is* the shared backing.
 
 #### 14.11.2 Function and trait lowering
 
