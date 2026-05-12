@@ -293,6 +293,29 @@ between "index `foo` with `T`, then call" and "call generic `foo` with type
 argument `T`". The `::` forces path-navigation mode where `[T]` is
 unambiguously a type-argument list.
 
+#### 2.2.6 Type wildcards
+
+The identifier `_` in a type-annotation position denotes a type that the
+compiler should infer from context. It is a placeholder per §2.1, resolved
+at its use site by the surrounding type information.
+
+```
+let r: Result[i32, _] = compute()       // i32 pinned; error type inferred
+let v: Vec[_] = make_ints()             // element type inferred
+let pair: (_, string) = build()         // tuple's first component inferred
+```
+
+The wildcard is permitted in any type-expression position: generic
+arguments, tuple components, function return types in annotations,
+trait-bound positions where inference can resolve the constraint, and
+others. If the compiler cannot infer the type at the wildcard's site from
+the surrounding context, the resulting error is reported at the wildcard's
+location, identifying the inference failure and what context was missing.
+
+The wildcard is distinct from the pattern wildcard `_` (used in pattern
+matches per §6.2.4). They share the same character but appear in different
+syntactic positions; the parser disambiguates by position.
+
 ### 2.3 Monomorphization
 
 Generic functions are realized in code via monomorphization: each unique
@@ -1997,6 +2020,10 @@ This table specifies the mapping:
 | `+%`, `-%`, `*%`, `//%`, `%%`, `-%` | corresponding `Wrapping...` | same type as operands |
 | `+\|`, `-\|`, `*\|`, `//\|`, `%\|`, `-\|` | corresponding `Saturating...` | same type as operands |
 | `+?`, `-?`, `*?`, `/?`, `//?`, `%?`, `-?` | corresponding `Checked...` | `Option[T]` |
+| `as` | (language-level) | the target type, traps on out-of-range |
+| `as%` | `WrappingAs[T]` (operand) | the target type T |
+| `as\|` | `SaturatingAs[T]` (operand) | the target type T |
+| `as?` | `CheckedAs[T]` (operand) | `Option[T]` |
 
 The compiler's inference algorithm per §2.2.1 walks each function body
 collecting the union of these constraints across all operators used. The
@@ -2244,36 +2271,82 @@ for division by zero — no modular or clamping value is meaningful.
 
 ### 4.7 Explicit Casts
 
-The `as` operator performs explicit numeric conversion:
+The `as` operator performs explicit numeric conversion. Like arithmetic
+operators (§4.6), `as` has four variants expressing four different
+out-of-range policies. The unsuffixed form is the default; suffixed forms
+mirror the arithmetic operator suffixes.
+
+#### 4.7.1 The four cast variants
+
+| Operator | Trait | Behavior on out-of-range |
+|---|---|---|
+| `as` | (language-level) | trap at runtime |
+| `as%` | `WrappingAs[T]` | modular two's-complement wrap |
+| `as\|` | `SaturatingAs[T]` | clamp to destination type's range bounds |
+| `as?` | `CheckedAs[T]` | return `Option[T]` — `None` on out-of-range |
+
+Examples:
 
 ```
 let x: i32 = 300
-let y: u8 = x as u8                     // explicit narrowing
-let f: f64 = x as f64                   // explicit widening (also possible implicitly)
-let z: i32 = some_float as i32          // explicit float-to-int (truncating)
+let y: u8 = x as u8                  // ✗ traps at runtime — 300 doesn't fit u8
+let y: u8 = x as% u8                 // ✓ wraps: 300 mod 256 == 44
+let y: u8 = x as| u8                 // ✓ saturates to u8::MAX == 255
+let y: Option[u8] = x as? u8         // ✓ None — out of range
+let z: i32 = some_float as i32       // truncating float-to-int (may trap)
 ```
 
-`as` traps at runtime on out-of-range conversions for narrowing casts and
-signed/unsigned crossing casts. For widening casts that are lossless,
-`as` is the explicit-syntax equivalent of implicit widening — the same result,
-no runtime cost beyond the conversion itself.
+The trapping default matches §4.6.1's philosophy: in production code,
+out-of-range cast is a bug to be surfaced, not silently transformed. Users
+who want non-trapping behavior choose the appropriate variant explicitly.
 
-Method-based alternatives provide non-trapping behaviors:
+#### 4.7.2 Lossless casts
 
-- `x.wrapping_as[u8]()` — wrap on overflow.
-- `x.saturating_as[u8]()` — clamp on overflow.
-- `x.checked_as[u8]()` — return `Option[u8]`, `None` on overflow.
+For widening casts that are lossless per §4.5, `as` is the explicit-syntax
+equivalent of implicit widening — the same result, no runtime cost beyond
+the conversion itself. The variants (`as%`, `as|`, `as?`) on lossless
+casts are equivalent to `as` (no out-of-range case can arise); they remain
+syntactically valid for use in generic code where the cast's losslessness
+isn't statically known.
 
-These method forms compose with `?` propagation for recoverable conversions
-in function bodies returning `Option`- or `Result`-compatible types.
+#### 4.7.3 Float-to-integer casts
 
-Float-to-integer casts via `as` truncate toward zero (matching most language
-conventions). Out-of-range float values (NaN, infinity, values larger than
-the integer's range) trap.
+Float-to-integer casts via `as` truncate toward zero (matching most
+language conventions). Out-of-range float values (NaN, infinity, values
+larger than the integer's range) follow the variant's policy: `as` traps,
+`as%` is implementation-defined (truncation modulo the destination range
+is the typical choice), `as|` saturates to the destination's range bounds
+(NaN treated as 0), `as?` returns `None`.
 
-User-defined conversions go through the `From`/`Into`/`TryFrom`/`TryInto`
-traits per §7. `as` is reserved for the built-in numeric conversions
-specified in this section; it does not extend to user-defined types.
+#### 4.7.4 Trait-based forms
+
+Each operator variant has a corresponding trait method per §4.9.1:
+`WrappingAs::wrapping_as`, `SaturatingAs::saturating_as`, `CheckedAs::checked_as`.
+The methods are callable via uniform call syntax (§3.4) and produce the
+same results as the operators:
+
+```
+let y: u8 = x.wrapping_as::[u8]()        // equivalent to `x as% u8`
+let y: u8 = x.saturating_as::[u8]()       // equivalent to `x as| u8`
+let y: Option[u8] = x.checked_as::[u8]()  // equivalent to `x as? u8`
+```
+
+The operators are the canonical user-facing form; the trait methods exist
+for generic code that constrains on the trait, and as the underlying
+dispatch targets the operators desugar to.
+
+#### 4.7.5 `as` reserved for built-in numeric and newtype operations
+
+`as` is reserved for two purposes:
+
+- Built-in numeric conversion (§4.7.1–§4.7.4).
+- Newtype extraction (§6.3.2).
+
+These are dispatched by operand kind: a numeric primitive on the left side
+uses the numeric-cast machinery; a newtype on the left side uses extraction.
+User-defined conversions on non-newtype types go through the
+`From`/`Into`/`TryFrom`/`TryInto` traits per §7. The `as` operator does
+not extend to arbitrary user-defined conversions.
 
 ### 4.8 Special Numeric Operations
 
@@ -2442,6 +2515,10 @@ trait CheckedDiv:     fn checked_div(a: Self, b: Self) -> Option[Self]
 trait CheckedIntDiv:  fn checked_intdiv(a: Self, b: Self) -> Option[Self]
 trait CheckedRem:     fn checked_rem(a: Self, b: Self) -> Option[Self]
 trait CheckedNeg:     fn checked_neg(value: Self) -> Option[Self]
+
+trait WrappingAs[T]:   fn wrapping_as(value: Self) -> T
+trait SaturatingAs[T]: fn saturating_as(value: Self) -> T
+trait CheckedAs[T]:    fn checked_as(value: Self) -> Option[T]
 
 trait Zero: fn zero() -> Self
 trait One:  fn one() -> Self
@@ -3662,7 +3739,12 @@ The auto-derivation is language-built-in and not user-overridable. This
 forecloses the coherence problem of disagreeing manual `From`/`Into` pairs.
 
 Users do not need to (and cannot) write `fulfill Into[U] for T` directly.
-The compiler synthesizes it from the corresponding `From` impl.
+The compiler synthesizes it from the corresponding `From` impl. The
+auto-derived `Into` impl is language-privileged per §3.7.3: it does not
+require a `satisfies Into[U]` declaration on the source type `T` (which
+may not even be in the user's module). The `From` impl is the user's
+written contract; the `Into` impl is the language's mechanical
+counterpart.
 
 ### 7.3 Identity Conversion
 
@@ -3677,7 +3759,30 @@ intermediate conversion call.
 Identity conversion is not subject to the orphan rule (§3.7.3); it is one
 of the language-privileged implementations.
 
-### 7.4 Built-in Numeric Conversions
+### 7.4 The Orphan Rule Applies to User Conversions
+
+User-written `fulfill From[T] for U` and `fulfill TryFrom[T] for U` are
+subject to the standard orphan rule per §3.7.1: at least one of `From`
+(the trait — defined in stdlib) or `U` (the destination type) must be
+local to the module declaring the impl. In practice, since the conversion
+traits are stdlib-defined, the destination type `U` must be local.
+
+The source type `T` may be foreign. A user can implement `From[i64] for
+MyMeasurement` (their type `MyMeasurement` is local; the source `i64` is
+foreign). A user cannot implement `From[i64] for f64` (both types are
+foreign — and the language already provides such impls anyway).
+
+For implementing a conversion between two foreign types — a relatively
+rare need — the newtype pattern per §6.3.5 is the workaround: wrap one
+of the foreign types in a local newtype, then implement the conversion
+involving the newtype.
+
+The auto-derivation of `Into` from `From` per §7.2 propagates this
+constraint: the synthesized `Into[U] for T` impl exists at the same
+module where the corresponding `From[T] for U` exists, and is bound by
+the same orphan rule.
+
+### 7.5 Built-in Numeric Conversions
 
 The language pre-populates the conversion traits with built-in numeric
 conversions per §4.5's lossless rules:
@@ -3699,7 +3804,7 @@ and lossy integer-to-float conversions. Each carries an appropriate
 These built-in impls are language-privileged (§3.7.3) — they exist outside
 user-writable `fulfill`-block space and cannot conflict with user code.
 
-### 7.5 Relationship to `as`
+### 7.6 Relationship to `as`
 
 The `as` operator (§4.7 for numeric, §6.3.2 for newtypes) is distinct
 from the conversion-trait system but interacts with it for numeric cases:
@@ -3709,24 +3814,25 @@ from the conversion-trait system but interacts with it for numeric cases:
   Both are valid; users pick based on style. `as` is more concise; `.into()`
   is more uniform with user-defined conversions.
 - For **lossy numeric conversions** that would overflow, `as` traps at
-  runtime per §4.6.1. `try_into` returns `Result[T, Error]` for explicit
-  handling. These are different operations with different failure
-  semantics. Users pick by intent — panic-on-failure (`as`) or
-  recoverable error (`try_into`).
-- The **wrapping** and **saturating** cast variants (§4.7) — `wrapping_as`,
-  `saturating_as`, `checked_as` — are method forms on the integer types,
-  not part of the conversion-trait machinery.
+  runtime per §4.6.1; `as%` wraps; `as|` saturates; `as?` returns
+  `Option[T]`. The fallible variant `try_into` returns
+  `Result[T, Error]` for explicit handling with a typed error. The
+  variants of `as` and `try_into` differ in what they signal: `as` and
+  its variants express *value-level* range mismatches via the chosen
+  policy (trap, wrap, clamp, optional); `try_into` expresses
+  *trait-level* fallibility with a named `Error` type.
 - For **newtype extraction**, `as` is the dedicated unwrap operation
   (§6.3.2). The conversion-trait system does not participate; the
   underlying value is exposed via the operator directly.
 - For **user-defined conversions on non-newtype types**, `as` is not
   available. Users use `.into()`, `From::from()`, or `.try_into()` per
-  §7.7.
+  §7.8.
 
-The summary: `as` is the operator for built-in numeric casts and newtype
-unwraps; the conversion traits are the mechanism for everything else.
+The summary: `as` (with its variants) is the operator for built-in
+numeric casts and newtype unwraps; the conversion traits are the
+mechanism for everything else.
 
-### 7.6 No Implicit User-Defined Conversions
+### 7.7 No Implicit User-Defined Conversions
 
 User-defined `From` impls do *not* produce implicit conversions. The
 implicit-conversion surface of the language is strictly limited to the
@@ -3744,7 +3850,7 @@ The auto-derivation of `Into` from `From` (§7.2) is *not* an implicit
 conversion — it is the auto-generation of a callable method. Calling that
 method requires explicit syntax at the call site.
 
-### 7.7 Invocation Forms
+### 7.8 Invocation Forms
 
 Conversion calls use the standard uniform call syntax per §3.4 and follow
 the argument-form rules per §3.5. The four equivalent forms for a
@@ -3775,22 +3881,58 @@ fn parse_age(s: string) -> Result[Age, ParseError]:
 The `?` operator's interaction with `From` for error-type conversion is
 specified in §8.
 
-### 7.8 Cross-Type `?` Rejected
+### 7.9 Error-Type Relationships in `?` Propagation
 
-The `?` operator (§8) propagates failures up the call stack with optional
-`From`-conversion on the error type. Applying `?` across genuinely
-different types — propagating a `Result[X, E1]` failure in a function
-returning `Result[Y, E2]` where neither the value types nor the error
-types are convertible by `From` — is rejected at compile time.
+The `?` operator (§8) extracts the success value from a `Result` or
+`Option`-typed expression. On failure, it propagates the failure value up
+the call stack — terminating the current function early with a converted
+failure if needed.
 
-Specifically: `?` requires the source's success type to be the same as
-or convertible (via `From`) to the destination's success type, and the
-source's error type to be the same as or convertible (via `From`) to the
-destination's error type. When neither relationship holds, the `?`
-operation is a type error at the use site.
+For propagation to succeed, the source's *error type* must be the same as
+the destination function's error type, or be convertible to it via `From`:
 
-This prevents `?` from being a silent type-coercion device. The error
-chain through `?` is bounded by user-declared `From` impls.
+```
+fn parse_to_string(s: string) -> Result[string, ParseError]:
+  let n: i32 = s.parse::[i32]()?      // source: Result[i32, ParseError]
+                                       //   error types match: ParseError = ParseError ✓
+  Ok(n.to_string())                    // function returns Result[string, ParseError]
+
+fn read_and_parse(path: string) -> Result[i32, AppError]:
+  let bytes: Vec[u8] = read_file(path)?   // source: Result[Vec[u8], IoError]
+                                          //   IoError → AppError via From: ✓
+  let s: string = parse_string(bytes)?     // source: Result[string, ParseError]
+                                          //   ParseError → AppError via From: ✓
+  let n: i32 = s.parse::[i32]()?
+  Ok(n)
+```
+
+The success type at the `?` site becomes the type of the expression at
+that site, bound to the local variable on the left or used inline.
+Different `?` sites in the same function can produce different success
+types — `?` does not impose any constraint between the source's success
+type and the function's return success type. That contract is satisfied
+separately, wherever the function actually returns `Ok(...)`.
+
+The error-type rule:
+
+- **Same error type:** trivially valid; no conversion.
+- **Source error convertible to destination error via `From`:** the
+  compiler inserts the `From::from` call automatically at the propagation
+  site.
+- **No relationship via `From`:** compile error at the `?` site,
+  identifying the source and destination error types and the missing
+  `From` impl.
+
+This rule is the *only* relationship `?` enforces between source and
+destination types. There is no implicit success-type coercion, no
+fallback through arbitrary trait machinery, no silent type adjustment.
+The `From`-bound error conversion is opt-in by the user (via implementing
+`From[SourceError] for DestError`); without it, `?` is a hard type error.
+
+This bounded model gives `?` predictable behavior: a reader sees `?` and
+knows exactly two things — "extract success here; propagate error
+upward, converting via `From` if the types differ." Anything more
+elaborate happens through explicit `match` or method chains.
 
 ---
 
