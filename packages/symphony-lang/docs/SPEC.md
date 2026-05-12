@@ -6614,11 +6614,13 @@ fn sum(samples: &Vec[f32]) -> f32:
   total
 ```
 
-Writing `&samples` in this position would be a parse error — `&` only
-applies to owned values, not to expressions that already evaluate to a
-borrow. The compiler dispatches based on the type of the iteration
-source: owned types use `IntoIterable` (consume); borrow types use
-`Iterable` (no consume possible, since borrows can't be consumed).
+Writing `&samples` in this position is a compile error — `&` may only
+be applied to owned values, not to expressions that already evaluate
+to a borrow. (The grammar accepts `&samples` syntactically; the type
+checker rejects it once it determines `samples` is of borrow type.)
+The compiler dispatches based on the type of the iteration source:
+owned types use `IntoIterable` (consume); borrow types use `Iterable`
+(no consume possible, since borrows can't be consumed).
 
 This means the rule "consume by default" applies to owned bindings.
 For borrowed bindings, iteration is necessarily through `Iterable`
