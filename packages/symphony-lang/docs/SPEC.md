@@ -1233,7 +1233,7 @@ names:
 ```
 let s = Shape::Rectangle(10.0, 20.0)
 let r = add(3, 4)
-person.display()
+let v = Vec3(1.0, 2.0, 3.0)             // (not a record — see §3.5.3)
 ```
 
 **Named form** — each argument is paired with its parameter name:
@@ -1241,11 +1241,18 @@ person.display()
 ```
 let s = Shape::Rectangle(width: 10.0, height: 20.0)
 let r = add(left: 3, right: 4)
-person.display()                          // no arguments — both forms trivially apply
 ```
 
-The named form uses `name: value` syntax. Order does not matter in the
-named form; the compiler matches by name.
+The named form uses `name: value` syntax. In the named form, the order of
+arguments does not matter; the compiler matches by name. In the positional
+form, arguments must appear in declaration order.
+
+Both forms are valid for any single-argument call. `square(5)` and
+`square(value: 5)` are equivalent; no special rule restricts single-
+argument calls to one form.
+
+A no-argument call (`person.display()`) is trivially both forms; the
+parentheses are empty and no mixing question arises.
 
 #### 3.5.2 No mixing within one call
 
@@ -1253,7 +1260,7 @@ A single call site uses either positional or named form throughout. Mixing
 is a compile error:
 
 ```
-Rectangle(width: 10.0, 20.0)              // ✗ mixed — compile error
+Shape::Rectangle(width: 10.0, 20.0)       // ✗ mixed — compile error
 add(3, right: 4)                          // ✗ mixed — compile error
 ```
 
@@ -1274,20 +1281,87 @@ Some declarations restrict the allowed form at their call sites:
 - **Free functions, trait methods, and enum variants** accept either form
   per-call.
 
-The constraints reflect the nature of each declaration: records have named
-fields with no canonical order, so positional construction would be
-ambiguous; tuples are anonymous products with positional identity, so
-named construction would be invented metadata; newtypes wrap a single
-value with no name, so a single positional argument is the only sensible
-form.
+The constraints reflect the nature of each declaration:
+
+- *Records* are nominal product types whose fields are named for domain
+  meaning. Forcing named construction makes the meaning of each value
+  explicit at every construction site and prevents the
+  same-typed-fields-in-wrong-order class of bugs (`Point(1.0, 2.0)` —
+  which is `x` and which is `y`?). The verbosity is the cost; clarity is
+  the benefit.
+- *Tuples* are anonymous products whose fields have only positional
+  identity — they have no names by design. Forcing positional
+  construction preserves this anonymity; named construction would invent
+  metadata that doesn't exist in the type.
+- *Newtypes* wrap a single underlying value. The constructor takes one
+  argument; the name would be redundant with the type name itself.
 
 For declarations that accept both forms, the choice between positional
 and named at a call site is a style decision driven by readability. Long
-argument lists, arguments with non-obvious meaning, or default arguments
-benefit from named form; short calls with self-evident argument meaning
-benefit from positional form.
+argument lists, arguments with non-obvious meaning, or arguments using
+defaults benefit from named form; short calls with self-evident argument
+meaning benefit from positional form.
 
-#### 3.5.4 Patterns parallel calls
+#### 3.5.4 Defaults and form interaction
+
+Parameters with default values (per §6.1.2 for records and analogous
+features for functions) interact with argument forms as follows:
+
+- In **named form**, default-bearing parameters may be omitted. The
+  default value applies for any parameter not named in the call.
+- In **positional form**, parameters must be supplied in declaration order.
+  Default-bearing parameters at the *end* of the parameter list may be
+  omitted (the remaining defaults all apply). Default-bearing parameters
+  in the *middle* of the list cannot be skipped — supplying a later
+  parameter positionally requires supplying all earlier parameters
+  positionally too.
+
+```
+fn greet(name: string, greeting: string = "Hello", suffix: string = "!"):
+  ...
+
+greet("Alice")                                  // ✓ uses both defaults
+greet("Alice", "Hi")                            // ✓ uses suffix default
+greet("Alice", "Hi", "?")                       // ✓ all positional
+greet(name: "Alice", suffix: "?")               // ✓ named, skipping greeting
+greet("Alice", suffix: "?")                     // ✗ mixed positional and named
+```
+
+The skipping flexibility of named form is one of its principal practical
+advantages. Functions with many optional parameters typically benefit
+from named form at call sites.
+
+#### 3.5.5 Method calls and the receiver
+
+A method call `x.f(args)` always passes the receiver `x` positionally
+(per §3.4's uniform call syntax — the method call is sugar for `f(x,
+args)`). The argument form rule applies to `args`, not to the receiver:
+
+```
+person.display()                                  // no args; trivially valid
+shape.set_dimensions(width: 10.0, height: 20.0)   // named form for trailing args
+shape.set_dimensions(10.0, 20.0)                  // positional form
+shape.set_dimensions(10.0, height: 20.0)          // ✗ mixed
+```
+
+The receiver `x` is conceptually the first positional argument of the
+underlying free function; the dot-syntax just brings it forward
+syntactically.
+
+#### 3.5.6 The `with` expression uses named form
+
+The record-update `with` expression (§6.1.5) uses named form for its
+field overrides:
+
+```
+let p2 = p1 with name: "new", age: 30
+```
+
+This is a special case of the general rule: records require named form
+(§3.5.3); the `with` expression updates record fields and therefore
+inherits the same form requirement. There is no positional `with` form.
+
+#### 3.5.7 Argument forms in patterns
 
 The same positional/named distinction applies to *patterns* that
 destructure compound values (§6.2.4). Variant patterns may be positional
