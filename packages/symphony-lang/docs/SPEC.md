@@ -7596,9 +7596,816 @@ the cursor advances; this is the normal behavior of iteration and does
 not violate purity.
 
 Iterators must not perform externally observable I/O. The reactive
-system's signals (deferred) are the appropriate mechanism for
+system's signals (§13) are the appropriate mechanism for
 externally-driven sequences; iterators are for collection traversal.
 
 ---
 
 *End of §12.*
+
+---
+
+## 13. Reactive System
+
+*This section is forthcoming. The reactive system — signals, attrs,
+derived expressions, nodes, connections, and propagation semantics — is
+the next major specification chapter. Until §13 is written, references
+to §13 from other sections refer to the planned content covering
+declarative reactive graphs and their evaluation.*
+
+---
+
+## 14. Implementation Model
+
+This section specifies the contract between a Symphony program and its
+runtime environment: how Symphony source is compiled, how the resulting
+artifacts interact with the host kernel, and what guarantees the
+implementation provides.
+
+The contents of this section are *normative for implementations* of
+Symphony, not for source-level code. Symphony programs do not depend on
+these details directly; their behavior is determined by §§1–13. But
+implementations must conform to the contracts specified here to ensure
+that programs run correctly across implementations.
+
+### 14.1 Compilation Modes
+
+A conforming Symphony implementation provides two compilation modes:
+
+**Interpreter mode** — Symphony source compiles to a compact bytecode
+representation, executed by an interpreter embedded in the kernel.
+Used for development workflows: fast iteration, hot reload, live
+coding.
+
+**Native mode** — Symphony source compiles, via a Rust intermediate
+form, to a native executable. Used for production: maximum performance,
+distributable artifact.
+
+Both modes share the same frontend: lexer, parser, type checker,
+semantic analysis. The frontend produces a typed intermediate
+representation. The two modes diverge after this point: the bytecode
+emitter targets the interpreter; the Rust emitter targets a Rust source
+file that is then compiled by `rustc`.
+
+The two modes produce equivalent observable behavior. A program that
+runs correctly in interpreter mode produces the same output (modulo
+performance and timing) in native mode. Implementations that diverge
+observably between modes are non-conforming.
+
+#### 14.1.1 The shared frontend
+
+The frontend performs:
+
+1. **Lexing and parsing** per `GRAMMAR.md`. Produces an AST.
+2. **Name resolution and type checking** per §§2–10. Produces a typed
+   AST with all generic instantiations resolved and all trait dispatch
+   sites bound to concrete implementations.
+3. **Borrow and ownership checking** per §11. Catches use-after-move,
+   borrow conflicts, and other ownership violations.
+4. **Reactive analysis** per §13 (forthcoming). Identifies reactive
+   declarations, computes dependency graphs, and extracts graph
+   metadata.
+5. **Monomorphization** per §2.3. Resolves all generic instantiations
+   in Symphony before lowering. Symphony's compiler does not delegate
+   monomorphization to Rust; emitted code is fully concrete.
+
+After these passes, the typed IR is consumed by one of the two
+backends.
+
+#### 14.1.2 Interpreter mode
+
+The bytecode emitter lowers the typed IR to a stack-based bytecode.
+The kernel includes a bytecode interpreter that executes this directly.
+No native compilation step occurs.
+
+Characteristics:
+- Sub-second compilation time, suitable for live editing.
+- Performance lower than native (a typical interpretation overhead is
+  5–20× slower in tight loops; acceptable for development).
+- Supports hot reload (§14.12): individual behaviors can be replaced
+  in a running kernel without restarting.
+- The bytecode format is implementation-internal and not stable across
+  Symphony versions. It is not a distribution format.
+
+#### 14.1.3 Native mode
+
+The Rust emitter lowers the typed IR to Rust source code, which is then
+compiled by the bundled `rustc` toolchain into a native executable. The
+resulting binary is the distribution artifact.
+
+Characteristics:
+- Native performance, equivalent to hand-written Rust for the
+  equivalent program.
+- Compilation time is dominated by `rustc` (typically seconds to tens
+  of seconds for non-trivial programs).
+- Produces a single executable embedding both the compiled behaviors
+  and the graph metadata (§14.7).
+- Does not support hot reload at runtime; rebuild is required to
+  change the program.
+
+The emitted Rust source is **fully monomorphic and trait-free**. Per
+§14.11, the Rust emitter produces concrete struct definitions and
+specialized function definitions per Symphony instantiation. Symphony's
+trait system is not exported into the emitted Rust; trait dispatch
+sites are resolved to direct function calls during frontend processing.
+
+### 14.2 The Symphony CLI
+
+A conforming implementation provides a command-line interface that
+wraps the compilation modes. The CLI's interface is normative; specific
+flag spellings may vary across implementations, but the operations are
+required.
+
+#### 14.2.1 Operations
+
+- **`symphony run <file>`** — invokes interpreter mode. Compiles to
+  bytecode and executes immediately. The kernel runs to program
+  completion or until interrupted.
+
+- **`symphony watch <file>`** — interpreter mode with file watching
+  and hot reload. The kernel runs continuously; saved changes to the
+  source trigger recompilation and reload of affected behaviors per
+  §14.12.
+
+- **`symphony build <file> [--release]`** — invokes native mode.
+  Compiles via Rust to a native executable. `--release` enables
+  optimization. The output is a single executable file.
+
+- **`symphony check <file>`** — runs the frontend (lexing, parsing,
+  type checking, ownership checking, reactive analysis) without
+  invoking either backend. Produces diagnostics. Used by editor
+  integrations (LSP).
+
+- **`symphony fmt <file>`** — invokes the canonical formatter.
+  Rewrites the source in normalized form.
+
+- **`symphony test <file>`** — runs tests via interpreter mode.
+  Optimized for fast feedback during development.
+
+#### 14.2.2 Toolchain bundling
+
+The CLI ships as a single binary that bundles or downloads on first
+use:
+- The Symphony frontend.
+- The bytecode interpreter (part of the kernel).
+- A `rustc` toolchain for native-mode builds.
+- The Symphony stdlib and reactive kernel.
+
+Users do not install `rustc` or `cargo` separately. The CLI does not
+expose `cargo` directly; all Rust-toolchain invocations are internal.
+Build output from `rustc` is suppressed in normal operation and
+surfaced only when a compilation failure prevents Symphony's output
+from being produced.
+
+#### 14.2.3 Project layout
+
+A Symphony project is a directory tree containing source files
+(`.sym`). The CLI does not require a manifest file for single-file
+programs (`symphony run file.sym` works on a lone file). Multi-file
+projects use a manifest file specifying the entry point and any
+external dependencies; the format of the manifest is
+implementation-specific.
+
+### 14.3 The Reactive State Buffer
+
+The kernel maintains a contiguous memory region holding all reactive
+cells of the running program. This region is the **reactive state
+buffer**.
+
+#### 14.3.1 Cell representation
+
+Cells are 64-bit slots, each one `AtomicI64` in implementations
+targeting threaded platforms (native, modern browsers with COOP/COEP
+headers, etc.). The complete buffer has type `Arc<[AtomicI64]>` in the
+reference Rust implementation.
+
+A single cell directly stores any 8-byte-or-smaller primitive value
+via bit reinterpretation:
+
+| Type | Storage in cell |
+|---|---|
+| `bool`, `char` | Single cell; value occupies the low bits, upper bits are zero. |
+| `i8`–`i64`, `u8`–`u64` | Single cell; value is sign- or zero-extended to 64 bits as needed. |
+| `f32`, `f64` | Single cell; value is bit-reinterpreted (transmute) as i64. |
+| `string` | Single cell; value is a u64 handle into the string pool (§14.5). |
+
+Lossless conversion: reading and writing a cell preserves the
+bit-exact value of any of these primitive types. `f64::from_bits` and
+`f64::to_bits` perform the reinterpretation in the reference Rust
+implementation.
+
+#### 14.3.2 Multi-cell types
+
+Types wider than 8 bytes (`i128`, `u128`, multi-field records used as
+reactive values) occupy multiple consecutive cells in the buffer.
+
+For example, an `i128` value occupies two cells: the low 64 bits in
+cell N, the high 64 bits in cell N+1.
+
+A record `Vec3 { x: f32, y: f32, z: f32 }` used as a reactive cell
+value occupies one cell per field (each field is a Copy primitive of
+size ≤ 8 bytes, padded into one cell). Three consecutive cells per
+`Vec3` reactive value.
+
+Records whose fields total more than 8 bytes each (e.g., fields of
+type `i128` or nested non-Copy records) follow the same per-field
+layout, with multi-cell types occupying their own consecutive cells
+within the enclosing record's allocation.
+
+#### 14.3.3 Triple-buffering
+
+The reactive state buffer is **triple-buffered** to provide:
+- Snapshot consistency across multiple cells for multi-cell values.
+- Per-tick reactive batching: all writes within a tick commit
+  atomically at the tick boundary (§14.8).
+- Wait-free reads on the consumer thread.
+
+The kernel maintains three copies of the buffer:
+- **Current**: the published snapshot. Read by the consumer thread.
+- **Back**: actively being written by the main thread.
+- **Pending** (or third buffer in some triple-buffer schemes): an
+  additional copy used for clean swap semantics.
+
+At publish time (typically a tick boundary), the kernel performs an
+atomic swap of the "current" pointer/index to point at the just-
+completed back buffer. The consumer thread reads atomic state from
+"current" wait-free.
+
+Publish operation cost: O(N) where N is the buffer size — the main
+thread copies pending changes into the back buffer before swap.
+
+Swap operation cost: O(1) — single atomic pointer update.
+
+Consumer-side reads: O(1) per cell — single atomic load against the
+published buffer.
+
+#### 14.3.4 Wide-atomic optimization (optional)
+
+On platforms with hardware support for 128-bit atomic operations
+(x86_64 with `CMPXCHG16B`, ARM64 with `LDXP`/`STXP`), the
+implementation may use in-place 128-bit atomic updates for `i128` and
+`u128` cells rather than relying on the triple-buffer publish cycle.
+This is an optimization, not a correctness requirement; the
+triple-buffer mechanism provides correct semantics on all platforms.
+
+Platforms without wide-atomic support (WebAssembly, ARM32, etc.) rely
+exclusively on the triple-buffer mechanism. Programs using `i128` or
+`u128` reactive cells on such platforms function correctly; they pay
+the full per-tick publish cost for those cells.
+
+### 14.4 What Lives in the Reactive State Buffer
+
+Only **reactive cells** live in the triple-buffered reactive state
+buffer. Specifically, the values held by:
+
+- `signal` declarations.
+- `attr` declarations on node and connection instances.
+- `derived` declarations (the cached computed value).
+
+Regular Symphony values — local bindings (`let`/`mut`) inside function
+bodies, function parameters, function return values, iterator state,
+closure captures, ordinary record/array/tuple values used as
+non-reactive data — do **not** live in the reactive state buffer.
+They are normal Rust values in stack or heap memory, governed by the
+ownership and borrow rules of §11.
+
+A record type may appear in both contexts in the same program. As the
+value of a signal/attr/derived declaration, it occupies cells in the
+reactive buffer. As a local value, parameter, or non-reactive field,
+it lives in regular memory. The Symphony compiler determines storage
+location based on the declaration site, not the type.
+
+### 14.5 Strings and the String Pool
+
+Strings are variable-length and refcount-shared per §11.6. Their
+storage requirements do not fit the fixed-size cell model of the
+reactive buffer.
+
+The kernel maintains a separate **string pool** that stores all string
+content. The pool is logically a refcounted-shared, append-mostly
+arena: each unique string is stored once and shared via reference
+counts.
+
+Reactive cells of type `string` store a **handle** (u64) into the pool
+rather than the string content itself. The handle indexes the pool;
+the pool resolves the handle to the actual `Arc<str>` data.
+
+#### 14.5.1 Cross-thread consistency
+
+The pool is shared across all three buffer copies. Buffer copies hold
+handles; the pool holds the data. This separation allows:
+
+- Buffer publish cost to remain O(N) in *cell count*, not in *string
+  content size*. Changing a 1-megabyte string updates a single 8-byte
+  handle in the buffer; the megabyte of data is allocated once in the
+  pool, not three times in three buffer copies.
+
+- Strings to be referenced by multiple cells (in the same or different
+  buffers) via shared handles. Refcounting ensures the data is
+  reclaimed when no buffer holds the handle.
+
+#### 14.5.2 Pool operations
+
+- **Allocation**: main thread allocates a new string in the pool;
+  pool returns a handle. Refcount initialized to 1 for the cell that
+  will hold it.
+- **Refcount increment**: when a handle is copied into another cell,
+  the pool's refcount on that string increments.
+- **Refcount decrement**: when a cell is overwritten or buffer is
+  retired, the previous handle's refcount decrements. If refcount
+  reaches zero, the pool reclaims the string's storage.
+- **Lookup**: consumer thread reads a handle from the buffer, looks
+  up the corresponding `Arc<str>` in the pool (wait-free with proper
+  pool structure).
+
+The pool's allocation and refcount operations are atomic but may block
+briefly under contention. These operations occur on the main thread;
+the consumer thread (audio thread or equivalent) only reads via
+handles, which is wait-free.
+
+### 14.6 The Behavior ABI
+
+Every executable unit of a Symphony program — a derived expression
+body, a function body called from a reactive context, a modulation
+function — is exposed to the kernel via a uniform **behavior ABI**.
+
+#### 14.6.1 Behavior signature
+
+Every behavior has the same calling convention:
+
+```
+fn behavior(kernel: &KernelHandle, instance: InstanceId) -> ()
+```
+
+- `kernel`: a borrowed handle to the kernel, used for reading and
+  writing reactive cells, allocating strings, and other kernel
+  services.
+- `instance`: an opaque identifier for the specific node or connection
+  instance the behavior is being invoked for (relevant for `attr` and
+  `derived` declarations on a particular instance).
+
+The behavior reads its inputs from kernel cells via the handle,
+performs its computation, and writes its outputs (if any) back to
+kernel cells. Return value is unit; all effects are side effects
+through the kernel handle.
+
+This uniform shape means the kernel maintains a single function
+pointer table: `Vec<fn(*const KernelHandle, u64) -> ()>` (in the
+reference Rust implementation). The kernel invokes behaviors by index
+into this table; no per-behavior dispatch logic is needed.
+
+#### 14.6.2 Statelessness
+
+Behaviors are **stateless** at the kernel level. All state lives in
+reactive cells (attrs, signals, derived results). Behaviors are pure
+transformations: read inputs from cells, compute, write outputs.
+
+A "stateful" computation (filter with sample history, oscillator with
+phase, accumulator) is structured as a record whose attrs hold the
+state, plus a behavior that reads the state-attrs, computes new
+state, and writes back to the state-attrs.
+
+Local mutation within a behavior (`mut` bindings, indexed assignment,
+iterator state) is permitted per §§11–12. These mutations are visible
+only within the behavior's invocation; they do not escape.
+
+#### 14.6.3 Error handling
+
+Behaviors may trap (§4.6) or return normally. The kernel invokes each
+behavior within a panic-isolation boundary (Rust's `catch_unwind` in
+the reference implementation). If a behavior panics:
+
+- The kernel logs the panic with the behavior's debug name and the
+  instance ID.
+- The behavior's output cells are marked as "errored" (a sentinel
+  state).
+- Downstream behaviors that read errored cells either propagate the
+  error or substitute defaults, per the per-cell configuration.
+- The kernel continues processing. Subsequent behaviors and ticks
+  are unaffected.
+
+User-level errors (`Option`, `Result`, `?`) flow through the type
+system and do not reach the panic path under normal program operation.
+
+#### 14.6.4 Behavior identity
+
+Each behavior is identified by a stable u32 ID assigned at compile
+time. IDs are content-addressed: identical behavior bodies (modulo
+position in source) produce the same ID. This enables hot reload
+(§14.12) to recognize unchanged behaviors across recompilations.
+
+Each behavior also carries a debug name: the qualified source path
+(`module::path::clip_name::derived_name`). Names appear in
+diagnostics, profiles, and error messages. Lookup is by ID; names are
+for human consumption.
+
+#### 14.6.5 Thread invocation
+
+The kernel determines which thread invokes each behavior. Behaviors
+are **strict-pinned** to a thread role:
+
+- Reactive evaluation behaviors (derived expression bodies) invoke on
+  the kernel's designated evaluation thread for the relevant context
+  (audio thread, frame thread, etc.).
+- Initialization behaviors invoke on the main thread.
+- Cleanup behaviors invoke on the main thread.
+
+Behaviors do not specify their thread role in Symphony source; the
+kernel determines the role from the behavior's role in the graph.
+
+Symphony source code does not encounter cross-thread concerns:
+behaviors are thread-safe by construction (no shared mutable state
+outside reactive cells, which are coordinated by the kernel).
+
+### 14.7 Graph Metadata
+
+The compiler produces, alongside the executable behaviors, a binary
+**graph metadata** structure describing the program's reactive shape.
+
+#### 14.7.1 Contents
+
+The metadata describes:
+
+- **Cell layout**: position (cell index) and primitive type tag for
+  each reactive cell. Used by the kernel to allocate the buffer and
+  by the host API to read/write cells.
+
+- **Signal declarations**: name, cell index, type tag, initial value.
+  Used to register signals at startup.
+
+- **Node types**: type name, list of attrs and deriveds, layout of
+  their cells per instance. Used to allocate per-instance cell groups.
+
+- **Connection types**: source/destination types, attrs and deriveds.
+  Same as nodes.
+
+- **Instances**: declared node/connection instances and their cell
+  allocations.
+
+- **Dependency edges**: which behaviors read which cells, which
+  behaviors write which cells. Used to compute dirty-set propagation
+  and topological evaluation order.
+
+- **Behavior references**: behavior IDs paired with debug names. The
+  kernel resolves IDs to function pointers via the behavior table
+  registered at program startup.
+
+- **String pool entries**: any string literals used by the program,
+  pre-loaded into the pool at startup.
+
+#### 14.7.2 Format
+
+The graph metadata is a binary format. The reference implementation
+uses a schema-based serialization (e.g., FlatBuffers, Cap'n Proto, or
+a custom binary format). The exact byte layout is implementation-
+defined; the schema content (the fields and types listed above) is
+normative.
+
+In native mode (§14.1.3), the graph metadata is embedded in the
+output executable as a binary blob (e.g., via Rust's `include_bytes!`
+or the linker's data sections). At program startup, the kernel
+deserializes the embedded blob and constructs the runtime graph.
+
+In interpreter mode (§14.1.2), the metadata is held in memory by the
+running kernel and may be updated by hot reload.
+
+#### 14.7.3 What metadata does not contain
+
+The metadata is intentionally type-erased at the kernel boundary. It
+contains primitive type tags (i32, f64, string, etc.) and cell
+layouts, but **not** Symphony's full type system (record definitions,
+trait conformances, generic parameters). Those are compile-time
+artifacts of Symphony, not runtime artifacts the kernel consumes.
+
+The kernel's view of the program is: a graph of cells with primitive
+types, dependency edges, and behavior references. The kernel does
+not need to understand records as records, or traits as traits — it
+manages bits in cells and invokes functions by ID.
+
+### 14.8 Per-Tick Reactive Evaluation
+
+The kernel evaluates the reactive graph in **discrete ticks**. A tick
+is a complete cycle of: collect pending writes, evaluate dirty
+behaviors, publish results.
+
+#### 14.8.1 Tick boundaries
+
+The kernel defines when ticks occur based on its host context:
+
+- Audio runtime: tick per audio block (typical: every 64–512 samples
+  at the configured sample rate).
+- UI runtime: tick per frame.
+- General-purpose: tick on demand via host API call.
+
+Within a tick:
+1. The kernel accumulates pending writes from host API calls
+   (`kernel.write_signal(id, value)`). Writes update cells in the
+   back buffer.
+2. The kernel marks dependents of changed cells dirty (per the
+   dependency edges from graph metadata).
+3. The kernel evaluates dirty behaviors in topological order.
+   Each behavior invocation reads from current buffer, writes to
+   back buffer.
+4. At end of tick, the kernel publishes the back buffer (atomic
+   swap; current ← back).
+5. Dirty bits reset; ready for next tick.
+
+#### 14.8.2 Snapshot consistency
+
+Each behavior invocation within a tick reads from the **current**
+(previously published) buffer. All cell reads within one behavior see
+a consistent snapshot of state as it was at the previous tick's
+publish.
+
+Behaviors write to the **back** buffer. Their writes are visible to
+later-evaluated behaviors within the same tick (the kernel updates
+the back buffer in-place during evaluation).
+
+At end of tick, all back-buffer changes are published together via
+the triple-buffer swap. The consumer thread (if separate from the
+evaluation thread) sees only fully-committed snapshots.
+
+#### 14.8.3 Explicit transactions
+
+Host code may opt into explicit transactions for multi-signal writes
+that should commit as a single logical change:
+
+```
+kernel.transaction(|tx| {
+  tx.write_signal(a_id, new_a);
+  tx.write_signal(b_id, new_b);
+})
+```
+
+Writes inside a transaction are accumulated and committed atomically
+at the transaction close. Compared to per-tick batching, explicit
+transactions allow finer-grained "atomic update" semantics within
+host code without waiting for the next tick boundary.
+
+Outside transactions, individual `kernel.write_signal` calls are
+batched per tick automatically.
+
+### 14.9 Thread Pinning and Scheduling
+
+The kernel manages thread assignment for behaviors. Symphony source
+does not expose threading concerns.
+
+#### 14.9.1 Thread roles
+
+The kernel defines logical thread **roles**:
+
+- **Main thread**: hosts the user-facing event loop, performs signal
+  writes, manages graph mutations (placement of new instances
+  forbidden after startup; runtime additions deferred — see §14.13).
+- **Evaluation thread**: invokes reactive behaviors. For audio
+  applications, this is the audio callback thread. For other domains,
+  the kernel chooses based on context.
+- **Worker threads** (optional): used for parallel behavior
+  evaluation when behaviors are independent. v1 implementations may
+  run all evaluation on a single thread.
+
+A specific behavior is pinned to a specific role at graph
+construction time. The kernel guarantees that role's thread is the
+only invoker of that behavior.
+
+#### 14.9.2 Implications for behavior code
+
+Behaviors written in Symphony are thread-safe by construction:
+
+- No shared mutable state outside reactive cells.
+- Reactive cells coordinated through the triple-buffer / kernel.
+- Local `mut` bindings (§11) are stack-allocated and per-invocation.
+- Closure captures are by-value Copy (§11.10), no shared mutability.
+
+A Symphony program does not declare thread affinity; it does not
+need to. The kernel routes each behavior to the appropriate thread
+based on its role in the graph.
+
+### 14.10 Drop Semantics
+
+Symphony's user-facing `Drop` trait (referenced as deferred in §11.3.3
+and §12.9.3) is specified here.
+
+#### 14.10.1 The Drop trait
+
+```
+trait Drop:
+  fn drop(value: mut Self)
+```
+
+A type implementing `Drop` provides cleanup logic that runs when a
+value of the type goes out of scope. The `drop` method receives the
+value by `mut` (the only place in the language where a `mut`
+parameter is permitted — internally generated by the compiler at the
+scope-exit point).
+
+#### 14.10.2 When drop runs
+
+The compiler inserts drop calls at:
+
+- The end of a value's lexical scope (when its `let` or `mut` binding
+  goes out of scope).
+- The point of consumption (when a value is moved into a function
+  parameter or assignment; the moved-out source's drop slot is empty
+  thereafter).
+- The end of a function for un-returned locals.
+- The point of `break` for non-yielded iterator elements (§12.9.3).
+
+Compound values (records, enums) drop in **reverse declaration
+order** of their fields: the last-declared field drops first.
+
+#### 14.10.3 Partial moves
+
+If only some fields of a record have been moved out when the binding
+goes out of scope, only the un-moved fields drop. The compiler tracks
+per-binding move flags during semantic analysis.
+
+#### 14.10.4 Drop and panic
+
+If a `drop` method panics, the process aborts (the standard trap
+behavior per §4.6.1). This prevents double-drop hazards from
+mid-drop panics that would otherwise leave the program in an
+inconsistent state.
+
+#### 14.10.5 Drop on reactive cells
+
+The kernel manages drop for reactive cells. When a node or connection
+instance is removed (deferred to §13's evolution model), its attr and
+derived cells are dropped per their type's `Drop` impl. Initial
+declarations (signals declared at program startup) live for the
+program's lifetime; their cells are dropped at program shutdown.
+
+### 14.11 Symphony → Rust Lowering
+
+The Rust emitter (§14.1.3) lowers the typed IR to Rust source per
+the following rules.
+
+#### 14.11.1 Type lowering
+
+| Symphony | Rust |
+|---|---|
+| `i8`–`i64`, `u8`–`u64` | Same Rust types. |
+| `i128`, `u128` | Same Rust types (on supporting targets). |
+| `f32`, `f64` | Same Rust types. |
+| `bool`, `char` | `bool`, `char`. |
+| `string` | A newtype wrapping a kernel string handle. |
+| Tuples | Rust tuples. |
+| Arrays `T[N]` | Rust arrays `[T; N]`. |
+| Records | Rust structs with same field order. |
+| Enums | Rust enums with same variant order. |
+| Newtypes (§6.3) | Rust newtype structs. |
+
+#### 14.11.2 Function and trait lowering
+
+Symphony resolves all generic instantiations and trait dispatch
+during frontend processing (§14.1.1). Emitted Rust is fully
+monomorphic and trait-free:
+
+- A generic Symphony function `fn f[T](...)` becomes multiple
+  monomorphic Rust functions, one per instantiation: `f_i32`,
+  `f_f64`, etc.
+- Trait method calls dispatch in Symphony to a specific function;
+  the emitted Rust call is direct, not through a trait.
+- Symphony traits are not declared in the emitted Rust. No `trait`
+  or `impl` blocks appear (with the exception below).
+- Operator overloading on Symphony numeric primitives uses Rust's
+  built-in operators (`+`, `-`, etc.) directly; no trait emission
+  needed.
+
+The one exception: when a Symphony record overloads a Symphony
+operator (e.g., a user-defined `Vec3` with `Add`), the emitter
+generates an explicit `impl std::ops::Add for Vec3` block in Rust so
+that `+` works on the type at the Rust level. This is a narrow
+mechanical emission, not a full trait export.
+
+#### 14.11.3 Ownership lowering
+
+Symphony's ownership rules map directly to Rust's:
+
+| Symphony | Rust |
+|---|---|
+| `let x = e` | `let x = e;` |
+| `mut x = e` | `let mut x = e;` |
+| Pass by value (move) | Pass by value (move). |
+| `&T` parameter (borrow) | `&T` parameter. |
+| `for x in v:` (consume) | `for x in v` (consumes). |
+| `for x in &v:` (borrow) | `for x in &v` (borrows). |
+| `Copy` types | `Copy` trait derived. |
+| `Clone` | `Clone` trait derived. |
+
+Symphony's `&v` form in for-loops compiles to Rust's `&v`. Symphony's
+parameter borrow `&T` compiles to Rust's `&T`. Rust's borrow checker
+enforces the same rules that Symphony's frontend already verified;
+any code that passed Symphony's checks passes Rust's.
+
+#### 14.11.4 Iterator lowering
+
+Symphony's `Iterator` trait (§12.7) has signature `fn next(iter:
+Self) -> (Option[Item], Self)`. Rust's standard `Iterator` trait has
+signature `fn next(&mut self) -> Option<Item>`.
+
+The Symphony emitter generates Rust code using Rust's `Iterator`
+pattern internally for performance, while Symphony source code
+continues to see the tuple-return form. The translation is
+mechanical: each Symphony iterator implementation lowers to a Rust
+struct with a `next(&mut self) -> Option<Item>` method, plus a
+wrapper that exposes the tuple-return form for Symphony-internal
+use during compilation. By the time native code is produced, only
+the `&mut self` form remains.
+
+This translation is invisible to Symphony source code. Symphony users
+never see `&mut` in their code or in error messages.
+
+#### 14.11.5 Reactive primitive lowering
+
+Symphony's `signal`, `attr`, `derived` declarations do not lower to
+Rust types directly. They lower to:
+
+- Cell allocations in the kernel state buffer (described in graph
+  metadata).
+- Behavior registrations (the body of a `derived` expression becomes
+  a Rust function matching the behavior ABI, §14.6).
+- Dependency edges in the graph metadata.
+
+The lowered Rust code contains no syntactic trace of `signal`/`attr`/
+`derived` keywords. They are pure graph-construction directives,
+encoded into the metadata and behavior table.
+
+### 14.12 Hot Reload
+
+Interpreter mode (§14.1.2) supports hot reload of individual
+behaviors in a running kernel.
+
+#### 14.12.1 Granularity
+
+The unit of hot reload is the **behavior**. When a Symphony source
+file changes:
+
+1. The CLI's watch mode detects the change.
+2. The frontend re-runs on the changed file.
+3. The new typed IR is compared against the old; behaviors with
+   changed bodies are identified.
+4. For each changed behavior:
+   a. The old bytecode is replaced with new bytecode.
+   b. The kernel's behavior table updates the function pointer (or
+      bytecode reference) for that behavior's ID.
+   c. The next invocation uses the new behavior.
+
+#### 14.12.2 State preservation
+
+Reactive cell values persist across hot reload. Signal values, attr
+values, and derived cached values are unchanged unless the source
+explicitly changes them. The graph topology persists.
+
+#### 14.12.3 Reload-safe and reload-unsafe changes
+
+Changes safe to hot reload:
+- Body of an existing behavior (same signature, different
+  implementation).
+- Adding new behaviors (new derived expressions, new functions).
+- Adding new signals, attrs, derived declarations.
+
+Changes unsafe to hot reload (require full kernel restart):
+- Removing a signal/attr/derived that is currently referenced.
+- Changing the type of an existing cell.
+- Changing the connection topology of currently-active instances.
+
+The implementation diagnoses unsafe changes at reload time and
+either rejects them (kernel keeps running old version) or restarts
+the kernel cleanly. The choice is implementation-defined.
+
+#### 14.12.4 Reload failure
+
+If the new source fails to compile (parse error, type error,
+ownership error), the reload is abandoned. The kernel keeps running
+the previous version. The CLI surfaces the compilation error to the
+user.
+
+Hot reload never produces a kernel in an inconsistent state. Either
+the old version continues running, or the new version is fully
+applied, never a mix.
+
+### 14.13 Versioning
+
+Symphony's source format, graph metadata format, behavior ABI, and
+kernel build are versioned together. Each Symphony release is a
+matched set:
+
+- Symphony source format version.
+- Graph metadata schema version.
+- Behavior ABI version.
+- Kernel binary version.
+
+Cross-version mixing is not supported. A Symphony program produced
+by version X.Y compiles with and runs against the same X.Y
+toolchain. Forward and backward compatibility across major version
+boundaries are explicit, not implicit.
+
+The version is recorded in source files via `@version` directives
+(syntactic form: implementation-defined) and in the graph metadata
+header. Mismatches are detected at compile time and load time
+respectively.
+
+---
+
+*End of §14.*
