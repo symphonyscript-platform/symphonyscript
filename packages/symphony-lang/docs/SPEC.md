@@ -41,13 +41,35 @@ known to the compiler at code generation time. Most types are inferred from
 context. Annotations are required only where inference is ambiguous or where
 the user wants to pin a choice deliberately.
 
-**Immutability by default and only.** All bindings (`let`, signal declarations,
-function parameters) are immutable. There is no `mut` or `var`. Change over
-time is expressed through the reactive system, not through assignment.
+**Immutability by default; isolated local mutation as escape hatch.**
+External state — module-level declarations, type definitions, signals,
+function parameters, record fields as a property of types — is always
+immutable. There is no module-level `mut`, no globally-mutable state.
+Inside function bodies, controlled local mutation is available through
+`mut` bindings (§11). Mutation is bounded to the function body that
+declared it; callers never observe a function's internal mutations
+except through its declared return value. Time-varying *external*
+behavior is expressed through the reactive system, not through
+assignment.
 
-**Pure functions.** All user-defined functions are pure: same inputs produce
-same outputs, no side effects. The reactive system provides the controlled
-mechanism for time-varying behavior; ordinary computation is pure.
+**Single ownership.** Every value has exactly one owner at any moment.
+Passing a non-`Copy` value to a function transfers ownership; the
+caller's binding is consumed. Returning a value transfers ownership back
+to the caller. Read-only access to a non-`Copy` value without ownership
+transfer is provided through call-scoped borrows (`&T` parameters) per
+§11.9. There is no garbage collector, no reference counting at the
+language level (the runtime may use refcounting internally for specific
+types like `string` per §11.6), and no shared mutable state.
+
+**Effectively pure functions.** From a caller's perspective, every
+user-defined function is referentially transparent: same inputs produce
+the same outputs, with no externally observable side effects on the
+caller's bindings beyond the function's declared return value. A
+function may use `mut` bindings, indexed assignment, and `while`/`for`
+loops *internally* (§11, §12), but these are implementation details
+invisible at the call site. The reactive system provides the controlled
+mechanism for time-varying behavior across the program; ordinary
+computation is pure-by-contract.
 
 **Compile-time evaluation where possible.** Pure functions and immutable
 bindings together mean that any expression not involving a signal or external
@@ -6067,22 +6089,50 @@ fn length(v: &Vec[i32]) -> isize:
   let saved = v               // ✗ cannot bind a borrow
 ```
 
-#### 11.9.5 Borrows do not appear in declarations
+#### 11.9.5 Where borrows may appear
 
-`&T` is grammatically valid only in function-parameter type position. It
-is a parse error in:
+`&T` is grammatically valid only in *parameter positions*. The language
+recognizes two parameter positions:
+
+- **Function-call parameters** (this section, §11.7.4 and §11.9).
+- **For-loop iteration variables** (§12.3.3). The iteration variable is
+  bound by the loop construct, fresh each iteration, immutable, and
+  cannot be declared `mut` — exactly the properties of a function
+  parameter. The Iterator trait's `Item` associated type may be a borrow
+  type (see §12.7.4), and that borrow type propagates into the iteration
+  variable position.
+
+Both parameter positions share the same lifetime discipline: the borrow
+lives for the scope of one parameter-binding occurrence (one call
+expression, or one iteration body). The compiler does not need lifetime
+parameters or cross-statement tracking; the lifetime is determined
+syntactically by the enclosing parameter position.
+
+Outside parameter positions, `&T` is a parse error:
 
 - `let` and `mut` declarations: `let r: &Vec = ...` is a parse error.
 - Record fields: `type Holder: data: &Vec` is a parse error.
 - Enum payloads: `Variant(&T)` is a parse error.
-- Tuple components: `(&i32, i32)` is a parse error.
-- Function return types: `fn f(...) -> &T` is a parse error.
+- Tuple components, *except* the tuple appearing as the return type of
+  `Iterator::next` per §12.7.4: `(&i32, i32)` is generally a parse error.
+- Function return types, *except* `Iterator::next` per §12.7.4:
+  `fn f(...) -> &T` is generally a parse error.
 - Closure parameter types in stored closure types (deferred).
-- Trait associated types: `type Item = &T` is a parse error.
-- Generic-type arguments: `Vec[&i32]` is a parse error.
+- Trait associated types, *except* `Iterator::Item` per §12.7.4:
+  `type Item = &T` is generally a parse error.
+- Generic-type arguments, *except* in `Option[&T]` as it appears in
+  `Iterator::next`'s return per §12.7.4: `Vec[&i32]` is a parse error.
 
-The single-position restriction is what keeps the borrow model trivially
-sound without lifetime tracking.
+The narrow exceptions for the `Iterator` trait exist because the trait's
+`Item` flows directly into the for-loop iteration variable position; the
+borrow's lifetime is bounded by the iteration body in exactly the same
+way function-parameter borrows are bounded by the call expression. The
+exceptions are *only* for the Iterator trait's `Item` type and the
+return-value composition of its `next` method; they do not generalize to
+arbitrary user code.
+
+This restriction keeps the borrow model trivially sound without lifetime
+parameters or cross-statement tracking.
 
 #### 11.9.6 Borrows of `Copy` values
 
@@ -6326,3 +6376,948 @@ boundary is deferred to the reactive-system section.
 ---
 
 *End of §11.*
+
+---
+
+## 12. Iteration and Loops
+
+This section specifies the language's iteration constructs: integer ranges,
+the `for`-loop, the `while`-loop, the `break` and `continue` statements,
+loop expression semantics with the `else:` clause, and the `Iterator` and
+`Iterable` traits that underlie all iteration.
+
+Loops are the necessary complement to local mutability (§11): without
+bounded iteration, indexed buffer construction and accumulation patterns
+require recursion, which is unusable for the workloads (audio DSP, image
+processing, numerical kernels) that motivate the local mutability model.
+This section completes the imperative-control story for performance-
+sensitive code while keeping the rest of the language pure and functional.
+
+### 12.1 Design Principles
+
+Loops in Symphony follow three guiding rules:
+
+**Iteration is signature-driven.** A `for` loop dispatches through the
+`Iterable` trait to obtain an `Iterator`, then dispatches through the
+`Iterator` trait to produce successive values. There is no built-in
+iteration logic specific to particular types; all iteration goes through
+the trait protocol. Users may extend iteration to their own types by
+implementing `Iterable`.
+
+**Loops are expressions.** Both `for` and `while` produce values. The
+value is determined by the body's `break` statements and an optional
+`else:` clause (§12.6). Loops that are not used in an expression context
+produce unit; loops that are used in an expression context obey the
+value-shaping rules of §12.6.
+
+**Mutation discipline is preserved.** Loop bodies are ordinary function
+body fragments. They can mutate `mut` bindings declared inside or outside
+the loop, perform indexed and field assignment through `mut` bindings,
+and call functions per the ownership rules of §11. The borrow checking
+rules of §11.9 apply: while a collection is being iterated, the collection
+is borrowed and may not be moved or mutated through its owner.
+
+### 12.2 Ranges
+
+A *range* is a value representing a sequence of integers. The range
+expression syntax is `start..end`, where `start` and `end` are integer
+expressions:
+
+```
+0..10                          // integers 0, 1, 2, ..., 9
+1..100                         // integers 1, 2, ..., 99
+n..(n + size)                  // dependent on n and size
+```
+
+Ranges are half-open and exclusive on the upper bound: `start..end`
+contains integers `i` such that `start <= i < end`. To iterate up to
+and including some value `N`, write `start..(N + 1)`. There is no
+inclusive-range form (`..=`) in v1.
+
+Ranges are values of type `Range[T]`, where `T` is the integer type of
+`start` and `end` (the two operands must have the same integer type;
+mixed-kind operands require explicit conversion). Ranges may be bound,
+passed to functions, returned, and used like any other value:
+
+```
+let r = 0..1024              // r: Range[i32], by default integer placeholder
+fn process_range(r: Range[i32]) -> isize: ...
+```
+
+`Range[T]` implements `Iterable` (§12.8); this is what makes
+`for i in 0..N` work. The implementation yields successive integers
+starting from `start` and stopping before `end`. If `start >= end`, the
+range is empty and yields no values.
+
+#### 12.2.1 Step
+
+The v1 range syntax has no step parameter. Iteration always advances by
+one. To iterate with a different stride, the user writes the arithmetic
+explicitly:
+
+```
+for i in 0..(N / 2):
+  let actual_i = i * 2          // 0, 2, 4, ..., N-2
+  process(actual_i)
+```
+
+A step-aware range form may be added in a future version of the language;
+for v1, the explicit form is the supported pattern.
+
+#### 12.2.2 Range bounds and overflow
+
+A range's bounds are evaluated once at the point the range value is
+constructed. Subsequent mutation of any variable used in those expressions
+does not affect the range:
+
+```
+mut n = 10
+let r = 0..n
+n = 100
+for i in r:                   // iterates 0..10, not 0..100
+  ...
+```
+
+The bound expressions must produce integer values. Per §4.6.1, overflow
+in the bound expressions traps at construction.
+
+#### 12.2.3 Negative ranges and empty ranges
+
+A range whose `start >= end` is empty. `for i in 5..3:` produces no
+iterations and (in expression context) goes directly to the `else:`
+clause if present, or produces the natural-completion value per §12.6
+otherwise.
+
+Ranges with negative starts and ends work normally if `T` is signed:
+
+```
+for i in -10..10:             // i: i32 (default); -10, -9, ..., 9
+  ...
+```
+
+For unsigned `T`, negative literals are rejected at the value-fits-check
+per §2.4.3.
+
+### 12.3 The `for` Loop
+
+The `for` loop iterates over the values produced by an `Iterable` source:
+
+```
+for x in iterable:
+  body
+```
+
+#### 12.3.1 Evaluation
+
+`iterable` is evaluated once at loop entry. The compiler implicitly
+borrows `iterable` (§11.8.1) and invokes `Iterable::iterator(&iterable)`
+to obtain an iterator. The iterator is held in an internal `mut` binding
+for the duration of the loop. Each iteration:
+
+1. Invokes `Iterator::next` on the current iterator value, receiving
+   `(Option[Item], NewIter)` per §12.7.
+2. Reassigns the internal iterator binding to the returned `NewIter`.
+3. If the option is `Some(value)`, binds `value` to the iteration
+   variable `x` and evaluates the body.
+4. If the option is `None`, exits the loop.
+
+The internal iterator binding and the borrow of `iterable` are released
+when the loop exits (either by natural completion or by `break`).
+
+#### 12.3.2 The iteration variable
+
+The iteration variable `x` is bound fresh on each iteration. It is a
+`let`-style binding: immutable, with the iterated `Item` type. Reassigning
+`x` within the body is a compile error.
+
+`x` cannot be declared `mut`. The form `for mut x in iterable:` is a
+parse error. This is consistent with §11.7.2's prohibition on `mut`
+parameters — the iteration variable is bound by the loop construct, not
+by user declaration, and follows the same rule.
+
+If the body needs a mutable per-iteration value, it rebinds:
+
+```
+for x in 0..N:
+  mut local = x
+  local = local * 2
+  process(local)
+```
+
+#### 12.3.3 Iteration variable type
+
+The iteration variable's type is `Iter::Item`, where `Iter` is the
+`Iterable::Iter` associated type for the iterable's type. For
+`Range[i32]`, this is `i32`. For an array `T[N]` of `Copy` elements,
+this is `T`. For an array `T[N]` of non-`Copy` elements, this is
+`&T` — a borrow of each element.
+
+The iteration variable is a parameter-position binding (§11.9.5): bound
+by the loop construct, fresh each iteration, immutable, cannot be
+declared `mut`. Like a function-parameter borrow, an iteration-variable
+borrow has a clearly-scoped lifetime — the duration of one iteration
+body. The compiler tracks this without requiring lifetime annotations.
+
+**For Copy `Item` types:** the iteration variable behaves as an owned
+Copy value. The body uses it freely — passes it to functions (consuming
+or borrowing), accesses fields, arithmetic, etc. No restriction.
+
+```
+let buf: f32[1024] = make_block()
+mut sum: f32 = 0.0
+for sample in buf:                  // sample: f32, Copy
+  sum = sum + sample                // body uses sample as a value
+```
+
+**For non-Copy `Item` types:** the iteration variable is borrow-shaped
+(`&T`). The body can read fields, call methods that take `&T`, compare,
+inspect — anything that doesn't require ownership. It cannot move the
+variable into a binding, pass it to a function that consumes (`T`
+parameter), or store it past the iteration body.
+
+```
+let records: Vec[Record] = make_records()
+for r in records:                   // r: &Record (Record is non-Copy)
+  print(r.first_name)               // ✓ read access
+  process_borrow(r)                 // ✓ if process_borrow takes &Record
+  consume(r)                        // ✗ compile error: cannot move out of borrow
+  let saved = r                     // ✗ compile error: cannot bind a borrow
+```
+
+The borrow lives for the iteration body. The next call to the iterator's
+`next` method invalidates the previous iteration's borrow, but the body
+has already finished by that point.
+
+The non-Copy element case is handled by the Iterator trait's `Item` being
+a borrow type (see §12.7.4). Stdlib's `Iterable for Vec[T]` for non-Copy
+`T` declares `Iter::Item = &T` and the iterator yields borrows of each
+element. No cloning, no allocation — same machine code as Rust's
+`for x in &vec`.
+
+#### 12.3.4 Body scope
+
+The body executes in a fresh nested scope each iteration. Bindings
+declared inside the body are dropped at the end of each iteration. The
+iteration variable `x` is in scope only within the body.
+
+Bindings declared OUTSIDE the loop are in scope inside the body. They
+persist across iterations and can be mutated if declared `mut`:
+
+```
+mut total: f32 = 0.0
+for sample in samples:
+  total = total + sample
+print(total)                  // accumulated sum
+```
+
+This is the accumulator pattern.
+
+#### 12.3.5 Move restrictions inside the body
+
+Per §11, moving a value out of an outer binding inside the loop body
+causes the binding to be consumed. If the loop runs more than once and
+the body references that binding again, the second iteration produces a
+use-after-move compile error.
+
+```
+let v = make_vec()
+for i in 0..10:
+  consume(v)                 // ✗ compile error: v consumed; subsequent iterations
+                             //   would attempt to use already-moved v
+```
+
+The compiler detects this conservatively: any move of an outer binding
+inside a loop body is reported as a potential use-after-move at the move
+site, with a note explaining that the loop may execute multiple times.
+
+To consume a value inside a loop body, the user can:
+
+- `.clone()` the value per iteration (explicit cost).
+- Restructure to consume after the loop, not inside.
+- Move the value into the loop with a single-iteration loop (rare).
+
+#### 12.3.6 Mutation of the iterated source
+
+Per §11.9.2, while the iteration borrow of `iterable` is active, the
+owner of `iterable` may not mutate or move it:
+
+```
+mut v = make_vec()
+for x in v:
+  v[0] = 5                   // ✗ compile error: v is borrowed for iteration
+```
+
+This prevents iterator invalidation. The borrow ends when the loop
+exits, after which the owner may freely mutate or move the value.
+
+### 12.4 The `while` Loop
+
+The `while` loop repeatedly evaluates a condition and runs its body so
+long as the condition is true:
+
+```
+while condition:
+  body
+```
+
+#### 12.4.1 Evaluation
+
+On each iteration:
+
+1. The condition expression is evaluated. It must produce a value of type
+   `bool`.
+2. If the result is `true`, the body executes.
+3. If the result is `false`, the loop exits.
+
+The condition is re-evaluated before each iteration, including the first.
+A loop whose condition is `false` at entry never executes its body.
+
+#### 12.4.2 Idiomatic uses
+
+The `while` loop is the right tool when the number of iterations is not
+known at loop entry. Examples include polling, fixed-point computation,
+state-machine progression, and consuming streaming inputs:
+
+```
+mut converged = false
+mut value = initial_guess
+while not converged:
+  let next = update(value)
+  converged = approx_equal(next, value)
+  value = next
+
+mut state = State::Initial
+while state is not State::Done:
+  state = step(state)
+```
+
+For "loop forever" patterns, `while true:` is the idiomatic form. There
+is no separate `loop` keyword.
+
+#### 12.4.3 Move restrictions
+
+The same move-inside-loop rule from §12.3.5 applies. A non-`Copy` outer
+binding consumed inside a `while` body produces a use-after-move error if
+the loop may iterate more than once. The condition expression is also
+subject to the same rule.
+
+### 12.5 `break` and `continue`
+
+The `break` statement exits the innermost enclosing loop. The `continue`
+statement skips to the next iteration of the innermost enclosing loop.
+
+```
+for i in 0..N:
+  if should_skip(i):
+    continue                  // skip the rest of this iteration; go to next i
+  if should_stop(i):
+    break                     // exit the loop entirely
+  process(i)
+```
+
+#### 12.5.1 `break` with value
+
+In expression context (§12.6), `break` may carry a value:
+
+```
+break expr
+```
+
+The expression's value becomes the loop's expression value. The body's
+`break value` sites must all produce values of compatible types, and (if
+an `else:` clause is present) must agree with the else clause's type.
+
+The plain `break` form (without value) is equivalent to `break ()` —
+exiting with the unit value. A loop body that mixes `break` and
+`break value` with a non-unit value is a type error.
+
+#### 12.5.2 `continue` carries no value
+
+`continue` does not produce a value. It is a control-flow statement only,
+advancing the loop to its next iteration. The loop's expression value is
+determined by `break` and `else:`, not by `continue`.
+
+#### 12.5.3 Innermost loop only
+
+`break` and `continue` always target the innermost enclosing loop. There
+is no label syntax for targeting outer loops in v1. To exit a nested
+loop construct, the user refactors to use a flag variable or extracts the
+inner loop into a function that returns early.
+
+```
+fn find_in_grid(g: &Grid, target: &Cell) -> Option[(isize, isize)]:
+  for row in 0..g.rows:
+    for col in 0..g.cols:
+      if g.get(row, col) is target:
+        return Some((row, col))    // returns from the function, exiting both loops
+  None
+```
+
+#### 12.5.4 `break` and `continue` outside loops
+
+A `break` or `continue` outside a loop is a parse error.
+
+### 12.6 Loop Expressions and the `else:` Clause
+
+Both `for` and `while` loops produce values when used in expression
+context. The value is determined by the body's `break value` sites and an
+optional `else:` clause.
+
+#### 12.6.1 The `else:` clause
+
+A loop may have an optional `else:` clause attached to its body:
+
+```
+for i in iterable:
+  body
+else:
+  natural_completion_value
+
+while condition:
+  body
+else:
+  natural_completion_value
+```
+
+The `else:` clause's expression is evaluated exactly when the loop
+completes *naturally* — meaning iteration exhausts (for `for` loops) or
+the condition becomes false (for `while` loops). The `else:` clause is
+*not* evaluated when the loop exits via `break` or via an enclosing
+function return.
+
+The `else:` keyword is reused from `if`/`match` constructs but has
+different semantics here. A reader should understand `else:` on a loop as
+"otherwise, the loop completed naturally and this is the value."
+
+#### 12.6.2 Loop expression type
+
+The loop expression's type is determined by the combination of `break
+value` sites in the body and the presence/absence of an `else:` clause:
+
+| Body has `break value` | `else:` clause | Loop expression type |
+|---|---|---|
+| No | absent | `()` (unit) |
+| No | present | type of `else:` expression |
+| Yes | absent | `Option[T]` |
+| Yes | present | `T` |
+
+where `T` is the unified type of all `break value` sites (and the
+`else:` clause, when present).
+
+##### Without `break value`, without `else:`
+
+The loop produces unit. This is the statement form.
+
+```
+for i in 0..N:
+  process(i)
+                              // expression value: () (unit)
+```
+
+##### Without `break value`, with `else:`
+
+The loop produces the `else:` clause's value. The body never produces a
+value via break, so the only path to a loop value is natural completion
+through `else:`:
+
+```
+let summary = for sample in samples:
+  process(sample)
+else:
+  count_of_samples            // always reached after natural completion
+                              // expression value: count_of_samples
+```
+
+This form is unusual but consistent. It is most useful when the body has
+significant side effects (mutations, function calls) and the user wants
+the loop to also yield a summary value.
+
+##### With `break value`, without `else:`
+
+The loop produces `Option[T]`. `Some(v)` from `break value`, `None`
+from natural completion:
+
+```
+let found = for item in items:
+  if matches(item):
+    break Some_value         // type T: whatever break_value produces
+                              // expression value: Option[T]
+```
+
+For the find-first pattern, the user typically wants `Some(item)` from
+the break and `None` from natural completion (no match). With this
+shape, the loop's expression type is `Option[Item]`, and the user
+match-decides on the result.
+
+##### With `break value`, with `else:`
+
+The loop produces `T`. The `break value` sites and the `else:` clause
+all produce values of the same type:
+
+```
+let answer = for n in numbers:
+  if is_special(n):
+    break n
+else:
+  -1                          // fallback when no n is special
+                              // expression value: i32
+```
+
+This form is typical when the user wants a guaranteed value without
+unwrapping an Option.
+
+#### 12.6.3 Type unification
+
+All `break value` expressions in a single loop body must produce values of
+the same type (or be unifiable). When an `else:` clause is present, its
+expression must produce a value of the same type. If types cannot be
+unified, the compiler reports a type error at the conflicting break or
+else site.
+
+```
+for i in 0..N:
+  if cond_a: break 42
+  if cond_b: break "hello"      // ✗ type error: i32 vs string
+else:
+  ...
+```
+
+#### 12.6.4 The `never` type and unreachable completions
+
+If the body provably never completes naturally — for instance, every
+path through the body produces a `break value`, or terminates via
+`return`, `panic`, or other diverging operation — the natural-completion
+case is unreachable. The compiler may use the `never` type (§8.2.2) to
+unify the unreachable case with any other type.
+
+```
+let value = for i in 0..N:
+  if condition(i):
+    break i
+  else:
+    panic("unexpected")        // diverges; never type
+                                // expression value: i32 (from break)
+                                // no else: clause needed; natural completion unreachable
+```
+
+#### 12.6.5 `continue` and the expression value
+
+`continue` does not contribute to the loop's expression value. It advances
+to the next iteration without producing a value. The loop's value is
+determined by `break value` and `else:` only.
+
+### 12.7 The `Iterator` Trait
+
+`Iterator` is the stdlib trait for types that produce a sequence of values
+on demand:
+
+```
+trait Iterator:
+  type Item
+  fn next(iter: Self) -> (Option[Item], Self)
+```
+
+The `next` method takes the iterator by value, advances its internal
+state, and returns both the next item (or `None` if the iteration is
+complete) and the advanced iterator. The caller binds the returned
+iterator for the next call.
+
+#### 12.7.1 Why the tuple return
+
+The trait method returns `(Option[Item], Self)` because the iterator's
+internal cursor state must be mutated across calls, but the language has
+no `&mut` parameter form (§11.9) and forbids `mut` on parameters
+(§11.7.2). Under these constraints, the only way to advance an
+iterator's state across a method call is to take the iterator by value
+(consume it) and return the advanced version alongside the item.
+
+The for-loop desugaring (§12.3.1) hides this verbosity from user code:
+the user writes `for x in v:` and the compiler emits the rebind pattern
+implicitly.
+
+#### 12.7.2 Linear-ownership optimization
+
+Because the for-loop's iterator binding is owned exclusively by the loop
+and is reassigned only by the loop's internal desugaring, the iterator's
+ownership is *linear* (single owner at every moment, no aliasing). The
+compiler is required to recognize this pattern and emit in-place
+cursor mutation — equivalent to the machine code produced for `&mut self`
+methods in languages with mutable references.
+
+Specifically, when:
+
+1. The iterator type is statically known (monomorphized per §2.3),
+2. The iterator binding is held in a single `mut` location (the
+   for-loop's internal binding),
+3. The `next` call's return value is immediately rebound to that same
+   location with no intervening use of the consumed binding,
+
+the compiler may compile the call as: pass a pointer to the iterator's
+state, mutate the cursor in place, return only the item value in
+registers. The "consumed" and "returned" iterator are the same memory
+location; no copy occurs.
+
+This optimization is a *required* property of conforming implementations,
+not an optional optimization. The tuple-return trait shape is the source-
+level pattern; the linear-ownership compilation is the performance
+guarantee. Implementations that fail to optimize this pattern produce
+code with iterator-cursor copies on every iteration, which is unacceptable
+for the workloads loops are designed to serve.
+
+#### 12.7.3 Implementing `Iterator`
+
+A user-defined iterator implements `Iterator` by declaring the `Item`
+associated type and the `next` method:
+
+```
+type SquareIter:
+  next_value: i32
+  limit: i32
+
+fulfill Iterator for SquareIter:
+  type Item = i32
+  fn next(iter: SquareIter) -> (Option[i32], SquareIter):
+    mut local = iter
+    if local.next_value >= local.limit:
+      (None, local)
+    else:
+      let value = local.next_value * local.next_value
+      local.next_value = local.next_value + 1
+      (Some(value), local)
+```
+
+This implementation receives the iterator by value, rebinds to a local
+`mut` binding (per §11.7.3), mutates the cursor, and returns the result
+alongside the (updated) iterator.
+
+#### 12.7.4 Borrow-typed `Item`
+
+The `Item` associated type may be a borrow type (`&T`) when the iterator
+yields non-Copy elements from a source it borrows. This is the one
+position in the language (outside function-parameter signatures) where
+`&T` is grammatically valid; the exception is bounded to the `Iterator`
+trait and is justified by `Item` flowing into the for-loop iteration
+variable position (§11.9.5, §12.3.3).
+
+When `Item = &T`, the `next` method's return type becomes
+`(Option[&T], Self)`. The `&T` appears inside `Option` and inside the
+tuple, both of which are normally borrow-forbidden positions; the
+exception applies specifically to this trait's `next` return.
+
+A borrow-yielding iterator implementation:
+
+```
+type VecIter[T]:
+  source: ...                       // internal: refers back to the borrowed Vec
+  cursor: isize
+
+fulfill Iterator for VecIter[Record]:
+  type Item = &Record               // yields borrows of Record elements
+  fn next(iter: VecIter[Record]) -> (Option[&Record], VecIter[Record]):
+    mut local = iter
+    if local.cursor >= local.source.length():
+      (None, local)
+    else:
+      let element_ref = local.source.element_at(local.cursor)   // returns &Record
+      local.cursor = local.cursor + 1
+      (Some(element_ref), local)
+```
+
+The `element_at` operation is a stdlib primitive that produces a borrow
+into the source's storage. The borrow's validity is tied to the
+iteration step.
+
+The trait declaration itself is unchanged:
+
+```
+trait Iterator:
+  type Item
+  fn next(iter: Self) -> (Option[Item], Self)
+```
+
+`Item` is unconstrained in the trait declaration. Implementations may
+declare `Item` as `T` (owned, requires Copy or special handling) or `&T`
+(borrow). Built-in Iterators for stdlib collections choose based on
+element type: Copy elements yield owned values; non-Copy elements yield
+borrows.
+
+The borrow's lifetime is bounded by the iteration body. The compiler
+checks that the source value (the Vec, the Record array, etc.) is not
+moved or mutated while iteration is active — same rule as §11.9.2 for
+function-parameter borrows, applied per iteration.
+
+### 12.8 The `Iterable` Trait
+
+`Iterable` is the stdlib trait for types that can produce an iterator:
+
+```
+trait Iterable:
+  type Iter: Iterator
+  fn iterator(value: &Self) -> Iter
+```
+
+The associated type `Iter` is the iterator type produced; it must itself
+implement `Iterator`. The method `iterator` takes a borrow of the source
+and returns an iterator that will yield the source's elements.
+
+#### 12.8.1 Method name
+
+The method is named `iterator`, not `iter`. The language convention is
+to prefer full names over abbreviations (§1.4 and following). Stdlib and
+user code use the full name throughout.
+
+#### 12.8.2 Borrow lifetime
+
+The `iterator` method's parameter is `&Self`. The iterator's lifetime is
+bounded by the borrow's scope — meaning, for a for-loop, the lifetime of
+the loop expression itself. This is enforced by the same call-scoped
+borrow rules of §11.9: while the for-loop is running, the source value
+is borrowed and may not be mutated through its owner.
+
+For consuming iteration (where the source is moved into the iterator
+and elements are yielded owned) a separate trait `IntoIterable` is
+deferred to a future version of the language. In v1, all `for` loops
+borrow their source.
+
+#### 12.8.3 Implementing `Iterable`
+
+A user-defined container implements `Iterable` by declaring the iterator
+type and the construction method:
+
+```
+type DataPoints:
+  values: f32[256]
+  count: isize
+
+fulfill Iterable for DataPoints:
+  type Iter = DataPointsIter
+  fn iterator(d: &DataPoints) -> DataPointsIter:
+    DataPointsIter(...)        // construct iterator over d's data
+```
+
+The `for x in d` syntax then dispatches to this implementation
+automatically.
+
+### 12.9 Built-in Iteration Sources
+
+Stdlib provides `Iterable` implementations for the language's built-in
+types where iteration is meaningful:
+
+- **Ranges (`Range[T]`)** — yields successive integers from `start`
+  (inclusive) to `end` (exclusive). `Item = T`.
+- **Arrays (`T[N]`)** — yields successive elements in index order. `Item
+  = T` for Copy element types. For non-Copy element types, the behavior
+  is the stdlib's choice (typically: not implemented; users iterate by
+  index via `arr[i]`).
+- **Stdlib collections** (`Vec[T]`, `HashMap[K, V]`, etc.) — yields
+  elements (for Vec) or key-value pairs (for HashMap). The specific
+  Item types and yielding semantics are stdlib design decisions.
+
+These implementations are language-privileged per §3.7.3 and are not
+user-overridable.
+
+#### 12.9.1 Iterating over arrays
+
+Arrays implement `Iterable` for any element type. The iteration yields
+successive elements, but the form depends on whether the element type is
+`Copy`:
+
+**Copy element types** (`T[N]` where `T: Copy`): yields owned `T`
+values. Each iteration variable is a Copy of the corresponding array
+element:
+
+```
+let buf: f32[64] = make_block()
+mut sum: f32 = 0.0
+for sample in buf:                // sample: f32, Copy
+  sum = sum + sample
+```
+
+**Non-Copy element types** (`T[N]` where `T` is not `Copy`): yields
+borrows. Each iteration variable is `&T`, a borrow into the array's
+storage:
+
+```
+let records: Record[16] = ...     // Record is non-Copy
+for r in records:                  // r: &Record
+  print(r.first_name)              // ✓ read access
+  process_by_borrow(r)             // ✓ pass to functions taking &Record
+  consume(r)                       // ✗ cannot move out of borrow
+  let saved = r                    // ✗ cannot bind a borrow to let
+```
+
+In both cases the array is borrowed for the duration of the loop.
+Indexed reads (`arr[i]`) inside the body are allowed (reading is
+non-disruptive); indexed writes (`arr[i] = v`) fail because the array is
+borrowed (§11.9.2).
+
+For non-Copy element iteration, the body's access is limited to
+borrow-compatible operations: read fields, pass to `&T` parameters,
+compare, hash. The body cannot move the element out of the array or
+duplicate it (without an explicit `.clone()`).
+
+#### 12.9.2 Iterating over ranges
+
+`Range[T]` iteration is the basic counting pattern:
+
+```
+for i in 0..N:
+  process(i)
+```
+
+The range itself is small and `Copy` (or near-Copy — implementation
+choice; semantically a value type). Borrowing a range for iteration is
+trivial; the range and its iterator are stack-allocated and have no
+heap overhead.
+
+### 12.10 Iteration Performance
+
+The combination of (1) the linear-ownership optimization for the
+`Iterator::next` tuple-return pattern (§12.7.2), (2) monomorphization of
+generic iterator implementations (§2.3), and (3) inlining of small
+iterator methods produces machine code equivalent to hand-written
+indexed loops.
+
+For a typical numeric inner loop:
+
+```
+mut sum: f32 = 0.0
+for sample in audio_block:
+  sum = sum + sample * sample
+```
+
+A conforming implementation compiles this to machine code with no heap
+allocation, no iterator object lifecycle overhead, and no per-iteration
+function call cost. The iterator's cursor is held in registers; the
+`next` call is inlined; the loop is a tight machine loop over the
+array's elements.
+
+This performance behavior is a *required* property of conforming
+implementations. The trait-based source-level abstraction is intended to
+disappear at the machine level for monomorphized loops over built-in
+iterables.
+
+### 12.11 Interaction with the Rest of the Language
+
+#### 12.11.1 Pattern matching and iteration variables
+
+The iteration variable may be a pattern, not just a single name. The
+pattern destructures each yielded value:
+
+```
+let pairs: Vec[(i32, string)] = ...
+for (id, name) in pairs:
+  process(id, name)
+```
+
+The pattern follows the rules of §6.2.4 and §9.2.2. Refutable patterns
+(those that may fail to match) are not permitted as iteration variables;
+the iteration variable must always bind successfully for each yielded
+value. To filter, the body uses `continue`:
+
+```
+for x in items:
+  match x:
+    Special(payload): continue        // skip; for filtering, use continue
+    Other(data): process(data)
+```
+
+A future extension may add `for pattern if guard in iterable:` syntax for
+inline filtering; not in v1.
+
+#### 12.11.2 Loops in trait method bodies
+
+Trait method bodies may contain loops, subject to the standard mutation
+and ownership rules. Default-body methods in trait declarations (§3.1.3)
+may use loops:
+
+```
+trait Sum:
+  type Item: Numeric
+  fn elements(value: &Self) -> Iter
+  type Iter: Iterator with Item = Item
+
+  fn sum(value: &Self) -> Item:
+    mut total = Item::zero()
+    for x in value:
+      total = total + x
+    total
+```
+
+The default body's loop is part of the trait declaration; implementations
+may override it as usual.
+
+#### 12.11.3 Loops in generic function bodies
+
+A generic function body containing a loop is type-checked at definition
+per §2.2.2. The loop's iterable expression's type must satisfy
+`Iterable` at the call site for each monomorphization:
+
+```
+fn total[T: Iterable](source: &T) -> f32 where T::Iter::Item is f32:
+  mut sum: f32 = 0.0
+  for sample in source:
+    sum = sum + sample
+  sum
+```
+
+The compiler verifies the constraints at definition and monomorphizes
+per call site.
+
+### 12.12 Interaction with Reactivity (Forward-Looking)
+
+The reactive system is specified in a deferred section. Loops in
+reactive contexts follow §11.14:
+
+- A `derived` expression's body may contain loops. Each evaluation of
+  the derived expression runs the loop fresh. The loop's local
+  mutations are not observable outside the derived's evaluation; only
+  the derived's final value enters the reactive graph.
+- The collection or range being iterated in a derived body may itself
+  be a reactive value. Each time the reactive value updates, the
+  derived re-evaluates and the loop re-runs.
+- The `while` loop's condition may depend on reactive values, but
+  reactive updates do not interrupt an in-progress loop iteration.
+
+Full specification is deferred to the reactive-system chapter.
+
+### 12.13 Restrictions and Edge Cases
+
+#### 12.13.1 Empty iteration
+
+An empty iterable (such as `0..0` or an empty container) produces no
+iterations. The loop's body does not execute. The expression value (in
+expression context) is determined by the else-clause-and-break-value
+table of §12.6.2:
+
+```
+let result = for x in []:           // hypothetical empty array
+  break x
+else:
+  default_value
+                                    // result = default_value
+```
+
+#### 12.13.2 Iterators that never complete
+
+An iterator whose `next` always returns `Some(_)` produces an infinite
+loop. There is no language-level prevention; the responsibility lies with
+the iterator implementation. A `break` inside the body is the user's
+mechanism for terminating such loops.
+
+#### 12.13.3 Side effects in iterator implementations
+
+`Iterator::next` is a pure function in the type-system sense: it takes
+inputs and produces outputs. However, the iterator's value contains
+state that the function may mutate (via `mut local`-style rebind in the
+body). Different invocations of `next` produce different results because
+the cursor advances; this is the normal behavior of iteration and does
+not violate purity.
+
+Iterators must not perform externally observable I/O. The reactive
+system's signals (deferred) are the appropriate mechanism for
+externally-driven sequences; iterators are for collection traversal.
+
+---
+
+*End of §12.*
