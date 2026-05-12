@@ -4400,5 +4400,488 @@ mechanism beyond what already exists in the type system.
 
 ---
 
-*End of §8. Subsequent sections (§9 Strings, Tuples, and Arrays, §10
-Visibility and Modules) follow.*
+## 9. Strings, Tuples, and Arrays
+
+This section specifies three foundational compound types that are
+not user-defined: `string` (a primitive built-in), tuples (structural
+anonymous products), and fixed-size arrays (`T[N]`). All three have
+dedicated syntax and language-level treatment; their behaviors are
+specified here rather than emerging from the trait system alone.
+
+### 9.1 Strings
+
+`string` is a built-in primitive type, at the same level as `i32` or
+`bool`. The compiler has direct knowledge of it; it is not a stdlib type
+with privileged literal syntax. The built-in status enables compiler-level
+optimizations (small-string optimization, intern pools, constant folding
+of string literals per §2.4) without dependency on a stdlib
+implementation. The lowercase `string` keyword is reserved, matching the
+lowercase convention for primitive types (§1.4).
+
+#### 9.1.1 Primitive non-numeric types
+
+The complete set of primitive non-numeric types in the language is:
+
+- `bool` — the truth-value type.
+- `char` — a Unicode scalar value (see §9.1.2).
+- `string` — UTF-8-encoded sequences of `char` values (see §9.1.3 onward).
+
+No other non-numeric primitives exist. Byte sequences are `u8[N]` arrays
+(§9.3). Other text-related types (UTF-16 strings, ASCII-only strings,
+byte strings with no encoding) are stdlib concerns if needed; the language
+commits to one string type, and that type is UTF-8.
+
+#### 9.1.2 The `char` type
+
+`char` represents a Unicode scalar value — an integer in the range
+`0..=0xD7FF` ∪ `0xE000..=0x10FFFF`. The excluded range
+(`0xD800..=0xDFFF`) is reserved for UTF-16 surrogate pairs and is not a
+valid scalar value. A `char` value is always a valid Unicode scalar; the
+type system rejects values outside this range at construction time.
+
+Representation is 32-bit per value (`char` does not vary in size despite
+representing a code-point range that fits in 21 bits — fixed width
+enables direct indexing of `char` sequences).
+
+**Character literals** use single quotes:
+
+```
+let c1: char = 'a'
+let c2: char = '\n'                 // newline
+let c3: char = '\t'                 // tab
+let c4: char = '\\'                 // literal backslash
+let c5: char = '\''                 // literal single quote
+let c6: char = '\u{1F600}'          // 😀  (escape for any Unicode scalar)
+let c7: char = '\x41'               // 'A' (escape for ASCII byte)
+```
+
+The same escape conventions as string literals (§9.1.3) apply. A
+character literal contains exactly one Unicode scalar; multi-character
+literals are a compile error.
+
+**Conversion with integers** uses the conversion-trait system per §7:
+
+- `From[char] for u32` — every `char` converts to a `u32` losslessly
+  (a Unicode scalar fits in 21 bits, well within u32's range).
+- `TryFrom[u32] for char` — only valid Unicode scalar values produce
+  a `char`; surrogate-pair range and values above `0x10FFFF` produce
+  `Err`.
+
+`char` is `Eq`, `Ord`, `Hash`, `Display`, `Debug`, and `Clone` — the
+standard trait set for primitive scalar types. Comparison and ordering
+follow numeric Unicode scalar value order.
+
+**Relationship to strings**: A `string` is conceptually a sequence of
+`char` values encoded as UTF-8. The `chars()` view (§9.1.6) produces a
+`char` sequence; the `chars` method's complexity is O(n) because UTF-8
+decoding is required to extract each `char`.
+
+#### 9.1.3 String literals
+
+String literals follow grammar §2.5.5:
+
+- **Plain strings**: `"hello world"`.
+- **Raw strings**: `r"no \n escapes"`, `r#"with "quotes""#`.
+- **Escape sequences**: `\n`, `\t`, `\\`, `\"`, `\xHH`, `\u{HHHHHH}`.
+- **Interpolation**: `"user {name} has {count} items"`.
+
+All forms produce values of type `string`.
+
+#### 9.1.4 UTF-8 invariant
+
+UTF-8 is the internal encoding. Strings are sequences of bytes
+interpretable as UTF-8; the type system guarantees that every string
+value is valid UTF-8. No invalid-UTF-8 string can exist at runtime;
+constructors and conversions that take untrusted input either reject
+ill-formed input or return a fallible result.
+
+#### 9.1.5 No direct indexing
+
+Strings are opaque with respect to indexing — there is no `s[i]`
+operator. Direct indexing is rejected as a footgun:
+
+- Byte indexing produces meaningless results when an index lands
+  mid-codepoint in a multi-byte UTF-8 sequence.
+- Character indexing is O(n) (since UTF-8 is variable-width) and would
+  silently hide that cost behind constant-time-looking syntax.
+- Both invite subtle bugs that only surface on non-ASCII input.
+
+Access to string contents requires explicit views per §9.1.6.
+
+#### 9.1.6 Views and queries
+
+Access to string contents uses explicit methods that make the unit of
+measurement visible at every call site:
+
+- `s.bytes()` — returns a sequence of `u8` values representing the
+  raw bytes. Indexable in O(1), but the user is responsible for
+  UTF-8-aware handling of multi-byte sequences. The exact return type is
+  a stdlib concern.
+- `s.chars()` — returns a sequence of `char` values (Unicode scalars).
+  Iterable in O(n) total traversal. The exact return type is a stdlib
+  concern.
+- `s.byte_len() -> isize` — length in bytes. O(1).
+- `s.char_count() -> isize` — number of Unicode scalars. O(n).
+
+Each name describes both the operation and its complexity-relevant unit.
+Users choose the appropriate view for their workload; the language does
+not pick a default that would be wrong for some cases.
+
+#### 9.1.7 Slicing
+
+Slicing uses explicit methods rather than range syntax:
+
+- `s.slice(start: isize, end: isize) -> string` — char-boundary slicing.
+  `start` and `end` are character positions. Boundaries are validated.
+  Cost is O(end) — char boundaries are located by walking UTF-8 from the
+  start, since UTF-8 is variable-width.
+- `s.byte_slice(start: isize, end: isize) -> string` — byte-boundary
+  slicing. `start` and `end` are byte positions. Traps if a boundary
+  lands mid-codepoint (which would produce invalid UTF-8). Cost is
+  O(1) for boundary lookup; the validation requires reading the byte at
+  each boundary to verify it does not fall inside a multi-byte sequence,
+  still O(1) per boundary.
+
+Both methods return a new string value. Invalid boundaries
+(mid-codepoint byte index, out-of-range positions) trap at runtime per
+§4.6.1's trap-on-error philosophy.
+
+#### 9.1.8 Immutability and operations
+
+Strings are immutable, consistent with all bindings in the language per
+§1.3. There is no in-place mutation. Every string operation that
+produces modified content returns a new string value:
+
+```
+let upper = s.to_upper()
+let trimmed = s.trim()
+let replaced = s.replace(old, new)
+let combined = a + b
+```
+
+The runtime is free to share immutable backing storage between values,
+but this is an implementation detail invisible to the user.
+
+The `+` operator concatenates strings per §4.4's operator framework.
+The language provides an `Add` implementation for `string` (per §3.7.3's
+language-privileged impls) with both operands and result typed as
+`string`:
+
+```
+let greeting = "hello" + " " + "world"
+```
+
+#### 9.1.9 Interpolation
+
+Interpolation is the preferred form when building strings from
+non-string values, per grammar §2.5.5:
+
+```
+let label = "user {name} has {count} items"
+let summary = "value: {amount * tax_rate}"
+```
+
+The interpolation expression `{expr}` evaluates the expression and
+converts the result to `string` via the `Display` trait per §3.7. Values
+whose types do not satisfy `Display` produce a compile error at the
+interpolation site.
+
+Interpolation expressions are arbitrary expressions, including method
+calls, arithmetic, and field access. They are not limited to bare
+identifiers.
+
+### 9.2 Tuples
+
+Tuples are *structurally typed* — the one structural-typing carve-out in
+an otherwise nominal type system. Two tuples with the same component
+types in the same order are the same type:
+
+```
+(1, 2)         // (i32, i32)
+(3, 4)         // also (i32, i32) — same type as above
+(1, "hello")   // (i32, string) — a different type
+```
+
+No type declaration is required to use a tuple type; the type expression
+`(T1, T2, ...)` denotes the tuple type directly. The structural-typing
+carve-out is justified by the fact that tuples are anonymous product
+types by design and carry no domain identity — there is no nominal
+contract to preserve.
+
+#### 9.2.1 Field access
+
+Field access uses numeric postfix syntax per grammar §3.15:
+
+```
+let t = (1, "hello", 3.14)
+let n = t.0          // i32
+let s = t.1          // string
+let f = t.2          // f64
+```
+
+Indices are zero-based and must be **integer literals**. Bounds checking
+happens at compile time: `t.3` on a 3-tuple is a compile error.
+
+The literal restriction is structural: tuple components can have
+different types, and the compiler must know the type of the accessed
+field statically. Runtime indexing with a variable expression (`t.i`
+where `i` is a binding) is not permitted because the type of the result
+would depend on a runtime value, which the type system cannot express.
+
+#### 9.2.2 Pattern destructuring
+
+Tuple patterns follow grammar §3.14's `TuplePat`:
+
+```
+let (a, b, c) = (1, "hello", 3.14)
+let (x, _, z) = some_tuple
+let ((a, b), c) = ((1, 2), 3)
+```
+
+Tuple patterns appear in `let` bindings, `match` arms, and any other
+position where patterns are admitted. Nested tuple patterns work to
+arbitrary depth. The wildcard `_` ignores a component without binding it.
+
+Tuple patterns are always positional per §3.5 — tuples have no field
+names, so there is no named form.
+
+#### 9.2.3 The unit type `()`
+
+The unit type is `()`, with a single value also written `()`. Functions
+without a final expression per grammar §3.13 return the unit value
+implicitly. The unit type appears in pattern position as `()` to match
+unit-typed values and as a type expression for return types of functions
+producing no meaningful value:
+
+```
+fn print_hello() -> ():
+  println("hello")
+
+fn print_hello():          // same as above; -> () may be omitted
+  println("hello")
+```
+
+#### 9.2.4 The 1-tuple
+
+The 1-tuple form requires a trailing comma to disambiguate from a
+parenthesized expression:
+
+```
+let single = (42,)         // 1-tuple of type (i32,)
+let grouped = (42)         // just i32 in parens — not a tuple
+```
+
+The trailing-comma convention is standard across languages with tuple
+support and resolves the syntactic ambiguity cleanly.
+
+#### 9.2.5 Generics over tuples
+
+Generic parameters appear in tuple types using standard generic syntax;
+no special mechanism is needed:
+
+```
+fn first[A, B](t: (A, B)) -> A:
+  t.0
+
+fn swap[A, B](t: (A, B)) -> (B, A):
+  (t.1, t.0)
+```
+
+The tuple type `(A, B)` is a type expression like any other; `A` and `B`
+are bound by the generic parameter list. Per §2.3, each unique
+tuple-type instantiation produces its own specialized code.
+
+**Variadic generics** — abstraction over tuples of arbitrary arity — are
+not supported in v1. Functions generic over "any tuple" would require
+either macro support or a different abstraction mechanism (e.g., a trait
+with associated types for each component). May be added later if usage
+patterns justify the complexity. For now,
+generic-over-tuple-component-types covers the common case.
+
+#### 9.2.6 Trait conformance for tuples
+
+Trait conformance for tuples is supported via `fulfill` blocks per §3.3,
+subject to the orphan rule from §3.7 — including the
+generic-parameter-coverage rule from §3.7.2. Since tuple types are
+structural and not declared in any module, the coverage check operates
+on the tuple's element types:
+
+- A `fulfill SomeTrait for (T1, T2, ...)` is permitted if `SomeTrait` is
+  local *or* if at least one of the element types `Ti` is local.
+- For tuples consisting entirely of foreign types (e.g., `(i32,
+  string)`), the trait must be local — no element provides coverage.
+- For tuples containing at least one locally-defined element type
+  (e.g., `(i32, MyType)` where `MyType` is local), coverage is satisfied
+  via that local element, and a foreign trait can be implemented.
+
+```
+// In user module declaring MyTrait and MyType:
+fulfill MyTrait for (i32, string):          // ✓ trait is local
+  ...
+
+fulfill Display for (i32, MyType):          // ✓ MyType covers; Display is foreign
+  ...
+
+fulfill Display for (i32, string):          // ✗ both element types foreign,
+                                            //   trait also foreign — orphan
+  ...
+```
+
+Stdlib provides `fulfill` blocks for common tuple types implementing
+common traits (`Eq`, `Ord`, `Hash`, `Clone`, `Display`, `Debug`).
+Coverage extends through **tuple arity 12** — beyond arity 12, users
+implement explicitly. The arity limit reflects the practical observation
+that tuples larger than 12 components are rare and typically indicate
+the user should be using a record (§6.1) instead.
+
+#### 9.2.7 Tuple-to-record conversion
+
+Tuple-to-record conversion is explicit. Tuples are structural; records
+are nominal; they do not share identity, and the compiler does not
+implicitly convert between them. Manual conversion uses field-by-field
+construction:
+
+```
+let t = (1.0, 2.0, 3.0)
+let v = Vec3(x: t.0, y: t.1, z: t.2)
+```
+
+For ergonomic repeated conversion, a `From` impl per §7 produces
+method-call conversion:
+
+```
+fulfill From[(f32, f32, f32)] for Vec3:
+  fn from(t: (f32, f32, f32)) -> Vec3:
+    Vec3(x: t.0, y: t.1, z: t.2)
+
+// Now:
+let v: Vec3 = (1.0_f32, 2.0_f32, 3.0_f32).into::[Vec3]()
+```
+
+### 9.3 Arrays
+
+Arrays are fixed-size, contiguous sequences of values of a single
+element type. The element count is part of the type. Arrays receive
+dedicated language syntax (`T[N]`) rather than being expressed through a
+generic stdlib type.
+
+#### 9.3.1 Array type syntax
+
+```
+i32[5]              // 5-element array of i32
+string[10]          // 10-element array of string
+f64[100]            // 100-element array of f64
+```
+
+The syntax `T[N]` is dedicated to the array type. There is no exposed
+canonical `Array[T, N]` form; the underlying array representation is
+internal to the compiler and not addressable by name in user code. The
+syntactic shape parallels how tuples are handled — dedicated syntax with
+no namespace-level type name.
+
+**Multi-dimensional arrays** parse left-to-right: `T[N][M]` is an
+M-element array of `T[N]`. To form an N-row × M-column matrix, write
+`f64[M][N]` (each row is `f64[M]`; the outer array has `N` such rows).
+
+**Zero-length arrays** `T[0]` are valid types. They are useful for edge
+cases in generic code that must abstract over array sizes including
+zero, and for FFI bindings to C-style flexible array members.
+
+#### 9.3.2 Disambiguation of `T[args]` in type position
+
+The grammar's `TypePostfixOp` is uniformly `[arg-list]`. The compiler
+interprets it based on what `T` resolves to:
+
+- If `T` is a primitive or other non-generic type, `T[args]` constructs
+  the array type (e.g., `i32[5]`, `string[10]`).
+- If `T` is a generic type, `T[args]` instantiates the generic with the
+  given type arguments (e.g., `Vec[i32]`, `Option[string]`).
+
+The disambiguation is by the kind of `T`, not by the kind of the
+arguments. A primitive type's name is always an array-type constructor;
+a generic type's name is always a generic-instantiation site. There is
+no ambiguity at the parser level.
+
+#### 9.3.3 Length type
+
+The array length type is `isize` — signed, platform-sized. The choice
+of signed reflects a real ergonomic concern: `length - 1` on an empty
+array under unsigned would either wrap to `usize::MAX` (likely freezing
+loops) or trap; under signed it yields `-1`, and the iteration `0..-1`
+is correctly empty.
+
+The platform-sized choice scales addressing capacity with the machine.
+The theoretical halving of addressable size from `usize` to `isize` is
+not a real constraint: `isize::MAX` on 64-bit platforms is
+~9.2 × 10¹⁸ elements, far beyond any conceivable array.
+
+Users needing the "must be non-negative" invariant for low-level work
+(allocation sizes, FFI) can use `usize` explicitly; the language does
+not block this.
+
+#### 9.3.4 Index type
+
+Array index types are flexible. Any integer type is accepted as an
+index, implicitly widened to `isize` for the indexing operation per
+§4.5's lossless-widening rules. Integer types whose value range fits
+entirely in `isize`'s range widen losslessly; types whose range exceeds
+`isize`'s range require explicit cast.
+
+On 64-bit platforms (where `isize` is 64-bit), this means every integer
+type up to and including `i64` widens losslessly; `u64`, `i128`, and
+`u128` require explicit cast. On 32-bit platforms (where `isize` is
+32-bit), the corresponding rule applies with `isize`'s narrower range.
+The rule is platform-aware: the same source code is valid on every
+platform, but a cast may be required on platforms with narrower `isize`
+that would be unnecessary on wider platforms.
+
+Users write indexing expressions with whichever integer type is natural
+for their context — counter variables, sizes, computed offsets — and
+the compiler handles the widening:
+
+```
+let i: i32 = 3
+let v: i32 = arr[i]            // i32 widens to isize for indexing
+
+let n: usize = compute()
+let w = arr[n]                  // usize widens to isize for indexing
+
+let big: u64 = some_huge()
+let x = arr[big]                // ✗ compile error on 64-bit (u64 doesn't fit isize);
+                                //   may also fail on 32-bit
+let x = arr[big as isize]       // ✓ explicit cast
+```
+
+#### 9.3.5 Bounds checking
+
+Bounds checking on `arr[i]` traps at runtime if `i < 0 || i >= length`,
+consistent with §4.6.1's trap-on-out-of-range philosophy. The trap is
+the language's signal that a logic error occurred — the program was
+asked to access a position that doesn't exist.
+
+When both the index and the length are compile-time known per §2.4,
+bounds checking happens at compile time and produces a compile error on
+out-of-range access:
+
+```
+let arr: i32[5] = ...
+let x = arr[10]                 // ✗ compile error — 10 not in 0..5
+let x = arr[3]                  // ✓ compile-time-verified safe
+```
+
+For recoverable indexing (where out-of-bounds should produce a value,
+not a trap), the user calls stdlib methods like `arr.get(i)` returning
+`Option[T]`, or uses the `?` variant per §4.6.4 if such an indexing
+operator is provided.
+
+#### 9.3.6 Dynamic arrays are not in the language
+
+The dynamic-sized vector type (heap-allocated, growable) is a standard
+library concern, not a language-level type. Its name and syntax (`Vec[T]`,
+`Vector[T]`, or whatever stdlib chooses) is outside this specification.
+Only fixed-size arrays receive dedicated language syntax. Stdlib's
+dynamic collections are ordinary generic types per §2.
+
+---
+
+*End of §9. Subsequent sections (§10 Visibility and Modules) follow.*
