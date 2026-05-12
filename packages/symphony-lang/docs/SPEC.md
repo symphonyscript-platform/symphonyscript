@@ -2442,6 +2442,254 @@ umbrella satisfaction follows.
 
 ---
 
-*End of §4. Subsequent sections (§5 Type Intersection and dyn, §6 Records
-and Enums, §7 Conversion System, §8 Error Handling, §9 Strings and Tuples,
-§10 Visibility and Modules) follow.*
+## 5. Type Intersection and `dyn`
+
+The `&` operator expresses type intersection — "satisfies all of these
+simultaneously" — and appears in three distinct contexts with related but
+position-dependent semantics. The unifying intuition is uniform; the
+concrete meaning varies by what the operands are and where the expression
+sits.
+
+The three contexts:
+
+| Context | Operands | Example |
+|---|---|---|
+| Generic bound | Traits | `fn pick[T: A & B](...)` |
+| Value-position trait object | Traits, behind `dyn` | `let x: dyn (A & B) = ...` |
+| Record intersection at type definition | Records | `type X = A & B` |
+
+### 5.1 Trait Conjunction in Generic Bounds
+
+In a generic parameter list or where-clause, `T: A & B` constrains `T` to
+be a type for which both `fulfill A for T` and `fulfill B for T` exist:
+
+```
+fn pick[T: Drivable & Insurable](item: T) -> T:
+  ...
+
+fn process[T](item: T) where T: Drivable & Insurable:
+  ...
+```
+
+The `&` here is *constraint conjunction*, not a type expression. The
+compiler resolves it statically at every use site; instantiations are
+monomorphized per §2.3 with no runtime dispatch cost. A type either
+satisfies all conjoined constraints or it doesn't; the constraint set is
+checked at the call site for each concrete instantiation.
+
+Conjunction is commutative and associative: `A & B`, `B & A`, and
+`(A & B) & C` are equivalent constraint sets.
+
+### 5.2 Trait Objects at Value Position (`dyn`)
+
+A trait may appear at value position — as the type of a variable, parameter,
+field, or return value — only when wrapped in `dyn`. The resulting *trait
+object* dispatches method calls dynamically through a vtable.
+
+#### 5.2.1 Single-trait and multi-trait forms
+
+Single-trait `dyn`:
+
+```
+let x: dyn Drivable = some_value
+fn render(item: dyn Renderable) -> string: ...
+```
+
+Multi-trait `dyn` (intersection at value position):
+
+```
+let x: dyn (Drivable & Insurable) = some_value
+fn process(item: dyn (Drivable & Insurable)) -> dyn Renderable: ...
+```
+
+When `dyn` precedes an intersection of traits, the intersection MUST be
+parenthesized. Without parens, `dyn Drivable & Insurable` parses as
+`(dyn Drivable) & Insurable` — `dyn Drivable` becomes a trait object,
+which is then intersected with the bare trait `Insurable`, which is
+ill-formed (trait objects are not in the `{trait & trait}` intersection
+domain per §5.5). The parens force the intended grouping: `dyn` applied
+to the trait-intersection expression as a whole.
+
+#### 5.2.2 `dyn` is mandatory for trait-object value positions
+
+`dyn` is *required* at every trait-object value position. The bare form
+`let x: Drivable` (no `dyn`) is a parse error when `Drivable` is a trait
+rather than a concrete type. Similarly, `let x: Drivable & Insurable`
+(no `dyn`) is a parse error when both operands are traits.
+
+The requirement makes dynamic-dispatch costs visible at the declaration
+site rather than hidden behind syntax that looks like a plain type
+annotation. Users who want static dispatch use generics with trait bounds
+per §5.1; users who want dynamic dispatch use `dyn` per §5.2 and pay the
+indirection cost knowingly.
+
+#### 5.2.3 Dispatch cost
+
+Trait objects dispatch through a vtable. The runtime cost is an indirect
+call per method invocation, plus the storage cost of the vtable pointer
+adjacent to the value's data. The costs are bounded and predictable;
+they are simply not zero, which is the property `dyn` makes visible.
+
+#### 5.2.4 Object safety
+
+Not every trait can be used in a `dyn` position. Traits with methods whose
+signatures depend on `Self` in non-receiver positions, traits with
+associated types not bound at the use site, or traits with generic methods
+cannot be made into trait objects under the standard vtable mechanism.
+Object-safety rules are specified in detail in § — Object Safety
+(deferred). A trait that is not object-safe used in a `dyn` position
+produces a compile error at the use site identifying the offending trait
+and the reason.
+
+#### 5.2.5 Coercion to `dyn`
+
+A value of a concrete type `T` that fulfills traits `A` and `B` can be
+assigned to a `dyn (A & B)` binding via an explicit coercion. The exact
+syntax is specified in § — Coercion (deferred); the principle is that
+moving from a static type to a trait object is a deliberate operation at
+the assignment or argument-passing site, not an implicit conversion.
+
+### 5.3 Record Intersection at Type Definition
+
+A `type` declaration whose right-hand side is a record-record intersection
+produces a new nominal record type combining the fields of both operands:
+
+```
+type Car:
+  brand: string
+  speed: f64
+  wheels: i32
+
+type Insured:
+  policy_number: string
+  premium: f64
+
+type InsuredCar = Car & Insured
+
+// Equivalent declaration:
+type InsuredCar:
+  brand: string
+  speed: f64
+  wheels: i32
+  policy_number: string
+  premium: f64
+```
+
+The resulting `InsuredCar` is *nominally distinct* from both `Car` and
+`Insured`. Values of `Car` are not implicitly assignable to `InsuredCar`
+(a `Car` lacks the insurance fields); values of `InsuredCar` are not
+implicitly assignable to `Car` (no implicit projection of fields).
+Conversion requires explicit construction or a `From` impl per §7.
+
+The intersection is a *definitional combinator* producing a new named type,
+not a subtyping relationship. The language has no nominal subtyping; record
+intersection composes structure into a new identity, full stop.
+
+#### 5.3.1 Field merging rules
+
+When both operand records declare a field with the same name:
+
+- **Identical types and identical visibility** — the merged record has a
+  single field of that name, type, and visibility. No duplication.
+- **Different types** — the intersection is a compile error identifying the
+  conflicting field name and the two incompatible types. The user resolves
+  by writing the record explicitly with the chosen field type, or by
+  adjusting the source records.
+- **Same type, different visibility** — the intersection is a compile error
+  identifying the conflicting field name and the two incompatible visibility
+  specifiers. Visibility is part of a field's contract per §10; the two
+  operand records disagree about how the field should be exposed, and the
+  merged record cannot resolve the disagreement without arbitrarily picking
+  one. The user resolves by writing the record explicitly with the chosen
+  visibility or by aligning the source records.
+
+#### 5.3.2 Trait inheritance via `@derive`
+
+Trait inheritance from the operand records is opt-in via `@derive` per
+§3.7. Each trait to be inherited is explicitly listed in the annotation,
+and the compiler generates the `fulfill` block by delegating to the
+operand types' implementations:
+
+```
+@derive(Display, Hash)
+type InsuredCar = Car & Insured
+```
+
+When both operand records have `fulfill` blocks for the same trait that
+would equally apply, derivation is ambiguous; the compiler reports an error
+and the user must write the implementation manually.
+
+The mechanism mirrors `@derive` for newtypes (§ — Newtypes): explicit
+opt-in trait inheritance, no automatic carry-over of traits the user didn't
+ask for.
+
+### 5.4 Interaction with `alias type`
+
+The `alias type` mechanism (§4.2 and § — Newtypes) produces transparent
+substitution — the alias name and its right-hand side refer to the same
+thing, no new identity. Interaction with `&` depends on what the right-hand
+side evaluates to:
+
+- **`alias type X = A & B` where A, B are traits** — valid. The alias names
+  a *constraint* usable in bound positions. `fn process[T: X](item: T)` is
+  equivalent to `fn process[T: A & B](item: T)`. Useful for naming common
+  bounds for reuse.
+- **`alias type X = dyn (A & B)` where A, B are traits** — valid. The alias
+  names a *dynamic-dispatch trait object type*. `let value: X = ...` is
+  equivalent to `let value: dyn (A & B) = ...`.
+- **`alias type X = A & B` where A, B are records** — rejected at compile
+  time. Record intersection creates a new nominal type with combined
+  fields; that creation requires `type`, not `alias type`. Without new
+  identity, the intersection has no meaning in the nominal type system.
+  The compile error directs the user to write `type X = A & B` instead.
+
+The asymmetry between trait intersection (aliasable) and record
+intersection (not aliasable) reflects a deeper asymmetry: trait
+intersection produces a constraint (or a `dyn` type with explicit
+identity); record intersection produces fields-combined-into-a-new-type
+that has meaning only as a nominal type with identity. Aliases work where
+the right-hand side already has identity; they don't work where the
+right-hand side requires a type declaration to acquire identity.
+
+### 5.5 Cross-Kind Intersection
+
+Intersection is well-defined only within `{trait & trait}` and `{record &
+record}`. Cross-kind combinations and same-kind combinations outside those
+two sets are rejected at compile time:
+
+- `Trait & Record` — rejected. A trait expresses a behavior contract; a
+  record expresses structure. Their intersection has no coherent meaning.
+- `Record & Enum` — rejected. Records and enums are distinct compound
+  kinds; combining them produces no type the language can represent.
+- `Trait & Enum` — rejected. Same reasoning.
+- `Enum & Enum` — rejected. Enums are tagged unions; intersection of two
+  tagged unions has no meaningful semantics (the union of their variants
+  would be `|`-shaped, not `&`-shaped, and is not provided by the language).
+- Intersections involving tuples, function types, or primitive types —
+  rejected. These kinds are not subject to intersection.
+
+The compiler reports the cross-kind intersection error at the `&`
+expression with the operand kinds named.
+
+### 5.6 Variance and Intersection
+
+The language has no variance markers and no subtyping between generic
+instantiations (§2.3). `Container[Cat]` and `Container[Animal]` are
+unrelated types regardless of any relationship between `Cat` and `Animal`.
+
+Intersection of two distinct generic instantiations (e.g.,
+`Container[Cat] & Container[Animal]`) follows the rules for the resulting
+kinds. As record intersection, the operands' fields would typically
+conflict (different generic instantiations differ in their field types per
+§2.3.1's strict-structural keying), so most such expressions are compile
+errors via §5.3.1's same-name-different-type rule. As trait conjunction,
+the conjunction is well-formed but produces a constraint that may have no
+satisfying type — generic constraints don't fail at the constraint
+declaration; they fail at the call site where no concrete type satisfies
+both.
+
+---
+
+*End of §5. Subsequent sections (§6 Records and Enums, §7 Conversion System,
+§8 Error Handling, §9 Strings and Tuples, §10 Visibility and Modules)
+follow.*
