@@ -599,15 +599,34 @@ special.
 #### 2.4.6 Reactivity provenance in diagnostics
 
 The compiler tracks reactivity provenance through expressions. When an
-expression's value is reactive, the compiler can identify the signal(s) it
-depends on. This information appears in error messages when reactivity
-prevents an expression from being compile-time evaluable:
+expression's value is reactive, the compiler can identify the signal(s)
+it depends on. This information surfaces in two places:
 
-```
-let x: u8 = compute(mouse_position)
-// error: value of `x` is reactive (depends on signal `mouse_position`
-// at line 14); cannot fit-check against `u8` at compile time
-```
+- **Errors that explicitly require compile-time evaluation.** A `const`
+  declaration (§2.4.1.2) whose RHS is reactive is a compile error per
+  §2.4.1.2's non-reactive guarantee. A type-level position requiring a
+  compile-time-known value (e.g., a const-generic argument or an array
+  length per §2.4.4) supplied with a reactive expression is likewise an
+  error. The diagnostic names the source signal:
+
+  ```
+  const N: usize = sample_count(mouse_position)
+  // error: `const` RHS must be non-reactive; value depends on signal
+  //   `mouse_position` (at line 14). For a runtime-derived value, use
+  //   `let` instead.
+  ```
+
+- **Diagnostic context, not error cause, for ordinary runtime bindings.**
+  A reactive value assigned to a regularly-typed binding is *not* an error
+  on reactivity grounds — `let x: u8 = compute(mouse_position)` is well-
+  typed whenever `compute(mouse_position)` has type `u8` (or implicitly
+  widens to `u8` per §4.5). Value-fits-type checking per §2.4.3 applies
+  only to compile-time-known values; reactive values are checked by
+  ordinary type-compatibility rules. If an error does arise (e.g., the
+  reactive value's type doesn't match `u8` and no implicit widening
+  applies), the diagnostic mentions the signal provenance to help the
+  user trace the value's origin, but the underlying error is a type
+  mismatch, not a fit-check failure.
 
 #### 2.4.7 Implementation limits
 
@@ -718,7 +737,8 @@ Implementations bind associated types via the `type Name = Concrete` form
 inside `fulfill` blocks (§3.4.3).
 
 Bounds on associated types in generic constraints use where-clauses with the
-`.` member-access notation (§ — Generic Parameters):
+`.` member-access notation (§3.3.4 for where-clauses; §3.1.6 for generic
+trait parameters):
 
 ```
 fn sum[I: Iterable](it: I) -> I.Item where I.Item: Numeric:
@@ -798,7 +818,8 @@ The `requires` mechanism is how trait hierarchies are constructed (§3.6).
 #### 3.1.5 Trait-level default concrete type
 
 A trait may declare a default concrete type used by the defaulting mechanism
-(§ — Numeric System, defaulting rules). When a use site is constrained solely
+(§3.6.2 for selection among multiple defaults; §4.9.3 for the numeric
+default mappings). When a use site is constrained solely
 by a trait (or traits) with declared defaults and nothing else pins the type,
 the trait's default fires.
 
@@ -856,7 +877,7 @@ type-system level. Two terms are useful when discussing generic traits:
 A type may implement multiple trait instances of the same parent trait
 (`fulfill From[i32] for MyNumber` and `fulfill From[i64] for MyNumber`
 coexist; both share the parent `From`). Default type parameters (`Rhs =
-Self`) follow the rules in § — Generic Parameters.
+Self`) follow the rules for generic parameters in §3.1.6 and §2.2.
 
 ### 3.2 Conformance Declarations (`satisfies`)
 
@@ -1027,8 +1048,8 @@ namespace. This is the key distinction from ordinary top-level function
 definitions:
 
 - A free function `fn display(p: Person)` defined at module level occupies a
-  name slot in that module's free-function namespace. Per § — Visibility and
-  Modules, function names are unique within their module; defining two free
+  name slot in that module's free-function namespace. Per §10, function
+  names are unique within their module; defining two free
   functions with the same name in the same module is a compile error.
 - A function `fn display(value: Person)` defined inside `fulfill Display for
   Person` does *not* occupy the module's free-function namespace. It lives
@@ -1231,8 +1252,11 @@ display(person)               // conventional form, requires `display` in scope
 Display::display(person)      // trait-path form, no import needed
 ```
 
-The trait-path form (`Trait::method`) is always available regardless of
-imports. Per §3.2.1 the bare-name forms are never ambiguous between
+The trait-path form (`Trait::method`) requires no `use` import — the
+path itself makes the trait accessible by path, satisfying the in-scope
+requirement for dispatch (§3.4.1). The trait must still be visible at
+the call site under §10's visibility rules; "no import needed" does not
+override visibility. Per §3.2.1 the bare-name forms are never ambiguous between
 traits with *different parent identities* (a type cannot satisfy two
 traits with different parents and overlapping method names). When a type
 satisfies multiple generic instantiations of the *same* parent trait
@@ -1240,7 +1264,7 @@ satisfies multiple generic instantiations of the *same* parent trait
 disambiguated by inference from argument or expected return type per
 §3.4.1.1; explicit disambiguation via the trait-path form
 (`Trait::[T]::method`) is available when inference cannot select one.
-The other forms rely on name resolution per § — Visibility and Modules.
+The other forms rely on name resolution per §10.
 
 #### 3.4.1 Resolution across free-function and trait-implementation namespaces
 
@@ -1278,12 +1302,12 @@ resolution algorithm prioritizes trait implementations over free functions:
 5. **No trait-impl candidate matches → fall back to free-function search.**
    The compiler looks in the current scope's free-function namespace for a
    function `f` whose first parameter type matches `x`'s type (or is reachable
-   via implicit widening per § — Numeric System).
+   via implicit widening per §4.5).
 6. **One free function matches → resolve to it.** Standard free-function
    dispatch.
 7. **Multiple free functions in scope under the same local name is
    impossible.** Free functions are uniquely named within their module per
-   § — Visibility and Modules (Option E); only one can be in scope under any
+   §10 (Option E in Topics.md); only one can be in scope under any
    given local name. Cross-module conflicts are resolved at import time, not
    at call time.
 8. **Nothing matches → unknown method error.** The diagnostic includes the
@@ -1674,8 +1698,8 @@ user modules, and are not subject to the orphan rule:
   types.* The fine-grained operator traits (`Add`, `Sub`, `Mul`, etc.) are
   pre-implemented for the built-in numeric types. User code cannot redefine
   these.
-- *Auto-derivations from `From` to `Into` and `TryFrom` to `TryInto`* (§ —
-  Conversion System). When a user writes `fulfill From[T] for U`, the
+- *Auto-derivations from `From` to `Into` and `TryFrom` to `TryInto`* (§7).
+  When a user writes `fulfill From[T] for U`, the
   language automatically provides `Into[U] for T`. The derivation is built
   in, not user-writable.
 - *Identity conversion `From[T] for T` for every type.* Universally provided.
@@ -1699,7 +1723,7 @@ fulfill SomeForeignTrait for MyVec:
 ```
 
 `MyVec` is local to the user's module; the orphan rule is satisfied.
-Newtype semantics are specified in § — Newtypes.
+Newtype semantics are specified in §6.3.
 
 ### 3.8 Automatic Derivation (`@derive`)
 
@@ -1744,7 +1768,7 @@ For an enum type, derivation operates variant-by-variant:
   payload comparison.
 - The other derivations follow the same structural pattern.
 
-For a newtype (§ — Newtypes), `@derive` may delegate to the underlying type
+For a newtype (§6.3), `@derive` may delegate to the underlying type
 or operate structurally over fields, depending on the newtype's shape; see
 the newtype section for details.
 
@@ -1814,7 +1838,7 @@ financial domains beyond 64-bit range).
 
 `isize` and `usize` are platform-sized integers. They are distinct types
 serving distinct roles: `isize` is the array-length and index type
-(§ — Arrays); `usize` exists for FFI compatibility with C-family `size_t`
+(§9.3); `usize` exists for FFI compatibility with C-family `size_t`
 APIs, byte-count contexts where the non-negative invariant is load-bearing,
 and low-level memory layout work. Most code uses `isize`; `usize` appears in
 low-level corners.
@@ -1829,8 +1853,8 @@ types.
 ### 4.2 Type Aliases
 
 The standard library provides convenience aliases using the `alias type`
-mechanism (§Topic 18 in the decision log; § — Newtypes for general alias
-semantics):
+mechanism (Topic 18 in the decision log; see §6.3 for newtypes, which
+contrast with `alias type`):
 
 ```
 alias type byte = u8
@@ -1849,8 +1873,8 @@ language's primary identifiers and appear unaltered throughout the standard
 library and documentation.
 
 No alias for `f32` is provided. The natural C-traditional name `float` would
-conflict with the lowercase `float` placeholder keyword (§2.2.4 and § —
-Placeholder Annotations) and would mislead users from C-family languages
+conflict with the lowercase `float` placeholder keyword (§1.4 and §2.2.4)
+and would mislead users from C-family languages
 where `float` is single-precision. `double` is the canonical short name for
 `f64`; users wanting `f32` write `f32` directly.
 
@@ -1931,12 +1955,12 @@ placeholder*. Resolution proceeds per §2.1; the default per §3.1.5 is `f64`.
 
 #### 4.3.3 Boolean and character literals
 
-`true` and `false` are the two values of `bool` (§ — Bool and Char). They
+`true` and `false` are the two values of `bool` (§9.1.1). They
 are not numeric; they do not participate in the numeric trait hierarchy.
 
 Character literals (`'a'`) produce values of type `char` (32-bit Unicode
 scalar value); byte literals (`b'a'`) produce values of type `u8`. Per
-§ — Bool and Char, `char` is not numeric; `u8` from a byte literal is
+§9.1.2, `char` is not numeric; `u8` from a byte literal is
 fully numeric (it is u8 in every type-system sense).
 
 ### 4.4 Operator Semantics
@@ -3024,13 +3048,14 @@ When both operand records have `fulfill` blocks for the same trait that
 would equally apply, derivation is ambiguous; the compiler reports an error
 and the user must write the implementation manually.
 
-The mechanism mirrors `@derive` for newtypes (§ — Newtypes): explicit
+The mechanism mirrors `@derive` for newtypes (§6.3.3): explicit
 opt-in trait inheritance, no automatic carry-over of traits the user didn't
 ask for.
 
 ### 5.4 Interaction with `alias type`
 
-The `alias type` mechanism (§4.2 and § — Newtypes) produces transparent
+The `alias type` mechanism (§4.2; contrasted with newtypes in §6.3)
+produces transparent
 substitution — the alias name and its right-hand side refer to the same
 thing, no new identity. Interaction with `&` depends on what the right-hand
 side evaluates to:
@@ -4530,12 +4555,16 @@ of their own per §6.1.9 and §6.2.6). The following are equivalent:
 option.unwrap()
 option >> unwrap
 unwrap(option)
-Option::unwrap(option)
+std::option::unwrap(option)        // module-path qualification
 ```
 
-The `Option::unwrap(option)` form uses path-qualification with the type
-name to disambiguate when multiple `unwrap` functions exist in scope
-(e.g., one for `Option` and one for `Result`).
+The module-path form `std::option::unwrap(option)` is used to
+disambiguate when multiple `unwrap` free functions are in scope (e.g.,
+the `unwrap` in `std::option` and the `unwrap` in `std::result`). Path
+qualification follows the module-path rules in §10. There is no
+`Option::unwrap(option)` (type-qualified) form: free functions live in
+modules per §10, not associated with types, and the dispatch model in
+§3.4 does not include a type-qualified free-function namespace.
 
 ### 8.8 Convention: `Option` vs `Result`
 
@@ -5161,7 +5190,7 @@ declaration's own section and summarized below:
 - **Free functions**: visibility specifier on the `fn` declaration.
 - **Constants** (§2.4.1.1): visibility specifier on the `const`
   declaration.
-- **Fulfill blocks** (§10.7): no separate visibility specifier —
+- **Fulfill blocks** (§10.8): no separate visibility specifier —
   reachability derived from trait and type visibility jointly.
 
 ### 10.4 `use` Statements
