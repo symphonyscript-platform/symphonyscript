@@ -153,7 +153,8 @@ let x = 5
 let f: f64 = x         // ✓ integer placeholder resolves to f64; value 5 fits exactly
 let g: f32 = x         // ✓ same; value 5 fits exactly in f32
 let h = x * 1.5_f32    // ✓ integer placeholder resolves to f32 in mixed-kind expression
-                       //   per the lossless-widening rule (§ — Numeric System)
+                       //   per the placeholder cross-kind resolution rule (§2.1) and
+                       //   the value-fits-type check (§2.4.3); value 5 fits exactly in f32
 ```
 
 A binding whose right-hand side is itself an expression with a placeholder
@@ -591,7 +592,7 @@ The integer-literal-with-sign sequence `-N` is parsed as a single signed
 literal token for type-checking purposes. `let x: i8 = -5` checks the value
 `-5` against `i8`'s range; it does not apply the runtime unary-minus operator
 to a literal `5` (which would conflict with the rule that unary `-` on
-unsigned integers is a type error — see §4.3). The runtime unary-minus
+unsigned integers is a type error — see §4.4.1). The runtime unary-minus
 operator's rules still apply to runtime values; only literal parsing is
 special.
 
@@ -806,7 +807,7 @@ The default must itself satisfy the trait; this is compiler-enforced.
 ```
 @default(i32)
 trait Integer:
-  requires Numeric, Rem, IntDiv, BitAnd, BitOr, BitXor, BitNot, Shl, Shr
+  requires Numeric, IntDiv, Rem, ...    // illustrative; canonical in §4.9.2
 ```
 
 The exact syntactic form (annotation, dedicated keyword, body clause) is a
@@ -881,11 +882,12 @@ the umbrella.
 
 #### 3.2.1 No overlapping method names across satisfied traits
 
-A type's `satisfies` set must not contain two traits whose method names
-overlap. If `Trait1` and `Trait2` each declare a method named `display`, no
-type can declare `satisfies Trait1, Trait2` — the compiler rejects the
-declaration with an error identifying the conflicting method name and the
-two traits.
+A type's `satisfies` set must not contain two *distinct trait identities*
+whose method names overlap. If `Trait1` and `Trait2` (different traits, not
+different instantiations of the same generic trait) each declare a method
+named `display`, no type can declare `satisfies Trait1, Trait2` — the
+compiler rejects the declaration with an error identifying the conflicting
+method name and the two traits.
 
 This rule preserves the contract semantics of `satisfies`. A reader of a
 type's declaration sees the full set of contracts the type promises; if those
@@ -893,6 +895,38 @@ contracts had hidden naming conflicts, the contract sheet would be lying
 about what `display` (or whichever method) does. By forbidding overlap at the
 declaration site, the contract remains unambiguous: every method name on the
 type maps to exactly one trait-method origin.
+
+##### Generic trait instantiations do not conflict
+
+Different generic instantiations of the *same parent trait* — e.g.,
+`From[i32]` and `From[i64]`, or `Add[Self]` and `Add[Other]` — are
+distinct trait instances per §3.1.6, but they share a parent trait
+identity. Their method names refer to the same underlying trait method
+parameterized over the trait's generic arguments. They do not conflict
+under this rule:
+
+```
+type MyNumber:
+  satisfies From[i32], From[i64]        // ✓ same parent trait From
+  ...
+
+fulfill From[i32] for MyNumber:
+  fn from(value: i32) -> MyNumber: ...
+
+fulfill From[i64] for MyNumber:
+  fn from(value: i64) -> MyNumber: ...
+```
+
+The two `from` methods are disambiguated at call sites by the conversion
+target's type or by explicit instantiation (`From::[i32]::from(...)` vs
+`From::[i64]::from(...)`). The compiler dispatches based on the generic
+arguments per §3.4.
+
+The conflict rule applies only to *different parent traits* with
+overlapping method names. The universal identity `From[T] for T` (§7.3)
+and a user-written `From[U] for T` are both instantiations of `From` and
+therefore do not conflict — both are part of the same parent-trait
+conformance.
 
 ##### Algorithm: effective method-set computation
 
@@ -1432,29 +1466,36 @@ trait Neg:
 ```
 
 Umbrella traits combine fine-grained traits via `requires` clauses,
-introducing no new methods:
+introducing no new methods. The numeric umbrellas follow this pattern;
+canonical definitions appear in §4.9.2, abbreviated here as an
+illustration:
 
 ```
 @default(i32)
 trait Numeric:
-  requires Add, Sub, Mul, Neg, Zero, One
+  requires Add, Sub, Mul, Zero, One, ...      // canonical: §4.9.2
 
 @default(i32)
 trait Integer:
-  requires Numeric, Rem, IntDiv, BitAnd, BitOr, BitXor, BitNot, Shl, Shr
+  requires Numeric, IntDiv, Rem, ...          // canonical: §4.9.2
 
 @default(f64)
 trait Float:
-  requires Numeric, Div, ...
+  requires Numeric, Neg, Div, ...             // canonical: §4.9.2
 
 @default(i32)
 trait Signed:
-  requires Integer, Neg
+  requires Integer, Neg, ...                  // canonical: §4.9.2
 
 @default(u32)
 trait Unsigned:
-  requires Integer  // not Neg
+  requires Integer                            // Neg deliberately absent (§4.9.2)
 ```
+
+The signed/unsigned split is structurally honest: `Neg` lives on `Signed`
+and `Float`, not on `Numeric`. Unsigned integer types satisfy `Numeric`
+and `Unsigned` but not `Neg`; this is what the umbrella's `requires` set
+encodes. See §4.9.2 for the full umbrella definitions.
 
 Per §3.3.5, umbrella traits are automatically satisfied when their
 requirements are. Users implement the fine-grained traits for their types;
@@ -1859,7 +1900,7 @@ Examples:
 
 ```
 5_i32 / 2_i32          // both i32 → both widen to f64 → 2.5_f64
-3.14_f32 / 2_i32       // f32 + i32 → i32 widens to f32 → ~1.57_f32
+3.14_f32 / 2_i32       // i32 widens to f64; f32 widens to f64 → ~1.57_f64
 5_i64 / 2_i64          // both i64 → both widen to f64 (pragmatic exception) → 2.5_f64
 5.0_f64 / 2.0_f64      // both f64 → direct Div::div → 2.5_f64
 ```
@@ -1943,10 +1984,14 @@ No separate `>>>` operator exists.
 
 The grammar currently assigns `>>` to pipe-forward (§3.15.3). The
 expression-position bitwise meaning coexists with the pipe-forward meaning
-via context; a `>>` followed by an integer operand is bitwise, a `>>`
-followed by an identifier-then-colon is pipe-forward. This is the same
-mechanism that disambiguates `&` and `|` between type-level and value-level
-uses.
+via context-directed dispatch: when the right-hand side resolves to a
+callable expression (a function reference, a path to a function, a method
+reference), `>>` is pipe-forward and means "call the RHS with the LHS as
+argument" (§3.4). When the right-hand side resolves to a numeric
+expression, `>>` is bitwise right-shift dispatching through `Shr`. The
+disambiguation is by what the RHS resolves to during type-checking, not
+by surface syntax alone. This is the same mechanism that disambiguates
+`&` and `|` between type-level and value-level uses.
 
 #### 4.4.3 Comparison operators
 
@@ -2025,9 +2070,12 @@ This table specifies the mapping:
 | `>>` | `Shr` (left); `u32`-convertible (right) | same type as left operand |
 | `<`, `<=`, `>`, `>=` | `Ord` | `bool` |
 | `is`, `is not` | `Eq` | `bool` |
-| `+%`, `-%`, `*%`, `//%`, `%%`, `-%` | corresponding `Wrapping...` | same type as operands |
-| `+\|`, `-\|`, `*\|`, `//\|`, `%\|`, `-\|` | corresponding `Saturating...` | same type as operands |
-| `+?`, `-?`, `*?`, `/?`, `//?`, `%?`, `-?` | corresponding `Checked...` | `Option[T]` |
+| `+%`, `-%` (binary), `*%`, `//%`, `%%` | corresponding `Wrapping...` | same type as operands |
+| unary `-%` | `WrappingNeg` | same type as operand |
+| `+\|`, `-\|` (binary), `*\|`, `//\|`, `%\|` | corresponding `Saturating...` | same type as operands |
+| unary `-\|` | `SaturatingNeg` | same type as operand |
+| `+?`, `-?` (binary), `*?`, `//?`, `%?` | corresponding `Checked...` | `Option[T]` |
+| unary `-?` | `CheckedNeg` | `Option[T]` |
 | `as` | (language-level) | the target type, traps on out-of-range |
 | `as%` | `WrappingAs[T]` (operand) | the target type T |
 | `as\|` | `SaturatingAs[T]` (operand) | the target type T |
@@ -2224,15 +2272,23 @@ Checked operators return `Option[T]` rather than producing a value-or-trap:
 | `+?` | `CheckedAdd` | `Option[T]` | `Some(result)` or `None` |
 | `-?` | `CheckedSub` | `Option[T]` | `Some(result)` or `None` |
 | `*?` | `CheckedMul` | `Option[T]` | `Some(result)` or `None` |
-| `/?` | `CheckedDiv` | `Option[T]` | `None` on overflow or div-by-zero |
 | `//?` | `CheckedIntDiv` | `Option[T]` | `None` on overflow or div-by-zero |
 | `%?` | `CheckedRem` | `Option[T]` | `None` on overflow or zero divisor |
 | unary `-?` | `CheckedNeg` | `Option[T]` | `None` on overflow |
 
-The checked form is for cases where the caller wants to handle the overflow
-case explicitly without panicking. The `?` postfix operator (§8) propagates
-the `None` upward in a function returning `Option`-compatible types, making
-the recoverable-error chain ergonomic.
+There is no `/?` operator. For the same reason `/%` and `/|` do not
+exist (§4.6.2, §4.6.3) — `/` always produces `Float` per §4.4.1.1, and
+float arithmetic follows IEEE 754, which doesn't trap on overflow or
+division by zero (producing `Infinity` or `NaN` instead). Code that
+needs to detect such results inspects the float value via methods like
+`.is_finite()` or `.is_nan()`. For checked *integer* division, use
+`//?` (`CheckedIntDiv`); for general checked arithmetic on floats,
+explicit IEEE-754 result-inspection is the standard approach.
+
+The checked form is for cases where the caller wants to handle the
+overflow case explicitly without panicking. The `?` postfix operator
+(§8) propagates the `None` upward in a function returning
+`Option`-compatible types, making the recoverable-error chain ergonomic.
 
 #### 4.6.5 Compile-time constant overflow
 
@@ -2519,7 +2575,6 @@ trait SaturatingNeg:  fn saturating_neg(value: Self) -> Self
 trait CheckedAdd:     fn checked_add(a: Self, b: Self) -> Option[Self]
 trait CheckedSub:     fn checked_sub(a: Self, b: Self) -> Option[Self]
 trait CheckedMul:     fn checked_mul(a: Self, b: Self) -> Option[Self]
-trait CheckedDiv:     fn checked_div(a: Self, b: Self) -> Option[Self]
 trait CheckedIntDiv:  fn checked_intdiv(a: Self, b: Self) -> Option[Self]
 trait CheckedRem:     fn checked_rem(a: Self, b: Self) -> Option[Self]
 trait CheckedNeg:     fn checked_neg(value: Self) -> Option[Self]
@@ -2600,13 +2655,13 @@ trait Integer:
   requires Numeric, Rem, IntDiv, BitAnd, BitOr, BitXor, BitNot, Shl, Shr,
            WrappingRem, WrappingIntDiv,
            SaturatingRem, SaturatingIntDiv,
-           CheckedDiv, CheckedIntDiv, CheckedRem,
+           CheckedIntDiv, CheckedRem,
            IntPow
 
 @default(f64)
 trait Float:
   requires Numeric, Neg, Div,
-           CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedNeg,
+           CheckedAdd, CheckedSub, CheckedMul, CheckedNeg,
            Sqrt, Sin, Cos, Tan, Asin, Acos, Atan, Atan2,
            Ln, Log2, Log10, Exp, Exp2,
            Floor, Ceil, Round, Trunc,
@@ -3065,21 +3120,21 @@ one with selected fields overridden or merged from other records:
 **Single-line form (comma-separated):**
 
 ```
-let e2 = e1 with name: "new"
-let e2 = e1 with name: "new", age: 30
-let e2 = e1 with e2
-let e2 = e1 with e2, e3
-let e4 = e1 with e2, e3, name: "new", age: 30
+let updated = base with name: "new"
+let updated = base with name: "new", age: 30
+let updated = base with other
+let updated = base with other1, other2
+let updated = base with other1, other2, name: "new", age: 30
 ```
 
 **Multi-line form (colon-introduced body):**
 
 ```
-let e2 = e1 with:
+let updated = base with:
   name: "new"
   age: 30
 
-let e4 = e1 with e2, e3:
+let updated = base with other1, other2:
   name: "new"
   age: 30
 ```
@@ -3089,19 +3144,20 @@ one expression is a parse error.
 
 The expression's components, evaluated left to right:
 
-- The *base* (`e1`) — a record value whose type defines the result type.
-- Zero or more *merge sources* (other record values like `e2`, `e3`) — each
-  must be of the same type as the base; fields are copied into the result.
+- The *base* (`base`) — a record value whose type defines the result type.
+- Zero or more *merge sources* (other record values like `other1`,
+  `other2`) — each must be of the same type as the base; fields are
+  copied into the result.
 - Zero or more *field overrides* (`name: "new"`) — each override sets one
   field of the result.
 
 The result is a new record of the base's type. Merge sources and field
 overrides are applied left-to-right; later assignments win on conflict.
-For `e1 with e2, e3, name: "new"`:
+For `base with other1, other2, name: "new"`:
 
-1. Start with `e1`'s field values.
-2. Override with `e2`'s field values.
-3. Override with `e3`'s field values.
+1. Start with `base`'s field values.
+2. Override with `other1`'s field values.
+3. Override with `other2`'s field values.
 4. Override `name` with `"new"`.
 
 A field unset in any source/override keeps the base's value. The result is
@@ -3367,9 +3423,10 @@ variants) supplying its arguments:
 
 ```
 let d = Direction::North
-let s1 = Shape::Circle(radius: 5.0)           // named
-let s2 = Shape::Circle(5.0)                   // positional (§6.2.1)
-let r: Result[i32, string] = Result::Ok(42)
+let c = Shape::Circle(5.0)                         // positional (Circle declared positionally)
+let r1 = Shape::Rectangle(width: 10.0, height: 20.0)   // named (Rectangle has names)
+let r2 = Shape::Rectangle(10.0, 20.0)              // positional (always available)
+let res: Result[i32, string] = Result::Ok(42)
 let n: Option[i32] = Option::None
 ```
 
@@ -3562,12 +3619,11 @@ type MyVec[T]:
 The signature line matches ordinary record and enum declarations
 (`type Name[generics]:`) for uniformity. The `wraps` clause inside the
 body identifies the declaration as a newtype and names its underlying
-type. The body may include other clauses — `satisfies`, `@derive`
-(as an annotation above the type), `requires` — but it may not contain
-field declarations. A `wraps` body and a field-declaration body are
-mutually exclusive: a newtype wraps one underlying value; a record
-declares its own fields. The compiler rejects bodies that mix `wraps`
-with field declarations.
+type. The body may include other clauses — `satisfies` clauses or
+metadata declarations — but it may not contain field declarations. A
+`wraps` body and a field-declaration body are mutually exclusive: a
+newtype wraps one underlying value; a record declares its own fields.
+The compiler rejects bodies that mix `wraps` with field declarations.
 
 The contrast with `alias type` from §4.2:
 
@@ -5046,7 +5102,7 @@ path, write an explicit re-declaration rather than a re-exporting
 
 ```
 // In root::facade.symphony:
-public type Synthesizer = root::audio::internal::Synthesizer
+public alias type Synthesizer = root::audio::internal::Synthesizer
                                        // alias type form (§4.2)
 
 public fn build_default() -> Synthesizer:
