@@ -692,9 +692,9 @@ trait Add[Rhs = Self]:
   type Output
   fn add(left: Self, right: Rhs) -> Output
 
-trait Iterable:
+trait Producer:
   type Item
-  fn next(value: Self) -> Option[Item]
+  fn produce(value: Self) -> Option[Item]
 ```
 
 A trait declaration may be empty:
@@ -736,9 +736,9 @@ constructors).
 A trait may declare associated types using the `type` keyword inside the body:
 
 ```
-trait Iterable:
+trait Producer:
   type Item
-  fn next(it: Self) -> Option[Item]
+  fn produce(p: Self) -> Option[Item]
 ```
 
 `Item` is an associated type — a type-level name whose concrete value is bound
@@ -763,7 +763,7 @@ Bounds on associated types in generic constraints use where-clauses with the
 trait parameters):
 
 ```
-fn sum[I: Iterable](it: I) -> I.Item where I.Item: Numeric:
+fn sum[P: Producer](p: P) -> P.Item where P.Item: Numeric:
   ...
 ```
 
@@ -6472,10 +6472,14 @@ let r = 0..1024              // r: Range[i32], by default integer placeholder
 fn process_range(r: Range[i32]) -> isize: ...
 ```
 
-`Range[T]` implements `Iterable` (§12.8); this is what makes
-`for i in 0..N` work. The implementation yields successive integers
-starting from `start` and stopping before `end`. If `start >= end`, the
-range is empty and yields no values.
+`Range[T]` implements both `IntoIterable` (§12.9) and `Iterable`
+(§12.8). The consume form `for i in 0..N` dispatches through
+`IntoIterable`; the borrow form `for i in &(0..N)` dispatches through
+`Iterable`. Since `Range[T]` is `Copy`, the two forms are functionally
+indistinguishable from the user's perspective — there is nothing to
+preserve on the source side either way. The implementations yield
+successive integers starting from `start` and stopping before `end`.
+If `start >= end`, the range is empty and yields no values.
 
 #### 12.2.1 Step
 
@@ -6560,10 +6564,11 @@ The iteration source expression is evaluated once at loop entry.
 2. The iterator is held in an internal `mut` binding for the loop's
    duration.
 3. Each iteration step calls `Iterator::next` (§12.7), receiving
-   `(Option[Item], NewIter)`.
+   `(Option[Item], NewIter)`. Under consuming iteration, `Item` is
+   always an owned type per §12.9.2.
 4. The internal binding is reassigned to `NewIter`.
 5. If the option is `Some(value)`, binds `value` to the iteration
-   variable `x` and runs the body. `value` is an owned `Item`.
+   variable `x` and runs the body.
 6. If `None`, the loop exits.
 7. When the loop exits (natural completion, `break`, or enclosing
    function return), the iterator is dropped. Any elements not yet
@@ -6649,11 +6654,11 @@ under consume form, or `Iterable::Iter` under borrow form). The Item
 type depends on both the iterable's element type and which form the
 loop uses.
 
-The iteration variable is a parameter-position binding (§11.9.5): bound
-by the loop construct, fresh each iteration, immutable, cannot be
-declared `mut`. Its borrow lifetime (when borrow-typed) is the duration
-of one iteration body. The compiler tracks this without requiring
-lifetime annotations.
+The iteration variable is one of the three valid borrow-bearing
+positions per §11.9.5: bound by the loop construct, fresh each
+iteration, immutable, cannot be declared `mut`. Its borrow lifetime
+(when borrow-typed) is the duration of one iteration body. The compiler
+tracks this without requiring lifetime annotations.
 
 **Consume form, Copy element type** (`for sample in buf:` where `buf:
 f32[1024]`): the iteration variable is an owned Copy value. The body
@@ -7079,13 +7084,22 @@ Specifically, when:
 1. The iterator type is statically known (monomorphized per §2.3),
 2. The iterator binding is held in a single `mut` location (the
    for-loop's internal binding),
-3. The `next` call's return value is immediately rebound to that same
-   location with no intervening use of the consumed binding,
+3. The `next` call's return value's `NewIter` component is
+   immediately destructured and rebound to that same `mut` location,
+   in a single statement, with no other reference to the consumed
+   binding between the `next` call and the rebind.
 
-the compiler may compile the call as: pass a pointer to the iterator's
-state, mutate the cursor in place, return only the item value in
-registers. The "consumed" and "returned" iterator are the same memory
-location; no copy occurs.
+Condition 3 holds by construction for the for-loop's internal
+desugaring: the desugaring emits one statement that calls `next`,
+destructures the returned tuple via pattern match, and rebinds the
+iterator location to `NewIter` — all in one expression with no other
+references possible. The compiler treats this pattern as a recognized
+form.
+
+When the three conditions hold, the compiler may compile the call as:
+pass a pointer to the iterator's state, mutate the cursor in place,
+return only the item value in registers. The "consumed" and "returned"
+iterator are the same memory location; no copy occurs.
 
 This optimization is a *required* property of conforming implementations,
 not an optional optimization. The tuple-return trait shape is the source-
@@ -7493,30 +7507,34 @@ and ownership rules. Default-body methods in trait declarations (§3.1.3)
 may use loops:
 
 ```
-trait Sum:
-  type Item: Numeric
-  fn elements(value: &Self) -> Iter
-  type Iter: Iterator with Item = Item
+trait Statistics:
+  fn samples(value: &Self) -> Vec[f32]
 
-  fn sum(value: &Self) -> Item:
-    mut total = Item::zero()
-    for x in value:
-      total = total + x
-    total
+  fn count_above(value: &Self, threshold: f32) -> isize:
+    mut count: isize = 0
+    let elements = samples(value)
+    for s in elements:                   // consumes the returned Vec; s: f32 (Copy)
+      if s > threshold:
+        count = count + 1
+    count
 ```
 
 The default body's loop is part of the trait declaration; implementations
-may override it as usual.
+may override it as usual. The `samples` method here is abstract (no
+default body); each implementation provides its own. The `count_above`
+default body iterates the returned `Vec[f32]` to compute the result.
 
 #### 12.12.3 Loops in generic function bodies
 
 A generic function body containing a loop is type-checked at definition
 per §2.2.2. The loop's iterable expression's type must satisfy
-`Iterable` at the call site for each monomorphization:
+`Iterable` (for borrow form) or `IntoIterable` (for consume form) at
+the call site for each monomorphization. Associated-type constraints
+use `.` member-access notation per §3.1.2:
 
 ```
-fn total[T: Iterable](source: &T) -> f32 where T::Iter::Item is f32:
-  mut sum: f32 = 0.0
+fn total[T: Iterable](source: &T) -> T.Iter.Item where T.Iter.Item: Numeric:
+  mut sum = T.Iter.Item::zero()
   for sample in source:
     sum = sum + sample
   sum
