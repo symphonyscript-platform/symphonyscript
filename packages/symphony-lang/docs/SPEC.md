@@ -817,10 +817,42 @@ methods:
   `Type`'s body is a compile error: the implementation has no declared
   contract.
 
-The exception is traits with no methods (pure-requirement traits, §3.4.6):
+The exception is traits with no methods (pure-requirement traits, §3.3.5):
 these are automatically satisfied when all required traits are satisfied; no
 `satisfies` clause is needed on the type and no `fulfill` block is needed for
 the umbrella.
+
+#### 3.2.1 No overlapping method names across satisfied traits
+
+A type's `satisfies` set must not contain two traits whose method names
+overlap. If `Trait1` and `Trait2` each declare a method named `display`, no
+type can declare `satisfies Trait1, Trait2` — the compiler rejects the
+declaration with an error identifying the conflicting method name and the
+two traits.
+
+This rule preserves the contract semantics of `satisfies`. A reader of a
+type's declaration sees the full set of contracts the type promises; if those
+contracts had hidden naming conflicts, the contract sheet would be lying
+about what `display` (or whichever method) does. By forbidding overlap at the
+declaration site, the contract remains unambiguous: every method name on the
+type maps to exactly one trait-method origin.
+
+The rule is checked across all methods of all listed traits, including
+methods inherited transitively through `requires` chains. A trait `Student`
+that `requires Person` brings `Person`'s methods into `Student`'s effective
+method set; a type satisfying both `Student` and some unrelated `Trait3`
+with a method colliding with `Person`'s method is rejected.
+
+When two traits a user wants both must have conflicting method names, the
+canonical workaround is the newtype pattern: define separate newtype wrappers
+of the underlying type, each satisfying one of the conflicting traits.
+Distinct newtypes have distinct contract sheets and distinct method
+dispatches.
+
+The rule simplifies dispatch (§3.4): because no type can satisfy two traits
+with overlapping method names, the case of "multiple trait impls match this
+call site" cannot arise. Call-site name resolution always finds at most one
+trait-impl candidate for a given (type, method-name) pair.
 
 ### 3.3 Implementation Blocks (`fulfill`)
 
@@ -1057,32 +1089,64 @@ and Modules.
 #### 3.4.1 Resolution across free-function and trait-implementation namespaces
 
 A bare-name call `f(x)`, method-call `x.f()`, or pipe-forward `x >> f` may
-resolve to either a free function or a trait-implementation function, since
-both are reachable when a name appears at a call site. The resolution rule:
+resolve to either a trait-implementation function or a free function. The
+resolution algorithm prioritizes trait implementations over free functions:
 
-1. The compiler searches the current scope's *free-function* namespace for a
+1. **Trait-impl search.** For each trait `T` reachable in the current scope
+   (imported or accessible by path) such that `x`'s type fulfills `T` and `T`
+   declares a method named `f`, collect the trait-impl candidate
+   `T::f(x, ...)`. The function bodies live inside the corresponding `fulfill
+   T for X` blocks.
+2. **At most one trait-impl candidate can match.** Per §3.2.1, no type may
+   satisfy two traits with overlapping method names — the type's `satisfies`
+   declaration would have been rejected. Therefore the trait-impl search
+   yields either zero or one candidate; never more.
+3. **One trait-impl candidate matches → resolve to it.** The trait impl wins.
+   A free function with the same name in scope is *shadowed* at this call
+   site; it remains callable only via path qualification (e.g.,
+   `some_module::f(x, ...)`).
+4. **No trait-impl candidate matches → fall back to free-function search.**
+   The compiler looks in the current scope's free-function namespace for a
    function `f` whose first parameter type matches `x`'s type (or is reachable
    via implicit widening per § — Numeric System).
-2. The compiler searches the *(Trait, Type)-scoped* namespaces reachable from
-   the current scope — that is, for each trait `T` in scope, the function `f`
-   inside `fulfill T for X` where `X` is `x`'s type (or compatible).
-3. If exactly one candidate matches across both searches, the call resolves to
-   that candidate.
-4. If multiple candidates match (e.g., a free function and a trait-impl
-   function, or trait-impl functions from multiple traits in scope), the call
-   is ambiguous; the compiler reports an error at the call site requiring
-   disambiguation.
+5. **One free function matches → resolve to it.** Standard free-function
+   dispatch.
+6. **Multiple free functions in scope under the same local name is
+   impossible.** Free functions are uniquely named within their module per
+   § — Visibility and Modules (Option E); only one can be in scope under any
+   given local name. Cross-module conflicts are resolved at import time, not
+   at call time.
+7. **Nothing matches → unknown method error.** The diagnostic includes the
+   receiver's type, the unmatched name, and any near-matches the compiler
+   identified.
 
-Disambiguation uses path-qualified call syntax:
+The algorithm is deterministic and never produces call-site ambiguity for
+trait method calls: the §3.2.1 rule guarantees that any given (type, method-
+name) pair has at most one trait-impl source, and the §10 module rules
+guarantee that any given module-scope name has at most one free-function
+source. Trait-path syntax (`Trait::f(x)`) remains available as the explicit
+form for cases where a user wants to make the call's trait source visible at
+the call site for clarity, even when bare-name resolution would succeed
+unambiguously.
 
-- `Display::display(person)` — explicitly the trait-impl function for `Display`.
-- `some_module::display(person)` — explicitly the free function in
-  `some_module`.
 
-The trait-path form is the canonical way to disambiguate when a free function
-and a trait-impl function with the same name coexist in scope. The free
-function does not get hidden by the trait-impl function (or vice versa);
-both remain callable, but ambiguous bare references require qualification.
+
+Trait visibility matters for dispatch. A `fulfill T for X` block is reachable
+for dispatch on `x: X` only when `T` itself is in scope (imported or
+accessible by path). If `T` is not in scope, the implementation is invisible
+at the call site, and the search proceeds as if that trait-impl candidate
+did not exist. Users control which trait-impl candidates participate in
+dispatch by choosing which traits to import.
+
+Disambiguation forms:
+
+- `Trait::f(x, ...)` — explicitly select a trait-impl candidate (the canonical
+  way to resolve trait-vs-trait ambiguity in step 3).
+- `some_module::f(x, ...)` — explicitly select a free function (used when a
+  free function would otherwise be shadowed by a trait impl per step 2).
+- `x >> Trait::f` — pipe-forward with trait-path qualification.
+- `x.f::[T]()` is *not* a disambiguation form; the turbofish (§2.2.5)
+  specifies generic type arguments, not the receiving trait.
 
 #### 3.4.2 Dispatch at monomorphization
 
