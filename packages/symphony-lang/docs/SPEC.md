@@ -1313,13 +1313,15 @@ type: if `value: i32`, the `From[i32]` instantiation is selected; if
 `value: i64`, the `From[i64]` instantiation. The compiler uses the same
 inference algorithm as for generic functions (§2.2.5).
 
-When inference cannot select an instantiation — for instance, when the
-argument's type is itself polymorphic or when defaulting fires — the
-compiler reports a call-site ambiguity error. The user disambiguates
-explicitly using the trait-path form with turbofish on the trait:
+When inference cannot uniquely determine the argument's type — for
+instance, inside a generic function body where the argument has a
+generic-parameter type — the compiler reports a call-site ambiguity
+error. The user disambiguates explicitly using the trait-path form with
+turbofish on the trait:
 
 ```
-let n = From::[i32]::from(some_polymorphic_value)
+fn build[T](v: T) -> MyNumber where MyNumber: From[T]:
+  From::[T]::from(v)       // T is generic; turbofish pins the instantiation
 ```
 
 This is the turbofish form (§2.2.5) applied to the trait identity,
@@ -2819,13 +2821,18 @@ Specifically:
 - **Float types** auto-implement: `Add`, `Sub`, `Mul`, `Div`, `Rem`,
   `Neg`; the checked variants `CheckedAdd`, `CheckedSub`, `CheckedMul`,
   `CheckedDiv`, `CheckedNeg` (returning `None` on NaN or Infinity
-  results per §4.6.6); float-only operations (`Sqrt`, trig, log, exp,
-  rounding); inspection methods; `Zero`, `One`, `Abs`, `Min`, `Max`,
-  `Ord`, `Eq`, `FloatPow`. Floats do not implement `WrappingAdd` /
-  `SaturatingAdd` etc. — IEEE 754's infinity-and-NaN semantics already
-  define overflow behavior, and modular or clamping interpretations would
-  conflict (§4.6.6). They satisfy `Float`, `Numeric`, and `Signed`
-  (floats are signed by convention — they support `Neg`).
+  results per §4.6.6); the cast traits `WrappingAs[T]`,
+  `SaturatingAs[T]`, `CheckedAs[T]` for integer destination types `T`
+  (per §4.7.3 — float-to-integer with truncation, saturation clamps
+  NaN to 0, etc.) and for narrower float destination types (where the
+  variants reduce to the unsuffixed `as` for lossless cases per §4.7.2);
+  float-only operations (`Sqrt`, trig, log, exp, rounding); inspection
+  methods; `Zero`, `One`, `Abs`, `Min`, `Max`, `Ord`, `Eq`, `FloatPow`.
+  Floats do not implement `WrappingAdd` / `SaturatingAdd` etc. — IEEE
+  754's infinity-and-NaN semantics already define overflow behavior, and
+  modular or clamping interpretations would conflict (§4.6.6). They
+  satisfy `Float`, `Numeric`, and `Signed` (floats are signed by
+  convention — they support `Neg`).
 
 User-defined numeric-like types (`Decimal` from stdlib, custom fixed-point
 types, etc.) implement whichever fine-grained traits are appropriate;
