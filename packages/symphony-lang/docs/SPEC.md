@@ -841,9 +841,22 @@ trait Add[Rhs = Self]:
   fn add(left: Self, right: Rhs) -> Output
 ```
 
-Type parameters on a trait are part of the trait's identity. `From[i32]` and
-`From[i64]` are distinct trait instances; a type may implement both. Default
-type parameters (`Rhs = Self`) follow the rules in § — Generic Parameters.
+Type parameters on a trait are part of the trait's identity at the
+type-system level. Two terms are useful when discussing generic traits:
+
+- A **trait instance** is the trait paired with specific concrete type
+  arguments — e.g., `From[i32]` is one trait instance; `From[i64]` is a
+  different trait instance. The type system treats each instance as a
+  distinct constraint and a distinct dispatch target.
+- A **parent trait identity** is the trait's declared name independent of
+  generic arguments — for both `From[i32]` and `From[i64]`, the parent
+  trait identity is `From`. Several conformance and dispatch rules
+  (§3.2.1, §3.4.1.1) operate at parent-trait granularity.
+
+A type may implement multiple trait instances of the same parent trait
+(`fulfill From[i32] for MyNumber` and `fulfill From[i64] for MyNumber`
+coexist; both share the parent `From`). Default type parameters (`Rhs =
+Self`) follow the rules in § — Generic Parameters.
 
 ### 3.2 Conformance Declarations (`satisfies`)
 
@@ -917,10 +930,20 @@ fulfill From[i64] for MyNumber:
   fn from(value: i64) -> MyNumber: ...
 ```
 
-The two `from` methods are disambiguated at call sites by the conversion
-target's type or by explicit instantiation (`From::[i32]::from(...)` vs
-`From::[i64]::from(...)`). The compiler dispatches based on the generic
-arguments per §3.4.
+The two `from` methods are disambiguated at call sites by argument type
+(in the `From` direction, the source-value type pins the instance) or by
+expected return type. Bare-name dispatch typically succeeds without
+explicit annotation:
+
+```
+let n1 = MyNumber::from(5_i32)     // resolves to From[i32]::from
+let n2 = MyNumber::from(5_i64)     // resolves to From[i64]::from
+let n3: MyNumber = 5_i32.into()    // Into[MyNumber] from i32 — resolves through From[i32]
+```
+
+When inference cannot pick a unique instance (e.g., the argument is
+polymorphic), explicit disambiguation via turbofish on the trait is
+available per §3.4.1.1: `From::[i32]::from(value)`.
 
 The conflict rule applies only to *different parent traits* with
 overlapping method names. The universal identity `From[T] for T` (§7.3)
@@ -938,37 +961,49 @@ Given a type `T` with `satisfies T1, T2, ..., Tn`, the compiler computes
    the `requires` relation: `Ti` itself plus every trait reachable through
    any chain of `requires` clauses.
 3. Union the method declarations of all traits in the closure for all `Ti`s
-   into the effective set. Each entry is a (method-name, declaring-trait)
-   pair.
+   into the effective set. Each entry is a (method-name, parent-trait-identity)
+   pair, where *parent-trait identity* is the trait's declared name
+   independent of generic arguments (so `From[i32]` and `From[i64]` share
+   the parent identity `From`).
 4. If two entries share the same method name but originate from different
-   trait-method declarations (i.e., distinct (declaring-trait, method-name)
-   pairs collide on the name alone), the declaration is rejected. The error
-   identifies the conflicting name and the two source traits.
-5. Methods reached through multiple `requires` paths but originating from
-   the *same* trait-method declaration are not in conflict — they are the
+   *parent-trait identities* (e.g., `Display`'s `display` and a different
+   `MyDebug`'s `display`), the declaration is rejected. The error identifies
+   the conflicting name and the two source parent traits.
+5. Multiple entries with the same method name and the same parent-trait
+   identity (i.e., different generic instantiations of the same parent —
+   `From[i32]::from` and `From[i64]::from`) do *not* collide. They are
+   logically the same method parameterized over generic arguments;
+   dispatch among them is resolved by inference per §3.4.1.1.
+6. Methods reached through multiple `requires` paths but originating from
+   the same trait-method declaration are not in conflict — they are the
    same method, just reachable via multiple inheritance paths. This is the
-   "diamond" case (Topic 9's note on diamond inheritance being well-defined
-   in nominal trait systems) and is permitted.
+   "diamond" case (well-defined in nominal trait systems) and is permitted.
 
 The §3.1.4 rule (traits cannot redeclare methods from required traits)
-guarantees that step 5's "same trait-method declaration reached multiple
+guarantees that step 6's "same trait-method declaration reached multiple
 ways" case has a single origin: the original declaring trait. There is no
 ambiguity about which method is which when diamonds occur.
 
 ##### Workaround for legitimate dual conformance
 
-When two traits a user wants both have conflicting method names, the
-canonical workaround is the newtype pattern: define separate newtype wrappers
-of the underlying type, each satisfying one of the conflicting traits.
-Distinct newtypes have distinct contract sheets and distinct method
-dispatches.
+When two traits a user wants both have conflicting method names *and
+different parent identities*, the canonical workaround is the newtype
+pattern: define separate newtype wrappers of the underlying type, each
+satisfying one of the conflicting traits. Distinct newtypes have
+distinct contract sheets and distinct method dispatches.
+
+This workaround is unnecessary for different generic instantiations of
+the same parent trait — those are permitted directly per step 5.
 
 ##### Consequence for dispatch
 
-The rule simplifies dispatch (§3.4): because no type can satisfy two traits
-with overlapping method names, the case of "multiple trait impls match this
-call site" cannot arise. Call-site name resolution always finds at most one
-trait-impl candidate for a given (type, method-name) pair.
+The rule shapes dispatch (§3.4): because no type can satisfy two traits
+with *different parent identities* and overlapping method names, the
+case of "multiple distinct-parent trait impls match this call site"
+cannot arise. Call-site name resolution always finds at most one
+parent-trait source for a given (type, method-name) pair. Within a
+parent-trait source, multiple generic instantiations may match; these
+are disambiguated by inference per §3.4.1.1.
 
 ### 3.3 Implementation Blocks (`fulfill`)
 
@@ -1197,12 +1232,15 @@ Display::display(person)      // trait-path form, no import needed
 ```
 
 The trait-path form (`Trait::method`) is always available regardless of
-imports. Per §3.2.1 the bare-name forms are never ambiguous between traits
-(a type cannot satisfy two traits with overlapping method names), so the
-trait-path form is not needed for disambiguation — it remains available for
-stylistic clarity when a user wants the call's trait source visible at the
-call site. The other forms rely on name resolution per § — Visibility and
-Modules.
+imports. Per §3.2.1 the bare-name forms are never ambiguous between
+traits with *different parent identities* (a type cannot satisfy two
+traits with different parents and overlapping method names). When a type
+satisfies multiple generic instantiations of the *same* parent trait
+(e.g., `From[i32]` and `From[i64]`), bare-name dispatch is normally
+disambiguated by inference from argument or expected return type per
+§3.4.1.1; explicit disambiguation via the trait-path form
+(`Trait::[T]::method`) is available when inference cannot select one.
+The other forms rely on name resolution per § — Visibility and Modules.
 
 #### 3.4.1 Resolution across free-function and trait-implementation namespaces
 
@@ -1215,37 +1253,78 @@ resolution algorithm prioritizes trait implementations over free functions:
    declares a method named `f`, collect the trait-impl candidate
    `T::f(x, ...)`. The function bodies live inside the corresponding `fulfill
    T for X` blocks.
-2. **At most one trait-impl candidate can match.** Per §3.2.1, no type may
-   satisfy two traits with overlapping method names — the type's `satisfies`
-   declaration would have been rejected. Therefore the trait-impl search
-   yields either zero or one candidate; never more.
-3. **One trait-impl candidate matches → resolve to it.** The trait impl wins.
-   A free function with the same name in scope is *shadowed* at this call
-   site; it remains callable only via path qualification (e.g.,
-   `some_module::f(x, ...)`).
-4. **No trait-impl candidate matches → fall back to free-function search.**
+2. **Collapse candidates from the same parent trait.** Per §3.2.1, multiple
+   candidates may arise when a type satisfies several generic instantiations
+   of the same parent trait (e.g., `From[i32]` and `From[i64]` both
+   declaring `from`). The compiler treats these as one logical method
+   parameterized by the trait's generic arguments. Disambiguation among
+   them uses the call-site context — argument types, expected return type,
+   explicit turbofish — exactly as for any other generic function dispatch
+   per §2.2.5. The set of candidates after this collapse contains at most
+   one parent-trait entry.
+3. **At most one parent-trait candidate after collapse.** Per §3.2.1, no
+   type may satisfy two traits with *different* parent identities that
+   declare overlapping method names — the type's `satisfies` declaration
+   would have been rejected. Therefore the trait-impl search yields either
+   zero or one parent-trait candidate.
+4. **One parent-trait candidate matches → resolve to it.** The trait impl
+   wins over any same-named free function. A free function with the same
+   name in scope is *shadowed* at this call site; it remains callable only
+   via path qualification (e.g., `some_module::f(x, ...)`). Within the
+   parent-trait candidate, if multiple generic instantiations are
+   reachable, the compiler resolves to a specific instantiation by
+   inference per §2.2.5; failure to resolve to one is a compile error at
+   the call site asking for explicit disambiguation.
+5. **No trait-impl candidate matches → fall back to free-function search.**
    The compiler looks in the current scope's free-function namespace for a
    function `f` whose first parameter type matches `x`'s type (or is reachable
    via implicit widening per § — Numeric System).
-5. **One free function matches → resolve to it.** Standard free-function
+6. **One free function matches → resolve to it.** Standard free-function
    dispatch.
-6. **Multiple free functions in scope under the same local name is
+7. **Multiple free functions in scope under the same local name is
    impossible.** Free functions are uniquely named within their module per
    § — Visibility and Modules (Option E); only one can be in scope under any
    given local name. Cross-module conflicts are resolved at import time, not
    at call time.
-7. **Nothing matches → unknown method error.** The diagnostic includes the
+8. **Nothing matches → unknown method error.** The diagnostic includes the
    receiver's type, the unmatched name, and any near-matches the compiler
    identified.
 
-The algorithm is deterministic and never produces call-site ambiguity for
-trait method calls: the §3.2.1 rule guarantees that any given (type, method-
-name) pair has at most one trait-impl source, and the §10 module rules
-guarantee that any given module-scope name has at most one free-function
-source. Trait-path syntax (`Trait::f(x)`) remains available as the explicit
-form for cases where a user wants to make the call's trait source visible at
-the call site for clarity, even when bare-name resolution would succeed
-unambiguously.
+The algorithm is deterministic: §3.2.1's parent-trait collision rule
+guarantees that any (type, method-name) pair has at most one parent-trait
+source, and the §10 module rules guarantee that any given module-scope
+name has at most one free-function source. When a parent-trait source has
+multiple generic instantiations, disambiguation among them follows the
+standard inference rules (§2.2.5).
+
+Trait-path syntax (`Trait::f(x)`) remains available as the explicit form
+when a user wants to make the call's trait source visible at the call
+site, including disambiguation between generic instantiations via
+turbofish (`Trait::[T]::f(x)`, see §3.4.1.1 below) or via path-qualified
+type-side dispatch (`Type::f(x)`, where `Type` is the for-type of the
+target `fulfill` block).
+
+#### 3.4.1.1 Disambiguating generic trait instantiations
+
+When a type satisfies multiple instantiations of the same parent trait
+(e.g., `MyNumber` satisfies both `From[i32]` and `From[i64]`), bare-name
+dispatch at `MyNumber::from(value)` typically resolves via the argument
+type: if `value: i32`, the `From[i32]` instantiation is selected; if
+`value: i64`, the `From[i64]` instantiation. The compiler uses the same
+inference algorithm as for generic functions (§2.2.5).
+
+When inference cannot select an instantiation — for instance, when the
+argument's type is itself polymorphic or when defaulting fires — the
+compiler reports a call-site ambiguity error. The user disambiguates
+explicitly using the trait-path form with turbofish on the trait:
+
+```
+let n = From::[i32]::from(some_polymorphic_value)
+```
+
+This is the turbofish form (§2.2.5) applied to the trait identity,
+selecting a specific instantiation of the trait before resolving the
+method.
 
 
 
@@ -2075,6 +2154,7 @@ This table specifies the mapping:
 | `+\|`, `-\|` (binary), `*\|`, `//\|`, `%\|` | corresponding `Saturating...` | same type as operands |
 | unary `-\|` | `SaturatingNeg` | same type as operand |
 | `+?`, `-?` (binary), `*?`, `//?`, `%?` | corresponding `Checked...` | `Option[T]` |
+| `/?` | `CheckedDiv` (on `Float`) | `Option[Float]`; integer operands widen per §4.4.1.1 |
 | unary `-?` | `CheckedNeg` | `Option[T]` |
 | `as` | (language-level) | the target type, traps on out-of-range |
 | `as%` | `WrappingAs[T]` (operand) | the target type T |
@@ -2272,23 +2352,26 @@ Checked operators return `Option[T]` rather than producing a value-or-trap:
 | `+?` | `CheckedAdd` | `Option[T]` | `Some(result)` or `None` |
 | `-?` | `CheckedSub` | `Option[T]` | `Some(result)` or `None` |
 | `*?` | `CheckedMul` | `Option[T]` | `Some(result)` or `None` |
+| `/?` | `CheckedDiv` | `Option[Float]` | `None` on NaN/Infinity result; integer operands widen to float per §4.4.1.1 |
 | `//?` | `CheckedIntDiv` | `Option[T]` | `None` on overflow or div-by-zero |
 | `%?` | `CheckedRem` | `Option[T]` | `None` on overflow or zero divisor |
 | unary `-?` | `CheckedNeg` | `Option[T]` | `None` on overflow |
 
-There is no `/?` operator. For the same reason `/%` and `/|` do not
-exist (§4.6.2, §4.6.3) — `/` always produces `Float` per §4.4.1.1, and
-float arithmetic follows IEEE 754, which doesn't trap on overflow or
-division by zero (producing `Infinity` or `NaN` instead). Code that
-needs to detect such results inspects the float value via methods like
-`.is_finite()` or `.is_nan()`. For checked *integer* division, use
-`//?` (`CheckedIntDiv`); for general checked arithmetic on floats,
-explicit IEEE-754 result-inspection is the standard approach.
+The `/?` operator parallels `/` in widening behavior: integer operands
+widen to float per §4.4.1.1, then dispatch to `CheckedDiv` on the float
+type, returning `Option[Float]`. On float operands, the result is `None`
+when IEEE 754 would produce `NaN` or `±Infinity` (e.g., divide by zero
+producing `Infinity`, or `0.0/0.0` producing `NaN`); otherwise `Some(result)`.
 
 The checked form is for cases where the caller wants to handle the
-overflow case explicitly without panicking. The `?` postfix operator
-(§8) propagates the `None` upward in a function returning
+overflow or non-finite case explicitly without panicking. The `?` postfix
+operator (§8) propagates the `None` upward in a function returning
 `Option`-compatible types, making the recoverable-error chain ergonomic.
+
+There are no `/%` or `/|` operators — wrapping and saturating
+interpretations on float values would conflict with IEEE 754's
+established semantics. Wrapping/saturating integer division uses `//%`
+and `//|` per §4.6.2 and §4.6.3.
 
 #### 4.6.5 Compile-time constant overflow
 
@@ -2575,6 +2658,7 @@ trait SaturatingNeg:  fn saturating_neg(value: Self) -> Self
 trait CheckedAdd:     fn checked_add(a: Self, b: Self) -> Option[Self]
 trait CheckedSub:     fn checked_sub(a: Self, b: Self) -> Option[Self]
 trait CheckedMul:     fn checked_mul(a: Self, b: Self) -> Option[Self]
+trait CheckedDiv:     fn checked_div(a: Self, b: Self) -> Option[Self]
 trait CheckedIntDiv:  fn checked_intdiv(a: Self, b: Self) -> Option[Self]
 trait CheckedRem:     fn checked_rem(a: Self, b: Self) -> Option[Self]
 trait CheckedNeg:     fn checked_neg(value: Self) -> Option[Self]
@@ -2661,7 +2745,7 @@ trait Integer:
 @default(f64)
 trait Float:
   requires Numeric, Neg, Div,
-           CheckedAdd, CheckedSub, CheckedMul, CheckedNeg,
+           CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedNeg,
            Sqrt, Sin, Cos, Tan, Asin, Acos, Atan, Atan2,
            Ln, Log2, Log10, Exp, Exp2,
            Floor, Ceil, Round, Trunc,
@@ -2719,16 +2803,29 @@ built-in numeric types). Umbrella satisfaction follows transitively per
 
 Specifically:
 
-- All integer types auto-implement: `Add`, `Sub`, `Mul`, `Rem`, `IntDiv`,
-  `BitAnd`, `BitOr`, `BitXor`, `BitNot`, `Shl`, `Shr`, the wrapping/
-  saturating/checked variants, `Zero`, `One`, `Abs`, `Min`, `Max`, `Ord`,
-  `Eq`, `IntPow`, and (for signed types) `Neg`. They satisfy `Integer`,
-  `Numeric`, and `Signed` or `Unsigned` accordingly.
-- Float types auto-implement: `Add`, `Sub`, `Mul`, `Div`, `Rem`, `Neg`,
-  the float-only operations (`Sqrt`, trig, log, exp, rounding), the
-  inspection methods, `Zero`, `One`, `Abs`, `Min`, `Max`, `Ord`, `Eq`,
-  `FloatPow`. They satisfy `Float`, `Numeric`, and `Signed` (floats are
-  signed by convention — they support `Neg`).
+- **All integer types** auto-implement: `Add`, `Sub`, `Mul`, `Rem`,
+  `IntDiv`, `BitAnd`, `BitOr`, `BitXor`, `BitNot`, `Shl`, `Shr`; the
+  wrapping variants `WrappingAdd`, `WrappingSub`, `WrappingMul`,
+  `WrappingIntDiv`, `WrappingRem`; the saturating variants
+  `SaturatingAdd`, `SaturatingSub`, `SaturatingMul`, `SaturatingIntDiv`,
+  `SaturatingRem`; the checked variants `CheckedAdd`, `CheckedSub`,
+  `CheckedMul`, `CheckedIntDiv`, `CheckedRem` (note: not `CheckedDiv`,
+  which is float-only since `/` widens integers to float per §4.4.1.1);
+  the cast traits `WrappingAs`, `SaturatingAs`, `CheckedAs`; `Zero`,
+  `One`, `Abs`, `Min`, `Max`, `Ord`, `Eq`, `IntPow`; and (for signed
+  integer types) `Neg`, `WrappingNeg`, `SaturatingNeg`, `CheckedNeg`.
+  They satisfy `Integer`, `Numeric`, and `Signed` or `Unsigned`
+  accordingly.
+- **Float types** auto-implement: `Add`, `Sub`, `Mul`, `Div`, `Rem`,
+  `Neg`; the checked variants `CheckedAdd`, `CheckedSub`, `CheckedMul`,
+  `CheckedDiv`, `CheckedNeg` (returning `None` on NaN or Infinity
+  results per §4.6.6); float-only operations (`Sqrt`, trig, log, exp,
+  rounding); inspection methods; `Zero`, `One`, `Abs`, `Min`, `Max`,
+  `Ord`, `Eq`, `FloatPow`. Floats do not implement `WrappingAdd` /
+  `SaturatingAdd` etc. — IEEE 754's infinity-and-NaN semantics already
+  define overflow behavior, and modular or clamping interpretations would
+  conflict (§4.6.6). They satisfy `Float`, `Numeric`, and `Signed`
+  (floats are signed by convention — they support `Neg`).
 
 User-defined numeric-like types (`Decimal` from stdlib, custom fixed-point
 types, etc.) implement whichever fine-grained traits are appropriate;
