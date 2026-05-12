@@ -3611,5 +3611,188 @@ the user has implementation authority.
 
 ---
 
-*End of §6. Subsequent sections (§7 Conversion System, §8 Error Handling,
-§9 Strings, Tuples, and Arrays, §10 Visibility and Modules) follow.*
+## 7. Conversion System
+
+User-defined conversions between types use a pair of trait pairs:
+`From`/`Into` for infallible conversions and `TryFrom`/`TryInto` for
+fallible conversions. The conversion system is layered on top of the trait
+system (§3) and complements the built-in numeric implicit-widening rules
+(§4.5) and the `as` operator (§4.7).
+
+### 7.1 The Four Traits
+
+```
+trait From[T]:
+  fn from(value: T) -> Self
+
+trait Into[T]:
+  fn into(value: Self) -> T
+
+trait TryFrom[T]:
+  type Error
+  fn try_from(value: T) -> Result[Self, Error]
+
+trait TryInto[T]:
+  type Error
+  fn try_into(value: Self) -> Result[T, Error]
+```
+
+`From` and `Into` describe the same conversion from two perspectives —
+"construct `Self` from a `T`" vs "convert `Self` into a `T`." Likewise
+`TryFrom` and `TryInto` describe the same fallible conversion.
+
+The fallibility split is semantic. `From`/`Into` is for conversions that
+cannot fail — widening, identity, lossless transformations.
+`TryFrom`/`TryInto` is for conversions that can fail — narrowing, parsing,
+range checks, validation. The trait the user implements signals fallibility
+to every caller. Each fallible conversion declares its own `Error`
+associated type, so different conversions can produce different error
+kinds (range error, parse error, validation error, etc.).
+
+### 7.2 Users Implement `From` and `TryFrom`; the Reverses Auto-Derive
+
+Users write `fulfill From[T] for U` (or `fulfill TryFrom[T] for U`); the
+language automatically provides the reverse direction:
+
+- Whenever `From[T] for U` exists, `Into[U] for T` is auto-provided.
+- Whenever `TryFrom[T] for U` exists, `TryInto[U] for T` is auto-provided
+  with the same `Error` associated type.
+
+The auto-derivation is language-built-in and not user-overridable. This
+forecloses the coherence problem of disagreeing manual `From`/`Into` pairs.
+
+Users do not need to (and cannot) write `fulfill Into[U] for T` directly.
+The compiler synthesizes it from the corresponding `From` impl.
+
+### 7.3 Identity Conversion
+
+The language auto-implements `From[T] for T` for every type, providing the
+identity conversion. The corresponding `Into[T] for T` is also auto-derived.
+
+This makes generic code cleaner: a function parameter `T: Into[U]`
+accepts both `U` (via identity) and any type explicitly convertible to
+`U`. The user can pass the destination type directly without an
+intermediate conversion call.
+
+Identity conversion is not subject to the orphan rule (§3.7.3); it is one
+of the language-privileged implementations.
+
+### 7.4 Built-in Numeric Conversions
+
+The language pre-populates the conversion traits with built-in numeric
+conversions per §4.5's lossless rules:
+
+**`From` impls** (infallible) cover all lossless widening:
+
+- Integer-to-wider-same-signedness (`i8` → `i32`, `u16` → `u64`, etc.).
+- Unsigned-to-wider-signed (`u8` → `i16`, etc.).
+- Float-to-wider-float (`f32` → `f64`).
+- Integer-to-float for exact-representable cases (`i8`/`u8`/`i16`/`u16`
+  → `f32`; `i32`/`u32` → `f64`).
+- The §4.5.4 pragmatic exception: `From[i64] for f64` and
+  `From[u64] for f64`.
+
+**`TryFrom` impls** (fallible) cover narrowing, signed/unsigned crossings,
+and lossy integer-to-float conversions. Each carries an appropriate
+`Error` type (typically a numeric range error).
+
+These built-in impls are language-privileged (§3.7.3) — they exist outside
+user-writable `fulfill`-block space and cannot conflict with user code.
+
+### 7.5 Relationship to `as`
+
+The `as` operator (§4.7 for numeric, §6.3.2 for newtypes) is distinct
+from the conversion-trait system but interacts with it for numeric cases:
+
+- For **lossless numeric conversions**, `x as U` and `x.into::[U]()` (or
+  equivalently `Into::into(x)` typed to `U`) produce the same result.
+  Both are valid; users pick based on style. `as` is more concise; `.into()`
+  is more uniform with user-defined conversions.
+- For **lossy numeric conversions** that would overflow, `as` traps at
+  runtime per §4.6.1. `try_into` returns `Result[T, Error]` for explicit
+  handling. These are different operations with different failure
+  semantics. Users pick by intent — panic-on-failure (`as`) or
+  recoverable error (`try_into`).
+- The **wrapping** and **saturating** cast variants (§4.7) — `wrapping_as`,
+  `saturating_as`, `checked_as` — are method forms on the integer types,
+  not part of the conversion-trait machinery.
+- For **newtype extraction**, `as` is the dedicated unwrap operation
+  (§6.3.2). The conversion-trait system does not participate; the
+  underlying value is exposed via the operator directly.
+- For **user-defined conversions on non-newtype types**, `as` is not
+  available. Users use `.into()`, `From::from()`, or `.try_into()` per
+  §7.7.
+
+The summary: `as` is the operator for built-in numeric casts and newtype
+unwraps; the conversion traits are the mechanism for everything else.
+
+### 7.6 No Implicit User-Defined Conversions
+
+User-defined `From` impls do *not* produce implicit conversions. The
+implicit-conversion surface of the language is strictly limited to the
+built-in lossless widenings specified in §4.5. A user implementing
+`From[Celsius] for Fahrenheit` does not enable `let f: Fahrenheit = some_c`
+without explicit invocation; the user writes `let f: Fahrenheit =
+some_c.into()` or `let f: Fahrenheit = Fahrenheit::from(some_c)`.
+
+This prevents the C-family hazard of action at a distance through
+user-defined conversions. The set of types that auto-convert is fixed by
+the language and discoverable from §4.5; user types never silently
+participate in expression-level type adjustment.
+
+The auto-derivation of `Into` from `From` (§7.2) is *not* an implicit
+conversion — it is the auto-generation of a callable method. Calling that
+method requires explicit syntax at the call site.
+
+### 7.7 Invocation Forms
+
+Conversion calls use the standard uniform call syntax per §3.4 and follow
+the argument-form rules per §3.5. The four equivalent forms for a
+conversion from `i32` to `f64`:
+
+```
+let x: f64 = (5_i32).into::[f64]()        // method form
+let x: f64 = 5_i32 >> Into::into          // pipe-forward through trait path
+let x: f64 = From::from(5_i32)            // free-function via trait path
+let x: f64 = 5_i32                        // implicit, since i32 → f64 is built-in lossless
+```
+
+The first three are explicit; the fourth works only because `i32` → `f64`
+is in the built-in lossless-widening set (§4.5.2). User-defined `From`
+impls have only the first three forms available.
+
+Fallible conversions return `Result[T, Error]` and typically chain through
+the `?` operator (§8) for propagation:
+
+```
+let r: Result[i32, _] = big_value.try_into::[i32]()
+fn parse_age(s: string) -> Result[Age, ParseError]:
+  let n: i32 = s.parse::[i32]()?
+  let age: Age = n.try_into::[Age]()?
+  Ok(age)
+```
+
+The `?` operator's interaction with `From` for error-type conversion is
+specified in §8.
+
+### 7.8 Cross-Type `?` Rejected
+
+The `?` operator (§8) propagates failures up the call stack with optional
+`From`-conversion on the error type. Applying `?` across genuinely
+different types — propagating a `Result[X, E1]` failure in a function
+returning `Result[Y, E2]` where neither the value types nor the error
+types are convertible by `From` — is rejected at compile time.
+
+Specifically: `?` requires the source's success type to be the same as
+or convertible (via `From`) to the destination's success type, and the
+source's error type to be the same as or convertible (via `From`) to the
+destination's error type. When neither relationship holds, the `?`
+operation is a type error at the use site.
+
+This prevents `?` from being a silent type-coercion device. The error
+chain through `?` is bounded by user-declared `From` impls.
+
+---
+
+*End of §7. Subsequent sections (§8 Error Handling, §9 Strings, Tuples,
+and Arrays, §10 Visibility and Modules) follow.*
