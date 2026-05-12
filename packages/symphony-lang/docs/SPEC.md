@@ -752,6 +752,14 @@ existing method name is needed, the right tool is a separate trait (with a
 different method name) or a newtype with its own conformance, not override
 through `requires`.
 
+The signature-no-redeclaration rule applies to signatures only. Default
+bodies remain overridable at the *fulfill site* per §3.1.3 — a type
+implementing the trait may provide its own body, replacing any default the
+trait declared. The override happens at the type's implementation, not at
+the trait level. This separation keeps signature stability (contracts don't
+shift) decoupled from implementation flexibility (types choose how to fulfill
+the contract).
+
 The `requires` mechanism is how trait hierarchies are constructed (§3.6).
 
 #### 3.1.5 Trait-level default concrete type
