@@ -1639,25 +1639,79 @@ corresponds to one or more trait methods in §4.7's trait hierarchy.
 
 #### 4.4.1 Arithmetic operators
 
-| Operator | Operand Trait | Result | Notes |
+| Operator | Operand Constraint | Result | Notes |
 |---|---|---|---|
 | `+` | `Add` | same kind | mixed-kind promotes per §4.5 |
 | `-` (binary) | `Sub` | same kind | mixed-kind promotes per §4.5 |
 | `*` | `Mul` | same kind | mixed-kind promotes per §4.5 |
-| `/` | `Div` | **always Float** | mathematical division |
+| `/` | `Numeric` | **always Float** | mathematical division; see §4.4.1.1 |
 | `//` | `IntDiv` | Integer | truncating integer division |
 | `%` | `Rem` | same kind | mixed-kind promotes per §4.5 |
 | `-` (unary) | `Neg` | same as operand | type error on unsigned |
 
+##### 4.4.1.1 The `/` operator and integer-to-float promotion
+
 The `/` operator is mathematical division, divorced from machine
-representation. It accepts `Numeric` operands (integer, float, or mixed) and
-always produces `Float`. `5 / 2` produces `2.5`, not `2`. The result type is
-determined by the operator, not the operand types: even `10 / 5` produces a
-`Float`, not an integer.
+representation. It accepts `Numeric` operands (integer, float, or mixed)
+and always produces a `Float` result. `5 / 2` produces `2.5`, not `2`. The
+result type is determined by the operator itself, not by the operand types:
+even uniformly-integer operands (`10_i32 / 5_i32`) produce a `Float`, not
+an integer.
+
+The mechanism is a language-level rule applied at the operator, distinct
+from direct trait dispatch:
+
+1. The compiler verifies both operands satisfy `Numeric` (per §3.5).
+2. If either operand is `Integer`-kinded (or both are), the compiler
+   inserts implicit widening conversions to lift them to the appropriate
+   `Float` type per §4.5's lossless-widening rules. The pragmatic
+   exception for `i64`/`u64` → `f64` (§4.5.2) applies here too.
+3. The promoted operands then satisfy `Div` (which is declared only on
+   `Float`); the compiler dispatches `Div::div` on the float type.
+4. The result is a `Float` value of the type the operands were widened to.
+
+Examples:
+
+```
+5_i32 / 2_i32          // both i32 → both widen to f64 → 2.5_f64
+3.14_f32 / 2_i32       // f32 + i32 → i32 widens to f32 → ~1.57_f32
+5_i64 / 2_i64          // both i64 → both widen to f64 (pragmatic exception) → 2.5_f64
+5.0_f64 / 2.0_f64      // both f64 → direct Div::div → 2.5_f64
+```
+
+The choice of which float type to widen to follows §4.5's mixed-kind rules:
+the smaller integer widens to whichever float type matches the larger
+operand, or to the default `f64` if both operands are integers without an
+overriding context. Concretely:
+
+- `i8`/`u8`/`i16`/`u16` operands widen to `f32` if the other operand is
+  `f32`, or to `f64` otherwise (default and exact-representable).
+- `i32`/`u32` operands widen to `f64` (exact-representable; `f32` would
+  lose precision).
+- `i64`/`u64` operands widen to `f64` (pragmatic exception; precision may
+  be lost for values above 2⁵³).
+- `i128`/`u128` operands: implicit widening is *not* permitted by §4.5;
+  `/` on `i128`/`u128` operands requires an explicit cast to float first.
+  The operator does not silently lose precision at the 128-bit boundary
+  where the precision loss is dramatic.
+
+If neither operand pins the float type and both are integers, the result is
+a `Float`-placeholder value (§2.1) that resolves per §3.1.5's default
+(`f64`) unless context demands otherwise.
+
+This rule is the *only* place in the language where an operator performs
+implicit kind-crossing promotion on uniformly-integer operands. Every other
+operator with mixed-kind support requires at least one operand to already
+be of the target kind; `/` is unique in always producing float regardless
+of input kinds.
+
+##### 4.4.1.2 Other arithmetic operators
 
 `//` is the truncating integer division operator. It accepts `Integer`
 operands and produces an `Integer` result. `5 // 2` produces `2`; `-5 // 2`
 produces `-3` (toward negative infinity). `Float` operands are a type error.
+For float-input integer-output behavior, the user explicitly converts via
+`as` or `From`/`Into`.
 
 `%` (remainder) accepts both kinds and produces a result of the same kind
 as its operands. Mixed-kind operands promote per §4.5.
@@ -1667,6 +1721,12 @@ to an unsigned integer is a type error at compile time — silent wrap on
 negation is rejected as a footgun source. To compute the additive inverse of
 an unsigned value, the user explicitly converts to a signed type via `as`
 or `From`/`Into` per §7.
+
+Negative integer literals (e.g., `-5` in `let x: i8 = -5`) are not subject
+to the unary-minus-on-unsigned rule. Per §2.4.5, `-N` is parsed as a single
+signed literal token at type-check time, not as the unary operator applied
+to a positive literal. The unary-minus rule applies only to runtime values
+of unsigned type, never to literals at their declaration site.
 
 #### 4.4.2 Bitwise operators
 
