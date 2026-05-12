@@ -1635,7 +1635,7 @@ fully numeric (it is u8 in every type-system sense).
 ### 4.4 Operator Semantics
 
 Operators on numeric values follow the rules in this section. Each operator
-corresponds to one or more trait methods in §4.7's trait hierarchy.
+corresponds to one or more trait methods in §4.9's trait hierarchy.
 
 #### 4.4.1 Arithmetic operators
 
@@ -1809,42 +1809,24 @@ comparisons against known-exact values). The hazard is documented; users
 needing approximate comparison call stdlib `approx_eq(a, b, epsilon)` or
 similar.
 
-#### 4.4.5 Mixed-kind promotion
+#### 4.4.5 Mixed-kind promotion (overview)
 
 When an expression mixes integer and float operands, the integer operand
-widens implicitly to the float type before the operation proceeds. The
-widening is *lossless or rejected*: if the integer's runtime range fits
-exactly in the float's mantissa, the widening is implicit; otherwise an
-explicit cast is required.
+widens implicitly to the float type before the operation proceeds. Full
+widening rules — both integer-to-integer and integer-to-float — are
+specified in §4.5.
 
-Lossless integer-to-float widenings (always implicit):
+### 4.5 Implicit Widening
 
-- `i8`, `u8`, `i16`, `u16` → `f32` (8/16-bit fits in f32's 24-bit mantissa).
-- `i32`, `u32` → `f64` (32-bit fits in f64's 53-bit mantissa).
-- All integer-to-`f64` widenings up to `i32`/`u32` are exact.
+Implicit widening converts a narrower numeric value to a wider type
+automatically, without an explicit cast, when the conversion is provably
+lossless. All other conversions — narrowing, signed/unsigned crossing,
+precision-losing — require explicit `as` (§4.7) or `From`/`Into` (§7).
 
-Precision-losing widenings (require explicit cast, except for the pragmatic
-exception below):
+The general principle: implicit widening fires only when the conversion
+loses no information, with one pragmatic exception specified in §4.5.4.
 
-- `i32`, `u32` → `f32` (precision loss for values above 2²⁴).
-- `i64`, `u64` → `f64` (precision loss for values above 2⁵³).
-- `i128`, `u128` → any float (significant precision loss).
-
-**Pragmatic exception:** `i64`/`u64` → `f64` is permitted as an implicit
-widening despite the formal precision hazard for values above 2⁵³. The
-alternative — explicit casts on every common `i64 + f64` expression — is
-more friction than the bounded hazard justifies. The precision behavior is
-documented; users handling very large integer magnitudes in float contexts
-are expected to be aware.
-
-The general principle: implicit widening fires only when the conversion is
-provably lossless, with the single pragmatic exception above. All other
-widenings require explicit `as` (§7.1) or `From`/`Into` (§7).
-
-### 4.5 Implicit Widening Within Integer Kinds
-
-Implicit widening also applies between integer types when lossless. The full
-rules:
+#### 4.5.1 Integer-to-integer widening
 
 | From | To | Implicit |
 |---|---|---|
@@ -1855,8 +1837,76 @@ rules:
 | signed → wider unsigned (e.g. `i8` → `u16`) | wider unsigned | ✗ (negatives don't fit) |
 | any narrowing | narrower type | ✗ (range may not fit) |
 
-Conversions marked ✗ require `as` (§7.1) or `From`/`Into` (§7) — and for the
-fallible ones, `TryFrom`/`TryInto` (§7) returning `Result`.
+The principle: same-signedness widening is implicit; unsigned-to-wider-signed
+is implicit (always representable). Crossing signedness boundaries — even
+when widening — requires an explicit cast, because the bit pattern's
+interpretation changes (an unsigned value might not fit a signed range of
+the same width; a negative signed value cannot represent in any unsigned
+type).
+
+#### 4.5.2 Integer-to-float widening
+
+| From | To | Implicit |
+|---|---|---|
+| `i8`, `u8`, `i16`, `u16` | `f32` | ✓ (8/16-bit fits in f32's 24-bit mantissa) |
+| `i8`, `u8`, `i16`, `u16`, `i32`, `u32` | `f64` | ✓ (up to 32-bit fits in f64's 53-bit mantissa) |
+| `i32`, `u32` | `f32` | ✗ (precision loss above 2²⁴) |
+| `i64`, `u64` | `f64` | ✓ (pragmatic exception — see §4.5.4) |
+| `i64`, `u64` | `f32` | ✗ (significant precision loss) |
+| `i128`, `u128` | any float | ✗ (significant precision loss) |
+
+The rule: integer-to-float widening is implicit when the integer's full
+range fits exactly in the float's mantissa. `f32` has a 24-bit mantissa, so
+integer widths up to 16-bit are exactly representable; `f64` has a 53-bit
+mantissa, so integer widths up to 32-bit are exactly representable.
+
+#### 4.5.3 Float-to-float widening
+
+| From | To | Implicit |
+|---|---|---|
+| `f32` | `f64` | ✓ (exact-representable for all finite f32 values) |
+| `f64` | `f32` | ✗ (precision and range loss) |
+
+Float-to-float widening is implicit upward only. Narrowing from `f64` to
+`f32` requires an explicit cast because both precision (mantissa width) and
+range (exponent width) shrink.
+
+#### 4.5.4 The i64/u64 → f64 pragmatic exception
+
+`i64`/`u64` → `f64` is permitted as an implicit widening despite the formal
+precision hazard for values above 2⁵³. The alternative — explicit casts on
+every common `i64 + f64` expression — is more friction than the bounded
+hazard justifies. The precision behavior is documented; users handling very
+large integer magnitudes in float contexts are expected to be aware that
+values exceeding 2⁵³ may lose low-order bits when converted to `f64`.
+
+This is the only deviation from strict lossless widening. All other
+precision-losing conversions require explicit casts.
+
+#### 4.5.5 What requires explicit cast
+
+Conversions not in §4.5.1–§4.5.3's implicit-widening tables require explicit
+`as` (§4.7) or, for fallible conversions where the destination range might
+not contain the source value, `TryFrom`/`TryInto` (§7) returning `Result`.
+
+This includes: narrowing in either kind (wider-to-narrower integer,
+wider-to-narrower float); signed/unsigned crossings of any width;
+float-to-integer in any direction; precision-losing integer-to-float
+(except the §4.5.4 exception); and any cross-type conversion involving
+user-defined types via `From`/`Into`.
+
+#### 4.5.6 Application: mixed-kind operators
+
+The implicit-widening rules above are what makes mixed-kind operator
+behavior work without explicit casts. For arithmetic operators (`+`, `-`,
+`*`, `%`) with mixed-kind operands, the compiler applies the appropriate
+widening from §4.5.1–§4.5.4 to bring operands to a common type, then
+dispatches the operator's trait method on that type. For `/` specifically,
+the operator's always-float result triggers integer-to-float widening even
+for uniformly-integer operands per §4.4.1.1.
+
+For comparison and equality operators (`<`, `<=`, `>`, `>=`, `is`,
+`is not`), mixed-kind operands are widened the same way before comparison.
 
 ### 4.6 Overflow and Arithmetic Safety
 
@@ -2037,9 +2087,21 @@ Note on `abs`: applying `abs` to the minimum value of a signed integer type
 mathematical result (`2³¹`) doesn't fit in `i32`. The wrapping and
 saturating variants are available as methods: `wrapping_abs`, `saturating_abs`.
 
-`min` and `max` on floats are NaN-suppressing by default: `min(x, NaN) = x`.
-NaN-propagating variants are available as `min_propagating` and
-`max_propagating` on `Float` for users who need strict IEEE 754 semantics.
+`min` and `max` on floats are NaN-propagating by default. If either operand
+is NaN, the result is NaN. This is consistent with every other float
+operation in the language: any operation involving NaN produces NaN ("if
+NaN in, NaN out"). Users with NaN-bearing data who want NaN to be ignored
+in favor of the non-NaN operand opt in explicitly via `min_or` and `max_or`
+(returning the non-NaN operand when exactly one is NaN, and NaN when both
+are NaN).
+
+This default aligns with IEEE 754-2019's recommended `minimum`/`maximum`
+operations. The earlier IEEE 754-2008 `minNum`/`maxNum` operations (which
+were NaN-suppressing) were deprecated in 2019 due to subtle issues with
+negative zero and signaling NaN handling; the NaN-propagating form is now
+the recommended primary behavior. The `min_or`/`max_or` variants implement
+the older NaN-suppressing convention for data-processing use cases where
+NaN represents missing data.
 
 #### 4.8.2 Float-only operations
 
@@ -2182,12 +2244,19 @@ trait Cos:  fn cos(value: Self) -> Self
 trait IntPow:   fn pow(base: Self, exp: Self) -> Self
 trait FloatPow: fn pow(base: Self, exp: Self) -> Self
 
-trait Ord: fn lt(a: Self, b: Self) -> bool
-           fn le(a: Self, b: Self) -> bool
-           fn gt(a: Self, b: Self) -> bool
-           fn ge(a: Self, b: Self) -> bool
-trait Eq:  fn eq(a: Self, b: Self) -> bool
-           fn ne(a: Self, b: Self) -> bool
+trait Ord: requires Lt, Le, Gt, Ge
+trait Lt: fn lt(a: Self, b: Self) -> bool
+trait Le: requires Lt, Eq
+          fn le(a: Self, b: Self) -> bool:
+            lt(a, b) or eq(a, b)
+trait Gt: requires Lt, Eq
+          fn gt(a: Self, b: Self) -> bool:
+            not (lt(a, b) or eq(a, b))
+trait Ge: requires Lt
+          fn ge(a: Self, b: Self) -> bool:
+            not lt(a, b)
+
+trait Eq: fn eq(a: Self, b: Self) -> bool
 ```
 
 This is the canonical fine-grained set. Stdlib may add additional fine-
@@ -2197,6 +2266,20 @@ capability) is what's normative, not the exact list above.
 `Ord` and `Eq` are standalone — not part of any numeric umbrella per §3.5.1.
 Non-numeric types (strings, enums, records) may also be ordered or compared,
 so these traits live outside the numeric hierarchy.
+
+`Ord` is an umbrella per §3.3.5: it requires the four ordering traits and
+declares no methods of its own. A type satisfies `Ord` automatically when it
+satisfies `Lt`, `Le`, `Gt`, `Ge`. In practice, implementers fulfill `Lt` and
+`Eq` only — the default bodies on `Le`, `Gt`, `Ge` derive their behavior from
+`Lt::lt` and `Eq::eq` per §3.1.3. Auto-derivation via `@derive(Ord)` per
+§3.7 generates the full set of fulfill blocks structurally; manual
+implementation requires only `fulfill Lt for X` and `fulfill Eq for X`.
+
+The `is not` operator does not have its own trait method. `a is not b`
+desugars at parse time to `not (a is b)` and dispatches through `Eq::eq` per
+the operator semantics in §4.4.4. This preserves the one-method-per-trait
+pattern: `Eq` declares one method (`eq`); the two operators `is` and `is not`
+both flow through it.
 
 #### 4.9.2 Umbrella traits
 
