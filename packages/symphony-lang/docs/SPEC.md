@@ -5419,4 +5419,910 @@ and type's visibility.
 
 ---
 
-*End of §10.*
+## 11. Local Mutability and Ownership
+
+This section specifies the language's local mutability model. Mutation is
+permitted only inside function bodies, scoped to bindings declared with
+`mut`. Ownership of values is tracked through move semantics: every value
+has exactly one owner at any moment. Read-only access to non-`Copy` values
+without ownership transfer is provided through call-scoped borrows declared
+in function signatures.
+
+This section supersedes the absolute-immutability language in §1.3. The
+broader principle stands — immutability is the default and external state
+remains immutable — but local mutation is permitted inside function bodies
+as a controlled escape hatch for performance.
+
+### 11.1 Design Principles
+
+Mutation in Symphony is an escape hatch, not the primary expression style.
+The default remains immutability and pure functions; `mut` exists because
+some computations (DSP buffer processing, in-place transformations,
+algorithm internals) cannot be expressed efficiently in a pure-functional
+style. The model is designed to *isolate* mutation rather than eliminate
+it.
+
+Three load-bearing rules constrain where and how mutation can occur:
+
+**Nothing outside a function body is mutable.** Module-level bindings,
+record fields as a property of the type, function parameters, enum
+variants — none of these can be declared `mut`. The `mut` keyword is
+legal only on bindings introduced inside a function body.
+
+**Single ownership.** At every moment, every value has exactly one owner.
+Passing a non-`Copy` value into a function transfers ownership. Returning
+it transfers ownership back to (a new binding in) the caller. Assigning a
+non-`Copy` value to a new binding transfers ownership. The compiler tracks
+ownership at every binding site; using a value after ownership has been
+transferred is a compile error.
+
+**Single writer.** A `mut` binding is the only path through which its
+underlying value may be mutated. While a borrow of the value is active,
+even the owner cannot mutate it. The compiler enforces this without any
+runtime check.
+
+The result is a model where mutation is locally efficient (no copying for
+in-place updates) but globally invisible (no caller can observe a callee's
+mutations except through the callee's declared return value). This
+combination preserves the language's pure-functional surface (functions
+remain referentially transparent observably) while permitting imperative
+implementation underneath.
+
+### 11.2 Binding Forms: `let` and `mut`
+
+The language has two binding forms for runtime values:
+
+```
+let x = expr        // immutable binding
+mut x = expr        // mutable binding (function bodies only)
+```
+
+`let` is the general-purpose binding form, identical to the form specified
+in §2.1.2 and §2.4.1.1. The binding is immutable: the binding name cannot
+be reassigned, the bound value cannot be mutated through this binding, and
+field/element assignment through this binding is a compile error.
+
+`mut` is the local-mutability binding form. The binding name can be
+reassigned, the bound value can be mutated in place (through indexed
+assignment, field assignment, or whole-value reassignment), and the
+binding lives only within the function body where it is declared.
+
+`mut` is **forbidden at module top level**, **forbidden inside type, trait,
+node, and connection bodies**, and **forbidden on function parameters**.
+Only function bodies (and nested block scopes within function bodies) may
+contain `mut` declarations. The grammar and the type checker both enforce
+this; a `mut` declaration outside a function body is a compile error at
+the declaration site.
+
+The `const` binding form (§2.4.1.1) remains valid as the strictly
+compile-time-only form. `const` and `mut` are mutually exclusive — `const`
+asserts compile-time-only and immutable; `mut` is necessarily runtime and
+mutable.
+
+#### 11.2.1 Shadowing
+
+Either form may shadow a previously declared binding in the same scope:
+
+```
+fn process(input: Vec[i32]) -> i32:
+  let input = preprocess(input)       // shadows the parameter
+  let input = filter(input)           // shadows again
+  sum(input)
+```
+
+Shadowing creates a new binding with the same name; the prior binding is
+no longer accessible by that name from the shadow point forward. Under
+move semantics this is the idiomatic pattern for "thread a value through
+a pipeline" — each step rebinds the same name to the new owned value.
+
+A `let` may shadow a `mut` and vice versa. The new binding's mutability is
+governed solely by its own declaration form, not by what it shadowed.
+
+### 11.3 Ownership and Move Semantics
+
+Every value has exactly one owner. The owner is the binding (or temporary
+expression slot) that currently holds the value. Ownership transfers in
+three situations:
+
+- **Assignment.** `let y = x` or `mut y = x` transfers ownership of `x`'s
+  value to `y`. After this point, `x` is no longer accessible by that name.
+- **Function argument passing.** `f(x)` transfers ownership of `x` into the
+  function's parameter binding for the duration of the call. After the
+  call, `x` is consumed; the caller's binding is no longer usable.
+- **Function return.** `return e` transfers ownership of `e`'s value out
+  of the function and into whatever binding (or expression) receives the
+  return value at the call site.
+
+Ownership transfer is what "move" means. The compiler tracks ownership
+statically; using a binding after its value has been moved is a compile
+error reported at the use site, with the location of the move identified.
+
+```
+let v = make_buffer()       // v owns the buffer
+let w = v                   // ownership moved from v to w; v no longer usable
+print(v)                    // ✗ compile error: v consumed at line 2
+```
+
+#### 11.3.1 Reading versus consuming
+
+The owner of a value may *read* through it without consuming it. Reading
+includes:
+
+- Field access: `r.field`
+- Indexed access: `arr[i]`
+- Pattern matching with read-only patterns
+- Built-in operator inspection (`is`, `<`, etc.)
+
+Reading does not transfer ownership. The owner retains the value after
+the read.
+
+```
+let r = make_record()
+print(r.first_name)         // reads r.first_name; r still owned
+print(r.last_name)          // reads again; r still owned
+consume(r)                  // consumes r; ownership moved
+print(r.age)                // ✗ compile error: r consumed at line 4
+```
+
+Consuming includes:
+
+- Function argument passing (by-value parameters): `f(r)`
+- Return statements: `return r`
+- Assignment to a new binding: `let x = r`
+- Storing in a record field, tuple component, or enum payload
+
+These operations transfer ownership.
+
+#### 11.3.2 Reassignment of `mut` bindings
+
+A `mut` binding may be reassigned. Reassignment consumes the new value
+and drops the old value:
+
+```
+mut buf = make_buffer()
+buf = make_other_buffer()    // old buffer dropped, new one bound
+```
+
+Reassignment is *not* shadowing — it modifies the existing binding rather
+than introducing a new one. The binding remains the same; only the value
+it holds changes.
+
+#### 11.3.3 Dropping
+
+When a binding goes out of scope, its value is dropped. For `Copy` types,
+dropping is a no-op. For non-`Copy` types whose constituent resources
+require cleanup (heap allocations, file handles via stdlib, etc.), the
+type's drop behavior is invoked.
+
+Drop semantics for user-defined types are specified through the trait
+system; the precise mechanism is deferred to §Drop Trait (deferred).
+
+### 11.4 The `Copy` Trait
+
+`Copy` is a marker trait. A type's values may be duplicated by the
+language at every use site (assignment, argument passing, return) without
+transferring ownership. The original binding remains usable.
+
+```
+trait Copy
+```
+
+No methods. No associated types. The trait's only purpose is to flag a
+type as having implicit-duplication semantics.
+
+#### 11.4.1 Auto-implementations
+
+The following types automatically implement `Copy`:
+
+- All primitive numeric types (`i8`–`i128`, `u8`–`u128`, `isize`, `usize`,
+  `f32`, `f64`).
+- `bool`, `char`.
+- `string` (see §11.6).
+- Tuples whose components are all `Copy`.
+
+#### 11.4.2 Opt-in via `@derive(Copy)`
+
+A record may opt into `Copy` semantics by including `@derive(Copy)` in its
+declaration:
+
+```
+@derive(Copy)
+type Color:
+  r: u8
+  g: u8
+  b: u8
+
+@derive(Copy, Eq, Hash)
+type Vec3:
+  x: f32
+  y: f32
+  z: f32
+```
+
+`@derive(Copy)` requires every field's type to itself be `Copy`. If any
+field is non-`Copy` (e.g., contains an array or a non-`Copy` user type),
+the derivation fails with a compile error identifying the offending field.
+
+A newtype may opt into `Copy` similarly; the wrapped type must be `Copy`.
+
+#### 11.4.3 Semantics of `Copy` use sites
+
+For `Copy` types, every operation that would normally transfer ownership
+instead produces an independent value:
+
+```
+@derive(Copy)
+type Point:
+  x: f32
+  y: f32
+
+let p = Point(x: 1.0, y: 2.0)
+let q = p                         // q is an independent Point; p still usable
+let total_x = p.x + q.x           // both readable
+plot(p)                            // does not consume p
+plot(q)                            // does not consume q
+print(p.x)                         // ✓ p still owned
+```
+
+The duplication is conceptually a value-by-value copy. The runtime cost
+is whatever the type's representation makes it (a register copy for small
+types, a memcpy for larger ones). The language guarantees the user-visible
+behavior; the compiler picks the implementation.
+
+#### 11.4.4 `Copy` and `mut`
+
+A `mut` binding to a `Copy` type behaves the same as for non-`Copy` types
+with respect to mutation — the binding's value can be reassigned and (for
+record/tuple `Copy` types) fields can be assigned. Other (immutable)
+bindings to copies of the same value are unaffected by mutations made
+through one `mut` binding, because they hold independent copies.
+
+```
+@derive(Copy)
+type Counter:
+  value: i32
+
+let original = Counter(value: 0)
+mut working = original              // independent copy
+working.value = 5                   // mutates working's copy
+print(original.value)               // 0; original unchanged
+print(working.value)                // 5
+```
+
+This is the standard interpretation of value-type mutation in
+copy-semantic languages.
+
+### 11.5 The `Clone` Trait
+
+`Clone` is the trait for explicit deep duplication:
+
+```
+trait Clone:
+  fn clone(value: &Self) -> Self
+```
+
+The method takes a borrow (§11.9) of the source value and returns an
+independent owned copy.
+
+Where `Copy` produces implicit duplications with no syntactic marker,
+`Clone` requires an explicit `.clone()` call at every duplication site.
+The visible call signals that an allocation (or analogous resource
+duplication) may be occurring.
+
+#### 11.5.1 Auto-derivation
+
+`Clone` is one of the derivable traits per §3.8:
+
+```
+@derive(Clone)
+type Buffer:
+  data: f32[1024]
+  sample_rate: i32
+```
+
+For records, derived `Clone` clones each field. Every field's type must
+itself be `Clone`. For enums, derived `Clone` clones the payload of the
+active variant.
+
+#### 11.5.2 Relationship to `Copy`
+
+`Copy` types are trivially `Clone` — the implicit duplication mechanism
+provides a `.clone()` method that returns the same result as direct use.
+The compiler auto-derives `Clone` for every `Copy` type.
+
+The converse is not true: most `Clone` types are not `Copy`. Heap-allocated
+structures (`Vec`, `HashMap`), arrays, and records containing them are
+`Clone` (when their fields support it) but not `Copy`.
+
+#### 11.5.3 Usage
+
+`Clone` is invoked when the user needs two owned copies of a non-`Copy`
+value:
+
+```
+let buf = make_buffer()
+let backup = buf.clone()          // explicit deep copy
+process(buf)                       // buf consumed
+restore(backup)                    // backup still owned
+```
+
+The clone allocates as the type requires. Users who write `.clone()` are
+making the cost visible.
+
+### 11.6 Strings and the `Copy` Implementation
+
+`string` is a `Copy` type despite being heap-allocated. Per §9.1, strings
+are UTF-8 encoded sequences and are immutable. The implementation realizes
+`Copy` semantics through refcounted shared backing: assigning, passing, or
+returning a `string` increments a refcount on the underlying byte storage
+without copying bytes; dropping a `string` decrements the refcount and
+deallocates when it reaches zero.
+
+This is observable to the user only through:
+
+- Performance: `let t = s` is constant-time regardless of string length.
+- Mutation: irrelevant, since `string` is immutable; the refcount-shared
+  backing is never visible because nothing can write through it.
+
+The user-visible model is simply: `string` is `Copy`. Passing strings to
+functions does not consume them; using a string in multiple places does
+not require `.clone()`.
+
+#### 11.6.1 Why arrays are different
+
+Arrays (§9.3) are not `Copy`, regardless of element type or compile-time
+size. Implicit duplication of arrays would either require deep copy
+(silent allocation per `let t = arr`, defeating the language's
+performance goals) or refcounted shared backing (which is unsafe for
+arrays because `mut` bindings to arrays support in-place mutation —
+sharing the backing would let one binding see another's writes,
+violating single-writer).
+
+Strings escape this trade-off by being immutable. There is no `mut`
+operation on a string that mutates its bytes; every "modification" returns
+a new string. Refcount-shared immutable backing is therefore safe. For
+arrays, no such immutability exists, so shared backing is unsafe.
+
+The user-visible rule: strings are `Copy`, arrays are not. The
+implementation difference is the immutability constraint.
+
+### 11.7 Function Parameters
+
+A function parameter declares either *by-value* ownership transfer or
+*by-borrow* read-only access. The declaration uses the parameter's type
+position:
+
+```
+fn consume_buffer(b: Vec[f32]) -> Vec[f32]: ...      // by-value: takes ownership
+fn inspect_buffer(b: &Vec[f32]) -> isize: ...        // by-borrow: read-only access
+```
+
+The `&` prefix on the parameter's type denotes a borrow. Without the
+prefix, the parameter is by-value.
+
+#### 11.7.1 By-value parameters
+
+A by-value parameter receives ownership of its argument. For `Copy`
+argument types, this is equivalent to making an independent copy and
+binding it to the parameter — the caller's binding remains usable. For
+non-`Copy` types, the caller's binding is consumed; using it after the
+call is a compile error.
+
+The function body owns the parameter for the duration of the call. It
+may read the parameter, pass it to other functions (transferring ownership
+further), return it, or let it drop at function exit.
+
+A by-value parameter is itself an immutable binding inside the function
+body — like a `let` binding. To mutate it, the body must rebind it to a
+local `mut` binding (§11.7.3).
+
+#### 11.7.2 No `mut` on parameters
+
+A function parameter may not be declared `mut`:
+
+```
+fn process(mut buf: Vec[f32]) -> Vec[f32]: ...    // ✗ compile error
+```
+
+The forbid is intentional. A function's signature is its contract with
+callers; that contract specifies type and ownership behavior. Mutation is
+the function's internal implementation choice — invisible to callers
+because the caller's binding has already been consumed (for non-`Copy`
+parameters) or never affected (for `Copy` parameters). Exposing mutation
+in the signature creates ambiguity about whether the function is pure
+without changing what the function can actually do.
+
+A function that intends to mutate its parameter rebinds it to a local
+`mut`:
+
+```
+fn apply_gain(buf: Vec[f32], gain: f32) -> Vec[f32]:
+  mut local = buf
+  // mutate local in place
+  local
+```
+
+The rebind is one line per function and surfaces the moment where the
+received parameter transitions to mutable working state.
+
+#### 11.7.3 Local rebinding to `mut`
+
+The rebind pattern `mut local = parameter` moves the parameter's value
+into a fresh `mut` binding. After the rebind, `local` is mutable and
+`parameter` (now consumed) is no longer accessible.
+
+For `Copy` parameter types, the rebind produces an independent mutable
+copy; mutations to `local` are invisible to the (also-still-usable)
+parameter binding. For non-`Copy`, the parameter binding is consumed by
+the move into `local`.
+
+```
+fn double_in_place(arr: i32[16]) -> i32[16]:
+  mut local = arr               // arr consumed; local owns the array
+  // mutate local[i] for each i
+  local
+```
+
+#### 11.7.4 By-borrow parameters
+
+A by-borrow parameter (`&T`) is a read-only handle to the caller's value
+for the duration of the call. The caller retains ownership; the function
+body may inspect the borrowed value but may not mutate it, consume it,
+return it, or store it anywhere persistent.
+
+By-borrow parameters allow inspection of non-`Copy` values without
+forcing ownership transfer. The dominant use case is stdlib container
+inspection: `length`, `contains`, `is_empty`, comparison, hashing, and
+similar operations declare `&T` parameters and leave callers' bindings
+untouched.
+
+Full borrow semantics are specified in §11.9.
+
+### 11.8 Call-Site Semantics
+
+The caller writes a uniform call syntax regardless of whether the function
+consumes or borrows its parameters:
+
+```
+let v = make_buffer()
+let n = length(v)             // length declares &Vec; v survives the call
+let v = push(v, 42)           // push declares Vec; v consumed, return rebinds
+let m = length(v)             // length again; v still owned
+```
+
+The call-site syntax does not distinguish consume from borrow. The
+function's signature is the authoritative contract: callers consult the
+signature (directly or via tooling) to know what happens to their
+arguments.
+
+#### 11.8.1 Implicit borrow at call sites
+
+When a function declares an `&T` parameter, the caller passes the binding
+without any sigil — `length(v)` rather than `length(&v)`. The compiler
+inserts the borrow operation automatically. The borrow is active for the
+duration of the call expression.
+
+This is intentional. Borrowing is a safe operation (read-only, no aliasing
+hazards), so making it explicit at call sites would add visual noise
+without informational value. Adding a sigil for the *dangerous* operation
+— consumption — would similarly be noise: consumption is so common under
+move semantics that requiring a marker would clutter most call sites.
+Instead, the language treats both behaviors as signature-driven and lets
+the compiler enforce correctness through use-after-move errors.
+
+#### 11.8.2 Use-after-move
+
+Using a binding after its value has been consumed is a compile error,
+reported at the use site. The diagnostic identifies the call (or other
+operation) that consumed the binding:
+
+```
+let v = make_vec()
+let n = consume_fn(v)         // v consumed here
+print(v)                       // ✗ compile error:
+                               //   `v` was consumed by `consume_fn` at line 2
+                               //   and is no longer accessible
+```
+
+The error is local: the compiler does not need to analyze the function's
+implementation; the signature is sufficient.
+
+#### 11.8.3 Method-call form
+
+The method-call form `x.f(args)` is sugar for `f(x, args)` per §3.4's
+uniform call syntax. The same ownership rules apply: if `f` declares its
+first parameter as `&T`, the call borrows `x`; if as `T`, the call
+consumes `x`.
+
+```
+let v = make_buffer()
+let n = v.length()           // sugar for length(v); borrows v per signature
+let m = v.length()           // borrows again; v still owned
+let v = v.push(42)           // sugar for push(v, 42); consumes; rebind
+```
+
+Field access `x.field` and indexed access `x[i]` are not function calls
+and do not consume regardless of any signature. They are language
+primitives that read without ownership transfer.
+
+#### 11.8.4 Refactoring impact
+
+Changing a function's parameter from `T` to `&T` (consume to borrow) is a
+*loosening* of the contract. Existing callers continue to compile:
+arguments that were being consumed are now merely borrowed; the caller
+retains access to the binding afterward (which is strictly more
+permissive than the previous behavior).
+
+Changing a parameter from `&T` to `T` (borrow to consume) is a
+*tightening* of the contract. Callers that were using the argument after
+the call now see use-after-move errors at those use sites. The errors are
+local and clearly indicate which call consumed the value.
+
+In neither direction is the refactor silent: tightening produces clear
+compile errors at the affected sites; loosening produces no errors at all.
+
+### 11.9 The Borrow Form (`&T`)
+
+A borrow is a temporary, read-only handle to a value, scoped to a single
+function call expression. Borrows are declared in function-parameter type
+position with the `&` prefix:
+
+```
+fn length(v: &Vec[i32]) -> isize: ...
+fn equals(a: &Vec[i32], b: &Vec[i32]) -> bool: ...
+fn copy_into(src: &Vec[i32], dest: Vec[i32]) -> Vec[i32]: ...
+```
+
+The `&` is a parameter-position-only syntactic form. It does not appear at
+call sites (per §11.8.1), in `let` or `mut` declarations, in record field
+declarations, in return types, in trait bounds, or in any other position.
+The borrow is created implicitly by the call dispatch when the function
+declares a borrow parameter; the borrow is released when the call
+expression finishes evaluating.
+
+#### 11.9.1 Restrictions
+
+A borrow may not be:
+
+- **Stored in a binding.** `let r = ...` cannot bind a borrow. The
+  language has no way to write down a "binding that holds a borrow"; the
+  `&` form is not valid in `let`/`mut` declarations.
+- **Returned from a function.** A function's return type is always an
+  owned value or a `Copy` value, never a borrow. The `&` form does not
+  appear in return-type position.
+- **Stored in a record field, enum variant payload, or tuple component.**
+  Compound types contain owned values, never borrows.
+- **Captured by a closure.** Closures capture by value (§11.10); borrows
+  are not values that can be captured.
+
+These restrictions collectively ensure that a borrow never outlives the
+function call expression that created it. The compiler does not need to
+track lifetimes across statements, across function boundaries, or across
+data structures — the borrow exists only within one call expression and
+is gone by the next statement.
+
+#### 11.9.2 Constraints during an active borrow
+
+While a borrow of value `v` is active (i.e., during the call expression
+where `&v` was passed), the owner of `v` may not:
+
+- Move `v` (pass it by value to another function, return it, assign it to
+  another binding).
+- Mutate `v` (reassign through a `mut` binding, perform indexed or field
+  assignment).
+
+These constraints apply within the call expression. Once the call returns,
+the borrow is released and the owner may move or mutate `v` freely.
+
+In practice, this restriction is invisible because expressions are
+evaluated sequentially. The case it forbids is multi-argument calls where
+one argument borrows and another consumes:
+
+```
+let v = make_vec()
+let result = combine(&v, consume_fn(v))   // ✗ compile error:
+                                           //   v borrowed and moved in the same expression
+```
+
+The compiler tracks within-expression borrow activity and reports
+conflicts at the offending sub-expression.
+
+#### 11.9.3 Multiple simultaneous borrows
+
+Multiple borrows of the same value in the same expression are permitted,
+because all borrows are read-only:
+
+```
+let v = make_vec()
+let r = compare(&v, &v)              // ✓ two borrows of v, both read-only
+let s = max3(&a, &a, &b)             // ✓ multiple borrows of a, one of b
+```
+
+No aliasing-with-mutation hazard arises: nothing in the call expression
+can mutate any of the borrowed values, by §11.9.2.
+
+#### 11.9.4 Implicit reborrow inside function bodies
+
+A function whose parameter is `&T` may pass that parameter to another
+function expecting `&T` without any additional syntax:
+
+```
+fn length(v: &Vec[i32]) -> isize:
+  count_elements(v)           // count_elements declares &Vec; reborrow is automatic
+
+fn count_elements(v: &Vec[i32]) -> isize: ...
+```
+
+The body of `length` treats `v` as a value of type `Vec[i32]` for purposes
+of reading; passing it to `count_elements` extends the borrow chain. The
+compiler tracks that `v` inside `length` is a borrow (not an owned value)
+and forbids operations that would consume or store it:
+
+```
+fn length(v: &Vec[i32]) -> isize:
+  count_elements(v)           // ✓ reborrow
+  consume_vec(v)              // ✗ consume_vec declares Vec by value;
+                              //   cannot move out of borrowed v
+  return v                    // ✗ cannot return a borrow as owned
+  let saved = v               // ✗ cannot bind a borrow
+```
+
+#### 11.9.5 Borrows do not appear in declarations
+
+`&T` is grammatically valid only in function-parameter type position. It
+is a parse error in:
+
+- `let` and `mut` declarations: `let r: &Vec = ...` is a parse error.
+- Record fields: `type Holder: data: &Vec` is a parse error.
+- Enum payloads: `Variant(&T)` is a parse error.
+- Tuple components: `(&i32, i32)` is a parse error.
+- Function return types: `fn f(...) -> &T` is a parse error.
+- Closure parameter types in stored closure types (deferred).
+- Trait associated types: `type Item = &T` is a parse error.
+- Generic-type arguments: `Vec[&i32]` is a parse error.
+
+The single-position restriction is what keeps the borrow model trivially
+sound without lifetime tracking.
+
+#### 11.9.6 Borrows of `Copy` values
+
+A `Copy` value may also be passed by borrow rather than by value if the
+function declares `&T`. The behavior is identical in effect — neither
+form consumes the caller's binding — and the choice is the function
+author's. Borrow declarations on `Copy` types are unusual but legal; the
+caller cannot tell the difference at the call site.
+
+The motivation for declaring `&T` even when `T` is `Copy` is uniform API
+shape: a function generic over `T: SomeTrait` may want to take `&T` so
+the behavior is consistent across `Copy` and non-`Copy` instantiations.
+
+### 11.10 Closures and Capture
+
+A closure is an anonymous function that may capture values from its
+enclosing scope. Symphony's closures capture *by value*: each captured
+value is stored inside the closure at the moment of definition.
+
+#### 11.10.1 Captures must be `Copy`
+
+Every value captured by a closure must have a `Copy` type. The captured
+value is a snapshot of the source value at definition time; the closure
+holds an independent copy.
+
+```
+let gain: f32 = 1.5
+let process = |sample: f32| sample * gain    // captures gain (f32, Copy) ✓
+```
+
+For non-`Copy` source values, capture is a compile error:
+
+```
+let buf = make_buffer()                       // Vec[f32], non-Copy
+let closure = || sum(buf)                     // ✗ compile error:
+                                              //   cannot capture non-Copy value `buf`
+```
+
+Non-`Copy` values flow through closures as arguments rather than captures:
+
+```
+let closure = |b: &Vec[f32]| sum(b)          // takes a borrow argument
+let total = closure(&buf)                     // caller passes &buf each call
+```
+
+#### 11.10.2 Capture granularity
+
+The compiler captures the minimal set of subvalues the closure body
+references. For a body that reads a single field of a larger record, only
+that field is captured — provided the field's type is `Copy`:
+
+```
+let contact = Contact(first_name: "Alice", age: 30, ...)
+let closure = || contact.age + 1              // captures contact.age (i32, Copy)
+                                              // contact stays in outer scope, fully usable
+```
+
+If a captured subvalue's type is not `Copy`, the capture fails regardless
+of whether the root binding is `Copy`. The constraint applies to the
+captured value's type, not the root binding's type.
+
+#### 11.10.3 Captures from `let` only
+
+Closures may capture from `let` bindings. They may not capture from `mut`
+bindings:
+
+```
+let stable = 5
+let closure_a = || stable + 1                 // ✓ capture from let
+
+mut counter = 0
+let closure_b = || counter + 1                // ✗ compile error:
+                                              //   cannot capture from `mut` binding `counter`
+```
+
+The forbid prevents a footgun: closures capture by value at definition
+time (a snapshot), but users naming a `mut` binding might intuitively
+expect the closure to see live updates. Forbidding the capture forces the
+user to make the snapshot explicit:
+
+```
+mut counter = 0
+counter = compute_initial()
+let snapshot = counter                        // explicit snapshot via let
+let closure = || snapshot + 1                 // captures snapshot (Copy)
+counter = counter + 1                         // mut continues to evolve
+                                              // closure still sees the snapshot value
+```
+
+For closures that must track live updates of changing state, the reactive
+system is the appropriate mechanism. The reactive system is specified in
+a deferred section.
+
+#### 11.10.4 Body unrestricted
+
+Within a closure body, all the usual function-body rules apply. The body
+may declare local `mut` bindings, call functions (consuming arguments as
+their signatures dictate), construct new values, perform iteration
+(once specified), and so on. The capture-must-be-`Copy` restriction
+applies only to the closure's captured environment, not to anything the
+body does internally.
+
+```
+let scale: f32 = 2.0                          // Copy capture
+let process = |raw: Vec[f32]| -> Vec[f32]:
+  mut local = raw                              // mut local; allowed inside closure body
+  apply_scale_in_place(local, scale)           // internal work; captures untouched
+  local
+```
+
+#### 11.10.5 Borrows cannot be captured
+
+A borrow is not a value (per §11.9). Closures capture values; therefore
+closures cannot capture borrows. There is no `&T` form usable in a
+capture context.
+
+A closure body may receive borrows as *arguments* (its parameter list may
+include `&T` parameters), but it cannot retain borrows from outside its
+parameter list.
+
+### 11.11 Indexed and Field Assignment
+
+Assignment through a `mut` binding to a field or array element is
+permitted:
+
+```
+mut r = make_record()
+r.field = new_value          // ✓ field assignment
+
+mut arr = make_array()
+arr[5] = 1.5                  // ✓ indexed assignment
+```
+
+The root binding (`r`, `arr`) must be declared `mut`. The field or
+element being assigned must itself be of a type compatible with the
+assigned value, per the standard type-check rules.
+
+Field and indexed assignment desugar to operator-trait method calls (the
+exact traits — `FieldAssign`, `IndexAssign`, or analogous — are specified
+in §Operator Traits, deferred). The desugaring preserves the
+single-writer invariant: the assignment is a mutation through the `mut`
+binding only; no other binding to the same underlying value can exist
+while the mutation occurs (borrows would block it per §11.9.2; aliased
+ownership is impossible by construction).
+
+Reading a field or element from any binding (whether `let` or `mut`) is
+unrestricted (§11.3.1).
+
+#### 11.11.1 Whole-value reassignment
+
+A `mut` binding may be reassigned entirely:
+
+```
+mut buf = make_buffer()
+buf = make_other_buffer()    // replaces the buffer; old one dropped
+```
+
+This drops the previous value and binds the new value. The new value is
+moved into the binding (consumed from its source).
+
+### 11.12 Interaction with Records, Enums, and Newtypes
+
+The compound types of §6 interact with mutability as follows:
+
+- A record, enum, or newtype may itself be `Copy` if it carries
+  `@derive(Copy)` and all its fields/payloads are `Copy`.
+- Mutability is purely a property of the binding (per §11.2), not of the
+  type. A type does not declare "this is mutable"; specific bindings to
+  values of the type may be declared `mut`.
+- A record's fields, an enum variant's payload, and a newtype's wrapped
+  value may all be assigned through a `mut` binding to the containing
+  value, provided the field/payload/wrapped type permits assignment.
+
+Records (§6.1) explicitly forbid `fn` declarations in their bodies; this
+forbid does not extend to disallowing `mut` interaction. A function
+elsewhere that holds a `mut` binding to a record may freely assign its
+fields.
+
+#### 11.12.1 Smart constructors and `mut`
+
+The `public(private)` constructor pattern (§6.1.7, §6.3.4) restricts
+construction to the type's defining module. This restriction interacts
+naturally with `mut`: any code holding a `mut` binding to such a type can
+still mutate its fields (subject to field visibility per §10.7); the
+restriction is only on initial construction, not on subsequent mutation.
+
+For types where post-construction mutation should also be restricted, the
+appropriate mechanism is field-level visibility (`private field_name:
+T`), which prevents external code from naming the field in an assignment
+expression.
+
+### 11.13 Interaction with the Trait System
+
+Trait method signatures may declare borrow parameters identically to free
+functions:
+
+```
+trait Length:
+  fn length(value: &Self) -> isize
+
+fulfill Length for Vec[i32]:
+  fn length(value: &Vec[i32]) -> isize:
+    ...
+```
+
+The `&Self` in the trait declaration becomes `&Vec[i32]` (or whatever the
+implementing type is) in each `fulfill` block, by the standard `Self`
+substitution rule of §3.1.1.
+
+Trait dispatch (§3.4) is unaffected by ownership semantics. Whether a
+trait method consumes or borrows its receiver depends on the trait
+method's signature; callers write the same uniform-call syntax regardless.
+
+Trait objects (§5.2, `dyn T`) may invoke methods that declare `&T`
+parameters. The borrow lifetime remains call-scoped as for direct calls.
+
+### 11.14 Interaction with Reactivity
+
+The reactive system is specified in a deferred section. The interaction
+with local mutability follows two principles, recorded here for
+forward-compatibility:
+
+- **Reactive expressions (`derived` and analogous) are pure-evaluated.**
+  A `derived` expression's body runs as a pure function of its inputs
+  each time inputs change. The body may invoke ordinary functions that
+  use `mut` internally; the body itself produces a value that enters the
+  reactive graph.
+
+- **Values entering the reactive graph become external state.** Once a
+  value is bound into the reactive system as a signal, derived, or
+  reactive store, it is no longer the property of any single function's
+  scope. External state is immutable per §11.1's "nothing outside a
+  function body is mutable" principle; reactive values are updated only
+  through the reactive system's defined update mechanisms, never through
+  `mut` assignment.
+
+The reactive boundary is one of the "global" scopes referenced in
+§11.1's principles. The full specification of how values cross this
+boundary is deferred to the reactive-system section.
+
+---
+
+*End of §11.*
