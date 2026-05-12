@@ -1816,6 +1816,48 @@ widens implicitly to the float type before the operation proceeds. Full
 widening rules — both integer-to-integer and integer-to-float — are
 specified in §4.5.
 
+#### 4.4.6 Operator-to-inferred-constraint mapping
+
+When the compiler infers constraints from a generic function body per
+§2.2.2, each operator implies a specific trait constraint on its operands
+(and on the result type where the operator produces a constrained result).
+This table specifies the mapping:
+
+| Operator | Operand constraint | Result constraint |
+|---|---|---|
+| `+` | `Add` | same type as operands |
+| `-` (binary) | `Sub` | same type as operands |
+| `*` | `Mul` | same type as operands |
+| `/` | `Numeric` | `Float` (per §4.4.1.1) |
+| `//` | `IntDiv` | same type as operands |
+| `%` | `Rem` | same type as operands |
+| `-` (unary) | `Neg` | same type as operand |
+| `&` | `BitAnd` | same type as operands |
+| `\|` | `BitOr` | same type as operands |
+| `^` | `BitXor` | same type as operands |
+| `~` | `BitNot` | same type as operand |
+| `<<` | `Shl` (left); `u32`-convertible (right) | same type as left operand |
+| `>>` | `Shr` (left); `u32`-convertible (right) | same type as left operand |
+| `<`, `<=`, `>`, `>=` | `Ord` | `bool` |
+| `is`, `is not` | `Eq` | `bool` |
+| `+%`, `-%`, `*%`, `//%`, `%%`, `-%` | corresponding `Wrapping...` | same type as operands |
+| `+\|`, `-\|`, `*\|`, `//\|`, `%\|`, `-\|` | corresponding `Saturating...` | same type as operands |
+| `+?`, `-?`, `*?`, `/?`, `//?`, `%?`, `-?` | corresponding `Checked...` | `Option[T]` |
+
+The compiler's inference algorithm per §2.2.1 walks each function body
+collecting the union of these constraints across all operators used. The
+resulting set is attached to the generic signature; call sites must satisfy
+it. The umbrella traits from §4.9.2 may be substituted for sets of
+fine-grained constraints when the substitution is unambiguous, for
+readability in error messages and signatures.
+
+For example, the body `a + (b - a) * c` infers `Add`, `Sub`, `Mul` on the
+operand types (with the substitution rule that `a`, `b`, `c` are likely
+related by inference — see §2.2.3). The compiler may report the inferred
+bounds as `T: Numeric` rather than `T: Add + Sub + Mul + ...` when the
+umbrella is unambiguous, but the underlying constraints are the
+fine-grained traits per the operators used.
+
 ### 4.5 Implicit Widening
 
 Implicit widening converts a narrower numeric value to a wider type
@@ -1939,6 +1981,7 @@ wrapping on overflow:
 | `+%` | `WrappingAdd` | `255_u8 +% 1 == 0_u8` |
 | `-%` | `WrappingSub` | `0_u8 -% 1 == 255_u8` |
 | `*%` | `WrappingMul` | `200_u8 *% 2 == 144_u8` |
+| `//%` | `WrappingIntDiv` | `(-128_i8) //% (-1_i8) == -128_i8` (no overflow trap) |
 | `%%` | `WrappingRem` | rare; defined for completeness |
 | unary `-%` | `WrappingNeg` | `(-128_i8) -% == -128_i8` (no overflow trap) |
 
@@ -1946,10 +1989,16 @@ Wrapping is the right choice for hash functions, cryptographic primitives,
 counters where modular arithmetic is the intent, and bit-manipulation
 patterns where wrap is mathematically meaningful.
 
-There is no `/%` wrapping division — integer division has no sensible
-modular result for division by zero (the principal failure mode), so a
-wrapping variant adds no value. Use `/?` (§4.6.4) for the recoverable
-form.
+Integer-division wrapping (`//%`) handles the one case where integer
+division overflows: signed-minimum divided by `-1` (e.g., `i32::MIN // -1`,
+which mathematically would be `2³¹` but doesn't fit in `i32`). The
+wrapping form yields `i32::MIN` itself (the bit pattern wraps).
+
+There is no `/%` for the `/` operator because `/` always produces `Float`
+per §4.4.1.1, and float operations follow IEEE 754 (which doesn't
+trap-overflow). No `//%` variant exists for division by zero — there is no
+sensible modular answer to "divide by zero"; use `//?` (§4.6.4) for the
+recoverable form, or accept that `//%` on a zero divisor traps.
 
 #### 4.6.3 Saturating operators
 
@@ -1961,6 +2010,7 @@ overflow:
 | `+|` | `SaturatingAdd` | `255_u8 +\| 1 == 255_u8` |
 | `-|` | `SaturatingSub` | `0_u8 -\| 1 == 0_u8` |
 | `*|` | `SaturatingMul` | `200_u8 *\| 2 == 255_u8` |
+| `//|` | `SaturatingIntDiv` | `(-128_i8) //\| (-1_i8) == 127_i8` |
 | `%|` | `SaturatingRem` | rare; defined for completeness |
 | unary `-|` | `SaturatingNeg` | `(-128_i8) -\| == 127_i8` |
 
@@ -1968,7 +2018,13 @@ Saturation is the right choice for DSP (audio sample clamping), image
 processing (pixel value clamping), and any context where producing a
 boundary value is preferable to either trapping or wrapping.
 
-There is no `/|` saturating division — same reasoning as `/%`.
+Integer-division saturation (`//|`) clamps the signed-min-divide-by-neg-one
+overflow case to the type's maximum value, parallel to `//%`'s wrapping
+behavior.
+
+There is no `/|` for the `/` operator (same reasoning as `/%` above).
+Saturating division by zero is not defined; use `//?` for the recoverable
+form.
 
 #### 4.6.4 Checked operators
 
@@ -2214,11 +2270,15 @@ trait Shr:    fn shr(value: Self, n: u32) -> Self
 trait WrappingAdd:    fn wrapping_add(a: Self, b: Self) -> Self
 trait WrappingSub:    fn wrapping_sub(a: Self, b: Self) -> Self
 trait WrappingMul:    fn wrapping_mul(a: Self, b: Self) -> Self
+trait WrappingIntDiv: fn wrapping_intdiv(a: Self, b: Self) -> Self
+trait WrappingRem:    fn wrapping_rem(a: Self, b: Self) -> Self
 trait WrappingNeg:    fn wrapping_neg(value: Self) -> Self
 
 trait SaturatingAdd:  fn saturating_add(a: Self, b: Self) -> Self
 trait SaturatingSub:  fn saturating_sub(a: Self, b: Self) -> Self
 trait SaturatingMul:  fn saturating_mul(a: Self, b: Self) -> Self
+trait SaturatingIntDiv: fn saturating_intdiv(a: Self, b: Self) -> Self
+trait SaturatingRem:  fn saturating_rem(a: Self, b: Self) -> Self
 trait SaturatingNeg:  fn saturating_neg(value: Self) -> Self
 
 trait CheckedAdd:     fn checked_add(a: Self, b: Self) -> Option[Self]
@@ -2290,22 +2350,24 @@ per §3.3.5: automatically satisfied when all required traits are satisfied.
 ```
 @default(i32)
 trait Numeric:
-  requires Add, Sub, Mul, Neg, Zero, One,
-           WrappingAdd, WrappingSub, WrappingMul, WrappingNeg,
-           SaturatingAdd, SaturatingSub, SaturatingMul, SaturatingNeg,
-           CheckedAdd, CheckedSub, CheckedMul, CheckedNeg,
+  requires Add, Sub, Mul, Zero, One,
+           WrappingAdd, WrappingSub, WrappingMul,
+           SaturatingAdd, SaturatingSub, SaturatingMul,
+           CheckedAdd, CheckedSub, CheckedMul,
            Abs, Min, Max
 
 @default(i32)
 trait Integer:
   requires Numeric, Rem, IntDiv, BitAnd, BitOr, BitXor, BitNot, Shl, Shr,
-           WrappingRem, SaturatingRem,
+           WrappingRem, WrappingIntDiv,
+           SaturatingRem, SaturatingIntDiv,
            CheckedDiv, CheckedIntDiv, CheckedRem,
            IntPow
 
 @default(f64)
 trait Float:
-  requires Numeric, Div,
+  requires Numeric, Neg, Div,
+           CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedNeg,
            Sqrt, Sin, Cos, Tan, Asin, Acos, Atan, Atan2,
            Ln, Log2, Log10, Exp, Exp2,
            Floor, Ceil, Round, Trunc,
@@ -2313,21 +2375,29 @@ trait Float:
 
 @default(i32)
 trait Signed:
-  requires Integer
-  // Signed requires Integer, which includes Neg
-  // (Neg is satisfiable for signed integers but is a type error for unsigned;
-  // see §4.4.1)
+  requires Integer, Neg, WrappingNeg, SaturatingNeg, CheckedNeg
 
 @default(u32)
 trait Unsigned:
   requires Integer
   // Unsigned does NOT require Neg; types satisfying Unsigned do not
-  // implement Neg, so unary `-` on them is a type error
+  // implement Neg, so unary `-` on them is a type error per §4.4.1
 ```
 
-The signed/unsigned distinction is enforced by the `Neg` trait's presence
-or absence in the type's effective method set. Types satisfying `Signed`
-implement `Neg`; types satisfying `Unsigned` do not.
+`Neg` is deliberately not part of `Numeric`. Unsigned integer types cannot
+implement `Neg` (§4.4.1: unary `-` on unsigned is a type error), so placing
+`Neg` in `Numeric` would prevent unsigned types from satisfying the
+`Numeric` umbrella. The clean resolution: `Numeric` collects only the
+operations meaningful for both signed and unsigned numbers; `Neg` (and its
+wrapping/saturating/checked variants) appear on `Signed` and `Float`
+separately. The signed/unsigned distinction is then exactly the presence
+or absence of `Neg` in the type's effective method set: types satisfying
+`Signed` implement `Neg`; types satisfying `Unsigned` do not; floats
+implement `Neg` via the `Float` umbrella.
+
+`Div` is on `Float` only (not on `Integer` or `Numeric`), reflecting Topic
+5's rule that `/` always produces `Float`. Integer operands to `/` are
+implicitly widened to float per §4.4.1.1 before `Div::div` is dispatched.
 
 #### 4.9.3 Default mappings
 
