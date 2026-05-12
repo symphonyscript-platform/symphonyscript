@@ -4884,4 +4884,343 @@ dynamic collections are ordinary generic types per §2.
 
 ---
 
-*End of §9. Subsequent sections (§10 Visibility and Modules) follow.*
+## 10. Visibility and Modules
+
+The language uses a three-level visibility model — `public`, `shared`,
+and `private` — and a folder-as-module structure for organizing code
+within and across packages. This section is the authoritative
+specification for both. Earlier sections cross-reference here for
+declaration-specific behavior.
+
+### 10.1 The Three Levels
+
+Visibility is three-level. Each level denotes a distinct scope:
+
+| Level | Scope | Default? |
+|---|---|---|
+| `public` | Across package boundaries — exported to dependent packages | no |
+| `shared` | Within the same package (the module tree rooted at the package root) | **yes** |
+| `private` | Within the declaring file only | no |
+
+`shared` is the default; no keyword is required. `public` and `private`
+are explicit keywords.
+
+The three levels are linearly ordered by permissiveness:
+`private < shared < public`. A declaration's visibility level determines
+the maximum reach of any reference to it; references from outside that
+reach produce compile errors at the reference site.
+
+### 10.2 Packages and Modules
+
+A *package* is the unit of distribution — a project root or a named
+dependency. Each package has a single *package root*: the top-level
+folder of the package's source tree. The package root is itself the
+*root module*, addressed in absolute paths via the `root` keyword.
+Subfolders of the package root are submodules; for example, the folder
+`<package_root>/audio/` is the module accessible as `root::audio`.
+
+A *module* is a folder of source files within a package. Files within
+a folder share a path prefix — the folder's module path — and form a
+single module's content. The folder structure of the source tree
+mirrors the module path structure.
+
+#### 10.2.1 Visibility reach
+
+The three visibility levels translate to declaration reach as follows:
+
+- A `private` declaration is reachable only from within its declaring
+  file. No other file — sibling, parent, child, or unrelated — can
+  reference it.
+- A `shared` declaration is reachable from any file within the same
+  package, including the declaring file itself, sibling files in the
+  same folder, files in parent or descendant folders, and files in
+  unrelated folders of the same package. Cross-file access requires
+  either a `use` statement (§10.4) or a path-qualified reference.
+- A `public` declaration is reachable from any file within the same
+  package (as for `shared`), plus any file in any package that depends
+  on the source package. Cross-package references go through the
+  dependent package's external dependency path base per §10.2.2.
+
+Cross-file access — same-folder or cross-folder — always requires
+explicit reference, either via `use` or via path qualification. There is
+no implicit "sibling files see each other" mechanism. The folder
+structure determines the module path; it does not grant implicit
+mutual visibility.
+
+#### 10.2.2 Path bases
+
+The grammar's `PathBase` (per grammar §3.4) provides the following entry
+points for absolute paths:
+
+- `root` — the current package's root module.
+- A bare name matching an external dependency declared in the package's
+  manifest — that dependency's root module.
+
+For example, `root::audio::Synthesizer` resolves an absolute path
+through the current package; `tone_lib::Oscillator` resolves into the
+`tone_lib` dependency's public surface.
+
+### 10.3 Visibility Specifiers on Declarations
+
+Every position in the grammar that admits a visibility specifier
+accepts one of: `public`, `shared`, `private`, or *absence* (which
+denotes `shared` by default). The grammar's older `pub` keyword is
+replaced throughout by this three-level model; the propagation covers
+all visibility-bearing productions (grammar §3.4 through §3.11).
+
+```
+public fn render_frame(...): ...           // exported across packages
+fn compute_delta(...): ...                 // shared (default)
+private fn internal_helper(...): ...       // file-local
+
+public type Synthesizer:                   // type public
+  ...
+
+private const SECRET_KEY: u64 = 0xDEADBEEF // file-local constant
+```
+
+Specific visibility rules for each declaration kind are specified in the
+declaration's own section and summarized below:
+
+- **Records** (§6.1): type visibility (§6.1.7), independent field
+  visibility (§6.1.6), independent constructor visibility (§6.1.7).
+- **Enums** (§6.2): type visibility applies uniformly to all variants
+  (§6.2.6); no per-variant visibility.
+- **Newtypes** (§6.3): type visibility (§6.3.1), independent
+  constructor visibility (§6.3.4).
+- **Traits** (§3.1): type visibility. Visibility of methods within a
+  trait declaration is uniform with the trait's visibility — no
+  per-method visibility.
+- **Free functions**: visibility specifier on the `fn` declaration.
+- **Constants** (§2.4.1.1): visibility specifier on the `const`
+  declaration.
+- **Fulfill blocks** (§10.7): no separate visibility specifier —
+  reachability derived from trait and type visibility jointly.
+
+### 10.4 `use` Statements
+
+A `use` statement imports a name from another module into the current
+file's scope, allowing the file to refer to that name unqualified rather
+than via its full path. The grammar of `use` is specified in grammar
+§3.3.
+
+```
+use root::audio::Synthesizer
+
+let s = Synthesizer(...)              // unqualified — would be
+                                      // root::audio::Synthesizer(...) otherwise
+```
+
+`use` has **no visibility modifier**. It is a usage-side construct: it
+controls how the current file refers to other names, not how other files
+refer to the current file. A name brought into scope via `use` does not
+become a declaration in the current file; it remains the original
+declaration in the original module, just with a shorter local reference.
+
+The visibility of the imported declaration governs whether the `use` is
+permitted at all. Importing a `private` declaration from another file
+is a compile error (the source isn't visible). Importing a `shared`
+declaration from within the same package works; importing it from another
+package does not. Importing a `public` declaration works from any package
+that depends on the source's package.
+
+#### 10.4.1 Selective and glob imports
+
+Per §6.2.3, selection lists on `use` paths use parentheses; a glob
+imports every visible name from the source:
+
+```
+use root::ops::(add, sub, mul)        // specific names
+use root::variants::*                 // glob: every visible name
+```
+
+Glob imports are subject to the import-time conflict rules per §6.2.3:
+two glob imports that bring colliding names into the same scope produce
+a compile error at the `use` site that introduces the second collision.
+
+#### 10.4.2 Re-exporting a name
+
+To make a declaration accessible from another module under a different
+path, write an explicit re-declaration rather than a re-exporting
+`use`. Common forms:
+
+```
+// In root::facade.symphony:
+public type Synthesizer = root::audio::internal::Synthesizer
+                                       // alias type form (§4.2)
+
+public fn build_default() -> Synthesizer:
+  root::audio::internal::build_default_with_params(...)
+                                       // wrapper function
+```
+
+These are ordinary declarations with their own visibility specifiers,
+distinct from `use` imports. The language's `use` machinery is solely
+about bringing names into the current file's scope; cross-module
+exposure of names is the job of declarations.
+
+### 10.5 Type Visibility and Constructor Visibility
+
+Records (§6.1.7) and newtypes (§6.3.4) carry an independent constructor
+visibility specifier alongside the type visibility. The syntax uses a
+parenthesized modifier on the type visibility keyword:
+
+```
+public type Email:                        // type public, constructor public (default)
+  wraps string
+
+public(shared) type Email:                // type public, constructor shared
+  wraps string
+
+public(private) type Email:               // type public, constructor private
+  wraps string                            //   — the smart-constructor pattern
+
+shared(private) type SecretConfig:        // type shared, constructor private
+  api_key: string
+```
+
+The outer keyword is type visibility; the parenthesized inner keyword is
+constructor visibility. When the inner specifier is omitted, constructor
+visibility defaults to match the type's visibility.
+
+**Inner ≤ outer.** The inner specifier may never be *more* permissive
+than the outer. `private(public)` is a compile error — a public
+constructor on a private type is unreachable from anywhere outside the
+type's visibility scope and would be a dead specifier.
+
+#### 10.5.1 The smart-constructor pattern
+
+The `public(private)` and `shared(private)` configurations are the
+canonical smart-constructor pattern: the type's name is visible across
+its visibility scope (so callers can use it in signatures, annotations,
+and field types), but construction `TypeName(...)` is unreachable from
+outside the constructor's scope.
+
+This is the language's mechanism for enforcing invariants at
+construction time. Any path that produces a value of the type must pass
+through the constructor's visibility scope, where validating logic — a
+`From` impl, a `TryFrom` impl, a factory function — can be defined.
+Callers receive values of the type that have passed the invariants;
+they cannot manufacture invalid values directly.
+
+### 10.6 Enum Visibility
+
+Enum visibility applies uniformly to the enum type and all its variants
+(§6.2.6). There is no per-variant visibility specifier.
+
+```
+public enum Color:                        // all variants public
+  Red
+  Green
+  Blue
+
+private enum InternalState:               // type and all variants file-local
+  Pending
+  Running
+  Done
+```
+
+If a user needs some variants visible and others hidden, they split the
+enum into multiple enums (each with its own visibility) and provide
+conversion functions between them. The motivation: per-variant
+visibility is rare in practice; supporting it would complicate the
+grammar and module-resolution rules for narrow benefit.
+
+### 10.7 Field Visibility
+
+Records carry independent visibility per field (§6.1.6). Each field
+declares its own visibility:
+
+```
+public type Account:
+  public id: i64                  // readable anywhere the type is visible
+  email: string                   // shared (default)
+  private password_hash: string   // readable only within this file
+```
+
+A field's visibility never exceeds the enclosing type's visibility —
+declaring a `public` field on a `private` type is a compile error,
+because no caller outside the type's visibility scope could observe the
+field.
+
+Access from outside a field's visibility scope is a compile error at
+the access site.
+
+### 10.8 Trait `fulfill` Block Visibility
+
+`fulfill` blocks (§3.3) have *no separate visibility specifier*. The
+implementation's effective visibility is:
+
+```
+impl_visibility = min(trait_visibility, type_visibility)
+```
+
+where the visibility levels are ordered `private < shared < public`.
+An implementation is callable wherever both the trait and the type are
+visible — the intersection of their reachability.
+
+Concrete cases:
+
+| Trait visibility | Type visibility | Impl visibility |
+|---|---|---|
+| `public` | `public` | `public` (anywhere both are visible) |
+| `public` | `shared` | `shared` (package-internal) |
+| `shared` | `public` | `shared` (package-internal) |
+| `private` | `public` | `private` (only in the trait's file) |
+| `private` | `private` | only if both declared in same file |
+
+The intersection rule reflects the practical observation: if a caller
+can't name both the trait and the type, the implementation is
+unreachable from that caller's site regardless of any separate
+visibility specifier on the `fulfill` block.
+
+The motivation for *not* having a separate visibility specifier: a
+separate specifier could create the case where the trait and type are
+both visible but the implementation is not, leading to confusing
+"method not found" errors when the implementation clearly should exist.
+Coherence per §3.7 guarantees at most one implementation exists per
+(trait, type) pair, so there is no ambiguity in which implementation is
+the visible one — only whether it is reachable.
+
+### 10.9 Visibility and the Orphan Rule
+
+The orphan rule (§3.7) operates on the *module-of-declaration*, not on
+visibility. A `fulfill` block satisfies the orphan rule if the trait or
+the type is declared locally — regardless of either's visibility level.
+Visibility controls *who can see and use* an implementation; the orphan
+rule controls *where it can be declared*.
+
+A `private` trait or type still counts as "local" for orphan-rule
+purposes. The combination — a `fulfill` block for a private trait and a
+foreign type, with the implementation accessible only inside the
+declaring file — is rare but valid.
+
+### 10.10 Visibility and Dispatch
+
+Visibility interacts with the uniform call syntax (§3.4) through name
+resolution. A method call `x.f()` resolves `f` against names visible in
+the current scope; visibility determines which names are reachable from
+the call site:
+
+- A `private` function is reachable only from within its declaring file.
+- A `shared` function is reachable from any file within the same package
+  via a `use` statement bringing it into scope, or via path
+  qualification.
+- A `public` function is reachable as for `shared`, plus from any file
+  in any package depending on the source package.
+
+In all cross-file cases — same-folder or cross-folder, same-package or
+cross-package — the reference is explicit: either the name is brought
+into scope via `use`, or the call uses a path-qualified form like
+`root::module::function_name(args)`.
+
+The resolution algorithm per §3.4.1 searches imported and in-scope names
+in the current file; visibility filters which names can be successfully
+brought into scope or referenced via path. Trait-method calls follow the
+same rule, with the additional reach constraint from §10.8 — the
+implementation's effective visibility is the minimum of the trait's
+and type's visibility.
+
+---
+
+*End of §10.*
