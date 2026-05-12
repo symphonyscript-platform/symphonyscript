@@ -142,6 +142,27 @@ let b: i64 = x      // x resolves to i64 here
 This is sound because the value `5` is compile-time known (§2.4) and the
 compiler verifies it fits both target types.
 
+Resolution at a use site considers all information available at that site,
+including other operands' types in the same expression and the value-fits
+check from §2.4.3. The integer/float kind of a placeholder tags it for
+defaulting (§3.1.5) but does not prevent resolution to a compatible type of
+a different kind, provided the value fits exactly:
+
+```
+let x = 5
+let f: f64 = x         // ✓ integer placeholder resolves to f64; value 5 fits exactly
+let g: f32 = x         // ✓ same; value 5 fits exactly in f32
+let h = x * 1.5_f32    // ✓ integer placeholder resolves to f32 in mixed-kind expression
+                       //   per the lossless-widening rule (§ — Numeric System)
+```
+
+A binding whose right-hand side is itself an expression with a placeholder
+follows the same rule applied to the expression: the expression resolves first
+using its own context (operand types, value-fits, defaulting), and the binding
+adopts the resolved type. The binding's annotation status (or absence) does
+not provide context to the expression; resolution flows forward from
+expression to binding, not backward.
+
 #### 2.1.3 Bindings to concretely-typed expressions
 
 When a binding's right-hand side has a concrete type, the binding carries that
@@ -211,24 +232,40 @@ uncalled generics.
 
 #### 2.2.3 Implicit and explicit generics are equivalent
 
-A function with omitted parameter types is generic. The omitted types become
-fresh, unique generic parameters with inferred constraints. The implicit form
-desugars to the explicit form:
+A function with omitted parameter types is generic. Each omitted parameter type
+becomes a *distinct* fresh generic parameter. The implicit form desugars
+mechanically to the explicit form, one fresh parameter per omitted slot:
 
 ```
 fn lerp(a, b, c): a + (b - a) * c
-// equivalent to:
-fn lerp[T](a: T, b: T, c: T) where T: Numeric:
-  a + (b - a) * c
+// initial desugaring (before inference):
+fn lerp[T0, T1, T2](a: T0, b: T1, c: T2): a + (b - a) * c
 ```
 
-(The exact synthesized parameters and inferred bounds depend on the body's
-operations; the example shows the common case where all three parameters
-unify.)
+The desugaring produces three distinct type parameters because there are three
+omitted parameter types. Inference (§2.2.1) then generates constraints from the
+body's operations and may unify some parameters with each other if the body's
+operations force them to be the same type. For `lerp`, the body `a + (b - a) *
+c` constrains the parameters such that inference may unify them into one — but
+the unification is a *result* of inference, not part of the desugaring.
 
-The two forms produce the same code and the same semantics. The choice is
-stylistic. Mixed forms are permitted: some parameter types explicit, others
-omitted.
+For a function whose body does not relate its parameters, the synthesized
+parameters remain distinct:
+
+```
+fn pair(a, b): (a, b)
+// desugars to (and stays as):
+fn pair[T0, T1](a: T0, b: T1) -> (T0, T1)
+```
+
+Here `a` and `b` are not connected by any operation, so `T0` and `T1` remain
+independent generic parameters and the function is genuinely generic in two
+parameters.
+
+The implicit and explicit forms produce the same code and the same semantics.
+The choice between them is stylistic. Mixed forms are permitted: some
+parameter types explicit, others omitted, with the omitted ones receiving
+fresh parameters per the same rule.
 
 #### 2.2.4 Trait-based constraints
 
@@ -355,6 +392,15 @@ immutable, compile-time-knowability propagates freely through the expression
 graph. The compiler determines compile-time-knowability automatically; users do
 not annotate it.
 
+There is no separate `const` keyword. `let` is the only binding form and covers
+both compile-time constants and runtime-immutable bindings. The distinction
+between the two is structural — determined by whether the binding's expression
+is compile-time evaluable — not lexical. A `let` bound to a literal or a pure
+expression over compile-time-known values is itself compile-time known; a `let`
+bound to a signal or to an expression involving runtime input is a runtime
+value. Purity plus immutability collapse the const/let distinction that other
+languages require.
+
 #### 2.4.2 Breaks in propagation
 
 Two categories of expression are not compile-time known:
@@ -455,6 +501,617 @@ performance optimization.
 
 ---
 
-*End of §2. Subsequent sections (§3 Trait System, §4 Numeric System, §5 Type
-Intersection and dyn, §6 Records and Enums, §7 Conversion System, §8 Error
-Handling, §9 Strings and Tuples, §10 Visibility and Modules) follow.*
+## 3. Trait System
+
+Traits are the language's abstraction mechanism for behavior. A trait declares
+an interface — a set of method signatures, associated types, and requirements —
+that types may explicitly conform to and provide implementations for. Generic
+code expresses constraints in terms of traits; the compiler resolves trait
+methods at monomorphization time per §2.3.5.
+
+The trait system is nominal throughout: a type satisfies a trait only via an
+explicit declaration of conformance, never by accidental structural match. Two
+types with structurally identical method sets are distinct unless both have
+explicitly declared (and implemented) the same trait.
+
+### 3.1 Trait Declarations
+
+A trait is declared with the `trait` keyword (grammar §3.7). The body of a
+trait declares method signatures, associated types, requirements on other
+traits, and optionally default values for the trait's defaulting behavior.
+
+```
+trait Display:
+  fn display(value: Self) -> string
+
+trait Add[Rhs = Self]:
+  type Output
+  fn add(left: Self, right: Rhs) -> Output
+
+trait Iterable:
+  type Item
+  fn next(value: Self) -> Option[Item]
+```
+
+A trait declaration may be empty:
+
+```
+trait Marker
+```
+
+Empty traits ("marker traits") have no methods, no associated types, and no
+requirements. They serve as nominal tags — a type's `satisfies Marker` clause
+is a declarative assertion the user makes about the type, checked only for
+existence by the compiler.
+
+#### 3.1.1 Method signatures
+
+Trait methods are declared with the `fn` keyword inside the trait body. The
+signatures use `Self` (capitalized, the type-level identifier) to refer to the
+implementing type:
+
+```
+trait Eq:
+  fn eq(a: Self, b: Self) -> bool
+```
+
+`Self` is a type-level placeholder bound during implementation: in a `fulfill
+Eq for i32` block, `Self` resolves to `i32`, so the method's signature becomes
+`fn eq(a: i32, b: i32) -> bool`.
+
+Trait methods do not use a `self` parameter. The lowercase `self` keyword is
+reserved exclusively for reactive context inside node and connection bodies
+(§ — Reactive System, deferred). Trait method signatures name their receiver
+parameter explicitly. The first parameter's type is conventionally `Self` for
+methods that operate on instances, but trait methods may have any parameter
+list — including no `Self` parameter at all (for "associated functions" like
+constructors).
+
+#### 3.1.2 Associated types
+
+A trait may declare associated types using the `type` keyword inside the body:
+
+```
+trait Iterable:
+  type Item
+  fn next(it: Self) -> Option[Item]
+```
+
+`Item` is an associated type — a type-level name whose concrete value is bound
+by each implementation. Associated types may be referenced in the trait's
+method signatures and in other associated-type expressions.
+
+An associated type may declare a default value:
+
+```
+trait Add[Rhs = Self]:
+  type Output = Self
+  fn add(left: Self, right: Rhs) -> Output
+```
+
+When an implementation does not bind `Output` explicitly, the default applies.
+
+Implementations bind associated types via the `type Name = Concrete` form
+inside `fulfill` blocks (§3.4.3).
+
+Bounds on associated types in generic constraints use where-clauses with the
+`.` member-access notation (§ — Generic Parameters):
+
+```
+fn sum[I: Iterable](it: I) -> I.Item where I.Item: Numeric:
+  ...
+```
+
+#### 3.1.3 Default method bodies
+
+A trait may provide a default implementation for any of its methods by
+including a function body in the trait declaration:
+
+```
+trait Greet:
+  fn greet(value: Self) -> string
+
+  fn shout(value: Self) -> string:
+    greet(value).to_upper() + "!"
+```
+
+Here `greet` is abstract (no body, must be implemented); `shout` has a default
+body that delegates to `greet`. An implementation may override the default by
+providing its own body in the `fulfill` block, or accept the default by
+omitting the method.
+
+#### 3.1.4 Super-trait requirements (`requires`)
+
+A trait may require that any type implementing it also implements other traits.
+Requirements are declared with the `requires` keyword (grammar §3.7):
+
+```
+trait Student:
+  requires Person
+  fn enrollment_id(value: Self) -> string
+```
+
+A type `T` satisfies `Student` only if `T` also satisfies `Person`. The
+compiler enforces this at the point `satisfies Student` is declared on the
+type: if `Person` is not in the type's `satisfies` set (directly or
+transitively), the declaration is rejected.
+
+The `requires` mechanism is how trait hierarchies are constructed (§3.6).
+
+#### 3.1.5 Trait-level default concrete type (§Topic 4)
+
+A trait may declare a default concrete type used by the defaulting mechanism
+(§ — Numeric System, defaulting rules). When a use site is constrained solely
+by a trait (or traits) with declared defaults and nothing else pins the type,
+the trait's default fires.
+
+The default must itself satisfy the trait; this is compiler-enforced.
+
+```
+@default(i32)
+trait Integer:
+  requires Numeric, Rem, IntDiv, BitAnd, BitOr, BitXor, BitNot, Shl, Shr
+```
+
+The exact syntactic form (annotation, dedicated keyword, body clause) is a
+syntax detail; the semantic decision is that defaults are declared on the
+trait, not on the compiler.
+
+A trait without a declared default produces a compile error at any use site
+that would require defaulting through it ("no default available for trait
+X"). This treats missing defaults as a deliberate choice by the trait author:
+some traits are too domain-specific to pick a default for.
+
+#### 3.1.6 Generic traits
+
+Traits may declare type parameters (grammar §3.7's `GenericParams`):
+
+```
+trait From[T]:
+  fn from(value: T) -> Self
+
+trait Add[Rhs = Self]:
+  type Output
+  fn add(left: Self, right: Rhs) -> Output
+```
+
+Type parameters on a trait are part of the trait's identity. `From[i32]` and
+`From[i64]` are distinct trait instances; a type may implement both. Default
+type parameters (`Rhs = Self`) follow the rules in § — Generic Parameters.
+
+### 3.2 Conformance Declarations (`satisfies`)
+
+A type declares conformance to a trait by including a `satisfies` clause in
+its body (grammar §3.5 for records, §3.6 for enums, §3.8 for nodes, §3.9 for
+connections):
+
+```
+type Person:
+  satisfies Display, Hash
+  first_name: string
+  last_name: string
+  age: i32
+```
+
+`satisfies` makes the conformance visible at the type's declaration site. A
+reader of the type sees its full set of conformances without leaving the
+type's file. The clause names the traits the type promises to implement; the
+actual implementations live in `fulfill` blocks (§3.4), possibly in different
+files (subject to the orphan rule from §3.7).
+
+`satisfies` and `fulfill` are paired and both required for traits with
+methods:
+
+- `satisfies Trait` in a type body without a corresponding `fulfill Trait for
+  Type` block reachable through the module graph is a compile error: the
+  promise is unfulfilled.
+- `fulfill Trait for Type` without a corresponding `satisfies Trait` in
+  `Type`'s body is a compile error: the implementation has no declared
+  contract.
+
+The exception is traits with no methods (pure-requirement traits, §3.4.6):
+these are automatically satisfied when all required traits are satisfied; no
+`satisfies` clause is needed on the type and no `fulfill` block is needed for
+the umbrella.
+
+### 3.3 Implementation Blocks (`fulfill`)
+
+A `fulfill` block delivers a trait's implementation for a specific type:
+
+```
+fulfill Display for Person:
+  fn display(value: Person) -> string:
+    "{value.first_name} {value.last_name}"
+```
+
+The block lives in some module (subject to the orphan rule from §3.7), not
+necessarily in the same module as either the trait or the type. Multiple
+`fulfill` blocks for the same (trait, type) pair are rejected by the coherence
+rule (§3.7): exactly one implementation exists per pair, reachable through
+the module graph.
+
+The syntax (grammar addition):
+
+```
+FulfillItem  := 'fulfill' TypeExpr 'for' TypeExpr WhereClause? FulfillBody
+FulfillBody  := NEWLINE INDENT FulfillBodyItem+ DEDENT
+FulfillBodyItem := Annotation* DocComment? (FnDecl | AssocTypeBinding)
+AssocTypeBinding := 'type' Ident '=' TypeExpr NEWLINE
+```
+
+`fulfill` is a reserved keyword.
+
+#### 3.3.1 Method signatures with `Self` substitution
+
+Inside a `fulfill Trait for Type` block, `Self` resolves to `Type` for all
+method signatures inherited from the trait. The implementer writes the
+receiver parameter type either as `Self` or as `Type` directly; both are
+equivalent:
+
+```
+fulfill Eq for Person:
+  fn eq(a: Person, b: Person) -> bool:
+    a.first_name is b.first_name and a.last_name is b.last_name
+
+// equivalent:
+fulfill Eq for Person:
+  fn eq(a: Self, b: Self) -> bool:
+    a.first_name is b.first_name and a.last_name is b.last_name
+```
+
+The parameter name is the implementer's choice; the parameter type must match
+the trait's signature after `Self` substitution. Other type-level references
+(`Output`, `Item`, etc.) follow the same substitution rule when they are
+associated types of the trait being implemented.
+
+#### 3.3.2 Associated type bindings
+
+A `fulfill` block binds the trait's associated types via the `type Name =
+Concrete` form:
+
+```
+fulfill Add for i32:
+  type Output = i32
+  fn add(left: i32, right: i32) -> i32:
+    // built-in integer addition
+```
+
+An associated type with a default value in the trait declaration may be
+omitted in the `fulfill` block; the default applies. An associated type
+without a default must be bound explicitly.
+
+#### 3.3.3 Default-body overriding
+
+When a trait declares a method with a default body (§3.1.3), the
+implementation may either inherit the default by omitting the method or
+override it by providing its own body:
+
+```
+trait Greet:
+  fn greet(value: Self) -> string
+  fn shout(value: Self) -> string:
+    greet(value).to_upper() + "!"
+
+fulfill Greet for Loud:
+  fn greet(value: Loud) -> string:
+    "HELLO"
+  // shout inherited from trait default
+
+fulfill Greet for Polite:
+  fn greet(value: Polite) -> string:
+    "hello"
+  fn shout(value: Polite) -> string:
+    "(politely): " + greet(value)
+  // shout overridden
+```
+
+Abstract methods (no default body) must be implemented; their absence in a
+`fulfill` block is a compile error.
+
+#### 3.3.4 Conditional implementations (where clauses)
+
+A `fulfill` block may be conditional on its type parameters satisfying
+additional traits. The condition is expressed via a where-clause attached to
+the `fulfill` declaration:
+
+```
+fulfill Display for Result[T, E] where T: Display, E: Display:
+  fn display(result: Result[T, E]) -> string:
+    match result:
+      Ok(value): "Ok({value.display()})"
+      Err(error): "Err({error.display()})"
+```
+
+The implementation is available only when the type parameters satisfy the
+required traits. A `Result[i32, string]` implements `Display` because both
+`i32` and `string` do; a `Result[ClosureType, string]` does not, because
+closure types typically do not implement `Display`. The compiler verifies
+the conditions at every call site that requires the implementation.
+
+#### 3.3.5 Pure-requirement traits and automatic satisfaction
+
+A trait that declares no methods and no associated types — only `requires`
+clauses — is a pure-requirement trait. Examples are the umbrella traits from
+§3.6 (`Numeric`, `Integer`, `Float`, `Signed`, `Unsigned`).
+
+Pure-requirement traits are automatically satisfied when all required traits
+are satisfied. No `fulfill` block is needed for the umbrella; no `satisfies`
+clause is needed on the type for the umbrella (though it may be included for
+documentation). The trait is *structurally* satisfied via the satisfaction of
+its requirements, but it remains *nominally* present in the trait system:
+generic constraints `T: Numeric` are checked against the trait's name, and
+the compiler verifies that `T`'s satisfied trait set includes everything
+`Numeric` requires.
+
+This carves out the only point of structural satisfaction in the language's
+otherwise-nominal trait system, and it is bounded: the structural rule
+applies only to traits with no methods. Any trait with method signatures
+requires explicit `satisfies` + `fulfill` per §3.2.
+
+#### 3.3.6 Visibility of `fulfill` blocks
+
+`fulfill` blocks have no visibility specifier of their own. An implementation
+is visible wherever both the trait and the type are jointly visible. If a
+caller can name `Display` (per its visibility) and can name `Person` (per
+its visibility), the call resolves to the `fulfill Display for Person` block;
+the implementation's visibility is the intersection of the trait's and type's
+visibility scopes.
+
+This avoids the case where a trait and type are both visible but the
+implementation is not, which would produce a confusing "method not found"
+error at a site where the method clearly should exist.
+
+### 3.4 Trait Method Dispatch
+
+Per §Topic 19/20, the language uses uniform function call syntax: a function
+whose first parameter is of type `T` is callable in three equivalent forms.
+Trait methods participate in this uniformly. Given a `fulfill Display for
+Person` block containing `fn display(value: Person) -> string`, any of the
+following are valid calls (and equivalent):
+
+```
+person.display()              // method-call form
+person >> display             // pipe-forward form
+display(person)               // conventional form, requires `display` in scope
+Display::display(person)      // trait-path form, no import needed
+```
+
+The trait-path form (`Trait::method`) is always available regardless of
+imports, and disambiguates when multiple traits in scope declare methods with
+the same name. The other forms rely on name resolution per § — Visibility
+and Modules.
+
+Trait method calls in monomorphized code resolve to direct function calls per
+§2.3.5; coherence (§3.7) guarantees there is exactly one implementation to
+dispatch to.
+
+### 3.5 Trait Hierarchies
+
+Traits compose into hierarchies via `requires` clauses. The recommended
+pattern, used pervasively in the language's standard library, is *fine-grained
+operator/capability traits combined into umbrella traits*.
+
+#### 3.5.1 The fine-grained-plus-umbrella pattern
+
+Fine-grained traits each declare exactly one method or one closely related
+group of methods, defining a single capability:
+
+```
+trait Add:
+  type Output
+  fn add(left: Self, right: Self) -> Output
+
+trait Sub:
+  type Output
+  fn sub(left: Self, right: Self) -> Output
+
+trait Mul:
+  type Output
+  fn mul(left: Self, right: Self) -> Output
+
+trait Neg:
+  fn neg(value: Self) -> Self
+```
+
+Umbrella traits combine fine-grained traits via `requires` clauses,
+introducing no new methods:
+
+```
+@default(i32)
+trait Numeric:
+  requires Add, Sub, Mul, Neg, Zero, One
+
+@default(i32)
+trait Integer:
+  requires Numeric, Rem, IntDiv, BitAnd, BitOr, BitXor, BitNot, Shl, Shr
+
+@default(f64)
+trait Float:
+  requires Numeric, Div, ...
+
+@default(i32)
+trait Signed:
+  requires Integer, Neg
+
+@default(u32)
+trait Unsigned:
+  requires Integer  // not Neg
+```
+
+Per §3.3.5, umbrella traits are automatically satisfied when their
+requirements are. Users implement the fine-grained traits for their types;
+umbrella satisfaction follows.
+
+This pattern serves three purposes:
+
+- *Precision in inferred constraints (§2.2.4):* the compiler infers exactly
+  which fine-grained traits a function body requires, not a coarser umbrella
+  the function might not actually need.
+- *Convenience in explicit constraints:* users writing explicit bounds can use
+  umbrella names (`T: Numeric`) without spelling out every operator, while
+  still being able to write fine-grained bounds (`T: Add + Mul`) when
+  precision matters.
+- *A place for trait-level defaults:* umbrellas are the natural carrier of
+  defaulting policy (§3.1.5), because the default is a property of the
+  domain-level abstraction, not of any individual operator.
+
+#### 3.5.2 Default trait selection in defaulting
+
+When a use site is constrained by multiple traits each with declared defaults,
+the most-specific trait in the hierarchy wins. "Most specific" is defined by
+the `requires` relation: trait `A` is more specific than trait `B` if `A`
+transitively requires `B` (i.e., `A` is "below" `B` in the hierarchy).
+
+For example, a use site constrained by `Float` defaults to `f64` (the
+`Float` trait's declared default), not `i32` (the `Numeric` trait's default),
+because `Float` requires `Numeric` and is therefore more specific.
+
+When multiple incomparable traits are in scope (neither requires the other)
+and each has a declared default, the defaulting is ambiguous and the compiler
+reports an error requiring an explicit annotation at the use site.
+
+### 3.6 Coherence and Orphan Rules
+
+Coherence is the property that for every (trait, type) pair, exactly one
+implementation exists, reachable through the module graph. The language
+enforces coherence structurally via the orphan rule.
+
+#### 3.6.1 The strict orphan rule
+
+A `fulfill Trait for Type` block is permitted in module M if and only if:
+
+- `Trait` is defined in M, OR
+- `Type` is defined in M.
+
+A `fulfill` block where both `Trait` and `Type` are foreign to M is rejected
+at compile time. This guarantees that no two independent modules can write
+conflicting implementations for the same (trait, type) pair: at least one of
+them would violate the orphan rule.
+
+There are no exceptions for "private" or "non-exported" orphan implementations.
+The privacy boundary cannot be enforced cleanly under separate compilation,
+and the looser rules used in some languages produce confusing visibility
+interactions. The strict rule is the only model that composes cleanly with
+the language's separate compilation model (§2.3.2) and uniform call dispatch
+(§3.4).
+
+#### 3.6.2 Generic-parameter coverage
+
+For impls involving type parameters, the orphan rule applies to the head of
+the type expression: at least one *concrete local type* must appear in the
+trait-or-type part of the `fulfill` declaration.
+
+```
+// Permitted in module M defining LocalType:
+fulfill ForeignTrait[LocalType] for ForeignType: ...
+
+// Rejected — no concrete local type:
+fulfill ForeignTrait[T] for ForeignType: ...
+```
+
+The covering rule prevents two independent modules from each writing
+`fulfill ForeignTrait[T] for ForeignType` with different unspecified `T`,
+which would create conflicts at use sites.
+
+#### 3.6.3 Language-privileged implementations
+
+Certain implementations are provided by the language itself rather than by
+user modules, and are not subject to the orphan rule:
+
+- *Auto-implementations of built-in numeric traits for built-in numeric
+  types.* The fine-grained operator traits (`Add`, `Sub`, `Mul`, etc.) are
+  pre-implemented for the built-in numeric types. User code cannot redefine
+  these.
+- *Auto-derivations from `From` to `Into` and `TryFrom` to `TryInto`* (§ —
+  Conversion System). When a user writes `fulfill From[T] for U`, the
+  language automatically provides `Into[U] for T`. The derivation is built
+  in, not user-writable.
+- *Identity conversion `From[T] for T` for every type.* Universally provided.
+
+These privileged implementations exist outside the user-writable
+`fulfill`-block space and cannot conflict with user code.
+
+#### 3.6.4 Newtype pattern as orphan-rule workaround
+
+When a user wants to implement a foreign trait for a foreign type, the
+canonical workaround is the newtype pattern: wrap the foreign type in a local
+newtype, then implement the foreign trait for the local newtype:
+
+```
+type MyVec:
+  satisfies SomeForeignTrait
+  inner: Vec[i32]
+
+fulfill SomeForeignTrait for MyVec:
+  ...
+```
+
+`MyVec` is local to the user's module; the orphan rule is satisfied.
+Newtype semantics are specified in § — Newtypes.
+
+### 3.7 Automatic Derivation (`@derive`)
+
+For a fixed set of common traits, the language provides automatic structural
+derivation via the `@derive` annotation (grammar §3.3). Applying `@derive` to
+a type generates the appropriate `fulfill` blocks structurally, saving the
+user from writing mechanical implementations.
+
+#### 3.7.1 Derivable traits
+
+The traits eligible for automatic derivation are:
+
+- `Eq` — structural equality.
+- `Ord` — structural total ordering.
+- `Hash` — structural hashing.
+- `Clone` — deep structural copy.
+- `Display` — default human-readable formatting.
+- `Debug` — default debug formatting (structural, compiler-defined).
+
+The set is fixed in the language; users cannot register new traits for
+`@derive`. Other traits require manual `fulfill` blocks. (A future extension
+may add user-definable derivation; not in v1.)
+
+#### 3.7.2 Structural derivation rules
+
+For a record type, derivation operates field-by-field:
+
+- `@derive(Eq)` generates an implementation that compares each field pairwise
+  using that field type's own `Eq` implementation.
+- `@derive(Ord)` generates lexicographic ordering by field declaration order.
+- `@derive(Hash)` generates a hash combining each field's hash.
+- `@derive(Clone)` generates a structural copy of each field.
+- `@derive(Display)` generates a default record-formatted string (exact format
+  is compiler-defined).
+- `@derive(Debug)` generates a structural debug format.
+
+For an enum type, derivation operates variant-by-variant:
+
+- `@derive(Eq)` generates an implementation that compares variant tags and,
+  for matching tags, compares payload fields pairwise.
+- `@derive(Ord)` orders by variant declaration order, breaking ties by
+  payload comparison.
+- The other derivations follow the same structural pattern.
+
+For a newtype (§ — Newtypes), `@derive` may delegate to the underlying type
+or operate structurally over fields, depending on the newtype's shape; see
+the newtype section for details.
+
+Derivation requires every field's (or payload's) type to itself satisfy the
+trait being derived. `@derive(Eq)` on `type Foo: x: SomeType` requires
+`SomeType: Eq`. If any component type does not satisfy the trait, derivation
+fails with a compile error identifying the offending component.
+
+#### 3.7.3 Overriding derived implementations
+
+A type may both `@derive` a trait and provide a manual `fulfill` block for
+the same trait. The manual `fulfill` block takes precedence; the derived
+implementation is suppressed for that (trait, type) pair.
+
+This allows users to start with derived defaults and override specific
+implementations as needed without removing the `@derive` annotation.
+
+---
+
+*End of §3. Subsequent sections (§4 Numeric System, §5 Type Intersection and
+dyn, §6 Records and Enums, §7 Conversion System, §8 Error Handling, §9
+Strings and Tuples, §10 Visibility and Modules) follow.*
