@@ -2821,16 +2821,18 @@ Specifically:
 - **Float types** auto-implement: `Add`, `Sub`, `Mul`, `Div`, `Rem`,
   `Neg`; the checked variants `CheckedAdd`, `CheckedSub`, `CheckedMul`,
   `CheckedDiv`, `CheckedNeg` (returning `None` on NaN or Infinity
-  results per §4.6.6); the cast trait `WrappingAs[T]` for *integer*
-  destination types `T` only (per §4.7.3 — float-to-integer with
-  implementation-defined modular truncation; `WrappingAs[Float]` is not
-  defined for floats because wrap has no sensible float-to-float
-  meaning); the cast traits `SaturatingAs[T]` and `CheckedAs[T]` for
-  both integer destinations (clamping NaN to 0, etc., per §4.7.3) and
-  narrower-float destinations (saturation clamps to the destination's
-  range bounds; checked returns `None` on overflow). For wider-float
-  destinations the cast is lossless and all three variants reduce to
-  the unsuffixed `as` per §4.7.2. Plus: float-only operations (`Sqrt`,
+  results per §4.6.6); the cast trait `WrappingAs[T]` for integer
+  destination types `T` (per §4.7.3 — float-to-integer with
+  implementation-defined modular truncation) and for wider-float
+  destinations (trivially equivalent to `as` per §4.7.2 since the
+  conversion is lossless); the cast traits `SaturatingAs[T]` and
+  `CheckedAs[T]` for integer destinations (clamping NaN to 0, etc.,
+  per §4.7.3), narrower-float destinations (saturation clamps to the
+  destination's range bounds; checked returns `None` on overflow), and
+  wider-float destinations (trivially equivalent to `as` per §4.7.2).
+  `WrappingAs[T]` is *not* implemented for narrower-float destinations
+  because modular wrap has no sensible meaning when the destination has
+  reduced range and precision. Plus: float-only operations (`Sqrt`,
   trig, log, exp, rounding); inspection methods; `Zero`, `One`, `Abs`,
   `Min`, `Max`, `Ord`, `Eq`, `FloatPow`. Floats do not implement
   `WrappingAdd` / `SaturatingAdd` etc. — IEEE 754's infinity-and-NaN
