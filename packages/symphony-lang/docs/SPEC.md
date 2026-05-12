@@ -760,6 +760,15 @@ the trait level. This separation keeps signature stability (contracts don't
 shift) decoupled from implementation flexibility (types choose how to fulfill
 the contract).
 
+Default bodies are themselves part of the trait that declares them. A child
+trait via `requires` inherits the parent's signatures *and* their default
+bodies; it cannot redeclare either. Overriding the default body happens only
+at the fulfill site, not by re-providing a default in a child trait. This
+preserves the principle that a method — both its signature and its default
+body — has exactly one origin: the trait that originally declared it. Types
+choose how to fulfill it; the trait hierarchy does not provide alternative
+defaults at intermediate levels.
+
 The `requires` mechanism is how trait hierarchies are constructed (§3.6).
 
 #### 3.1.5 Trait-level default concrete type
