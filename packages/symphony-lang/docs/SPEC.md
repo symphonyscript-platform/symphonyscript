@@ -7796,6 +7796,20 @@ derived becomes dirty and is recomputed at the next publish.
 recurrent name: Type = initial | next: expression | on: trigger1, trigger2, ...
 ```
 
+Equivalent indented form for readability when `next:` is large:
+
+```
+recurrent name: Type = initial
+  | next: expression
+  | on: trigger1, trigger2, ...
+```
+
+Both forms are accepted and produce the same declaration. The
+indented form continues onto subsequent lines, each beginning with
+`|` aligned to the same indentation level. Mixing the two forms in
+the same declaration is permitted (e.g., `next:` inline, `on:` on
+the next line).
+
 A `recurrent` declares a *per-instance* writable cell with memory
 across triggering events. It is the mechanism for values that
 depend on their own past — counters, accumulators, smoothing
@@ -7838,16 +7852,20 @@ of the evaluation pass.
 
 When multiple recurrent cells' triggers fire in the same
 evaluation pass (a single `kernel.publish()` cycle), they advance
-in **lockstep**: all `next:` expressions read the
-*previous-committed* values of all recurrent cells (including each
-other), compute new values, and commit together at the end of the
-pass. No recurrent cell sees another recurrent cell's
-just-advanced value within the same pass.
+in **lockstep**: every triggered recurrent's `next:` expression
+reads the *previous-committed* values of all recurrent cells in
+the system (including other triggered ones), computes a new value,
+and commits together at the end of the pass. No recurrent cell
+sees another recurrent cell's just-advanced value within the same
+pass.
+
+Recurrents whose triggers did not fire in this pass do not
+re-evaluate; they retain their existing values.
 
 This is the standard synchronous-dataflow semantics (Lustre,
 Esterel, Verilog `<=` non-blocking assignment). The new value of
-any recurrent cell is a pure function of the previous-committed
-values and the inputs received during this pass.
+any triggered recurrent is a pure function of the previous-
+committed values and the inputs received during this pass.
 
 ##### 13.2.4.2 Recurrent vs attr
 
@@ -7938,6 +7956,11 @@ Bootstrap order:
   cannot reference cells of other instances. Cross-instance
   references are resolved only at placement time, not at type
   declaration.
+
+Traps during initial evaluation (signal initializers, attr defaults,
+recurrent initial values, or initial derived evaluation) follow
+§13.11.1 — the process aborts. There is no recovery path for traps
+encountered during startup.
 
 #### 13.2.6 No mutation of cells from Symphony source
 
@@ -8317,6 +8340,8 @@ currently being declared or constructed.
 declaration. Specifically, in:
 
 - Attr default expressions: `attr x: i32 = self.other_attr + 1`.
+- Recurrent initial-value expressions: `recurrent x: i32 = self.other_attr | ...`.
+- Recurrent `next:` expressions: `... | next: self.x + 1 | ...`.
 - Derived expressions: `derived y: bool = self.x > 0`.
 - Iteration over parts in reactive expressions inside a node body:
   `for p in self.parts: ...`. Inside free functions that receive
@@ -8417,10 +8442,16 @@ The named cell must be declared on the placed type as either an
 error. The value's type must match the cell's declared type
 (subject to the standard widening rules).
 
-Attrs may also be set via inline pipes (§13.7.7) or flags
-(§13.7.8). All three mechanisms target the same underlying cells;
-setting the same cell via two mechanisms is a compile error
-(duplicate-set).
+For attrs only, the same value may also be set via inline pipes
+(§13.7.7) or flags (§13.7.8). The three mechanisms (body form,
+pipes, flags) all target the same underlying attr cells; setting
+the same attr via two mechanisms is a compile error (duplicate-set).
+
+Pipes and flags do *not* target recurrent cells. Recurrent initial
+values can be overridden only via the body form. Pipes and flags
+exist as inline placement shorthand for the attr-controlled API
+surface of a node or connection; recurrents are self-managed cells
+and do not participate in that surface.
 
 For recurrent cells, only the initial value is overridable at
 placement. The `next:` and `on:` clauses are structural type
@@ -8541,12 +8572,14 @@ an inline pipe and the placement body, is a compile error
 (duplicate-set, parallel to the rule for record-field
 duplicate-set).
 
-Pipes target attrs declared on the placed type (directly or
-inherited via satisfied traits). The expression in `| name: value`
-must match the attr's type subject to standard widening rules.
-The boolean-true (`| name`) and boolean-false (`| !name`) forms
-require the attr to be of type `bool`; non-boolean attrs used with
-the bare form are a compile error.
+Pipes target *attrs* declared on the placed type (directly or
+inherited via satisfied traits). Pipes do not target recurrent,
+derived, or signal declarations — targeting a non-attr identifier
+is a compile error. The expression in `| name: value` must match
+the attr's type subject to standard widening rules. The boolean-
+true (`| name`) and boolean-false (`| !name`) forms require the
+attr to be of type `bool`; non-boolean attrs used with the bare
+form are a compile error.
 
 #### 13.7.8 Flags
 
@@ -8679,24 +8712,45 @@ consumers see the new state.
 
 A write call (`kernel.write_signal`, `kernel.write_attr`, or any
 write inside `kernel.transaction`) records the new value in the
-reactive state buffer's back-buffer cell and marks all directly-
-dependent cells dirty per value-change semantics (§13.2.4.4).
-**No derived recomputation or recurrent advancement happens at
-write time.** The kernel maintains a dirty-set bitvector for the
-reactive graph; writes set bits.
+reactive state buffer's back-buffer cell. **No derived recomputation
+or recurrent advancement happens at write time.** Writes accumulate
+in the back buffer until the next `kernel.publish()`.
+
+Dirty bits are determined at publish time, not per write
+(§13.8.2 step 1). This makes value-change semantics correct under
+net-revert patterns: a sequence of writes that ends with the cell's
+value equal to the previous-published value produces no dirty bit
+and fires no triggers — regardless of intermediate values during
+the accumulation.
+
+```
+// Outside or inside a transaction, identical semantics:
+kernel.write_signal(x_id, 1);   // back-buffer cell now 1
+kernel.write_signal(x_id, 0);   // back-buffer cell back to 0
+kernel.publish();                // x's value equals previous publish — no dirty bit
+```
 
 This decouples writes from evaluation. Multiple writes between
-publishes batch automatically: each write marks dirty cells;
-recomputation happens at the next publish for the union.
+publishes batch automatically: only the net change from the
+previous publish matters.
 
 #### 13.8.2 Publish
 
 `kernel.publish()` performs the full evaluation-and-visibility
 operation on the producer thread:
 
-1. **Snapshot the dirty set.** No new dirty bits are added during
-   the rest of the publish cycle. The set of recurrent cells
-   whose triggers fired since the previous publish is also frozen.
+1. **Compute the dirty set.** For each writable cell (signal,
+   attr), compare its back-buffer value to its previously-published
+   value. Cells whose values differ are *dirty*; cells whose values
+   are identical (including those that were written intermediate
+   values but reverted before publish) are *not* dirty. Triggers
+   listed in `on:` clauses fire when their referenced cell is
+   dirty — value-change semantics (§13.2.4.4) operationalized as
+   "current-publish value ≠ previous-publish value." Dirty
+   propagation extends to all derived cells transitively dependent
+   on dirty roots, and to all recurrents whose triggers fired this
+   publish. No new dirty bits are added during the rest of the
+   publish cycle.
 2. **Compute evaluation order.** Topologically sort the per-publish
    DAG (§13.9.3). Nodes in the DAG are: dirty derived expressions
    plus recurrent `next:` expressions whose triggers fired this
@@ -8880,9 +8934,18 @@ the `recurrent` declaration.
 #### 13.9.5 Topology cycles
 
 Distinct from reactive expression cycles, a *topology cycle* is a
-cycle in the graph of node *instances* connected via connection
-placements. Example: node instance A has a connection to B; B has
-a connection back to A.
+cycle in the construction-time *topology graph*.
+
+> **Topology graph.** Nodes correspond to placed instances; for
+> each placed connection, a directed edge runs from the connection's
+> `from`-endpoint instance to its `to`-endpoint instance, labeled
+> with the connection type.
+
+A topology cycle is a sequence of distinct directed edges
+returning to its starting node.
+
+Example: instance A has a connection to B; B has a connection back
+to A. The edges A→B and B→A form a topology cycle.
 
 Topology cycles are governed by the `Circularity` trait (§13.5.5):
 
@@ -8897,8 +8960,8 @@ connections are compile errors.
 
 ```
 error: topology cycle with no Circularity-satisfying connection
-  instance `clip_a` connects to `clip_b` via `Parallel`
-  instance `clip_b` connects to `clip_a` via `Parallel`
+  instance `a` connects to `b` via `MyConn`
+  instance `b` connects to `a` via `MyConn`
   hint: at least one connection on this cycle must use a
         connection type that satisfies `Circularity`
 ```
