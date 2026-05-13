@@ -950,7 +950,7 @@ node delay:
   satisfies Action
   const type: string = "@action/delay"
   attr enabled: bool = false              -- overrides the trait's default
-  default attr time: Duration
+  default attr time: duration
 ```
 
 Restrictions:
@@ -1873,6 +1873,87 @@ implementation is suppressed for that (trait, type) pair.
 This allows users to start with derived defaults and override specific
 implementations as needed without removing the `@derive` annotation.
 
+### 3.9 Custom Literal Suffixes (`@literal_suffix`)
+
+The `@literal_suffix` annotation registers a typed-literal suffix for a
+type. After registration, the lexer recognizes `<NumericLiteral><suffix>`
+as a single token, and the type checker resolves it to a call of the
+registered constructor function.
+
+```
+@literal_suffix("hz",    from_hz)
+@literal_suffix("khz",   from_khz)
+@literal_suffix("cents", from_cents)
+type Frequency = i64
+
+fn from_hz(n: i64) -> Frequency:
+  n
+fn from_khz(n: f64) -> Frequency:
+  (n * 1000.0) as i64
+fn from_cents(n: i64) -> Frequency:
+  ...
+
+let middle_c = 440hz       -- resolved to from_hz(440)
+let voice    = 1.5khz      -- resolved to from_khz(1.5)
+```
+
+#### 3.9.1 Annotation grammar
+
+```
+@literal_suffix("<suffix>", <constructor>)
+```
+
+- `"<suffix>"` is a string literal naming the suffix. Suffixes consist of
+  one or more identifier-continue characters (letters, digits, underscores,
+  Unicode identifier characters). Examples: `ms`, `khz`, `μs`, `years_2k`.
+- `<constructor>` is the unqualified name of a function (or trait method)
+  in scope, which must take exactly one numeric parameter (`Numeric`-bound)
+  and return the annotated type.
+
+Multiple `@literal_suffix` annotations may decorate one type, registering
+distinct suffixes. Each (suffix, target-type) pair must be unique within
+its scope; collisions are compile errors.
+
+#### 3.9.2 Constructor signature
+
+The constructor must:
+
+- Take exactly one parameter of a numeric type (integer or float). The
+  parameter type determines which numeric literal forms are accepted at
+  the suffix.
+- Return the annotated type.
+- Be pure (no side effects, no reactive cell reads).
+
+Distinct constructors may share a target type but use different parameter
+types — e.g., `from_hz(i64) -> Frequency` and `from_hz_f(f64) -> Frequency`
+registered with different suffixes (`hz` and `hzf` respectively, or via
+literal-form distinction).
+
+#### 3.9.3 Resolution
+
+When the lexer encounters `<NumberLiteral><suffix>`:
+
+1. The lexer emits a single suffixed-literal token.
+2. The type checker looks up `(suffix)` in the registered annotations
+   visible at the site. A suffix must resolve to exactly one constructor
+   in scope; ambiguity or no-match is a compile error.
+3. The literal value is passed to the constructor; the call's return value
+   is the literal's value.
+
+The resolution happens at compile time; no runtime dispatch is involved.
+
+#### 3.9.4 Built-in suffixes
+
+The `duration` type (§9.4) has built-in suffixes:
+`ns`, `us`, `μs`, `ms`, `s`, `min`, `h`, `d`. These are reserved and may
+not be re-registered for another type in the same scope.
+
+#### 3.9.5 Scope and visibility
+
+`@literal_suffix` registrations follow normal name-visibility rules:
+registrations made in a module are visible within that module and to
+importers per §10. Built-in suffixes (for `duration`) are globally visible.
+
 ---
 
 ## 4. Numeric System
@@ -2040,7 +2121,38 @@ Float literals may carry suffixes:
 Without a suffix, a float literal produces a value with the *float
 placeholder*. Resolution proceeds per §2.1; the default per §3.1.5 is `f64`.
 
-#### 4.3.3 Boolean and character literals
+#### 4.3.3 Suffixed-literal forms for non-numeric types
+
+In addition to the underscore-separated numeric type suffix
+(`5_i32`, `3.14_f32`), a numeric literal may carry an
+*identifier suffix* (no underscore separator) that produces a value
+of a non-numeric type. The lexer recognizes
+`<NumberLiteral><identifier>` as a single suffixed-literal token; the
+type checker resolves the suffix against the language's built-in
+suffixes and any user-registered suffixes (§3.9).
+
+Built-in suffixed-literal forms in the language:
+
+- `duration` suffixes (§9.4.1.1): `ns`, `us`, `μs`, `ms`, `s`, `min`,
+  `h`, `d`. Both integer and float literals accept these.
+
+Examples:
+
+```
+500ns         -- duration: 500 nanoseconds
+100ms         -- duration: 100 milliseconds
+1.5s          -- duration: 1.5 seconds (float)
+2h            -- duration: 2 hours
+```
+
+User-defined suffixes via `@literal_suffix` (§3.9) follow the same
+lexical rule and resolve via the registered constructor function.
+
+The lexer distinguishes the underscore-separated type suffix from the
+identifier suffix by the presence of the underscore: `5_i32` is the
+former (forced numeric type); `5ms` is the latter (suffixed literal).
+
+#### 4.3.4 Boolean and character literals
 
 `true` and `false` are the two values of `bool` (§9.1.1). They
 are not numeric; they do not participate in the numeric trait hierarchy.
@@ -4708,11 +4820,15 @@ The complete set of primitive non-numeric types in the language is:
 - `bool` — the truth-value type.
 - `char` — a Unicode scalar value (see §9.1.2).
 - `string` — UTF-8-encoded sequences of `char` values (see §9.1.3 onward).
+- `duration` — a span of monotonic time (see §9.4.1).
+- `instant` — a point in monotonic time (see §9.4.2).
 
 No other non-numeric primitives exist. Byte sequences are `u8[N]` arrays
 (§9.3). Other text-related types (UTF-16 strings, ASCII-only strings,
 byte strings with no encoding) are stdlib concerns if needed; the language
-commits to one string type, and that type is UTF-8.
+commits to one string type, and that type is UTF-8. Wall-clock dates,
+calendar arithmetic, and timezones are stdlib concerns; the language
+commits to monotonic time only.
 
 #### 9.1.2 The `char` type
 
@@ -5164,6 +5280,158 @@ library concern, not a language-level type. Its name and syntax (`Vec[T]`,
 `Vector[T]`, or whatever stdlib chooses) is outside this specification.
 Only fixed-size arrays receive dedicated language syntax. Stdlib's
 dynamic collections are ordinary generic types per §2.
+
+### 9.4 Time Types: `duration` and `instant`
+
+The language provides two built-in time types for representing temporal
+quantities:
+
+- `duration` — a *span* of time (an interval between two moments).
+- `instant` — a *point* in monotonic time (a specific moment relative to
+  an implementation-defined epoch).
+
+Both are first-class primitive types with distinct semantics, dedicated
+operator rules, and (for `duration`) literal syntax. They are lowercase,
+matching the convention of other primitives (`bool`, `string`, `i32`,
+etc.).
+
+#### 9.4.1 `duration`
+
+A `duration` represents an interval of time. Internally it is i64
+nanoseconds; the representation gives a range of approximately ±292
+years with single-nanosecond precision. Negative durations are
+permitted.
+
+##### 9.4.1.1 Literal syntax
+
+Numeric literals may carry one of the following built-in suffixes to
+produce a `duration` value:
+
+| Suffix | Unit         | Example       |
+|--------|--------------|---------------|
+| `ns`   | nanoseconds  | `500ns`       |
+| `us`   | microseconds | `100us`       |
+| `μs`   | microseconds | `100μs`       |
+| `ms`   | milliseconds | `250ms`       |
+| `s`    | seconds      | `1s`, `1.5s`  |
+| `min`  | minutes      | `5min`        |
+| `h`    | hours        | `2h`          |
+| `d`    | days         | `1d`          |
+
+Both integer and float literals may carry these suffixes. Float literals
+convert to nanoseconds with rounding-to-nearest at compile time
+(`1.5s` → `1_500_000_000ns`). Integer literals scale exactly.
+
+These suffixes are reserved by the language; `@literal_suffix` (§3.9)
+may not re-register them in any scope.
+
+##### 9.4.1.2 Operators
+
+The following operators are defined for `duration`:
+
+| Operation                  | Result          | Notes                            |
+|----------------------------|-----------------|----------------------------------|
+| `duration + duration`      | `duration`      | sum of spans                     |
+| `duration - duration`      | `duration`      | difference (may be negative)     |
+| `duration * Numeric`       | `duration`      | scale; `Numeric * duration` ok   |
+| `duration / Numeric`       | `duration`      | scale down                       |
+| `duration / duration`      | `Numeric`       | ratio; result follows defaulting |
+| `duration % duration`      | `duration`      | modulo (remainder)               |
+| `-duration`                | `duration`      | negation                         |
+| `duration <,<=,==,!=,>=,>` | `bool`          | comparison                       |
+
+The `Numeric` operand may be any integer or float type per §4.1. Integer
+scaling is exact; float scaling rounds to nearest at the nanosecond level
+before storing the result.
+
+Operations **not defined** for `duration`:
+
+- `duration + Numeric` / `Numeric + duration` — no implied unit.
+- `duration - Numeric` / `Numeric - duration` — no implied unit.
+- `duration * duration` — no semantic meaning.
+
+Attempting any forbidden operation is a compile error.
+
+##### 9.4.1.3 Overflow
+
+Default arithmetic operators trap on overflow per §4.6.1: a `duration`
+result that does not fit i64 nanoseconds aborts the process. Checked
+variants (`+?`, `-?`, `*?`, `/?`, `%?`) per §4.6.4 return
+`Option[duration]` and are recommended where saturation or failure
+recovery is needed.
+
+##### 9.4.1.4 Construction and conversion (stdlib)
+
+Construction from raw integer/float values and conversion to integer/float
+counts are stdlib concerns, not language built-ins. Stdlib is expected to
+provide:
+
+- `duration::from_nanos(n)`, `from_micros(n)`, `from_millis(n)`,
+  `from_secs(n)`, `from_minutes(n)`, `from_hours(n)`, `from_days(n)`.
+- `d.as_nanos() -> i64` — lossless (nanoseconds is the internal repr).
+- `d.as_micros() -> i64`, `d.as_millis() -> i64`, `d.as_secs() -> i64` —
+  truncate sub-unit components.
+- `d.as_secs_f64() -> f64`, `d.as_millis_f64() -> f64`, etc. — float
+  variants for ratio-style queries (precision-bound by f64).
+
+#### 9.4.2 `instant`
+
+An `instant` represents a *monotonic* point in time — a value from a
+clock that never goes backward, measured against an implementation-
+defined epoch (typically program start or system boot).
+
+Instants are opaque: there is no literal syntax for them, no direct
+construction from raw nanoseconds, and no operations that expose the
+underlying value as an absolute count. Their purpose is type-level
+distinction from `duration` and from arbitrary integers.
+
+Internally, an `instant` is represented as i64 nanoseconds since the
+implementation-defined epoch, paralleling `duration`'s representation,
+but the value is exposed only via comparisons and difference operations.
+
+`instant` represents monotonic time. Wall-clock time (calendar dates,
+timezones, DST) is a separate concern, deferred to stdlib. The language
+core defines only monotonic instants.
+
+##### 9.4.2.1 Operators
+
+The following operators are defined for `instant`:
+
+| Operation                | Result      | Notes                            |
+|--------------------------|-------------|----------------------------------|
+| `instant - instant`      | `duration`  | elapsed time between two points  |
+| `instant + duration`     | `instant`   | future point                     |
+| `instant - duration`     | `instant`   | past point                       |
+| `instant <,<=,==,!=,>=,>`| `bool`      | comparison                       |
+
+Operations **not defined** for `instant`:
+
+- `instant + instant` — no semantic meaning.
+- `instant * Numeric` / `instant / Numeric` — scaling a point in time
+  has no meaning.
+- Any direct arithmetic between `instant` and `Numeric` — no implied
+  unit.
+
+##### 9.4.2.2 Construction (stdlib)
+
+Constructing an `instant` requires the host's clock; the language
+core does not provide direct construction. Stdlib is expected to
+provide:
+
+- `instant::now() -> instant` — returns the current monotonic time.
+- No conversion to absolute values (would imply wall-clock semantics
+  the language does not commit to).
+
+Comparison and difference are the canonical operations on `instant`;
+no other introspection is provided.
+
+#### 9.4.3 Reactive cell compatibility
+
+Both `duration` and `instant` are i64-sized values and satisfy the
+single-cell reactive cell type constraint (§13.10.4). They may appear as
+the type of `signal`, `attr`, `recurrent`, and `derived` declarations,
+and in `Result[duration, E]` / `Option[duration]` cells (subject to the
+tag+payload bit budget in §13.10.4).
 
 ---
 
@@ -8109,7 +8377,7 @@ node log:
 node delay:
   satisfies Action
   const type: string = "@action/delay"
-  default attr time: Duration
+  default attr time: duration
 ```
 
 ##### 13.2.5.1 Properties
