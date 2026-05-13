@@ -7669,6 +7669,74 @@ non-reactive data only. Reactive cell types are restricted
 (§13.10.4) to types that fit single cells in the reactive state
 buffer (§14.3).
 
+#### 13.1.1 A small example
+
+A complete reactive program that counts ticks of a host-driven
+signal and exposes the count through a connection to a Display.
+The signal named `tick` in this example is *user-defined* — it is
+not a language built-in. Symphony has no built-in clock or tick
+primitive; hosts that need a clock declare their own signal and
+write to it at whatever cadence is meaningful for their domain.
+
+```
+-- Module-level signal; user-defined, not a language built-in.
+-- The host writes to this signal at its own cadence.
+signal tick: i64 = 0
+
+-- Counter advances its count whenever the host changes `tick`.
+node Counter:
+  recurrent count: i32 = 0
+    | next: self.count + 1
+    | on: tick
+  out: ShowsCount [=1]
+
+-- Display reads the count through its incoming connection.
+node Display:
+  attr label: string = "Unnamed"
+  in: ShowsCount [=1]
+  derived shown: string = "{self.label}: {self.in.ShowsCount[0].count}"
+
+-- Connection from Counter to Display carries a derived count.
+connection ShowsCount:
+  from: Counter
+  to: Display
+  derived count: i32 = self.from.count
+
+-- Placements (instances).
+Counter c1:
+  ShowsCount /d1                -- outgoing connection to d1
+
+Display d1:
+  label: "Main"
+```
+
+The host drives the program via:
+
+```
+loop {
+  kernel.write_signal(tick_id, next_tick_value);   // accumulate dirty bits
+  kernel.publish();                                 // evaluate + atomic swap
+  // consumers observe d1.shown via kernel.swap()
+}
+```
+
+Each `publish()`:
+
+1. Detects that `tick` differs from its previous-published value
+   (dirty).
+2. Re-evaluates `Counter.count`'s `next:` expression (its trigger
+   `tick` fired).
+3. Re-evaluates `ShowsCount.count` and `Display.shown` (transitive
+   derived dependencies).
+4. Commits recurrent advancement and atomically swaps the back
+   buffer for consumer visibility.
+
+This example demonstrates every reactive declaration kind (signal,
+attr, recurrent, derived), composition through nodes and connections,
+cardinality (`[=1]`), placement with overrides, indexed access
+through the connection (`self.in.ShowsCount[0].count`), and the
+publish-driven evaluation cycle.
+
 ### 13.2 Reactive Declarations
 
 The reactive system has four declaration kinds, distinguished by who
@@ -7988,10 +8056,32 @@ they do not imperatively modify it from within.
 
 ### 13.3 Nodes
 
-A `node` is a nominal type whose instances live in the reactive
-graph as composable units. A node bundles attrs, recurrents,
-deriveds, parts, and connection-endpoint declarations into a
-single named abstraction.
+#### 13.3.0 Concept
+
+A node is a reactive entity — a composable unit that holds values
+(attrs, recurrents), computes values (deriveds), and communicates
+with other nodes through typed connections. Each node type is a
+nominal type with a body declaring its members. Each placement of
+a node type creates an instance with its own cells.
+
+Composition takes two forms:
+
+- *Containment* — sub-nodes are placed inside a parent node as
+  *parts* (§13.4). The parent owns the parts; their lifetimes are
+  bound to the parent's.
+- *Communication* — nodes communicate with each other through
+  *connections* (§13.5). Connections are typed directed links
+  carrying their own reactive content; they are not passive
+  pointers.
+
+The reactive graph is the running structure of all node instances
+and the connections between them. Once constructed, the graph's
+shape is fixed (§13.1, "Static graph").
+
+Nodes are distinct from records (§6): records are pure data values
+that exist anywhere in a program; nodes are reactive entities that
+exist only as placed instances in the graph, with per-instance
+reactive cells managed by the kernel.
 
 #### 13.3.1 Declaration
 
@@ -8043,38 +8133,102 @@ fulfill Displayable for Driver:
 #### 13.3.3 `parts` clause
 
 ```
-parts: Type1, Type2, ...
+parts: Type1 [cardinality]?, Type2 [cardinality]?, ...
 ```
 
 The `parts` clause lists the *types* of child node instances that
-may be placed inside instances of this node at placement time. The
-clause does not place any specific instances — it constrains what
-types of children are permitted; the actual children appear at
-placement (§13.7.3).
+may be placed inside instances of this node at placement time, with
+optional cardinality constraints per type. The clause does not
+place any specific instances — it constrains what types and how
+many of each are permitted; the actual children appear at placement
+(§13.7.3).
 
 ```
 node Synthesizer:
-  parts: Oscillator, Filter, Amplifier
+  parts: Oscillator+, Filter [=1], Amplifier?
   attr master_volume: f32 = 1.0
 ```
 
+In this example: at least one Oscillator (`+`), exactly one Filter
+(`[=1]`), at most one Amplifier (`?`).
+
+##### 13.3.3.1 Cardinality forms
+
+Cardinality may be written as a sigil or a bracketed range. Sigils
+cover common cases:
+
+- (no sigil, no bracket) — `0..` (zero or more, unlimited)
+- `?` — `0..=1` (optional)
+- `+` — `1..` (at least one)
+- `!` — exactly one (shorthand for `[=1]`)
+
+Bracketed range forms support arbitrary bounds:
+
+- `[=N]` — exactly N
+- `[N..=M]` — between N and M (inclusive on both ends)
+- `[N..]` — at least N (no upper bound)
+- `[..=M]` — up to M (lower bound 0)
+
+A part type may carry exactly one cardinality specifier (sigil OR
+bracket, not both); duplicate specifiers are a compile error.
+
+##### 13.3.3.2 Access from inside the node body
+
+Parts of a given type are accessible as `self.parts.<NodeType>`,
+which is a structural iterable of compile-time-known length range:
+
+- Indexed access: `self.parts.<NodeType>[i]` — legal at type-level
+  expressions iff `i < min_cardinality` of that part type.
+  Example: under `parts: Oscillator+`, `self.parts.Oscillator[0]`
+  is legal (at least one is guaranteed) but `[1]` is not.
+- Type-bulk iteration: `for o in self.parts.<NodeType>: ...`
+  always works.
+- Heterogeneous iteration: `for p in self.parts: ...` iterates
+  all parts of all declared types (§13.4.2).
+
 A node without a `parts` clause cannot contain children. A node
-with a `parts` clause may contain zero or more children of each
-listed type, placed at construction time.
+with a `parts` clause may contain children at runtime according to
+the declared cardinality.
 
 #### 13.3.4 `in` and `out` clauses
 
 ```
-in: ConnType1, ConnType2
-out: ConnType3, ConnType4
+in: ConnType1 [cardinality]?, ConnType2 [cardinality]?, ...
+out: ConnType3 [cardinality]?, ConnType4 [cardinality]?, ...
 ```
 
 The `in` and `out` clauses list the *types* of connections in which
-instances of this node may participate as endpoints. `in` connections
-target this node (the node is the `to` endpoint); `out` connections
-originate from this node (the node is the `from` endpoint). See
-§13.5 for connection declarations and §13.7.4 for connection
-placement.
+instances of this node may participate as endpoints, with optional
+cardinality constraints. `in` connections target this node (the
+node is the `to` endpoint); `out` connections originate from this
+node (the node is the `from` endpoint). See §13.5 for connection
+declarations and §13.7.4 for connection placement.
+
+Cardinality syntax is identical to that of `parts:` (§13.3.3.1):
+sigils (`?`, `+`, `!`) or bracketed ranges (`[=N]`, `[N..=M]`,
+`[N..]`, `[..=M]`). Default (bare) is unlimited (`0..`).
+
+```
+node Driver:
+  out: Drives [=1], MaintainedBy?
+  in: SponsoredBy [..=3]
+```
+
+##### 13.3.4.1 Access from inside the node body
+
+Connections of a given type are accessible as `self.in.<ConnType>`
+and `self.out.<ConnType>`, both structural iterables of compile-
+time-known length range:
+
+- Indexed: `self.in.<ConnType>[i]` and `self.out.<ConnType>[i]` are
+  legal iff `i < min_cardinality` of that connection type.
+  Example: under `out: Drives [=1]`, `self.out.Drives[0]` is legal.
+- Type-bulk iteration: `for c in self.out.<ConnType>: ...` always
+  works.
+
+The access syntax is symmetric with parts (§13.3.3.2): three
+namespaces (`parts`, `in`, `out`), each grouping cells by declared
+type.
 
 #### 13.3.5 Generic parameters
 
@@ -8109,53 +8263,146 @@ methods are imperative computation, distinct in kind.
 
 ### 13.4 Parts
 
+#### 13.4.0 Concept
+
 "Part" is a *role*, not a separate type. A part is a child node
-instance placed inside a parent node at construction time. The
-parent declares the types of children it accepts via its `parts:`
-clause (§13.3.3); the specific instances appear via placement
-(§13.7.3).
+instance placed inside a parent node at construction time. Parts
+exist for *containment* (§13.3.0 framing): a parent node may own
+child nodes whose lifetimes and addressing are bound to the parent.
 
-#### 13.4.1 The `self.parts` form
+Parts vs. top-level placements: a node placed at the module top
+level is an independent instance addressable by its name. A node
+placed as a part is contained within a parent instance and
+addressable only through that parent (e.g., `parent.osc1` or
+`parent.parts.Oscillator[0]`). The structural distinction matters
+for ownership, hot-reload diffing, and addressing — both kinds of
+instances have reactive cells that participate in dependency
+graphs, but a part's cells are reachable through the parent's
+`self.parts.<Type>` mechanism, whereas a top-level instance is
+reachable only by its module-scope name or through connections.
 
-Inside a node body's reactive expressions, the structural
-collection of parts is accessible as `self.parts`. Inside free
-functions that receive the node as a parameter, the parts are
-accessed as `paramName.parts`, where `paramName` is the
-developer-chosen parameter name (not `self` — see §13.6.1).
+Use parts when:
 
-`self.parts` is *not* a Vec, array, or runtime collection. It is a
-compile-time-known structural iterable: the compiler knows the
-identity and count of every part of a given instance, because the
-graph is static (§13.1).
+- The contained instance is conceptually "owned" by the parent
+  (a Synthesizer owns its Oscillators; a Form owns its Fields).
+- The parent's reactive expressions need to aggregate over the
+  child instances (a Synthesizer summing oscillator outputs).
+- The compositional structure is part of the parent's identity
+  (the Form's fields define the Form).
+
+Use top-level placements when the instance stands on its own and
+participates in the graph through connections rather than
+containment.
+
+The parent declares the types of children it accepts via its
+`parts:` clause (§13.3.3) with optional cardinality; the specific
+instances appear via placement (§13.7.3).
+
+#### 13.4.1 Access forms
+
+Parts of a parent instance are accessible in three ways:
+
+- **Type-bulk:** `self.parts.<NodeType>` — a structural iterable
+  over all parts of the given type. Length range is determined by
+  the declared cardinality of that part type in the parent's
+  `parts:` clause.
+- **Heterogeneous:** `self.parts` — a structural iterable over all
+  parts of all declared types. The iteration variable is typed as
+  the sum of all part types.
+- **Named individual:** `self.<name>` (or `paramName.<name>` from
+  outside the node body) — accesses a specific part by its
+  placement-time name. Names are assigned in the placement body
+  (§13.7.3) and visible wherever the placement scope is known.
+
+Inside the parent's own type body (its `derived` and `recurrent`
+expressions), only type-bulk and heterogeneous forms are available;
+placement names aren't visible at the type-declaration level.
+Named individual access becomes available in:
+
+- Function bodies receiving a specific instance, where the
+  instance's placement names are visible (e.g., `c.osc1.output`
+  where `c` is a Composite parameter).
+- Other instances' placement bodies that reference the named
+  instance.
+- The same placement body where the part is declared (subsequent
+  lines may reference the just-named part by name).
+
+All three access forms are compile-time resolved; the graph is
+static (§13.1), so the compiler knows every part's identity, type,
+and placement-name.
 
 #### 13.4.2 Iteration over parts
 
 A function body that receives the parent node as a parameter may
-iterate the parent's parts using a `for` loop, accessed via the
-parameter name (developer-chosen, not `self`):
+iterate its parts using a `for` loop, accessed via the parameter
+name (developer-chosen, not `self`).
+
+**Type-bulk iteration:**
 
 ```
 fn total_output(s: Synthesizer) -> f32:
   mut sum: f32 = 0.0
-  for p in s.parts:
-    sum = sum + p.output
+  for o in s.parts.Oscillator:
+    sum = sum + o.output
   sum
 
 node Synthesizer:
-  parts: Oscillator
+  parts: Oscillator+
   derived total: f32 = total_output(self)
 ```
 
-The compiler unrolls the `for` loop at compile time, emitting
-direct references to each declared part:
+`o` has the concrete type `Oscillator` in each iteration. The
+compiler unrolls the loop to one reference per declared Oscillator
+part.
+
+**Heterogeneous iteration:**
 
 ```
-fn total_output(s: Synthesizer) -> f32:
-  s.parts[0].output + s.parts[1].output + ... + s.parts[N-1].output
+fn render_all(c: Composite):
+  for p in c.parts:
+    p.render()
+
+node Composite:
+  parts: Oscillator+, Filter [=1], Amplifier [=1]
 ```
 
-(Schematic; the actual lowered code references parts by their
-placement-time names.)
+Inside the body, `p` is typed as the sum `Oscillator | Filter |
+Amplifier` (the union of all declared part types). The compiler
+unrolls the loop to one body copy per part instance, dispatching
+the `p.render()` call statically based on the concrete type. The
+body must compile for every part type that appears; if `render`
+is unavailable on any part type, the unroll-copy fails at the
+for-loop site.
+
+**Heterogeneous iteration with an explicit trait bound:**
+
+```
+for p: Renderable in c.parts:
+  p.render()
+```
+
+The explicit form enforces that all part types implement
+`Renderable` at the iteration site (clearer error messages). The
+unbounded form (`for p in c.parts`) checks the same constraint
+implicitly through body operations.
+
+**Heterogeneous iteration with `match`:**
+
+```
+fn process(c: Composite):
+  for p in c.parts:
+    match p:
+      Oscillator(o): o.synthesize()
+      Filter(f): f.process()
+      Amplifier(a): a.amplify()
+```
+
+`p`'s sum type permits regular pattern matching. The compiler
+unrolls per part instance and simplifies the match at compile time
+so only the matching branch survives in each copy.
+
+Match exhaustiveness rules apply: if the match omits a declared
+part type and has no wildcard arm, it is a compile error.
 
 #### 13.4.3 Reactive dependency tracking through parts
 
@@ -8177,59 +8424,98 @@ transitively through function calls.
 
 - Parts are bound to placement-time names. A node may contain at
   most one part of each name; multiple parts of the same type with
-  different names are permitted.
+  different names are permitted (subject to the cardinality
+  declared in the `parts:` clause).
 - Parts are not added or removed at runtime (except via hot reload).
-- Heterogeneous parts (different types per part) are supported only
-  when each part has a distinct name and the iteration expects a
-  trait that all part types satisfy. For homogeneous parts (one
-  type), iteration is straightforward (see §13.4.2). For
-  heterogeneous parts, see §13.4.5.
+- For heterogeneous iteration (`for p in self.parts`), the body
+  must compile for every declared part type (§13.4.2). The optional
+  explicit trait bound form (`for p: Trait in self.parts`) gives
+  clearer error messages and enforces the constraint at the
+  iteration site.
 
-#### 13.4.5 Heterogeneous parts
+#### 13.4.5 Heterogeneous parts — example
 
-A node may declare multiple part types:
-
-```
-node Composite:
-  parts: Oscillator, Filter, Amplifier
-```
-
-Each placed part has a distinct name. Iteration via `for p in
-self.parts` over heterogeneous parts produces a sequence of values
-of mixed types. In v1, this is supported only when:
-
-- All part types satisfy a common trait, AND
-- The iteration body accesses only that trait's methods/attrs.
-
-In other cases, the user accesses each part by name. Parts are
-named at placement time (§13.7.3), not in the `parts:` clause:
+Putting type-bulk, heterogeneous, and named individual access
+together:
 
 ```
 node Composite:
-  parts: Oscillator, Filter, Amplifier
+  parts: Oscillator+, Filter [=1], Amplifier [=1]
+  derived total_oscillation: f32 = sum_oscillators(self)
+  derived processed: f32 = process(self)
 
+fn sum_oscillators(c: Composite) -> f32:
+  mut sum: f32 = 0.0
+  for o in c.parts.Oscillator:        -- type-specific iteration
+    sum = sum + o.output
+  sum
+
+fn process(c: Composite) -> f32:
+  let raw = c.parts.Oscillator[0].output      -- indexed, legal under `+`
+  let filtered = c.parts.Filter[0].apply(raw) -- indexed, legal under `[=1]`
+  c.parts.Amplifier[0].amplify(filtered)
+
+-- Placement with optional names:
 Composite c1:
-  Oscillator osc1
+  Oscillator osc_a
+  Oscillator osc_b
   Filter flt1
   Amplifier amp1
 
-fn process(c: Composite) -> f32:
-  // Direct access by part name
-  let raw = c.osc1.output
-  let filtered = c.flt1.filter(raw)
-  c.amp1.amplify(filtered)
+-- Named individual access from outside the type body:
+fn debug(c: Composite) -> string:
+  "first oscillator: {c.osc_a.output}, filter: {c.flt1.kind}"
 ```
 
-The `parts:` clause lists only types; names appear at placement.
+Three access patterns coexist: `c.parts.Oscillator[i]` (type-bulk
+indexed, bounded by cardinality), `for p in c.parts: ...`
+(heterogeneous), and `c.osc_a` (named individual, requires the
+caller to know placement names).
 
 ### 13.5 Connections
 
-A `connection` is a directional link between two node instances. A
-connection is itself a nominal type that may carry attrs and
-deriveds. Connections are first-class entities, not just references:
-they have identity and reactive content.
+#### 13.5.0 Concept
+
+A connection is a directional, typed link between two node
+instances. Connections are first-class entities — they have identity,
+reactive content (attrs, recurrents, deriveds), and may implement
+traits. They are not passive references; they are active channels
+through which nodes communicate.
+
+Why first-class types: connections carry reactive state *about the
+relationship* rather than about either endpoint. A `Drives`
+connection between a Driver and a Vehicle holds attrs like
+`aggressiveness` that belong to neither node individually but to
+the act of driving. Connections also satisfy traits (like
+`Circularity`, §13.5.5) that govern static graph properties.
+
+Communication direction: every connection has a *source* (the
+`from` endpoint) and a *destination* (the `to` endpoint). A
+connection participates in the source node's outgoing surface
+(declared via `out:`) and the destination node's incoming surface
+(declared via `in:`).
+
+A node declares which connection types it can participate in via
+its `in:` and `out:` clauses (§13.3.4), with optional cardinality
+constraints. The actual connection instances appear at placement
+(§13.7.4).
+
+Connection vs. node-typed attr: a node could in principle hold a
+direct reference to another node (e.g., `attr target: SomeNode`),
+but this offers no place to carry per-relationship state, no static
+guarantees about graph topology, and no trait conformance for cycle
+handling. Connections solve all three: they carry state about the
+relationship, give the type system structural information for
+compile-time graph analysis, and integrate with traits.
 
 #### 13.5.1 Declaration
+
+A connection declares its endpoint types in one of three forms:
+single, cartesian, or pairs. A connection uses exactly one form;
+mixing forms (e.g., `pairs:` alongside `from:`+`to:`) is a compile
+error.
+
+##### 13.5.1.1 Single form (one from-type, one to-type)
 
 ```
 connection TypeName[GenericParams]?:
@@ -8241,11 +8527,7 @@ connection TypeName[GenericParams]?:
   derived name: Type = expr                            -- per-instance reactive values
 ```
 
-The `from` and `to` clauses declare the endpoint *types*. Exactly
-one of each is required. `from:` and `to:` are not attributes —
-they are endpoint slots, first-class structural elements of every
-connection. Attribute syntax (placement-time `name: expr` settings,
-inline pipes, flags) does not target them.
+Example:
 
 ```
 connection Drives:
@@ -8254,24 +8536,121 @@ connection Drives:
   attr enhanced_handling: bool = false
   attr aggressiveness: f32 = 0.5
   derived effective_speed: f32 =
-    to.top_speed * (from.expertise_level as f32 / 10.0)
+    self.to.top_speed * (self.from.expertise_level as f32 / 10.0)
 ```
+
+`from` and `to` are not attributes — they are endpoint slots,
+first-class structural elements of every connection. Attribute
+syntax (placement-time `name: expr` settings, inline pipes, flags)
+does not target them.
+
+Inside the body, `self.from` and `self.to` resolve to the endpoint
+instances directly (their concrete types).
+
+##### 13.5.1.2 Cartesian form (multiple from-types and/or to-types)
+
+```
+connection TypeName:
+  from: TypeA, TypeB, ...
+  to: TypeX, TypeY, ...
+  -- body declarations
+```
+
+All cartesian combinations of from-types × to-types are valid
+placements. Inside the body, `self.from` is the sum type of all
+listed from-types, and `self.to` is the sum type of all listed
+to-types. Pattern matching is required to extract the concrete
+endpoint types.
+
+Example:
+
+```
+connection Owns:
+  from: Person, Company
+  to: Vehicle, Property
+  attr acquired_at: i64
+  derived display: string = match (self.from, self.to):
+    (Person(p), Vehicle(v)): "{p.name} owns car {v.id}"
+    (Person(p), Property(pr)): "{p.name} owns property {pr.id}"
+    (Company(c), Vehicle(v)): "company {c.name} owns car {v.id}"
+    (Company(c), Property(pr)): "company {c.name} owns property {pr.id}"
+```
+
+The compiler requires the match to be exhaustive over the cartesian
+product (4 combinations in this example).
+
+##### 13.5.1.3 Pairs form (constrained from-to combinations)
+
+```
+connection TypeName:
+  pairs:
+    FromType1 -> ToType1
+    FromType2 -> ToType2
+    ...
+  -- body declarations
+```
+
+Only the listed pair combinations are valid placements. Inside the
+body, the endpoints are accessed via `self.pair`, a sum type whose
+variants correspond to the declared pairs.
+
+Example:
+
+```
+connection Drives:
+  pairs:
+    Driver -> Vehicle
+    Racer -> Boat
+  attr aggressiveness: f32 = 0.5
+  derived speed: f32 = match self.pair:
+    (Driver(d), Vehicle(v)): v.top_speed * (d.expertise as f32 / 10.0)
+    (Racer(r), Boat(b)): b.knots * r.aggression
+```
+
+In pairs form, `self.from` and `self.to` are not independently
+accessible — endpoints must be extracted via `self.pair` and
+pattern matching. This reflects the semantic coupling: pair-form
+connections enforce that specific from-types pair with specific
+to-types.
+
+Rules for pairs form:
+
+- Duplicate pairs (same `From -> To` listed twice) are a compile
+  error.
+- Asymmetric pair counts are allowed; pair uniqueness, not type
+  count, is what matters. `pairs: A -> X; A -> Y; B -> Y` is legal
+  (A can go to X or Y; B only to Y).
+- All attrs/deriveds in the body are uniform across pairs. If
+  pair-conditional content is needed, declare a separate connection
+  type. (Pair-conditional content would require trait-like
+  machinery; deferred to potential v2+.)
 
 A connection body does not contain `fn` declarations, paralleling
 node bodies (§13.3.6).
 
-#### 13.5.2 `from` and `to` references in expressions
+#### 13.5.2 `from`, `to`, and `pair` references in expressions
 
-Inside a connection's `derived` expressions and attr defaults, the
-identifiers `from` and `to` refer to the connection's endpoints.
-They behave like instance references; their attrs and deriveds are
-accessible via the usual `.` notation.
+The endpoint access inside a connection body depends on the form
+of its declaration (§13.5.1):
 
-`from` and `to` are bound at the connection's *placement* time —
-each connection placement specifies its source (the enclosing
-instance) and its destination (typically via the `/expr` form or
+- **Single form** (`from: X / to: Y`): `self.from` is typed as `X`
+  directly; `self.to` is typed as `Y` directly. Attrs and deriveds
+  of the endpoints are accessible via `self.from.attr_name`,
+  `self.to.attr_name`, etc.
+- **Cartesian form** (`from: X, Y / to: A, B`): `self.from` is the
+  sum `X | Y`; `self.to` is the sum `A | B`. Pattern matching
+  against the sums (typically as a tuple `(self.from, self.to)`)
+  is required to extract concrete endpoint types.
+- **Pairs form** (`pairs:`): `self.pair` is the sum of declared
+  (FromType, ToType) tuples. Pattern matching against `self.pair`
+  extracts the concrete pair. `self.from` and `self.to` are not
+  independently available in pairs form.
+
+`self.from`, `self.to`, and `self.pair` are bound at the
+connection's *placement* time. Each placement specifies its source
+(the enclosing instance) and destination (via the `/expr` form or
 the `to:` endpoint-slot syntax in the connection's body). Inside
-the connection's body, `from` and `to` resolve to those specific
+the connection's body, these identifiers resolve to those specific
 instances.
 
 #### 13.5.3 Generic connections
@@ -8476,6 +8855,33 @@ Component chip_b:
 A child placement that names a node type listed in the parent's
 `parts:` clause is a part. The placement creates an instance of
 that node type as a child of the parent.
+
+The optional instance name (`out1`, `in1` in the example) is the
+*placement-time name* of the part. Once named, the part is
+accessible by that name from contexts where the placement scope is
+visible:
+
+- Inside the same placement body: `out1` refers to the just-placed
+  Pin (useful when subsequent connection placements need to
+  reference it).
+- Outside the parent type, in function bodies receiving the parent
+  instance: `chip_b.out1` (where `chip_b` is the parameter name)
+  accesses the named part directly, in parallel with the type-bulk
+  form `chip_b.parts.Pin[i]`.
+- In other instances' placement bodies that reference this
+  instance, by qualified path: `chip_b.out1`.
+
+Named individual access is the placement-time companion to the
+type-bulk and heterogeneous access forms described in §13.4.1.
+Names are not available inside the parent's own type body (the
+type declaration doesn't know what placements will exist) — within
+the parent type, use `self.parts.<NodeType>[i]` or `self.parts`
+instead.
+
+Cardinality declared in the parent's `parts:` clause (§13.3.3.1) is
+enforced at placement: the number of placed parts of each type
+must satisfy the declared cardinality. Violations are compile
+errors at the placement site.
 
 Disambiguation: a line is an *attribute setting* if it has `: expr`
 immediately after the first identifier; otherwise it is a
