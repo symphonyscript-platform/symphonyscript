@@ -901,6 +901,71 @@ A type may implement multiple trait instances of the same parent trait
 coexist; both share the parent `From`). Default type parameters (`Rhs =
 Self`) follow the rules for generic parameters in §3.1.6 and §2.2.
 
+#### 3.1.7 Required attrs and consts (node and connection types only)
+
+Traits may declare *required attrs* and *required consts* that
+implementing types must provide. These requirements apply only to
+node and connection types (see §13 for the reactive system); they
+are not applicable to records, enums, newtypes, or primitive types.
+
+```
+trait Action:
+  const type: string                    -- required const, no default
+  attr enabled: bool = true              -- required attr with default
+
+trait Identifiable:
+  const id_kind: string = "generic"     -- required const with default
+```
+
+The forms `attr Name: Type [= Default]?` and `const Name: Type [=
+Default]?` inside a trait body declare requirements. Defaults are
+optional in trait declarations:
+
+- **Without a default** — implementing types must supply the
+  declaration with a concrete value.
+- **With a default** — implementing types may omit the declaration
+  (in which case the trait's default is used) or override it by
+  declaring their own.
+
+Override semantics parallel default method bodies (§3.1.3): the
+trait declares the contract; the implementing type may accept the
+default or override at its declaration site.
+
+A node or connection type satisfies a trait with required attrs
+and consts only if every required declaration is present (or
+defaulted) in the type's body with a matching name and type:
+
+```
+trait Action:
+  const type: string
+  attr enabled: bool = true
+
+node log:
+  satisfies Action
+  const type: string = "@action/log"     -- supplies the no-default const
+  -- enabled inherits the trait's default (true) automatically
+  default attr message: string
+
+node delay:
+  satisfies Action
+  const type: string = "@action/delay"
+  attr enabled: bool = false              -- overrides the trait's default
+  default attr time: Duration
+```
+
+Restrictions:
+
+- Required attrs and consts are forbidden in traits implemented by
+  records, enums, newtypes, or primitives — those types lack the
+  reactive cell machinery. The compiler rejects `satisfies` on
+  such types if the trait has required attrs or consts.
+- Required reactive declarations (`signal`, `recurrent`, `derived`)
+  inside a trait body are *not* supported in v1. Only `attr` and
+  `const` requirements are recognized.
+- The same name/type matching rules as method signatures apply: an
+  implementing declaration must match the trait's required name
+  and type exactly.
+
 ### 3.2 Conformance Declarations (`satisfies`)
 
 A type declares conformance to a trait by including a `satisfies` clause in
@@ -7739,8 +7804,10 @@ publish-driven evaluation cycle.
 
 ### 13.2 Reactive Declarations
 
-The reactive system has four declaration kinds, distinguished by who
-controls the value and how it changes over time.
+The reactive system has five declaration kinds, distinguished by
+who controls the value and how (or whether) it changes over time.
+Four are reactive cells (signal, attr, recurrent, derived); one is
+a compile-time constant (const).
 
 #### 13.2.1 `signal`
 
@@ -7797,7 +7864,7 @@ node Synthesizer:
 The `default` expression provides the initial value used when an
 instance is constructed without an explicit value for that attr.
 Defaults may reference previously-declared attrs of the same node
-(declaration order is significant; see §13.2.5).
+(declaration order is significant; see §13.2.6).
 
 The default may be a constant expression, an expression involving
 other declared attrs, an expression involving signals visible in
@@ -7818,6 +7885,37 @@ Filter f1:
   cutoff_hz: 500.0                    // override default
   // resonance and enabled use defaults
 ```
+
+##### 13.2.2.1 `default attr`
+
+A node or connection type may designate one of its attrs as the
+*positional default* by prefixing the declaration with `default`:
+
+```
+node Log:
+  default attr message: string
+```
+
+A `default attr` is a regular attr in every respect (writable,
+overridable at placement, can have a default value) plus one
+property: it becomes the target of the positional `/expr` syntax at
+placement time (§13.7.5), so the attr can be set without naming it:
+
+```
+Log /"Hello World"        -- sets the default attr `message` to "Hello World"
+
+-- Equivalent body form:
+Log:
+  message: "Hello World"
+```
+
+Rules:
+
+- At most one `default attr` per node or connection type. Declaring
+  two is a compile error.
+- The `default attr` marker applies only to `attr` declarations.
+  `recurrent`, `derived`, `const`, and `signal` cannot be marked
+  `default`.
 
 #### 13.2.3 `derived`
 
@@ -7988,25 +8086,116 @@ counter pattern: the signal is a monotonically increasing count;
 each "event" increments the count; downstream cells trigger on
 every increment because the value changes each time.
 
-#### 13.2.5 Initial value rules
+#### 13.2.5 `const`
 
-Initial values are computed in a single startup pass:
+```
+const name: Type = value
+```
 
-1. **Signals** are initialized first, in declaration order. Each
-   signal's `= initial` expression is evaluated. Signal initializers
-   may reference other signals declared earlier in the same module.
-2. **Per-instance attrs** are initialized when their containing
+A `const` declares a compile-time constant value associated with a
+node or connection type. Unlike `attr`, `recurrent`, and `derived`,
+a `const` is not reactive and not per-instance in the runtime
+sense — it is a type-level property whose value is the same for
+every instance of the type and is fixed at compile time.
+
+```
+trait Action
+
+node log:
+  satisfies Action
+  const type: string = "@action/log"
+  default attr message: string
+
+node delay:
+  satisfies Action
+  const type: string = "@action/delay"
+  default attr time: Duration
+```
+
+##### 13.2.5.1 Properties
+
+- **Compile-time value.** The right-hand side must be evaluable at
+  compile time. It may reference other consts (of the same type or
+  top-level), literal values, and any compile-time-evaluable
+  expression. It may not reference reactive cells (signals, attrs,
+  recurrents, deriveds), since those are runtime values.
+- **Not reactive.** A const value never changes during the kernel's
+  lifetime. It does not occupy a cell in the reactive state buffer
+  and does not participate in dirty propagation.
+- **Allowed complex types.** Because consts are not stored in the
+  single-cell reactive buffer (§13.10.4), they may hold complex
+  values: records, arrays, tuples, nested structures. The
+  single-cell constraint does not apply.
+- **Not overridable at placement.** A const's value is fixed by the
+  declaration; placement bodies cannot override it. Attempting to
+  set a const at placement is a compile error.
+- **Not host-writable.** The host API has no `write_const`. Consts
+  are immutable for the kernel's lifetime.
+
+##### 13.2.5.2 Access forms
+
+A const is accessible through three syntactic forms:
+
+- **Instance-level (`self.<const>`)** — inside the declaring node
+  or connection's reactive expressions. Resolves to the same value
+  as the type-level access.
+- **Through an instance (`<instance>.<const>`)** — from function
+  bodies or other instances' bodies that hold a reference to an
+  instance of the type.
+- **Type-level (`<TypeName>::<const>`)** — direct type-level access
+  without an instance. Useful for compile-time discriminators and
+  dispatch tables.
+
+```
+-- Type-level access lets callers read a type's const without an
+-- instance. Useful for compile-time tables and dispatch keys.
+const ACTION_LOG_TAG: string = log::type        -- "@action/log"
+const ACTION_DELAY_TAG: string = delay::type    -- "@action/delay"
+
+fn tag_for[T: Action](_: T) -> string:
+  T::type           -- type-level read; no instance needed at runtime
+```
+
+##### 13.2.5.3 Declaration order
+
+Within a node or connection body, a const's value expression may
+reference previously-declared consts of the same body (in
+declaration order). Referencing a later-declared const is a
+compile error.
+
+#### 13.2.6 Initial value rules
+
+Values are resolved in a fixed order. Consts are resolved at
+compile time and embedded in the compiled artifact; reactive
+cells are computed during the kernel's startup pass.
+
+**Compile-time resolution (during compilation):**
+
+1. **Top-level consts** are resolved in declaration order. Values
+   are embedded in the compiled artifact; no runtime computation
+   is needed.
+2. **Per-type consts** declared inside node/connection bodies are
+   similarly resolved at compile time. They are not allocated
+   cells in the reactive state buffer.
+
+**Startup pass (during kernel initialization):**
+
+3. **Signals** are initialized in declaration order. Each signal's
+   `= initial` expression is evaluated. Signal initializers may
+   reference other signals declared earlier in the same module and
+   any compile-time-evaluable constants.
+4. **Per-instance attrs** are initialized when their containing
    instance is placed. For each instance, attrs are initialized in
    declaration order. Each attr's `= default` expression is
    evaluated against the just-initialized attrs of the same instance
-   (declaration order matters) and against signals (which are
-   already initialized from step 1).
-3. **Per-instance recurrents** are initialized similarly: each
+   (declaration order matters), any consts of the same type, and
+   against signals (which are already initialized from step 3).
+5. **Per-instance recurrents** are initialized similarly: each
    recurrent cell receives its `= initial` value (with placement-
    time override if specified). The `next:` expression is *not*
    evaluated at startup — recurrent cells hold their initial values
    until a trigger fires.
-4. **Deriveds** are evaluated last, in topological order over the
+6. **Deriveds** are evaluated last, in topological order over the
    reactive dependency graph. Each derived computes its initial
    value from the now-initialized signals, attrs, and recurrents.
    Recurrents' initial values serve as the "previous-committed"
@@ -8014,45 +8203,48 @@ Initial values are computed in a single startup pass:
 
 Bootstrap order:
 
-- Within a node's attr or recurrent declarations, defaults and
-  initial values may reference previously-declared cells of the
-  same node. Referencing a later-declared cell in a default is a
-  compile error.
+- Within a node's attr, recurrent, or const declarations, defaults
+  and initial values may reference previously-declared cells of
+  the same node. Referencing a later-declared cell in a default is
+  a compile error.
 - At type-declaration time, attr defaults and recurrent initial
   values may reference only same-instance cells (via `self.X`),
-  top-level signals, and compile-time-evaluable expressions. They
-  cannot reference cells of other instances. Cross-instance
-  references are resolved only at placement time, not at type
-  declaration.
+  same-type consts, top-level signals, top-level consts, and
+  compile-time-evaluable expressions. They cannot reference cells
+  of other instances. Cross-instance references are resolved only
+  at placement time, not at type declaration.
 
 Traps during initial evaluation (signal initializers, attr defaults,
 recurrent initial values, or initial derived evaluation) follow
 §13.11.1 — the process aborts. There is no recovery path for traps
 encountered during startup.
 
-#### 13.2.6 No mutation of cells from Symphony source
+#### 13.2.7 No mutation of cells from Symphony source
 
 Symphony source has no syntactic form for assigning to a signal,
-attr, recurrent, or derived after declaration. Source-level
-expressions read reactive cells; they do not write to them.
+attr, recurrent, derived, or const after declaration. Source-level
+expressions read reactive cells and consts; they do not write to
+them.
 
 Writes occur only through:
 
 - The host API (`kernel.write_signal`, `kernel.write_attr`,
   `kernel.transaction`) per §13.12. The host cannot directly write
-  to recurrents or deriveds at runtime; influence is indirect via
-  signals and attrs.
+  to recurrents, deriveds, or consts at runtime; influence is
+  indirect via signals and attrs.
 - Placement-time initial values for attrs and recurrents
-  (per §13.7.2).
+  (per §13.7.2). Consts are *not* settable at placement.
 - The kernel's own evaluation of `derived` expressions, which
   writes the derived's output cell with the newly computed value.
 - The kernel's own evaluation of `next:` expressions on `recurrent`
   cells, which commits the computed value at the end of the
   publish cycle (per §13.2.4.1 and §13.8.2).
 
-The "no source-level write" rule applies to all four declaration
-kinds uniformly. Symphony programs describe the reactive graph;
-they do not imperatively modify it from within.
+Consts are immutable for the kernel's lifetime: their values are
+fixed at compile time and never change. The "no source-level
+write" rule applies to all five declaration kinds uniformly.
+Symphony programs describe the reactive graph; they do not
+imperatively modify it from within.
 
 ### 13.3 Nodes
 
@@ -8091,7 +8283,9 @@ node TypeName[GenericParams]?:
   parts: Type1, Type2                                  -- optional permitted part types
   in: Conn1, Conn2                                     -- optional incoming connection types
   out: Conn3, Conn4                                    -- optional outgoing connection types
+  const name: Type = value                             -- per-type compile-time constants
   attr name: Type = default                            -- per-instance writable cells
+  default attr name: Type = default                    -- positional default attr (at most one)
   recurrent name: Type = init | next: expr | on: t1   -- per-instance memory cells
   derived name: Type = expr                            -- per-instance reactive values
 ```
@@ -8136,14 +8330,26 @@ fulfill Displayable for Driver:
 parts: Type1 [cardinality]?, Type2 [cardinality]?, ...
 ```
 
-The `parts` clause lists the *types* of child node instances that
-may be placed inside instances of this node at placement time, with
-optional cardinality constraints per type. The clause does not
-place any specific instances — it constrains what types and how
-many of each are permitted; the actual children appear at placement
-(§13.7.3).
+The `parts:` clause is **optional**. Its presence determines what
+kinds of child node instances may be placed inside instances of
+this node at placement time:
+
+- **No `parts:` clause** — the node accepts child instances of *any
+  node type*. Only the heterogeneous access form `self.parts`
+  (§13.4.1) is available inside the node body; type-bulk and
+  cardinality-bounded forms are not.
+- **With a `parts:` clause** — the node accepts only children whose
+  types appear in the listed set, with the declared cardinality
+  constraints. Both heterogeneous (`self.parts`) and type-bulk
+  (`self.parts.<NodeType>[i]`) access are available; cardinality
+  is enforced at placement.
+
+The clause does not place specific instances — it only constrains
+what types and how many of each are permitted. The actual children
+appear at placement (§13.7.3).
 
 ```
+-- Restricted parts with cardinality:
 node Synthesizer:
   parts: Oscillator+, Filter [=1], Amplifier?
   attr master_volume: f32 = 1.0
@@ -8151,6 +8357,24 @@ node Synthesizer:
 
 In this example: at least one Oscillator (`+`), exactly one Filter
 (`[=1]`), at most one Amplifier (`?`).
+
+```
+-- Open parts (any node type accepted):
+node Processor:
+  -- no `parts:` clause; accepts any node as a child
+  out: WiresTo
+```
+
+`Processor` accepts any node type as a part. Inside its body, only
+`self.parts` (heterogeneous iteration) is available; the host walks
+the parts externally based on its own conventions (e.g., per-type
+dispatch via const discriminators — §13.2.5).
+
+A node may have parts of its own type (self-recursion) when `parts:`
+is omitted or when the node's own type appears in the `parts:`
+clause. Self-recursive placements terminate because each placement
+is an explicit user act — the compiler walks finite placement trees,
+not infinite type recursions.
 
 ##### 13.3.3.1 Cardinality forms
 
@@ -8234,7 +8458,7 @@ type.
 
 A node may declare generic parameters in the standard `[T, U, ...]`
 form. Generic parameters are in scope within the body's attr,
-recurrent, derived, parts, and connection declarations:
+recurrent, derived, const, parts, and connection declarations:
 
 ```
 node Buffer[T: Numeric]:
@@ -8300,19 +8524,39 @@ instances appear via placement (§13.7.3).
 
 #### 13.4.1 Access forms
 
-Parts of a parent instance are accessible in three ways:
+Parts of a parent instance are accessible in three ways. The
+available access forms depend on whether the parent's `parts:`
+clause is declared:
 
-- **Type-bulk:** `self.parts.<NodeType>` — a structural iterable
-  over all parts of the given type. Length range is determined by
-  the declared cardinality of that part type in the parent's
-  `parts:` clause.
 - **Heterogeneous:** `self.parts` — a structural iterable over all
-  parts of all declared types. The iteration variable is typed as
-  the sum of all part types.
+  parts of the parent, regardless of their types.
+  - When `parts:` is declared, the iteration variable is typed as
+    the sum of the listed types. The body must compile for every
+    listed type (per the heterogeneous iteration rules of §13.4.2).
+  - When `parts:` is omitted, the iteration variable's static type
+    cannot be inferred from the declaration alone (any node type
+    may have been placed). The body must declare an explicit trait
+    bound on the iteration variable (`for p: SomeTrait in
+    self.parts: ...`); the compiler verifies at each placement
+    that every placed part type satisfies the bound.
+- **Type-bulk (`parts:` declared only):** `self.parts.<NodeType>` —
+  a structural iterable over all parts of the given type. Length
+  range is determined by the declared cardinality. Available only
+  when `<NodeType>` appears in the `parts:` clause.
 - **Named individual:** `self.<name>` (or `paramName.<name>` from
   outside the node body) — accesses a specific part by its
   placement-time name. Names are assigned in the placement body
   (§13.7.3) and visible wherever the placement scope is known.
+  Available in both forms (with or without `parts:`).
+
+Summary table:
+
+| Form                         | `parts:` declared | `parts:` omitted               |
+|------------------------------|-------------------|--------------------------------|
+| `self.parts.<Type>`          | available         | not available                  |
+| `self.parts` (unbounded)     | available         | not available (need bound)     |
+| `self.parts` (trait-bounded) | available         | available (trait bound required) |
+| named (`self.<name>`)        | available         | available                      |
 
 Inside the parent's own type body (its `derived` and `recurrent`
 expressions), only type-bulk and heterogeneous forms are available;
@@ -8522,7 +8766,9 @@ connection TypeName[GenericParams]?:
   satisfies Trait1, Trait2                            -- optional trait conformance
   from: SourceType                                     -- required, exactly once
   to: DestType                                         -- required, exactly once
+  const name: Type = value                             -- per-type compile-time constants
   attr name: Type = default                            -- per-instance writable cells
+  default attr name: Type = default                    -- positional default attr (at most one)
   recurrent name: Type = init | next: expr | on: t1   -- per-instance memory cells
   derived name: Type = expr                            -- per-instance reactive values
 ```
@@ -8821,23 +9067,31 @@ The named cell must be declared on the placed type as either an
 error. The value's type must match the cell's declared type
 (subject to the standard widening rules).
 
+**`const` declarations are not settable at placement.** A const's
+value is fixed by its declaration on the type; placement bodies
+cannot override it. Attempting to set a const at placement is a
+compile error.
+
 For attrs only, the same value may also be set via inline pipes
 (§13.7.7) or flags (§13.7.8). The three mechanisms (body form,
 pipes, flags) all target the same underlying attr cells; setting
 the same attr via two mechanisms is a compile error (duplicate-set).
 
-Pipes and flags do *not* target recurrent cells. Recurrent initial
-values can be overridden only via the body form. Pipes and flags
-exist as inline placement shorthand for the attr-controlled API
-surface of a node or connection; recurrents are self-managed cells
-and do not participate in that surface.
+A node or connection type's `default attr` (§13.2.2.1) — when
+declared — is additionally settable via the positional `/expr` form
+(§13.7.5).
+
+Pipes and flags do *not* target recurrent cells or consts.
+Recurrent initial values can be overridden only via the body form.
+Consts cannot be overridden at all.
 
 For recurrent cells, only the initial value is overridable at
 placement. The `next:` and `on:` clauses are structural type
 properties and cannot be overridden per-instance (§13.2.4.3).
 
 If a cell is not set at placement, its declared default (for attrs)
-or declared initial value (for recurrents) applies.
+or declared initial value (for recurrents) applies. Consts always
+have their type-declared value.
 
 #### 13.7.3 Child parts
 
@@ -8912,11 +9166,15 @@ clause (or in the type's traits' contributions).
 
 #### 13.7.5 The `/expr` form
 
-A connection placement may specify its `to` endpoint inline using
-`/expr` immediately after the type name (and any flags), before any
-optional instance name and before any inline attribute pipes. The
-full syntax is specified in the inline placement spec (which §13
-incorporates as §13.7.7 onward); the form is illustrated:
+The `/expr` form appears immediately after the placed type name
+(and any flags), before any optional instance name and before any
+inline attribute pipes. The expression after `/` is the *positional
+argument* of the placement; its meaning depends on what kind of
+type is being placed.
+
+##### 13.7.5.1 For connection placements
+
+For a connection placement, `/expr` sets the `to` endpoint slot:
 
 ```
 Drives/some_car | enhanced_handling: true | aggressiveness: 0.8
@@ -8932,9 +9190,42 @@ Drives:
   aggressiveness: 0.8      // attribute setting
 ```
 
-The `/expr` form is the conventional choice for connection
-placements; it consolidates the endpoint slot (`to`) into a
-positional slot adjacent to the type.
+##### 13.7.5.2 For node (part) placements
+
+For a node placement (typically a part placed inside a parent),
+`/expr` sets the type's `default attr` (§13.2.2.1). The expression
+must match the default attr's declared type.
+
+```
+node Log:
+  default attr message: string
+
+Program p1:
+  Log /"Hello World"
+  Log /"System ready"
+```
+
+Each `Log /"..."` placement creates a Log part with its `message`
+attr set to the string. Equivalent body form:
+
+```
+Program p1:
+  Log:
+    message: "Hello World"
+  Log:
+    message: "System ready"
+```
+
+A node-placement `/expr` form requires the type to have a declared
+`default attr`. Using `/expr` on a node type without a `default
+attr` is a compile error.
+
+##### 13.7.5.3 Summary
+
+The `/expr` form is positional shorthand:
+- On connections, it targets the `to` endpoint (always present).
+- On nodes, it targets the `default attr` (present only when the
+  type declares one).
 
 #### 13.7.6 Disambiguation summary
 
@@ -9089,10 +9380,12 @@ TypeRef [FlagsRun]? [InstanceName]? [DefaultArgPart (`/Expr`)]? [AttrPipe]*
 
 - Flags immediately adjacent to TypeRef (no whitespace).
 - Optional instance name follows the type/flags.
-- The `/Expr` default-arg slot (connection-only) follows the name.
+- The `/Expr` default-arg slot follows the name. For connection
+  placements, `/Expr` sets the `to` endpoint. For node placements,
+  `/Expr` sets the type's `default attr` (§13.2.2.1).
 - Inline pipes follow last.
 
-Example:
+Example (connection placement):
 
 ```
 WiresTo'! my_wire / chip_b.in1 | resistance: 50 | reverse_polarity
@@ -9103,8 +9396,19 @@ WiresTo'! my_wire / chip_b.in1 | resistance: 50 | reverse_polarity
                                                 ^^^^^^^^^^^^^^^^^  -- pipe 2
 ```
 
-The `/Expr` form is permitted only on connection placements; on
-node placements it is a compile error.
+Example (node placement with `default attr`):
+
+```
+Log / "Hello World" | level: "info"
+^^^                                       -- TypeRef
+      ^^^^^^^^^^^^^^                      -- /Expr (sets default attr `message`)
+                      ^^^^^^^^^^^^^^^^^   -- pipe (sets attr `level`)
+```
+
+The `/Expr` form requires the placed type to have a valid target
+for it: connections must have a `to` endpoint type (always true);
+nodes must have a declared `default attr`. Using `/Expr` on a node
+without a `default attr` is a compile error.
 
 ### 13.8 Reactive Evaluation
 
