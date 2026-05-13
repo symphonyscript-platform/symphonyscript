@@ -1884,18 +1884,24 @@ registered constructor function.
 @literal_suffix("hz",    from_hz)
 @literal_suffix("khz",   from_khz)
 @literal_suffix("cents", from_cents)
-type Frequency = i64
+type Frequency: newtype i64
 
-fn from_hz(n: i64) -> Frequency:
-  n
-fn from_khz(n: f64) -> Frequency:
-  (n * 1000.0) as i64
-fn from_cents(n: i64) -> Frequency:
+fn from_hz[N: Numeric](n: N) -> Frequency:
+  Frequency(n as i64)
+fn from_khz[N: Numeric](n: N) -> Frequency:
+  Frequency((n as f64 * 1000.0) as i64)
+fn from_cents[N: Numeric](n: N) -> Frequency:
   ...
 
-let middle_c = 440hz       -- resolved to from_hz(440)
-let voice    = 1.5khz      -- resolved to from_khz(1.5)
+let middle_c = 440hz       -- resolved to from_hz(440), i64 literal
+let voice    = 1.5khz      -- resolved to from_khz(1.5), f64 literal
 ```
+
+Note: the registered type must be a distinct nominal type for the
+suffix to provide type-level distinction. A bare type alias (`type
+Frequency = i64`) is interchangeable with its underlying type and
+defeats the purpose; use a newtype (§6.3) to create a fresh nominal
+type.
 
 #### 3.9.1 Annotation grammar
 
@@ -1912,22 +1918,47 @@ let voice    = 1.5khz      -- resolved to from_khz(1.5)
 
 Multiple `@literal_suffix` annotations may decorate one type, registering
 distinct suffixes. Each (suffix, target-type) pair must be unique within
-its scope; collisions are compile errors.
+its scope; duplicate registrations are compile errors. Each *suffix*
+must also resolve to exactly one (suffix, target-type) pair at any use
+site; cross-module collisions where two modules register the same
+suffix for different types are compile errors at the use site that
+imports both. There is no qualified-suffix disambiguation syntax in v1;
+users must avoid suffix-name collisions across imported modules.
+
+The reserved suffix set (forbidden as `@literal_suffix` names) consists
+of all built-in numeric type names — `i8`, `i16`, `i32`, `i64`, `i128`,
+`u8`, `u16`, `u32`, `u64`, `u128`, `isize`, `usize`, `f32`, `f64` —
+plus the built-in `duration` suffixes (§9.4.1.1). Registering any of
+these as a `@literal_suffix` is a compile error. The numeric type
+names are reserved to prevent confusion with the underscore-separated
+numeric type suffix form (`5_i32`); the duration suffixes are reserved
+because they are built into the language.
 
 #### 3.9.2 Constructor signature
 
 The constructor must:
 
-- Take exactly one parameter of a numeric type (integer or float). The
-  parameter type determines which numeric literal forms are accepted at
-  the suffix.
+- Take exactly one parameter, either of a concrete numeric type or
+  bounded by `Numeric` (or one of its sub-traits). Generic
+  constructors allow a single registration to handle both integer
+  and float literals at the suffix.
 - Return the annotated type.
 - Be pure (no side effects, no reactive cell reads).
 
-Distinct constructors may share a target type but use different parameter
-types — e.g., `from_hz(i64) -> Frequency` and `from_hz_f(f64) -> Frequency`
-registered with different suffixes (`hz` and `hzf` respectively, or via
-literal-form distinction).
+Each (suffix, target-type) pair has exactly one registered constructor.
+Overloading the same suffix with multiple non-generic constructors for
+the same target type (e.g., one taking `i64` and another taking `f64`)
+is a compile error; use a single generic constructor instead.
+
+```
+-- Recommended: single generic constructor handles both forms
+@literal_suffix("hz", from_hz)
+fn from_hz[N: Numeric](n: N) -> Frequency: ...
+
+-- Disallowed: two registrations for the same (suffix, target)
+@literal_suffix("hz", from_hz_int)     -- compile error: duplicate registration
+@literal_suffix("hz", from_hz_float)
+```
 
 #### 3.9.3 Resolution
 
@@ -5335,7 +5366,7 @@ The following operators are defined for `duration`:
 | `duration - duration`      | `duration`      | difference (may be negative)     |
 | `duration * Numeric`       | `duration`      | scale; `Numeric * duration` ok   |
 | `duration / Numeric`       | `duration`      | scale down                       |
-| `duration / duration`      | `Numeric`       | ratio; result follows defaulting |
+| `duration / duration`      | `f64`           | ratio (canonical float result)   |
 | `duration % duration`      | `duration`      | modulo (remainder)               |
 | `-duration`                | `duration`      | negation                         |
 | `duration <,<=,==,!=,>=,>` | `bool`          | comparison                       |
@@ -5343,6 +5374,21 @@ The following operators are defined for `duration`:
 The `Numeric` operand may be any integer or float type per §4.1. Integer
 scaling is exact; float scaling rounds to nearest at the nanosecond level
 before storing the result.
+
+Division by zero follows the standard rules of §4.6:
+
+- `duration / 0` where `0` is an integer-typed value traps per §4.6.7
+  (integer division by zero).
+- `duration / 0.0` where `0.0` is a float-typed value produces `±inf`
+  or NaN per IEEE 754; the integer-nanosecond result is then defined
+  by the float-to-integer conversion (saturate or trap per §4.6.6 and
+  §4.7).
+- `duration / duration_zero` (i.e., dividing by a zero-duration value)
+  traps; this is treated as the i64 zero-divisor case per §4.6.7.
+
+Use checked variants (`/?`, `%?`) per §4.6.4 where division-by-zero
+recovery is needed; they return `Option[duration]` (or `Option[f64]`
+for `duration / duration`).
 
 Operations **not defined** for `duration`:
 
@@ -5425,13 +5471,33 @@ provide:
 Comparison and difference are the canonical operations on `instant`;
 no other introspection is provided.
 
+##### 9.4.2.3 Limitation: no cross-run serialization
+
+Because the `instant` epoch is implementation-defined and tied to a
+single kernel run (typically program start), instants cannot be
+reliably serialized to disk and restored across runs — a saved
+`instant` from one run has no meaningful interpretation in a later
+run started from a different epoch. Programs that need persistent
+absolute time must use stdlib serialization that converts instants
+to and from a stable absolute representation (e.g., Unix nanoseconds
+since 1970-01-01 UTC). The language core does not provide this; it
+is a stdlib concern.
+
 #### 9.4.3 Reactive cell compatibility
 
 Both `duration` and `instant` are i64-sized values and satisfy the
-single-cell reactive cell type constraint (§13.10.4). They may appear as
-the type of `signal`, `attr`, `recurrent`, and `derived` declarations,
-and in `Result[duration, E]` / `Option[duration]` cells (subject to the
-tag+payload bit budget in §13.10.4).
+single-cell reactive cell type constraint (§13.10.4). They may appear
+directly as the type of `signal`, `attr`, `recurrent`, and `derived`
+declarations.
+
+Wrapping in `Result[duration, E]`, `Option[duration]`,
+`Result[instant, E]`, or `Option[instant]` as a reactive cell type is
+generally *not* permitted: the i64 payload plus any discriminant
+exceeds the single-cell budget (§13.10.4). The compiler rejects such
+types at reactive cell declarations. To represent "absent" or "errored"
+duration/instant values in a reactive cell, use a sentinel pattern
+(e.g., a separate `bool` cell indicating presence, or a designated
+sentinel duration value like `i64::MIN`).
 
 ---
 
