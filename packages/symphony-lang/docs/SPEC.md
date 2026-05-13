@@ -8022,7 +8022,7 @@ when they change" without manually wiring update propagation.
 
 ### 13.1 Design Principles
 
-The reactive system is built on six load-bearing principles.
+The reactive system is built on seven load-bearing principles.
 
 **Declarative composition.** A reactive graph is built declaratively
 from signal, attr, recurrent, derived, node, and connection
@@ -8067,6 +8067,39 @@ nodes, parts, and connections. Imperative data structures (`Vec`,
 non-reactive data only. Reactive cell types are restricted
 (§13.10.4) to types that fit single cells in the reactive state
 buffer (§14.3).
+
+**No separate effects construct.** External effects (logging, I/O,
+audio output, network requests, scheduling, etc.) are not expressed
+through dedicated effect declarations. Instead, effects are encoded
+as ordinary nodes, parts, and connections that the host interprets.
+A `Log` node holds a `message` attr; the host walks Log instances
+and emits log lines. A `Delay` node holds a `time: duration` attr;
+the host suspends accordingly. A `Wire` connection between an audio
+Source and an audio Sink; the host routes the audio data through
+its DSP pipeline.
+
+This is a deliberate choice. Effect systems in pure functional
+languages (Haskell `IO`, Elm `Cmd`) work by producing values that
+*describe* what should happen; a runtime then interprets those
+descriptions. The reactive graph already provides exactly that
+mechanism: deriveds and recurrents produce values; the host reads
+them via swap (§13.12.6) and acts on them. Adding a separate
+effects layer would duplicate the mechanism — the runtime would
+still need to walk descriptions and dispatch interpretations, just
+for two parallel systems instead of one.
+
+The trade-off: each effect category requires the host to know how
+to interpret nodes of that type. This pushes interpretation
+complexity into host code, which is the right place for it — the
+host knows its domain. The language stays minimal: one unified
+composition layer (nodes + parts + connections + reactive cells)
+covers data flow and effects together.
+
+Adding a new effect category is achieved by declaring a new node
+type; the host extends its interpreter to handle the new type. This
+is the same pattern used by node-based programming systems (Pure
+Data, Max/MSP, Unreal Blueprints, Node-RED, LabView): the language
+defines the graph; the runtime walks it as a program.
 
 #### 13.1.1 A small example
 
