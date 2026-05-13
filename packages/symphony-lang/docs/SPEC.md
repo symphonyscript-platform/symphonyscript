@@ -5533,13 +5533,43 @@ A *package* is the unit of distribution — a project root or a named
 dependency. Each package has a single *package root*: the top-level
 folder of the package's source tree. The package root is itself the
 *root module*, addressed in absolute paths via the `root` keyword.
-Subfolders of the package root are submodules; for example, the folder
-`<package_root>/audio/` is the module accessible as `root::audio`.
+Subfolders of the package root may be submodules; for example, the
+folder `<package_root>/audio/` may be the module accessible as
+`root::audio` (subject to the rule of §10.2.0 below).
 
 A *module* is a folder of source files within a package. Files within
 a folder share a path prefix — the folder's module path — and form a
 single module's content. The folder structure of the source tree
 mirrors the module path structure.
+
+#### 10.2.0 Module entry files (`index.symphony`)
+
+A folder forms a module **only if** it contains a file named
+`index.symphony`. Folders without an `index.symphony` are
+organizational subdirectories — their `.symphony` files are not
+reachable from outside the folder and produce a compile error if a
+`use` statement or path attempts to reference them.
+
+The `index.symphony` file is the module's entry point. Its
+top-level declarations belong to the folder's module path. Sibling
+`.symphony` files in the same folder belong to the same module and
+share the same module path; cross-file references within the
+module follow §10.2.1 (visibility reach) and §10.4 (use).
+
+```
+<package_root>/
+├── index.symphony            -- root module entry
+├── audio/
+│   ├── index.symphony        -- root::audio entry (this folder is a module)
+│   ├── oscillator.symphony   -- part of root::audio
+│   └── filter.symphony       -- part of root::audio
+└── helpers/
+    └── util.symphony         -- compile error: no index.symphony in helpers/;
+                              --   util.symphony is unreachable
+```
+
+The package root must contain an `index.symphony`. A package
+without one is malformed.
 
 #### 10.2.1 Visibility reach
 
@@ -5547,7 +5577,9 @@ The three visibility levels translate to declaration reach as follows:
 
 - A `private` declaration is reachable only from within its declaring
   file. No other file — sibling, parent, child, or unrelated — can
-  reference it.
+  reference it. **Parent modules cannot see `private` items in child
+  modules**, and vice versa. `private` is strictly file-scoped, not
+  module-scoped.
 - A `shared` declaration is reachable from any file within the same
   package, including the declaring file itself, sibling files in the
   same folder, files in parent or descendant folders, and files in
@@ -5675,6 +5707,59 @@ These are ordinary declarations with their own visibility specifiers,
 distinct from `use` imports. The language's `use` machinery is solely
 about bringing names into the current file's scope; cross-module
 exposure of names is the job of declarations.
+
+#### 10.4.3 `use` is file-scope only
+
+A `use` statement may appear only at file scope (alongside other
+top-level declarations). Function-scope `use` (a `use` statement
+inside a function body, block, or other inner scope) is a compile
+error. Local short names within a function body are achieved by
+binding the desired value to a `let` or `mut` (e.g.,
+`let synth = root::audio::Synthesizer`), not by importing the name.
+
+This restriction keeps the import surface of a file visible at the
+top of the file, which aids tooling, navigation, and reasoning
+about dependencies. It also avoids the complexity of nested-scope
+import shadowing.
+
+#### 10.4.4 Circular imports are forbidden
+
+The cross-file `use`-and-reference graph at the file level must be
+acyclic. If file A `use`s a name from file B (directly or
+transitively through chains of `use` statements), and file B
+references a name from file A, the cycle is rejected at compile
+time. The error identifies the cycle's members.
+
+This rule eliminates ambiguous initialization order across files
+and simplifies module-level reasoning. Programs that need shared
+state between mutually-referencing modules must extract the shared
+declarations into a third module that both depend on, breaking the
+cycle topologically.
+
+Note: this rule applies to the *file-level* reference graph
+(`use`-or-path-reference edges between files). It is distinct from
+reactive-graph cycles (§13.9), which operate at the runtime
+dependency level and have their own rules.
+
+#### 10.4.5 Cross-module initialization order
+
+Top-level declarations with initializers — `const`, `signal`, and
+the placement-time-evaluated portions of node/connection bodies —
+are initialized in **topological order** of the cross-module
+reference graph. If module A's initializers reference items from
+module B, B is initialized before A. Because circular imports are
+forbidden (§10.4.4), this ordering is well-defined.
+
+Within a single module (a single `.symphony` file, or the
+collected files of a folder-module sharing one entry), declarations
+are initialized in source declaration order (per §13.2.6 for
+reactive declarations; analogous rules apply to plain consts and
+signals).
+
+The compiler computes the topological order at compile time;
+runtime initialization follows this fixed order. A program never
+observes initialization in any order other than the topologically-
+determined one.
 
 ### 10.5 Type Visibility and Constructor Visibility
 
