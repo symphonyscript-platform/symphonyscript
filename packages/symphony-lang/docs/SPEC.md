@@ -1,4 +1,4 @@
-# Symphony Language Specification
+# Ductus Language Specification
 
 **Status:** Draft v0.1. Living document. Working reference for the language's
 design. Pairs with `GRAMMAR.md` (lexical and syntactic structure) and
@@ -10,7 +10,7 @@ design. Pairs with `GRAMMAR.md` (lexical and syntactic structure) and
 
 ### 1.1 Purpose
 
-This specification is the authoritative source for Symphony's type system,
+This specification is the authoritative source for Ductus's type system,
 evaluation model, and runtime semantics. Implementation details (compiler
 internals, optimizations, runtime representation) are out of scope except where
 they constrain user-visible semantics. The grammar of the language is specified
@@ -29,7 +29,7 @@ refinement.
 
 ### 1.3 Design Philosophy
 
-Symphony is a general-purpose, statically typed language designed to make
+Ductus is a general-purpose, statically typed language designed to make
 compositional reactive systems first-class. Its initial application domain is
 code-first music composition, but the language commits to no domain-specific
 primitives.
@@ -95,7 +95,7 @@ propagation). The choice is made at the operation site, not retroactively.
 
 ### 1.4 Conventions
 
-Code examples use Symphony syntax per `GRAMMAR.md`. Type-name case conventions:
+Code examples use Ductus syntax per `GRAMMAR.md`. Type-name case conventions:
 
 - Concrete primitive types: lowercase (`i32`, `f64`, `bool`, `char`, `string`, `never`).
 - Built-in placeholder keywords: lowercase (`numeric`, `integer`, `float`, `signed`, `unsigned`).
@@ -5998,7 +5998,7 @@ as a controlled escape hatch for performance.
 
 ### 11.1 Design Principles
 
-Mutation in Symphony is an escape hatch, not the primary expression style.
+Mutation in Ductus is an escape hatch, not the primary expression style.
 The default remains immutability and pure functions; `mut` exists because
 some computations (DSP buffer processing, in-place transformations,
 algorithm internals) cannot be expressed efficiently in a pure-functional
@@ -6714,7 +6714,7 @@ the behavior is consistent across `Copy` and non-`Copy` instantiations.
 ### 11.10 Closures and Capture
 
 A closure is an anonymous function that may capture values from its
-enclosing scope. Symphony's closures capture *by value*: each captured
+enclosing scope. Ductus's closures capture *by value*: each captured
 value is stored inside the closure at the moment of definition.
 
 #### 11.10.1 Captures must be `Copy`
@@ -6961,7 +6961,7 @@ sensitive code while keeping the rest of the language pure and functional.
 
 ### 12.1 Design Principles
 
-Loops in Symphony follow three guiding rules:
+Loops in Ductus follow three guiding rules:
 
 **Iteration is trait-driven.** A `for` loop dispatches through the
 `IntoIterable` trait (consume form, default) or the `Iterable` trait
@@ -8155,7 +8155,7 @@ governing reactive expression evaluation, and the host API through
 which external code drives and observes the reactive graph.
 
 The reactive system is the language's mechanism for expressing values
-that change over time. Ordinary computation in Symphony is pure and
+that change over time. Ordinary computation in Ductus is pure and
 immutable (§1.3, §11.1); change is confined to two contexts: local
 mutation within a function body (§11) and the reactive system
 specified here. The reactive system gives users a declarative way to
@@ -8248,7 +8248,7 @@ defines the graph; the runtime walks it as a program.
 A complete reactive program that counts ticks of a host-driven
 signal and exposes the count through a connection to a Display.
 The signal named `tick` in this example is *user-defined* — it is
-not a language built-in. Symphony has no built-in clock or tick
+not a language built-in. Ductus has no built-in clock or tick
 primitive; hosts that need a clock declare their own signal and
 write to it at whatever cadence is meaningful for their domain.
 
@@ -8326,7 +8326,7 @@ signal name: Type = initial
 
 A `signal` declares a writable reactive cell. The initial value is
 supplied at the declaration. After construction, the value is written
-only through the host API (§13.12.2); Symphony source has no
+only through the host API (§13.12.2); Ductus source has no
 syntactic form for assigning to a signal.
 
 Signals are program-level reactive entry points. They represent
@@ -8728,9 +8728,9 @@ recurrent initial values, or initial derived evaluation) follow
 §13.11.1 — the process aborts. There is no recovery path for traps
 encountered during startup.
 
-#### 13.2.7 No mutation of cells from Symphony source
+#### 13.2.7 No mutation of cells from Ductus source
 
-Symphony source has no syntactic form for assigning to a signal,
+Ductus source has no syntactic form for assigning to a signal,
 attr, recurrent, derived, or const after declaration. Source-level
 expressions read reactive cells and consts; they do not write to
 them.
@@ -8752,7 +8752,7 @@ Writes occur only through:
 Consts are immutable for the kernel's lifetime: their values are
 fixed at compile time and never change. The "no source-level
 write" rule applies to all five declaration kinds uniformly.
-Symphony programs describe the reactive graph; they do not
+Ductus programs describe the reactive graph; they do not
 imperatively modify it from within.
 
 ### 13.3 Nodes
@@ -10063,7 +10063,7 @@ if each were its own one-write transaction.
 
 ### 13.9 Cycle Handling
 
-Cycles in Symphony's reactive graph are handled at two distinct
+Cycles in Ductus's reactive graph are handled at two distinct
 layers: **reactive expression cycles** between reactive cells
 within and across nodes, and **topology cycles** between node
 instances via connection placements. Each has its own rules.
@@ -10353,7 +10353,7 @@ diagnostics for these cases.
 
 ### 13.11 Error Handling in Reactive Contexts
 
-Symphony's two-track failure model (§8.1) applies uniformly to
+Ductus's two-track failure model (§8.1) applies uniformly to
 reactive contexts.
 
 #### 13.11.1 Traps abort the process
@@ -10410,7 +10410,7 @@ the type system.
 
 #### 13.11.3 The reactive context is not an exception
 
-The reactive evaluation context does not modify Symphony's trap
+The reactive evaluation context does not modify Ductus's trap
 semantics. A behavior that traps aborts the process, same as a
 free function or function-body trap. Authors expecting graceful
 handling must use value-track errors; the language does not
@@ -10602,7 +10602,7 @@ specific hot reload semantics are as follows.
 #### 13.13.1 Compile-time validation gate
 
 Before any kernel-side action occurs, the new source must compile
-under the full Symphony type system (§§1–12) and reactive system
+under the full Ductus type system (§§1–12) and reactive system
 rules (§13). If compilation fails — for any reason, including
 dangling references to nodes removed in the new source — the hot
 reload is rejected. The kernel continues running the previously-
@@ -10719,27 +10719,27 @@ specifies the implementation model. Cross-references:
 
 ## 14. Implementation Model
 
-This section specifies the contract between a Symphony program and its
-runtime environment: how Symphony source is compiled, how the resulting
+This section specifies the contract between a Ductus program and its
+runtime environment: how Ductus source is compiled, how the resulting
 artifacts interact with the host kernel, and what guarantees the
 implementation provides.
 
 The contents of this section are *normative for implementations* of
-Symphony, not for source-level code. Symphony programs do not depend on
+Ductus, not for source-level code. Ductus programs do not depend on
 these details directly; their behavior is determined by §§1–13. But
 implementations must conform to the contracts specified here to ensure
 that programs run correctly across implementations.
 
 ### 14.1 Compilation Modes
 
-A conforming Symphony implementation provides two compilation modes:
+A conforming Ductus implementation provides two compilation modes:
 
-**Interpreter mode** — Symphony source compiles to a compact bytecode
+**Interpreter mode** — Ductus source compiles to a compact bytecode
 representation, executed by an interpreter embedded in the kernel.
 Used for development workflows: fast iteration, hot reload, live
 coding.
 
-**Native mode** — Symphony source compiles, via a Rust intermediate
+**Native mode** — Ductus source compiles, via a Rust intermediate
 form, to a native executable. Used for production: maximum performance,
 distributable artifact.
 
@@ -10768,7 +10768,7 @@ The frontend performs:
    declarations, computes dependency graphs, and extracts graph
    metadata.
 5. **Monomorphization** per §2.3. Resolves all generic instantiations
-   in Symphony before lowering. Symphony's compiler does not delegate
+   in Ductus before lowering. Ductus's compiler does not delegate
    monomorphization to Rust; emitted code is fully concrete.
 
 After these passes, the typed IR is consumed by one of the two
@@ -10787,7 +10787,7 @@ Characteristics:
 - Supports hot reload (§14.11): individual behaviors can be replaced
   in a running kernel without restarting.
 - The bytecode format is implementation-internal and not stable across
-  Symphony versions. It is not a distribution format.
+  Ductus versions. It is not a distribution format.
 
 #### 14.1.3 Native mode
 
@@ -10807,11 +10807,11 @@ Characteristics:
 
 The emitted Rust source is **fully monomorphic and trait-free**. Per
 §14.10, the Rust emitter produces concrete struct definitions and
-specialized function definitions per Symphony instantiation. Symphony's
+specialized function definitions per Ductus instantiation. Ductus's
 trait system is not exported into the emitted Rust; trait dispatch
 sites are resolved to direct function calls during frontend processing.
 
-### 14.2 The Symphony CLI
+### 14.2 The Ductus CLI
 
 A conforming implementation provides a command-line interface that
 wraps the compilation modes. The CLI's interface is normative; specific
@@ -10820,50 +10820,50 @@ required.
 
 #### 14.2.1 Operations
 
-- **`symphony run <file>`** — invokes interpreter mode. Compiles to
+- **`ductus run <file>`** — invokes interpreter mode. Compiles to
   bytecode and executes immediately. The kernel runs to program
   completion or until interrupted.
 
-- **`symphony watch <file>`** — interpreter mode with file watching
+- **`ductus watch <file>`** — interpreter mode with file watching
   and hot reload. The kernel runs continuously; saved changes to the
   source trigger recompilation and reload of affected behaviors per
   §14.11.
 
-- **`symphony build <file> [--release]`** — invokes native mode.
+- **`ductus build <file> [--release]`** — invokes native mode.
   Compiles via Rust to a native executable. `--release` enables
   optimization. The output is a single executable file.
 
-- **`symphony check <file>`** — runs the frontend (lexing, parsing,
+- **`ductus check <file>`** — runs the frontend (lexing, parsing,
   type checking, ownership checking, reactive analysis) without
   invoking either backend. Produces diagnostics. Used by editor
   integrations (LSP).
 
-- **`symphony fmt <file>`** — invokes the canonical formatter.
+- **`ductus fmt <file>`** — invokes the canonical formatter.
   Rewrites the source in normalized form.
 
-- **`symphony test <file>`** — runs tests via interpreter mode.
+- **`ductus test <file>`** — runs tests via interpreter mode.
   Optimized for fast feedback during development.
 
 #### 14.2.2 Toolchain bundling
 
 The CLI ships as a single binary that bundles or downloads on first
 use:
-- The Symphony frontend.
+- The Ductus frontend.
 - The bytecode interpreter (part of the kernel).
 - A `rustc` toolchain for native-mode builds.
-- The Symphony stdlib and reactive kernel.
+- The Ductus stdlib and reactive kernel.
 
 Users do not install `rustc` or `cargo` separately. The CLI does not
 expose `cargo` directly; all Rust-toolchain invocations are internal.
 Build output from `rustc` is suppressed in normal operation and
-surfaced only when a compilation failure prevents Symphony's output
+surfaced only when a compilation failure prevents Ductus's output
 from being produced.
 
 #### 14.2.3 Project layout
 
-A Symphony project is a directory tree containing source files
-(`.sym`). The CLI does not require a manifest file for single-file
-programs (`symphony run file.sym` works on a lone file). Multi-file
+A Ductus project is a directory tree containing source files
+(`.duc`). The CLI does not require a manifest file for single-file
+programs (`ductus run file.duc` works on a lone file). Multi-file
 projects use a manifest file specifying the entry point and any
 external dependencies; the format of the manifest is
 implementation-specific.
@@ -10914,7 +10914,7 @@ An implementation may optionally pack multiple sub-8-byte fields
 into a single cell as an optimization (e.g., three f32s into one
 8-byte slot with the fourth slot unused, or four `bool` fields into
 the low bits of one cell). Such packing is an implementation
-optimization and must not be observable from Symphony source — every
+optimization and must not be observable from Ductus source — every
 cell read and write through the kernel API must produce results
 identical to the canonical per-field layout.
 
@@ -11021,7 +11021,7 @@ buffer. Specifically, the values held by:
 - `attr` declarations on node and connection instances.
 - `derived` declarations (the cached computed value).
 
-Regular Symphony values — local bindings (`let`/`mut`) inside function
+Regular Ductus values — local bindings (`let`/`mut`) inside function
 bodies, function parameters, function return values, iterator state,
 closure captures, ordinary record/array/tuple values used as
 non-reactive data — do **not** live in the reactive state buffer.
@@ -11031,7 +11031,7 @@ ownership and borrow rules of §11.
 A record type may appear in both contexts in the same program. As the
 value of a signal/attr/derived declaration, it occupies cells in the
 reactive buffer. As a local value, parameter, or non-reactive field,
-it lives in regular memory. The Symphony compiler determines storage
+it lives in regular memory. The Ductus compiler determines storage
 location based on the declaration site, not the type.
 
 ### 14.5 Strings and the String Pool
@@ -11084,7 +11084,7 @@ which is wait-free. The role-to-thread mapping is specified in §13.
 
 ### 14.6 The Behavior ABI
 
-Every executable unit of a Symphony program — a derived expression
+Every executable unit of a Ductus program — a derived expression
 body, a function body called from a reactive context, a modulation
 function — is exposed to the kernel via a uniform **behavior ABI**.
 
@@ -11134,7 +11134,7 @@ A behavior may **trap** (§4.6) during evaluation — e.g., from
 arithmetic overflow under the default `+` operator, division by
 zero, an out-of-range array index, or an explicit `panic` call.
 
-Symphony's two-track failure model (§8.1) applies to behaviors
+Ductus's two-track failure model (§8.1) applies to behaviors
 without modification. Traps follow the trap-track semantics of
 §4.6.1: the process aborts. The kernel does not isolate behavior
 traps; there is no "errored cell" sentinel state, no `catch_unwind`
@@ -11191,7 +11191,7 @@ declarations, renaming local bindings — do not perturb the ID.
 Semantic changes — different operations, different inputs, different
 output type — produce different IDs.
 
-The hash algorithm is fixed per Symphony toolchain version (§14.12)
+The hash algorithm is fixed per Ductus toolchain version (§14.12)
 so that hot reload (§14.11) within one version reliably matches
 unchanged behaviors across recompilations. Across major toolchain
 versions the canonicalization may change; cross-version hot reload
@@ -11206,10 +11206,10 @@ for human consumption.
 
 Behaviors are invoked by the kernel; the specific thread that
 invokes each behavior is determined by the role assignment
-specified in §13 (reactive system). Symphony source does not
+specified in §13 (reactive system). Ductus source does not
 specify thread roles.
 
-Symphony source code does not encounter cross-thread concerns:
+Ductus source code does not encounter cross-thread concerns:
 behaviors are thread-safe by construction (no shared mutable state
 outside reactive cells, which are coordinated by the kernel per
 §14.3.3).
@@ -11270,9 +11270,9 @@ running kernel and may be updated by hot reload.
 
 The metadata is intentionally type-erased at the kernel boundary. It
 contains primitive type tags (i32, f64, string, etc.) and cell
-layouts, but **not** Symphony's full type system (record definitions,
+layouts, but **not** Ductus's full type system (record definitions,
 trait conformances, generic parameters). Those are compile-time
-artifacts of Symphony, not runtime artifacts the kernel consumes.
+artifacts of Ductus, not runtime artifacts the kernel consumes.
 
 The kernel's view of the program is: a graph of cells with primitive
 types, dependency edges, and behavior references. The kernel does
@@ -11334,9 +11334,9 @@ and an instance ID; behavior bodies read from and write to cells
 via the handle. Behaviors are thread-safe by construction
 (§14.8.3).
 
-#### 14.8.3 Why Symphony behaviors are thread-safe by construction
+#### 14.8.3 Why Ductus behaviors are thread-safe by construction
 
-Regardless of the role-to-thread mapping in §13, Symphony source
+Regardless of the role-to-thread mapping in §13, Ductus source
 code never sees cross-thread concerns:
 
 - No shared mutable state outside reactive cells.
@@ -11345,13 +11345,13 @@ code never sees cross-thread concerns:
 - Local `mut` bindings (§11) are stack-allocated and per-invocation.
 - Closure captures are by-value Copy (§11.10), no shared mutability.
 
-A Symphony program does not declare thread affinity; it does not
+A Ductus program does not declare thread affinity; it does not
 need to. The kernel determines (per §13) which thread plays which
 role.
 
 ### 14.9 Drop Semantics
 
-Symphony's user-facing `Drop` trait (referenced as deferred in §11.3.3
+Ductus's user-facing `Drop` trait (referenced as deferred in §11.3.3
 and §12.9.3) is specified here.
 
 #### 14.9.1 The Drop trait
@@ -11403,14 +11403,14 @@ derived cells are dropped per their type's `Drop` impl. Initial
 declarations (signals declared at program startup) live for the
 program's lifetime; their cells are dropped at program shutdown.
 
-### 14.10 Symphony → Rust Lowering
+### 14.10 Ductus → Rust Lowering
 
 The Rust emitter (§14.1.3) lowers the typed IR to Rust source per
 the following rules.
 
 #### 14.10.1 Type lowering
 
-| Symphony | Rust |
+| Ductus | Rust |
 |---|---|
 | `i8`–`i64`, `u8`–`u64` | Same Rust types. |
 | `i128`, `u128` | Same Rust types (on supporting targets). |
@@ -11453,22 +11453,22 @@ onto the kernel pool. The pool *is* the shared backing.
 
 #### 14.10.2 Function and trait lowering
 
-Symphony resolves all generic instantiations and trait dispatch
+Ductus resolves all generic instantiations and trait dispatch
 during frontend processing (§14.1.1). Emitted Rust is fully
 monomorphic and trait-free:
 
-- A generic Symphony function `fn f[T](...)` becomes multiple
+- A generic Ductus function `fn f[T](...)` becomes multiple
   monomorphic Rust functions, one per instantiation: `f_i32`,
   `f_f64`, etc.
-- Trait method calls dispatch in Symphony to a specific function;
+- Trait method calls dispatch in Ductus to a specific function;
   the emitted Rust call is direct, not through a trait.
-- Symphony traits are not declared in the emitted Rust. No `trait`
+- Ductus traits are not declared in the emitted Rust. No `trait`
   or `impl` blocks appear (with the exception below).
-- Operator overloading on Symphony numeric primitives uses Rust's
+- Operator overloading on Ductus numeric primitives uses Rust's
   built-in operators (`+`, `-`, etc.) directly; no trait emission
   needed.
 
-The one exception: when a Symphony record overloads a Symphony
+The one exception: when a Ductus record overloads a Ductus
 operator (e.g., a user-defined `Vec3` with `Add`), the emitter
 generates an explicit `impl std::ops::Add for Vec3` block in Rust so
 that `+` works on the type at the Rust level. This is a narrow
@@ -11476,9 +11476,9 @@ mechanical emission, not a full trait export.
 
 #### 14.10.3 Ownership lowering
 
-Symphony's ownership rules map directly to Rust's:
+Ductus's ownership rules map directly to Rust's:
 
-| Symphony | Rust |
+| Ductus | Rust |
 |---|---|
 | `let x = e` | `let x = e;` |
 | `mut x = e` | `let mut x = e;` |
@@ -11489,32 +11489,32 @@ Symphony's ownership rules map directly to Rust's:
 | `Copy` types | `Copy` trait derived. |
 | `Clone` | `Clone` trait derived. |
 
-Symphony's `&v` form in for-loops compiles to Rust's `&v`. Symphony's
+Ductus's `&v` form in for-loops compiles to Rust's `&v`. Ductus's
 parameter borrow `&T` compiles to Rust's `&T`. Rust's borrow checker
-enforces the same rules that Symphony's frontend already verified;
-any code that passed Symphony's checks passes Rust's.
+enforces the same rules that Ductus's frontend already verified;
+any code that passed Ductus's checks passes Rust's.
 
 #### 14.10.4 Iterator lowering
 
-Symphony's `Iterator` trait (§12.7) has signature `fn next(iter:
+Ductus's `Iterator` trait (§12.7) has signature `fn next(iter:
 Self) -> (Option[Item], Self)`. Rust's standard `Iterator` trait has
 signature `fn next(&mut self) -> Option<Item>`.
 
-The Symphony emitter generates Rust code using Rust's `Iterator`
-pattern internally for performance, while Symphony source code
+The Ductus emitter generates Rust code using Rust's `Iterator`
+pattern internally for performance, while Ductus source code
 continues to see the tuple-return form. The translation is
-mechanical: each Symphony iterator implementation lowers to a Rust
+mechanical: each Ductus iterator implementation lowers to a Rust
 struct with a `next(&mut self) -> Option<Item>` method, plus a
-wrapper that exposes the tuple-return form for Symphony-internal
+wrapper that exposes the tuple-return form for Ductus-internal
 use during compilation. By the time native code is produced, only
 the `&mut self` form remains.
 
-This translation is invisible to Symphony source code. Symphony users
+This translation is invisible to Ductus source code. Ductus users
 never see `&mut` in their code or in error messages.
 
 #### 14.10.5 Reactive primitive lowering
 
-Symphony's `signal`, `attr`, `derived` declarations do not lower to
+Ductus's `signal`, `attr`, `derived` declarations do not lower to
 Rust types directly. They lower to:
 
 - Cell allocations in the kernel state buffer (described in graph
@@ -11534,7 +11534,7 @@ behaviors in a running kernel.
 
 #### 14.11.1 Granularity
 
-The unit of hot reload is the **behavior**. When a Symphony source
+The unit of hot reload is the **behavior**. When a Ductus source
 file changes:
 
 1. The CLI's watch mode detects the change.
@@ -11583,16 +11583,16 @@ applied, never a mix.
 
 ### 14.12 Versioning
 
-Symphony's source format, graph metadata format, behavior ABI, and
-kernel build are versioned together. Each Symphony release is a
+Ductus's source format, graph metadata format, behavior ABI, and
+kernel build are versioned together. Each Ductus release is a
 matched set:
 
-- Symphony source format version.
+- Ductus source format version.
 - Graph metadata schema version.
 - Behavior ABI version.
 - Kernel binary version.
 
-Cross-version mixing is not supported. A Symphony program produced
+Cross-version mixing is not supported. A Ductus program produced
 by version X.Y compiles with and runs against the same X.Y
 toolchain. Forward and backward compatibility across major version
 boundaries are explicit, not implicit.
