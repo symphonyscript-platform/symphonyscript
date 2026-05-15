@@ -5542,17 +5542,50 @@ Each subfolder of the package root is a distinct module addressable
 by its folder name (e.g., `<package_root>/audio/` is the module
 `root::audio`).
 
-A *module* is a folder containing one or more `.duc` source files.
-The folder's path within the package determines the module's path;
-files inside the folder are organizational, not separately addressed.
-There is no module marker file, no module declaration inside files,
-no manifest. **The folder is the module.**
+A *module* is a folder that contains one or more `.duc` source
+files directly inside it. The folder's path within the package
+determines the module's path; files inside the folder are
+organizational, not separately addressed. There is no module marker
+file, no module declaration inside files, no manifest. **A folder
+is a module iff it contains `.duc` files.**
 
-A subfolder is *not* a "child module" or "submodule of its parent" —
-each folder is an independent module addressable by its own path.
-Folders nested under `audio/` (e.g., `audio/effects/`) form their
-own modules (`root::audio::effects`); references between them are
-ordinary cross-module references.
+A folder *without* any `.duc` files is not a module — it is a pure
+path-segment folder. Such folders are filesystem organization only;
+they cannot be the target of a `use` statement or qualified path
+reference, and they have no declarations of their own.
+
+Path-segment folders **do not** prevent their subfolders from being
+modules. A subfolder of a path-segment folder is a module if it
+itself contains `.duc` files; its module path is constructed by
+traversing the path segments and the parent's module path normally.
+
+```
+root/
+├── main.duc                  // root module (has .duc directly)
+├── audio/                    // path segment only (no direct .duc)
+│   ├── synth/
+│   │   └── synth.duc         // root::audio::synth module
+│   └── effects/              // path segment only (no direct .duc)
+│       └── reverb/
+│           └── reverb.duc    // root::audio::effects::reverb module
+```
+
+Use sites resolve through path segments unchanged:
+
+```
+use root::audio::effects::reverb::Reverb    // ✓ resolves through audio/effects/
+use root::audio::*                           // ✗ audio/ is not a module
+use root::audio::effects                     // ✗ audio/effects/ is not a module
+```
+
+A subfolder is *not* a "child module" or "submodule of its parent"
+in any special sense — each module folder is an independent module
+addressable by its own path. References between them are ordinary
+cross-module references.
+
+Mixing code and non-code in the same folder is permitted by the
+language but is the developer's organizational responsibility; the
+language imposes no convention beyond the rule above.
 
 #### 10.2.1 Files within a module
 
@@ -5760,27 +5793,44 @@ import shadowing.
 
 #### 10.4.4 Circular module references are forbidden
 
-The cross-module `use`-and-reference graph must be acyclic. If
-module A references a name from module B (directly or transitively),
-and module B references a name from module A, the cycle is
-rejected at compile time. The error identifies the cycle's
-members.
+The cross-module `use`-and-reference graph must be acyclic. If any
+cycle exists — a chain of modules where each references the next
+and the chain eventually returns to its starting module — the
+cycle is rejected at compile time. Binary cycles (A→B→A) and
+longer cycles (A→B→C→A, etc.) are equally forbidden. The error
+identifies the cycle's members.
 
-Cycles *within* a single module (between sibling files in the same
-folder) are not subject to this rule — files in the same module
-share scope and are compiled as a single unit. Mutually-referencing
-type declarations across sibling files in the same module are
-permitted; the compiler resolves them in one pass.
+**Within-module sibling cycles — distinguish two kinds:**
 
-This rule eliminates ambiguous initialization order across modules
-and simplifies cross-module reasoning. Programs that need shared
-state between mutually-referencing modules must extract the shared
-declarations into a third module that both depend on, breaking the
-cycle topologically.
+- **Type-reference cycles between sibling files are permitted.**
+  Files inside the same module share scope and are compiled as a
+  single unit, so mutually-referencing type declarations (e.g.,
+  one file's `node` declares an `out:` connection type defined in
+  a sibling file, and the sibling's `connection` declares `from:`
+  the first file's node) are resolved in one pass. This is the
+  normal case for any non-trivial module split across files.
+- **Initializer-reference cycles between sibling files are
+  forbidden.** If file A's top-level initializer (a const value,
+  signal initial value, attr default at module scope) depends on
+  a name from file B, and B's initializer depends on a name from
+  A, the cycle is rejected (§10.4.5). Compile-time-resolvable
+  type references and runtime-evaluated initializer references
+  are evaluated under different rules.
 
-Note: this rule applies to the *cross-module* reference graph. It
-is distinct from reactive-graph cycles (§13.9), which operate at
-the runtime dependency level and have their own rules.
+This split rule eliminates ambiguous initialization order while
+preserving the convenience of multi-file modules for type
+declarations.
+
+Programs that need shared state between mutually-referencing
+modules must extract the shared declarations into a third module
+that both depend on, breaking the cycle topologically. This applies
+to both cross-module cycles and within-module initializer cycles.
+
+Note: this rule applies to the *static reference graph* (use
+statements, path-qualified references, type references between
+sibling files, initializer-time references). It is distinct from
+reactive-graph cycles (§13.9), which operate at the runtime
+dependency level and have their own rules.
 
 #### 10.4.5 Cross-module initialization order
 
@@ -5940,16 +5990,17 @@ the visible one — only whether it is reachable.
 
 ### 10.9 Visibility and the Orphan Rule
 
-The orphan rule (§3.7) operates on the *module-of-declaration*, not on
-visibility. A `fulfill` block satisfies the orphan rule if the trait or
-the type is declared locally — regardless of either's visibility level.
-Visibility controls *who can see and use* an implementation; the orphan
-rule controls *where it can be declared*.
+The orphan rule (§3.7) operates on *package-of-declaration*, not on
+visibility. A `fulfill` block satisfies the orphan rule if the trait
+or the type is declared in the current package (the same package
+the `fulfill` block resides in) — regardless of either's visibility
+level. Visibility controls *who can see and use* an implementation;
+the orphan rule controls *where it can be declared*.
 
-A `private` trait or type still counts as "local" for orphan-rule
-purposes. The combination — a `fulfill` block for a private trait and a
-foreign type, with the implementation accessible only inside the
-declaring module — is rare but valid.
+A `private` trait or type still counts as "in the current package"
+for orphan-rule purposes. The combination — a `fulfill` block for a
+private trait and a foreign type, with the implementation accessible
+only inside the declaring module — is rare but valid.
 
 ### 10.10 Visibility and Dispatch
 
