@@ -8850,7 +8850,13 @@ cells are computed during the kernel's startup pass.
    reactive dependency graph. Each derived computes its initial
    value from the now-initialized signals, attrs, and recurrents.
    Recurrents' initial values serve as the "previous-committed"
-   source for any cyclic reads during this startup pass.
+   source for any cyclic reads during this startup pass. `when`
+   predicates (§13.8) are evaluated alongside deriveds in this
+   step, in the same topological order — each instance's initial
+   gate state is established here. An instance whose `when`
+   evaluates to false at the end of startup begins inactive, with
+   its other cells holding their just-computed initial values per
+   Model B (§13.8.7).
 
 Bootstrap order:
 
@@ -10234,10 +10240,19 @@ host concern; it lives in the source.
 
 #### 13.8.1 Concept
 
-A `when` predicate is a reactive boolean expression. It evaluates
-in the scope of the construct it modifies: inside a type body it
-sees `self.*` and items visible at the type's declaration scope;
-inside a placement it sees the full placement scope.
+A `when` predicate is, for reactive-evaluation purposes, a derived
+expression of type `bool`: it follows the same purity rules
+(§13.2.3), provenance tracking (§13.11.1), cycle-detection rules
+(§13.10.2), and recurrent-read semantics (§13.10.4) as any other
+derived. The expression forms accepted are identical. What differs
+is the structural role — the predicate's value is consumed by the
+kernel to gate propagation through the construct it modifies, not
+exposed through a named cell readable by other expressions.
+
+It evaluates in the scope of the construct it modifies: inside a
+type body it sees `self.*` and items visible at the type's
+declaration scope; inside a placement it sees the full placement
+scope.
 
 ```
 connection Pulse:
@@ -10290,6 +10305,11 @@ every placement should inherit by default.
 A single `when:` clause is permitted per type. Multiple `when:`
 declarations in one body are a compile error.
 
+Traits cannot declare or require a `when` predicate. Gates are
+per-type structural metadata, not behavior: two types satisfying
+the same trait may have different gates (or none at all). A trait
+declaration containing a `when:` clause is a compile error.
+
 #### 13.8.3 Placement-level `when`
 
 A placement may attach a `when` modifier to override or introduce a
@@ -10301,6 +10321,29 @@ Logger l1 when self.debug_enabled
 Filter f1 / "low-pass" when self.dsp_mode == DspMode::Realtime | gain: 0.5
 ShowsCount/d1 when self.from.count > 0
 ```
+
+Parts placed inside a parent's body may carry `when` clauses
+identically — the same grammar applies to part placements as to
+top-level placements:
+
+```
+node App:
+  parts: Logger [=2], Monitor [=1]
+  attr verbose: bool = false
+  attr health_checks_enabled: bool = true
+
+App my_app:
+  Logger l1                                         // always active
+  Logger l2 when self.verbose                       // gated on parent attr
+  Monitor m1 when self.health_checks_enabled        // feature flag
+```
+
+`l2` and `m1` are constructed unconditionally (the static graph
+rule of §13.1 holds — the graph's shape is fixed at compile time).
+What `when` controls is propagation: when `self.verbose` is false,
+`l2`'s recurrents do not advance, its deriveds do not recompute,
+and its outputs do not propagate. Its cells hold their initial
+values per Model B (§13.8.7).
 
 Position in the inline-parts ordering is fixed by §13.7.9: after
 `/Expr` (if present), before the inline pipes. When `/Expr` is
@@ -10314,10 +10357,13 @@ are positional and keyword-introduced; no colon is used. The same
 distinction is what separates `from:` (a schema slot) from `->`
 (a placement-level directional sigil).
 
-#### 13.8.4 Predicate scope
+#### 13.8.4 Predicate type and scope
 
-A `when` predicate follows normal expression scope rules — no
-special restrictions.
+The predicate must have type `bool`. A non-bool predicate is a
+compile error.
+
+Otherwise, a `when` predicate follows normal expression scope
+rules — no special restrictions.
 
 - **Type level:** the predicate may reference `self.*` (own cells
   and, for connections, `self.from` / `self.to` / `self.pair`),
@@ -10411,7 +10457,11 @@ false):
   provenance set changes. A flip from false to true is itself a
   propagation event (see below).
 - **Recurrents:** do not advance. Their `next:` expressions do not
-  fire; the cells hold their last committed value.
+  fire; the cells hold their last committed value. Any `on:`
+  trigger that would have fired during a gated period is lost —
+  the kernel does not queue triggers, and gate-open does not
+  replay them. The recurrent remains at its last committed value
+  until a future `on:` trigger fires during an active period.
 - **Deriveds:** do not recompute. They hold their last committed
   value. (An exception: deriveds whose values are read by the
   `when` predicate must remain current; the kernel keeps the
@@ -10497,6 +10547,59 @@ participates in the next publish; cells retain their values.
 Changes to the predicate that would have caused a state to differ
 historically are not retroactive — the new predicate takes effect
 prospectively only.
+
+#### 13.8.11 Diagnostics
+
+The compiler emits the following diagnostic classes for `when`
+clauses. Concrete wording is implementation-defined; the classes
+listed here are normative.
+
+**Non-bool predicate.** The predicate's inferred type is not `bool`.
+
+```
+error: `when` predicate must be of type `bool`
+  --> connection Foo: when: self.weight
+                            ^^^^^^^^^^^ expression has type `f32`
+  hint: introduce a comparison (e.g., `self.weight > 0.0`)
+```
+
+**Multiple `when:` clauses in a single type body.** Per §13.8.2.
+
+```
+error: multiple `when:` clauses in connection body
+  --> connection Foo
+        first  declared at line 5
+        second declared at line 8
+  hint: at most one `when:` per type; combine predicates with `and`/`or`
+```
+
+**`when:` in a trait declaration.** Per §13.8.2.
+
+```
+error: `when:` is not permitted in a trait declaration
+  --> trait Drivable: when: ...
+  hint: gates are per-type structural metadata, not part of trait contracts
+```
+
+**Unresolved reference in predicate.** Standard name-resolution
+failure, surfaced in `when`-clause context.
+
+```
+error: unknown identifier `self.frobnicate` in `when` predicate
+  --> node Foo: when: self.frobnicate
+  hint: did you mean `self.activate`?
+```
+
+**Cycle through `when` provenance.** Per §13.10.2; gate predicates
+participate in cycle detection identically to deriveds.
+
+```
+error: instantaneous cycle in reactive expressions
+  derived `a.x` depends on `b.gate`
+  `when` predicate of `b` depends on `a.x`
+  hint: introduce a `recurrent` declaration on the cycle, or
+        eliminate the cyclic dependency
+```
 
 ### 13.9 Reactive Evaluation
 
