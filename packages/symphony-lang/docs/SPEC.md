@@ -4578,8 +4578,8 @@ where the runtime has access to them:
 
 ```
 panic: integer overflow: 2147483647 + 1
-  at compute_total, src/billing.symphony:42:8
-  called from main, src/main.symphony:7:3
+  at compute_total, src/billing.duc:42:8
+  called from main, src/main.duc:7:3
 ```
 
 For user-triggered `panic` calls, the diagnostic includes the
@@ -4587,7 +4587,7 @@ user-supplied message:
 
 ```
 panic: expected Some, got None
-  at process_input, src/handler.symphony:24:10
+  at process_input, src/handler.duc:24:10
 ```
 
 Format details are implementation-level. The semantic commitment is that
