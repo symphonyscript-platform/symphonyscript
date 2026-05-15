@@ -3559,7 +3559,7 @@ Each field carries an independent visibility specifier per §10:
 type Account:
   public id: i64                  // readable anywhere the type is visible
   email: string                   // shared (default) — readable within package
-  private password_hash: string   // readable only within this file
+  private password_hash: string   // readable only within this module
 ```
 
 Field visibility is independent from the enclosing type's visibility and
@@ -5588,18 +5588,17 @@ The three visibility levels translate to declaration reach as follows:
 
 - A `private` declaration is reachable from any file inside its
   *module* (the folder it is declared in). Sibling files in the same
-  folder see it. Files in any other module — parent folder, child
-  folder, unrelated folder of the same package, or any external
-  package — cannot reference it.
+  folder see it. Files in any other module — any other folder of the
+  same package, or any external package — cannot reference it.
 - A `shared` declaration is reachable from any file within the same
-  package, including the declaring module's siblings, files in any
-  other module of the same package, and files in any descendant or
-  sibling folder. Cross-module access within the package requires
-  either a `use` statement (§10.4) or a path-qualified reference.
+  package, including the declaring module's siblings and files in any
+  other module of the same package. Cross-module access within the
+  package requires either a `use` statement (§10.4) or a path-qualified
+  reference.
 - A `public` declaration is reachable from any file within the same
   package (as for `shared`), plus any file in any package that depends
-  on the source package. Cross-package references go through the
-  dependent package's external dependency path base per §10.2.3.
+  on the source package. Cross-package references use the importing
+  package's external dependency path base; see §10.2.3.
 
 Within a single module, all three levels behave identically — every
 declaration is visible to every sibling file regardless of its
@@ -5682,6 +5681,11 @@ let s = Synthesizer(...)              // unqualified — would be
 Files within the same module (the same folder) see each other's
 declarations automatically; no `use` is needed for siblings (§10.2.1).
 
+A `use` statement is **per-file**: it affects only the file in which
+it appears. Sibling files in the same module each declare their own
+`use` statements for the external names they need. There is no
+mechanism to share imports across sibling files.
+
 All `use` paths are absolute, starting from a path base
 (`root` or an external dependency name; see §10.2.3). There is no
 relative-path form.
@@ -5726,7 +5730,7 @@ path, write an explicit re-declaration rather than a re-exporting
 `use`. Common forms:
 
 ```
-// In root::facade.symphony:
+// In root::facade.duc:
 public alias type Synthesizer = root::audio::internal::Synthesizer
                                        // alias type form (§4.2)
 
@@ -5757,8 +5761,7 @@ import shadowing.
 #### 10.4.4 Circular module references are forbidden
 
 The cross-module `use`-and-reference graph must be acyclic. If
-module A `use`s a name from module B (directly or transitively
-through chains of `use` statements or qualified path references),
+module A references a name from module B (directly or transitively),
 and module B references a name from module A, the cycle is
 rejected at compile time. The error identifies the cycle's
 members.
@@ -5789,11 +5792,21 @@ module B, B is initialized before A. Because circular module
 references are forbidden (§10.4.4), this ordering is well-defined.
 
 Within a single module (across all sibling files in the same
-folder), declarations are initialized in a deterministic order
-based on cross-file references within the module and source
-declaration order. Per-section rules (§13.2.6 for reactive
-declarations; analogous rules for plain consts and signals)
-specify the within-module order.
+folder), the within-module initialization order is:
+
+1. **Topological across files** based on cross-file initializer
+   references. If file A's initializer references a name from file
+   B, B's initializer runs before A's. Cycles in initializer
+   references between sibling files are a compile error (note:
+   *type* references between sibling files may form cycles — see
+   §10.4.4 — but *initializer* references must not).
+2. **Source declaration order within each file.** Among
+   declarations in the same file, the textually earlier one
+   initializes first.
+
+Per-section rules (§13.2.6 for reactive declarations; analogous
+rules for plain consts and signals) refine these for specific
+declaration kinds.
 
 The compiler computes the topological order at compile time;
 runtime initialization follows this fixed order. A program never
@@ -5825,9 +5838,11 @@ constructor visibility. When the inner specifier is omitted, constructor
 visibility defaults to match the type's visibility.
 
 **Inner ≤ outer.** The inner specifier may never be *more* permissive
-than the outer. `private(public)` is a compile error — a public
-constructor on a private type is unreachable from anywhere outside the
-type's visibility scope and would be a dead specifier.
+than the outer. `private(public)` is a compile error — the inner
+specifier claims wider reach than the enclosing type permits. The
+constructor's effective reach is capped at the type's reach; declaring
+a broader constructor visibility produces no additional access and is
+rejected to surface the inconsistency at the declaration site.
 
 #### 10.5.1 The smart-constructor pattern
 
@@ -5855,7 +5870,7 @@ public enum Color:                        // all variants public
   Green
   Blue
 
-private enum InternalState:               // type and all variants file-local
+private enum InternalState:               // type and all variants module-local
   Pending
   Running
   Done
@@ -5876,7 +5891,7 @@ declares its own visibility:
 public type Account:
   public id: i64                  // readable anywhere the type is visible
   email: string                   // shared (default)
-  private password_hash: string   // readable only within this file
+  private password_hash: string   // readable only within this module
 ```
 
 A field's visibility never exceeds the enclosing type's visibility —
@@ -5907,8 +5922,8 @@ Concrete cases:
 | `public` | `public` | `public` (anywhere both are visible) |
 | `public` | `shared` | `shared` (package-internal) |
 | `shared` | `public` | `shared` (package-internal) |
-| `private` | `public` | `private` (only in the trait's file) |
-| `private` | `private` | only if both declared in same file |
+| `private` | `public` | `private` (only in the trait's module) |
+| `private` | `private` | only if both declared in same module |
 
 The intersection rule reflects the practical observation: if a caller
 can't name both the trait and the type, the implementation is
@@ -5934,7 +5949,7 @@ rule controls *where it can be declared*.
 A `private` trait or type still counts as "local" for orphan-rule
 purposes. The combination — a `fulfill` block for a private trait and a
 foreign type, with the implementation accessible only inside the
-declaring file — is rare but valid.
+declaring module — is rare but valid.
 
 ### 10.10 Visibility and Dispatch
 
@@ -5943,24 +5958,27 @@ resolution. A method call `x.f()` resolves `f` against names visible in
 the current scope; visibility determines which names are reachable from
 the call site:
 
-- A `private` function is reachable only from within its declaring file.
+- A `private` function is reachable only from within its declaring
+  module.
 - A `shared` function is reachable from any file within the same package
   via a `use` statement bringing it into scope, or via path
   qualification.
 - A `public` function is reachable as for `shared`, plus from any file
   in any package depending on the source package.
 
-In all cross-file cases — same-folder or cross-folder, same-package or
-cross-package — the reference is explicit: either the name is brought
-into scope via `use`, or the call uses a path-qualified form like
-`root::module::function_name(args)`.
+In all cross-module cases — same-package or cross-package — the
+reference is explicit: either the name is brought into scope via
+`use`, or the call uses a path-qualified form like
+`root::module::function_name(args)`. Within a module, sibling files
+see each other's declarations directly (§10.2.1); no explicit
+reference is needed.
 
-The resolution algorithm per §3.4.1 searches imported and in-scope names
-in the current file; visibility filters which names can be successfully
-brought into scope or referenced via path. Trait-method calls follow the
-same rule, with the additional reach constraint from §10.8 — the
-implementation's effective visibility is the minimum of the trait's
-and type's visibility.
+The resolution algorithm per §3.4.1 searches in-module declarations
+and imported names in the current file; visibility filters which
+names can be successfully brought into scope or referenced via path.
+Trait-method calls follow the same rule, with the additional reach
+constraint from §10.8 — the implementation's effective visibility is
+the minimum of the trait's and type's visibility.
 
 ---
 
