@@ -5517,7 +5517,7 @@ Visibility is three-level. Each level denotes a distinct scope:
 |---|---|---|
 | `public` | Across package boundaries — exported to dependent packages | no |
 | `shared` | Within the same package (the module tree rooted at the package root) | **yes** |
-| `private` | Within the declaring file only | no |
+| `private` | Within the declaring module only (the folder containing the declaration) | no |
 
 `shared` is the default; no keyword is required. `public` and `private`
 are explicit keywords.
@@ -5527,76 +5527,89 @@ The three levels are linearly ordered by permissiveness:
 the maximum reach of any reference to it; references from outside that
 reach produce compile errors at the reference site.
 
+The unit of `private` is the *module* (the folder), not the file
+within it. Files inside the same folder are organizational; they
+share scope and see each other's declarations regardless of
+visibility level (§10.2.1).
+
 ### 10.2 Packages and Modules
 
 A *package* is the unit of distribution — a project root or a named
 dependency. Each package has a single *package root*: the top-level
 folder of the package's source tree. The package root is itself the
 *root module*, addressed in absolute paths via the `root` keyword.
-Subfolders of the package root may be submodules; for example, the
-folder `<package_root>/audio/` may be the module accessible as
-`root::audio` (subject to the rule of §10.2.0 below).
+Each subfolder of the package root is a distinct module addressable
+by its folder name (e.g., `<package_root>/audio/` is the module
+`root::audio`).
 
-A *module* is a folder of source files within a package. Files within
-a folder share a path prefix — the folder's module path — and form a
-single module's content. The folder structure of the source tree
-mirrors the module path structure.
+A *module* is a folder containing one or more `.duc` source files.
+The folder's path within the package determines the module's path;
+files inside the folder are organizational, not separately addressed.
+There is no module marker file, no module declaration inside files,
+no manifest. **The folder is the module.**
 
-#### 10.2.0 Module entry files (`index.symphony`)
+A subfolder is *not* a "child module" or "submodule of its parent" —
+each folder is an independent module addressable by its own path.
+Folders nested under `audio/` (e.g., `audio/effects/`) form their
+own modules (`root::audio::effects`); references between them are
+ordinary cross-module references.
 
-A folder forms a module **only if** it contains a file named
-`index.symphony`. Folders without an `index.symphony` are
-organizational subdirectories — their `.symphony` files are not
-reachable from outside the folder and produce a compile error if a
-`use` statement or path attempts to reference them.
+#### 10.2.1 Files within a module
 
-The `index.symphony` file is the module's entry point. Its
-top-level declarations belong to the folder's module path. Sibling
-`.symphony` files in the same folder belong to the same module and
-share the same module path; cross-file references within the
-module follow §10.2.1 (visibility reach) and §10.4 (use).
+Files inside the same folder share scope: each file sees all
+declarations from sibling files automatically, without any `use`
+statement or path qualification. The unit of identity in the type
+system is the module (the folder); files inside are purely
+organizational means of splitting source across multiple physical
+files.
 
 ```
 <package_root>/
-├── index.symphony            -- root module entry
-├── audio/
-│   ├── index.symphony        -- root::audio entry (this folder is a module)
-│   ├── oscillator.symphony   -- part of root::audio
-│   └── filter.symphony       -- part of root::audio
-└── helpers/
-    └── util.symphony         -- compile error: no index.symphony in helpers/;
-                              --   util.symphony is unreachable
+├── main.duc           // part of root module; sees signals.duc declarations directly
+├── signals.duc        // part of root module
+└── audio/
+    ├── oscillator.duc // part of root::audio; sees filter.duc directly
+    └── filter.duc     // part of root::audio; sees oscillator.duc directly
 ```
 
-The package root must contain an `index.symphony`. A package
-without one is malformed.
+In this layout: `main.duc` and `signals.duc` are both in the root
+module and reference each other's declarations with no import.
+`oscillator.duc` and `filter.duc` are both in `root::audio` and
+likewise reference each other directly. But `main.duc` referencing
+something from `audio/oscillator.duc` requires either a `use`
+statement or a qualified path (§10.4) — those are different modules.
 
-#### 10.2.1 Visibility reach
+No file declares which module it belongs to; the folder location is
+the source of truth.
+
+#### 10.2.2 Visibility reach
 
 The three visibility levels translate to declaration reach as follows:
 
-- A `private` declaration is reachable only from within its declaring
-  file. No other file — sibling, parent, child, or unrelated — can
-  reference it. **Parent modules cannot see `private` items in child
-  modules**, and vice versa. `private` is strictly file-scoped, not
-  module-scoped.
+- A `private` declaration is reachable from any file inside its
+  *module* (the folder it is declared in). Sibling files in the same
+  folder see it. Files in any other module — parent folder, child
+  folder, unrelated folder of the same package, or any external
+  package — cannot reference it.
 - A `shared` declaration is reachable from any file within the same
-  package, including the declaring file itself, sibling files in the
-  same folder, files in parent or descendant folders, and files in
-  unrelated folders of the same package. Cross-file access requires
+  package, including the declaring module's siblings, files in any
+  other module of the same package, and files in any descendant or
+  sibling folder. Cross-module access within the package requires
   either a `use` statement (§10.4) or a path-qualified reference.
 - A `public` declaration is reachable from any file within the same
   package (as for `shared`), plus any file in any package that depends
   on the source package. Cross-package references go through the
-  dependent package's external dependency path base per §10.2.2.
+  dependent package's external dependency path base per §10.2.3.
 
-Cross-file access — same-folder or cross-folder — always requires
-explicit reference, either via `use` or via path qualification. There is
-no implicit "sibling files see each other" mechanism. The folder
-structure determines the module path; it does not grant implicit
-mutual visibility.
+Within a single module, all three levels behave identically — every
+declaration is visible to every sibling file regardless of its
+visibility specifier. The visibility level only matters for
+references *outside* the declaring module.
 
-#### 10.2.2 Path bases
+Cross-module access always requires explicit reference, either via
+`use` (§10.4) or via path qualification.
+
+#### 10.2.3 Path bases
 
 The grammar's `PathBase` (per grammar §3.4) provides the following entry
 points for absolute paths:
@@ -5609,6 +5622,11 @@ For example, `root::audio::Synthesizer` resolves an absolute path
 through the current package; `tone_lib::Oscillator` resolves into the
 `tone_lib` dependency's public surface.
 
+All `use` statements use absolute paths starting from one of these
+bases. There is no relative-path or "current module" reference;
+references between modules always go through `root` or an external
+dependency name.
+
 ### 10.3 Visibility Specifiers on Declarations
 
 Every position in the grammar that admits a visibility specifier
@@ -5620,12 +5638,12 @@ all visibility-bearing productions (grammar §3.4 through §3.11).
 ```
 public fn render_frame(...): ...           // exported across packages
 fn compute_delta(...): ...                 // shared (default)
-private fn internal_helper(...): ...       // file-local
+private fn internal_helper(...): ...       // module-local
 
 public type Synthesizer:                   // type public
   ...
 
-private const SECRET_KEY: u64 = 0xDEADBEEF // file-local constant
+private const SECRET_KEY: u64 = 0xDEADBEEF // module-local constant
 ```
 
 Specific visibility rules for each declaration kind are specified in the
@@ -5648,10 +5666,10 @@ declaration's own section and summarized below:
 
 ### 10.4 `use` Statements
 
-A `use` statement imports a name from another module into the current
-file's scope, allowing the file to refer to that name unqualified rather
-than via its full path. The grammar of `use` is specified in grammar
-§3.3.
+A `use` statement imports a name from a *different module* into the
+current file's scope, allowing the file to refer to that name
+unqualified rather than via its full path. The grammar of `use` is
+specified in grammar §3.3.
 
 ```
 use root::audio::Synthesizer
@@ -5660,6 +5678,14 @@ let s = Synthesizer(...)              // unqualified — would be
                                       // root::audio::Synthesizer(...) otherwise
 ```
 
+`use` statements are required only for *cross-module* references.
+Files within the same module (the same folder) see each other's
+declarations automatically; no `use` is needed for siblings (§10.2.1).
+
+All `use` paths are absolute, starting from a path base
+(`root` or an external dependency name; see §10.2.3). There is no
+relative-path form.
+
 `use` has **no visibility modifier**. It is a usage-side construct: it
 controls how the current file refers to other names, not how other files
 refer to the current file. A name brought into scope via `use` does not
@@ -5667,11 +5693,17 @@ become a declaration in the current file; it remains the original
 declaration in the original module, just with a shorter local reference.
 
 The visibility of the imported declaration governs whether the `use` is
-permitted at all. Importing a `private` declaration from another file
-is a compile error (the source isn't visible). Importing a `shared`
-declaration from within the same package works; importing it from another
-package does not. Importing a `public` declaration works from any package
-that depends on the source's package.
+permitted at all. Importing a `private` declaration from a different
+module is a compile error (the source isn't visible from outside its
+module). Importing a `shared` declaration from within the same package
+works; importing it from another package does not. Importing a
+`public` declaration works from any package that depends on the
+source's package.
+
+A `use` statement targets the module path of the declaration's
+*module* (folder), not the file within it. From the importer's
+perspective, the file in which the declaration physically lives is
+irrelevant — only its module's path matters.
 
 #### 10.4.1 Selective and glob imports
 
@@ -5722,24 +5754,30 @@ top of the file, which aids tooling, navigation, and reasoning
 about dependencies. It also avoids the complexity of nested-scope
 import shadowing.
 
-#### 10.4.4 Circular imports are forbidden
+#### 10.4.4 Circular module references are forbidden
 
-The cross-file `use`-and-reference graph at the file level must be
-acyclic. If file A `use`s a name from file B (directly or
-transitively through chains of `use` statements), and file B
-references a name from file A, the cycle is rejected at compile
-time. The error identifies the cycle's members.
+The cross-module `use`-and-reference graph must be acyclic. If
+module A `use`s a name from module B (directly or transitively
+through chains of `use` statements or qualified path references),
+and module B references a name from module A, the cycle is
+rejected at compile time. The error identifies the cycle's
+members.
 
-This rule eliminates ambiguous initialization order across files
-and simplifies module-level reasoning. Programs that need shared
+Cycles *within* a single module (between sibling files in the same
+folder) are not subject to this rule — files in the same module
+share scope and are compiled as a single unit. Mutually-referencing
+type declarations across sibling files in the same module are
+permitted; the compiler resolves them in one pass.
+
+This rule eliminates ambiguous initialization order across modules
+and simplifies cross-module reasoning. Programs that need shared
 state between mutually-referencing modules must extract the shared
 declarations into a third module that both depend on, breaking the
 cycle topologically.
 
-Note: this rule applies to the *file-level* reference graph
-(`use`-or-path-reference edges between files). It is distinct from
-reactive-graph cycles (§13.9), which operate at the runtime
-dependency level and have their own rules.
+Note: this rule applies to the *cross-module* reference graph. It
+is distinct from reactive-graph cycles (§13.9), which operate at
+the runtime dependency level and have their own rules.
 
 #### 10.4.5 Cross-module initialization order
 
@@ -5747,14 +5785,15 @@ Top-level declarations with initializers — `const`, `signal`, and
 the placement-time-evaluated portions of node/connection bodies —
 are initialized in **topological order** of the cross-module
 reference graph. If module A's initializers reference items from
-module B, B is initialized before A. Because circular imports are
-forbidden (§10.4.4), this ordering is well-defined.
+module B, B is initialized before A. Because circular module
+references are forbidden (§10.4.4), this ordering is well-defined.
 
-Within a single module (a single `.symphony` file, or the
-collected files of a folder-module sharing one entry), declarations
-are initialized in source declaration order (per §13.2.6 for
-reactive declarations; analogous rules apply to plain consts and
-signals).
+Within a single module (across all sibling files in the same
+folder), declarations are initialized in a deterministic order
+based on cross-file references within the module and source
+declaration order. Per-section rules (§13.2.6 for reactive
+declarations; analogous rules for plain consts and signals)
+specify the within-module order.
 
 The compiler computes the topological order at compile time;
 runtime initialization follows this fixed order. A program never
