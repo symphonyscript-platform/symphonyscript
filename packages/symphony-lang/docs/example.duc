@@ -12,3 +12,7 @@ connection Drives:
 node Vehicle:
   in: Drives
   attr top_speed: i32 = 160
+
+
+node Fetch:
+  signal response: Option<HttpResponse>

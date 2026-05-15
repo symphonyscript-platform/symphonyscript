@@ -8380,24 +8380,74 @@ supplied at the declaration. After construction, the value is written
 only through the host API (§13.12.2); Ductus source has no
 syntactic form for assigning to a signal.
 
-Signals are program-level reactive entry points. They represent
-inputs from outside the reactive graph — host events, sensor
-readings, user input, scheduled values. The host pushes new values
-into the kernel; the reactive graph propagates the changes.
+Signals represent reactive *entry points* — values fed into the
+reactive graph by the host or runtime, not computed by Ductus
+source. The host pushes new values into the kernel; the reactive
+graph propagates the changes.
+
+Signals may be declared at three scopes:
+
+**Module-level signals** — declared at module top level (outside
+any node or connection body). One value shared across the program;
+host writes it; all references read the same cell. Useful for
+program-wide inputs: a global clock, a user-input axis, a master
+volume signal.
 
 ```
 signal mouse_x: i32 = 0
-signal mouse_y: i32 = 0
-signal mouse_button: bool = false
 signal current_time_ms: i64 = 0
-signal volume: f32 = 0.5
-signal target_pitch: f32 = 440.0
+signal master_volume: f32 = 0.5
 ```
 
-Signals are declared only at module top level. They are program-wide
-reactive entry points — inputs from outside the reactive graph.
-Per-instance writable cells are the role of `attr` (§13.2.2);
-per-instance self-advancing cells are the role of `recurrent` (§13.2.4).
+**Node-level signals** — declared inside a node body. Per-instance:
+each placement of the node creates its own cell. The runtime/host
+writes per-instance signals to feed instance-specific data into the
+graph (an HTTP response for a specific `Fetch` instance, a sensor
+reading for a specific `Sensor` instance, etc.).
+
+```
+node Fetch:
+  default attr url: string
+  signal response: Result[HttpResponse, HttpError] = Err(NotYetFetched)
+  signal status: i32 = 0
+```
+
+(Types like `HttpResponse`, `HttpError`, and variants such as
+`NotYetFetched` are illustrative; the stdlib or a host package
+provides concrete definitions.)
+
+**Connection-level signals** — declared inside a connection body.
+Per-instance per-connection: each placement of the connection
+creates its own cell. The runtime writes per-connection signals to
+feed data flowing through that specific connection instance (bytes
+received on a network connection, audio samples through a routing
+edge, etc.).
+
+```
+connection NetworkChannel:
+  from: Source
+  to: Sink
+  signal bytes_received: Bytes = empty_bytes
+  signal status: ChannelStatus = ChannelStatus::Idle
+```
+
+(Types like `Bytes`, `ChannelStatus`, `Source`, and `Sink` are
+illustrative; the stdlib or domain code provides concrete
+definitions.)
+
+In all three scopes, signals share the same semantics: host-written,
+not source-assignable, reactive (writes trigger downstream
+re-evaluation). The scope determines instance multiplicity and how
+the host addresses the signal when writing (§13.12.2).
+
+Use cases by scope:
+- Module-level: program-wide entry points (one cell, shared).
+- Node-level: per-node-instance runtime-fed data.
+- Connection-level: per-connection-instance runtime-fed data.
+
+Per-instance *configuration* (user-controlled) is the role of
+`attr` (§13.2.2); per-instance memory is the role of `recurrent`
+(§13.2.4). Signals are reserved for externally-fed reactive inputs.
 
 #### 13.2.2 `attr`
 
@@ -8448,7 +8498,7 @@ Filter f1:
 
 ##### 13.2.2.1 `default attr`
 
-A node or connection type may designate one of its attrs as the
+A *node* type may designate one of its attrs as the
 *positional default* by prefixing the declaration with `default`:
 
 ```
@@ -8462,20 +8512,24 @@ property: it becomes the target of the positional `/expr` syntax at
 placement time (§13.7.5), so the attr can be set without naming it:
 
 ```
-Log /"Hello World"        -- sets the default attr `message` to "Hello World"
+Log /"Hello World"        // sets the default attr `message` to "Hello World"
 
--- Equivalent body form:
+// Equivalent body form:
 Log:
   message: "Hello World"
 ```
 
 Rules:
 
-- At most one `default attr` per node or connection type. Declaring
-  two is a compile error.
+- At most one `default attr` per node type. Declaring two is a
+  compile error.
 - The `default attr` marker applies only to `attr` declarations.
   `recurrent`, `derived`, `const`, and `signal` cannot be marked
   `default`.
+- **`default attr` is node-only.** Connection types may not declare
+  `default attr`, because their positional `/expr` slot is reserved
+  for the destination endpoint (§13.7.5.1) and cannot also target
+  an attribute.
 
 #### 13.2.3 `derived`
 
@@ -8839,15 +8893,16 @@ reactive cells managed by the kernel.
 
 ```
 node TypeName[GenericParams]?:
-  satisfies Trait1, Trait2                            -- optional trait conformance
-  parts: Type1, Type2                                  -- optional permitted part types
-  in: Conn1, Conn2                                     -- optional incoming connection types
-  out: Conn3, Conn4                                    -- optional outgoing connection types
-  const name: Type = value                             -- per-type compile-time constants
-  attr name: Type = default                            -- per-instance writable cells
-  default attr name: Type = default                    -- positional default attr (at most one)
-  recurrent name: Type = init | next: expr | on: t1   -- per-instance memory cells
-  derived name: Type = expr                            -- per-instance reactive values
+  satisfies Trait1, Trait2                            // optional trait conformance
+  parts: Type1, Type2                                 // optional permitted part types
+  in: Conn1, Conn2                                    // optional incoming connection types
+  out: Conn3, Conn4                                   // optional outgoing connection types
+  const name: Type = value                            // per-type compile-time constants
+  signal name: Type = initial                         // per-instance runtime-fed entry points
+  attr name: Type = default                           // per-instance user-configured cells
+  default attr name: Type = default                   // positional default attr (at most one; node-only)
+  recurrent name: Type = init | next: expr | on: t1   // per-instance memory cells
+  derived name: Type = expr                           // per-instance reactive values
 ```
 
 All body items are optional. A node with no attrs, no deriveds, no
@@ -9323,15 +9378,19 @@ error.
 
 ```
 connection TypeName[GenericParams]?:
-  satisfies Trait1, Trait2                            -- optional trait conformance
-  from: SourceType                                     -- required, exactly once
-  to: DestType                                         -- required, exactly once
-  const name: Type = value                             -- per-type compile-time constants
-  attr name: Type = default                            -- per-instance writable cells
-  default attr name: Type = default                    -- positional default attr (at most one)
-  recurrent name: Type = init | next: expr | on: t1   -- per-instance memory cells
-  derived name: Type = expr                            -- per-instance reactive values
+  satisfies Trait1, Trait2                            // optional trait conformance
+  from: SourceType                                    // required, exactly once
+  to: DestType                                        // required, exactly once
+  const name: Type = value                            // per-type compile-time constants
+  signal name: Type = initial                         // per-instance runtime-fed entry points
+  attr name: Type = default                           // per-instance writable cells
+  recurrent name: Type = init | next: expr | on: t1   // per-instance memory cells
+  derived name: Type = expr                           // per-instance reactive values
 ```
+
+Note: `default attr` is not permitted in connection bodies — the
+positional `/expr` slot on a connection placement targets the
+destination endpoint (§13.7.5.1), not an attr.
 
 Example:
 
@@ -9623,27 +9682,83 @@ Counter c1:
 ```
 
 The named cell must be declared on the placed type as either an
-`attr` or a `recurrent`. Setting any other identifier is a compile
-error. The value's type must match the cell's declared type
-(subject to the standard widening rules).
+`attr` or a `recurrent`. Setting any other identifier — including
+`signal`, `derived`, or `const` declarations — is a compile error.
+The value's type must match the cell's declared type (subject to
+the standard widening rules).
 
-**`const` declarations are not settable at placement.** A const's
-value is fixed by its declaration on the type; placement bodies
-cannot override it. Attempting to set a const at placement is a
-compile error.
+##### 13.7.2.1 Reactive vs. compile-time placement values
+
+The right-hand side of an attr setting at placement may be:
+
+- A **compile-time expression** — a literal, a `const` reference, a
+  compile-time-evaluable computation. The value is fixed at
+  placement and stored directly in the attr's cell.
+- A **reactive expression** — references reactive cells (signals,
+  attrs, recurrents, deriveds) visible at the placement scope:
+  sibling part instances by name, top-level signals or consts, or
+  any cell reachable through visible names. The placement creates
+  an implicit `derived` bridging the source cells to the target
+  attr, so the attr reactively tracks changes to the source.
+
+```
+App my_app:
+  Fetch fetcher / "url"
+  Log / fetcher.response                 // reactive binding: Log's default attr
+                                          // tracks fetcher.response
+
+App other_app:
+  Counter c1
+  Display d1 | label: format(c1.count)   // reactive: d1.label tracks c1.count,
+                                          // formatted as a string
+```
+
+Mechanically, a reactive placement value introduces a synthesized
+derived in the parent's scope; the target attr is bound to that
+derived. When any cell in the expression's provenance changes
+(§13.10.1), the synthesized derived re-evaluates and the target
+attr updates.
+
+The compiler determines reactivity from the expression's provenance
+set: any reference to a reactive cell makes the expression
+reactive; otherwise the expression is compile-time and the value is
+fixed at placement.
+
+##### 13.7.2.2 Restrictions
+
+- **`const` declarations are not settable at placement.** A const's
+  value is fixed by its declaration on the type; placement bodies
+  cannot override it. Attempting to set a const at placement is a
+  compile error.
+- **`signal` declarations are not settable at placement.** Signals
+  receive their values from the host/runtime, not from placement
+  syntax. Their declared initial value applies at construction;
+  subsequent values come through the host API (§13.12.2).
+- **Recurrent initial-value overrides accept only compile-time
+  values.** Unlike attrs, the placement body form for recurrents
+  (`count: 100`) does *not* accept reactive expressions. A
+  recurrent's initial value is a fixed compile-time constant at
+  construction; runtime advancement happens via the `next:`
+  expression (§13.2.4).
 
 For attrs only, the same value may also be set via inline pipes
 (§13.7.7) or flags (§13.7.8). The three mechanisms (body form,
 pipes, flags) all target the same underlying attr cells; setting
 the same attr via two mechanisms is a compile error (duplicate-set).
 
-A node or connection type's `default attr` (§13.2.2.1) — when
-declared — is additionally settable via the positional `/expr` form
-(§13.7.5).
+Reactive bindings apply to **body form and pipe form** for attrs.
+Flag form has no expression slot — a flag always sets a literal
+boolean (true for `'name`, false for `!name`) — so reactive
+bindings do not apply to flags.
+
+A node type's `default attr` (§13.2.2.1) — when declared — is
+additionally settable via the positional `/expr` form (§13.7.5).
+Connection types do not have `default attr`; their `/expr` slot is
+the to-endpoint (§13.7.5.1).
 
 Pipes and flags do *not* target recurrent cells or consts.
-Recurrent initial values can be overridden only via the body form.
-Consts cannot be overridden at all.
+Recurrent initial values can be overridden only via the body form
+(with compile-time values). Consts cannot be overridden at all.
 
 For recurrent cells, only the initial value is overridable at
 placement. The `next:` and `on:` clauses are structural type
@@ -9703,26 +9818,71 @@ immediately after the first identifier; otherwise it is a
 
 #### 13.7.4 Connections
 
-A child placement whose type is a connection type creates a
-connection from the enclosing instance (which becomes the `from`
-endpoint) to some destination (the `to` endpoint). The destination
-is specified either via the `/expr` form (§13.7.5) or via an
-explicit `to:` clause in the connection's body. `to:` (and `from:`,
-if explicitly specified) are endpoint-slot syntax — distinct from
-attribute settings — and target the connection's structural
-endpoints, not its attrs.
+A connection placement creates a directional edge from a source
+instance to a destination instance. The placement form differs by
+context:
+
+- **Node-owned connection** — placed at the same level as the
+  source node instance; the source is named explicitly.
+- **Part-owned connection** — placed inside the source part's body
+  using a `->` prefix; the source is the enclosing part instance
+  implicitly.
+
+**Node-owned connection.** When the source is the immediately
+enclosing instance (a top-level placement or a parent node), the
+connection is placed as a sibling declaration inside that
+instance's body. No `->` prefix is used:
 
 ```
-Component chip_b:
-  Pin out1
-    WiresTo/chip_a.in1 | resistance: 50      // connection from out1 to chip_a.in1
-    WiresTo/chip_a.in2 | resistance: 75
+App my_app:
+  Fetcher fetcher / "url"                       // part placement
+  WiresToExternal / external_target             // node-owned conn from my_app
+                                                 // to external_target
 ```
 
-The enclosing instance becomes the connection's `from`; the
-expression after `/` becomes the connection's `to`. The connection
-type must match a type listed in the enclosing instance's `out:`
-clause (or in the type's traits' contributions).
+Here `WiresToExternal` originates from `my_app` (the enclosing
+instance); the source is unambiguous because the placement is
+directly inside `my_app`'s body and is not nested inside any part.
+
+**Part-owned connection.** When the source is a specific *part*
+inside a parent, the connection placement appears inside the part's
+body, prefixed with `->`. The arrow marks the line as an outbound
+edge originating from that part:
+
+```
+App my_app:
+  Filter filter / "low-pass":
+    -> Cascade / next_filter                    // outbound from filter to next_filter
+    -> WiresTo / monitor | gain: 0.5            // outbound from filter to monitor
+  Filter next_filter / "high-pass"
+  Monitor monitor
+```
+
+The `->` prefix is **required** for part-owned connections and
+**not used** for node-owned connections. The distinction reflects
+where the source instance lives:
+
+- No `->`: source is the immediately enclosing instance.
+- `->`: source is the part whose body contains this line.
+
+Rationale for `->` on part-owned only:
+
+1. **Visual delimitation.** A connection inside a part's body could
+   otherwise be mistaken for an attr setting or a nested child
+   placement. The arrow makes "outbound edge from this part"
+   immediately visible.
+2. **Reuse of `->` symbol.** `->` is already used in connection
+   declarations (`pairs: From -> To`) to denote a directional pair
+   at the type level; using `->` in placement contexts denotes a
+   directional edge at the instance level. Both share the same
+   conceptual meaning: directed flow from left to right.
+
+The connection type must match a type listed in the source
+instance's `out:` clause (or in the type's traits' contributions).
+
+In both forms, the expression after `/` is the destination
+(§13.7.5.1). Connection attrs are set via inline pipes (`| name: value`)
+or the connection's body.
 
 #### 13.7.5 The `/expr` form
 
@@ -9831,12 +9991,19 @@ duplicate-set).
 
 Pipes target *attrs* declared on the placed type (directly or
 inherited via satisfied traits). Pipes do not target recurrent,
-derived, or signal declarations — targeting a non-attr identifier
-is a compile error. The expression in `| name: value` must match
-the attr's type subject to standard widening rules. The boolean-
-true (`| name`) and boolean-false (`| !name`) forms require the
-attr to be of type `bool`; non-boolean attrs used with the bare
+derived, signal, or const declarations — targeting a non-attr
+identifier is a compile error. The expression in `| name: value`
+must match the attr's type subject to standard widening rules. The
+boolean-true (`| name`) and boolean-false (`| !name`) forms require
+the attr to be of type `bool`; non-boolean attrs used with the bare
 form are a compile error.
+
+The expression in `| name: value` may be a compile-time constant
+*or* a reactive expression, per §13.7.2.1. A reactive expression
+in a pipe creates a synthesized derived bridging the source cells
+to the target attr — identical mechanics to the body form. All
+three setting mechanisms (body, pipe, flag) handle reactive
+bindings uniformly for attrs.
 
 #### 13.7.8 Flags
 
@@ -9935,9 +10102,13 @@ pipes (§13.7.7).
 A placement's inline parts have a fixed order:
 
 ```
-TypeRef [FlagsRun]? [InstanceName]? [DefaultArgPart (`/Expr`)]? [AttrPipe]*
+["->"]? TypeRef [FlagsRun]? [InstanceName]? [DefaultArgPart (`/Expr`)]? [AttrPipe]*
 ```
 
+- The optional `->` prefix marks a part-owned outbound connection
+  placement (§13.7.4). Present only when the placement is a
+  connection originating from the enclosing part. Not allowed on
+  node-owned connection placements or on node placements.
 - Flags immediately adjacent to TypeRef (no whitespace).
 - Optional instance name follows the type/flags.
 - The `/Expr` default-arg slot follows the name. For connection
@@ -10346,47 +10517,97 @@ that reads the reactive cell directly (or calls a function that
 reads it). Closures are for snapshot semantics; derived expressions
 are for live reactive semantics.
 
-#### 13.10.4 Restricted reactive cell types
+#### 13.10.4 Reactive cell types and storage
 
-Reactive cells (signal, attr, recurrent, derived values) are
-restricted to types that fit a single cell in the reactive state
-buffer (§14.3). Specifically:
+Reactive cells (signal, attr, recurrent, derived values) accept
+**any type**. The compiler determines the cell's storage strategy
+from the type's size and shape:
 
-**Permitted:**
+**Direct in-cell storage (no indirection):**
 
-- Primitives: `i8`–`i128`, `u8`–`u128`, `isize`, `usize`, `f32`,
-  `f64`, `bool`, `char`.
-- `string` (refcounted-shared handle in cell, content in pool per
-  §14.5).
-- Tuples of all-`Copy` components whose total size fits one cell.
-- Records with `@derive(Copy)` whose total size fits one cell.
-- `Result[T, E]` and `Option[T]` where the total bit width (tag
-  discriminant + maximum payload variant) fits a single cell.
-  A `Result[i32, i32]` with a 1-bit discriminant fits 64 bits; a
-  `Result[i64, i64]` does not (discriminant pushes the total past
-  the cell). The compiler verifies the bit-width budget at
-  type-checking time.
+- Types whose size is ≤ the platform's atomic word width (typically
+  one i64 = 8 bytes) are stored directly in the reactive state
+  buffer's cell. The atomic publication (§14.3.3) is a single
+  atomic store. No allocation, no refcount, no pool.
+- On platforms supporting wider atomics (x86_64 with `CMPXCHG16B`,
+  ARM64 with `LDXP`/`STXP`), types of size 9–16 bytes may
+  optionally be stored directly in a 128-bit cell (§14.3.4). On
+  platforms without wide atomics, types in this range fall back to
+  handle-based storage.
+- `Result[T, E]` and `Option[T]` follow the same rule: if the total
+  bit width (discriminant + maximum payload) fits the atomic word,
+  direct storage applies.
+
+**Handle-based pool storage (indirection):**
+
+- Types whose size exceeds the platform's atomic word width are
+  stored as handles (one i64 per cell) into a per-type pool. The
+  cell stores the handle; the actual value lives in the pool.
+- Dynamically-sized types (`string`, `Vec[T]`, `HashMap[K, V]`,
+  and other heap-allocated dynamic-size collections) always use
+  handle-based storage. `string` uses the existing string pool
+  (§14.5); other dynamic types use per-type pools generated by the
+  compiler.
+- Refcounting on the pool entry manages lifetime: when the cell is
+  overwritten and no consumer holds a reference, the pool slot is
+  released.
+
+**Pool mechanics:**
+
+- Per-type pools. Each reactive cell type that requires handle-based
+  storage has its own pool, sized at kernel construction based on
+  graph metadata.
+- The cell still occupies one i64 slot in the reactive state buffer
+  (the handle); the triple-buffer atomic swap publishes the handle
+  unchanged.
+- Producer cost: when writing a complex-typed cell, the producer
+  allocates a pool slot (or reuses one), copies the value in, and
+  writes the handle into the back buffer. This involves work
+  proportional to the value's size, plus a pool acquire.
+- Consumer cost: dereferencing the handle to read the value.
+
+**Performance implications:**
+
+- For real-time domains (audio DSP, animation hot paths), prefer
+  reactive cells whose types fit direct storage. Pool storage
+  involves allocation and refcounting that may not be acceptable
+  inside an audio callback or render loop.
+- Direct storage has zero overhead vs. plain atomic reads/writes.
+- Handle storage adds an indirection on read and a pool allocation
+  on write. Acceptable for cold paths, configuration cells,
+  network/IO results, etc.
+
+**Cell-fit examples:**
+
+| Type                                    | Storage                         |
+|-----------------------------------------|---------------------------------|
+| `i32`, `f32`, `bool`                    | direct (4 bytes)                |
+| `i64`, `f64`                            | direct (8 bytes)                |
+| `(i32, f32)` tuple                      | direct (8 bytes)                |
+| `Option[i32]`                           | direct (1-bit tag + 4 = 5 bytes)|
+| `Result[i32, i32]`                      | direct (1-bit tag + 4 = 5 bytes)|
+| Record with two `i64` fields            | direct on wide-atomic platforms (16 bytes); pool otherwise |
+| Record with five `i64` fields           | pool (40 bytes)                 |
+| `string`                                | pool (variable; via string pool §14.5) |
+| `Vec[i32]`                              | pool (variable)                 |
+| `HashMap[K, V]`                         | pool (variable)                 |
+| Fixed-size array `T[N]` with N×sizeof(T) ≤ word | direct           |
+| Fixed-size array `T[N]` with N×sizeof(T) > word | pool             |
 
 **Not permitted as reactive cell types in v1:**
 
-- `Vec[T]`, `HashMap[K, V]`, and other heap-allocated dynamic-size
-  collections.
-- Fixed-size arrays `T[N]` (even when N is small).
-- Records or tuples whose total size exceeds one cell.
-- `dyn` trait objects.
-- Functions and closures.
+- `dyn` trait objects (no fixed in-cell representation; type
+  identity not tracked statically).
+- Functions and closures (require captured environment management
+  beyond what the reactive cell model supports).
 
-For "collection of reactive things" patterns, users compose via
-parts (§13.4): a parent node with N parts of the same child type,
-each part holding its own attrs/deriveds. This is the canonical
-reactive composition mechanism. Non-reactive collections (`Vec`,
-`HashMap`) hold non-reactive data only.
-
-Multi-cell record values that span more than one cell are
-intentionally excluded from reactive cells in v1 to keep the
-storage model simple. Future versions may relax this for
-narrow-multi-cell types (`i128`, small records spanning 2-3 cells)
-via the same triple-buffer mechanism, but it is not part of v1.
+For "collection of reactive things" patterns, prefer composition
+via parts (§13.4): a parent node with N parts of the same child
+type, each part holding its own attrs/deriveds. This is the
+canonical reactive composition mechanism. Reactive cells of
+collection types (`Vec[T]`, etc.) work via pool storage but each
+write involves rebuilding/replacing the collection — fine for
+batch updates, less suited for fine-grained mutations.
 
 #### 13.10.5 Reactivity vs compile-time evaluation
 
@@ -10530,24 +10751,40 @@ sentinel (or block, per implementation choice).
 
 #### 13.12.2 `kernel.write_signal`
 
+Two forms, one per signal scope:
+
 ```
-kernel.write_signal(signal_id, value)
+kernel.write_signal(signal_id, value)                          // module-level signal
+kernel.write_instance_signal(instance_id, signal_id, value)    // per-instance signal
 ```
 
-Writes a new value to the cell of the named signal. The call is
-synchronous and inexpensive: it updates the back buffer's cell and
-sets the dirty bit for dependents. No evaluation runs at this
-point.
+Both forms write a new value to the named signal's cell. The calls
+are synchronous and inexpensive: they update the back buffer's
+cell and set the dirty bit for dependents. No evaluation runs at
+this point.
 
-The call must be made from the producer thread (the kernel's
+**Module-level form** — `kernel.write_signal(signal_id, value)`:
+writes to a top-level signal. The `signal_id` identifies a
+module-scope signal declared per §13.2.1. One cell exists for the
+entire program.
+
+**Per-instance form** —
+`kernel.write_instance_signal(instance_id, signal_id, value)`:
+writes to a node-level or connection-level signal on a specific
+instance. The `instance_id` identifies the instance (assigned at
+compile time per placement); `signal_id` identifies the signal on
+that instance's type. Each placement creates its own cell; the
+write targets one specific cell.
+
+Both calls must be made from the producer thread (the kernel's
 designated thread for write/evaluation/publish operations; see
-§14.8). Other threads write to signals indirectly by enqueueing
-requests for the producer thread to apply — that's a
-host-application concern, not a kernel concern.
+§14.8). Other threads write indirectly by enqueueing requests for
+the producer thread to apply — that's a host-application concern,
+not a kernel concern.
 
-The `signal_id` is obtained at compile time from the graph
-metadata (each signal has a stable ID assigned during compilation,
-per §14.7).
+Signal IDs and instance IDs are obtained at compile time from the
+graph metadata (each signal and each placement has a stable ID
+assigned during compilation, per §14.7).
 
 #### 13.12.3 `kernel.write_attr`
 
@@ -10556,11 +10793,15 @@ kernel.write_attr(instance_id, attr_id, value)
 ```
 
 Writes a new value to the cell of a specific instance's attr.
-Otherwise behaves identically to `kernel.write_signal`: synchronous,
-back-buffer-only, dirty-bit propagation, no evaluation.
+Otherwise behaves identically to `kernel.write_instance_signal`:
+synchronous, back-buffer-only, dirty-bit propagation, no evaluation.
 
 `instance_id` identifies the instance (assigned at compile time per
 placement); `attr_id` identifies the attr on that instance's type.
+
+The same call applies to attrs declared on node instances or
+connection instances — both kinds of instance live in the same ID
+space.
 
 #### 13.12.4 `kernel.publish`
 
