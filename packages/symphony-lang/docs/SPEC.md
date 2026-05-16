@@ -83,10 +83,12 @@ are explicit structural carve-outs with clear semantics.
 traits with explicit `satisfies`/`fulfill` declarations. Coherence is enforced
 structurally via orphan rules.
 
-**Uniform function call syntax.** Methods, free functions, and pipe-forward
-calls are interchangeable syntactic forms for the same underlying operation.
-Records carry data; functions carry behavior; the call site chooses the form
-that reads best.
+**Uniform function call syntax.** Methods and free functions are
+interchangeable syntactic forms for the same underlying operation: a
+function `f(x, y)` may equivalently be called as `x.f(y)`. Records
+carry data; functions carry behavior; the call site chooses the form
+that reads best. The `>>` token is *not* a function-call form — it
+is reserved for operator application (§13.16).
 
 **Two-track failure model.** Failures are either bugs (traps, process abort, no
 catch mechanism) or recoverable conditions (`Option`/`Result` values, `?`
@@ -1333,10 +1335,12 @@ valid calls (and equivalent):
 
 ```
 person.display()              // method-call form
-person >> display             // pipe-forward form
 display(person)               // conventional form, requires `display` in scope
 Display::display(person)      // trait-path form, no import needed
 ```
+
+The `>>` token is reserved for operator application (§13.16); it is not
+a function-call form. Functions are called via the three forms above.
 
 The trait-path form (`Trait::method`) requires no `use` import — the
 path itself makes the trait accessible by path, satisfying the in-scope
@@ -1354,7 +1358,7 @@ The other forms rely on name resolution per §10.
 
 #### 3.4.1 Resolution across free-function and trait-implementation namespaces
 
-A bare-name call `f(x)`, method-call `x.f()`, or pipe-forward `x >> f` may
+A bare-name call `f(x)` or method-call `x.f()` may
 resolve to either a trait-implementation function or a free function. The
 resolution algorithm prioritizes trait implementations over free functions:
 
@@ -1451,7 +1455,6 @@ Disambiguation forms:
   way to resolve trait-vs-trait ambiguity in step 3).
 - `some_module::f(x, ...)` — explicitly select a free function (used when a
   free function would otherwise be shadowed by a trait impl per step 2).
-- `x >> Trait::f` — pipe-forward with trait-path qualification.
 - `x.f::[T]()` is *not* a disambiguation form; the turbofish (§2.2.5)
   specifies generic type arguments, not the receiving trait.
 
@@ -2314,16 +2317,18 @@ arithmetically (sign-extending); unsigned types shift logically (zero-
 extending). The compiler dispatches on the type via the `Shr` trait impl.
 No separate `>>>` operator exists.
 
-The grammar currently assigns `>>` to pipe-forward (§3.15.3). The
-expression-position bitwise meaning coexists with the pipe-forward meaning
-via context-directed dispatch: when the right-hand side resolves to a
-callable expression (a function reference, a path to a function, a method
-reference), `>>` is pipe-forward and means "call the RHS with the LHS as
-argument" (§3.4). When the right-hand side resolves to a numeric
-expression, `>>` is bitwise right-shift dispatching through `Shr`. The
-disambiguation is by what the RHS resolves to during type-checking, not
-by surface syntax alone. This is the same mechanism that disambiguates
-`&` and `|` between type-level and value-level uses.
+`>>` is overloaded with a second meaning: **operator application**
+(§13.16). When the right-hand side resolves to an operator name (a
+declaration introduced by the `operator` keyword), `>>` instantiates
+that operator with the LHS bound to its first positional parameter.
+When the right-hand side resolves to a numeric expression, `>>` is
+bitwise right-shift dispatching through `Shr`. The disambiguation is
+by what the RHS resolves to during type-checking, not by surface
+syntax alone. This is the same mechanism that disambiguates `&` and
+`|` between type-level and value-level uses.
+
+`>>` is *not* a function-call form. Calling a function as `x >> f`
+is a compile error; use `f(x)` or `x.f()` instead.
 
 #### 4.4.3 Comparison operators
 
@@ -2752,8 +2757,8 @@ not extend to arbitrary user-defined conversions.
 
 Operations beyond the core arithmetic operators (mathematical functions,
 inspection methods, constants) are provided as trait methods on the relevant
-numeric traits. Per §3.4 they are callable via method-call, pipe-forward,
-conventional, and trait-path syntax.
+numeric traits. Per §3.4 they are callable via method-call, conventional,
+and trait-path syntax.
 
 #### 4.8.1 General numeric operations
 
@@ -3407,7 +3412,7 @@ per §3.3.5 are satisfied automatically when their requirements are.
 Records do not declare methods. Functions operating on record instances are
 free functions defined elsewhere (grammar §3.13) or trait-method
 implementations in `fulfill` blocks (§3.3). The uniform function call
-syntax (§3.4) makes these callable as `x.f()`, `x >> f`, or `f(x)`
+syntax (§3.4) makes these callable as `x.f()` or `f(x)`
 indifferently.
 
 #### 6.1.2 Field defaults
@@ -4363,7 +4368,7 @@ widenings.
 
 ```
 let x: f64 = (5_i32).into::[f64]()        // method form
-let x: f64 = 5_i32 >> Into::into          // pipe-forward through trait path
+let x: f64 = Into::into(5_i32)            // free-function via trait path
 let x: f64 = From::from(5_i32)            // free-function via trait path
 let x: f64 = 5_i32                        // implicit (built-in lossless widening only)
 ```
@@ -4375,12 +4380,12 @@ an invocation at all but the absence of one: it works only because
 the compiler inserts the conversion silently. User-defined `From` impls
 never participate in implicit conversion (§7.7).
 
-The pipe-forward form `value >> Trait::method` works with generic trait
-methods (like `Into::into`) when the target type can be inferred from
-context — typically from an annotation on the binding (`let x: f64 = ...`)
-or from a downstream constraint. When inference isn't sufficient, the
-method form with explicit turbofish (`x.into::[U]()`) is the clearer
-choice.
+The trait-path free-function form `Trait::method(value)` works with
+generic trait methods (like `Into::into`) when the target type can be
+inferred from context — typically from an annotation on the binding
+(`let x: f64 = ...`) or from a downstream constraint. When inference
+isn't sufficient, the method form with explicit turbofish
+(`x.into::[U]()`) is the clearer choice.
 
 Fallible conversions return `Result[T, Error]` and typically chain through
 the `?` operator (§8) for propagation:
@@ -4780,7 +4785,6 @@ of their own per §6.1.9 and §6.2.6). The following are equivalent:
 
 ```
 option.unwrap()
-option >> unwrap
 unwrap(option)
 std::option::unwrap(option)        // module-path qualification
 ```
@@ -5688,10 +5692,26 @@ declaration's own section and summarized below:
   trait declaration is uniform with the trait's visibility — no
   per-method visibility.
 - **Free functions**: visibility specifier on the `fn` declaration.
+- **Operators** (§13.16): visibility specifier on the `operator`
+  declaration; same rules as functions.
 - **Constants** (§2.4.1.1): visibility specifier on the `const`
   declaration.
+- **Reactive declarations** (§13.2.1, §13.2.3, §13.2.4): module-level
+  `signal`, `derived`, and `recurrent` accept visibility specifiers
+  on the same line as the declaration.
+- **Node and connection types** (§13.3, §13.5): visibility specifier
+  on the type declaration.
+- **Instantiations**: any top-level placement (`Foo bar:`,
+  `signal x = ...`, `let y = ...`) accepts a visibility specifier.
+  An instantiation is conceptually `let-binds-an-instance`;
+  visibility controls cross-module reachability of the instance
+  name.
 - **Fulfill blocks** (§10.8): no separate visibility specifier —
   reachability derived from trait and type visibility jointly.
+
+Visibility specifiers attach to any *named declaration*. The unifying
+rule: if a name is introduced into a scope, the declaration may carry
+a visibility specifier governing that name's cross-scope reach.
 
 ### 10.4 `use` Statements
 
@@ -8594,6 +8614,25 @@ including transitively through function calls — determines its
 dependency set. When any cell in the dependency set changes, the
 derived becomes dirty and is recomputed at the next publish.
 
+##### 13.2.3.1 Scope
+
+A `derived` may be declared at three scopes, paralleling `signal`:
+
+- **Module-level** — declared at module top level (outside any node
+  or connection body). One cell shared across the program. References
+  to module-level deriveds use the bare name (no `self.` prefix).
+- **Node-level** — declared inside a node body. Per-instance: each
+  placement of the node creates its own cell.
+- **Connection-level** — declared inside a connection body.
+  Per-instance per-connection: each placement of the connection
+  creates its own cell.
+
+Module-level deriveds are useful for global computed values that
+many parts of the program depend on (a normalized clock, a derived
+configuration value, etc.). Their initial values must reference
+only cells visible at module scope per the topological-init rule
+(§13.2.6).
+
 #### 13.2.4 `recurrent`
 
 ```
@@ -8724,6 +8763,192 @@ counter pattern: the signal is a monotonically increasing count;
 each "event" increments the count; downstream cells trigger on
 every increment because the value changes each time.
 
+##### 13.2.4.5 Scope
+
+A `recurrent` may be declared at three scopes, paralleling `signal`
+and `derived`:
+
+- **Module-level** — declared at module top level. One cell shared
+  across the program. References use the bare name (no `self.`
+  prefix). Useful for global stateful counters, accumulators, or
+  state machines driven by module-level signals.
+- **Node-level** — declared inside a node body. Per-instance.
+- **Connection-level** — declared inside a connection body.
+  Per-instance per-connection.
+
+##### 13.2.4.6 Tuple-coupled recurrents
+
+Multiple recurrents may share a single `next:` evaluation by
+declaring them as a tuple:
+
+```
+recurrent (name1, name2, ...): (Type1, Type2, ...) = (init1, init2, ...)
+  | next: tuple_expression_returning_same_shape
+  | on: triggers
+```
+
+The declaration creates N independent cells, each named and
+typed individually. The `next:` expression returns a tuple of the
+same shape and types; all N cells advance atomically from a single
+evaluation. Shared computation in `next:` is performed once, not
+N times.
+
+Example — a Kalman filter sharing the gain computation across
+mean and variance updates. The `next:` body is a single pure
+expression and cannot directly contain `let` bindings; the shared
+work is factored into a helper function whose body computes the
+gain once and returns the pair of updated values:
+
+```
+fn kalman_step(mean: f32, variance: f32, source: f32, noise: f32) -> (f32, f32):
+  let gain = variance / (variance + noise)        // computed once per call
+  (
+    mean + gain * (source - mean),                // updated mean
+    (1.0 - gain) * variance,                      // updated variance
+  )
+
+recurrent (mean, variance): (f32, f32) = (source, 1.0)
+  | next: kalman_step(mean, variance, source, noise)
+  | on: source
+```
+
+The single function call evaluates the shared `gain` once per
+publish and returns both updated values atomically. Without
+tuple-coupled recurrents, the same logic would require two
+independent recurrents each calling the helper separately, doing
+the gain computation twice per publish.
+
+Reads of any cell within the tuple use its individual name
+(`self.mean`, `self.variance`, or bare `mean`/`variance` at
+module scope).
+
+Lockstep semantics (§13.2.4.1) are preserved across the tuple:
+during `next:` evaluation, reads of any cell in the group return
+its previous-committed value. Cross-references within the tuple
+read previous-committed values, the same way independent
+recurrents do.
+
+In the per-publish DAG (§13.10.3), tuple-coupled recurrents
+contribute one evaluation node with N output edges, not N
+independent evaluation nodes.
+
+Initial values follow the topological-init rule (§13.2.6) — each
+cell's initial may reference any reactive cell in scope, provided
+no init-time cycle exists. If any one cell's initial creates a
+cycle, the entire group is rejected.
+
+##### 13.2.4.7 Conditional triggers (`where` clauses)
+
+A trigger in the `on:` list may carry a `where` predicate:
+
+```
+recurrent name: Type = init
+  | next: expr
+  | on: trigger_cell where predicate
+```
+
+The trigger fires when `trigger_cell` changes value AND the
+`predicate` is currently true. A change in the predicate alone
+(without `trigger_cell` changing) does not fire the recurrent.
+
+Multiple triggers each may carry independent `where` clauses:
+
+```
+| on: A where p1, B where p2, C
+```
+
+Reads as: "fire on A-change if p1; or B-change if p2; or any
+C-change."
+
+The predicate is a reactive boolean expression evaluated in the
+recurrent's scope, with the same purity rules as derived
+expressions (§13.2.3).
+
+Equivalence to `next:` predicates:
+
+```
+recurrent x: T = init
+  | next: if predicate then expr else x
+  | on: trigger_cell
+
+// equivalent to:
+recurrent x: T = init
+  | next: expr
+  | on: trigger_cell where predicate
+```
+
+The two are observationally identical, but the `where` form
+allows the kernel to skip `next:` evaluation entirely when the
+predicate is false. This is a perf benefit when `next:` is
+expensive and the predicate is cheap.
+
+##### 13.2.4.8 Multi-arm `on:` form
+
+A recurrent may declare multiple update arms, each with its own
+trigger(s), optional `where` clause, and `next:` expression:
+
+```
+recurrent name: T = init
+  | on A: next_A_expr
+  | on B: next_B_expr
+  | on C where p: next_C_expr
+```
+
+Each arm specifies one or more trigger cells (parens optional for
+single, required for groups), an optional `where` predicate, and
+the `next:` expression to apply when the arm fires.
+
+Example shown at module scope (cell references are bare; inside a
+node body, references would use `self.counter` etc.):
+
+```
+signal reset_signal: bool = false
+signal tick: u64 = 0
+signal running: bool = true
+
+recurrent counter: i32 = 0
+  | on reset_signal: 0                         // arm 1: reset to zero
+  | on tick where running: counter + 1         // arm 2: increment if running
+```
+
+**Mixing forms is forbidden.** A recurrent uses either the
+single-arm form (`| next: expr | on: triggers`) OR the multi-arm
+form (`| on X: ... | on Y: ...`), never both. Mixing is a compile
+error.
+
+**Priority on overlapping fires.** When multiple arms' triggers
+fire in the same publish, arms are evaluated in declaration
+order; the first arm whose trigger fired AND whose `where`
+predicate (if present) is true wins. The remaining arms are not
+evaluated. Earlier-declared arms have higher priority.
+
+In the example above, if both `reset_signal` and `tick` change in
+the same publish, arm 1 wins and `counter` becomes 0 (not
+`counter + 1`).
+
+If no arm fires (no triggers changed, or all guards are false),
+the recurrent holds its previous value — same as the single-arm
+form.
+
+The `= init` clause is mandatory regardless of the arm form. The
+initial value is committed at startup before any arm fires.
+
+##### 13.2.4.9 Dynamic-size cell types
+
+Recurrent cells may hold dynamic-size types in addition to
+fixed-size types. Dynamic-size types include:
+
+- `Vec[T]` — persistent vector with structural sharing
+- `SmallVec[T; N]` — inline up to N elements, then heap
+- `RingBuf[T; N]` — fixed-capacity ring buffer
+
+Storage and cost details are specified in §13.11.4 (cell types
+and storage). The `next:` expression returns a new value of the
+declared type; the kernel handles allocation and triple-buffer
+rotation transparently. Source code never mutates a cell in
+place — the functional builder API (`.with(value)`, `+`
+operator) returns new collection values.
+
 #### 13.2.5 `const`
 
 ```
@@ -8803,9 +9028,11 @@ compile error.
 
 #### 13.2.6 Initial value rules
 
-Values are resolved in a fixed order. Consts are resolved at
-compile time and embedded in the compiled artifact; reactive
-cells are computed during the kernel's startup pass.
+Initialization happens in two phases: compile-time resolution
+(consts) and a startup pass (reactive cells). Within the startup
+pass, all reactive cells are initialized in **topological order
+over their init-time read dependencies** — there are no separate
+serialized steps for signals, attrs, recurrents, and deriveds.
 
 **Compile-time resolution (during compilation):**
 
@@ -8818,56 +9045,65 @@ cells are computed during the kernel's startup pass.
 
 **Startup pass (during kernel initialization):**
 
-3. **Signals** are initialized in declaration order. Each signal's
-   `= initial` expression is evaluated. Signal initializers may
-   reference other signals declared earlier in the same module and
-   any compile-time-evaluable constants.
-4. **Per-instance attrs** are initialized when their containing
-   instance is placed. For each instance, attrs are initialized in
-   declaration order. For each attr:
+The kernel constructs an *init-time dependency graph*: each
+reactive cell (signal, attr, recurrent, derived) is a node;
+edges run from each cell to the cells its initial-value
+expression reads. The kernel then evaluates initial values in
+topological order over this graph.
+
+For each cell:
+
+- **Signals** evaluate their `= initial` expression.
+- **Attrs** are initialized when their containing instance is
+  placed. For each attr:
     - If the placement supplies an explicit value (via body form,
-      inline pipe, flag, or `/expr` for the default attr), that value
-      is evaluated and stored.
+      inline pipe, flag, or `/expr` for the default attr), that
+      value is evaluated and stored.
     - Otherwise, if the attr was declared with `= default`, the
-      default expression is evaluated and stored.
+      default expression is evaluated.
     - Otherwise, the attr was declared without a default and the
       placement omitted a value — a compile error caught before
       startup (see §13.2.2).
+- **Recurrents** evaluate their `= initial` expression. The `next:`
+  expression is *not* evaluated at startup; recurrent cells hold
+  their initial values until a trigger fires. When an initial-value
+  expression reads a `Signal[T]` cell (per §13.2.8), the read
+  returns the cell's value at the topological-init evaluation
+  point — equivalent to a snapshot of the cell at startup. The
+  recurrent does not subscribe to subsequent changes of that cell;
+  for tracking semantics use a `derived` declaration instead. The
+  same snapshot semantic applies to attrs and signals whose initial
+  expressions read other reactive cells.
+- **Deriveds** evaluate their expression body.
+- **`when` predicates** (§13.8) are evaluated alongside deriveds
+  in the topological order. Each instance's initial gate state is
+  established here. An instance whose `when` evaluates to false at
+  the end of startup begins inactive, with its other cells holding
+  their just-computed initial values per Model B (§13.8.7).
 
-   Whether sourced from a placement value or a default expression,
-   the right-hand side is evaluated against the just-initialized
-   attrs of the same instance (declaration order matters), any
-   consts of the same type, and against signals (which are already
-   initialized from step 3).
-5. **Per-instance recurrents** are initialized similarly: each
-   recurrent cell receives its `= initial` value (with placement-
-   time override if specified). The `next:` expression is *not*
-   evaluated at startup — recurrent cells hold their initial values
-   until a trigger fires.
-6. **Deriveds** are evaluated last, in topological order over the
-   reactive dependency graph. Each derived computes its initial
-   value from the now-initialized signals, attrs, and recurrents.
-   Recurrents' initial values serve as the "previous-committed"
-   source for any cyclic reads during this startup pass. `when`
-   predicates (§13.8) are evaluated alongside deriveds in this
-   step, in the same topological order — each instance's initial
-   gate state is established here. An instance whose `when`
-   evaluates to false at the end of startup begins inactive, with
-   its other cells holding their just-computed initial values per
-   Model B (§13.8.7).
+**Init-time dependency rules:**
 
-Bootstrap order:
-
-- Within a node's attr, recurrent, or const declarations, defaults
-  and initial values may reference previously-declared cells of
-  the same node. Referencing a later-declared cell in a default is
-  a compile error.
+- An initial-value expression may read any reactive cell visible
+  in scope, regardless of declaration kind. The topological sort
+  resolves ordering automatically. There is no artificial
+  "recurrents init before deriveds" constraint.
+- **Init-time cycles are compile errors.** A cycle in the init
+  dependency graph (cell A's initial reads B; B's initial reads
+  A; or longer cycles) cannot be resolved by topological sort.
+  This is distinct from runtime cycles (§13.10), which the
+  per-publish DAG handles via recurrents-as-delays. Init time
+  has no notion of "previous publish," so cycles flat-out fail.
+- Within a node body, an attr or recurrent's initial may
+  reference previously-declared cells of the same body. The
+  topological sort catches forward references that would
+  otherwise be ambiguous; the compiler may permit them when the
+  dependency graph is well-defined.
 - At type-declaration time, attr defaults and recurrent initial
-  values may reference only same-instance cells (via `self.X`),
-  same-type consts, top-level signals, top-level consts, and
-  compile-time-evaluable expressions. They cannot reference cells
-  of other instances. Cross-instance references are resolved only
-  at placement time, not at type declaration.
+  values may reference same-instance cells (via `self.X`),
+  same-type consts, module-level cells (signals, deriveds,
+  recurrents, consts), and compile-time-evaluable expressions.
+  Cross-instance references are resolved only at placement time,
+  not at type declaration.
 
 Traps during initial evaluation (signal initializers, attr defaults,
 recurrent initial values, or initial derived evaluation) follow
@@ -8900,6 +9136,77 @@ fixed at compile time and never change. The "no source-level
 write" rule applies to all five declaration kinds uniformly.
 Ductus programs describe the reactive graph; they do not
 imperatively modify it from within.
+
+#### 13.2.8 The `Signal[T]` type
+
+`Signal[T]` is the umbrella type for any reactive cell whose
+value type is `T`. It is a first-class type usable in parameter
+positions, return types, and generic arguments.
+
+**Subkinds.** Three reactive declaration kinds produce values of
+`Signal[T]`:
+
+- `signal X = init` — host-writable `Signal[T]`. Host pushes
+  values via `kernel.write_signal` (§13.13.2).
+- `derived X = expr` — projected `Signal[T]`. Kernel maintains
+  the value consistent with its inputs.
+- `recurrent X: T = init | next | on` — memoryful `Signal[T]`.
+  Kernel advances per the `next:` expression on trigger.
+
+The keyword `signal` is overloaded with the type `Signal[T]`:
+the keyword declares one specific subkind (the writable cell);
+the type covers all three subkinds. This overload is documented
+here and elsewhere referenced as "the `Signal[T]` type" vs "a
+`signal` declaration" to disambiguate.
+
+**Where `Signal[T]` is used:**
+
+- **Operator parameters** (§13.16) — operators take `Signal[T]`
+  to bind to a reactive cell at instantiation, allocating
+  internal state tied to that cell.
+- **Operator return types** — operators return `Signal[T]`
+  representing their output cell.
+- **Function parameters** — `fn` may accept `Signal[T]` as a
+  parameter type. The compiler distinguishes call-site semantics
+  by the function's declared signature: a `fn(x: T)` parameter
+  receives the cell's current value (with reactive transparency
+  per §13.11.2); a `fn(s: Signal[T])` parameter receives the
+  cell reference. No call-site syntactic difference; resolution
+  is by type.
+
+`Signal[T]` is read-only when received as a parameter. There is
+no source-level form for writing to a `Signal[T]` value (the
+no-mutation rule of §13.2.7 applies). The cell may still be
+written by the host (for `signal` subkind) or by the kernel (for
+`derived` and `recurrent` subkinds), but not through the
+`Signal[T]` reference itself.
+
+**Generics.**
+
+`Signal[T]` is parametric. Generic functions and operators may
+abstract over the value type:
+
+```
+operator passthrough[T](source: Signal[T]) -> Signal[T]:
+  source
+
+fn observe[T](signal: Signal[T]) -> string:
+  // some debugging utility, etc.
+  ...
+```
+
+Standard trait bounds apply (§3.1, §5.1). The constraint
+`Signal[T: Numeric]` requires T to satisfy `Numeric`.
+
+**Reading a `Signal[T]` field on records.**
+
+A reactive cell may have a record value: `Signal[Record]`.
+Field access on the cell's value is reactive — `cell.field`
+inside a derived expression projects the field, and the derived
+re-evaluates whenever the cell's value changes (any field). This
+is coarse-grained: changes to one field invalidate consumers of
+all other fields. For finer granularity, project early into
+stable derived cells, or expose distinct cells from the source.
 
 ### 13.3 Nodes
 
@@ -10925,6 +11232,23 @@ expression becomes dirty and re-evaluates. Re-evaluation re-runs
 `some_fn` with the new argument values. The function sees only
 the new concrete values; it never observes "the signal."
 
+Reactive transparency applies to `fn` declarations only. Operators
+(§13.16) are *not* reactive-transparent — they allocate cells per
+instantiation and have distinct call-site semantics. The
+distinction at the call site is by callee declaration kind:
+`some_fn(my_signal)` evaluates per-emission via reactive
+transparency; `some_op(my_signal)` instantiates an operator with
+internal state.
+
+Functions may also accept `Signal[T]` parameters (§13.2.8). When a
+function declares `fn some_fn(s: Signal[T])`, the parameter binds
+to the cell reference itself rather than its current value. This is
+distinct from the per-emission behavior described above. The
+compiler distinguishes by the declared parameter type; no
+call-site syntactic difference. Use cases for `fn(Signal[T])` are
+narrow; the typical `fn` declaration uses bare `T` parameters and
+relies on reactive transparency at the call site.
+
 ##### 13.11.2.1 Transitive provenance through functions
 
 If a function's body reads a reactive cell directly (e.g., reads
@@ -11056,6 +11380,51 @@ from the type's size and shape:
 | `HashMap[K, V]`                                 | pool (variable)                                            |
 | Fixed-size array `T[N]` with N×sizeof(T) ≤ word | direct                                                     |
 | Fixed-size array `T[N]` with N×sizeof(T) > word | pool                                                       |
+
+**Dynamic-size handle-based types:**
+
+The stdlib provides three dynamic-size collection types usable as
+reactive cell types. Each uses handle-based pool storage. The
+cost model below is normative — implementations must achieve the
+documented complexity bounds.
+
+| Type             | Append/push  | Read by index | Memory pattern              |
+|------------------|--------------|---------------|-----------------------------|
+| `Vec[T]`         | O(log32 n)   | O(log32 n)    | Persistent trie, structural sharing across versions |
+| `SmallVec[T; N]` | O(n) bounded | O(1)          | Inline storage up to N elements, heap beyond        |
+| `RingBuf[T; N]`  | O(1)         | O(1)          | Fixed-capacity ring; oldest dropped when full       |
+
+`Vec[T]` is the default for unbounded growth; the persistent
+vector trie (Clojure/Scala/Rust `im::Vector` family) provides
+sublinear append and read with structural sharing across
+triple-buffer versions. `SmallVec[T; N]` optimizes the common
+case of small bounded collections with cache-friendly inline
+storage. `RingBuf[T; N]` provides constant-time bounded history
+with automatic eviction.
+
+The functional builder API preserves the no-mutation rule
+(§13.2.7):
+
+- `vec.with(value)` returns a new `Vec[T]` with `value` appended.
+- `vec + value` is equivalent (operator form).
+- The `recurrent`'s `next:` expression returns the new value;
+  the kernel commits it through triple-buffer rotation.
+
+Implementation strategies (Vec uses persistent trie; SmallVec
+uses inline+heap; RingBuf uses fixed ring) are observably
+indistinguishable from "always returns new" semantics. Sharing
+and in-place optimization are kernel concerns, transparent at
+the language level. See §14.3 (extensible pools) for the runtime
+mechanism, §14.9 for triple-buffer eviction ordering.
+
+**Cost model for users not using dynamic types:**
+
+If user code never references `Vec[T]`, `SmallVec[T; N]`, or
+`RingBuf[T; N]`, the runtime cost is zero. The reactive state
+buffer remains a flat fixed-size table; the extensible pool
+machinery is not exercised. Binary size grows slightly only when
+these types are used. This preserves "pay for what you use" for
+hard-realtime workloads.
 
 **Not permitted as reactive cell types in v1:**
 
@@ -11475,6 +11844,478 @@ specifies the implementation model. Cross-references:
   and new compiled output, applies the diff atomically, and
   publishes.
 
+### 13.16 Operators
+
+An *operator* is a reusable, cell-allocating reactive transformation
+declared with the `operator` keyword. Operators take `Signal[T]`
+inputs (and optionally non-reactive value parameters), allocate
+internal reactive cells (recurrents and/or deriveds) per
+instantiation, and produce a `Signal[T]` output. They are the
+primary mechanism for composing reactive transformations.
+
+Operators are distinct from `fn` declarations:
+
+- `fn` is reactive-transparent (§13.11.2). It takes value
+  parameters, returns values, and allocates no cells.
+- `operator` is *not* reactive-transparent. It takes cell
+  references (`Signal[T]`), allocates internal cells per
+  instantiation, and is wired into the reactive graph at the call
+  site.
+
+#### 13.16.1 Concept
+
+Stateless operators wrap a pure projection over a source cell:
+
+```
+operator double(source: Signal[f32]) -> Signal[f32]:
+  source * 2
+```
+
+Stateful operators allocate recurrent state per instantiation:
+
+```
+operator smooth(source: Signal[f32], rate: f32 = 0.1, clock: Signal[u64]) -> Signal[f32]:
+  recurrent state: f32 = source
+    | next: state + (source - state) * rate
+    | on: clock
+  state
+```
+
+Each instantiation of a stateful operator creates fresh internal
+cells; multiple call sites do not share state.
+
+#### 13.16.2 Declaration
+
+```
+operator name[GenericParams]?(params...) -> Signal[T]:
+  body
+```
+
+- `name` is a snake_case identifier.
+- `GenericParams` are optional type parameters with optional trait
+  bounds (§3, §5).
+- `params` is a comma-separated parameter list (§13.16.3).
+- The return type is always `Signal[T]` for some value type `T`.
+- The body is a sequence of reactive declarations (recurrents,
+  deriveds) followed by a final expression that becomes the output.
+
+Operators may carry visibility modifiers (`public`, `shared`,
+`private`) per §10.
+
+#### 13.16.3 Parameters
+
+Operator parameters are of two kinds, distinguished by declared
+type:
+
+**Cell-bound parameters** (`name: Signal[T]`):
+- Bind to a reactive cell at instantiation.
+- The operator tracks the cell's changes over time via the reactive
+  engine.
+- Inside the body, the parameter is treated as a cell of value type
+  `T` — references read the cell's current value.
+
+**Value parameters** (`name: T`):
+- Snapshot at instantiation. The value is fixed for the lifetime of
+  this operator instance.
+- Inside the body, the parameter is a compile-time-fixed value.
+- Useful for configuration that does not change: smoothing rates,
+  thresholds, modes, etc.
+
+The author chooses for each parameter based on intent. A parameter
+the user expects to vary at runtime (e.g., a UI knob driving a
+smoothing rate) should be `Signal[T]`; a parameter that is a
+deployment-time choice should be `T`.
+
+```
+operator smooth(
+  source: Signal[f32],         // cell-bound: tracked over time
+  rate: f32 = 0.1,             // value: snapshotted at instantiation
+  clock: Signal[u64],          // cell-bound: drives the trigger
+) -> Signal[f32]:
+  ...
+```
+
+**Default values** are allowed on value parameters. Default values
+on `Signal[T]` parameters are not allowed in v1 (a default cell
+reference has no clear meaning; if needed, use a stdlib helper
+that constructs a constant cell).
+
+**At call sites:**
+
+- Literals passed to `Signal[T]` parameters are wrapped as implicit
+  `const`-cell instances. Cost: one cell per literal at the call
+  site (effectively zero — folded by the compiler when possible).
+- Cells passed to `Signal[T]` parameters bind directly.
+- Values passed to `T` parameters are evaluated and snapshotted.
+
+#### 13.16.4 Body
+
+The operator body is a sequence of reactive declarations followed
+by a final expression. Permitted body items:
+
+- `recurrent` declarations (with all extensions per §13.2.4).
+- `derived` declarations.
+- `let` bindings for intermediate values, including
+  runtime-evaluated reads of `Signal[T]` parameters and other
+  cells in scope. A `let` binding's right-hand side is evaluated
+  in a reactive context — reads of cell-bound parameters return
+  their current values, and the binding's value is recomputed
+  whenever any read cell changes (the binding behaves as a
+  synthesized derived for dependency-tracking purposes).
+- The final expression — the value (or cell) returned as the
+  operator's output.
+
+Not permitted in operator bodies:
+
+- `signal` declarations. Operator-internal cells cannot be
+  host-writable; the host has no addressing mechanism for cells
+  inside an operator instance.
+- `attr` declarations. Per-instance configuration is expressed via
+  parameters, not internal attrs.
+- Side-effecting statements. The body is reactive — declarative,
+  not imperative.
+
+The final expression's type must be `T` (matching the operator's
+return type `Signal[T]`). The compiler synthesizes a derived cell
+holding the final expression's value, and exposes that cell as the
+operator instance's output.
+
+If the final expression is itself a cell (e.g., a recurrent named
+in the body), no synthesis is needed — that cell is the output
+directly.
+
+#### 13.16.5 Output
+
+Every operator returns a single `Signal[T]`. For multiple outputs,
+return a record or tuple type:
+
+```
+type PeakResult:
+  peak: f32
+  count: u32
+
+operator peak_detector(source: Signal[f32]) -> Signal[PeakResult]:
+  recurrent (peak, count): (f32, u32) = (source, 0)
+    | next: (
+        max(peak, source),
+        if source > peak then count + 1 else count,
+      )
+    | on: source
+
+  PeakResult(peak: peak, count: count)
+```
+
+Consumers project fields via reactive expressions:
+
+```
+let result = source >> peak_detector            // Signal[PeakResult]
+derived just_peak: f32 = result.peak            // reactive projection
+derived just_count: u32 = result.count
+```
+
+Field-level reactivity is coarse-grained: a change to any field
+invalidates consumers of all fields. For finer granularity,
+project early into stable derived cells, or expose distinct
+cells from the source. (See §13.2.8 for details on `Signal[T]`
+field access.)
+
+#### 13.16.6 Instantiation
+
+Two equivalent call-site syntaxes:
+
+**Function-call form:**
+
+```
+let smoothed = smooth(source_cell, rate: 0.1, clock: tick)
+```
+
+**Pipe form (`>>`):**
+
+```
+let smoothed = source_cell >> smooth(rate: 0.1, clock: tick)
+```
+
+In the pipe form, the LHS of `>>` is bound to the operator's first
+positional parameter. The remaining arguments are passed as in the
+function-call form. The two forms are observationally identical.
+
+The pipe form is convenient for chaining:
+
+```
+signal bar = 0.0 >> clamp(min: 0.0, max: 1.0) >> smooth(rate: 0.1, clock: tick) >> ease_in_out
+```
+
+Each `>>` step is an operator application. The result of each step
+is a `Signal[T]` consumed by the next.
+
+**Convention:** the first positional parameter of any operator is
+the implicit pipe target. Library authors place the upstream cell
+first by convention. For binary operators (those needing two
+upstream cells), the first is the pipe target; subsequent cells
+are passed by name:
+
+```
+operator combine(primary: Signal[T], other: Signal[T], weight: f32) -> Signal[T]:
+  ...
+
+// Call:
+let result = source >> combine(other: another_signal, weight: 0.5)
+```
+
+**Each instantiation allocates fresh internal cells.** Two call
+sites of the same operator do not share state. The compiler emits
+one allocation set per call site at compile time; the reactive
+state buffer reserves space for each instance's internal cells.
+
+##### 13.16.6.1 Operator instance identity
+
+An operator instance is identified by its enclosing scope plus its
+position in source. Two `>>` chains in different scopes (different
+modules, different node bodies, different placements) produce
+distinct instances with independent state.
+
+Operator instances do not have user-assignable names. Assigning
+an operator's output to a `let` binding names the *output cell*,
+not the instance — but for reload-identity purposes (§13.16.10),
+the instance is identified by source position, not by binding name.
+
+##### 13.16.6.2 Graph metadata
+
+Operator instances contribute to the kernel's graph metadata
+(§14.7) the same way node placements and connection placements do.
+Each instance's internal cells (recurrents, deriveds, synthesized
+cells from the operator body and from `let` bindings) are counted
+against the reactive state buffer's allocation and against any
+per-type pool sizing for dynamic-size cells (§14.3.5).
+
+The compiler enumerates operator call sites at compile time;
+recursion through operators is forbidden (an operator may not
+transitively instantiate itself), so the static count of operator
+instances is bounded and known.
+
+#### 13.16.7 The `>>` operator
+
+`>>` is the operator-application token. Its semantics:
+
+- LHS must be an expression of type `Signal[T]` (or convertible to
+  one — literals are wrapped as implicit const cells).
+- RHS must be an operator call (the operator name optionally
+  followed by parenthesized arguments).
+- The operator is instantiated; the LHS is bound to the operator's
+  first positional parameter.
+- The result is the operator's output cell, of type `Signal[U]`
+  where `U` is the operator's declared return value type.
+
+**Precedence:** `>>` is low-precedence, left-associative. Most
+arithmetic and logical operators bind tighter. Specifically:
+
+```
+a + b >> op            // parses as (a + b) >> op
+a >> op1 >> op2        // parses as (a >> op1) >> op2
+```
+
+**`>>` exclusivity:** `>>` may only apply operators. Using `>>`
+with a `fn` is a compile error:
+
+```
+signal bar = 0.0 >> some_fn       // ✗ error: `>>` requires an operator
+```
+
+Diagnostic class:
+```
+error: `>>` requires an operator on the right-hand side
+  --> signal bar = 0.0 >> some_fn
+                        ^^^^^^^^ `some_fn` is a `fn`, not an operator
+  hint: use function call syntax: `some_fn(0.0)`
+```
+
+For applying pure functions to reactive cells, use a derived:
+
+```
+derived bar: f32 = some_fn(source_cell)
+```
+
+Or wrap the function in an operator (Path B from the curve recovery
+discussion):
+
+```
+operator some_op(source: Signal[f32]) -> Signal[f32]:
+  some_fn(source)
+```
+
+#### 13.16.8 Generic operators
+
+Operators may take type parameters with optional trait bounds:
+
+```
+operator passthrough[T](source: Signal[T]) -> Signal[T]:
+  source
+
+operator scan[T: Add + Copy](source: Signal[T]) -> Signal[T]:
+  recurrent acc: T = source
+    | next: acc + source
+    | on: source
+  acc
+```
+
+Standard generics machinery applies (§3 traits, §2.2 inference).
+Type parameters are resolved at the call site from argument types;
+explicit instantiation is supported via turbofish syntax where
+inference is ambiguous.
+
+#### 13.16.9 Visibility
+
+Operators carry the standard three-level visibility (§10): `public`,
+`shared` (default), `private`. Module-private operators are not
+reachable from other modules; public operators may be re-exported.
+
+```
+public operator smooth(source: Signal[f32], rate: f32 = 0.1, clock: Signal[u64]) -> Signal[f32]:
+  ...
+
+private operator internal_helper(source: Signal[i32]) -> Signal[i32]:
+  ...
+```
+
+#### 13.16.10 Hot reload of operators
+
+An operator instance is a scoped reload boundary. Within an
+instance, the cell-identity rules of §13.14.3 apply: each internal
+cell is identified by its declared name and type within the
+operator body.
+
+**Reload-safe changes:**
+
+- Changes to the body of `next:` expressions, `where` predicates,
+  or final-expression bodies — same as plain recurrent/derived
+  reload safety.
+- Adding a new internal cell — new cells are initialized fresh.
+
+**Reload-unsafe changes (require restart for affected instances):**
+
+- Operator signature changes (parameters added, removed, or
+  retyped; return type changed).
+- Internal cell type changes.
+- Changes to a cell's `= initial` expression in a way that would
+  alter its current state semantics.
+
+**Call-site changes:**
+
+If a call site changes which operator is invoked (`source >> op_a`
+becomes `source >> op_b`), the old instance's cells are dropped
+per §14.9 eviction; the new instance's cells initialize fresh.
+The two operators are treated as distinct instances even if
+op_b's signature matches op_a's.
+
+**Call-site moves:**
+
+If a call site moves within source (e.g., reformatting that shifts
+its line/column position) but the operator, its arguments, and its
+enclosing scope remain identical, the kernel attempts to preserve
+instance identity. The reload's diff phase identifies operator
+instances by *(enclosing scope, operator name, argument bindings)*
+rather than raw line/column. A pure positional move within the same
+scope preserves state; a move to a different enclosing scope is
+treated as call-site change (state lost).
+
+If two operator call sites in the same scope cannot be
+distinguished by (operator name, arguments) — e.g., two identical
+calls `source >> smooth(rate: 0.1, clock: tick)` in the same node
+body — the reload uses syntactic order to match old to new
+instances. Adding a third identical call between them treats the
+new call as fresh; the existing two preserve state.
+
+#### 13.16.11 Interaction with other reactive features
+
+**With `when` clauses (§13.8):** an operator instance has no
+`when` predicate of its own. To gate an operator's effect, gate
+its output cell or its consumer. The author can also write a
+gated wrapper operator that conditionally falls through:
+
+```
+operator conditional_smooth(source: Signal[f32], gate: Signal[bool], clock: Signal[u64]) -> Signal[f32]:
+  derived effective: f32 = if gate then (source >> smooth(rate: 0.1, clock: clock)) else source
+  effective
+```
+
+**With cycles (§13.10):** operator-internal cells participate in
+the same cycle-detection rules. A recurrent inside an operator
+acts as a delay element identical to a top-level recurrent.
+
+**With the per-publish DAG (§13.10.3):** each operator instance's
+internal cells contribute their evaluation nodes to the per-publish
+DAG. Operators do not cross publish boundaries — all internal
+evaluation happens within a single publish.
+
+**With reactive transparency (§13.11.2):** operator bodies are
+*not* reactive-transparent. Reading a cell-bound parameter reads
+through the reactive engine (provenance tracked at the call site).
+Calls to other operators inside the body create further
+instantiations; calls to `fn`s inside the body remain
+reactive-transparent in the standard way.
+
+**With dynamic-size types (§13.11.4, §14.3.5):** operator-internal
+recurrents may hold dynamic-size types (`Vec[T]`, etc.). Storage
+follows the same pool-with-handle mechanism. The operator's
+instance-specific allocation contributes to per-type pool sizing
+in graph metadata.
+
+#### 13.16.12 Diagnostics
+
+Normative diagnostic classes for operator usage:
+
+**`>>` applied to a non-operator:**
+
+```
+error: `>>` requires an operator on the right-hand side
+  --> signal bar = 0.0 >> some_fn
+                        ^^^^^^^^ `some_fn` is a `fn`, not an operator
+  hint: use function call syntax: `some_fn(0.0)`
+```
+
+**Operator missing first positional parameter:**
+
+```
+error: operator `smooth` has no positional parameter to bind from `>>`
+  --> signal bar = source >> smooth(rate: 0.1)
+                             ^^^^^^ no positional parameter declared
+  hint: either pass the upstream cell as the first positional argument,
+        or declare a positional `Signal[T]` parameter on the operator
+```
+
+**`Signal[T]` parameter passed a non-cell, non-literal value:**
+
+```
+error: cannot pass value of type `f32` to `Signal[f32]` parameter
+  --> smooth(source: some_value, rate: 0.1, clock: tick)
+                     ^^^^^^^^^^ expected `Signal[f32]`, found `f32`
+  hint: literals are wrapped as const cells automatically; this expression
+        cannot be wrapped — use a `signal`, `derived`, or `recurrent` declaration
+```
+
+**`signal` or `attr` declared inside an operator body:**
+
+```
+error: `signal` declarations are not permitted inside operator bodies
+  --> operator foo(source: Signal[f32]) -> Signal[f32]:
+        signal internal: f32 = 0.0
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  hint: operator-internal cells must be `recurrent` or `derived`. For
+        per-instance configuration, use a parameter; for stateful memory,
+        use `recurrent`.
+```
+
+**Final expression type mismatch with declared return type:**
+
+```
+error: operator body returns `i32` but declared return type is `Signal[f32]`
+  --> operator bad(source: Signal[f32]) -> Signal[f32]:
+        ...
+        42
+        ^^ this expression has type `i32`
+  hint: the final expression's value type must match the operator's return value type
+```
+
 ---
 
 *End of §13.*
@@ -11781,6 +12622,68 @@ Platforms without wide-atomic support (WebAssembly, ARM32, etc.) rely
 exclusively on the triple-buffer mechanism. Programs using `i128` or
 `u128` reactive cells on such platforms function correctly; they pay
 the full per-publish cost for those cells.
+
+#### 14.3.5 Extensible pools for dynamic-size types
+
+Dynamic-size cell types (`Vec[T]`, `SmallVec[T; N]`, `RingBuf[T; N]`,
+`string`, etc., per §13.11.4) cannot live directly in the fixed-size
+cell slots. Their storage uses **extensible pools** alongside the
+reactive state buffer.
+
+For each dynamic-size type used in the program, the kernel allocates
+a per-type pool. The reactive cell holds a fixed-size handle (one
+`AtomicI64` slot, encoding a pool index plus version metadata); the
+actual variable-size value lives in the pool.
+
+**Pool mechanics:**
+
+- Each pool is an arena of slots. Each slot holds one value of the
+  pool's type, plus refcount metadata sufficient for triple-buffer
+  rotation.
+- Producer writes: when the kernel commits a new dynamic-size value
+  for a cell, it allocates a fresh pool slot, writes the value, and
+  publishes the new handle into the back buffer.
+- Consumer reads: dereference the handle through the pool to obtain
+  the value's address, then read the value.
+
+**Triple-buffer interaction:**
+
+Each of the three buffer copies independently references its own
+pool slot for any given dynamic-size cell. When the producer
+commits, the back buffer's handle is updated to a new slot; the
+previous "current" buffer's handle still points at the old slot
+until rotation reassigns its role.
+
+For persistent data structures (e.g., `Vec[T]` as persistent vector
+trie), pool slots may share internal nodes across versions. The pool
+tracks the trie's node-level refcounts; old nodes are reclaimed when
+no buffer references them.
+
+For value types (`SmallVec[T; N]`, `RingBuf[T; N]`), each buffer's
+slot holds a complete copy of the value. Rotation of the
+triple-buffer ensures consumers never see partial writes; producer
+work is bounded by the value's size.
+
+**Initial allocation:**
+
+Pool sizes are chosen at kernel construction based on graph metadata
+(static count of cells per type) plus a configurable headroom for
+versioning. Pools may grow at runtime if the configured headroom is
+exceeded; growth is amortized but not guaranteed wait-free. Hosts
+needing strict wait-free guarantees should configure sufficient
+headroom up front.
+
+**Cost characteristics:**
+
+- Allocation per commit: O(1) amortized for slot acquire (free-list
+  in pool); O(value-size) for value copy. Persistent structures
+  copy O(log n) nodes per push.
+- Read: one pointer dereference through the pool.
+- Memory: per-cell overhead is one handle slot (8 bytes); per-value
+  overhead depends on the type. Persistent structures share storage
+  across versions; flat structures replicate per buffer.
+
+**Drop and eviction:** see §14.9.
 
 ### 14.4 What Lives in the Reactive State Buffer
 
@@ -12173,6 +13076,48 @@ instance is removed (deferred to §13's evolution model), its attr and
 derived cells are dropped per their type's `Drop` impl. Initial
 declarations (signals declared at program startup) live for the
 program's lifetime; their cells are dropped at program shutdown.
+
+#### 14.9.6 Drop and triple-buffer eviction for dynamic-size cells
+
+Dynamic-size cells (per §13.11.4 and §14.3.5) require eviction
+ordering across triple-buffer rotation. When the kernel commits a
+new value for a dynamic-size cell, the previous value is still
+referenced by the rotating-out buffer slot until rotation makes
+that slot the next back buffer.
+
+**Rotation rule:**
+
+A pool slot for a dynamic-size cell becomes eligible for `drop`
+when no buffer references its handle. Concretely:
+
+1. Producer commits new value → new pool slot allocated → back
+   buffer's handle updated to new slot.
+2. Atomic swap → back becomes current; previous-current's handle
+   still points at the old slot.
+3. Consumer eventually reads the new current (catches up).
+4. Next publish → previous-current rotates to back. At this point
+   the back buffer's slot reference is replaced; the old slot is
+   now unreferenced from any buffer.
+5. The kernel runs `drop` on the old slot's value, then releases
+   the slot to the pool's free list.
+
+**For persistent data structures (e.g., `Vec[T]` as persistent
+trie):** drop runs at the trie-node level rather than the whole-Vec
+level. Internal nodes shared across versions remain alive until all
+referencing versions have been evicted. The pool tracks per-node
+refcounts; nodes drop when their refcount reaches zero.
+
+**Drop ordering invariants:**
+
+- A drop runs only after the value is unreferenced by any buffer.
+- Drops run on the producer thread (or a dedicated reclamation
+  thread), never on the consumer thread.
+- Drops complete before the slot is reused — no in-place reuse of
+  a slot whose drop hasn't finished.
+
+**Drop and panic:** if `drop` panics on a dynamic-size cell value,
+process abort applies per §14.9.4. The pool slot is leaked but the
+process is terminating anyway.
 
 ### 14.10 Ductus → Rust Lowering
 
