@@ -16,3 +16,5 @@ node Vehicle:
 
 node Fetch:
   signal response: Option<HttpResponse>
+
+recurrent foo: i32 = 1 |

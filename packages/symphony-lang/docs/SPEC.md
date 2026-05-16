@@ -30,9 +30,8 @@ refinement.
 ### 1.3 Design Philosophy
 
 Ductus is a general-purpose, statically typed language designed to make
-compositional reactive systems first-class. Its initial application domain is
-code-first music composition, but the language commits to no domain-specific
-primitives.
+compositional reactive systems first-class. The language commits to no
+domain-specific primitives.
 
 The language is built on a small set of load-bearing principles:
 
@@ -1439,8 +1438,6 @@ This is the turbofish form (§2.2.5) applied to the trait identity,
 selecting a specific instantiation of the trait before resolving the
 method.
 
-
-
 Trait visibility matters for dispatch. A `fulfill T for X` block is reachable
 for dispatch on `x: X` only when `T` itself is in scope (imported or
 accessible by path). If `T` is not in scope, the implementation is invisible
@@ -2001,31 +1998,31 @@ The built-in numeric primitive type set is fixed at fourteen types.
 
 **Signed integers:**
 
-| Type | Width | Range |
-|---|---|---|
-| `i8` | 8-bit | −128 to 127 |
-| `i16` | 16-bit | −32,768 to 32,767 |
-| `i32` | 32-bit | −2³¹ to 2³¹ − 1 |
-| `i64` | 64-bit | −2⁶³ to 2⁶³ − 1 |
-| `i128` | 128-bit | −2¹²⁷ to 2¹²⁷ − 1 |
+| Type    | Width                  | Range              |
+|---------|------------------------|--------------------|
+| `i8`    | 8-bit                  | −128 to 127        |
+| `i16`   | 16-bit                 | −32,768 to 32,767  |
+| `i32`   | 32-bit                 | −2³¹ to 2³¹ − 1    |
+| `i64`   | 64-bit                 | −2⁶³ to 2⁶³ − 1    |
+| `i128`  | 128-bit                | −2¹²⁷ to 2¹²⁷ − 1  |
 | `isize` | platform-pointer-sized | platform-dependent |
 
 **Unsigned integers:**
 
-| Type | Width | Range |
-|---|---|---|
-| `u8` | 8-bit | 0 to 255 |
-| `u16` | 16-bit | 0 to 65,535 |
-| `u32` | 32-bit | 0 to 2³² − 1 |
-| `u64` | 64-bit | 0 to 2⁶⁴ − 1 |
-| `u128` | 128-bit | 0 to 2¹²⁸ − 1 |
+| Type    | Width                  | Range              |
+|---------|------------------------|--------------------|
+| `u8`    | 8-bit                  | 0 to 255           |
+| `u16`   | 16-bit                 | 0 to 65,535        |
+| `u32`   | 32-bit                 | 0 to 2³² − 1       |
+| `u64`   | 64-bit                 | 0 to 2⁶⁴ − 1       |
+| `u128`  | 128-bit                | 0 to 2¹²⁸ − 1      |
 | `usize` | platform-pointer-sized | platform-dependent |
 
 **Floating-point:**
 
-| Type | Format | Range/Precision |
-|---|---|---|
-| `f32` | IEEE 754 single | ~7 decimal digits, ±3.4 × 10³⁸ |
+| Type  | Format          | Range/Precision                  |
+|-------|-----------------|----------------------------------|
+| `f32` | IEEE 754 single | ~7 decimal digits, ±3.4 × 10³⁸   |
 | `f64` | IEEE 754 double | ~16 decimal digits, ±1.8 × 10³⁰⁸ |
 
 `i128` and `u128` are first-class. The performance overhead on platforms
@@ -2200,15 +2197,15 @@ corresponds to one or more trait methods in §4.9's trait hierarchy.
 
 #### 4.4.1 Arithmetic operators
 
-| Operator | Operand Constraint | Result | Notes |
-|---|---|---|---|
-| `+` | `Add` | same kind | mixed-kind promotes per §4.5 |
-| `-` (binary) | `Sub` | same kind | mixed-kind promotes per §4.5 |
-| `*` | `Mul` | same kind | mixed-kind promotes per §4.5 |
-| `/` | `Numeric` | **always Float** | mathematical division; see §4.4.1.1 |
-| `//` | `IntDiv` | Integer | truncating integer division |
-| `%` | `Rem` | same kind | mixed-kind promotes per §4.5 |
-| `-` (unary) | `Neg` | same as operand | type error on unsigned |
+| Operator     | Operand Constraint | Result           | Notes                               |
+|--------------|--------------------|------------------|-------------------------------------|
+| `+`          | `Add`              | same kind        | mixed-kind promotes per §4.5        |
+| `-` (binary) | `Sub`              | same kind        | mixed-kind promotes per §4.5        |
+| `*`          | `Mul`              | same kind        | mixed-kind promotes per §4.5        |
+| `/`          | `Numeric`          | **always Float** | mathematical division; see §4.4.1.1 |
+| `//`         | `IntDiv`           | Integer          | truncating integer division         |
+| `%`          | `Rem`              | same kind        | mixed-kind promotes per §4.5        |
+| `-` (unary)  | `Neg`              | same as operand  | type error on unsigned              |
 
 ##### 4.4.1.1 The `/` operator and integer-to-float promotion
 
@@ -2291,14 +2288,14 @@ of unsigned type, never to literals at their declaration site.
 
 #### 4.4.2 Bitwise operators
 
-| Operator | Operand Trait | Result |
-|---|---|---|
-| `&` | `BitAnd` | Integer (same type) |
-| `\|` | `BitOr` | Integer (same type) |
-| `^` | `BitXor` | Integer (same type) |
-| `~` (unary) | `BitNot` | Integer (same type) |
-| `<<` | `Shl` | Integer (same type as left operand) |
-| `>>` | `Shr` | Integer (same type as left operand) |
+| Operator    | Operand Trait | Result                              |
+|-------------|---------------|-------------------------------------|
+| `&`         | `BitAnd`      | Integer (same type)                 |
+| `\|`        | `BitOr`       | Integer (same type)                 |
+| `^`         | `BitXor`      | Integer (same type)                 |
+| `~` (unary) | `BitNot`      | Integer (same type)                 |
+| `<<`        | `Shl`         | Integer (same type as left operand) |
+| `>>`        | `Shr`         | Integer (same type as left operand) |
 
 Bitwise operators are integer-only. Applying them to float values is a type
 error. Bit-level operations on floats require an explicit reinterpret cast
@@ -2331,11 +2328,11 @@ by surface syntax alone. This is the same mechanism that disambiguates
 #### 4.4.3 Comparison operators
 
 | Operator | Operand Trait | Result |
-|---|---|---|
-| `<` | `Ord` | bool |
-| `<=` | `Ord` | bool |
-| `>` | `Ord` | bool |
-| `>=` | `Ord` | bool |
+|----------|---------------|--------|
+| `<`      | `Ord`         | bool   |
+| `<=`     | `Ord`         | bool   |
+| `>`      | `Ord`         | bool   |
+| `>=`     | `Ord`         | bool   |
 
 Comparison works on both integer and float kinds. Mixed-kind comparisons
 promote per §4.5 before comparing. Float comparison follows IEEE 754
@@ -2353,9 +2350,9 @@ operand).
 #### 4.4.4 Equality operators
 
 | Operator | Operand Trait | Result |
-|---|---|---|
-| `is` | `Eq` | bool |
-| `is not` | `Eq` | bool |
+|----------|---------------|--------|
+| `is`     | `Eq`          | bool   |
+| `is not` | `Eq`          | bool   |
 
 Equality uses the keyword forms `is` and `is not`, not symbolic `==`/`!=`
 (grammar §3.15 and grammar §6 reserve symbolic equality for future
@@ -2388,34 +2385,34 @@ When the compiler infers constraints from a generic function body per
 (and on the result type where the operator produces a constrained result).
 This table specifies the mapping:
 
-| Operator | Operand constraint | Result constraint |
-|---|---|---|
-| `+` | `Add` | same type as operands |
-| `-` (binary) | `Sub` | same type as operands |
-| `*` | `Mul` | same type as operands |
-| `/` | `Numeric` | `Float` (per §4.4.1.1) |
-| `//` | `IntDiv` | same type as operands |
-| `%` | `Rem` | same type as operands |
-| `-` (unary) | `Neg` | same type as operand |
-| `&` | `BitAnd` | same type as operands |
-| `\|` | `BitOr` | same type as operands |
-| `^` | `BitXor` | same type as operands |
-| `~` | `BitNot` | same type as operand |
-| `<<` | `Shl` (left); `u32`-convertible (right) | same type as left operand |
-| `>>` | `Shr` (left); `u32`-convertible (right) | same type as left operand |
-| `<`, `<=`, `>`, `>=` | `Ord` | `bool` |
-| `is`, `is not` | `Eq` | `bool` |
-| `+%`, `-%` (binary), `*%`, `//%`, `%%` | corresponding `Wrapping...` | same type as operands |
-| unary `-%` | `WrappingNeg` | same type as operand |
-| `+\|`, `-\|` (binary), `*\|`, `//\|`, `%\|` | corresponding `Saturating...` | same type as operands |
-| unary `-\|` | `SaturatingNeg` | same type as operand |
-| `+?`, `-?` (binary), `*?`, `//?`, `%?` | corresponding `Checked...` | `Option[T]` |
-| `/?` | `CheckedDiv` (on `Float`) | `Option[Float]`; integer operands widen per §4.4.1.1 |
-| unary `-?` | `CheckedNeg` | `Option[T]` |
-| `as` | (language-level) | the target type, traps on out-of-range |
-| `as%` | `WrappingAs[T]` (operand) | the target type T |
-| `as\|` | `SaturatingAs[T]` (operand) | the target type T |
-| `as?` | `CheckedAs[T]` (operand) | `Option[T]` |
+| Operator                                    | Operand constraint                      | Result constraint                                    |
+|---------------------------------------------|-----------------------------------------|------------------------------------------------------|
+| `+`                                         | `Add`                                   | same type as operands                                |
+| `-` (binary)                                | `Sub`                                   | same type as operands                                |
+| `*`                                         | `Mul`                                   | same type as operands                                |
+| `/`                                         | `Numeric`                               | `Float` (per §4.4.1.1)                               |
+| `//`                                        | `IntDiv`                                | same type as operands                                |
+| `%`                                         | `Rem`                                   | same type as operands                                |
+| `-` (unary)                                 | `Neg`                                   | same type as operand                                 |
+| `&`                                         | `BitAnd`                                | same type as operands                                |
+| `\|`                                        | `BitOr`                                 | same type as operands                                |
+| `^`                                         | `BitXor`                                | same type as operands                                |
+| `~`                                         | `BitNot`                                | same type as operand                                 |
+| `<<`                                        | `Shl` (left); `u32`-convertible (right) | same type as left operand                            |
+| `>>`                                        | `Shr` (left); `u32`-convertible (right) | same type as left operand                            |
+| `<`, `<=`, `>`, `>=`                        | `Ord`                                   | `bool`                                               |
+| `is`, `is not`                              | `Eq`                                    | `bool`                                               |
+| `+%`, `-%` (binary), `*%`, `//%`, `%%`      | corresponding `Wrapping...`             | same type as operands                                |
+| unary `-%`                                  | `WrappingNeg`                           | same type as operand                                 |
+| `+\|`, `-\|` (binary), `*\|`, `//\|`, `%\|` | corresponding `Saturating...`           | same type as operands                                |
+| unary `-\|`                                 | `SaturatingNeg`                         | same type as operand                                 |
+| `+?`, `-?` (binary), `*?`, `//?`, `%?`      | corresponding `Checked...`              | `Option[T]`                                          |
+| `/?`                                        | `CheckedDiv` (on `Float`)               | `Option[Float]`; integer operands widen per §4.4.1.1 |
+| unary `-?`                                  | `CheckedNeg`                            | `Option[T]`                                          |
+| `as`                                        | (language-level)                        | the target type, traps on out-of-range               |
+| `as%`                                       | `WrappingAs[T]` (operand)               | the target type T                                    |
+| `as\|`                                      | `SaturatingAs[T]` (operand)             | the target type T                                    |
+| `as?`                                       | `CheckedAs[T]` (operand)                | `Option[T]`                                          |
 
 The compiler's inference algorithm per §2.2.1 walks each function body
 collecting the union of these constraints across all operators used. The
@@ -2443,14 +2440,14 @@ loses no information, with one pragmatic exception specified in §4.5.4.
 
 #### 4.5.1 Integer-to-integer widening
 
-| From | To | Implicit |
-|---|---|---|
-| `i8` → wider signed | `i16`, `i32`, `i64`, `i128`, `isize` | ✓ |
-| `u8` → wider unsigned | `u16`, `u32`, `u64`, `u128`, `usize` | ✓ |
-| `u8` → wider signed | `i16`, `i32`, `i64`, `i128`, `isize` | ✓ (always representable) |
-| same-width signed/unsigned (e.g. `i32` ↔ `u32`) | the other | ✗ (explicit cast) |
-| signed → wider unsigned (e.g. `i8` → `u16`) | wider unsigned | ✗ (negatives don't fit) |
-| any narrowing | narrower type | ✗ (range may not fit) |
+| From                                            | To                                   | Implicit                 |
+|-------------------------------------------------|--------------------------------------|--------------------------|
+| `i8` → wider signed                             | `i16`, `i32`, `i64`, `i128`, `isize` | ✓                        |
+| `u8` → wider unsigned                           | `u16`, `u32`, `u64`, `u128`, `usize` | ✓                        |
+| `u8` → wider signed                             | `i16`, `i32`, `i64`, `i128`, `isize` | ✓ (always representable) |
+| same-width signed/unsigned (e.g. `i32` ↔ `u32`) | the other                            | ✗ (explicit cast)        |
+| signed → wider unsigned (e.g. `i8` → `u16`)     | wider unsigned                       | ✗ (negatives don't fit)  |
+| any narrowing                                   | narrower type                        | ✗ (range may not fit)    |
 
 The principle: same-signedness widening is implicit; unsigned-to-wider-signed
 is implicit (always representable). Crossing signedness boundaries — even
@@ -2461,14 +2458,14 @@ type).
 
 #### 4.5.2 Integer-to-float widening
 
-| From | To | Implicit |
-|---|---|---|
-| `i8`, `u8`, `i16`, `u16` | `f32` | ✓ (8/16-bit fits in f32's 24-bit mantissa) |
-| `i8`, `u8`, `i16`, `u16`, `i32`, `u32` | `f64` | ✓ (up to 32-bit fits in f64's 53-bit mantissa) |
-| `i32`, `u32` | `f32` | ✗ (precision loss above 2²⁴) |
-| `i64`, `u64` | `f64` | ✓ (pragmatic exception — see §4.5.4) |
-| `i64`, `u64` | `f32` | ✗ (significant precision loss) |
-| `i128`, `u128` | any float | ✗ (significant precision loss) |
+| From                                   | To        | Implicit                                       |
+|----------------------------------------|-----------|------------------------------------------------|
+| `i8`, `u8`, `i16`, `u16`               | `f32`     | ✓ (8/16-bit fits in f32's 24-bit mantissa)     |
+| `i8`, `u8`, `i16`, `u16`, `i32`, `u32` | `f64`     | ✓ (up to 32-bit fits in f64's 53-bit mantissa) |
+| `i32`, `u32`                           | `f32`     | ✗ (precision loss above 2²⁴)                   |
+| `i64`, `u64`                           | `f64`     | ✓ (pragmatic exception — see §4.5.4)           |
+| `i64`, `u64`                           | `f32`     | ✗ (significant precision loss)                 |
+| `i128`, `u128`                         | any float | ✗ (significant precision loss)                 |
 
 The rule: integer-to-float widening is implicit when the integer's full
 range fits exactly in the float's mantissa. `f32` has a 24-bit mantissa, so
@@ -2477,10 +2474,10 @@ mantissa, so integer widths up to 32-bit are exactly representable.
 
 #### 4.5.3 Float-to-float widening
 
-| From | To | Implicit |
-|---|---|---|
+| From  | To    | Implicit                                          |
+|-------|-------|---------------------------------------------------|
 | `f32` | `f64` | ✓ (exact-representable for all finite f32 values) |
-| `f64` | `f32` | ✗ (precision and range loss) |
+| `f64` | `f32` | ✗ (precision and range loss)                      |
 
 Float-to-float widening is implicit upward only. Narrowing from `f64` to
 `f32` requires an explicit cast because both precision (mantissa width) and
@@ -2549,14 +2546,14 @@ overflow concerns.
 Wrapping operators perform modular two's-complement arithmetic, silently
 wrapping on overflow:
 
-| Operator | Trait | Behavior |
-|---|---|---|
-| `+%` | `WrappingAdd` | `255_u8 +% 1 == 0_u8` |
-| `-%` | `WrappingSub` | `0_u8 -% 1 == 255_u8` |
-| `*%` | `WrappingMul` | `200_u8 *% 2 == 144_u8` |
-| `//%` | `WrappingIntDiv` | `(-128_i8) //% (-1_i8) == -128_i8` (no overflow trap) |
-| `%%` | `WrappingRem` | rare; defined for completeness |
-| unary `-%` | `WrappingNeg` | `(-128_i8) -% == -128_i8` (no overflow trap) |
+| Operator   | Trait            | Behavior                                              |
+|------------|------------------|-------------------------------------------------------|
+| `+%`       | `WrappingAdd`    | `255_u8 +% 1 == 0_u8`                                 |
+| `-%`       | `WrappingSub`    | `0_u8 -% 1 == 255_u8`                                 |
+| `*%`       | `WrappingMul`    | `200_u8 *% 2 == 144_u8`                               |
+| `//%`      | `WrappingIntDiv` | `(-128_i8) //% (-1_i8) == -128_i8` (no overflow trap) |
+| `%%`       | `WrappingRem`    | rare; defined for completeness                        |
+| unary `-%` | `WrappingNeg`    | `(-128_i8) -% == -128_i8` (no overflow trap)          |
 
 Wrapping is the right choice for hash functions, cryptographic primitives,
 counters where modular arithmetic is the intent, and bit-manipulation
@@ -2578,14 +2575,14 @@ recoverable form, or accept that `//%` on a zero divisor traps.
 Saturating operators clamp to the destination type's range bounds on
 overflow:
 
-| Operator | Trait | Behavior |
-|---|---|---|
-| `+|` | `SaturatingAdd` | `255_u8 +\| 1 == 255_u8` |
-| `-|` | `SaturatingSub` | `0_u8 -\| 1 == 0_u8` |
-| `*|` | `SaturatingMul` | `200_u8 *\| 2 == 255_u8` |
-| `//|` | `SaturatingIntDiv` | `(-128_i8) //\| (-1_i8) == 127_i8` |
-| `%|` | `SaturatingRem` | rare; defined for completeness |
-| unary `-|` | `SaturatingNeg` | `(-128_i8) -\| == 127_i8` |
+| Operator | Trait | Behavior           |
+|----------|-------|--------------------|
+| `+       | `     | `SaturatingAdd`    | `255_u8 +\| 1 == 255_u8` |
+| `-       | `     | `SaturatingSub`    | `0_u8 -\| 1 == 0_u8` |
+| `*       | `     | `SaturatingMul`    | `200_u8 *\| 2 == 255_u8` |
+| `//      | `     | `SaturatingIntDiv` | `(-128_i8) //\| (-1_i8) == 127_i8` |
+| `%       | `     | `SaturatingRem`    | rare; defined for completeness |
+| unary `- | `     | `SaturatingNeg`    | `(-128_i8) -\| == 127_i8` |
 
 Saturation is the right choice for DSP (audio sample clamping), image
 processing (pixel value clamping), and any context where producing a
@@ -2603,15 +2600,15 @@ form.
 
 Checked operators return `Option[T]` rather than producing a value-or-trap:
 
-| Operator | Trait | Return | Behavior |
-|---|---|---|---|
-| `+?` | `CheckedAdd` | `Option[T]` | `Some(result)` or `None` |
-| `-?` | `CheckedSub` | `Option[T]` | `Some(result)` or `None` |
-| `*?` | `CheckedMul` | `Option[T]` | `Some(result)` or `None` |
-| `/?` | `CheckedDiv` | `Option[Float]` | `None` on NaN/Infinity result; integer operands widen to float per §4.4.1.1 |
-| `//?` | `CheckedIntDiv` | `Option[T]` | `None` on overflow or div-by-zero |
-| `%?` | `CheckedRem` | `Option[T]` | `None` on overflow or zero divisor |
-| unary `-?` | `CheckedNeg` | `Option[T]` | `None` on overflow |
+| Operator   | Trait           | Return          | Behavior                                                                    |
+|------------|-----------------|-----------------|-----------------------------------------------------------------------------|
+| `+?`       | `CheckedAdd`    | `Option[T]`     | `Some(result)` or `None`                                                    |
+| `-?`       | `CheckedSub`    | `Option[T]`     | `Some(result)` or `None`                                                    |
+| `*?`       | `CheckedMul`    | `Option[T]`     | `Some(result)` or `None`                                                    |
+| `/?`       | `CheckedDiv`    | `Option[Float]` | `None` on NaN/Infinity result; integer operands widen to float per §4.4.1.1 |
+| `//?`      | `CheckedIntDiv` | `Option[T]`     | `None` on overflow or div-by-zero                                           |
+| `%?`       | `CheckedRem`    | `Option[T]`     | `None` on overflow or zero divisor                                          |
+| unary `-?` | `CheckedNeg`    | `Option[T]`     | `None` on overflow                                                          |
 
 The `/?` operator parallels `/` in widening behavior: integer operands
 widen to float per §4.4.1.1, then dispatch to `CheckedDiv` on the float
@@ -2681,12 +2678,12 @@ mirror the arithmetic operator suffixes.
 
 #### 4.7.1 The four cast variants
 
-| Operator | Trait | Behavior on out-of-range |
-|---|---|---|
-| `as` | (language-level) | trap at runtime |
-| `as%` | `WrappingAs[T]` | modular two's-complement wrap |
-| `as\|` | `SaturatingAs[T]` | clamp to destination type's range bounds |
-| `as?` | `CheckedAs[T]` | return `Option[T]` — `None` on out-of-range |
+| Operator | Trait             | Behavior on out-of-range                    |
+|----------|-------------------|---------------------------------------------|
+| `as`     | (language-level)  | trap at runtime                             |
+| `as%`    | `WrappingAs[T]`   | modular two's-complement wrap               |
+| `as\|`   | `SaturatingAs[T]` | clamp to destination type's range bounds    |
+| `as?`    | `CheckedAs[T]`    | return `Option[T]` — `None` on out-of-range |
 
 Examples:
 
@@ -2762,11 +2759,11 @@ conventional, and trait-path syntax.
 
 Available on all `Numeric` types (both integer and float):
 
-| Operation | Trait | Signature |
-|---|---|---|
-| `abs` | `Abs` | `fn abs(value: Self) -> Self` |
-| `min` | `Min` | `fn min(a: Self, b: Self) -> Self` |
-| `max` | `Max` | `fn max(a: Self, b: Self) -> Self` |
+| Operation | Trait | Signature                          |
+|-----------|-------|------------------------------------|
+| `abs`     | `Abs` | `fn abs(value: Self) -> Self`      |
+| `min`     | `Min` | `fn min(a: Self, b: Self) -> Self` |
+| `max`     | `Max` | `fn max(a: Self, b: Self) -> Self` |
 
 Note on `abs`: applying `abs` to the minimum value of a signed integer type
 (e.g., `i32::MIN.abs()`) traps on overflow per §4.6.1, because the
@@ -2793,14 +2790,14 @@ NaN represents missing data.
 
 Available on `Float` types:
 
-| Category | Operations |
-|---|---|
-| Square root | `sqrt` |
+| Category      | Operations                                           |
+|---------------|------------------------------------------------------|
+| Square root   | `sqrt`                                               |
 | Trigonometric | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2` |
-| Logarithmic | `ln`, `log2`, `log10`, `log` (base, value) |
-| Exponential | `exp`, `exp2` |
-| Rounding | `floor`, `ceil`, `round`, `trunc` |
-| Inspection | `is_nan`, `is_infinite`, `is_finite`, `is_normal` |
+| Logarithmic   | `ln`, `log2`, `log10`, `log` (base, value)           |
+| Exponential   | `exp`, `exp2`                                        |
+| Rounding      | `floor`, `ceil`, `round`, `trunc`                    |
+| Inspection    | `is_nan`, `is_infinite`, `is_finite`, `is_normal`    |
 
 Each operation has its own trait (e.g., `Sqrt`, `Sin`, `Floor`). The
 `Float` umbrella requires all of them per the umbrella pattern in §3.6.
@@ -3038,13 +3035,13 @@ implicitly widened to float per §4.4.1.1 before `Div::div` is dispatched.
 Defaults declared on the umbrella traits per §3.1.5 are confirmed against
 the final type set:
 
-| Trait | Default Type | Rationale |
-|---|---|---|
-| `Numeric` | `i32` | Workhorse general-purpose integer |
-| `Integer` | `i32` | Same |
-| `Float` | `f64` | Higher precision preferred when unconstrained |
-| `Signed` | `i32` | Workhorse signed integer |
-| `Unsigned` | `u32` | Symmetric counterpart to `i32` |
+| Trait      | Default Type | Rationale                                     |
+|------------|--------------|-----------------------------------------------|
+| `Numeric`  | `i32`        | Workhorse general-purpose integer             |
+| `Integer`  | `i32`        | Same                                          |
+| `Float`    | `f64`        | Higher precision preferred when unconstrained |
+| `Signed`   | `i32`        | Workhorse signed integer                      |
+| `Unsigned` | `u32`        | Symmetric counterpart to `i32`                |
 
 The `i32` and `f64` defaults match modern language convention (Rust, Swift,
 Kotlin, C#) and reflect the types where the cost/precision tradeoffs are
@@ -3111,11 +3108,11 @@ sits.
 
 The three contexts:
 
-| Context | Operands | Example |
-|---|---|---|
-| Generic bound | Traits | `fn pick[T: A & B](...)` |
-| Value-position trait object | Traits, behind `dyn` | `let x: dyn (A & B) = ...` |
-| Record intersection at type definition | Records | `type X = A & B` |
+| Context                                | Operands             | Example                    |
+|----------------------------------------|----------------------|----------------------------|
+| Generic bound                          | Traits               | `fn pick[T: A & B](...)`   |
+| Value-position trait object            | Traits, behind `dyn` | `let x: dyn (A & B) = ...` |
+| Record intersection at type definition | Records              | `type X = A & B`           |
 
 ### 5.1 Trait Conjunction in Generic Bounds
 
@@ -5338,16 +5335,16 @@ permitted.
 Numeric literals may carry one of the following built-in suffixes to
 produce a `duration` value:
 
-| Suffix | Unit         | Example       |
-|--------|--------------|---------------|
-| `ns`   | nanoseconds  | `500ns`       |
-| `us`   | microseconds | `100us`       |
-| `μs`   | microseconds | `100μs`       |
-| `ms`   | milliseconds | `250ms`       |
-| `s`    | seconds      | `1s`, `1.5s`  |
-| `min`  | minutes      | `5min`        |
-| `h`    | hours        | `2h`          |
-| `d`    | days         | `1d`          |
+| Suffix | Unit         | Example      |
+|--------|--------------|--------------|
+| `ns`   | nanoseconds  | `500ns`      |
+| `us`   | microseconds | `100us`      |
+| `μs`   | microseconds | `100μs`      |
+| `ms`   | milliseconds | `250ms`      |
+| `s`    | seconds      | `1s`, `1.5s` |
+| `min`  | minutes      | `5min`       |
+| `h`    | hours        | `2h`         |
+| `d`    | days         | `1d`         |
 
 Both integer and float literals may carry these suffixes. Float literals
 convert to nanoseconds with rounding-to-nearest at compile time
@@ -5360,16 +5357,16 @@ may not re-register them in any scope.
 
 The following operators are defined for `duration`:
 
-| Operation                  | Result          | Notes                            |
-|----------------------------|-----------------|----------------------------------|
-| `duration + duration`      | `duration`      | sum of spans                     |
-| `duration - duration`      | `duration`      | difference (may be negative)     |
-| `duration * Numeric`       | `duration`      | scale; `Numeric * duration` ok   |
-| `duration / Numeric`       | `duration`      | scale down                       |
-| `duration / duration`      | `f64`           | ratio (canonical float result)   |
-| `duration % duration`      | `duration`      | modulo (remainder)               |
-| `-duration`                | `duration`      | negation                         |
-| `duration <,<=,==,!=,>=,>` | `bool`          | comparison                       |
+| Operation                  | Result     | Notes                          |
+|----------------------------|------------|--------------------------------|
+| `duration + duration`      | `duration` | sum of spans                   |
+| `duration - duration`      | `duration` | difference (may be negative)   |
+| `duration * Numeric`       | `duration` | scale; `Numeric * duration` ok |
+| `duration / Numeric`       | `duration` | scale down                     |
+| `duration / duration`      | `f64`      | ratio (canonical float result) |
+| `duration % duration`      | `duration` | modulo (remainder)             |
+| `-duration`                | `duration` | negation                       |
+| `duration <,<=,==,!=,>=,>` | `bool`     | comparison                     |
 
 The `Numeric` operand may be any integer or float type per §4.1. Integer
 scaling is exact; float scaling rounds to nearest at the nanosecond level
@@ -5443,12 +5440,12 @@ core defines only monotonic instants.
 
 The following operators are defined for `instant`:
 
-| Operation                | Result      | Notes                            |
-|--------------------------|-------------|----------------------------------|
-| `instant - instant`      | `duration`  | elapsed time between two points  |
-| `instant + duration`     | `instant`   | future point                     |
-| `instant - duration`     | `instant`   | past point                       |
-| `instant <,<=,==,!=,>=,>`| `bool`      | comparison                       |
+| Operation                 | Result     | Notes                           |
+|---------------------------|------------|---------------------------------|
+| `instant - instant`       | `duration` | elapsed time between two points |
+| `instant + duration`      | `instant`  | future point                    |
+| `instant - duration`      | `instant`  | past point                      |
+| `instant <,<=,==,!=,>=,>` | `bool`     | comparison                      |
 
 Operations **not defined** for `instant`:
 
@@ -5513,11 +5510,11 @@ declaration-specific behavior.
 
 Visibility is three-level. Each level denotes a distinct scope:
 
-| Level | Scope | Default? |
-|---|---|---|
-| `public` | Across package boundaries — exported to dependent packages | no |
-| `shared` | Within the same package (the module tree rooted at the package root) | **yes** |
-| `private` | Within the declaring module only (the folder containing the declaration) | no |
+| Level     | Scope                                                                    | Default? |
+|-----------|--------------------------------------------------------------------------|----------|
+| `public`  | Across package boundaries — exported to dependent packages               | no       |
+| `shared`  | Within the same package (the module tree rooted at the package root)     | **yes**  |
+| `private` | Within the declaring module only (the folder containing the declaration) | no       |
 
 `shared` is the default; no keyword is required. `public` and `private`
 are explicit keywords.
@@ -5967,13 +5964,13 @@ visible — the intersection of their reachability.
 
 Concrete cases:
 
-| Trait visibility | Type visibility | Impl visibility |
-|---|---|---|
-| `public` | `public` | `public` (anywhere both are visible) |
-| `public` | `shared` | `shared` (package-internal) |
-| `shared` | `public` | `shared` (package-internal) |
-| `private` | `public` | `private` (only in the trait's module) |
-| `private` | `private` | only if both declared in same module |
+| Trait visibility | Type visibility | Impl visibility                        |
+|------------------|-----------------|----------------------------------------|
+| `public`         | `public`        | `public` (anywhere both are visible)   |
+| `public`         | `shared`        | `shared` (package-internal)            |
+| `shared`         | `public`        | `shared` (package-internal)            |
+| `private`        | `public`        | `private` (only in the trait's module) |
+| `private`        | `private`       | only if both declared in same module   |
 
 The intersection rule reflects the practical observation: if a caller
 can't name both the trait and the type, the implementation is
@@ -7523,12 +7520,12 @@ different semantics here. A reader should understand `else:` on a loop as
 The loop expression's type is determined by the combination of `break
 value` sites in the body and the presence/absence of an `else:` clause:
 
-| Body has `break value` | `else:` clause | Loop expression type |
-|---|---|---|
-| No | absent | `()` (unit) |
-| No | present | type of `else:` expression |
-| Yes | absent | `Option[T]` |
-| Yes | present | `T` |
+| Body has `break value` | `else:` clause | Loop expression type       |
+|------------------------|----------------|----------------------------|
+| No                     | absent         | `()` (unit)                |
+| No                     | present        | type of `else:` expression |
+| Yes                    | absent         | `Option[T]`                |
+| Yes                    | present        | `T`                        |
 
 where `T` is the unified type of all `break value` sites (and the
 `else:` clause, when present).
@@ -8441,6 +8438,7 @@ re-evaluation). The scope determines instance multiplicity and how
 the host addresses the signal when writing (§13.13.2).
 
 Use cases by scope:
+
 - Module-level: program-wide entry points (one cell, shared).
 - Node-level: per-node-instance runtime-fed data.
 - Connection-level: per-connection-instance runtime-fed data.
@@ -8827,14 +8825,14 @@ cells are computed during the kernel's startup pass.
 4. **Per-instance attrs** are initialized when their containing
    instance is placed. For each instance, attrs are initialized in
    declaration order. For each attr:
-   - If the placement supplies an explicit value (via body form,
-     inline pipe, flag, or `/expr` for the default attr), that value
-     is evaluated and stored.
-   - Otherwise, if the attr was declared with `= default`, the
-     default expression is evaluated and stored.
-   - Otherwise, the attr was declared without a default and the
-     placement omitted a value — a compile error caught before
-     startup (see §13.2.2).
+    - If the placement supplies an explicit value (via body form,
+      inline pipe, flag, or `/expr` for the default attr), that value
+      is evaluated and stored.
+    - Otherwise, if the attr was declared with `= default`, the
+      default expression is evaluated and stored.
+    - Otherwise, the attr was declared without a default and the
+      placement omitted a value — a compile error caught before
+      startup (see §13.2.2).
 
    Whether sourced from a placement value or a default expression,
    the right-hand side is evaluated against the just-initialized
@@ -9189,15 +9187,15 @@ clause is declared:
 
 - **Heterogeneous:** `self.parts` — a structural iterable over all
   parts of the parent, regardless of their types.
-  - When `parts:` is declared, the iteration variable is typed as
-    the sum of the listed types. The body must compile for every
-    listed type (per the heterogeneous iteration rules of §13.4.2).
-  - When `parts:` is omitted, the iteration variable's static type
-    cannot be inferred from the declaration alone (any node type
-    may have been placed). The body must declare an explicit trait
-    bound on the iteration variable (`for p: SomeTrait in
+    - When `parts:` is declared, the iteration variable is typed as
+      the sum of the listed types. The body must compile for every
+      listed type (per the heterogeneous iteration rules of §13.4.2).
+    - When `parts:` is omitted, the iteration variable's static type
+      cannot be inferred from the declaration alone (any node type
+      may have been placed). The body must declare an explicit trait
+      bound on the iteration variable (`for p: SomeTrait in
     self.parts: ...`); the compiler verifies at each placement
-    that every placed part type satisfies the bound.
+      that every placed part type satisfies the bound.
 - **Type-bulk (`parts:` declared only):** `self.parts.<NodeType>` —
   a structural iterable over all parts of the given type. Length
   range is determined by the declared cardinality. Available only
@@ -9210,12 +9208,12 @@ clause is declared:
 
 Summary table:
 
-| Form                         | `parts:` declared | `parts:` omitted               |
-|------------------------------|-------------------|--------------------------------|
-| `self.parts.<Type>`          | available         | not available                  |
-| `self.parts` (unbounded)     | available         | not available (need bound)     |
+| Form                         | `parts:` declared | `parts:` omitted                 |
+|------------------------------|-------------------|----------------------------------|
+| `self.parts.<Type>`          | available         | not available                    |
+| `self.parts` (unbounded)     | available         | not available (need bound)       |
 | `self.parts` (trait-bounded) | available         | available (trait bound required) |
-| named (`self.<name>`)        | available         | available                      |
+| named (`self.<name>`)        | available         | available                        |
 
 Inside the parent's own type body (its `derived` and `recurrent`
 expressions), only type-bulk and heterogeneous forms are available;
@@ -10002,6 +10000,7 @@ attr` is a compile error.
 ##### 13.7.5.3 Summary
 
 The `/expr` form is positional shorthand:
+
 - On connections, it targets the `to` endpoint (always present).
 - On nodes, it targets the `default attr` (present only when the
   type declares one).
@@ -10018,7 +10017,8 @@ three categories:
   slot rather than an attribute. The identifiers `to` and `from`
   are reserved as endpoint slots inside connection bodies; they
   cannot be used as attr names on connections.
-- **Placement:** `["->"]? TypeRef [Flags]? [InstanceName]? [/Expr]? ["when" Pred]? [| AttrPipe]*` followed by an optional `:` and indented body. Creates a child part or connection. The `when` modifier gates the placement (§13.8).
+- **Placement:** `["->"]? TypeRef [Flags]? [InstanceName]? [/Expr]? ["when" Pred]? [| AttrPipe]*` followed by an
+  optional `:` and indented body. Creates a child part or connection. The `when` modifier gates the placement (§13.8).
 
 The parser distinguishes by what follows the first identifier: `:`
 (with an expression after) → attribute setting or endpoint slot
@@ -10664,13 +10664,13 @@ operation on the producer thread:
    gate-open transition rule.
 3. **Evaluate in topological order.** For each node in topo order,
    invoke its behavior (per §14.6's ABI). Reads resolve as follows:
-   - Signal and attr reads → current values in the back buffer
-     (most recent writes since the previous publish).
-   - Derived reads → this-publish computed values for deriveds
-     evaluated earlier in this step; previous-publish committed
-     values for deriveds not in the dirty set.
-   - Recurrent reads → previous-committed values, always
-     (lockstep — §13.2.4.1).
+    - Signal and attr reads → current values in the back buffer
+      (most recent writes since the previous publish).
+    - Derived reads → this-publish computed values for deriveds
+      evaluated earlier in this step; previous-publish committed
+      values for deriveds not in the dirty set.
+    - Recurrent reads → previous-committed values, always
+      (lockstep — §13.2.4.1).
 
    Derived behaviors write their results into the back buffer.
    Recurrent `next:` expression results are held aside (not yet
@@ -11042,20 +11042,20 @@ from the type's size and shape:
 
 **Cell-fit examples:**
 
-| Type                                    | Storage                         |
-|-----------------------------------------|---------------------------------|
-| `i32`, `f32`, `bool`                    | direct (4 bytes)                |
-| `i64`, `f64`                            | direct (8 bytes)                |
-| `(i32, f32)` tuple                      | direct (8 bytes)                |
-| `Option[i32]`                           | direct (1-bit tag + 4 = 5 bytes)|
-| `Result[i32, i32]`                      | direct (1-bit tag + 4 = 5 bytes)|
-| Record with two `i64` fields            | direct on wide-atomic platforms (16 bytes); pool otherwise |
-| Record with five `i64` fields           | pool (40 bytes)                 |
-| `string`                                | pool (variable; via string pool §14.5) |
-| `Vec[i32]`                              | pool (variable)                 |
-| `HashMap[K, V]`                         | pool (variable)                 |
-| Fixed-size array `T[N]` with N×sizeof(T) ≤ word | direct           |
-| Fixed-size array `T[N]` with N×sizeof(T) > word | pool             |
+| Type                                            | Storage                                                    |
+|-------------------------------------------------|------------------------------------------------------------|
+| `i32`, `f32`, `bool`                            | direct (4 bytes)                                           |
+| `i64`, `f64`                                    | direct (8 bytes)                                           |
+| `(i32, f32)` tuple                              | direct (8 bytes)                                           |
+| `Option[i32]`                                   | direct (1-bit tag + 4 = 5 bytes)                           |
+| `Result[i32, i32]`                              | direct (1-bit tag + 4 = 5 bytes)                           |
+| Record with two `i64` fields                    | direct on wide-atomic platforms (16 bytes); pool otherwise |
+| Record with five `i64` fields                   | pool (40 bytes)                                            |
+| `string`                                        | pool (variable; via string pool §14.5)                     |
+| `Vec[i32]`                                      | pool (variable)                                            |
+| `HashMap[K, V]`                                 | pool (variable)                                            |
+| Fixed-size array `T[N]` with N×sizeof(T) ≤ word | direct                                                     |
+| Fixed-size array `T[N]` with N×sizeof(T) > word | pool                                                       |
 
 **Not permitted as reactive cell types in v1:**
 
@@ -11164,6 +11164,7 @@ defined.
 The kernel's lifecycle proceeds in phases:
 
 **Startup:**
+
 1. Load metadata (per §14.7).
 2. Allocate the reactive state buffer (per §14.3).
 3. Initialize signal cells with their declared initial values (in
@@ -11200,6 +11201,7 @@ sentinel (or block, per implementation choice).
   published state and read cell values.
 
 **Shutdown:**
+
 1. Stop accepting new signal/attr writes.
 2. Drain any in-flight publish (the current publish, if running,
    completes).
@@ -11543,6 +11545,7 @@ The kernel includes a bytecode interpreter that executes this directly.
 No native compilation step occurs.
 
 Characteristics:
+
 - Sub-second compilation time, suitable for live editing.
 - Performance lower than native (a typical interpretation overhead is
   5–20× slower in tight loops; acceptable for development).
@@ -11558,6 +11561,7 @@ compiled by the bundled `rustc` toolchain into a native executable. The
 resulting binary is the distribution artifact.
 
 Characteristics:
+
 - Native performance, equivalent to hand-written Rust for the
   equivalent program.
 - Compilation time is dominated by `rustc` (typically seconds to tens
@@ -11610,6 +11614,7 @@ required.
 
 The CLI ships as a single binary that bundles or downloads on first
 use:
+
 - The Ductus frontend.
 - The bytecode interpreter (part of the kernel).
 - A `rustc` toolchain for native-mode builds.
@@ -11646,12 +11651,12 @@ reference Rust implementation.
 A single cell directly stores any 8-byte-or-smaller primitive value
 via bit reinterpretation:
 
-| Type | Storage in cell |
-|---|---|
-| `bool`, `char` | Single cell; value occupies the low bits, upper bits are zero. |
+| Type                   | Storage in cell                                                    |
+|------------------------|--------------------------------------------------------------------|
+| `bool`, `char`         | Single cell; value occupies the low bits, upper bits are zero.     |
 | `i8`–`i64`, `u8`–`u64` | Single cell; value is sign- or zero-extended to 64 bits as needed. |
-| `f32`, `f64` | Single cell; value is bit-reinterpreted (transmute) as i64. |
-| `string` | Single cell; value is a u64 handle into the string pool (§14.5). |
+| `f32`, `f64`           | Single cell; value is bit-reinterpreted (transmute) as i64.        |
+| `string`               | Single cell; value is a u64 handle into the string pool (§14.5).   |
 
 Lossless conversion: reading and writing a cell preserves the
 bit-exact value of any of these primitive types. `f64::from_bits` and
@@ -11688,6 +11693,7 @@ within the enclosing record's allocation.
 #### 14.3.3 Triple-buffering
 
 The reactive state buffer is **triple-buffered** to provide:
+
 - Snapshot consistency across multiple cells for multi-cell values.
 - Batched publication: writes accumulated in the back buffer commit
   atomically when the producer publishes.
@@ -11713,6 +11719,7 @@ The kernel maintains three copies of the buffer:
 ##### 14.3.3.1 Publish operation
 
 To publish accumulated writes, the producer performs:
+
 1. Finalizes writes to the back buffer.
 2. Atomically swaps the "current" pointer to point at the
    newly-written back buffer. The previous "current" rotates to
@@ -11734,6 +11741,7 @@ specified in §13) is outside the scope of this section.
 
 The consumer, when it wants to read the latest published state,
 performs **swap**:
+
 1. Atomically load the current pointer.
 2. Read cells from the buffer it points to.
 
@@ -12070,6 +12078,7 @@ specified in §13 (reactive system).
 #### 14.8.1 Thread-safety properties of the mechanism
 
 By construction of the SPSC triple buffer:
+
 - The producer writes the back buffer without interference; the
   consumer never touches it.
 - The consumer reads the current buffer without interference; the
@@ -12172,18 +12181,18 @@ the following rules.
 
 #### 14.10.1 Type lowering
 
-| Ductus | Rust |
-|---|---|
-| `i8`–`i64`, `u8`–`u64` | Same Rust types. |
-| `i128`, `u128` | Same Rust types (on supporting targets). |
-| `f32`, `f64` | Same Rust types. |
-| `bool`, `char` | `bool`, `char`. |
-| `string` | A newtype wrapping a kernel string handle (see §14.10.1.1). |
-| Tuples | Rust tuples. |
-| Arrays `T[N]` | Rust arrays `[T; N]`. |
-| Records | Rust structs with same field order. |
-| Enums | Rust enums with same variant order. |
-| Newtypes (§6.3) | Rust newtype structs. |
+| Ductus                 | Rust                                                        |
+|------------------------|-------------------------------------------------------------|
+| `i8`–`i64`, `u8`–`u64` | Same Rust types.                                            |
+| `i128`, `u128`         | Same Rust types (on supporting targets).                    |
+| `f32`, `f64`           | Same Rust types.                                            |
+| `bool`, `char`         | `bool`, `char`.                                             |
+| `string`               | A newtype wrapping a kernel string handle (see §14.10.1.1). |
+| Tuples                 | Rust tuples.                                                |
+| Arrays `T[N]`          | Rust arrays `[T; N]`.                                       |
+| Records                | Rust structs with same field order.                         |
+| Enums                  | Rust enums with same variant order.                         |
+| Newtypes (§6.3)        | Rust newtype structs.                                       |
 
 ##### 14.10.1.1 String storage uniformity
 
@@ -12240,16 +12249,16 @@ mechanical emission, not a full trait export.
 
 Ductus's ownership rules map directly to Rust's:
 
-| Ductus | Rust |
-|---|---|
-| `let x = e` | `let x = e;` |
-| `mut x = e` | `let mut x = e;` |
-| Pass by value (move) | Pass by value (move). |
-| `&T` parameter (borrow) | `&T` parameter. |
+| Ductus                  | Rust                     |
+|-------------------------|--------------------------|
+| `let x = e`             | `let x = e;`             |
+| `mut x = e`             | `let mut x = e;`         |
+| Pass by value (move)    | Pass by value (move).    |
+| `&T` parameter (borrow) | `&T` parameter.          |
 | `for x in v:` (consume) | `for x in v` (consumes). |
 | `for x in &v:` (borrow) | `for x in &v` (borrows). |
-| `Copy` types | `Copy` trait derived. |
-| `Clone` | `Clone` trait derived. |
+| `Copy` types            | `Copy` trait derived.    |
+| `Clone`                 | `Clone` trait derived.   |
 
 Ductus's `&v` form in for-loops compiles to Rust's `&v`. Ductus's
 parameter borrow `&T` compiles to Rust's `&T`. Rust's borrow checker
@@ -12306,7 +12315,7 @@ file changes:
 4. For each changed behavior:
    a. The old bytecode is replaced with new bytecode.
    b. The kernel's behavior table updates the function pointer (or
-      bytecode reference) for that behavior's ID.
+   bytecode reference) for that behavior's ID.
    c. The next invocation uses the new behavior.
 
 #### 14.11.2 State preservation
@@ -12318,12 +12327,14 @@ explicitly changes them. The graph topology persists.
 #### 14.11.3 Reload-safe and reload-unsafe changes
 
 Changes safe to hot reload:
+
 - Body of an existing behavior (same signature, different
   implementation).
 - Adding new behaviors (new derived expressions, new functions).
 - Adding new signals, attrs, derived declarations.
 
 Changes unsafe to hot reload (require full kernel restart):
+
 - Removing a signal/attr/derived that is currently referenced.
 - Changing the type of an existing cell.
 - Changing the connection topology of currently-active instances.
