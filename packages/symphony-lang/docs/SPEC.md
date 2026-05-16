@@ -22,10 +22,11 @@ revised to match.
 ### 1.2 Status
 
 The specification is under active development. The type system (this section
-and §§2–10) is fully specified. The reactive system, runtime semantics, and the
-node/connection composition model are partially specified or deferred. Sections
-labeled "deferred" indicate decisions consciously postponed for later
-refinement.
+and §§2–10) is fully specified except for object safety (§5.2.4) and coercion
+semantics (§5.2.5), which are deferred to a future revision. The reactive
+system, runtime semantics, and the node/connection composition model are
+partially specified or deferred. Sections labeled "deferred" indicate
+decisions consciously postponed for later refinement.
 
 ### 1.3 Design Philosophy
 
@@ -596,7 +597,7 @@ conversion rules (§4.5).
 #### 2.4.4 Compile-time evaluation as type-level mechanism
 
 Compile-time-known integer values can serve as type-level arguments. The
-const-generic mechanism (§Generic Parameters) uses this directly:
+const-generic mechanism (§2.2.5) uses this directly:
 
 ```
 let arr: i32[fib(10) + 1]                  // valid; fib(10) + 1 is compile-time evaluable
@@ -757,7 +758,7 @@ trait Add[Rhs = Self]:
 When an implementation does not bind `Output` explicitly, the default applies.
 
 Implementations bind associated types via the `type Name = Concrete` form
-inside `fulfill` blocks (§3.4.3).
+inside `fulfill` blocks (§3.3.2).
 
 Bounds on associated types in generic constraints use where-clauses with the
 `.` member-access notation (§3.3.4 for where-clauses; §3.1.6 for generic
@@ -1642,17 +1643,17 @@ Fine-grained traits each declare exactly one method or one closely related
 group of methods, defining a single capability:
 
 ```
-trait Add:
-  type Output
-  fn add(left: Self, right: Self) -> Output
+trait Add[Rhs = Self]:
+  type Output = Self
+  fn add(left: Self, right: Rhs) -> Output
 
-trait Sub:
-  type Output
-  fn sub(left: Self, right: Self) -> Output
+trait Sub[Rhs = Self]:
+  type Output = Self
+  fn sub(left: Self, right: Rhs) -> Output
 
-trait Mul:
-  type Output
-  fn mul(left: Self, right: Self) -> Output
+trait Mul[Rhs = Self]:
+  type Output = Self
+  fn mul(left: Self, right: Rhs) -> Output
 
 trait Neg:
   fn neg(value: Self) -> Self
@@ -2243,15 +2244,15 @@ corresponds to one or more trait methods in §4.9's trait hierarchy.
 
 #### 4.4.1 Arithmetic operators
 
-| Operator     | Operand Constraint | Result           | Notes                               |
-|--------------|--------------------|------------------|-------------------------------------|
-| `+`          | `Add`              | same kind        | mixed-kind promotes per §4.5        |
-| `-` (binary) | `Sub`              | same kind        | mixed-kind promotes per §4.5        |
-| `*`          | `Mul`              | same kind        | mixed-kind promotes per §4.5        |
-| `/`          | `Numeric`          | **always Float** | mathematical division; see §4.4.1.1 |
-| `//`         | `IntDiv`           | Integer          | truncating integer division         |
-| `%`          | `Rem`              | same kind        | mixed-kind promotes per §4.5        |
-| `-` (unary)  | `Neg`              | same as operand  | type error on unsigned              |
+| Operator     | Operand Constraint | Result                                                            | Notes                               |
+|--------------|--------------------|-------------------------------------------------------------------|-------------------------------------|
+| `+`          | `Add`              | Output (associated type)                                          | mixed-kind promotes per §4.5        |
+| `-` (binary) | `Sub`              | Output (associated type)                                          | mixed-kind promotes per §4.5        |
+| `*`          | `Mul`              | Output (associated type)                                          | mixed-kind promotes per §4.5        |
+| `/`          | `Numeric`          | Self (on Float umbrella; mixed-kind operands widen per §4.4.1.1)  | mathematical division; see §4.4.1.1 |
+| `//`         | `IntDiv`           | Output (associated type)                                          | truncating integer division         |
+| `%`          | `Rem`              | Output (associated type)                                          | mixed-kind promotes per §4.5        |
+| `-` (unary)  | `Neg`              | same as operand                                                   | type error on unsigned              |
 
 ##### 4.4.1.1 The `/` operator and integer-to-float promotion
 
@@ -2430,12 +2431,12 @@ This table specifies the mapping:
 
 | Operator                                    | Operand constraint                      | Result constraint                                    |
 |---------------------------------------------|-----------------------------------------|------------------------------------------------------|
-| `+`                                         | `Add`                                   | same type as operands                                |
-| `-` (binary)                                | `Sub`                                   | same type as operands                                |
-| `*`                                         | `Mul`                                   | same type as operands                                |
-| `/`                                         | `Numeric`                               | `Float` (per §4.4.1.1)                               |
-| `//`                                        | `IntDiv`                                | same type as operands                                |
-| `%`                                         | `Rem`                                   | same type as operands                                |
+| `+`                                         | `Add`                                   | `Output` (associated type)                           |
+| `-` (binary)                                | `Sub`                                   | `Output` (associated type)                           |
+| `*`                                         | `Mul`                                   | `Output` (associated type)                           |
+| `/`                                         | `Numeric`                               | `Self` on `Float` umbrella (per §4.4.1.1)            |
+| `//`                                        | `IntDiv`                                | `Output` (associated type)                           |
+| `%`                                         | `Rem`                                   | `Output` (associated type)                           |
 | `-` (unary)                                 | `Neg`                                   | same type as operand                                 |
 | `&`                                         | `BitAnd`                                | same type as operands                                |
 | `\|`                                        | `BitOr`                                 | same type as operands                                |
@@ -2618,14 +2619,14 @@ recoverable form, or accept that `//%` on a zero divisor traps.
 Saturating operators clamp to the destination type's range bounds on
 overflow:
 
-| Operator | Trait | Behavior           |
-|----------|-------|--------------------|
-| `+       | `     | `SaturatingAdd`    | `255_u8 +\| 1 == 255_u8` |
-| `-       | `     | `SaturatingSub`    | `0_u8 -\| 1 == 0_u8` |
-| `*       | `     | `SaturatingMul`    | `200_u8 *\| 2 == 255_u8` |
-| `//      | `     | `SaturatingIntDiv` | `(-128_i8) //\| (-1_i8) == 127_i8` |
-| `%       | `     | `SaturatingRem`    | rare; defined for completeness |
-| unary `- | `     | `SaturatingNeg`    | `(-128_i8) -\| == 127_i8` |
+| Operator    | Trait              | Behavior                            |
+|-------------|--------------------|-------------------------------------|
+| `+\|`       | `SaturatingAdd`    | `255_u8 +\| 1 == 255_u8`            |
+| `-\|`       | `SaturatingSub`    | `0_u8 -\| 1 == 0_u8`                |
+| `*\|`       | `SaturatingMul`    | `200_u8 *\| 2 == 255_u8`            |
+| `//\|`      | `SaturatingIntDiv` | `(-128_i8) //\| (-1_i8) == 127_i8`  |
+| `%\|`       | `SaturatingRem`    | rare; defined for completeness      |
+| unary `-\|` | `SaturatingNeg`    | `(-128_i8) -\| == 127_i8`           |
 
 Saturation is the right choice for DSP (audio sample clamping), image
 processing (pixel value clamping), and any context where producing a
@@ -2922,13 +2923,13 @@ Each operator from §4.4 has its own trait, with the method name matching
 the conventional operator name:
 
 ```
-trait Add:    fn add(a: Self, b: Self) -> Self
-trait Sub:    fn sub(a: Self, b: Self) -> Self
-trait Mul:    fn mul(a: Self, b: Self) -> Self
-trait Div:    fn div(a: Self, b: Self) -> Float    -- mathematical division
-trait IntDiv: fn intdiv(a: Self, b: Self) -> Self  -- truncating
-trait Rem:    fn rem(a: Self, b: Self) -> Self
-trait Neg:    fn neg(value: Self) -> Self
+trait Add[Rhs = Self]:    type Output = Self; fn add(a: Self, b: Rhs) -> Output
+trait Sub[Rhs = Self]:    type Output = Self; fn sub(a: Self, b: Rhs) -> Output
+trait Mul[Rhs = Self]:    type Output = Self; fn mul(a: Self, b: Rhs) -> Output
+trait Div:                fn div(a: Self, b: Self) -> Self      -- on Float umbrella only; see §4.4.1.1 for widening
+trait IntDiv[Rhs = Self]: type Output = Self; fn intdiv(a: Self, b: Rhs) -> Output
+trait Rem[Rhs = Self]:    type Output = Self; fn rem(a: Self, b: Rhs) -> Output
+trait Neg:                fn neg(value: Self) -> Self
 
 trait BitAnd: fn bitand(a: Self, b: Self) -> Self
 trait BitOr:  fn bitor(a: Self, b: Self) -> Self
@@ -2937,27 +2938,27 @@ trait BitNot: fn bitnot(value: Self) -> Self
 trait Shl:    fn shl(value: Self, n: u32) -> Self
 trait Shr:    fn shr(value: Self, n: u32) -> Self
 
-trait WrappingAdd:    fn wrapping_add(a: Self, b: Self) -> Self
-trait WrappingSub:    fn wrapping_sub(a: Self, b: Self) -> Self
-trait WrappingMul:    fn wrapping_mul(a: Self, b: Self) -> Self
-trait WrappingIntDiv: fn wrapping_intdiv(a: Self, b: Self) -> Self
-trait WrappingRem:    fn wrapping_rem(a: Self, b: Self) -> Self
-trait WrappingNeg:    fn wrapping_neg(value: Self) -> Self
+trait WrappingAdd[Rhs = Self]:    type Output = Self; fn wrapping_add(a: Self, b: Rhs) -> Output
+trait WrappingSub[Rhs = Self]:    type Output = Self; fn wrapping_sub(a: Self, b: Rhs) -> Output
+trait WrappingMul[Rhs = Self]:    type Output = Self; fn wrapping_mul(a: Self, b: Rhs) -> Output
+trait WrappingIntDiv[Rhs = Self]: type Output = Self; fn wrapping_intdiv(a: Self, b: Rhs) -> Output
+trait WrappingRem[Rhs = Self]:    type Output = Self; fn wrapping_rem(a: Self, b: Rhs) -> Output
+trait WrappingNeg:                fn wrapping_neg(value: Self) -> Self
 
-trait SaturatingAdd:  fn saturating_add(a: Self, b: Self) -> Self
-trait SaturatingSub:  fn saturating_sub(a: Self, b: Self) -> Self
-trait SaturatingMul:  fn saturating_mul(a: Self, b: Self) -> Self
-trait SaturatingIntDiv: fn saturating_intdiv(a: Self, b: Self) -> Self
-trait SaturatingRem:  fn saturating_rem(a: Self, b: Self) -> Self
-trait SaturatingNeg:  fn saturating_neg(value: Self) -> Self
+trait SaturatingAdd[Rhs = Self]:    type Output = Self; fn saturating_add(a: Self, b: Rhs) -> Output
+trait SaturatingSub[Rhs = Self]:    type Output = Self; fn saturating_sub(a: Self, b: Rhs) -> Output
+trait SaturatingMul[Rhs = Self]:    type Output = Self; fn saturating_mul(a: Self, b: Rhs) -> Output
+trait SaturatingIntDiv[Rhs = Self]: type Output = Self; fn saturating_intdiv(a: Self, b: Rhs) -> Output
+trait SaturatingRem[Rhs = Self]:    type Output = Self; fn saturating_rem(a: Self, b: Rhs) -> Output
+trait SaturatingNeg:                fn saturating_neg(value: Self) -> Self
 
-trait CheckedAdd:     fn checked_add(a: Self, b: Self) -> Option[Self]
-trait CheckedSub:     fn checked_sub(a: Self, b: Self) -> Option[Self]
-trait CheckedMul:     fn checked_mul(a: Self, b: Self) -> Option[Self]
-trait CheckedDiv:     fn checked_div(a: Self, b: Self) -> Option[Self]
-trait CheckedIntDiv:  fn checked_intdiv(a: Self, b: Self) -> Option[Self]
-trait CheckedRem:     fn checked_rem(a: Self, b: Self) -> Option[Self]
-trait CheckedNeg:     fn checked_neg(value: Self) -> Option[Self]
+trait CheckedAdd[Rhs = Self]:    type Output = Self; fn checked_add(a: Self, b: Rhs) -> Option[Output]
+trait CheckedSub[Rhs = Self]:    type Output = Self; fn checked_sub(a: Self, b: Rhs) -> Option[Output]
+trait CheckedMul[Rhs = Self]:    type Output = Self; fn checked_mul(a: Self, b: Rhs) -> Option[Output]
+trait CheckedDiv[Rhs = Self]:    type Output = Self; fn checked_div(a: Self, b: Rhs) -> Option[Output]
+trait CheckedIntDiv[Rhs = Self]: type Output = Self; fn checked_intdiv(a: Self, b: Rhs) -> Option[Output]
+trait CheckedRem[Rhs = Self]:    type Output = Self; fn checked_rem(a: Self, b: Rhs) -> Option[Output]
+trait CheckedNeg:                fn checked_neg(value: Self) -> Option[Self]
 
 trait WrappingAs[T]:   fn wrapping_as(value: Self) -> T
 trait SaturatingAs[T]: fn saturating_as(value: Self) -> T
@@ -3135,6 +3136,12 @@ Specifically:
   `Numeric`, and `Signed` (floats are signed by convention — they
   support `Neg`).
 
+Built-in numeric types implement the same-type instantiations only — e.g.,
+`fulfill Add[i32] for i32`, not `Add[i64] for i32`. Cross-type arithmetic
+between built-in numeric types requires explicit conversion (§4.5, §4.7);
+user-defined types may implement cross-type instantiations such as
+`Add[i32] for Distance` per §6.3.3.
+
 User-defined numeric-like types (`Decimal` from stdlib, custom fixed-point
 types, etc.) implement whichever fine-grained traits are appropriate;
 umbrella satisfaction follows.
@@ -3235,18 +3242,19 @@ Not every trait can be used in a `dyn` position. Traits with methods whose
 signatures depend on `Self` in non-receiver positions, traits with
 associated types not bound at the use site, or traits with generic methods
 cannot be made into trait objects under the standard vtable mechanism.
-Object-safety rules are specified in detail in § — Object Safety
-(deferred). A trait that is not object-safe used in a `dyn` position
-produces a compile error at the use site identifying the offending trait
-and the reason.
+Object-safety rules are specified in detail in [Object Safety: deferred
+to a future spec revision]. A trait that is not object-safe used in a
+`dyn` position produces a compile error at the use site identifying the
+offending trait and the reason.
 
 #### 5.2.5 Coercion to `dyn`
 
 A value of a concrete type `T` that fulfills traits `A` and `B` can be
 assigned to a `dyn (A & B)` binding via an explicit coercion. The exact
-syntax is specified in § — Coercion (deferred); the principle is that
-moving from a static type to a trait object is a deliberate operation at
-the assignment or argument-passing site, not an implicit conversion.
+syntax is specified in [Coercion: deferred to a future spec revision];
+the principle is that moving from a static type to a trait object is a
+deliberate operation at the assignment or argument-passing site, not an
+implicit conversion.
 
 ### 5.3 Record Intersection at Type Definition
 
@@ -4697,9 +4705,14 @@ enum TryBranch[S, F]:
 `Option` and `Result` fulfill `Try` in stdlib:
 
 - `Try::branch(Some(x))` → `Continue(x)`; `Try::branch(None)` →
-  `Break(None)`.
+  `Break(())`.
 - `Try::branch(Ok(x))` → `Continue(x)`; `Try::branch(Err(e))` →
-  `Break(Err(e))`.
+  `Break(e)`.
+
+For `Option[T]`, `Failure = ()` (unit) — there is no inner error value
+beyond the absence itself. For `Result[T, E]`, `Failure = E` — the error
+value. The desugaring in §8.4.1 applies `From::from` to this inner
+failure value, not to the wrapped `None`/`Err(...)` container.
 
 User types may implement `Try` to make `?` available on their own
 optional-or-result-like types.
@@ -4726,6 +4739,14 @@ The `From::from(failure)` automatically converts the failure value into
 the enclosing function's failure type. When the failure types are
 identical, `From::from` is the trivial identity conversion (§7.3); no
 special-case logic is needed for matching types.
+
+Under this desugaring, `From::from(failure)` converts the inner failure
+value to the enclosing function's error/absence type. For Result-to-Result
+propagation, this is the user's `From[SourceError] for DestError` impl
+(§7.9). For Option-to-Option propagation, the auto-implementation
+`From[()] for Option[T]` (yielding `None`) is provided by stdlib.
+Cross-type propagation (Option in a Result-returning function, or vice
+versa) remains forbidden per §8.6 — the failure types are not compatible.
 
 ### 8.5 Error-Type Conversion via `From`
 
@@ -5688,10 +5709,15 @@ points for absolute paths:
 - `root` — the current package's root module.
 - A bare name matching an external dependency declared in the package's
   manifest — that dependency's root module.
+- `std` — the standard library's root module. Built-in path base,
+  implicitly available to every package without manifest declaration.
+  Stdlib types and functions are accessed through this base (e.g.,
+  `std::option::unwrap`, `std::vec::Vec`).
 
 For example, `root::audio::Synthesizer` resolves an absolute path
 through the current package; `tone_lib::Oscillator` resolves into the
-`tone_lib` dependency's public surface.
+`tone_lib` dependency's public surface; `std::vec::Vec` resolves into
+the standard library.
 
 All `use` statements use absolute paths starting from one of these
 bases. There is no relative-path or "current module" reference;
@@ -6280,6 +6306,14 @@ trait Copy
 No methods. No associated types. The trait's only purpose is to flag a
 type as having implicit-duplication semantics.
 
+Non-primitive types opt into `Copy` either via `@derive(Copy)` (idiomatic
+shorthand) or via explicit `satisfies Copy` in the type's body. Both
+forms are valid and have identical semantics: the compiler verifies the
+structural requirement that every field's type is itself `Copy`, then
+enables implicit-duplication semantics for values of the type. The
+`@derive(Copy)` form is preferred for parallel with other derivable
+traits.
+
 #### 11.4.1 Auto-implementations
 
 The following types automatically implement `Copy`:
@@ -6288,6 +6322,7 @@ The following types automatically implement `Copy`:
   `f32`, `f64`).
 - `bool`, `char`.
 - `string` (see §11.6).
+- `duration`, `instant` (see §9.4; both are i64-sized scalars).
 - Tuples whose components are all `Copy`.
 
 #### 11.4.2 Opt-in via `@derive(Copy)`
@@ -6740,7 +6775,7 @@ fn length(v: &Vec[i32]) -> isize:
 #### 11.9.5 Where borrows may appear
 
 `&T` is grammatically valid only in *parameter positions*. The language
-recognizes three positions, each with a clear, lexically-bounded borrow
+recognizes four positions, each with a clear, lexically-bounded borrow
 lifetime:
 
 - **Function parameter type signatures** (this section, §11.7.4 and
@@ -6758,8 +6793,16 @@ lifetime:
   is the only position where `&v` is an *expression* rather than a
   signature element; everywhere else, `&v` as an expression is a parse
   error.
+- **Iterator type fields holding a borrow into the iteration source**
+  (§12.7.4). When a user-defined iterator type satisfies the `Iterator`
+  trait with `Item = &T`, the iterator's record may carry a `source: &T`
+  field referencing the iteration source. The borrow's lifetime is
+  bounded by the enclosing for-loop expression that holds the iterator;
+  the compiler verifies that the source outlives the iterator at
+  construction. This carve-out is bounded to fields of types satisfying
+  `Iterator` — it does not generalize to arbitrary record fields.
 
-All three positions share the same lifetime discipline: the borrow lives
+All four positions share the same lifetime discipline: the borrow lives
 for the scope of one parameter-binding occurrence (one call expression,
 one iteration body, or one for-loop expression respectively). The
 compiler does not need lifetime parameters or cross-statement tracking;
@@ -6771,7 +6814,8 @@ Outside these positions, `&T` is a parse error.
 forbidden in:
 
 - `let` and `mut` declarations: `let r: &Vec = ...` is a parse error.
-- Record fields: `type Holder: data: &Vec` is a parse error.
+- Record fields: `type Holder: data: &Vec` is a parse error. Exception:
+  iterator-type fields per the position list above.
 - Enum payloads: `Variant(&T)` is a parse error.
 - Tuple components, *except* the tuple appearing as the return type of
   `Iterator::next` per §12.7.4: `(&i32, i32)` is generally a parse error.
@@ -7589,6 +7633,13 @@ value` sites in the body and the presence/absence of an `else:` clause:
 where `T` is the unified type of all `break value` sites (and the
 `else:` clause, when present).
 
+**Note on `never`-unification:** if the body provably never completes
+naturally (every path produces a `break value`, `return`, `panic`, or
+other diverging operation), the natural-completion arm is unreachable
+and unifies with the break-value type via §8.2.2. In this case the
+loop expression's type collapses to `T` regardless of the `else:`
+clause's presence. See §12.6.4.
+
 ##### Without `break value`, without `else:`
 
 The loop produces unit. This is the statement form.
@@ -7619,14 +7670,17 @@ the loop to also yield a summary value.
 
 ##### With `break value`, without `else:`
 
-The loop produces `Option[T]`. `Some(v)` from `break value`, `None`
-from natural completion:
+The loop produces `Option[T]` where `T` is the type of the `break value`
+expression. The language auto-wraps each `break value` as `Some(value)`;
+natural completion produces `None`. The user writes the bare value (not
+`Some(...)`).
 
 ```
 let found = for item in &items:
   if matches(item):
-    break Some(item.id)       // borrow form: items survives the loop
-                              // expression value: Option[ItemId]
+    break item.id              // borrow form: items survives the loop
+                               // auto-wrapped to Some(item.id)
+                               // expression type: Option[ItemId]
 ```
 
 For the find-first pattern, the user typically wants `Some(item)` from
@@ -7798,11 +7852,16 @@ When `Item = &T`, the `next` method's return type becomes
 tuple, both of which are normally borrow-forbidden positions; the
 exception applies specifically to this trait's `next` return.
 
+User-defined borrow-yielding iterators store a borrow into the iteration
+source as a field of the iterator type. This is one of the narrow `&T`
+positions permitted per §11.9.5; the lifetime is bounded by the for-loop
+expression.
+
 A borrow-yielding iterator implementation:
 
 ```
 type VecIter[T]:
-  source: ...                       // internal: refers back to the borrowed Vec
+  source: &Vec[T]                   -- borrow into the iteration source
   cursor: isize
 
 fulfill Iterator for VecIter[Record]:
@@ -8310,12 +8369,17 @@ via connections are handled separately via the `Circularity` trait
 (§13.5, §13.10): a topology cycle is valid only if it traverses at
 least one connection type satisfying `Circularity`.
 
-**Reactive vs imperative separation.** Reactive composition uses
-nodes, parts, and connections. Imperative data structures (`Vec`,
-`HashMap`, fixed-size arrays of more than one cell, etc.) hold
-non-reactive data only. Reactive cell types are restricted
-(§13.11.4) to types that fit single cells in the reactive state
-buffer (§14.3).
+**Reactive composition uses nodes, parts, and connections.**
+Reactive cells (signal, attr, recurrent, derived) may hold values
+of any type; the kernel chooses a storage strategy from §13.11.4:
+direct in-cell storage for values fitting the platform atomic
+word, or handle-based pool storage for larger or dynamically-sized
+values. Imperative data structures (`Vec`, `HashMap`, etc.) are
+first-class as values held inside reactive cells via pool storage,
+and are also usable as ordinary owned values inside function
+bodies (governed by §11). The reactive system organizes
+composition and propagation; cell content is governed by ordinary
+type rules.
 
 **No separate effects construct.** External effects (logging, I/O,
 audio output, network requests, scheduling, etc.) are not expressed
@@ -9400,9 +9464,11 @@ which is a structural iterable of compile-time-known length range:
 - Heterogeneous iteration: `for p in self.parts: ...` iterates
   all parts of all declared types (§13.4.2).
 
-A node without a `parts` clause cannot contain children. A node
-with a `parts` clause may contain children at runtime according to
-the declared cardinality.
+A node without a `parts` clause may still contain children of any
+node type (per §13.3.3); inside its body, only the heterogeneous
+`self.parts` form is available (no type-bulk or cardinality-bounded
+forms). A node with a `parts` clause may contain children at runtime
+according to the declared cardinality.
 
 #### 13.3.4 `in` and `out` clauses
 
@@ -10750,9 +10816,11 @@ placement-level `when` is unconditional — always active.
 
 A gate predicate may reference cells of the gated instance itself.
 The kernel evaluates the predicate against the cells' current
-committed values; cyclic self-reference is well-defined because
-reads see committed state (per §13.10.3 — the per-publish DAG
-treats every cell read as an input to the current publish).
+committed values; cyclic self-reference is well-defined: the gate
+predicate evaluates against the gated cell's *previously-committed*
+values from the prior publish. The gate-open transition is itself a
+propagation event scheduled within the publish that flips the
+predicate (per §13.8.7's snap-on-gate-open rule).
 
 ```
 connection WeightedEdge:
@@ -10776,9 +10844,10 @@ predicate.
 **Definitions.**
 
 - A *gate-true* edge propagates normally.
-- A *gate-false* edge does not propagate to the destination's
-  output-affecting state, but does deliver to the destination's
-  input cells (so the destination's own `when` can re-evaluate).
+- A *gate-false* edge on a gated *node* does not propagate to the
+  destination's output-affecting state, but inbound connections
+  still deliver to the gated node's input cells, so the node's own
+  `when` predicate can re-evaluate.
 
 **Behavior on a gated node** (its `when` predicate is currently
 false):
@@ -10805,9 +10874,12 @@ false):
 - **Outputs:** do not propagate. Outbound connections from the
   gated node do not deliver to their destinations.
 
-**Behavior on a gated connection** (its `when` predicate is
-currently false): the edge does not propagate at all. The
-destination receives nothing through this connection.
+**Behavior on a gated connection** (the connection's own `when` is
+false): a gated connection edge does not propagate at all — its
+destination receives nothing through this connection. Note this
+differs from a gated *node*, whose inbound connections still deliver
+to its `in` cells (the node's own `when` re-evaluates against those
+inputs).
 
 **Snap on gate-open.** When a `when` predicate transitions from
 false to true between publishes, the kernel treats this as a
@@ -11343,10 +11415,10 @@ from the type's size and shape:
   buffer's cell. The atomic publication (§14.3.3) is a single
   atomic store. No allocation, no refcount, no pool.
 - On platforms supporting wider atomics (x86_64 with `CMPXCHG16B`,
-  ARM64 with `LDXP`/`STXP`), types of size 9–16 bytes may
-  optionally be stored directly in a 128-bit cell (§14.3.4). On
-  platforms without wide atomics, types in this range fall back to
-  handle-based storage.
+  ARM64 with `LDXP`/`STXP`), types of size 9–16 bytes are stored
+  across two consecutive 64-bit cells with atomic-pair updates
+  (§14.3.4). On platforms without wide-atomic support, types in
+  this range fall back to handle-based storage.
 - `Result[T, E]` and `Option[T]` follow the same rule: if the total
   bit width (discriminant + maximum payload) fits the atomic word,
   direct storage applies.
@@ -11562,26 +11634,17 @@ The kernel's lifecycle proceeds in phases:
 
 1. Load metadata (per §14.7).
 2. Allocate the reactive state buffer (per §14.3).
-3. Initialize signal cells with their declared initial values (in
-   declaration order).
-4. Initialize attr cells with their declared defaults (per-instance,
-   in declaration order within each instance, with placement
-   order across instances).
-5. Initialize recurrent cells with their declared initial values
-   (per-instance, with placement-time overrides applied). The arm
-   expressions are *not* evaluated at startup; they run only when
-   triggers fire during a publish.
-6. Run the initial derived evaluation in topological order over
-   the reactive dependency graph. Each derived computes its
-   initial value from the now-initialized signals, attrs, and
-   recurrents. Recurrents' initial values serve as the
-   "previous-committed" source for any cyclic reads during this
-   pass.
-7. Perform the first publish (atomic current-pointer swap per
+3. Initialize all reactive cells (signals, attrs, recurrents,
+   deriveds) and evaluate all `when` predicates in topological order
+   over their init-time read dependencies, per §13.2.6's startup
+   pass rules. The kernel does not separate this work into
+   per-declaration-kind phases; the topological sort determines the
+   order.
+4. Perform the first publish (atomic current-pointer swap per
    §14.3.3.1). Consumers' subsequent swaps return real data.
 
-The kernel is "constructing" through steps 1–6; "live" after step
-7 completes. Consumer reads via swap before step 7 return a
+The kernel is "constructing" through steps 1–3; "live" after step
+4 completes. Consumer reads via swap before step 4 return a
 sentinel (or block, per implementation choice).
 
 **Steady-state operation:**
@@ -11611,17 +11674,17 @@ sentinel (or block, per implementation choice).
 
 #### 13.13.2 `kernel.write_signal`
 
-Two forms, one per signal scope:
+A single overloaded call, dispatched by arity:
 
 ```
-kernel.write_signal(signal_id, value)                          // module-level signal
-kernel.write_instance_signal(instance_id, signal_id, value)    // per-instance signal
+kernel.write_signal(signal_id, value)                      // module-level signal
+kernel.write_signal(instance_id, signal_id, value)         // per-instance signal
 ```
 
-Both forms write a new value to the named signal's cell. The calls
-are synchronous and inexpensive: they update the back buffer's
-cell and set the dirty bit for dependents. No evaluation runs at
-this point.
+Both arities write a new value to the named signal's cell. The
+calls are synchronous and inexpensive: they update the back
+buffer's cell and set the dirty bit for dependents. No evaluation
+runs at this point.
 
 **Module-level form** — `kernel.write_signal(signal_id, value)`:
 writes to a top-level signal. The `signal_id` identifies a
@@ -11629,14 +11692,14 @@ module-scope signal declared per §13.2.1. One cell exists for the
 entire program.
 
 **Per-instance form** —
-`kernel.write_instance_signal(instance_id, signal_id, value)`:
+`kernel.write_signal(instance_id, signal_id, value)`:
 writes to a node-level or connection-level signal on a specific
 instance. The `instance_id` identifies the instance (assigned at
 compile time per placement); `signal_id` identifies the signal on
 that instance's type. Each placement creates its own cell; the
 write targets one specific cell.
 
-Both calls must be made from the producer thread (the kernel's
+Both arities must be called from the producer thread (the kernel's
 designated thread for write/evaluation/publish operations; see
 §14.8). Other threads write indirectly by enqueueing requests for
 the producer thread to apply — that's a host-application concern,
@@ -11653,7 +11716,7 @@ kernel.write_attr(instance_id, attr_id, value)
 ```
 
 Writes a new value to the cell of a specific instance's attr.
-Otherwise behaves identically to `kernel.write_instance_signal`:
+Otherwise behaves identically to the per-instance form of `kernel.write_signal`:
 synchronous, back-buffer-only, dirty-bit propagation, no evaluation.
 
 `instance_id` identifies the instance (assigned at compile time per
@@ -11965,6 +12028,14 @@ on `Signal[T]` parameters are not allowed in v1 (a default cell
 reference has no clear meaning; if needed, use a stdlib helper
 that constructs a constant cell).
 
+**Default-parameter ordering.** Operators (and functions, per §3.5)
+permit defaulted parameters to precede non-defaulted parameters. Call
+sites must either supply all positional arguments in declaration
+order (in which case the defaulted positional may be omitted only
+when no subsequent positional argument is supplied), or use named
+arguments to skip over the defaulted parameter while supplying the
+non-defaulted one. This is consistent with §3.5.4.
+
 **At call sites:**
 
 - Literals passed to `Signal[T]` parameters are wrapped as implicit
@@ -12093,15 +12164,17 @@ state buffer reserves space for each instance's internal cells.
 
 ##### 13.16.6.1 Operator instance identity
 
-An operator instance is identified by its enclosing scope plus its
-position in source. Two `|>` chains in different scopes (different
-modules, different node bodies, different placements) produce
-distinct instances with independent state.
+An operator instance is identified by its enclosing scope, the
+operator name, and its argument bindings. Two `|>` chains in
+different scopes (different modules, different node bodies,
+different placements) produce distinct instances with independent
+state.
 
-Operator instances do not have user-assignable names. Assigning
-an operator's output to a `let` binding names the *output cell*,
-not the instance — but for reload-identity purposes (§13.16.10),
-the instance is identified by source position, not by binding name.
+Operator instances do not have user-assignable names. Assigning an
+operator's output to a `let` binding names the *output cell*, not
+the instance. For reload-identity purposes (§13.16.10), the same
+identity scheme is used, with tolerance for positional moves within
+the same scope; the binding name has no role.
 
 ##### 13.16.6.2 Graph metadata
 
@@ -12218,7 +12291,9 @@ operator body.
   recurrent/derived reload safety.
 - Adding a new internal cell — new cells are initialized fresh.
 
-**Reload-unsafe changes (require restart for affected instances):**
+**Reload-unsafe changes (require full kernel restart per §13.14.4 —
+the kernel does not support per-instance restart as a separate
+mechanism):**
 
 - Operator signature changes (parameters added, removed, or
   retyped; return type changed).
@@ -12719,6 +12794,7 @@ buffer. Specifically, the values held by:
 
 - `signal` declarations.
 - `attr` declarations on node and connection instances.
+- `recurrent` declarations on node and connection instances.
 - `derived` declarations (the cached computed value).
 
 Regular Ductus values — local bindings (`let`/`mut`) inside function
@@ -12830,54 +12906,15 @@ only within the behavior's invocation; they do not escape.
 
 #### 14.6.3 Error handling
 
-A behavior may **trap** (§4.6) during evaluation — e.g., from
-arithmetic overflow under the default `+` operator, division by
-zero, an out-of-range array index, or an explicit `panic` call.
-
-Ductus's two-track failure model (§8.1) applies to behaviors
-without modification. Traps follow the trap-track semantics of
-§4.6.1: the process aborts. The kernel does not isolate behavior
-traps; there is no "errored cell" sentinel state, no `catch_unwind`
-boundary, and no continuation past a trap.
-
-Authors expecting recoverable failure must use the value-track
-error model. Specifically: declare the derived's value type as
-`Result[T, E]` (or `Option[T]`), have the behavior body produce
-`Err(...)` for failure cases via explicit checking, and propagate
-through `?` (§8.4) or `match` in downstream expressions. Errored
-state is then a value flowing through the type system, not a kernel
-sideband.
-
-Example:
-
-```
-node Divider:
-  attr numerator: f32
-  attr denominator: f32
-  derived quotient: Result[f32, DivideError] =
-    if self.denominator is 0.0:
-      Err(DivideError::ByZero)
-    else:
-      Ok(self.numerator / self.denominator)
-
-node Consumer:
-  parts: Divider
-  derived report: string =
-    match self.divider.quotient:
-      Ok(value): "result: {value}"
-      Err(DivideError::ByZero): "result: undefined"
-
-Consumer my_consumer:
-  Divider divider               // names the contained Divider part
-```
-
-The divide-by-zero case never traps; it produces `Err(...)` through
-the type system, which `Consumer.report` handles via `match`. No
-kernel-level error isolation is needed.
-
-This applies uniformly across the language. Traps are for bugs that
-should abort; value-track errors are for conditions the program
-must handle. The reactive context is no exception.
+Behaviors follow Ductus's two-track failure model per §13.12:
+trap-track failures (arithmetic overflow under default operators,
+division by zero, out-of-range indices, explicit `panic`) abort the
+process; recoverable conditions are expressed as value-track
+`Option`/`Result` values flowing through the type system. The
+kernel does not isolate behavior traps — there is no `catch_unwind`
+boundary, no errored-cell sentinel, no continuation past a trap.
+See §13.12.1 for full rules and worked examples; the same semantics
+apply uniformly to all behaviors invoked by the producer.
 
 #### 14.6.4 Behavior identity
 
@@ -13282,13 +13319,17 @@ file changes:
 
 1. The CLI's watch mode detects the change.
 2. The frontend re-runs on the changed file.
-3. The new typed IR is compared against the old; behaviors with
-   changed bodies are identified.
-4. For each changed behavior:
-   a. The old bytecode is replaced with new bytecode.
-   b. The kernel's behavior table updates the function pointer (or
-   bytecode reference) for that behavior's ID.
-   c. The next invocation uses the new behavior.
+3. The frontend computes content-addressed IDs for each behavior
+   per §14.6.4. Behaviors whose IDs are present in only the old
+   program are *removed*; behaviors whose IDs are present in only
+   the new program are *added*; behaviors whose IDs appear in both
+   are *carried over* unchanged.
+4. For each added behavior:
+   a. New bytecode is loaded into the kernel's behavior table at a
+   fresh ID.
+   b. Graph metadata edges and cell allocations referencing the new
+   behavior's ID become live.
+   c. Subsequent invocations dispatch through the new behavior's ID.
 
 #### 14.11.2 State preservation
 
