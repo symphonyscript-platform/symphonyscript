@@ -552,9 +552,9 @@ assertion.
 
 Two categories of expression are not compile-time known:
 
-- Expressions involving *signals* (§Reactive System, deferred) or any reactive
-  value derived from a signal. Signal values depend on the moment of evaluation
-  and are inherently runtime.
+- Expressions involving *signals* (§13) or any reactive value derived from a
+  signal. Signal values depend on the moment of evaluation and are inherently
+  runtime.
 - Expressions involving external I/O, host-boundary calls, or any future
   construct whose value is determined by the runtime environment.
 
@@ -727,7 +727,7 @@ Eq for i32` block, `Self` resolves to `i32`, so the method's signature becomes
 
 Trait methods do not use a `self` parameter. The lowercase `self` keyword is
 reserved exclusively for reactive context inside node and connection bodies
-(§ — Reactive System, deferred). Trait method signatures name their receiver
+(§13). Trait method signatures name their receiver
 parameter explicitly. The first parameter's type is conventionally `Self` for
 methods that operate on instances, but trait methods may have any parameter
 list — including no `Self` parameter at all (for "associated functions" like
@@ -1220,9 +1220,9 @@ valid; the choice is stylistic.
 The receiver parameter name (`a`, `value`, `result`, `left`, etc.) is always
 the implementer's choice. There is no `self` keyword for trait method
 receivers — that lowercase form is reserved exclusively for reactive context
-inside node and connection bodies (§ — Reactive System, deferred). Explicit
-parameter naming is the language's general principle under uniform function
-call syntax: every parameter has a chosen name, not an implicit one.
+inside node and connection bodies (§13). Explicit parameter naming is the
+language's general principle under uniform function call syntax: every
+parameter has a chosen name, not an implicit one.
 
 Other type-level references in trait signatures (associated types like
 `Output`, `Item`, etc.) follow the same substitution rule: in `fulfill`
@@ -1456,7 +1456,7 @@ Disambiguation forms:
 - `Trait::f(x, ...)` — explicitly select a trait-impl candidate (the canonical
   way to resolve trait-vs-trait ambiguity in step 3).
 - `some_module::f(x, ...)` — explicitly select a free function (used when a
-  free function would otherwise be shadowed by a trait impl per step 2).
+  free function would otherwise be shadowed by a trait impl per step 4).
 - `x.f::[T]()` is *not* a disambiguation form; the turbofish (§2.2.5)
   specifies generic type arguments, not the receiving trait.
 
@@ -2399,8 +2399,8 @@ operand).
 | `is not` | `Eq`          | bool   |
 
 Equality uses the keyword forms `is` and `is not`, not symbolic `==`/`!=`
-(grammar §3.15 and grammar §6 reserve symbolic equality for future
-deprecation). The keyword forms read more naturally in this language's
+(grammar §3.15 and grammar §6 reserve symbolic equality against future
+use). The keyword forms read more naturally in this language's
 expression syntax and avoid the visual collision with `=` used for
 binding-initialization.
 
@@ -2442,8 +2442,8 @@ This table specifies the mapping:
 | `\|`                                        | `BitOr`                                 | same type as operands                                |
 | `^`                                         | `BitXor`                                | same type as operands                                |
 | `~`                                         | `BitNot`                                | same type as operand                                 |
-| `<<`                                        | `Shl` (left); `u32`-convertible (right) | same type as left operand                            |
-| `>>`                                        | `Shr` (left); `u32`-convertible (right) | same type as left operand                            |
+| `<<`                                        | `Shl` (left); `u32`-convertible (right)¹ | same type as left operand                           |
+| `>>`                                        | `Shr` (left); `u32`-convertible (right)¹ | same type as left operand                           |
 | `<`, `<=`, `>`, `>=`                        | `Ord`                                   | `bool`                                               |
 | `is`, `is not`                              | `Eq`                                    | `bool`                                               |
 | `+%`, `-%` (binary), `*%`, `//%`, `%%`      | corresponding `Wrapping...`             | same type as operands                                |
@@ -2457,6 +2457,10 @@ This table specifies the mapping:
 | `as%`                                       | `WrappingAs[T]` (operand)               | the target type T                                    |
 | `as\|`                                      | `SaturatingAs[T]` (operand)             | the target type T                                    |
 | `as?`                                       | `CheckedAs[T]` (operand)                | `Option[T]`                                          |
+
+¹ The right operand may be any unsigned integer type narrower than or
+equal to u32 (implicit widening per §4.5.1); other types require an
+explicit cast.
 
 The compiler's inference algorithm per §2.2.1 walks each function body
 collecting the union of these constraints across all operators used. The
@@ -3361,9 +3365,10 @@ right-hand side requires a type declaration to acquire identity.
 
 ### 5.5 Cross-Kind Intersection
 
-Intersection is well-defined only within `{trait & trait}` and `{record &
-record}`. Cross-kind combinations and same-kind combinations outside those
-two sets are rejected at compile time:
+Conjunction (trait case) is well-defined only between traits;
+intersection (record case) is well-defined only between records. Cross-
+kind combinations and same-kind combinations outside those two sets are
+rejected at compile time:
 
 - `Trait & Record` — rejected. A trait expresses a behavior contract; a
   record expresses structure. Their intersection has no coherent meaning.
@@ -4256,6 +4261,9 @@ associated type, so different conversions can produce different error
 kinds (range error, parse error, validation error, etc.).
 
 ### 7.2 Users Implement `From` and `TryFrom`; the Reverses Auto-Derive
+
+`Into` and `TryInto` are *sealed* traits — declared by the language for
+use in trait bounds and method dispatch, but not implementable by users.
 
 Users write `fulfill From[T] for U` (or `fulfill TryFrom[T] for U`); the
 language automatically provides the reverse direction:
@@ -5951,16 +5959,16 @@ visibility specifier alongside the type visibility. The syntax uses a
 parenthesized modifier on the type visibility keyword:
 
 ```
-public type Email:                        // type public, constructor public (default)
+public type Email:                        // newtype; type public, constructor public (default)
   wraps string
 
-public(shared) type Email:                // type public, constructor shared
+public(shared) type Email:                // newtype; type public, constructor shared
   wraps string
 
-public(private) type Email:               // type public, constructor private
+public(private) type Email:               // newtype; type public, constructor private
   wraps string                            //   — the smart-constructor pattern
 
-shared(private) type SecretConfig:        // type shared, constructor private
+shared(private) type SecretConfig:        // record; type shared, constructor private
   api_key: string
 ```
 
@@ -6290,7 +6298,7 @@ require cleanup (heap allocations, file handles via stdlib, etc.), the
 type's drop behavior is invoked.
 
 Drop semantics for user-defined types are specified through the trait
-system; the precise mechanism is deferred to §Drop Trait (deferred).
+system; the precise mechanism is specified in §14.9.
 
 ### 11.4 The `Copy` Trait
 
@@ -8018,8 +8026,8 @@ remain inside the iterator's internal storage. When the iterator is
 dropped (at loop exit), the remaining elements are dropped per their
 `Drop` semantics, and the underlying buffer is released.
 
-The exact `Drop` mechanism for non-Copy types is specified in §Drop
-Trait (deferred). For Copy types, drop is a no-op.
+The exact `Drop` mechanism for non-Copy types is specified in §14.9.
+For Copy types, drop is a no-op.
 
 #### 12.9.4 Implementing `IntoIterable`
 
@@ -8279,7 +8287,7 @@ expression context) is determined by the else-clause-and-break-value
 table of §12.6.2:
 
 ```
-let result = for x in []:           // hypothetical empty array
+let result = for x in 0..0:         // empty range (type-resolvable)
   break x
 else:
   default_value
@@ -9984,10 +9992,10 @@ blocks. Same rule as nodes (§13.3.6).
 
 #### 13.5.5 The `Circularity` trait
 
-A connection type may declare conformance to the language-provided
-`Circularity` trait — a language-defined marker trait (§3.7.4) — to
-indicate that placements of this connection type may participate in
-topology cycles in the node graph (§13.10.2).
+A connection type may declare conformance to the `Circularity` trait
+— a language-defined marker trait (§3.7.4) — to indicate that
+placements of this connection type may participate in topology cycles
+in the node graph (§13.10.2).
 
 ```
 trait Circularity                          -- marker trait, no methods
@@ -10418,8 +10426,10 @@ three categories:
   slot rather than an attribute. The identifiers `to` and `from`
   are reserved as endpoint slots inside connection bodies; they
   cannot be used as attr names on connections.
-- **Placement:** `["->"]? TypeRef [Flags]? [InstanceName]? [/Expr]? ["when" Pred]? [| AttrPipe]*` followed by an
-  optional `:` and indented body. Creates a child part or connection. The `when` modifier gates the placement (§13.8).
+- **Placement:** the placement form (see §13.7.9 for the canonical
+  ordering of inline parts), optionally followed by `:` and an
+  indented body. Creates a child part or connection. The optional
+  `when` modifier gates the placement (§13.8).
 
 The parser distinguishes by what follows the first identifier: `:`
 (with an expression after) → attribute setting or endpoint slot
@@ -10685,10 +10695,12 @@ a schema member. It uses colon form, consistent with other body
 fields (`from:`, `to:`, `attr name:`, `recurrent name:`, etc.):
 
 ```
+signal trigger: u64 = 0
+
 node OneShot:
   out: Pulse
   recurrent fired: bool = false
-    | on self.in.trigger: true
+    | on trigger: true
   when: not self.fired                        // intrinsic refractory gate
 
 connection ActiveEdge:
@@ -12039,8 +12051,9 @@ non-defaulted one. This is consistent with §3.5.4.
 **At call sites:**
 
 - Literals passed to `Signal[T]` parameters are wrapped as implicit
-  `const`-cell instances. Cost: one cell per literal at the call
-  site (effectively zero — folded by the compiler when possible).
+  constant signal cells (compile-time-fixed `Signal[T]` values). Cost:
+  one cell per literal at the call site (effectively zero — folded by
+  the compiler when possible).
 - Cells passed to `Signal[T]` parameters bind directly.
 - Values passed to `T` parameters are evaluated and snapshotted.
 
@@ -12137,7 +12150,7 @@ function-call form. The two forms are observationally identical.
 The pipe form is convenient for chaining:
 
 ```
-signal bar = 0.0 |> clamp(min: 0.0, max: 1.0) |> smooth(rate: 0.1, clock: tick) |> ease_in_out
+derived bar: f32 = 0.0 |> clamp(min: 0.0, max: 1.0) |> smooth(rate: 0.1, clock: tick) |> ease_in_out
 ```
 
 Each `|>` step is an operator application. The result of each step
@@ -12219,14 +12232,14 @@ desired grouping.
 with a `fn` is a compile error:
 
 ```
-signal bar = 0.0 |> some_fn       // ✗ error: `|>` requires an operator
+let bar = 0.0 |> some_fn       // ✗ error: `|>` requires an operator
 ```
 
 Diagnostic class:
 ```
 error: `|>` requires an operator on the right-hand side
-  --> signal bar = 0.0 |> some_fn
-                        ^^^^^^^^ `some_fn` is a `fn`, not an operator
+  --> let bar = 0.0 |> some_fn
+                     ^^^^^^^^ `some_fn` is a `fn`, not an operator
   hint: use function call syntax: `some_fn(0.0)`
 ```
 
@@ -12370,8 +12383,8 @@ Normative diagnostic classes for operator usage:
 
 ```
 error: `|>` requires an operator on the right-hand side
-  --> signal bar = 0.0 |> some_fn
-                        ^^^^^^^^ `some_fn` is a `fn`, not an operator
+  --> let bar = 0.0 |> some_fn
+                     ^^^^^^^^ `some_fn` is a `fn`, not an operator
   hint: use function call syntax: `some_fn(0.0)`
 ```
 
@@ -12379,8 +12392,8 @@ error: `|>` requires an operator on the right-hand side
 
 ```
 error: operator `smooth` has no positional parameter to bind from `|>`
-  --> signal bar = source |> smooth(rate: 0.1)
-                             ^^^^^^ no positional parameter declared
+  --> derived bar: f32 = source |> smooth(rate: 0.1)
+                                   ^^^^^^ no positional parameter declared
   hint: either pass the upstream cell as the first positional argument,
         or declare a positional `Signal[T]` parameter on the operator
 ```
@@ -12471,9 +12484,8 @@ The frontend performs:
    sites bound to concrete implementations.
 3. **Borrow and ownership checking** per §11. Catches use-after-move,
    borrow conflicts, and other ownership violations.
-4. **Reactive analysis** per §13 (forthcoming). Identifies reactive
-   declarations, computes dependency graphs, and extracts graph
-   metadata.
+4. **Reactive analysis** per §13. Identifies reactive declarations,
+   computes dependency graphs, and extracts graph metadata.
 5. **Monomorphization** per §2.3. Resolves all generic instantiations
    in Ductus before lowering. Ductus's compiler does not delegate
    monomorphization to Rust; emitted code is fully concrete.
@@ -13136,10 +13148,11 @@ inconsistent state.
 #### 14.9.5 Drop on reactive cells
 
 The kernel manages drop for reactive cells. When a node or connection
-instance is removed (deferred to §13's evolution model), its attr and
-derived cells are dropped per their type's `Drop` impl. Initial
-declarations (signals declared at program startup) live for the
-program's lifetime; their cells are dropped at program shutdown.
+instance is removed (deferred to §13.14 (Hot Reload of the Reactive
+Graph)), its attr and derived cells are dropped per their type's
+`Drop` impl. Initial declarations (signals declared at program
+startup) live for the program's lifetime; their cells are dropped at
+program shutdown.
 
 #### 14.9.6 Drop and triple-buffer eviction for dynamic-size cells
 
