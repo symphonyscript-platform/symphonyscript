@@ -87,8 +87,8 @@ structurally via orphan rules.
 interchangeable syntactic forms for the same underlying operation: a
 function `f(x, y)` may equivalently be called as `x.f(y)`. Records
 carry data; functions carry behavior; the call site chooses the form
-that reads best. The `>>` token is *not* a function-call form — it
-is reserved for operator application (§13.16).
+that reads best. Operator application uses the `|>` token (§13.16);
+`>>` is bitwise right shift only.
 
 **Two-track failure model.** Failures are either bugs (traps, process abort, no
 catch mechanism) or recoverable conditions (`Option`/`Result` values, `?`
@@ -1339,8 +1339,9 @@ display(person)               // conventional form, requires `display` in scope
 Display::display(person)      // trait-path form, no import needed
 ```
 
-The `>>` token is reserved for operator application (§13.16); it is not
-a function-call form. Functions are called via the three forms above.
+Operator application uses the `|>` token (§13.16); it is not a
+function-call form. `>>` is bitwise right shift only. Functions are
+called via the three forms above.
 
 The trait-path form (`Trait::method`) requires no `use` import — the
 path itself makes the trait accessible by path, satisfying the in-scope
@@ -1794,7 +1795,49 @@ user modules, and are not subject to the orphan rule:
 These privileged implementations exist outside the user-writable
 `fulfill`-block space and cannot conflict with user code.
 
-#### 3.7.4 Newtype pattern as orphan-rule workaround
+#### 3.7.4 Language-defined marker traits
+
+A small, closed category of traits are declared by the language itself,
+have no methods and no associated types, and receive compiler-privileged
+enforcement. A type opts into one of these traits via the usual
+`satisfies` clause (and, where applicable, `@derive`); the compiler
+treats membership as a flag carrying load-bearing semantics rather than
+as a vehicle for user-supplied method bodies. Members of this category
+are not redeclarable: user code cannot define a new trait of the same
+name and reuse the privileged behavior.
+
+The members of the category in Ductus v1 are:
+
+- `Copy` (§11.4) — flags a type whose values are duplicated implicitly
+  at every use site. The compiler enforces the auto-derivation rules
+  and the use-site duplication semantics.
+- `Circularity` (§13.5.5) — flags a connection type that may participate
+  in topology cycles in the node graph. The compiler enforces the static
+  cycle rule against this flag.
+
+Like any trait, a language-defined marker trait may be used as a generic
+bound or appear in a `where` clause:
+
+```
+fn duplicate[T: Copy](value: T) -> (T, T):
+  (value, value)
+```
+
+This category is distinct from two superficially similar things:
+
+- `Drop` (§14.9) is compiler-aware but carries a method (`fn drop`); it
+  is therefore not a marker trait.
+- The empty `trait Marker` shown in §3.1 illustrates a *user-writable*
+  pattern — empty traits whose only purpose is to act as a nominal tag.
+  Such user-defined empty traits are perfectly valid, but they are not
+  members of the language-defined marker traits category and do not
+  receive any compiler privilege beyond the usual `satisfies` check.
+
+The category is closed in v1: the language defines exactly `Copy` and
+`Circularity` as language-defined marker traits. Adding a new member is
+a language-level change, not a user-extensible mechanism.
+
+#### 3.7.5 Newtype pattern as orphan-rule workaround
 
 When a user wants to implement a foreign trait for a foreign type, the
 canonical workaround is the newtype pattern: wrap the foreign type in a local
@@ -2311,24 +2354,19 @@ inside expressions — they are bitwise operators. The grammar's context-based
 disambiguation determines which interpretation applies; user-visible
 overloading is avoided through positional context.
 
+At the value level, `|` is bitwise OR (dispatching through `BitOr`); the
+operator-application token is `|>` (§13.16), a distinct token. Bitwise
+`|` and `|>` share the same low precedence and left-associativity, so
+expressions mixing bitwise OR with higher-precedence arithmetic parse
+naturally; users mixing bitwise OR with operator application across the
+same expression should add parentheses to make grouping explicit.
+
 The right-shift operator `>>` is a single operator whose behavior depends
 on the signedness of the left operand's type: signed types shift
 arithmetically (sign-extending); unsigned types shift logically (zero-
 extending). The compiler dispatches on the type via the `Shr` trait impl.
-No separate `>>>` operator exists.
-
-`>>` is overloaded with a second meaning: **operator application**
-(§13.16). When the right-hand side resolves to an operator name (a
-declaration introduced by the `operator` keyword), `>>` instantiates
-that operator with the LHS bound to its first positional parameter.
-When the right-hand side resolves to a numeric expression, `>>` is
-bitwise right-shift dispatching through `Shr`. The disambiguation is
-by what the RHS resolves to during type-checking, not by surface
-syntax alone. This is the same mechanism that disambiguates `&` and
-`|` between type-level and value-level uses.
-
-`>>` is *not* a function-call form. Calling a function as `x >> f`
-is a compile error; use `f(x)` or `x.f()` instead.
+No separate `>>>` operator exists. `>>` has no other meaning at the value
+level.
 
 #### 4.4.3 Comparison operators
 
@@ -3963,7 +4001,7 @@ offending payload field.
 A newtype is a wrapper type that creates a new nominal identity over an
 existing type. Newtypes are the standard way to add domain meaning to a
 primitive or stdlib type, satisfy the orphan rule for foreign-trait +
-foreign-type combinations (§3.7.4), or enforce invariants at construction.
+foreign-type combinations (§3.7.5), or enforce invariants at construction.
 
 #### 6.3.1 Declaration
 
@@ -6230,9 +6268,10 @@ system; the precise mechanism is deferred to §Drop Trait (deferred).
 
 ### 11.4 The `Copy` Trait
 
-`Copy` is a marker trait. A type's values may be duplicated by the
-language at every use site (assignment, argument passing, return) without
-transferring ownership. The original binding remains usable.
+`Copy` is a language-defined marker trait (§3.7.4). A type's values may
+be duplicated by the language at every use site (assignment, argument
+passing, return) without transferring ownership. The original binding
+remains usable.
 
 ```
 trait Copy
@@ -8247,9 +8286,9 @@ added or removed at runtime — except by hot reload (§13.14), which
 replaces the program source and applies a diff atomically.
 
 **Pure evaluation surface.** Reactive expressions (`derived`
-declarations, attr default expressions, recurrent `next:`
-expressions) are pure expressions over signal, attr, recurrent,
-and derived values. They contain no `mut` bindings, no loops, no
+declarations, attr default expressions, recurrent arm expressions)
+are pure expressions over signal, attr, recurrent, and derived
+values. They contain no `mut` bindings, no loops, no
 statement-level imperative constructs. When imperative work is
 needed, the reactive expression calls a pure function (per §11),
 which may use `mut` internally.
@@ -8257,8 +8296,8 @@ which may use `mut` internally.
 **Lazy, batched evaluation.** Writes (signal, attr) mark dependent
 cells dirty without immediate recomputation. The kernel evaluates
 the dirty set in topological order, advances recurrent cells per
-their `next:` expressions in lockstep, and swaps the back buffer
-atomically — all in a single `kernel.publish()` operation
+their firing arm expressions in lockstep, and swaps the back
+buffer atomically — all in a single `kernel.publish()` operation
 (§13.13.4). Writes accumulate between publishes; one publish
 processes the union.
 
@@ -8328,8 +8367,7 @@ signal tick: i64 = 0
 -- Counter advances its count whenever the host changes `tick`.
 node Counter:
   recurrent count: i32 = 0
-    | next: self.count + 1
-    | on: tick
+    | on tick: self.count + 1
   out: ShowsCount [=1]
 
 -- Display reads the count through its incoming connection.
@@ -8366,8 +8404,7 @@ Each `publish()`:
 
 1. Detects that `tick` differs from its previous-published value
    (dirty).
-2. Re-evaluates `Counter.count`'s `next:` expression (its trigger
-   `tick` fired).
+2. Re-evaluates `Counter.count`'s arm (its trigger `tick` fired).
 3. Re-evaluates `ShowsCount.count` and `Display.shown` (transitive
    derived dependencies).
 4. Commits recurrent advancement and atomically swaps the back
@@ -8636,22 +8673,11 @@ only cells visible at module scope per the topological-init rule
 #### 13.2.4 `recurrent`
 
 ```
-recurrent name: Type = initial | next: expression | on: trigger1, trigger2, ...
-```
-
-Equivalent indented form for readability when `next:` is large:
-
-```
 recurrent name: Type = initial
-  | next: expression
-  | on: trigger1, trigger2, ...
+  | on triggers: next_expr
+  | on triggers where guard: next_expr
+  ...
 ```
-
-Both forms are accepted and produce the same declaration. The
-indented form continues onto subsequent lines, each beginning with
-`|` aligned to the same indentation level. Mixing the two forms in
-the same declaration is permitted (e.g., `next:` inline, `on:` on
-the next line).
 
 A `recurrent` declares a *per-instance* writable cell with memory
 across triggering events. It is the mechanism for values that
@@ -8659,43 +8685,70 @@ depend on their own past — counters, accumulators, smoothing
 curves, running statistics, sequencer step indices, and other
 patterns where the new value depends on the previous value.
 
-A recurrent declaration has three required parts, separated by `|`:
+A recurrent declaration consists of:
 
-- **`= initial`** — the value the cell holds before any trigger
-  fires.
-- **`next:` expression** — a pure reactive expression. When any
-  trigger in the `on:` list fires, the expression evaluates
-  against current inputs and the cell's *previous-committed*
-  value; the result becomes the cell's new value after the
-  evaluation pass commits.
-- **`on:` triggers** — a comma-separated list of reactive cells
-  (signals, attrs, recurrents, deriveds) whose value changes cause
-  this cell's `next:` to re-evaluate. Any reactive cell type may
-  appear; trigger semantics is value-change (§13.2.4.4).
+- **`= initial`** — the value the cell holds before any arm fires.
+  Mandatory.
+- **One or more arms** — each beginning with `| on`, specifying the
+  trigger cells whose value changes cause the arm to fire, an
+  optional `where guard` clause, and the `next_expr` to apply when
+  the arm fires. At least one arm is required; a recurrent with no
+  arms is a compile error.
 
-All three clauses are required. A recurrent without `next:` is a
-compile error (use `attr` instead). A recurrent without `on:`
-would never advance and is also a compile error.
+An arm has the shape:
+
+```
+| on triggers: next_expr
+| on triggers where guard: next_expr
+```
+
+where:
+
+- **`triggers`** is one or more reactive cells (signals, attrs,
+  recurrents, deriveds) whose value changes cause the arm to fire.
+  A single trigger is written as a bare name (`on tick`); a group
+  of two or more triggers is written parenthesized
+  (`on (tick1, tick2)`). Parens are optional for a single trigger
+  and required for groups. Trigger semantics is value-change
+  (§13.2.4.4).
+- **`where guard`** is an optional reactive boolean expression
+  evaluated in the recurrent's scope (§13.2.4.7), with the same
+  purity rules as derived expressions (§13.2.3). When present, the
+  arm fires only if at least one trigger changed value AND the
+  guard is currently true.
+- **`next_expr`** is a pure reactive expression. When the arm
+  fires, the expression evaluates against current inputs and the
+  cell's *previous-committed* value; the result becomes the cell's
+  new value after the evaluation pass commits.
 
 ```
 signal increment: i32 = 0
 
 node Counter:
   attr step_size: i32 = 1
-  recurrent count: i32 = 0 | next: self.count + self.step_size | on: increment
+  recurrent count: i32 = 0
+    | on increment: self.count + self.step_size
 ```
 
 The cell starts at 0. When `increment`'s value changes (host
-writes a new value via `write_signal`), the `next:` expression
-re-evaluates: it reads `self.count` (previous-committed value) and
+writes a new value via `write_signal`), the arm fires: the
+`next_expr` reads `self.count` (previous-committed value) and
 `self.step_size`, computes the new value, and commits at the end
 of the evaluation pass.
+
+**Priority on overlapping fires.** When multiple arms' triggers
+fire in the same publish, arms are evaluated in declaration order;
+the first arm whose trigger fired AND whose `where` guard (if
+present) is true wins. The remaining arms are not evaluated.
+Earlier-declared arms have higher priority. If no arm fires (no
+triggers changed, or all guards are false), the recurrent holds
+its previous value.
 
 ##### 13.2.4.1 Lockstep advancement
 
 When multiple recurrent cells' triggers fire in the same
 evaluation pass (a single `kernel.publish()` cycle), they advance
-in **lockstep**: every triggered recurrent's `next:` expression
+in **lockstep**: every triggered recurrent's firing arm expression
 reads the *previous-committed* values of all recurrent cells in
 the system (including other triggered ones), computes a new value,
 and commits together at the end of the pass. No recurrent cell
@@ -8718,11 +8771,11 @@ distinction is who advances the value:
 - `attr` cells change only when the host writes via
   `kernel.write_attr`. The kernel does not advance them
   automatically.
-- `recurrent` cells advance automatically per their `next:`
-  expression whenever a trigger in `on:` fires. The host cannot
+- `recurrent` cells advance automatically per their firing arm's
+  expression whenever a trigger in an arm fires. The host cannot
   directly write a recurrent cell at runtime; control is indirect
-  — the host triggers signals (or writes attrs) that the `next:`
-  expression reads or that appear in the `on:` list.
+  — the host triggers signals (or writes attrs) that an arm's
+  expression reads or that appear in an arm's trigger list.
 
 Use `attr` for parameters, configuration, and host-controlled
 inputs. Use `recurrent` for cells that carry computed values
@@ -8738,14 +8791,16 @@ Counter c1:
   count: 100      // override initial value
 ```
 
-The `next:` and `on:` clauses are structural type properties and
-*cannot* be overridden at placement. If per-instance variation is
-needed, parametrize via attrs read inside `next:`:
+The arm structure (triggers, guards, and `next_expr` expressions)
+is a structural type property and *cannot* be overridden at
+placement. If per-instance variation is needed, parametrize via
+attrs read inside `next_expr`:
 
 ```
 node Counter:
   attr step_size: i32 = 1
-  recurrent count: i32 = 0 | next: self.count + self.step_size | on: tick_signal
+  recurrent count: i32 = 0
+    | on tick_signal: self.count + self.step_size
 
 Counter c1:
   step_size: 5        // per-instance step via attr override
@@ -8753,9 +8808,9 @@ Counter c1:
 
 ##### 13.2.4.4 Value-change semantics for triggers
 
-A trigger in the `on:` list fires when the listed cell's value
-changes from the perspective of the evaluation pass. Writing the
-same value to a signal does not fire its triggers. This is
+A trigger in an arm's trigger list fires when the listed cell's
+value changes from the perspective of the evaluation pass. Writing
+the same value to a signal does not fire its triggers. This is
 standard reactive semantics — only meaningful changes propagate.
 
 To express "fire on every event regardless of value," use a
@@ -8778,23 +8833,22 @@ and `derived`:
 
 ##### 13.2.4.6 Tuple-coupled recurrents
 
-Multiple recurrents may share a single `next:` evaluation by
-declaring them as a tuple:
+Multiple recurrents may share a single arm evaluation by declaring
+them as a tuple:
 
 ```
 recurrent (name1, name2, ...): (Type1, Type2, ...) = (init1, init2, ...)
-  | next: tuple_expression_returning_same_shape
-  | on: triggers
+  | on triggers: tuple_expression_returning_same_shape
 ```
 
 The declaration creates N independent cells, each named and
-typed individually. The `next:` expression returns a tuple of the
+typed individually. The arm's `next_expr` returns a tuple of the
 same shape and types; all N cells advance atomically from a single
-evaluation. Shared computation in `next:` is performed once, not
-N times.
+evaluation. Shared computation in the arm body is performed once,
+not N times.
 
 Example — a Kalman filter sharing the gain computation across
-mean and variance updates. The `next:` body is a single pure
+mean and variance updates. The arm body is a single pure
 expression and cannot directly contain `let` bindings; the shared
 work is factored into a helper function whose body computes the
 gain once and returns the pair of updated values:
@@ -8808,8 +8862,7 @@ fn kalman_step(mean: f32, variance: f32, source: f32, noise: f32) -> (f32, f32):
   )
 
 recurrent (mean, variance): (f32, f32) = (source, 1.0)
-  | next: kalman_step(mean, variance, source, noise)
-  | on: source
+  | on source: kalman_step(mean, variance, source, noise)
 ```
 
 The single function call evaluates the shared `gain` once per
@@ -8823,7 +8876,7 @@ Reads of any cell within the tuple use its individual name
 module scope).
 
 Lockstep semantics (§13.2.4.1) are preserved across the tuple:
-during `next:` evaluation, reads of any cell in the group return
+during arm evaluation, reads of any cell in the group return
 its previous-committed value. Cross-references within the tuple
 read previous-committed values, the same way independent
 recurrents do.
@@ -8839,64 +8892,54 @@ cycle, the entire group is rejected.
 
 ##### 13.2.4.7 Conditional triggers (`where` clauses)
 
-A trigger in the `on:` list may carry a `where` predicate:
+An arm may carry a `where guard` clause placed after its trigger
+list and before the colon:
 
 ```
 recurrent name: Type = init
-  | next: expr
-  | on: trigger_cell where predicate
+  | on trigger_cell where guard: expr
 ```
 
-The trigger fires when `trigger_cell` changes value AND the
-`predicate` is currently true. A change in the predicate alone
-(without `trigger_cell` changing) does not fire the recurrent.
+The arm fires when `trigger_cell` changes value AND `guard` is
+currently true. A change in `guard` alone (without `trigger_cell`
+changing) does not fire the arm.
 
-Multiple triggers each may carry independent `where` clauses:
+Each arm carries its own optional `where` clause; different arms
+may apply different guards:
 
 ```
-| on: A where p1, B where p2, C
+recurrent name: Type = init
+  | on A where p1: next_A_expr
+  | on B where p2: next_B_expr
+  | on C: next_C_expr
 ```
 
-Reads as: "fire on A-change if p1; or B-change if p2; or any
-C-change."
+Reads as: "fire on A-change if p1; or on B-change if p2; or on
+any C-change," evaluated in declaration order per the priority
+rule in §13.2.4.
 
-The predicate is a reactive boolean expression evaluated in the
+The guard is a reactive boolean expression evaluated in the
 recurrent's scope, with the same purity rules as derived
 expressions (§13.2.3).
 
-Equivalence to `next:` predicates:
+Pedagogically, an arm guard is equivalent to inlining the
+guard into the arm's `next_expr`:
 
 ```
+// guard form
 recurrent x: T = init
-  | next: if predicate then expr else x
-  | on: trigger_cell
+  | on trigger_cell where guard: expr
 
-// equivalent to:
+// inline-conditional form, observationally identical
 recurrent x: T = init
-  | next: expr
-  | on: trigger_cell where predicate
+  | on trigger_cell: if guard then expr else x
 ```
 
-The two are observationally identical, but the `where` form
-allows the kernel to skip `next:` evaluation entirely when the
-predicate is false. This is a perf benefit when `next:` is
-expensive and the predicate is cheap.
-
-##### 13.2.4.8 Multi-arm `on:` form
-
-A recurrent may declare multiple update arms, each with its own
-trigger(s), optional `where` clause, and `next:` expression:
-
-```
-recurrent name: T = init
-  | on A: next_A_expr
-  | on B: next_B_expr
-  | on C where p: next_C_expr
-```
-
-Each arm specifies one or more trigger cells (parens optional for
-single, required for groups), an optional `where` predicate, and
-the `next:` expression to apply when the arm fires.
+The two produce identical observable behavior, but the `where`
+form allows the kernel to skip the arm's evaluation entirely when
+the guard is false. This is a perf benefit when the `next_expr`
+is expensive and the guard is cheap, and it allows the priority
+rule to fall through to subsequent arms when the guard fails.
 
 Example shown at module scope (cell references are bare; inside a
 node body, references would use `self.counter` etc.):
@@ -8911,29 +8954,11 @@ recurrent counter: i32 = 0
   | on tick where running: counter + 1         // arm 2: increment if running
 ```
 
-**Mixing forms is forbidden.** A recurrent uses either the
-single-arm form (`| next: expr | on: triggers`) OR the multi-arm
-form (`| on X: ... | on Y: ...`), never both. Mixing is a compile
-error.
+If both `reset_signal` and `tick` change in the same publish, arm
+1 wins per the priority rule (§13.2.4) and `counter` becomes 0
+(not `counter + 1`).
 
-**Priority on overlapping fires.** When multiple arms' triggers
-fire in the same publish, arms are evaluated in declaration
-order; the first arm whose trigger fired AND whose `where`
-predicate (if present) is true wins. The remaining arms are not
-evaluated. Earlier-declared arms have higher priority.
-
-In the example above, if both `reset_signal` and `tick` change in
-the same publish, arm 1 wins and `counter` becomes 0 (not
-`counter + 1`).
-
-If no arm fires (no triggers changed, or all guards are false),
-the recurrent holds its previous value — same as the single-arm
-form.
-
-The `= init` clause is mandatory regardless of the arm form. The
-initial value is committed at startup before any arm fires.
-
-##### 13.2.4.9 Dynamic-size cell types
+##### 13.2.4.8 Dynamic-size cell types
 
 Recurrent cells may hold dynamic-size types in addition to
 fixed-size types. Dynamic-size types include:
@@ -8943,7 +8968,7 @@ fixed-size types. Dynamic-size types include:
 - `RingBuf[T; N]` — fixed-capacity ring buffer
 
 Storage and cost details are specified in §13.11.4 (cell types
-and storage). The `next:` expression returns a new value of the
+and storage). An arm's `next_expr` returns a new value of the
 declared type; the kernel handles allocation and triple-buffer
 rotation transparently. Source code never mutates a cell in
 place — the functional builder API (`.with(value)`, `+`
@@ -9064,8 +9089,8 @@ For each cell:
     - Otherwise, the attr was declared without a default and the
       placement omitted a value — a compile error caught before
       startup (see §13.2.2).
-- **Recurrents** evaluate their `= initial` expression. The `next:`
-  expression is *not* evaluated at startup; recurrent cells hold
+- **Recurrents** evaluate their `= initial` expression. The arm
+  expressions are *not* evaluated at startup; recurrent cells hold
   their initial values until a trigger fires. When an initial-value
   expression reads a `Signal[T]` cell (per §13.2.8), the read
   returns the cell's value at the topological-init evaluation
@@ -9127,7 +9152,7 @@ Writes occur only through:
   (per §13.7.2). Consts are *not* settable at placement.
 - The kernel's own evaluation of `derived` expressions, which
   writes the derived's output cell with the newly computed value.
-- The kernel's own evaluation of `next:` expressions on `recurrent`
+- The kernel's own evaluation of arm expressions on `recurrent`
   cells, which commits the computed value at the end of the
   publish cycle (per §13.2.4.1 and §13.9.2).
 
@@ -9150,8 +9175,9 @@ positions, return types, and generic arguments.
   values via `kernel.write_signal` (§13.13.2).
 - `derived X = expr` — projected `Signal[T]`. Kernel maintains
   the value consistent with its inputs.
-- `recurrent X: T = init | next | on` — memoryful `Signal[T]`.
-  Kernel advances per the `next:` expression on trigger.
+- `recurrent X: T = init | on triggers: expr` — memoryful
+  `Signal[T]`. Kernel advances per the arm's expression when an
+  arm fires.
 
 The keyword `signal` is overloaded with the type `Signal[T]`:
 the keyword declares one specific subkind (the writable cell);
@@ -9250,7 +9276,7 @@ node TypeName[GenericParams]?:
   signal name: Type = initial                         // per-instance runtime-fed entry points
   attr name: Type = default                           // per-instance user-configured cells
   default attr name: Type = default                   // positional default attr (at most one; node-only)
-  recurrent name: Type = init | next: expr | on: t1   // per-instance memory cells
+  recurrent name: Type = init | on t1: expr           // per-instance memory cells
   derived name: Type = expr                           // per-instance reactive values
 ```
 
@@ -9734,7 +9760,7 @@ connection TypeName[GenericParams]?:
   const name: Type = value                            // per-type compile-time constants
   signal name: Type = initial                         // per-instance runtime-fed entry points
   attr name: Type = default                           // per-instance writable cells
-  recurrent name: Type = init | next: expr | on: t1   // per-instance memory cells
+  recurrent name: Type = init | on t1: expr           // per-instance memory cells
   derived name: Type = expr                           // per-instance reactive values
 ```
 
@@ -9893,8 +9919,9 @@ blocks. Same rule as nodes (§13.3.6).
 #### 13.5.5 The `Circularity` trait
 
 A connection type may declare conformance to the language-provided
-`Circularity` trait to indicate that placements of this connection
-type may participate in topology cycles in the node graph (§13.10.2).
+`Circularity` trait — a language-defined marker trait (§3.7.4) — to
+indicate that placements of this connection type may participate in
+topology cycles in the node graph (§13.10.2).
 
 ```
 trait Circularity                          -- marker trait, no methods
@@ -9935,7 +9962,7 @@ declaration. Specifically, in:
 
 - Attr default expressions: `attr x: i32 = self.other_attr + 1`.
 - Recurrent initial-value expressions: `recurrent x: i32 = self.other_attr | ...`.
-- Recurrent `next:` expressions: `... | next: self.x + 1 | ...`.
+- Recurrent arm expressions: `... | on tick: self.x + 1`.
 - Derived expressions: `derived y: bool = self.x > 0`.
 - Iteration over parts in reactive expressions inside a node body:
   `for p in self.parts: ...`. Inside free functions that receive
@@ -10088,8 +10115,8 @@ fixed at placement.
   values.** Unlike attrs, the placement body form for recurrents
   (`count: 100`) does *not* accept reactive expressions. A
   recurrent's initial value is a fixed compile-time constant at
-  construction; runtime advancement happens via the `next:`
-  expression (§13.2.4).
+  construction; runtime advancement happens via the recurrent's
+  arms (§13.2.4).
 
 For attrs only, the same value may also be set via inline pipes
 (§13.7.7) or flags (§13.7.8). The three mechanisms (body form,
@@ -10111,8 +10138,9 @@ Recurrent initial values can be overridden only via the body form
 (with compile-time values). Consts cannot be overridden at all.
 
 For recurrent cells, only the initial value is overridable at
-placement. The `next:` and `on:` clauses are structural type
-properties and cannot be overridden per-instance (§13.2.4.3).
+placement. The arm structure (triggers, guards, and `next_expr`
+expressions) is a structural type property and cannot be overridden
+per-instance (§13.2.4.3).
 
 If a cell is not set at placement, its declared default (for attrs)
 or declared initial value (for recurrents) applies. Consts always
@@ -10594,8 +10622,7 @@ fields (`from:`, `to:`, `attr name:`, `recurrent name:`, etc.):
 node OneShot:
   out: Pulse
   recurrent fired: bool = false
-    | next: true
-    | on: self.in.trigger
+    | on self.in.trigger: true
   when: not self.fired                        // intrinsic refractory gate
 
 connection ActiveEdge:
@@ -10763,12 +10790,12 @@ false):
 - **`when` predicate:** re-evaluates whenever any cell in its
   provenance set changes. A flip from false to true is itself a
   propagation event (see below).
-- **Recurrents:** do not advance. Their `next:` expressions do not
-  fire; the cells hold their last committed value. Any `on:`
-  trigger that would have fired during a gated period is lost —
-  the kernel does not queue triggers, and gate-open does not
-  replay them. The recurrent remains at its last committed value
-  until a future `on:` trigger fires during an active period.
+- **Recurrents:** do not advance. Their arms do not fire; the
+  cells hold their last committed value. Any arm trigger that
+  would have fired during a gated period is lost — the kernel
+  does not queue triggers, and gate-open does not replay them.
+  The recurrent remains at its last committed value until a future
+  arm trigger fires during an active period.
 - **Deriveds:** do not recompute. They hold their last committed
   value. (An exception: deriveds whose values are read by the
   `when` predicate must remain current; the kernel keeps the
@@ -10913,7 +10940,7 @@ error: instantaneous cycle in reactive expressions
 The kernel processes reactive state via two operations:
 **writes** (signal/attr) accumulate dirty bits without evaluation;
 **publish** evaluates dirty cells, advances recurrents per their
-`next:` expressions, and swaps the back buffer atomically so that
+firing arm expressions, and swaps the back buffer atomically so that
 consumers see the new state.
 
 #### 13.9.1 Lazy writes
@@ -10952,7 +10979,7 @@ operation on the producer thread:
    value. Cells whose values differ are *dirty*; cells whose values
    are identical (including those that were written intermediate
    values but reverted before publish) are *not* dirty. Triggers
-   listed in `on:` clauses fire when their referenced cell is
+   listed in arm trigger lists fire when their referenced cell is
    dirty — value-change semantics (§13.2.4.4) operationalized as
    "current-publish value ≠ previous-publish value." Dirty
    propagation extends to all derived cells transitively dependent
@@ -10961,7 +10988,7 @@ operation on the producer thread:
    publish cycle.
 2. **Compute evaluation order.** Topologically sort the per-publish
    DAG (§13.10.3). Nodes in the DAG are: dirty derived expressions
-   plus recurrent `next:` expressions whose triggers fired this
+   plus recurrent arm expressions whose triggers fired this
    publish. Edges are dependencies; recurrent reads are treated as
    inputs (their previous-committed values), which breaks reactive
    cycles. Reads of deriveds, signals, and attrs follow normal
@@ -10980,7 +11007,7 @@ operation on the producer thread:
       (lockstep — §13.2.4.1).
 
    Derived behaviors write their results into the back buffer.
-   Recurrent `next:` expression results are held aside (not yet
+   Recurrent arm expression results are held aside (not yet
    visible to in-pass evaluation) until step 4.
 4. **Commit recurrent advancement.** Write the next values
    computed in step 3 into the recurrent cells. After this step,
@@ -10996,7 +11023,7 @@ the same thread between publish calls accumulate as usual.
 
 #### 13.9.3 Topological order and tiebreaker
 
-Within a publish cycle, dirty deriveds and recurrent `next:`
+Within a publish cycle, dirty deriveds and recurrent arm
 expressions evaluate in topological order over the per-publish DAG.
 Topological order ensures that each node's dependencies have stable
 values when the node itself is evaluated.
@@ -11011,7 +11038,7 @@ reproducibility (same program, same inputs, same output trace).
 For cells across different node instances at the same level, the
 placement order at construction time is the tiebreaker.
 
-`next:` expressions across multiple recurrent cells evaluate in
+Arm expressions across multiple recurrent cells evaluate in
 lockstep (§13.2.4.1); no internal ordering between them is
 observable, because none of them sees another's just-advanced
 value.
@@ -11063,7 +11090,7 @@ instances via connection placements. Each has its own rules.
 #### 13.10.1 The reactive dependency graph
 
 The compiler constructs the reactive dependency graph by walking
-every `derived` expression's body and every recurrent `next:`
+every `derived` expression's body and every recurrent arm
 expression's body, recording for each the set of reactive cells it
 reads. Edges go from each read cell to the reading expression's
 output cell. Signal, attr, derived, and recurrent reads all
@@ -11090,9 +11117,9 @@ error: instantaneous cycle in reactive expressions
 ```
 
 **Recurrent self-reference and cross-reference are allowed.** A
-recurrent cell's `next:` expression may read the recurrent's own
-previous value (`next: self.x + 1`) or another recurrent cell's
-previous value (`next: self.other.value`). These do not form
+recurrent cell's arm expression may read the recurrent's own
+previous value (`on t: self.x + 1`) or another recurrent cell's
+previous value (`on t: self.other.value`). These do not form
 instantaneous cycles because recurrent reads always return the
 previous-committed value (lockstep — §13.2.4.1). The per-publish
 DAG treats every recurrent read as an input, breaking the static
@@ -11104,13 +11131,12 @@ Example (allowed):
 node Filter:
   attr input: f32 = 0.0
   recurrent previous: f32 = 0.0
-    | next: self.current
-    | on: sample_clock
+    | on sample_clock: self.current
   derived current: f32 =
     0.5 * self.input + 0.5 * self.previous
 ```
 
-`current` reads `previous`; `previous`'s `next:` reads `current`.
+`current` reads `previous`; `previous`'s arm reads `current`.
 The static graph has a cycle, but the lockstep semantics make this
 well-defined: each publish, `current` reads `previous`'s last-
 committed value, then `previous` advances to `current`'s new value
@@ -11131,9 +11157,9 @@ step 2.
 
 A recurrent cell on a cycle behaves as a one-publish delay
 element: it always reads the previous-committed value, regardless
-of what its `next:` expression computes this publish. The
-end-of-publish commit (§13.9.2 step 4) is what advances the cell
-for the next publish to observe.
+of what its firing arm computes this publish. The end-of-publish
+commit (§13.9.2 step 4) is what advances the cell for the next
+publish to observe.
 
 This is the same semantic primitive used by hardware registers
 (Verilog `<=` non-blocking assignment), synchronous-dataflow
@@ -11407,7 +11433,7 @@ The functional builder API preserves the no-mutation rule
 
 - `vec.with(value)` returns a new `Vec[T]` with `value` appended.
 - `vec + value` is equivalent (operator form).
-- The `recurrent`'s `next:` expression returns the new value;
+- The `recurrent`'s arm expression returns the new value;
   the kernel commits it through triple-buffer rotation.
 
 Implementation strategies (Vec uses persistent trie; SmallVec
@@ -11462,7 +11488,7 @@ reactive contexts.
 
 #### 13.12.1 Traps abort the process
 
-A reactive expression — derived expression or recurrent `next:`
+A reactive expression — derived expression or recurrent arm
 expression — that traps during evaluation, from arithmetic
 overflow under default operators (§4.6.1), division by zero, an
 out-of-range array index, or explicit `panic`, follows the
@@ -11542,9 +11568,9 @@ The kernel's lifecycle proceeds in phases:
    in declaration order within each instance, with placement
    order across instances).
 5. Initialize recurrent cells with their declared initial values
-   (per-instance, with placement-time overrides applied). The
-   `next:` expressions are *not* evaluated at startup; they run
-   only when triggers fire during a publish.
+   (per-instance, with placement-time overrides applied). The arm
+   expressions are *not* evaluated at startup; they run only when
+   triggers fire during a publish.
 6. Run the initial derived evaluation in topological order over
    the reactive dependency graph. Each derived computes its
    initial value from the now-initialized signals, attrs, and
@@ -11564,7 +11590,7 @@ sentinel (or block, per implementation choice).
   or `kernel.transaction(...)` to update reactive state. Writes
   mark dirty bits; no evaluation runs.
 - Host calls `kernel.publish()` to evaluate dirty cells, advance
-  recurrent cells per their `next:` expressions, and atomically
+  recurrent cells per their firing arm expressions, and atomically
   swap the back buffer for consumer visibility.
 - Consumer threads call `kernel.swap(...)` to obtain the latest
   published state and read cell values.
@@ -11644,7 +11670,7 @@ kernel.publish()
 ```
 
 Performs the complete publish operation specified in §13.9.2:
-evaluates dirty deriveds and recurrent `next:` expressions in
+evaluates dirty deriveds and recurrent arm expressions in
 topological order, commits recurrent advancements, and atomically
 swaps the back buffer pointer (§14.3.3.1) so consumers see the new
 state.
@@ -11823,7 +11849,7 @@ specifies the implementation model. Cross-references:
   types (per §13.11.4) map to single AtomicI64 cells.
 - The producer role per §14.8 is the kernel's reactive evaluation
   thread. It applies host writes to the back buffer, runs publish
-  cycles (recurrent `next:` evaluation, derived behavior
+  cycles (recurrent arm evaluation, derived behavior
   invocations, atomic swap). In typical deployments, the host's
   main thread plays the producer role; in other deployments, a
   kernel-configured thread does.
@@ -11831,7 +11857,7 @@ specifies the implementation model. Cross-references:
   state via swap. Consumer threads do not invoke behaviors; they
   read the results of past publishes.
 - Behaviors invoked during reactive evaluation — both derived
-  expressions and recurrent `next:` expressions — conform to the
+  expressions and recurrent arm expressions — conform to the
   ABI of §14.6: a uniform `fn(kernel: &KernelHandle, instance:
   InstanceId) -> ()` signature, with stateless semantics and
   content-addressed identity (§14.6.4).
@@ -11876,8 +11902,7 @@ Stateful operators allocate recurrent state per instantiation:
 ```
 operator smooth(source: Signal[f32], rate: f32 = 0.1, clock: Signal[u64]) -> Signal[f32]:
   recurrent state: f32 = source
-    | next: state + (source - state) * rate
-    | on: clock
+    | on clock: state + (source - state) * rate
   state
 ```
 
@@ -11996,11 +12021,10 @@ type PeakResult:
 
 operator peak_detector(source: Signal[f32]) -> Signal[PeakResult]:
   recurrent (peak, count): (f32, u32) = (source, 0)
-    | next: (
+    | on source: (
         max(peak, source),
         if source > peak then count + 1 else count,
       )
-    | on: source
 
   PeakResult(peak: peak, count: count)
 ```
@@ -12008,7 +12032,7 @@ operator peak_detector(source: Signal[f32]) -> Signal[PeakResult]:
 Consumers project fields via reactive expressions:
 
 ```
-let result = source >> peak_detector            // Signal[PeakResult]
+let result = source |> peak_detector            // Signal[PeakResult]
 derived just_peak: f32 = result.peak            // reactive projection
 derived just_count: u32 = result.count
 ```
@@ -12029,23 +12053,23 @@ Two equivalent call-site syntaxes:
 let smoothed = smooth(source_cell, rate: 0.1, clock: tick)
 ```
 
-**Pipe form (`>>`):**
+**Pipe form (`|>`):**
 
 ```
-let smoothed = source_cell >> smooth(rate: 0.1, clock: tick)
+let smoothed = source_cell |> smooth(rate: 0.1, clock: tick)
 ```
 
-In the pipe form, the LHS of `>>` is bound to the operator's first
+In the pipe form, the LHS of `|>` is bound to the operator's first
 positional parameter. The remaining arguments are passed as in the
 function-call form. The two forms are observationally identical.
 
 The pipe form is convenient for chaining:
 
 ```
-signal bar = 0.0 >> clamp(min: 0.0, max: 1.0) >> smooth(rate: 0.1, clock: tick) >> ease_in_out
+signal bar = 0.0 |> clamp(min: 0.0, max: 1.0) |> smooth(rate: 0.1, clock: tick) |> ease_in_out
 ```
 
-Each `>>` step is an operator application. The result of each step
+Each `|>` step is an operator application. The result of each step
 is a `Signal[T]` consumed by the next.
 
 **Convention:** the first positional parameter of any operator is
@@ -12059,7 +12083,7 @@ operator combine(primary: Signal[T], other: Signal[T], weight: f32) -> Signal[T]
   ...
 
 // Call:
-let result = source >> combine(other: another_signal, weight: 0.5)
+let result = source |> combine(other: another_signal, weight: 0.5)
 ```
 
 **Each instantiation allocates fresh internal cells.** Two call
@@ -12070,7 +12094,7 @@ state buffer reserves space for each instance's internal cells.
 ##### 13.16.6.1 Operator instance identity
 
 An operator instance is identified by its enclosing scope plus its
-position in source. Two `>>` chains in different scopes (different
+position in source. Two `|>` chains in different scopes (different
 modules, different node bodies, different placements) produce
 distinct instances with independent state.
 
@@ -12093,9 +12117,9 @@ recursion through operators is forbidden (an operator may not
 transitively instantiate itself), so the static count of operator
 instances is bounded and known.
 
-#### 13.16.7 The `>>` operator
+#### 13.16.7 The `|>` operator
 
-`>>` is the operator-application token. Its semantics:
+`|>` is the operator-application token. Its semantics:
 
 - LHS must be an expression of type `Signal[T]` (or convertible to
   one — literals are wrapped as implicit const cells).
@@ -12106,25 +12130,29 @@ instances is bounded and known.
 - The result is the operator's output cell, of type `Signal[U]`
   where `U` is the operator's declared return value type.
 
-**Precedence:** `>>` is low-precedence, left-associative. Most
+**Precedence:** `|>` is low-precedence, left-associative. Most
 arithmetic and logical operators bind tighter. Specifically:
 
 ```
-a + b >> op            // parses as (a + b) >> op
-a >> op1 >> op2        // parses as (a >> op1) >> op2
+a + b |> op            // parses as (a + b) |> op
+a |> op1 |> op2        // parses as (a |> op1) |> op2
 ```
 
-**`>>` exclusivity:** `>>` may only apply operators. Using `>>`
+Bitwise `|` (§4.4.2) shares this low precedence with `|>`; mixed
+arithmetic and bitwise-OR expressions may need parentheses for the
+desired grouping.
+
+**`|>` exclusivity:** `|>` may only apply operators. Using `|>`
 with a `fn` is a compile error:
 
 ```
-signal bar = 0.0 >> some_fn       // ✗ error: `>>` requires an operator
+signal bar = 0.0 |> some_fn       // ✗ error: `|>` requires an operator
 ```
 
 Diagnostic class:
 ```
-error: `>>` requires an operator on the right-hand side
-  --> signal bar = 0.0 >> some_fn
+error: `|>` requires an operator on the right-hand side
+  --> signal bar = 0.0 |> some_fn
                         ^^^^^^^^ `some_fn` is a `fn`, not an operator
   hint: use function call syntax: `some_fn(0.0)`
 ```
@@ -12153,8 +12181,7 @@ operator passthrough[T](source: Signal[T]) -> Signal[T]:
 
 operator scan[T: Add + Copy](source: Signal[T]) -> Signal[T]:
   recurrent acc: T = source
-    | next: acc + source
-    | on: source
+    | on source: acc + source
   acc
 ```
 
@@ -12186,9 +12213,9 @@ operator body.
 
 **Reload-safe changes:**
 
-- Changes to the body of `next:` expressions, `where` predicates,
-  or final-expression bodies — same as plain recurrent/derived
-  reload safety.
+- Changes to the body of recurrent arm expressions, `where`
+  guards, or final-expression bodies — same as plain
+  recurrent/derived reload safety.
 - Adding a new internal cell — new cells are initialized fresh.
 
 **Reload-unsafe changes (require restart for affected instances):**
@@ -12201,8 +12228,8 @@ operator body.
 
 **Call-site changes:**
 
-If a call site changes which operator is invoked (`source >> op_a`
-becomes `source >> op_b`), the old instance's cells are dropped
+If a call site changes which operator is invoked (`source |> op_a`
+becomes `source |> op_b`), the old instance's cells are dropped
 per §14.9 eviction; the new instance's cells initialize fresh.
 The two operators are treated as distinct instances even if
 op_b's signature matches op_a's.
@@ -12220,7 +12247,7 @@ treated as call-site change (state lost).
 
 If two operator call sites in the same scope cannot be
 distinguished by (operator name, arguments) — e.g., two identical
-calls `source >> smooth(rate: 0.1, clock: tick)` in the same node
+calls `source |> smooth(rate: 0.1, clock: tick)` in the same node
 body — the reload uses syntactic order to match old to new
 instances. Adding a third identical call between them treats the
 new call as fresh; the existing two preserve state.
@@ -12234,7 +12261,7 @@ gated wrapper operator that conditionally falls through:
 
 ```
 operator conditional_smooth(source: Signal[f32], gate: Signal[bool], clock: Signal[u64]) -> Signal[f32]:
-  derived effective: f32 = if gate then (source >> smooth(rate: 0.1, clock: clock)) else source
+  derived effective: f32 = if gate then (source |> smooth(rate: 0.1, clock: clock)) else source
   effective
 ```
 
@@ -12264,11 +12291,11 @@ in graph metadata.
 
 Normative diagnostic classes for operator usage:
 
-**`>>` applied to a non-operator:**
+**`|>` applied to a non-operator:**
 
 ```
-error: `>>` requires an operator on the right-hand side
-  --> signal bar = 0.0 >> some_fn
+error: `|>` requires an operator on the right-hand side
+  --> signal bar = 0.0 |> some_fn
                         ^^^^^^^^ `some_fn` is a `fn`, not an operator
   hint: use function call syntax: `some_fn(0.0)`
 ```
@@ -12276,8 +12303,8 @@ error: `>>` requires an operator on the right-hand side
 **Operator missing first positional parameter:**
 
 ```
-error: operator `smooth` has no positional parameter to bind from `>>`
-  --> signal bar = source >> smooth(rate: 0.1)
+error: operator `smooth` has no positional parameter to bind from `|>`
+  --> signal bar = source |> smooth(rate: 0.1)
                              ^^^^^^ no positional parameter declared
   hint: either pass the upstream cell as the first positional argument,
         or declare a positional `Signal[T]` parameter on the operator
@@ -12962,8 +12989,8 @@ The triple-buffer mechanism (§14.3.3) operates in terms of two roles:
   buffer it is writing; such reads are local to the producer and
   do not go through the triple-buffer pointer swap. What the
   producer writes (signal/attr updates from host API, derived and
-  `next:` expression results) and what triggers it to publish are
-  specified in §13.
+  recurrent arm expression results) and what triggers it to publish
+  are specified in §13.
 - **Consumer**: the role that reads the current buffer via the swap
   operation. Loads the current pointer and reads cells from the
   buffer it points to. Never writes; never invokes behaviors. There
@@ -12996,7 +13023,7 @@ specified in §13.
 
 #### 14.8.2 Behaviors invoked by the mechanism
 
-Reactive behaviors (derived expression bodies, recurrent `next:`
+Reactive behaviors (derived expression bodies, recurrent arm
 expressions, functions called from reactive contexts) are invoked
 by the producer. The trigger, the selection of which behaviors are
 invoked, and the ordering of invocations within a publish cycle
