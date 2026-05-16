@@ -1794,7 +1794,50 @@ user modules, and are not subject to the orphan rule:
 These privileged implementations exist outside the user-writable
 `fulfill`-block space and cannot conflict with user code.
 
-#### 3.7.4 Newtype pattern as orphan-rule workaround
+#### 3.7.4 Language-defined marker traits
+
+A small, closed category of traits are declared by the language itself,
+have no methods and no associated types, and receive compiler-privileged
+enforcement. A type opts into one of these traits via the usual
+`satisfies` clause (and, where applicable, `@derive`); the compiler
+treats membership as a flag carrying load-bearing semantics rather than
+as a vehicle for user-supplied method bodies. Members of this category
+are not redeclarable: user code cannot define a new trait of the same
+name and reuse the privileged behavior.
+
+The members of the category in Ductus v1 are:
+
+- `Copy` (§11.4) — flags a type whose values are duplicated implicitly
+  at every use site. The compiler enforces the auto-derivation rules
+  and the use-site duplication semantics.
+- `Circularity` (§13.5.5) — flags a connection type that may participate
+  in topology cycles in the node graph. The compiler enforces the static
+  cycle rule against this flag.
+
+Like any trait, a language-defined marker trait may be used as a generic
+bound or appear in a `where` clause:
+
+```
+fn duplicate[T: Copy](value: T) -> (T, T):
+  (value, value)
+```
+
+This category is distinct from two superficially similar things:
+
+- `Drop` (§14.9) is compiler-aware but carries a method (`fn drop`); it
+  is therefore not a marker trait. It belongs to a separate category of
+  compiler-aware traits with methods.
+- The empty `trait Marker` shown in §3.1 illustrates a *user-writable*
+  pattern — empty traits whose only purpose is to act as a nominal tag.
+  Such user-defined empty traits are perfectly valid, but they are not
+  members of the language-defined marker traits category and do not
+  receive any compiler privilege beyond the usual `satisfies` check.
+
+The category is closed in v1: the language defines exactly `Copy` and
+`Circularity` as language-defined marker traits. Adding a new member is
+a language-level change, not a user-extensible mechanism.
+
+#### 3.7.5 Newtype pattern as orphan-rule workaround
 
 When a user wants to implement a foreign trait for a foreign type, the
 canonical workaround is the newtype pattern: wrap the foreign type in a local
@@ -3963,7 +4006,7 @@ offending payload field.
 A newtype is a wrapper type that creates a new nominal identity over an
 existing type. Newtypes are the standard way to add domain meaning to a
 primitive or stdlib type, satisfy the orphan rule for foreign-trait +
-foreign-type combinations (§3.7.4), or enforce invariants at construction.
+foreign-type combinations (§3.7.5), or enforce invariants at construction.
 
 #### 6.3.1 Declaration
 
@@ -6230,9 +6273,10 @@ system; the precise mechanism is deferred to §Drop Trait (deferred).
 
 ### 11.4 The `Copy` Trait
 
-`Copy` is a marker trait. A type's values may be duplicated by the
-language at every use site (assignment, argument passing, return) without
-transferring ownership. The original binding remains usable.
+`Copy` is a language-defined marker trait (§3.7.4). A type's values may
+be duplicated by the language at every use site (assignment, argument
+passing, return) without transferring ownership. The original binding
+remains usable.
 
 ```
 trait Copy
@@ -9893,8 +9937,9 @@ blocks. Same rule as nodes (§13.3.6).
 #### 13.5.5 The `Circularity` trait
 
 A connection type may declare conformance to the language-provided
-`Circularity` trait to indicate that placements of this connection
-type may participate in topology cycles in the node graph (§13.10.2).
+`Circularity` trait — a language-defined marker trait (§3.7.4) — to
+indicate that placements of this connection type may participate in
+topology cycles in the node graph (§13.10.2).
 
 ```
 trait Circularity                          -- marker trait, no methods
