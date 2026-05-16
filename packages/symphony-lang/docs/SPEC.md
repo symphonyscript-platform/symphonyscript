@@ -87,8 +87,8 @@ structurally via orphan rules.
 interchangeable syntactic forms for the same underlying operation: a
 function `f(x, y)` may equivalently be called as `x.f(y)`. Records
 carry data; functions carry behavior; the call site chooses the form
-that reads best. The `>>` token is *not* a function-call form — it
-is reserved for operator application (§13.16).
+that reads best. Operator application uses the `|>` token (§13.16);
+`>>` is bitwise right shift only.
 
 **Two-track failure model.** Failures are either bugs (traps, process abort, no
 catch mechanism) or recoverable conditions (`Option`/`Result` values, `?`
@@ -1339,8 +1339,9 @@ display(person)               // conventional form, requires `display` in scope
 Display::display(person)      // trait-path form, no import needed
 ```
 
-The `>>` token is reserved for operator application (§13.16); it is not
-a function-call form. Functions are called via the three forms above.
+Operator application uses the `|>` token (§13.16); it is not a
+function-call form. `>>` is bitwise right shift only. Functions are
+called via the three forms above.
 
 The trait-path form (`Trait::method`) requires no `use` import — the
 path itself makes the trait accessible by path, satisfying the in-scope
@@ -2358,20 +2359,15 @@ The right-shift operator `>>` is a single operator whose behavior depends
 on the signedness of the left operand's type: signed types shift
 arithmetically (sign-extending); unsigned types shift logically (zero-
 extending). The compiler dispatches on the type via the `Shr` trait impl.
-No separate `>>>` operator exists.
+No separate `>>>` operator exists. `>>` has no other meaning at the value
+level.
 
-`>>` is overloaded with a second meaning: **operator application**
-(§13.16). When the right-hand side resolves to an operator name (a
-declaration introduced by the `operator` keyword), `>>` instantiates
-that operator with the LHS bound to its first positional parameter.
-When the right-hand side resolves to a numeric expression, `>>` is
-bitwise right-shift dispatching through `Shr`. The disambiguation is
-by what the RHS resolves to during type-checking, not by surface
-syntax alone. This is the same mechanism that disambiguates `&` and
-`|` between type-level and value-level uses.
-
-`>>` is *not* a function-call form. Calling a function as `x >> f`
-is a compile error; use `f(x)` or `x.f()` instead.
+At the value level, `|` is bitwise OR (dispatching through `BitOr`); the
+operator-application token is `|>` (§13.16), a distinct token. Bitwise
+`|` and `|>` share the same low precedence and left-associativity, so
+expressions mixing bitwise OR with higher-precedence arithmetic parse
+naturally; users mixing bitwise OR with operator application across the
+same expression should add parentheses to make grouping explicit.
 
 #### 4.4.3 Comparison operators
 
@@ -12053,7 +12049,7 @@ operator peak_detector(source: Signal[f32]) -> Signal[PeakResult]:
 Consumers project fields via reactive expressions:
 
 ```
-let result = source >> peak_detector            // Signal[PeakResult]
+let result = source |> peak_detector            // Signal[PeakResult]
 derived just_peak: f32 = result.peak            // reactive projection
 derived just_count: u32 = result.count
 ```
@@ -12074,23 +12070,23 @@ Two equivalent call-site syntaxes:
 let smoothed = smooth(source_cell, rate: 0.1, clock: tick)
 ```
 
-**Pipe form (`>>`):**
+**Pipe form (`|>`):**
 
 ```
-let smoothed = source_cell >> smooth(rate: 0.1, clock: tick)
+let smoothed = source_cell |> smooth(rate: 0.1, clock: tick)
 ```
 
-In the pipe form, the LHS of `>>` is bound to the operator's first
+In the pipe form, the LHS of `|>` is bound to the operator's first
 positional parameter. The remaining arguments are passed as in the
 function-call form. The two forms are observationally identical.
 
 The pipe form is convenient for chaining:
 
 ```
-signal bar = 0.0 >> clamp(min: 0.0, max: 1.0) >> smooth(rate: 0.1, clock: tick) >> ease_in_out
+signal bar = 0.0 |> clamp(min: 0.0, max: 1.0) |> smooth(rate: 0.1, clock: tick) |> ease_in_out
 ```
 
-Each `>>` step is an operator application. The result of each step
+Each `|>` step is an operator application. The result of each step
 is a `Signal[T]` consumed by the next.
 
 **Convention:** the first positional parameter of any operator is
@@ -12104,7 +12100,7 @@ operator combine(primary: Signal[T], other: Signal[T], weight: f32) -> Signal[T]
   ...
 
 // Call:
-let result = source >> combine(other: another_signal, weight: 0.5)
+let result = source |> combine(other: another_signal, weight: 0.5)
 ```
 
 **Each instantiation allocates fresh internal cells.** Two call
@@ -12115,7 +12111,7 @@ state buffer reserves space for each instance's internal cells.
 ##### 13.16.6.1 Operator instance identity
 
 An operator instance is identified by its enclosing scope plus its
-position in source. Two `>>` chains in different scopes (different
+position in source. Two `|>` chains in different scopes (different
 modules, different node bodies, different placements) produce
 distinct instances with independent state.
 
@@ -12138,9 +12134,9 @@ recursion through operators is forbidden (an operator may not
 transitively instantiate itself), so the static count of operator
 instances is bounded and known.
 
-#### 13.16.7 The `>>` operator
+#### 13.16.7 The `|>` operator
 
-`>>` is the operator-application token. Its semantics:
+`|>` is the operator-application token. Its semantics:
 
 - LHS must be an expression of type `Signal[T]` (or convertible to
   one — literals are wrapped as implicit const cells).
@@ -12151,25 +12147,29 @@ instances is bounded and known.
 - The result is the operator's output cell, of type `Signal[U]`
   where `U` is the operator's declared return value type.
 
-**Precedence:** `>>` is low-precedence, left-associative. Most
+**Precedence:** `|>` is low-precedence, left-associative. Most
 arithmetic and logical operators bind tighter. Specifically:
 
 ```
-a + b >> op            // parses as (a + b) >> op
-a >> op1 >> op2        // parses as (a >> op1) >> op2
+a + b |> op            // parses as (a + b) |> op
+a |> op1 |> op2        // parses as (a |> op1) |> op2
 ```
 
-**`>>` exclusivity:** `>>` may only apply operators. Using `>>`
+Bitwise `|` (§4.4.2) shares this low precedence with `|>`; mixed
+arithmetic and bitwise-OR expressions may need parentheses for the
+desired grouping.
+
+**`|>` exclusivity:** `|>` may only apply operators. Using `|>`
 with a `fn` is a compile error:
 
 ```
-signal bar = 0.0 >> some_fn       // ✗ error: `>>` requires an operator
+signal bar = 0.0 |> some_fn       // ✗ error: `|>` requires an operator
 ```
 
 Diagnostic class:
 ```
-error: `>>` requires an operator on the right-hand side
-  --> signal bar = 0.0 >> some_fn
+error: `|>` requires an operator on the right-hand side
+  --> signal bar = 0.0 |> some_fn
                         ^^^^^^^^ `some_fn` is a `fn`, not an operator
   hint: use function call syntax: `some_fn(0.0)`
 ```
@@ -12246,8 +12246,8 @@ operator body.
 
 **Call-site changes:**
 
-If a call site changes which operator is invoked (`source >> op_a`
-becomes `source >> op_b`), the old instance's cells are dropped
+If a call site changes which operator is invoked (`source |> op_a`
+becomes `source |> op_b`), the old instance's cells are dropped
 per §14.9 eviction; the new instance's cells initialize fresh.
 The two operators are treated as distinct instances even if
 op_b's signature matches op_a's.
@@ -12265,7 +12265,7 @@ treated as call-site change (state lost).
 
 If two operator call sites in the same scope cannot be
 distinguished by (operator name, arguments) — e.g., two identical
-calls `source >> smooth(rate: 0.1, clock: tick)` in the same node
+calls `source |> smooth(rate: 0.1, clock: tick)` in the same node
 body — the reload uses syntactic order to match old to new
 instances. Adding a third identical call between them treats the
 new call as fresh; the existing two preserve state.
@@ -12279,7 +12279,7 @@ gated wrapper operator that conditionally falls through:
 
 ```
 operator conditional_smooth(source: Signal[f32], gate: Signal[bool], clock: Signal[u64]) -> Signal[f32]:
-  derived effective: f32 = if gate then (source >> smooth(rate: 0.1, clock: clock)) else source
+  derived effective: f32 = if gate then (source |> smooth(rate: 0.1, clock: clock)) else source
   effective
 ```
 
@@ -12309,11 +12309,11 @@ in graph metadata.
 
 Normative diagnostic classes for operator usage:
 
-**`>>` applied to a non-operator:**
+**`|>` applied to a non-operator:**
 
 ```
-error: `>>` requires an operator on the right-hand side
-  --> signal bar = 0.0 >> some_fn
+error: `|>` requires an operator on the right-hand side
+  --> signal bar = 0.0 |> some_fn
                         ^^^^^^^^ `some_fn` is a `fn`, not an operator
   hint: use function call syntax: `some_fn(0.0)`
 ```
@@ -12321,8 +12321,8 @@ error: `>>` requires an operator on the right-hand side
 **Operator missing first positional parameter:**
 
 ```
-error: operator `smooth` has no positional parameter to bind from `>>`
-  --> signal bar = source >> smooth(rate: 0.1)
+error: operator `smooth` has no positional parameter to bind from `|>`
+  --> signal bar = source |> smooth(rate: 0.1)
                              ^^^^^^ no positional parameter declared
   hint: either pass the upstream cell as the first positional argument,
         or declare a positional `Signal[T]` parameter on the operator
