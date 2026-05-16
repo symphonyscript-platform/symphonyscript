@@ -2310,6 +2310,13 @@ operator with mixed-kind support requires at least one operand to already
 be of the target kind; `/` is unique in always producing float regardless
 of input kinds.
 
+**Mixed widths and kinds.** When the operands are mixed-width and
+mixed-kind (e.g., `i64 + f32`), the integer first widens to the smallest
+float type capable of representing its full range (f64 for i64, by
+§4.5.4's pragmatic exception), then the f32 widens to f64 per §4.5.3.
+The result is f64. To force an alternate target type (e.g., truncating
+the i64 to fit f32), use an explicit cast.
+
 ##### 4.4.1.2 Other arithmetic operators
 
 `//` is the truncating integer division operator. It accepts `Integer`
@@ -5454,6 +5461,12 @@ Division by zero follows the standard rules of §4.6:
 - `duration / duration_zero` (i.e., dividing by a zero-duration value)
   traps; this is treated as the i64 zero-divisor case per §4.6.7.
 
+**`duration / 0.0` with a float-typed zero divisor.** IEEE 754 produces
+`±inf` or `NaN`; converting that result back to the i64-nanosecond
+duration representation traps per §4.7.3 (default float-to-int cast
+traps on non-finite values). To handle this case recoverably, use `/?`
+or test the divisor before dividing.
+
 Use checked variants (`/?`, `%?`) per §4.6.4 where division-by-zero
 recovery is needed; they return `Option[duration]` (or `Option[f64]`
 for `duration / duration`).
@@ -5760,6 +5773,8 @@ declaration's own section and summarized below:
   (§6.2.6); no per-variant visibility.
 - **Newtypes** (§6.3): type visibility (§6.3.1), independent
   constructor visibility (§6.3.4).
+- **Alias types** (§4.2, §10.4.2): visibility specifier on the
+  `alias type` declaration.
 - **Traits** (§3.1): type visibility. Visibility of methods within a
   trait declaration is uniform with the trait's visibility — no
   per-method visibility.
@@ -5865,6 +5880,12 @@ These are ordinary declarations with their own visibility specifiers,
 distinct from `use` imports. The language's `use` machinery is solely
 about bringing names into the current file's scope; cross-module
 exposure of names is the job of declarations.
+
+Visibility specifiers (`public`, `shared`, `private`) are permitted on
+`alias type` declarations and follow the same rules as other declarations
+per §10.3. `alias type` is grammatically a visibility-bearing form even
+though §10.3's enumeration doesn't list it explicitly; this section is
+the authoritative statement.
 
 #### 10.4.3 `use` is file-scope only
 
@@ -9207,6 +9228,12 @@ recurrent initial values, or initial derived evaluation) follow
 §13.12.1 — the process aborts. There is no recovery path for traps
 encountered during startup.
 
+**Cross-instance init cycles.** When a cell's initial value references
+a cell on another instance (e.g., a sibling part's attr), the init
+dependency graph includes cross-instance edges. Cycles across
+instances are compile errors at the same severity as within-instance
+init cycles, identifying the participating instances and cells.
+
 #### 13.2.7 No mutation of cells from Ductus source
 
 Ductus source has no syntactic form for assigning to a signal,
@@ -10349,6 +10376,14 @@ App my_app:
   Monitor monitor
   WiresTo / monitor when self.debug_enabled                   // node-owned, gated
 ```
+
+**Scope of placement-level `when` on part-owned connections.** A
+placement-level `when` clause on a part-owned connection
+(`-> ConnType / dest when predicate`) evaluates in the scope of the
+*enclosing part instance*, not the connection-being-placed. The
+connection has not yet been constructed; its `self` is unavailable. To
+reference the connection's own attrs in a gate, use a type-level
+`when:` clause inside the connection's body (§13.5.1.1) instead.
 
 #### 13.7.5 The `/expr` form
 
@@ -12685,6 +12720,12 @@ is O(N) where N is the buffer size — the producer copies the
 publishable state into the back buffer before the swap. The atomic
 swap itself is O(1).
 
+The "copy" here refers to the producer's accumulation work *across the
+publish cycle*, not a single bulk memcpy at swap time. Per §13.9.1,
+writes accumulate into the back buffer between publishes; the publish
+operation finalizes derived/recurrent evaluation into that same
+buffer, then performs the atomic pointer swap (O(1)).
+
 The producer's per-publish cost is therefore O(N) memcpy + one
 atomic operation. This cost is paid on the producer side, not on
 the consumer side; consumers are unaffected.
@@ -13362,8 +13403,11 @@ Changes safe to hot reload:
 Changes unsafe to hot reload (require full kernel restart):
 
 - Removing a signal/attr/derived that is currently referenced.
-- Changing the type of an existing cell.
 - Changing the connection topology of currently-active instances.
+
+Changing the type of an existing cell is supported via the diff's
+remove + add machinery per §13.14.2 and incurs cell-value loss for
+the affected cell.
 
 The implementation diagnoses unsafe changes at reload time and
 either rejects them (kernel keeps running old version) or restarts
@@ -13396,10 +13440,10 @@ by version X.Y compiles with and runs against the same X.Y
 toolchain. Forward and backward compatibility across major version
 boundaries are explicit, not implicit.
 
-The version is recorded in source files via `@version` directives
-(syntactic form: implementation-defined) and in the graph metadata
-header. Mismatches are detected at compile time and load time
-respectively.
+The exact syntactic form of the `@version` directive is reserved for
+a future spec revision; v1 implementations are not required to
+recognize it. Version metadata is recorded in the graph metadata
+header (§14.7); cross-version compatibility checks happen there.
 
 ---
 
