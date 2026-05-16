@@ -1826,8 +1826,7 @@ fn duplicate[T: Copy](value: T) -> (T, T):
 This category is distinct from two superficially similar things:
 
 - `Drop` (§14.9) is compiler-aware but carries a method (`fn drop`); it
-  is therefore not a marker trait. It belongs to a separate category of
-  compiler-aware traits with methods.
+  is therefore not a marker trait.
 - The empty `trait Marker` shown in §3.1 illustrates a *user-writable*
   pattern — empty traits whose only purpose is to act as a nominal tag.
   Such user-defined empty traits are perfectly valid, but they are not
@@ -2355,19 +2354,19 @@ inside expressions — they are bitwise operators. The grammar's context-based
 disambiguation determines which interpretation applies; user-visible
 overloading is avoided through positional context.
 
-The right-shift operator `>>` is a single operator whose behavior depends
-on the signedness of the left operand's type: signed types shift
-arithmetically (sign-extending); unsigned types shift logically (zero-
-extending). The compiler dispatches on the type via the `Shr` trait impl.
-No separate `>>>` operator exists. `>>` has no other meaning at the value
-level.
-
 At the value level, `|` is bitwise OR (dispatching through `BitOr`); the
 operator-application token is `|>` (§13.16), a distinct token. Bitwise
 `|` and `|>` share the same low precedence and left-associativity, so
 expressions mixing bitwise OR with higher-precedence arithmetic parse
 naturally; users mixing bitwise OR with operator application across the
 same expression should add parentheses to make grouping explicit.
+
+The right-shift operator `>>` is a single operator whose behavior depends
+on the signedness of the left operand's type: signed types shift
+arithmetically (sign-extending); unsigned types shift logically (zero-
+extending). The compiler dispatches on the type via the `Shr` trait impl.
+No separate `>>>` operator exists. `>>` has no other meaning at the value
+level.
 
 #### 4.4.3 Comparison operators
 
@@ -8924,16 +8923,16 @@ recurrent's scope, with the same purity rules as derived
 expressions (§13.2.3).
 
 Pedagogically, an arm guard is equivalent to inlining the
-predicate into the arm's `next_expr`:
+guard into the arm's `next_expr`:
 
 ```
 // guard form
 recurrent x: T = init
-  | on trigger_cell where predicate: expr
+  | on trigger_cell where guard: expr
 
 // inline-conditional form, observationally identical
 recurrent x: T = init
-  | on trigger_cell: if predicate then expr else x
+  | on trigger_cell: if guard then expr else x
 ```
 
 The two produce identical observable behavior, but the `where`
