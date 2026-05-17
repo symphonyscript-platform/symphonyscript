@@ -1873,10 +1873,22 @@ The traits eligible for automatic derivation are:
 - `Clone` — deep structural copy.
 - `Display` — default human-readable formatting.
 - `Debug` — default debug formatting (structural, compiler-defined).
+- `Copy` (§3.7.4) — language-defined marker trait; derivation performs the
+  structural Copy-eligibility check (every field's type must be `Copy`),
+  no method body is generated.
+- `Circularity` (§3.7.4) — language-defined marker trait; derivation is the
+  opt-in declaration, no method body is generated.
+- Any other language-defined marker trait (§3.7.4). The general rule:
+  every member of the language-defined marker traits category is
+  `@derive`-eligible. Derivation performs whatever structural check the
+  marker's category requires (none for Circularity; Copy-eligibility for
+  Copy) and emits the satisfies-flag with no method body.
 
-The set is fixed in the language; users cannot register new traits for
-`@derive`. Other traits require manual `fulfill` blocks. (A future extension
-may add user-definable derivation; not in v1.)
+The set is fixed in the language: the six structural-derivation traits
+above (Eq, Ord, Hash, Clone, Display, Debug) plus every member of the
+language-defined marker traits category (§3.7.4). Users cannot register
+new traits for `@derive`. Other traits require manual `fulfill` blocks.
+(A future extension may add user-definable derivation; not in v1.)
 
 #### 3.8.2 Structural derivation rules
 
@@ -1928,7 +1940,8 @@ registered constructor function.
 @literal_suffix("hz",    from_hz)
 @literal_suffix("khz",   from_khz)
 @literal_suffix("cents", from_cents)
-type Frequency: newtype i64
+type Frequency:
+  wraps i64
 
 fn from_hz[N: Numeric](n: N) -> Frequency:
   Frequency(n as i64)
@@ -4074,7 +4087,8 @@ type Email:
   satisfies TryFrom[string]
 
 fulfill TryFrom[string] for Email:
-  fn try_from(s: string) -> Result[Email, ValidationError]:
+  type Error = ValidationError
+  fn try_from(s: string) -> Result[Email, Error]:
     if is_valid_email(s):
       Ok(Email(s))
     else:
@@ -5884,9 +5898,8 @@ exposure of names is the job of declarations.
 
 Visibility specifiers (`public`, `shared`, `private`) are permitted on
 `alias type` declarations and follow the same rules as other declarations
-per §10.3. `alias type` is grammatically a visibility-bearing form even
-though §10.3's enumeration doesn't list it explicitly; this section is
-the authoritative statement.
+per §10.3 (which enumerates `alias type` among the visibility-bearing
+forms).
 
 #### 10.4.3 `use` is file-scope only
 
@@ -6738,6 +6751,11 @@ track lifetimes across statements, across function boundaries, or across
 data structures — the borrow exists only within one call expression and
 is gone by the next statement.
 
+These prohibitions admit a small set of narrow carve-outs documented in
+§11.9.5 for specific structural positions (iterator-type fields,
+Iterator::next returns, stdlib-privileged borrow-returning functions).
+Outside those positions the prohibitions are absolute.
+
 #### 11.9.2 Constraints during an active borrow
 
 While a borrow of value `v` is active (i.e., during the call expression
@@ -6756,9 +6774,13 @@ evaluated sequentially. The case it forbids is multi-argument calls where
 one argument borrows and another consumes:
 
 ```
+fn combine(a: &Vec[i32], b: Vec[i32]) -> ...  // a borrows; b consumes
+fn consume_fn(v: Vec[i32]) -> ...
+
 let v = make_vec()
-let result = combine(&v, consume_fn(v))   // ✗ compile error:
-                                           //   v borrowed and moved in the same expression
+let result = combine(v, consume_fn(v))   // ✗ compile error:
+                                          //   v borrowed (per combine's first parameter)
+                                          //   and moved (into consume_fn) in the same expression
 ```
 
 The compiler tracks within-expression borrow activity and reports
@@ -6770,9 +6792,12 @@ Multiple borrows of the same value in the same expression are permitted,
 because all borrows are read-only:
 
 ```
+fn compare(a: &Vec[i32], b: &Vec[i32]) -> bool
+fn max3(a: &Vec[i32], b: &Vec[i32], c: &Vec[i32]) -> &Vec[i32]  // illustrative; see §11.9.5 stdlib carve-out
+
 let v = make_vec()
-let r = compare(&v, &v)              // ✓ two borrows of v, both read-only
-let s = max3(&a, &a, &b)             // ✓ multiple borrows of a, one of b
+let r = compare(v, v)                // ✓ two borrows of v per compare's signature, both read-only
+let s = max3(a, a, b)                // ✓ three borrows total per max3's signature
 ```
 
 No aliasing-with-mutation hazard arises: nothing in the call expression
@@ -6925,8 +6950,8 @@ let closure = || sum(buf)                     // ✗ compile error:
 Non-`Copy` values flow through closures as arguments rather than captures:
 
 ```
-let closure = |b: &Vec[f32]| sum(b)          // takes a borrow argument
-let total = closure(&buf)                     // caller passes &buf each call
+let closure = |b: &Vec[f32]| sum(b)          // closure takes a borrow argument
+let total = closure(buf)                      // caller passes buf; borrow inserted per signature
 ```
 
 #### 11.10.2 Capture granularity
@@ -10374,7 +10399,7 @@ in the inline-parts ordering between `/Expr` and the inline pipes
 ```
 App my_app:
   Filter filter / "low-pass":
-    -> Cascade / next_filter when self.from.signal_active     // part-owned, gated
+    -> Cascade / next_filter when self.signal_active          // part-owned, gated on filter's own attr
   Filter next_filter / "high-pass"
   Monitor monitor
   WiresTo / monitor when self.debug_enabled                   // node-owned, gated
@@ -11109,13 +11134,20 @@ operation on the producer thread:
    publish. No new dirty bits are added during the rest of the
    publish cycle.
 2. **Compute evaluation order.** Topologically sort the per-publish
-   DAG (§13.10.3). Nodes in the DAG are: dirty derived expressions
-   plus recurrent arm expressions whose triggers fired this
-   publish. Edges are dependencies; recurrent reads are treated as
-   inputs (their previous-committed values), which breaks reactive
-   cycles. Reads of deriveds, signals, and attrs follow normal
-   dependency edges within this publish. Edges whose gate predicate
-   evaluates false do not propagate to destination outputs; see §13.8
+   DAG (§13.10.3). Nodes in the DAG are:
+    - Dirty derived expressions.
+    - Each recurrent **arm** whose triggers fired this publish. A
+      multi-arm recurrent (§13.2.4) contributes one DAG node per
+      fired arm, not one node per recurrent. The arm's `where` guard
+      expression (if present) contributes its own dependency edges
+      into the DAG — guard reads are not deferred to evaluation;
+      they participate in the topological sort.
+
+   Edges are dependencies; recurrent reads are treated as inputs
+   (their previous-committed values), which breaks reactive cycles.
+   Reads of deriveds, signals, and attrs follow normal dependency
+   edges within this publish. Edges whose gate predicate evaluates
+   false do not propagate to destination outputs; see §13.8
    (Conditional Activation) for the full semantics, including the
    gate-open transition rule.
 3. **Evaluate in topological order.** For each node in topo order,
@@ -11131,6 +11163,14 @@ operation on the producer thread:
    Derived behaviors write their results into the back buffer.
    Recurrent arm expression results are held aside (not yet
    visible to in-pass evaluation) until step 4.
+
+   **Arm selection at evaluation.** When a recurrent has multiple
+   arms whose triggers fired this publish, the kernel evaluates each
+   arm's `where` guard in topological order; the first arm (in
+   declaration order — §13.2.4) whose trigger fired AND whose guard
+   evaluates true wins. The winning arm's `next_expr` evaluates;
+   remaining arms' `next_expr` expressions are not evaluated this
+   publish.
 4. **Commit recurrent advancement.** Write the next values
    computed in step 3 into the recurrent cells. After this step,
    recurrent reads return their newly-advanced values.
@@ -12079,6 +12119,32 @@ non-defaulted one. This is consistent with §3.5.4.
 - Cells passed to `Signal[T]` parameters bind directly.
 - Values passed to `T` parameters are evaluated and snapshotted.
 
+##### 13.16.3.1 Signal[T] auto-deref in expression contexts
+
+When an expression context requires a value of type `T` and the
+supplied expression has type `Signal[T]`, the compiler implicitly
+inserts a read of the cell — `signal` is dereferenced to its current
+value. The provenance tracking (§13.11.1) records the cell read as a
+dependency, so the surrounding expression becomes reactive on changes
+to that cell.
+
+```
+operator example(s: Signal[f32]) -> Signal[f32]:
+  derived doubled: f32 = s * 2.0       // s: Signal[f32] auto-derefs to f32 in arithmetic context
+  doubled
+```
+
+The implicit deref applies wherever a `Signal[T]` flows into a
+position expecting `T`: arithmetic operands, function-call arguments
+typed `T`, attribute initial-value expressions, derived bodies,
+recurrent arm expressions. It does NOT apply when the context expects
+`Signal[T]` directly (operator parameters, function parameters typed
+`Signal[T]`, pipe-form `|>` LHS) — in those cases the cell reference
+is bound without dereferencing.
+
+The auto-deref is a compile-time mechanism; no runtime cost beyond
+the cell read itself.
+
 #### 13.16.4 Body
 
 The operator body is a sequence of reactive declarations followed
@@ -12106,14 +12172,13 @@ Not permitted in operator bodies:
 - Side-effecting statements. The body is reactive — declarative,
   not imperative.
 
-The final expression's type must be `T` (matching the operator's
-return type `Signal[T]`). The compiler synthesizes a derived cell
-holding the final expression's value, and exposes that cell as the
-operator instance's output.
-
-If the final expression is itself a cell (e.g., a recurrent named
-in the body), no synthesis is needed — that cell is the output
-directly.
+The final expression's type must be either `T` or `Signal[T]`
+(matching the operator's return type `Signal[T]`). If the type is
+`T`, the compiler synthesizes a derived cell holding the final
+expression's value, and exposes that cell as the operator instance's
+output. If the type is already `Signal[T]` (e.g., a named recurrent
+or derived in the body), that cell is the output directly — no
+synthesis needed.
 
 #### 13.16.5 Output
 
@@ -12680,8 +12745,10 @@ The arrangement is **single-producer, single-consumer (SPSC)**: one
 *producer role* writes, one *consumer role* reads, mediated by three
 buffer copies and an atomic current-pointer swap. The mapping of
 these roles to physical threads, and the trigger that initiates a
-publish, are specified in §13 (reactive system); §14 specifies only
-the mechanism.
+publish, are implementation-defined; §14 specifies only the
+mechanism. Typical native deployments map the producer role to the
+host's main thread and the consumer role to one or more application
+threads.
 
 The kernel maintains three copies of the buffer:
 
@@ -13089,9 +13156,10 @@ The triple-buffer mechanism (§14.3.3) operates in terms of two roles:
 §14 specifies only the mechanism of these roles — what each role is
 permitted to do, how the two coordinate via the triple buffer, and
 the costs of the swap and publish operations. The mapping of roles
-to physical threads, the choreography of what the producer does
-between publishes, and the trigger that initiates a publish are all
-specified in §13 (reactive system).
+to physical threads and the choreography of what the producer does
+between publishes are implementation-defined; the trigger that
+initiates a publish is specified in §13.9 (the kernel's evaluation
+cycle).
 
 #### 14.8.1 Thread-safety properties of the mechanism
 
@@ -13115,11 +13183,13 @@ depend on the mapping choice.
 
 #### 14.8.2 Behaviors invoked by the mechanism
 
-Reactive behaviors (derived expression bodies, recurrent arm
-expressions, functions called from reactive contexts) are invoked
-by the producer. The trigger, the selection of which behaviors are
-invoked, and the ordering of invocations within a publish cycle
-are all specified in §13.
+Reactive behaviors (derived expression bodies and recurrent arm
+expressions) are invoked by the producer. Functions called from
+reactive contexts are reactive-transparent per §13.11.2 and reached
+transitively from registered behaviors; they are not themselves
+separately invoked by the producer. The trigger, the selection of
+which behaviors are invoked, and the ordering of invocations within
+a publish cycle are all specified in §13.
 
 The behavior ABI (§14.6) is the contract between the producer and
 each invoked behavior. Each invocation receives a kernel handle
@@ -13342,8 +13412,7 @@ continues to see the tuple-return form. The translation is
 mechanical: each Ductus iterator implementation lowers to a Rust
 struct with a `next(&mut self) -> Option<Item>` method, plus a
 wrapper that exposes the tuple-return form for Ductus-internal
-use during compilation. By the time native code is produced, only
-the `&mut self` form remains.
+use during compilation.
 
 The final emitted Rust module contains only the `&mut self` form.
 The tuple-return wrapper exists in Ductus's IR during lowering for
@@ -13381,11 +13450,20 @@ file changes:
 
 1. The CLI's watch mode detects the change.
 2. The frontend re-runs on the changed file.
-3. The frontend computes content-addressed IDs for each behavior
-   per §14.6.4. Behaviors whose IDs are present in only the old
-   program are *removed*; behaviors whose IDs are present in only
-   the new program are *added*; behaviors whose IDs appear in both
-   are *carried over* unchanged.
+3a. **Behavior identity (§14.6.4).** The frontend computes
+   content-addressed IDs for each behavior per §14.6.4. Behaviors
+   whose IDs are present only in the old program are *removed*;
+   behaviors present only in the new program are *added*; behaviors
+   present in both are *carried over* unchanged.
+3b. **Cell identity (§13.14.2).** The kernel computes the cell-diff
+   by fully-qualified declaration path. Cells with matching path and
+   type carry forward (preserving values); new cells are added;
+   removed cells are dropped per §14.9.
+3c. **Operator instance identity (§13.16.10).** Operator instances
+   are matched by (enclosing scope, operator name, argument bindings)
+   with tolerance for positional moves within the same scope. Matched
+   instances preserve their internal cell state via 3b; unmatched
+   instances are dropped/added with the corresponding cell churn.
 4. For each added behavior:
    a. New bytecode is loaded into the kernel's behavior table at a
    fresh ID.
@@ -13405,17 +13483,20 @@ Changes safe to hot reload:
 
 - Body of an existing behavior (same signature, different
   implementation).
-- Adding new behaviors (new derived expressions, new functions).
+- Adding new behaviors (new derived expressions, new recurrent arm
+  bodies).
 - Adding new signals, attrs, derived declarations.
 
-Changes unsafe to hot reload (require full kernel restart):
-
-- Removing a signal/attr/derived that is currently referenced.
-- Changing the connection topology of currently-active instances.
-
-Changing the type of an existing cell is supported via the diff's
-remove + add machinery per §13.14.2 and incurs cell-value loss for
-the affected cell.
+Changes unsafe to hot reload require full kernel restart. The
+authoritative list of restart-required changes is in §13.14.4: any
+change to the reactive state buffer layout that would require
+relocating live cells. Operator-specific restart-required cases
+(operator signature changes, internal cell type changes) are
+enumerated in §13.16.10. All other changes — including cell removal
+(which the new source's compile gate verifies is unreferenced),
+cell type changes (handled via remove + add per §13.14.2), and
+connection topology changes (handled via remove + add per §13.14.2)
+— are reload-safe.
 
 The implementation diagnoses unsafe changes at reload time and
 either rejects them (kernel keeps running old version) or restarts
