@@ -12116,13 +12116,13 @@ recomputed.
 
 #### 13.14.4 Constraints on reloadability
 
-Some changes are not safely hot-reloadable and require full kernel
-restart:
+Some changes are not safely hot-reloadable in place and require a
+restart — either full-kernel or per-instance, depending on the change:
 
 - Changes to the layout of the reactive state buffer that would
   require relocating live cells. The reload's diff-and-apply
   approach handles incremental changes but not whole-buffer
-  reorganization.
+  reorganization. **Full-kernel restart required.**
 - Operator-specific changes that require restart for the affected
   operator instances:
   - Operator signature changes (parameters added, removed, or
@@ -12131,13 +12131,14 @@ restart:
   - Changes to a cell's `= initial` expression in a way that would
     alter its current state semantics.
 
-  See §13.16.10 for full operator-reload rules. These per-instance
-  restart cases are handled by recreating only the affected operator
-  instances; the rest of the kernel continues without restart.
+  See §13.16.10 for full operator-reload rules. **Per-instance
+  restart** suffices: the affected operator instances are
+  recreated; the rest of the kernel continues without restart.
 
-Implementations detect these cases during the diff phase and
-either reject the reload or schedule it as a restart-required
-reload. The kernel diagnoses which class of change occurred.
+Implementations detect these cases during the diff phase and either
+reject the reload or schedule the appropriate restart (full-kernel
+or per-instance). The kernel diagnoses which class of change
+occurred.
 
 ### 13.15 Interaction with the Implementation (§14)
 
@@ -12556,7 +12557,7 @@ operator body.
 cases (signature changes, internal cell type changes) trigger
 per-instance restart — only the affected operator instances are
 recreated, not the whole kernel. Other reload-unsafe changes
-(buffer-layout relocation per §13.14.4) require full kernel restart.
+(buffer-layout relocation per §13.14.4) require full-kernel restart.
 
 The reload-unsafe operator changes are:
 
@@ -13703,7 +13704,7 @@ Changes safe to hot reload:
 Changes unsafe for in-place hot reload fall into two classes per
 §13.14.4:
 
-- **Full kernel restart** is required for changes to the reactive
+- **Full-kernel restart** is required for changes to the reactive
   state buffer layout that would require relocating live cells.
 - **Per-instance restart** is sufficient for operator-specific
   cases (operator signature changes, internal cell type changes
@@ -13717,8 +13718,9 @@ via remove + add per §13.14.2), and connection topology changes
 no restart.
 
 The implementation diagnoses unsafe changes at reload time and
-either rejects them (kernel keeps running old version) or restarts
-the kernel cleanly. The choice is implementation-defined.
+either rejects them (kernel keeps running old version) or applies
+the appropriate restart — full-kernel or per-instance per §13.14.4
+— cleanly. The choice is implementation-defined.
 
 #### 14.11.4 Reload failure
 
