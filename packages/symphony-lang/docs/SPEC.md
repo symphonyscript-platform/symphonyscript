@@ -698,7 +698,7 @@ trait Display:
 
 trait Add[Rhs = Self]:
   type Output = Self
-  fn add(left: Self, right: Rhs) -> Output
+  fn add(a: Self, b: Rhs) -> Output
 
 trait Producer:
   type Item
@@ -758,7 +758,7 @@ An associated type may declare a default value:
 ```
 trait Add[Rhs = Self]:
   type Output = Self
-  fn add(left: Self, right: Rhs) -> Output
+  fn add(a: Self, b: Rhs) -> Output
 ```
 
 When an implementation does not bind `Output` explicitly, the default applies.
@@ -889,7 +889,7 @@ trait From[T]:
 
 trait Add[Rhs = Self]:
   type Output = Self
-  fn add(left: Self, right: Rhs) -> Output
+  fn add(a: Self, b: Rhs) -> Output
 ```
 
 Type parameters on a trait are part of the trait's identity at the
@@ -969,13 +969,13 @@ trait Action:
   const type: string
   attr enabled: bool = true
 
-node log:
+node Log:
   satisfies Action
   const type: string = "@action/log"     -- supplies the no-default const
   -- enabled inherits the trait's default (true) automatically
   default attr message: string
 
-node delay:
+node Delay:
   satisfies Action
   const type: string = "@action/delay"
   attr enabled: bool = false              -- overrides the trait's default
@@ -1267,6 +1267,12 @@ fulfill Add for i32:
   fn add(left: i32, right: i32) -> i32:
     // built-in integer addition
 ```
+
+Note: with the §4.9.1 default `type Output = Self`, the `type Output =
+i32` binding shown here is explicit but optional. It could be omitted;
+the default applies. Explicit binding is shown for clarity in examples
+and remains valid where the implementer wants to make the choice
+visible.
 
 An associated type with a default value in the trait declaration may be
 omitted in the `fulfill` block; the default applies. An associated type
@@ -1962,6 +1968,12 @@ For an enum type, derivation operates variant-by-variant:
 For a newtype (§6.3), `@derive` may delegate to the underlying type
 or operate structurally over fields, depending on the newtype's shape; see
 the newtype section for details.
+
+For language-defined marker traits (`Copy`, `Circularity`, and any future
+markers per §3.7.4): derivation performs the marker's structural check
+(Copy-eligibility for `Copy`; none for `Circularity`) and emits the
+satisfies-flag — no method body is generated. The marker-trait derivation
+is purely a structural opt-in.
 
 Derivation requires every field's (or payload's) type to itself satisfy the
 trait being derived. `@derive(Eq)` on `type Foo: x: SomeType` requires
@@ -4967,8 +4979,8 @@ accepts either signature; users choose based on what callers need.
 
 ### 8.9 Error Handling in the Reactive Context
 
-The reactive system (deferred to a later section) uses the same
-two-track failure model. A trap inside a `derived` expression's
+The reactive system (specified in §13.2.3 for derived error
+semantics) uses the same two-track failure model. A trap inside a `derived` expression's
 computation propagates as a normal trap — the reactive system does not
 catch traps. A `derived` declaration whose expression has type
 `Result[T, E]` or `Option[T]` produces a reactive value of that type;
@@ -6805,8 +6817,9 @@ A borrow may not be:
   language has no way to write down a "binding that holds a borrow"; the
   `&` form is not valid in `let`/`mut` declarations.
 - **Returned from a function.** A function's return type is always an
-  owned value or a `Copy` value, never a borrow. The `&` form does not
-  appear in return-type position.
+  owned value or a `Copy` value. The `&` form does not appear in
+  return-type position, except for the narrow carve-outs in §11.9.5
+  (`Iterator::next` and stdlib-privileged borrow-returning functions).
 - **Stored in a record field, enum variant payload, or tuple component.**
   Compound types contain owned values, never borrows.
 - **Captured by a closure.** Closures capture by value (§11.10); borrows
@@ -6902,7 +6915,7 @@ The borrow-position list below covers both permitted and forbidden
 cases; readers may treat the bullets as a complete enumeration.
 
 `&T` is grammatically valid only in *parameter positions*. The language
-recognizes five positions, each with a clear, lexically-bounded borrow
+recognizes six positions, each with a clear, lexically-bounded borrow
 lifetime:
 
 - **Function parameter type signatures** (this section, §11.7.4 and
@@ -6928,6 +6941,12 @@ lifetime:
   the compiler verifies that the source outlives the iterator at
   construction. This carve-out is bounded to fields of types satisfying
   `Iterator` — it does not generalize to arbitrary record fields.
+- **`Iterator::next` return values** (§12.7.4). The `Iterator` trait's
+  `next` method may return `(Option[&T], Self)` when the iterator's
+  `Item` type is a borrow. This is the value-side counterpart to the
+  iterator-type-field carve-out above: the iterator stores the borrow in
+  its source field, and `next` exposes that borrow as the yielded item.
+  The borrow's lifetime is bounded by the enclosing for-loop expression.
 - **Stdlib-privileged borrow-returning function signatures** (§3.7.3).
   The language reserves the right to provide functions in the standard
   library whose return type is a borrow into one of their arguments — for
@@ -6938,7 +6957,7 @@ lifetime:
   language-privileged stdlib functions enumerated in §3.7.3; user-defined
   functions cannot declare borrow return types.
 
-All five positions share the same lifetime discipline: the borrow lives
+All six positions share the same lifetime discipline: the borrow lives
 for the scope of one parameter-binding occurrence (one call expression,
 one iteration body, or one for-loop expression respectively). The
 compiler does not need lifetime parameters or cross-statement tracking;
@@ -6955,8 +6974,9 @@ forbidden in:
 - Enum payloads: `Variant(&T)` is a parse error.
 - Tuple components, *except* the tuple appearing as the return type of
   `Iterator::next` per §12.7.4: `(&i32, i32)` is generally a parse error.
-- Function return types, *except* `Iterator::next` per §12.7.4:
-  `fn f(...) -> &T` is generally a parse error.
+- Function return types, *except* `Iterator::next` per §12.7.4 and
+  stdlib-privileged borrow-returning functions per the carve-out above
+  (`element_at`, etc.): `fn f(...) -> &T` is generally a parse error.
 - Closure parameter types in stored closure types (deferred).
 - Trait associated types, *except* `Iterator::Item` per §12.7.4:
   `type Item = &T` is generally a parse error.
@@ -7076,7 +7096,7 @@ counter = counter + 1                         // mut continues to evolve
 
 For closures that must track live updates of changing state, the reactive
 system is the appropriate mechanism. The reactive system is specified in
-a deferred section.
+§13 (see §13.2 for reactive cell declarations).
 
 #### 11.10.4 Body unrestricted
 
@@ -7203,8 +7223,8 @@ parameters. The borrow lifetime remains call-scoped as for direct calls.
 
 ### 11.14 Interaction with Reactivity
 
-The reactive system is specified in a deferred section. The interaction
-with local mutability follows two principles, recorded here for
+The reactive system is specified in §13. The interaction with local
+mutability follows two principles, recorded here for
 forward-compatibility:
 
 - **Reactive expressions (`derived` and analogous) are pure-evaluated.**
@@ -7223,7 +7243,7 @@ forward-compatibility:
 
 The reactive boundary is one of the "global" scopes referenced in
 §11.1's principles. The full specification of how values cross this
-boundary is deferred to the reactive-system section.
+boundary is given in §13.11 (the reactivity boundary).
 
 ---
 
@@ -8388,8 +8408,8 @@ per call site.
 
 ### 12.13 Interaction with Reactivity (Forward-Looking)
 
-The reactive system is specified in a deferred section. Loops in
-reactive contexts follow §11.14:
+The reactive system is specified in §13. Loops in reactive contexts
+follow §11.14:
 
 - A `derived` expression's body may contain loops. Each evaluation of
   the derived expression runs the loop fresh. The loop's local
@@ -8401,7 +8421,8 @@ reactive contexts follow §11.14:
 - The `while` loop's condition may depend on reactive values, but
   reactive updates do not interrupt an in-progress loop iteration.
 
-Full specification is deferred to the reactive-system chapter.
+Full specification is given in §13 (see §13.9 for the evaluation
+cycle and §13.11 for the reactivity boundary).
 
 ### 12.14 Restrictions and Edge Cases
 
@@ -9240,8 +9261,8 @@ A const is accessible through three syntactic forms:
 ```
 -- Type-level access lets callers read a type's const without an
 -- instance. Useful for compile-time tables and dispatch keys.
-const ACTION_LOG_TAG: string = log::type        -- "@action/log"
-const ACTION_DELAY_TAG: string = delay::type    -- "@action/delay"
+const ACTION_LOG_TAG: string = Log::type        -- "@action/log"
+const ACTION_DELAY_TAG: string = Delay::type    -- "@action/delay"
 
 fn tag_for[T: Action](_: T) -> string:
   T::type           -- type-level read; no instance needed at runtime
@@ -9613,9 +9634,11 @@ which is a structural iterable of compile-time-known length range:
 
 A node without a `parts` clause may still contain children of any
 node type (per §13.3.3); inside its body, only the heterogeneous
-`self.parts` form is available (no type-bulk or cardinality-bounded
-forms). A node with a `parts` clause may contain children at runtime
-according to the declared cardinality.
+`self.parts` form is available, and it requires an explicit trait
+bound on the iteration variable (`for p: SomeTrait in self.parts`)
+per §13.4.1 — type-bulk and cardinality-bounded forms are not
+available. A node with a `parts` clause may contain children at
+runtime according to the declared cardinality.
 
 #### 13.3.4 `in` and `out` clauses
 
@@ -11258,13 +11281,17 @@ operation on the producer thread:
    Recurrent arm expression results are held aside (not yet
    visible to in-pass evaluation) until step 4.
 
-   **Arm selection at evaluation.** When a recurrent has multiple
-   arms whose triggers fired this publish, the kernel evaluates each
-   arm's `where` guard in topological order; the first arm (in
-   declaration order — §13.2.4) whose trigger fired AND whose guard
-   evaluates true wins. The winning arm's `next_expr` evaluates;
-   remaining arms' `next_expr` expressions are not evaluated this
-   publish.
+   **Arm selection at evaluation.** Multi-arm recurrent evaluation
+   proceeds in two stages within the publish cycle:
+   1. **Guard evaluation order**: each arm's `where` guard expression
+      evaluates in topological order over the per-publish DAG
+      (alongside other dirty deriveds). This produces a fired/not-fired
+      bit per arm.
+   2. **Arm selection order**: among the arms with fired triggers AND
+      guards evaluated to true (or no guard), the first one in
+      declaration order (per §13.2.4) wins. Only the winning arm's
+      `next_expr` evaluates; remaining arms' `next_expr` expressions
+      are skipped this publish.
 4. **Commit recurrent advancement.** Write the next values
    computed in step 3 into the recurrent cells. After this step,
    recurrent reads return their newly-advanced values.
@@ -11406,13 +11433,17 @@ whatever was committed at the end of the previous publish, not
 what will be committed at the end of this publish. This breaks
 all valid reactive cycles, producing a DAG.
 
-This rule applies to reads of recurrent cells from any expression —
-derived bodies, recurrent `next_expr` bodies, recurrent `where`
-guards. A `where` guard's reads are NOT treated as inputs (the guard
-evaluates within the publish to determine arm selection per §13.9.2
-step 2's clarification); only the recurrent cell's own value, when
-read by other expressions, is treated as the previous-publish input
-that breaks cycles.
+Reads OF a recurrent cell — from any expression context (derived
+bodies, recurrent arm `next_expr` bodies, `where` guards) — always
+return the previous-committed value. This is the rule that breaks
+reactive cycles.
+
+Reads FROM a `where` guard (its own input cells) are NOT treated as
+previous-publish inputs. The guard evaluates within the current
+publish to determine whether its arm fires (per §13.9.2 step 2). The
+two rules are not in conflict: "reads OF recurrents" refers to what
+value a recurrent cell yields when read; "reads FROM a guard" refers
+to which cells the guard's expression itself reads.
 
 The per-publish DAG is what gets topologically sorted in §13.9.2
 step 2.
@@ -12521,15 +12552,19 @@ operator body.
   recurrent/derived reload safety.
 - Adding a new internal cell — new cells are initialized fresh.
 
-**Reload-unsafe changes (require full kernel restart per §13.14.4 —
-the kernel does not support per-instance restart as a separate
-mechanism):**
+**Reload-unsafe changes** are handled per §13.14.4: operator-specific
+cases (signature changes, internal cell type changes) trigger
+per-instance restart — only the affected operator instances are
+recreated, not the whole kernel. Other reload-unsafe changes
+(buffer-layout relocation per §13.14.4) require full kernel restart.
+
+The reload-unsafe operator changes are:
 
 - Operator signature changes (parameters added, removed, or
-  retyped; return type changed).
-- Internal cell type changes.
+  retyped; return type changed) — per-instance restart.
+- Internal cell type changes — per-instance restart.
 - Changes to a cell's `= initial` expression in a way that would
-  alter its current state semantics.
+  alter its current state semantics — per-instance restart.
 
 **Call-site changes:**
 
@@ -12919,8 +12954,9 @@ The producer's per-publish cost is therefore O(N) memcpy + one
 atomic operation. This cost is paid on the producer side, not on
 the consumer side; consumers are unaffected.
 
-When the producer chooses to publish (the trigger for which is
-specified in §13) is outside the scope of this section.
+When the producer chooses to publish (the trigger is specified in
+§13.9 — the kernel's evaluation cycle) is outside the scope of this
+section.
 
 ##### 14.3.3.2 Swap operation
 
@@ -13201,7 +13237,7 @@ behaviors by ID; debug names appear only in diagnostic output.
 Behaviors are invoked by the kernel; the specific thread that
 invokes each behavior is the producer-role thread, which the kernel
 maps to a specific OS thread at startup (implementation-defined per
-§14.5.2). Ductus source does not specify thread roles.
+§14.8.1). Ductus source does not specify thread roles.
 
 Ductus source code does not encounter cross-thread concerns:
 behaviors are thread-safe by construction (no shared mutable state
@@ -13287,7 +13323,7 @@ The triple-buffer mechanism (§14.3.3) operates in terms of two roles:
   do not go through the triple-buffer pointer swap. What the
   producer writes (signal/attr updates from host API, derived and
   recurrent arm expression results) and what triggers it to publish
-  are specified in §13.
+  are specified in §13.9.
 - **Consumer**: the role that reads the current buffer via the swap
   operation. Loads the current pointer and reads cells from the
   buffer it points to. Never writes; never invokes behaviors. There
@@ -13341,8 +13377,8 @@ via the handle. Behaviors are thread-safe by construction
 
 #### 14.8.3 Why Ductus behaviors are thread-safe by construction
 
-Regardless of the role-to-thread mapping in §13, Ductus source
-code never sees cross-thread concerns:
+Regardless of the role-to-thread mapping (implementation-defined per
+§14.8.1), Ductus source code never sees cross-thread concerns:
 
 - No shared mutable state outside reactive cells.
 - Reactive cells are coordinated through the triple-buffer
@@ -13351,8 +13387,8 @@ code never sees cross-thread concerns:
 - Closure captures are by-value Copy (§11.10), no shared mutability.
 
 A Ductus program does not declare thread affinity; it does not
-need to. The kernel determines (per §13) which thread plays which
-role.
+need to. The kernel determines (implementation-defined per §14.8.1)
+which thread plays which role.
 
 ### 14.9 Drop Semantics
 
@@ -13614,12 +13650,32 @@ file changes:
    with tolerance for positional moves within the same scope. Matched
    instances preserve their internal cell state via 3b; unmatched
    instances are dropped/added with the corresponding cell churn.
-4. For each added behavior:
-   a. New bytecode is loaded into the kernel's behavior table at a
-   fresh ID.
-   b. Graph metadata edges and cell allocations referencing the new
-   behavior's ID become live.
-   c. Subsequent invocations dispatch through the new behavior's ID.
+4. **Apply additions.**
+   - For each added behavior: register in the behavior table at its
+     content-addressed ID; graph metadata edges and cell allocations
+     referencing the new behavior's ID become live; subsequent
+     invocations dispatch through the new behavior's ID.
+   - For each added cell: allocate space in the reactive state buffer
+     and initialize per the new source.
+   - For each added operator instance: allocate internal cell state
+     and initialize per the new source.
+
+5. **Apply removals.**
+   - For each removed behavior: deregister from the behavior table.
+   - For each removed cell: invoke drop per §14.9 in
+     reverse-declaration order.
+   - For each removed operator instance: drop internal cells per
+     §14.9.
+
+6. **Run re-initialization evaluation pass.** For each derived whose
+   behavior body changed (different content-addressed ID), recompute
+   its initial value from current inputs. Deriveds whose body is
+   unchanged retain their values.
+
+7. **Publish the reloaded state** (atomic current-pointer swap).
+
+8. **Release the reload lock.** Resume signal/attr writes; apply any
+   queued writes to the new state.
 
 #### 14.11.2 State preservation
 
