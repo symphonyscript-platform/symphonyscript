@@ -6293,12 +6293,12 @@ ownership at every binding site; using a value after ownership has been
 transferred is a compile error.
 
 *Exception — reference-typed reactive bindings.* `Signal[T]` parameters
-(§13.2.8) and reactive composite bindings (§13.2.9.6) name cells held
-by the kernel rather than stack-owned values; multiple live aliases
-to the same cell may coexist without violating single ownership.
-Materialization to a concrete value at the boundaries of §13.2.9.7
-produces an instance subject to standard single-ownership rules from
-that point on.
+(§13.2.8) and reactive composite bindings (§13.2.9.6) name reactive
+cells (specified by §13, §14) rather than stack-owned values;
+multiple live aliases to the same cell may coexist without violating
+single ownership. For reactive composites, materialization at the
+boundaries of §13.2.9.7 produces a concrete instance subject to
+standard single-ownership rules from that point on.
 
 **Single writer.** A `mut` binding is the only path through which its
 underlying value may be mutated. While a borrow of the value is active,
@@ -9686,8 +9686,7 @@ boundaries force materialization to a concrete value:
   ```
   // vec: Vec[PeakResult]
   let vec2 = vec.push(A)             // A materialized at push time;
-                                      // vec2 holds a concrete snapshot
-                                      // (consume-and-rebind per §11.11)
+                                      // vec2 holds a concrete snapshot.
   ```
 
   The pushed element is a concrete snapshot; subsequent changes to
