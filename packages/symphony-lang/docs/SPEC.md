@@ -11679,7 +11679,7 @@ from the type's size and shape:
 
 - Per-type pools. Each reactive cell type that requires handle-based
   storage has its own pool, sized at kernel construction based on
-  graph metadata.
+  graph specification.
 - The cell still occupies one i64 slot in the reactive state buffer
   (the handle); the triple-buffer atomic swap publishes the handle
   unchanged.
@@ -11879,7 +11879,7 @@ The kernel's lifecycle proceeds in phases:
 
 **Startup:**
 
-1. Load metadata (per §15.4).
+1. Load the graph specification (per §15.4).
 2. Allocate the reactive state buffer (per §14.3).
 3. Initialize all reactive cells (signals, attrs, recurrents,
    deriveds) and evaluate all `when` predicates in topological order
@@ -11963,7 +11963,7 @@ the producer thread to apply — that's a host-application concern,
 not a kernel concern.
 
 Signal IDs and instance IDs are obtained at compile time from the
-graph metadata (each signal and each placement has a stable ID
+graph specification (each signal and each placement has a stable ID
 assigned during compilation, per §15.4).
 
 #### 13.13.3 `kernel.write_attr`
@@ -12183,7 +12183,7 @@ specifies the implementation model. Cross-references:
   ABI of §14.6: a uniform `fn(kernel: &KernelHandle, instance:
   InstanceId) -> ()` signature, with stateless semantics and
   content-addressed identity (§14.6.4).
-- The graph metadata (§15.4) carries the structural information
+- The graph specification (§15.4) carries the structural information
   the kernel needs to construct the reactive state buffer, build
   dependency edges, distinguish attr cells from recurrent cells,
   and dispatch behaviors.
@@ -12458,9 +12458,9 @@ the instance. For reload-identity purposes (§13.16.10), the same
 identity scheme is used, with tolerance for positional moves within
 the same scope; the binding name has no role.
 
-##### 13.16.6.2 Graph metadata
+##### 13.16.6.2 Graph specification
 
-Operator instances contribute to the kernel's graph metadata
+Operator instances contribute to the kernel's graph specification
 (§15.4) the same way node placements and connection placements do.
 Each instance's internal cells (recurrents, deriveds, synthesized
 cells from the operator body and from `let` bindings) are counted
@@ -12647,7 +12647,7 @@ reactive-transparent in the standard way.
 recurrents may hold dynamic-size types (`Vec[T]`, etc.). Storage
 follows the same pool-with-handle mechanism. The operator's
 instance-specific allocation contributes to per-type pool sizing
-in graph metadata.
+in graph specification.
 
 #### 13.16.12 Diagnostics
 
@@ -12760,7 +12760,7 @@ The frontend performs:
 3. **Borrow and ownership checking** per §11. Catches use-after-move,
    borrow conflicts, and other ownership violations.
 4. **Reactive analysis** per §13. Identifies reactive declarations,
-   computes dependency graphs, and extracts graph metadata.
+   computes dependency graphs, and extracts graph specification.
 5. **Monomorphization** per §2.3. Resolves all generic instantiations
    in Ductus before lowering. Ductus's compiler does not delegate
    monomorphization to Rust; emitted code is fully concrete.
@@ -12797,7 +12797,7 @@ Characteristics:
 - Compilation time is dominated by `rustc` (typically seconds to tens
   of seconds for non-trivial programs).
 - Produces a single executable embedding both the compiled behaviors
-  and the graph metadata (§15.4).
+  and the graph specification (§15.4).
 - Does not support hot reload at runtime; rebuild is required to
   change the program.
 
@@ -13068,7 +13068,7 @@ work is bounded by the value's size.
 
 **Initial allocation:**
 
-Pool sizes are chosen at kernel construction based on graph metadata
+Pool sizes are chosen at kernel construction based on graph specification
 (static count of cells per type) plus a configurable headroom for
 versioning. Pools may grow at runtime if the configured headroom is
 exceeded; growth is amortized but not guaranteed wait-free. Hosts
@@ -13476,7 +13476,7 @@ file changes:
    instances are dropped/added with the corresponding cell churn.
 4. **Apply additions.**
    - For each added behavior: register in the behavior table at its
-     content-addressed ID; graph metadata edges and cell allocations
+     content-addressed ID; graph specification edges and cell allocations
      referencing the new behavior's ID become live; subsequent
      invocations dispatch through the new behavior's ID.
    - For each added cell: allocate space in the reactive state buffer
@@ -13558,12 +13558,12 @@ applied, never a mix.
 
 ### 14.10 Versioning
 
-Ductus's source format, graph metadata format, behavior ABI, and
+Ductus's source format, graph specification format, behavior ABI, and
 kernel build are versioned together. Each Ductus release is a
 matched set:
 
 - Ductus source format version.
-- Graph metadata schema version.
+- Graph specification schema version.
 - Behavior ABI version.
 - Kernel binary version.
 
@@ -13574,7 +13574,7 @@ boundaries are explicit, not implicit.
 
 The exact syntactic form of the `@version` directive is reserved for
 a future spec revision; v1 implementations are not required to
-recognize it. Version metadata is recorded in the graph metadata
+recognize it. Version metadata is recorded in the graph specification
 header (§15.4); cross-version compatibility checks happen there.
 
 ---
