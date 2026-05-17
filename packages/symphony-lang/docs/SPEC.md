@@ -612,7 +612,7 @@ value.
 
 #### 2.4.5 Negative literal parsing
 
-The integer-literal-with-sign sequence `-N` is parsed as a single signed
+A negative integer literal `-N` is parsed as a single signed
 literal token for type-checking purposes. `let x: i8 = -5` checks the value
 `-5` against `i8`'s range; it does not apply the runtime unary-minus operator
 to a literal `5` (which would conflict with the rule that unary `-` on
@@ -971,8 +971,8 @@ Restrictions:
 ### 3.2 Conformance Declarations (`satisfies`)
 
 A type declares conformance to a trait by including a `satisfies` clause in
-its body (grammar §3.5 for records, §3.6 for enums, §3.8 for nodes, §3.9 for
-connections):
+its body (grammar §3.5 for records, grammar §3.6 for enums, grammar §3.8
+for nodes, grammar §3.9 for connections):
 
 ```
 type Person:
@@ -2711,8 +2711,8 @@ infinity-and-NaN semantics already define the overflow behavior, and
 modular or clamping interpretations on float values would conflict with the
 established standard. The checked variant `+?` etc. on floats is defined for
 parity with integer checked operators and returns `None` if the operation
-produces NaN or infinity (implementation detail to be confirmed when stdlib
-is specified).
+produces NaN or infinity (normative; see §4.7.3 for the analogous NaN
+handling on saturating casts).
 
 #### 4.6.7 Integer division by zero
 
@@ -2771,7 +2771,8 @@ language conventions). Out-of-range float values (NaN, infinity, values
 larger than the integer's range) follow the variant's policy: `as` traps,
 `as%` is implementation-defined (truncation modulo the destination range
 is the typical choice), `as|` saturates to the destination's range bounds
-(NaN treated as 0), `as?` returns `None`.
+(NaN treated as 0, parallel to §4.6.6's checked-arithmetic NaN handling),
+`as?` returns `None`.
 
 #### 4.7.4 Trait-based forms
 
@@ -6353,6 +6354,8 @@ The following types automatically implement `Copy`:
 - `string` (see §11.6).
 - `duration`, `instant` (see §9.4; both are i64-sized scalars).
 - Tuples whose components are all `Copy`.
+- `Range[T]` when `T: Copy` (language-privileged implementation
+  per §3.7.3).
 
 #### 11.4.2 Opt-in via `@derive(Copy)`
 
@@ -6802,6 +6805,9 @@ fn length(v: &Vec[i32]) -> isize:
 ```
 
 #### 11.9.5 Where borrows may appear
+
+The borrow-position list below covers both permitted and forbidden
+cases; readers may treat the bullets as a complete enumeration.
 
 `&T` is grammatically valid only in *parameter positions*. The language
 recognizes four positions, each with a clear, lexically-bounded borrow
@@ -7808,9 +7814,9 @@ implicitly.
 Because the for-loop's iterator binding is owned exclusively by the loop
 and is reassigned only by the loop's internal desugaring, the iterator's
 ownership is *linear* (single owner at every moment, no aliasing). The
-compiler is required to recognize this pattern and emit in-place
-cursor mutation — equivalent to the machine code produced for `&mut self`
-methods in languages with mutable references.
+compiler recognizes this pattern and emits in-place cursor mutation —
+equivalent to the machine code produced for `&mut self` methods in
+languages with mutable references.
 
 Specifically, when:
 
@@ -7826,20 +7832,17 @@ Condition 3 holds by construction for the for-loop's internal
 desugaring: the desugaring emits one statement that calls `next`,
 destructures the returned tuple via pattern match, and rebinds the
 iterator location to `NewIter` — all in one expression with no other
-references possible. The compiler treats this pattern as a recognized
-form.
+references possible.
 
-When the three conditions hold, the compiler may compile the call as:
+When the three conditions hold, the compiler compiles the call as:
 pass a pointer to the iterator's state, mutate the cursor in place,
 return only the item value in registers. The "consumed" and "returned"
 iterator are the same memory location; no copy occurs.
 
 This optimization is a *required* property of conforming implementations,
-not an optional optimization. The tuple-return trait shape is the source-
-level pattern; the linear-ownership compilation is the performance
-guarantee. Implementations that fail to optimize this pattern produce
-code with iterator-cursor copies on every iteration, which is unacceptable
-for the workloads loops are designed to serve.
+not an optional optimization. The tuple-return trait shape is the
+source-level pattern; the linear-ownership compilation is the performance
+guarantee.
 
 #### 12.7.3 Implementing `Iterator`
 
@@ -11808,32 +11811,16 @@ kernel.transaction(|tx| {
 })
 ```
 
-Provides atomic grouping of writes. Properties:
+Provides atomic grouping of writes.
 
-- The transaction's closure executes synchronously.
-- Writes within the closure accumulate in the back buffer; a
-  snapshot of the pre-transaction back-buffer state is preserved
-  to support `tx.abort()`.
-- On successful completion, the writes are committed (the snapshot
-  is discarded).
-- **On panic within the closure**, the trap-track semantics of
-  §13.12.1 apply: the process aborts. There is no rollback; the
-  back-buffer state at the moment of abort is irrelevant because
-  the process is terminating. Atomicity of grouped writes is
-  trivially preserved by process death. The savepoint mechanism
-  exists only for `tx.abort()`, not for panic recovery.
-- **On `tx.abort()`** (called from within the closure), the back
-  buffer is rolled back to the pre-transaction snapshot. The
-  closure returns normally; no panic is raised. This is the only
-  rollback path.
-- **Nesting:** nested transactions flatten — only the outermost
-  `kernel.transaction` commits. Inner `kernel.transaction` calls
-  are no-ops with respect to commit; their writes accumulate into
-  the outer transaction and commit together at outer close.
-
-Transactions provide *atomicity of grouped writes*. They do not
-publish; dirty cells remain dirty until the next `kernel.publish()`,
-which performs evaluation and consumer visibility.
+The transaction's closure executes synchronously. Writes accumulate
+in the back buffer and commit atomically at closure completion. The
+full semantic rules for atomicity, panic-on-abort, nesting flattening,
+and `tx.abort()` rollback are specified in §13.9.4; the API surface
+here is the syntactic invocation form. Transactions provide
+*atomicity of grouped writes*; dirty cells remain dirty until the
+next `kernel.publish()`, which performs evaluation and consumer
+visibility.
 
 #### 13.13.6 `kernel.swap`
 
@@ -12259,9 +12246,9 @@ a + b |> op            // parses as (a + b) |> op
 a |> op1 |> op2        // parses as (a |> op1) |> op2
 ```
 
-Bitwise `|` (§4.4.2) shares this low precedence with `|>`; mixed
-arithmetic and bitwise-OR expressions may need parentheses for the
-desired grouping.
+Bitwise `|` (§4.4.2) has the same low precedence as `|>`. Expressions
+mixing bitwise OR with operator application may need parentheses for
+the desired grouping.
 
 **`|>` exclusivity:** `|>` may only apply operators. Using `|>`
 with a `fn` is a compile error:
@@ -12909,13 +12896,20 @@ handles; the pool holds the data. This separation allows:
 The pool's allocation and refcount operations are atomic but may
 block briefly under contention. These operations are performed by
 the producer role (§14.8); the consumer role only reads via handles,
-which is wait-free. The role-to-thread mapping is specified in §13.
+which is wait-free. The role-to-thread mapping is implementation-defined:
+in typical native deployments the host's main thread plays the producer
+role and one or more application threads play the consumer role; other
+deployments may assign a kernel-configured thread to the producer role.
+The mechanism (§14.3.3, §14.8) does not depend on the mapping choice.
 
 ### 14.6 The Behavior ABI
 
-Every executable unit of a Ductus program — a derived expression
-body, a function body called from a reactive context, a modulation
-function — is exposed to the kernel via a uniform **behavior ABI**.
+Each reactive behavior — a `derived` expression body or a `recurrent`
+arm body — is exposed to the kernel via a uniform **behavior ABI**.
+Functions called from reactive bodies are reactive-transparent per
+§13.11.2: they compile to ordinary Rust functions (per §14.10) reached
+transitively from the registered behaviors, not as separately-registered
+behaviors of their own.
 
 #### 14.6.1 Behavior signature
 
@@ -12938,9 +12932,12 @@ kernel cells. Return value is unit; all effects are side effects
 through the kernel handle.
 
 This uniform shape means the kernel maintains a single function
-pointer table: `Vec<fn(*const KernelHandle, u64) -> ()>` (in the
-reference Rust implementation). The kernel invokes behaviors by index
-into this table; no per-behavior dispatch logic is needed.
+pointer table: `Vec<fn(&KernelHandle, u64) -> ()>` (in the
+reference Rust implementation; implementations facing rust-fn-pointer
+lifetime issues may use `*const KernelHandle` with appropriate
+unsafe-block discipline at the dispatch site). The kernel invokes
+behaviors by index into this table; no per-behavior dispatch logic
+is needed.
 
 #### 14.6.2 Statelessness
 
@@ -12995,9 +12992,10 @@ for human consumption.
 #### 14.6.5 Thread invocation
 
 Behaviors are invoked by the kernel; the specific thread that
-invokes each behavior is determined by the role assignment
-specified in §13 (reactive system). Ductus source does not
-specify thread roles.
+invokes each behavior is determined by the producer-role thread,
+which is the kernel's reactive evaluation thread per §14.8. The
+mapping of producer to a specific OS thread is implementation-defined.
+Ductus source does not specify thread roles.
 
 Ductus source code does not encounter cross-thread concerns:
 behaviors are thread-safe by construction (no shared mutable state
@@ -13108,8 +13106,12 @@ By construction of the SPSC triple buffer:
 - No locks are required, no spin-wait is required, and reads are
   wait-free.
 
-These properties hold regardless of the role-to-thread mapping
-specified in §13.
+These properties hold regardless of the role-to-thread mapping, which
+is implementation-defined: in typical native deployments the host's
+main thread plays the producer role and one or more application threads
+play the consumer role; other deployments may assign a kernel-configured
+thread to the producer role. The mechanism (§14.3.3, §14.8) does not
+depend on the mapping choice.
 
 #### 14.8.2 Behaviors invoked by the mechanism
 
@@ -13342,6 +13344,12 @@ struct with a `next(&mut self) -> Option<Item>` method, plus a
 wrapper that exposes the tuple-return form for Ductus-internal
 use during compilation. By the time native code is produced, only
 the `&mut self` form remains.
+
+The final emitted Rust module contains only the `&mut self` form.
+The tuple-return wrapper exists in Ductus's IR during lowering for
+type-system consistency with the source-level Iterator trait, and
+is eliminated before Rust code generation. No runtime overhead from
+the dual representation reaches the emitted binary.
 
 This translation is invisible to Ductus source code. Ductus users
 never see `&mut` in their code or in error messages.
