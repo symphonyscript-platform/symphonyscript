@@ -22,10 +22,11 @@ revised to match.
 ### 1.2 Status
 
 The specification is under active development. The type system (this section
-and §§2–10) is fully specified. The reactive system, runtime semantics, and the
-node/connection composition model are partially specified or deferred. Sections
-labeled "deferred" indicate decisions consciously postponed for later
-refinement.
+and §§2–10) is fully specified except for object safety (§5.2.4) and coercion
+semantics (§5.2.5), which are deferred to a future revision. The reactive
+system, runtime semantics, and the node/connection composition model are
+partially specified or deferred. Sections labeled "deferred" indicate
+decisions consciously postponed for later refinement.
 
 ### 1.3 Design Philosophy
 
@@ -294,7 +295,8 @@ fresh parameters per the same rule.
 #### 2.2.4 Trait-based constraints
 
 Inferred constraints reference traits (§3). Operations in the body resolve to
-trait methods (`+` resolves to `Add::add`, etc.), and the relevant trait
+trait methods (`+` resolves to `Add::add`, where `Add` denotes `Add[Self]`
+per §3.1.6's default-type-parameter resolution), and the relevant trait
 becomes the constraint on the corresponding parameter. The trait system's
 umbrella traits (§3.6) let the compiler simplify inferred constraint sets for
 readability: `Add + Sub + Mul + Neg + Zero + One` may collapse to `Numeric`
@@ -551,9 +553,9 @@ assertion.
 
 Two categories of expression are not compile-time known:
 
-- Expressions involving *signals* (§Reactive System, deferred) or any reactive
-  value derived from a signal. Signal values depend on the moment of evaluation
-  and are inherently runtime.
+- Expressions involving *signals* (§13) or any reactive value derived from a
+  signal. Signal values depend on the moment of evaluation and are inherently
+  runtime.
 - Expressions involving external I/O, host-boundary calls, or any future
   construct whose value is determined by the runtime environment.
 
@@ -595,8 +597,13 @@ conversion rules (§4.5).
 
 #### 2.4.4 Compile-time evaluation as type-level mechanism
 
-Compile-time-known integer values can serve as type-level arguments. The
-const-generic mechanism (§Generic Parameters) uses this directly:
+Compile-time-known integer values can serve as type-level arguments.
+Const-generic arguments (where a type parameter accepts a compile-time-known
+value rather than a type) use this directly: `type Buffer[T, N: usize =
+1024]: data: T[N]`. The full const-generic specification — value-kind
+parameters, bounds, inference — is deferred to a future spec revision;
+v1 supports the syntactic form shown above for fixed-size array sizing
+and similar uses.
 
 ```
 let arr: i32[fib(10) + 1]                  // valid; fib(10) + 1 is compile-time evaluable
@@ -611,7 +618,7 @@ value.
 
 #### 2.4.5 Negative literal parsing
 
-The integer-literal-with-sign sequence `-N` is parsed as a single signed
+A negative integer literal `-N` is parsed as a single signed
 literal token for type-checking purposes. `let x: i8 = -5` checks the value
 `-5` against `i8`'s range; it does not apply the runtime unary-minus operator
 to a literal `5` (which would conflict with the rule that unary `-` on
@@ -690,8 +697,8 @@ trait Display:
   fn display(value: Self) -> string
 
 trait Add[Rhs = Self]:
-  type Output
-  fn add(left: Self, right: Rhs) -> Output
+  type Output = Self
+  fn add(a: Self, b: Rhs) -> Output
 
 trait Producer:
   type Item
@@ -726,7 +733,7 @@ Eq for i32` block, `Self` resolves to `i32`, so the method's signature becomes
 
 Trait methods do not use a `self` parameter. The lowercase `self` keyword is
 reserved exclusively for reactive context inside node and connection bodies
-(§ — Reactive System, deferred). Trait method signatures name their receiver
+(§13). Trait method signatures name their receiver
 parameter explicitly. The first parameter's type is conventionally `Self` for
 methods that operate on instances, but trait methods may have any parameter
 list — including no `Self` parameter at all (for "associated functions" like
@@ -751,13 +758,13 @@ An associated type may declare a default value:
 ```
 trait Add[Rhs = Self]:
   type Output = Self
-  fn add(left: Self, right: Rhs) -> Output
+  fn add(a: Self, b: Rhs) -> Output
 ```
 
 When an implementation does not bind `Output` explicitly, the default applies.
 
 Implementations bind associated types via the `type Name = Concrete` form
-inside `fulfill` blocks (§3.4.3).
+inside `fulfill` blocks (§3.3.2).
 
 Bounds on associated types in generic constraints use where-clauses with the
 `.` member-access notation (§3.3.4 for where-clauses; §3.1.6 for generic
@@ -881,8 +888,8 @@ trait From[T]:
   fn from(value: T) -> Self
 
 trait Add[Rhs = Self]:
-  type Output
-  fn add(left: Self, right: Rhs) -> Output
+  type Output = Self
+  fn add(a: Self, b: Rhs) -> Output
 ```
 
 Type parameters on a trait are part of the trait's identity at the
@@ -901,6 +908,27 @@ A type may implement multiple trait instances of the same parent trait
 (`fulfill From[i32] for MyNumber` and `fulfill From[i64] for MyNumber`
 coexist; both share the parent `From`). Default type parameters (`Rhs =
 Self`) follow the rules for generic parameters in §3.1.6 and §2.2.
+
+##### 3.1.6.1 Default-type-parameter resolution
+
+When a generic trait has defaulted type parameters (e.g., `trait
+Add[Rhs = Self]`), references to the bare trait name resolve to the
+trait instance with all defaults applied:
+
+- In `requires` clauses: `requires Add` is sugar for `requires Add[Self]`.
+- In trait bounds: `T: Add` is sugar for `T: Add[Self]`.
+- In `satisfies` clauses: `satisfies Add` is sugar for `satisfies Add[Self]`.
+- In `fulfill` blocks: `fulfill Add for T` is sugar for `fulfill Add[Self] for T`.
+- In inferred constraints: the compiler infers `T: Add[Self]` unless the
+  operation's operand types force a cross-type form.
+
+This rule is universal across all generic traits with default type
+parameters, not specific to operator traits. To reference a non-default
+instance, the user supplies explicit type arguments: `Add[i64]`,
+`From[string]`, etc.
+
+The defaulting happens at name-resolution time; at code-generation
+time, every reference has a fully-specified trait instance.
 
 #### 3.1.7 Required attrs and consts (node and connection types only)
 
@@ -941,13 +969,13 @@ trait Action:
   const type: string
   attr enabled: bool = true
 
-node log:
+node Log:
   satisfies Action
   const type: string = "@action/log"     -- supplies the no-default const
   -- enabled inherits the trait's default (true) automatically
   default attr message: string
 
-node delay:
+node Delay:
   satisfies Action
   const type: string = "@action/delay"
   attr enabled: bool = false              -- overrides the trait's default
@@ -970,8 +998,8 @@ Restrictions:
 ### 3.2 Conformance Declarations (`satisfies`)
 
 A type declares conformance to a trait by including a `satisfies` clause in
-its body (grammar §3.5 for records, §3.6 for enums, §3.8 for nodes, §3.9 for
-connections):
+its body (grammar §3.5 for records, grammar §3.6 for enums, grammar §3.8
+for nodes, grammar §3.9 for connections):
 
 ```
 type Person:
@@ -1219,9 +1247,9 @@ valid; the choice is stylistic.
 The receiver parameter name (`a`, `value`, `result`, `left`, etc.) is always
 the implementer's choice. There is no `self` keyword for trait method
 receivers — that lowercase form is reserved exclusively for reactive context
-inside node and connection bodies (§ — Reactive System, deferred). Explicit
-parameter naming is the language's general principle under uniform function
-call syntax: every parameter has a chosen name, not an implicit one.
+inside node and connection bodies (§13). Explicit parameter naming is the
+language's general principle under uniform function call syntax: every
+parameter has a chosen name, not an implicit one.
 
 Other type-level references in trait signatures (associated types like
 `Output`, `Item`, etc.) follow the same substitution rule: in `fulfill`
@@ -1239,6 +1267,12 @@ fulfill Add for i32:
   fn add(left: i32, right: i32) -> i32:
     // built-in integer addition
 ```
+
+Note: with the §4.9.1 default `type Output = Self`, the `type Output =
+i32` binding shown here is explicit but optional. It could be omitted;
+the default applies. Explicit binding is shown for clarity in examples
+and remains valid where the implementer wants to make the choice
+visible.
 
 An associated type with a default value in the trait declaration may be
 omitted in the `fulfill` block; the default applies. An associated type
@@ -1396,7 +1430,7 @@ resolution algorithm prioritizes trait implementations over free functions:
    via implicit widening per §4.5).
 6. **One free function matches → resolve to it.** Standard free-function
    dispatch.
-7. **Multiple free functions in scope under the same local name is
+7. **Multiple free functions in scope under the same local name are
    impossible.** Free functions are uniquely named within their module per
    §10 (Option E in Topics.md); only one can be in scope under any
    given local name. Cross-module conflicts are resolved at import time, not
@@ -1452,10 +1486,11 @@ dispatch by choosing which traits to import.
 
 Disambiguation forms:
 
-- `Trait::f(x, ...)` — explicitly select a trait-impl candidate (the canonical
-  way to resolve trait-vs-trait ambiguity in step 3).
+- `Trait::f(x, ...)` — explicit trait selection. While trait-vs-trait
+  ambiguity cannot arise per step 3, the explicit form makes the trait
+  source visible at the call site, which aids readability.
 - `some_module::f(x, ...)` — explicitly select a free function (used when a
-  free function would otherwise be shadowed by a trait impl per step 2).
+  free function would otherwise be shadowed by a trait impl per step 4).
 - `x.f::[T]()` is *not* a disambiguation form; the turbofish (§2.2.5)
   specifies generic type arguments, not the receiving trait.
 
@@ -1562,16 +1597,24 @@ meaning benefit from positional form.
 #### 3.5.4 Defaults and form interaction
 
 Parameters with default values (per §6.1.2 for records and analogous
-features for functions) interact with argument forms as follows:
+features for functions) may appear in any position in the parameter
+list, including before non-defaulted parameters. Call sites resolve as
+follows:
 
-- In **named form**, default-bearing parameters may be omitted. The
+- In **named form**, default-bearing parameters may be omitted; the
   default value applies for any parameter not named in the call.
-- In **positional form**, parameters must be supplied in declaration order.
-  Default-bearing parameters at the *end* of the parameter list may be
-  omitted (the remaining defaults all apply). Default-bearing parameters
-  in the *middle* of the list cannot be skipped — supplying a later
-  parameter positionally requires supplying all earlier parameters
-  positionally too.
+  Non-defaulted parameters must still be supplied.
+- In **positional form**, parameters must be supplied in declaration
+  order. A defaulted parameter mid-list cannot be skipped using
+  positional form alone — every subsequent positional argument must be
+  supplied as well, which means non-defaulted parameters following
+  defaulted ones force the defaulted ones to also be supplied
+  positionally. To skip a mid-list default, use named form.
+- **Mixed form** (positional then named) is still forbidden per §3.5.2.
+
+The relaxation (defaulted-before-non-defaulted permitted) is uniform
+across functions, operators (§13.16.3), and constructor invocations.
+The rule rewards named-argument call sites for readability.
 
 ```
 fn greet(name: string, greeting: string = "Hello", suffix: string = "!"):
@@ -1582,6 +1625,19 @@ greet("Alice", "Hi")                            // ✓ uses suffix default
 greet("Alice", "Hi", "?")                       // ✓ all positional
 greet(name: "Alice", suffix: "?")               // ✓ named, skipping greeting
 greet("Alice", suffix: "?")                     // ✗ mixed positional and named
+```
+
+Defaulted parameters may precede non-defaulted ones:
+
+```
+fn render(scale: f32 = 1.0, content: string):
+  ...
+
+render(content: "hello")                        // ✓ named, uses scale default
+render(scale: 2.0, content: "hello")            // ✓ named, both supplied
+render(1.0, "hello")                            // ✓ positional, both supplied
+render("hello")                                 // ✗ positional cannot skip
+                                                //   scale to bind content
 ```
 
 The skipping flexibility of named form is one of its principal practical
@@ -1642,17 +1698,17 @@ Fine-grained traits each declare exactly one method or one closely related
 group of methods, defining a single capability:
 
 ```
-trait Add:
-  type Output
-  fn add(left: Self, right: Self) -> Output
+trait Add[Rhs = Self]:
+  type Output = Self
+  fn add(a: Self, b: Rhs) -> Output
 
-trait Sub:
-  type Output
-  fn sub(left: Self, right: Self) -> Output
+trait Sub[Rhs = Self]:
+  type Output = Self
+  fn sub(a: Self, b: Rhs) -> Output
 
-trait Mul:
-  type Output
-  fn mul(left: Self, right: Self) -> Output
+trait Mul[Rhs = Self]:
+  type Output = Self
+  fn mul(a: Self, b: Rhs) -> Output
 
 trait Neg:
   fn neg(value: Self) -> Self
@@ -1791,6 +1847,18 @@ user modules, and are not subject to the orphan rule:
   language automatically provides `Into[U] for T`. The derivation is built
   in, not user-writable.
 - *Identity conversion `From[T] for T` for every type.* Universally provided.
+- *Auto-implementations of `Copy` for built-in types per §11.4.1.* The
+  primitive numeric types, `bool`, `char`, `string`, `duration`, `instant`,
+  tuples of Copy components, and `Range[T]` when T: Copy all auto-implement
+  Copy. User code cannot redefine these impls.
+- *Stdlib auto-impl `From[()] for Option[T]`* — provides the `None` value
+  for use in the `?` desugaring per §8.4.1. The impl is universally
+  available for any T; user code cannot override or shadow it.
+- *Stdlib-privileged borrow-returning functions* (§11.9.5 carve-out).
+  Specific stdlib functions (e.g., indexed-collection accessors like
+  `element_at`) declare return types of the form `&T`. The carve-out is
+  enumerated in stdlib documentation; user-defined functions cannot
+  declare borrow return types.
 
 These privileged implementations exist outside the user-writable
 `fulfill`-block space and cannot conflict with user code.
@@ -1800,7 +1868,8 @@ These privileged implementations exist outside the user-writable
 A small, closed category of traits are declared by the language itself,
 have no methods and no associated types, and receive compiler-privileged
 enforcement. A type opts into one of these traits via the usual
-`satisfies` clause (and, where applicable, `@derive`); the compiler
+`satisfies` clause or via `@derive` (every member of the category is
+`@derive`-eligible; see §3.8.1); the compiler
 treats membership as a flag carrying load-bearing semantics rather than
 as a vehicle for user-supplied method bodies. Members of this category
 are not redeclarable: user code cannot define a new trait of the same
@@ -1833,9 +1902,8 @@ This category is distinct from two superficially similar things:
   members of the language-defined marker traits category and do not
   receive any compiler privilege beyond the usual `satisfies` check.
 
-The category is closed in v1: the language defines exactly `Copy` and
-`Circularity` as language-defined marker traits. Adding a new member is
-a language-level change, not a user-extensible mechanism.
+Adding a new member to this category is a language-level change, not
+a user-extensible mechanism.
 
 #### 3.7.5 Newtype pattern as orphan-rule workaround
 
@@ -1844,11 +1912,11 @@ canonical workaround is the newtype pattern: wrap the foreign type in a local
 newtype, then implement the foreign trait for the local newtype:
 
 ```
-type MyVec:
+type MyVec[T]:
+  wraps Vec[T]
   satisfies SomeForeignTrait
-  inner: Vec[i32]
 
-fulfill SomeForeignTrait for MyVec:
+fulfill SomeForeignTrait for MyVec[T]:
   ...
 ```
 
@@ -1872,10 +1940,22 @@ The traits eligible for automatic derivation are:
 - `Clone` — deep structural copy.
 - `Display` — default human-readable formatting.
 - `Debug` — default debug formatting (structural, compiler-defined).
+- `Copy` (§3.7.4) — language-defined marker trait; derivation performs the
+  structural Copy-eligibility check (every field's type must be `Copy`),
+  no method body is generated.
+- `Circularity` (§3.7.4) — language-defined marker trait; derivation is the
+  opt-in declaration, no method body is generated.
+- Any other language-defined marker trait (§3.7.4). The general rule:
+  every member of the language-defined marker traits category is
+  `@derive`-eligible. Derivation performs whatever structural check the
+  marker's category requires (none for Circularity; Copy-eligibility for
+  Copy) and emits the satisfies-flag with no method body.
 
-The set is fixed in the language; users cannot register new traits for
-`@derive`. Other traits require manual `fulfill` blocks. (A future extension
-may add user-definable derivation; not in v1.)
+The set is fixed in the language: the six structural-derivation traits
+above (Eq, Ord, Hash, Clone, Display, Debug) plus every member of the
+language-defined marker traits category (§3.7.4). Users cannot register
+new traits for `@derive`. Other traits require manual `fulfill` blocks.
+(A future extension may add user-definable derivation; not in v1.)
 
 #### 3.8.2 Structural derivation rules
 
@@ -1902,6 +1982,12 @@ For a newtype (§6.3), `@derive` may delegate to the underlying type
 or operate structurally over fields, depending on the newtype's shape; see
 the newtype section for details.
 
+For language-defined marker traits (`Copy`, `Circularity`, and any future
+markers per §3.7.4): derivation performs the marker's structural check
+(Copy-eligibility for `Copy`; none for `Circularity`) and emits the
+satisfies-flag — no method body is generated. The marker-trait derivation
+is purely a structural opt-in.
+
 Derivation requires every field's (or payload's) type to itself satisfy the
 trait being derived. `@derive(Eq)` on `type Foo: x: SomeType` requires
 `SomeType: Eq`. If any component type does not satisfy the trait, derivation
@@ -1927,7 +2013,8 @@ registered constructor function.
 @literal_suffix("hz",    from_hz)
 @literal_suffix("khz",   from_khz)
 @literal_suffix("cents", from_cents)
-type Frequency: newtype i64
+type Frequency:
+  wraps i64
 
 fn from_hz[N: Numeric](n: N) -> Frequency:
   Frequency(n as i64)
@@ -2243,15 +2330,15 @@ corresponds to one or more trait methods in §4.9's trait hierarchy.
 
 #### 4.4.1 Arithmetic operators
 
-| Operator     | Operand Constraint | Result           | Notes                               |
-|--------------|--------------------|------------------|-------------------------------------|
-| `+`          | `Add`              | same kind        | mixed-kind promotes per §4.5        |
-| `-` (binary) | `Sub`              | same kind        | mixed-kind promotes per §4.5        |
-| `*`          | `Mul`              | same kind        | mixed-kind promotes per §4.5        |
-| `/`          | `Numeric`          | **always Float** | mathematical division; see §4.4.1.1 |
-| `//`         | `IntDiv`           | Integer          | truncating integer division         |
-| `%`          | `Rem`              | same kind        | mixed-kind promotes per §4.5        |
-| `-` (unary)  | `Neg`              | same as operand  | type error on unsigned              |
+| Operator     | Operand Constraint | Result                                                            | Notes                               |
+|--------------|--------------------|-------------------------------------------------------------------|-------------------------------------|
+| `+`          | `Add`              | Output (associated type)                                          | mixed-kind promotes per §4.5        |
+| `-` (binary) | `Sub`              | Output (associated type)                                          | mixed-kind promotes per §4.5        |
+| `*`          | `Mul`              | Output (associated type)                                          | mixed-kind promotes per §4.5        |
+| `/`          | `Numeric`          | Self (on Float umbrella; mixed-kind operands widen per §4.4.1.1)  | mathematical division; see §4.4.1.1 |
+| `//`         | `IntDiv`           | Output (associated type)                                          | truncating integer division         |
+| `%`          | `Rem`              | Output (associated type)                                          | mixed-kind promotes per §4.5        |
+| `-` (unary)  | `Neg`              | same as operand                                                   | type error on unsigned              |
 
 ##### 4.4.1.1 The `/` operator and integer-to-float promotion
 
@@ -2308,6 +2395,13 @@ implicit kind-crossing promotion on uniformly-integer operands. Every other
 operator with mixed-kind support requires at least one operand to already
 be of the target kind; `/` is unique in always producing float regardless
 of input kinds.
+
+**Mixed widths and kinds.** When the operands are mixed-width and
+mixed-kind (e.g., `i64 + f32`), the integer first widens to the smallest
+float type capable of representing its full range (f64 for i64, by
+§4.5.4's pragmatic exception), then the f32 widens to f64 per §4.5.3.
+The result is f64. To force an alternate target type (e.g., truncating
+the i64 to fit f32), use an explicit cast.
 
 ##### 4.4.1.2 Other arithmetic operators
 
@@ -2398,8 +2492,8 @@ operand).
 | `is not` | `Eq`          | bool   |
 
 Equality uses the keyword forms `is` and `is not`, not symbolic `==`/`!=`
-(grammar §3.15 and grammar §6 reserve symbolic equality for future
-deprecation). The keyword forms read more naturally in this language's
+(grammar §3.15 and grammar §6 reserve symbolic equality against future
+use). The keyword forms read more naturally in this language's
 expression syntax and avoid the visual collision with `=` used for
 binding-initialization.
 
@@ -2430,19 +2524,19 @@ This table specifies the mapping:
 
 | Operator                                    | Operand constraint                      | Result constraint                                    |
 |---------------------------------------------|-----------------------------------------|------------------------------------------------------|
-| `+`                                         | `Add`                                   | same type as operands                                |
-| `-` (binary)                                | `Sub`                                   | same type as operands                                |
-| `*`                                         | `Mul`                                   | same type as operands                                |
-| `/`                                         | `Numeric`                               | `Float` (per §4.4.1.1)                               |
-| `//`                                        | `IntDiv`                                | same type as operands                                |
-| `%`                                         | `Rem`                                   | same type as operands                                |
+| `+`                                         | `Add`                                   | `Output` (associated type)                           |
+| `-` (binary)                                | `Sub`                                   | `Output` (associated type)                           |
+| `*`                                         | `Mul`                                   | `Output` (associated type)                           |
+| `/`                                         | `Numeric`                               | `Self` on `Float` umbrella (per §4.4.1.1)            |
+| `//`                                        | `IntDiv`                                | `Output` (associated type)                           |
+| `%`                                         | `Rem`                                   | `Output` (associated type)                           |
 | `-` (unary)                                 | `Neg`                                   | same type as operand                                 |
 | `&`                                         | `BitAnd`                                | same type as operands                                |
 | `\|`                                        | `BitOr`                                 | same type as operands                                |
 | `^`                                         | `BitXor`                                | same type as operands                                |
 | `~`                                         | `BitNot`                                | same type as operand                                 |
-| `<<`                                        | `Shl` (left); `u32`-convertible (right) | same type as left operand                            |
-| `>>`                                        | `Shr` (left); `u32`-convertible (right) | same type as left operand                            |
+| `<<`                                        | `Shl` (left); `u32`-convertible (right)¹ | same type as left operand                           |
+| `>>`                                        | `Shr` (left); `u32`-convertible (right)¹ | same type as left operand                           |
 | `<`, `<=`, `>`, `>=`                        | `Ord`                                   | `bool`                                               |
 | `is`, `is not`                              | `Eq`                                    | `bool`                                               |
 | `+%`, `-%` (binary), `*%`, `//%`, `%%`      | corresponding `Wrapping...`             | same type as operands                                |
@@ -2456,6 +2550,17 @@ This table specifies the mapping:
 | `as%`                                       | `WrappingAs[T]` (operand)               | the target type T                                    |
 | `as\|`                                      | `SaturatingAs[T]` (operand)             | the target type T                                    |
 | `as?`                                       | `CheckedAs[T]` (operand)                | `Option[T]`                                          |
+
+¹ The right operand may be any unsigned integer type narrower than or
+equal to u32 (implicit widening per §4.5.1); other types require an
+explicit cast.
+
+Per §3.1.6's default-type-parameter resolution, each table entry that
+names a bare trait (e.g., `Add`) refers to the trait instance with
+default type parameters applied — `Add` is `Add[Self]`. For operands
+of different types, the compiler may infer cross-type instances
+(`Add[T2] for T1`) if such an instance is in scope; otherwise the
+operand types must be unified per the implicit-widening rules of §4.5.
 
 The compiler's inference algorithm per §2.2.1 walks each function body
 collecting the union of these constraints across all operators used. The
@@ -2618,14 +2723,14 @@ recoverable form, or accept that `//%` on a zero divisor traps.
 Saturating operators clamp to the destination type's range bounds on
 overflow:
 
-| Operator | Trait | Behavior           |
-|----------|-------|--------------------|
-| `+       | `     | `SaturatingAdd`    | `255_u8 +\| 1 == 255_u8` |
-| `-       | `     | `SaturatingSub`    | `0_u8 -\| 1 == 0_u8` |
-| `*       | `     | `SaturatingMul`    | `200_u8 *\| 2 == 255_u8` |
-| `//      | `     | `SaturatingIntDiv` | `(-128_i8) //\| (-1_i8) == 127_i8` |
-| `%       | `     | `SaturatingRem`    | rare; defined for completeness |
-| unary `- | `     | `SaturatingNeg`    | `(-128_i8) -\| == 127_i8` |
+| Operator    | Trait              | Behavior                            |
+|-------------|--------------------|-------------------------------------|
+| `+\|`       | `SaturatingAdd`    | `255_u8 +\| 1 == 255_u8`            |
+| `-\|`       | `SaturatingSub`    | `0_u8 -\| 1 == 0_u8`                |
+| `*\|`       | `SaturatingMul`    | `200_u8 *\| 2 == 255_u8`            |
+| `//\|`      | `SaturatingIntDiv` | `(-128_i8) //\| (-1_i8) == 127_i8`  |
+| `%\|`       | `SaturatingRem`    | rare; defined for completeness      |
+| unary `-\|` | `SaturatingNeg`    | `(-128_i8) -\| == 127_i8`           |
 
 Saturation is the right choice for DSP (audio sample clamping), image
 processing (pixel value clamping), and any context where producing a
@@ -2699,8 +2804,8 @@ infinity-and-NaN semantics already define the overflow behavior, and
 modular or clamping interpretations on float values would conflict with the
 established standard. The checked variant `+?` etc. on floats is defined for
 parity with integer checked operators and returns `None` if the operation
-produces NaN or infinity (implementation detail to be confirmed when stdlib
-is specified).
+produces NaN or infinity (normative; see §4.7.3 for the analogous NaN
+handling on saturating casts).
 
 #### 4.6.7 Integer division by zero
 
@@ -2759,7 +2864,8 @@ language conventions). Out-of-range float values (NaN, infinity, values
 larger than the integer's range) follow the variant's policy: `as` traps,
 `as%` is implementation-defined (truncation modulo the destination range
 is the typical choice), `as|` saturates to the destination's range bounds
-(NaN treated as 0), `as?` returns `None`.
+(NaN treated as 0, parallel to §4.6.6's checked-arithmetic NaN handling),
+`as?` returns `None`.
 
 #### 4.7.4 Trait-based forms
 
@@ -2922,13 +3028,13 @@ Each operator from §4.4 has its own trait, with the method name matching
 the conventional operator name:
 
 ```
-trait Add:    fn add(a: Self, b: Self) -> Self
-trait Sub:    fn sub(a: Self, b: Self) -> Self
-trait Mul:    fn mul(a: Self, b: Self) -> Self
-trait Div:    fn div(a: Self, b: Self) -> Float    -- mathematical division
-trait IntDiv: fn intdiv(a: Self, b: Self) -> Self  -- truncating
-trait Rem:    fn rem(a: Self, b: Self) -> Self
-trait Neg:    fn neg(value: Self) -> Self
+trait Add[Rhs = Self]:    type Output = Self; fn add(a: Self, b: Rhs) -> Output
+trait Sub[Rhs = Self]:    type Output = Self; fn sub(a: Self, b: Rhs) -> Output
+trait Mul[Rhs = Self]:    type Output = Self; fn mul(a: Self, b: Rhs) -> Output
+trait Div:                fn div(a: Self, b: Self) -> Self      -- on Float umbrella only; see §4.4.1.1 for widening
+trait IntDiv[Rhs = Self]: type Output = Self; fn intdiv(a: Self, b: Rhs) -> Output
+trait Rem[Rhs = Self]:    type Output = Self; fn rem(a: Self, b: Rhs) -> Output
+trait Neg:                fn neg(value: Self) -> Self
 
 trait BitAnd: fn bitand(a: Self, b: Self) -> Self
 trait BitOr:  fn bitor(a: Self, b: Self) -> Self
@@ -2937,27 +3043,27 @@ trait BitNot: fn bitnot(value: Self) -> Self
 trait Shl:    fn shl(value: Self, n: u32) -> Self
 trait Shr:    fn shr(value: Self, n: u32) -> Self
 
-trait WrappingAdd:    fn wrapping_add(a: Self, b: Self) -> Self
-trait WrappingSub:    fn wrapping_sub(a: Self, b: Self) -> Self
-trait WrappingMul:    fn wrapping_mul(a: Self, b: Self) -> Self
-trait WrappingIntDiv: fn wrapping_intdiv(a: Self, b: Self) -> Self
-trait WrappingRem:    fn wrapping_rem(a: Self, b: Self) -> Self
-trait WrappingNeg:    fn wrapping_neg(value: Self) -> Self
+trait WrappingAdd[Rhs = Self]:    type Output = Self; fn wrapping_add(a: Self, b: Rhs) -> Output
+trait WrappingSub[Rhs = Self]:    type Output = Self; fn wrapping_sub(a: Self, b: Rhs) -> Output
+trait WrappingMul[Rhs = Self]:    type Output = Self; fn wrapping_mul(a: Self, b: Rhs) -> Output
+trait WrappingIntDiv[Rhs = Self]: type Output = Self; fn wrapping_intdiv(a: Self, b: Rhs) -> Output
+trait WrappingRem[Rhs = Self]:    type Output = Self; fn wrapping_rem(a: Self, b: Rhs) -> Output
+trait WrappingNeg:                fn wrapping_neg(value: Self) -> Self
 
-trait SaturatingAdd:  fn saturating_add(a: Self, b: Self) -> Self
-trait SaturatingSub:  fn saturating_sub(a: Self, b: Self) -> Self
-trait SaturatingMul:  fn saturating_mul(a: Self, b: Self) -> Self
-trait SaturatingIntDiv: fn saturating_intdiv(a: Self, b: Self) -> Self
-trait SaturatingRem:  fn saturating_rem(a: Self, b: Self) -> Self
-trait SaturatingNeg:  fn saturating_neg(value: Self) -> Self
+trait SaturatingAdd[Rhs = Self]:    type Output = Self; fn saturating_add(a: Self, b: Rhs) -> Output
+trait SaturatingSub[Rhs = Self]:    type Output = Self; fn saturating_sub(a: Self, b: Rhs) -> Output
+trait SaturatingMul[Rhs = Self]:    type Output = Self; fn saturating_mul(a: Self, b: Rhs) -> Output
+trait SaturatingIntDiv[Rhs = Self]: type Output = Self; fn saturating_intdiv(a: Self, b: Rhs) -> Output
+trait SaturatingRem[Rhs = Self]:    type Output = Self; fn saturating_rem(a: Self, b: Rhs) -> Output
+trait SaturatingNeg:                fn saturating_neg(value: Self) -> Self
 
-trait CheckedAdd:     fn checked_add(a: Self, b: Self) -> Option[Self]
-trait CheckedSub:     fn checked_sub(a: Self, b: Self) -> Option[Self]
-trait CheckedMul:     fn checked_mul(a: Self, b: Self) -> Option[Self]
-trait CheckedDiv:     fn checked_div(a: Self, b: Self) -> Option[Self]
-trait CheckedIntDiv:  fn checked_intdiv(a: Self, b: Self) -> Option[Self]
-trait CheckedRem:     fn checked_rem(a: Self, b: Self) -> Option[Self]
-trait CheckedNeg:     fn checked_neg(value: Self) -> Option[Self]
+trait CheckedAdd[Rhs = Self]:    type Output = Self; fn checked_add(a: Self, b: Rhs) -> Option[Output]
+trait CheckedSub[Rhs = Self]:    type Output = Self; fn checked_sub(a: Self, b: Rhs) -> Option[Output]
+trait CheckedMul[Rhs = Self]:    type Output = Self; fn checked_mul(a: Self, b: Rhs) -> Option[Output]
+trait CheckedDiv[Rhs = Self]:    type Output = Self; fn checked_div(a: Self, b: Rhs) -> Option[Output]
+trait CheckedIntDiv[Rhs = Self]: type Output = Self; fn checked_intdiv(a: Self, b: Rhs) -> Option[Output]
+trait CheckedRem[Rhs = Self]:    type Output = Self; fn checked_rem(a: Self, b: Rhs) -> Option[Output]
+trait CheckedNeg:                fn checked_neg(value: Self) -> Option[Self]
 
 trait WrappingAs[T]:   fn wrapping_as(value: Self) -> T
 trait SaturatingAs[T]: fn saturating_as(value: Self) -> T
@@ -2978,6 +3084,8 @@ trait Cos:  fn cos(value: Self) -> Self
 trait IntPow:   fn pow(base: Self, exp: Self) -> Self
 trait FloatPow: fn pow(base: Self, exp: Self) -> Self
 
+trait Eq: fn eq(a: Self, b: Self) -> bool
+
 trait Ord: requires Lt, Le, Gt, Ge
 trait Lt: fn lt(a: Self, b: Self) -> bool
 trait Le: requires Lt, Eq
@@ -2989,13 +3097,15 @@ trait Gt: requires Lt, Eq
 trait Ge: requires Lt
           fn ge(a: Self, b: Self) -> bool:
             not lt(a, b)
-
-trait Eq: fn eq(a: Self, b: Self) -> bool
 ```
 
 This is the canonical fine-grained set. Stdlib may add additional fine-
 grained traits for specialized operations; the principle (one trait per
 capability) is what's normative, not the exact list above.
+
+Note: `Div` is non-generic (Float-umbrella only); `CheckedDiv` is generic
+for consistency with other checked-arithmetic traits, but instances are
+auto-derived only for Float types where `Div` is implemented.
 
 `Ord` and `Eq` are standalone — not part of any numeric umbrella per §3.6.1.
 Non-numeric types (strings, enums, records) may also be ordered or compared,
@@ -3041,7 +3151,7 @@ trait Integer:
 @default(f64)
 trait Float:
   requires Numeric, Neg, Div,
-           CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedNeg,
+           CheckedDiv, CheckedNeg,
            Sqrt, Sin, Cos, Tan, Asin, Acos, Atan, Atan2,
            Ln, Log2, Log10, Exp, Exp2,
            Floor, Ceil, Round, Trunc,
@@ -3134,6 +3244,12 @@ Specifically:
   interpretations would conflict (§4.6.6). They satisfy `Float`,
   `Numeric`, and `Signed` (floats are signed by convention — they
   support `Neg`).
+
+Built-in numeric types implement the same-type instantiations only — e.g.,
+`fulfill Add[i32] for i32`, not `Add[i64] for i32`. Cross-type arithmetic
+between built-in numeric types requires explicit conversion (§4.5, §4.7);
+user-defined types may implement cross-type instantiations such as
+`Add[i32] for Distance` per §6.3.3.
 
 User-defined numeric-like types (`Decimal` from stdlib, custom fixed-point
 types, etc.) implement whichever fine-grained traits are appropriate;
@@ -3235,18 +3351,19 @@ Not every trait can be used in a `dyn` position. Traits with methods whose
 signatures depend on `Self` in non-receiver positions, traits with
 associated types not bound at the use site, or traits with generic methods
 cannot be made into trait objects under the standard vtable mechanism.
-Object-safety rules are specified in detail in § — Object Safety
-(deferred). A trait that is not object-safe used in a `dyn` position
-produces a compile error at the use site identifying the offending trait
-and the reason.
+Object-safety rules are specified in detail in [Object Safety: deferred
+to a future spec revision]. A trait that is not object-safe used in a
+`dyn` position produces a compile error at the use site identifying the
+offending trait and the reason.
 
 #### 5.2.5 Coercion to `dyn`
 
 A value of a concrete type `T` that fulfills traits `A` and `B` can be
 assigned to a `dyn (A & B)` binding via an explicit coercion. The exact
-syntax is specified in § — Coercion (deferred); the principle is that
-moving from a static type to a trait object is a deliberate operation at
-the assignment or argument-passing site, not an implicit conversion.
+syntax is specified in [Coercion: deferred to a future spec revision];
+the principle is that moving from a static type to a trait object is a
+deliberate operation at the assignment or argument-passing site, not an
+implicit conversion.
 
 ### 5.3 Record Intersection at Type Definition
 
@@ -3353,9 +3470,10 @@ right-hand side requires a type declaration to acquire identity.
 
 ### 5.5 Cross-Kind Intersection
 
-Intersection is well-defined only within `{trait & trait}` and `{record &
-record}`. Cross-kind combinations and same-kind combinations outside those
-two sets are rejected at compile time:
+Intersection is well-defined only within `{trait & trait}` (trait
+intersection) and `{record & record}` (record intersection). Cross-kind
+combinations and same-kind combinations outside those two sets are
+rejected at compile time:
 
 - `Trait & Record` — rejected. A trait expresses a behavior contract; a
   record expresses structure. Their intersection has no coherent meaning.
@@ -4053,7 +4171,8 @@ type Email:
   satisfies TryFrom[string]
 
 fulfill TryFrom[string] for Email:
-  fn try_from(s: string) -> Result[Email, ValidationError]:
+  type Error = ValidationError
+  fn try_from(s: string) -> Result[Email, Error]:
     if is_valid_email(s):
       Ok(Email(s))
     else:
@@ -4249,6 +4368,9 @@ kinds (range error, parse error, validation error, etc.).
 
 ### 7.2 Users Implement `From` and `TryFrom`; the Reverses Auto-Derive
 
+`Into` and `TryInto` are *sealed* traits — declared by the language for
+use in trait bounds and method dispatch, but not implementable by users.
+
 Users write `fulfill From[T] for U` (or `fulfill TryFrom[T] for U`); the
 language automatically provides the reverse direction:
 
@@ -4259,16 +4381,14 @@ language automatically provides the reverse direction:
 The auto-derivation is language-built-in and not user-overridable. This
 forecloses the coherence problem of disagreeing manual `From`/`Into` pairs.
 
-`Into` and `TryInto` are *sealed* traits: declared by the language for use
-in trait bounds (`T: Into[U]`) and method dispatch (`x.into::[U]()`), but
-not implementable by users. All `Into[U] for T` impls come from
-auto-derivation of a corresponding `From[T] for U` impl (plus the
-identity case per §7.3); all `TryInto[U] for T` impls come from
-auto-derivation of `TryFrom[T] for U`. Users do not write `fulfill
-Into[U] for T` or `fulfill TryInto[U] for T` directly — the compiler
-synthesizes the impl from the corresponding `From` or `TryFrom`. To
-expose a conversion from `T` to `U` to users, write the `From[T] for U`
-impl on the destination type; the `Into` direction follows automatically.
+All `Into[U] for T` impls come from auto-derivation of a corresponding
+`From[T] for U` impl (plus the identity case per §7.3); all `TryInto[U]
+for T` impls come from auto-derivation of `TryFrom[T] for U`. Users do
+not write `fulfill Into[U] for T` or `fulfill TryInto[U] for T` directly
+— the compiler synthesizes the impl from the corresponding `From` or
+`TryFrom`. To expose a conversion from `T` to `U` to users, write the
+`From[T] for U` impl on the destination type; the `Into` direction
+follows automatically.
 
 The `From`/`TryFrom` impls are the user's written contract; the
 `Into`/`TryInto` impls are the language's mechanical counterparts.
@@ -4697,9 +4817,14 @@ enum TryBranch[S, F]:
 `Option` and `Result` fulfill `Try` in stdlib:
 
 - `Try::branch(Some(x))` → `Continue(x)`; `Try::branch(None)` →
-  `Break(None)`.
+  `Break(())`.
 - `Try::branch(Ok(x))` → `Continue(x)`; `Try::branch(Err(e))` →
-  `Break(Err(e))`.
+  `Break(e)`.
+
+For `Option[T]`, `Failure = ()` (unit) — there is no inner error value
+beyond the absence itself. For `Result[T, E]`, `Failure = E` — the error
+value. The desugaring in §8.4.1 applies `From::from` to this inner
+failure value, not to the wrapped `None`/`Err(...)` container.
 
 User types may implement `Try` to make `?` available on their own
 optional-or-result-like types.
@@ -4727,6 +4852,14 @@ the enclosing function's failure type. When the failure types are
 identical, `From::from` is the trivial identity conversion (§7.3); no
 special-case logic is needed for matching types.
 
+Under this desugaring, `From::from(failure)` converts the inner failure
+value to the enclosing function's error/absence type. For Result-to-Result
+propagation, this is the user's `From[SourceError] for DestError` impl
+(§7.9). For Option-to-Option propagation, the auto-implementation
+`From[()] for Option[T]` (yielding `None`) is provided by stdlib.
+Cross-type propagation (Option in a Result-returning function, or vice
+versa) remains forbidden per §8.6 — the failure types are not compatible.
+
 ### 8.5 Error-Type Conversion via `From`
 
 The `From::from(failure)` step in `?` propagation enables error-type
@@ -4752,25 +4885,23 @@ function's `Ok(...)` site satisfies that contract separately.
 
 Using `?` on an `Option` value inside a function returning `Result`, or
 on a `Result` value inside a function returning `Option`, is a compile
-error. The failure-type families are fundamentally different:
+error. This is a categorical rule enforced by the compiler at every
+`?` site — regardless of whether `From` impls exist that could in
+principle bridge the failure types (`From[()] for SomeError` or
+`From[SomeError] for ()`).
 
-- `Option`'s `None` carries *no information*.
-- `Result`'s `Err` carries *an error value*.
+The rule's justification: `Option`'s `None` carries no information,
+while `Result`'s `Err` carries an error value. Silently bridging them
+would require either fabricating an error value from `None` (what
+information?) or discarding an error value when going to `Option`
+(information loss without user signal). Both cross-category bridges
+are operations that should be explicit at the call site, never
+implicit through `?`.
 
-Silently bridging them would require either fabricating an error value
-from `None` (which information is invented?) or discarding an error
-value when going to `Option` (information is lost). Both lose
-information that should be explicit at the call site.
-
-The user converts explicitly via stdlib methods (§8.7):
-
-- `option.ok_or(err)` — where `err: E` is the error value to use for
-  `None` — produces `Result[T, E]` from `Option[T]`.
-- `result.ok()` produces `Option[T]` from `Result[T, E]`, discarding
-  the error.
-
-The conversion is visible at the call site; the failure-handling
-decision is explicit.
+The user converts explicitly via stdlib methods (§8.7): `option.ok_or(err)`
+produces `Result[T, E]` from `Option[T]` with an explicit error value;
+`result.ok()` produces `Option[T]` from `Result[T, E]`, discarding the
+error.
 
 ### 8.7 Standard Methods
 
@@ -4794,7 +4925,7 @@ The non-exhaustive list:
   computation.
 - `ok_or[E](value: Self, err: E) -> Result[T, E]` — converts to
   `Result` with the given error on `None`.
-- `is_some(value: Self) -> bool`, `is_none(value: Self) -> bool` —
+- `is_some(value: &Self) -> bool`, `is_none(value: &Self) -> bool` —
   discriminator predicates.
 
 #### 8.7.2 `Result[T, E]`
@@ -4814,7 +4945,7 @@ The non-exhaustive list:
   — error-recovery chain.
 - `ok(value: Self) -> Option[T]`, `err(value: Self) -> Option[E]` —
   convert to `Option`, discarding the other arm.
-- `is_ok(value: Self) -> bool`, `is_err(value: Self) -> bool` —
+- `is_ok(value: &Self) -> bool`, `is_err(value: &Self) -> bool` —
   discriminator predicates.
 
 All methods listed above are *free functions* defined in stdlib, callable
@@ -4835,6 +4966,13 @@ qualification follows the module-path rules in §10. There is no
 modules per §10, not associated with types, and the dispatch model in
 §3.4 does not include a type-qualified free-function namespace.
 
+Note on closure-type notation: the `fn(T) -> U` parameter types shown
+in the method signatures use a forward-referencing notation for closure
+types. The complete closure-type specification is deferred to a future
+spec revision. For v1, treat these signatures as taking any callable
+value (free function, closure, or operator-applied function) whose
+call-arity and parameter/return types match.
+
 ### 8.8 Convention: `Option` vs `Result`
 
 The choice between `Option` and `Result` is convention, not a language
@@ -4854,8 +4992,8 @@ accepts either signature; users choose based on what callers need.
 
 ### 8.9 Error Handling in the Reactive Context
 
-The reactive system (deferred to a later section) uses the same
-two-track failure model. A trap inside a `derived` expression's
+The reactive system (specified in §13.2.3 for derived error
+semantics) uses the same two-track failure model. A trap inside a `derived` expression's
 computation propagates as a normal trap — the reactive system does not
 catch traps. A `derived` declaration whose expression has type
 `Result[T, E]` or `Option[T]` produces a reactive value of that type;
@@ -5419,9 +5557,9 @@ Division by zero follows the standard rules of §4.6:
 - `duration / 0` where `0` is an integer-typed value traps per §4.6.7
   (integer division by zero).
 - `duration / 0.0` where `0.0` is a float-typed value produces `±inf`
-  or NaN per IEEE 754; the integer-nanosecond result is then defined
-  by the float-to-integer conversion (saturate or trap per §4.6.6 and
-  §4.7).
+  or NaN per IEEE 754; converting that result back to the i64-nanosecond
+  duration representation traps per §4.7.3 (default float-to-int cast
+  traps on non-finite values).
 - `duration / duration_zero` (i.e., dividing by a zero-duration value)
   traps; this is treated as the i64 zero-divisor case per §4.6.7.
 
@@ -5525,18 +5663,23 @@ is a stdlib concern.
 #### 9.4.3 Reactive cell compatibility
 
 Both `duration` and `instant` are i64-sized values and satisfy the
-single-cell reactive cell type constraint (§13.11.4). They may appear
-directly as the type of `signal`, `attr`, `recurrent`, and `derived`
+direct in-cell storage criteria of §13.11.4. They may appear directly
+as the type of `signal`, `attr`, `recurrent`, and `derived`
 declarations.
 
 Wrapping in `Result[duration, E]`, `Option[duration]`,
-`Result[instant, E]`, or `Option[instant]` as a reactive cell type is
-generally *not* permitted: the i64 payload plus any discriminant
-exceeds the single-cell budget (§13.11.4). The compiler rejects such
-types at reactive cell declarations. To represent "absent" or "errored"
-duration/instant values in a reactive cell, use a sentinel pattern
-(e.g., a separate `bool` cell indicating presence, or a designated
-sentinel duration value like `i64::MIN`).
+`Result[instant, E]`, or `Option[instant]` is governed by §13.11.4's
+general storage rules: if the total bit width (discriminant + payload)
+fits the platform atomic word, direct storage applies; otherwise the
+cell uses handle-based pool storage. On platforms supporting wide
+atomics, `Option[duration]` (≈9 bytes) fits a 128-bit-coupled cell;
+on platforms without wide atomics, it falls back to handle-based
+storage. The compiler chooses the strategy; the source-level type is
+permitted in all cases.
+
+For minimum-overhead reactive cells, prefer bare `duration` / `instant`
+when an absent/errored sentinel can be encoded in the value's range
+(e.g., `i64::MIN`) rather than via `Option`/`Result`.
 
 ---
 
@@ -5688,10 +5831,15 @@ points for absolute paths:
 - `root` — the current package's root module.
 - A bare name matching an external dependency declared in the package's
   manifest — that dependency's root module.
+- `std` — the standard library's root module. Built-in path base,
+  implicitly available to every package without manifest declaration.
+  Stdlib types and functions are accessed through this base (e.g.,
+  `std::option::unwrap`, `std::vec::Vec`).
 
 For example, `root::audio::Synthesizer` resolves an absolute path
 through the current package; `tone_lib::Oscillator` resolves into the
-`tone_lib` dependency's public surface.
+`tone_lib` dependency's public surface; `std::vec::Vec` resolves into
+the standard library.
 
 All `use` statements use absolute paths starting from one of these
 bases. There is no relative-path or "current module" reference;
@@ -5726,6 +5874,8 @@ declaration's own section and summarized below:
   (§6.2.6); no per-variant visibility.
 - **Newtypes** (§6.3): type visibility (§6.3.1), independent
   constructor visibility (§6.3.4).
+- **Alias types** (§4.2, §10.4.2): visibility specifier on the
+  `alias type` declaration.
 - **Traits** (§3.1): type visibility. Visibility of methods within a
   trait declaration is uniform with the trait's visibility — no
   per-method visibility.
@@ -5832,6 +5982,11 @@ distinct from `use` imports. The language's `use` machinery is solely
 about bringing names into the current file's scope; cross-module
 exposure of names is the job of declarations.
 
+Visibility specifiers (`public`, `shared`, `private`) are permitted on
+`alias type` declarations and follow the same rules as other declarations
+per §10.3 (which enumerates `alias type` among the visibility-bearing
+forms).
+
 #### 10.4.3 `use` is file-scope only
 
 A `use` statement may appear only at file scope (alongside other
@@ -5925,16 +6080,16 @@ visibility specifier alongside the type visibility. The syntax uses a
 parenthesized modifier on the type visibility keyword:
 
 ```
-public type Email:                        // type public, constructor public (default)
+public type Email:                        // newtype; type public, constructor public (default)
   wraps string
 
-public(shared) type Email:                // type public, constructor shared
+public(shared) type Email:                // newtype; type public, constructor shared
   wraps string
 
-public(private) type Email:               // type public, constructor private
+public(private) type Email:               // newtype; type public, constructor private
   wraps string                            //   — the smart-constructor pattern
 
-shared(private) type SecretConfig:        // type shared, constructor private
+shared(private) type SecretConfig:        // record; type shared, constructor private
   api_key: string
 ```
 
@@ -6264,7 +6419,7 @@ require cleanup (heap allocations, file handles via stdlib, etc.), the
 type's drop behavior is invoked.
 
 Drop semantics for user-defined types are specified through the trait
-system; the precise mechanism is deferred to §Drop Trait (deferred).
+system; the precise mechanism is specified in §14.9.
 
 ### 11.4 The `Copy` Trait
 
@@ -6280,6 +6435,14 @@ trait Copy
 No methods. No associated types. The trait's only purpose is to flag a
 type as having implicit-duplication semantics.
 
+Non-primitive types opt into `Copy` either via `@derive(Copy)` (idiomatic
+shorthand) or via explicit `satisfies Copy` in the type's body. Both
+forms are valid and have identical semantics: the compiler verifies the
+structural requirement that every field's type is itself `Copy`, then
+enables implicit-duplication semantics for values of the type. The
+`@derive(Copy)` form is preferred for parallel with other derivable
+traits.
+
 #### 11.4.1 Auto-implementations
 
 The following types automatically implement `Copy`:
@@ -6288,7 +6451,10 @@ The following types automatically implement `Copy`:
   `f32`, `f64`).
 - `bool`, `char`.
 - `string` (see §11.6).
+- `duration`, `instant` (see §9.4; both are i64-sized scalars).
 - Tuples whose components are all `Copy`.
+- `Range[T]` when `T: Copy` (language-privileged implementation
+  per §3.7.3).
 
 #### 11.4.2 Opt-in via `@derive(Copy)`
 
@@ -6658,8 +6824,9 @@ A borrow may not be:
   language has no way to write down a "binding that holds a borrow"; the
   `&` form is not valid in `let`/`mut` declarations.
 - **Returned from a function.** A function's return type is always an
-  owned value or a `Copy` value, never a borrow. The `&` form does not
-  appear in return-type position.
+  owned value or a `Copy` value. The `&` form does not appear in
+  return-type position, except for the narrow carve-outs in §11.9.5
+  (`Iterator::next` and stdlib-privileged borrow-returning functions).
 - **Stored in a record field, enum variant payload, or tuple component.**
   Compound types contain owned values, never borrows.
 - **Captured by a closure.** Closures capture by value (§11.10); borrows
@@ -6670,6 +6837,11 @@ function call expression that created it. The compiler does not need to
 track lifetimes across statements, across function boundaries, or across
 data structures — the borrow exists only within one call expression and
 is gone by the next statement.
+
+These prohibitions admit a small set of narrow carve-outs documented in
+§11.9.5 for specific structural positions (iterator-type fields,
+Iterator::next returns, stdlib-privileged borrow-returning functions).
+Outside those positions the prohibitions are absolute.
 
 #### 11.9.2 Constraints during an active borrow
 
@@ -6689,9 +6861,13 @@ evaluated sequentially. The case it forbids is multi-argument calls where
 one argument borrows and another consumes:
 
 ```
+fn combine(a: &Vec[i32], b: Vec[i32]) -> ...  // a borrows; b consumes
+fn consume_fn(v: Vec[i32]) -> ...
+
 let v = make_vec()
-let result = combine(&v, consume_fn(v))   // ✗ compile error:
-                                           //   v borrowed and moved in the same expression
+let result = combine(v, consume_fn(v))   // ✗ compile error:
+                                          //   v borrowed (per combine's first parameter)
+                                          //   and moved (into consume_fn) in the same expression
 ```
 
 The compiler tracks within-expression borrow activity and reports
@@ -6703,9 +6879,12 @@ Multiple borrows of the same value in the same expression are permitted,
 because all borrows are read-only:
 
 ```
+fn compare(a: &Vec[i32], b: &Vec[i32]) -> bool
+fn max3(a: &Vec[i32], b: &Vec[i32], c: &Vec[i32]) -> &Vec[i32]  // illustrative; see §11.9.5 stdlib carve-out
+
 let v = make_vec()
-let r = compare(&v, &v)              // ✓ two borrows of v, both read-only
-let s = max3(&a, &a, &b)             // ✓ multiple borrows of a, one of b
+let r = compare(v, v)                // ✓ two borrows of v per compare's signature, both read-only
+let s = max3(a, a, b)                // ✓ three borrows total per max3's signature
 ```
 
 No aliasing-with-mutation hazard arises: nothing in the call expression
@@ -6739,8 +6918,11 @@ fn length(v: &Vec[i32]) -> isize:
 
 #### 11.9.5 Where borrows may appear
 
+The borrow-position list below covers both permitted and forbidden
+cases; readers may treat the bullets as a complete enumeration.
+
 `&T` is grammatically valid only in *parameter positions*. The language
-recognizes three positions, each with a clear, lexically-bounded borrow
+recognizes six positions, each with a clear, lexically-bounded borrow
 lifetime:
 
 - **Function parameter type signatures** (this section, §11.7.4 and
@@ -6758,8 +6940,31 @@ lifetime:
   is the only position where `&v` is an *expression* rather than a
   signature element; everywhere else, `&v` as an expression is a parse
   error.
+- **Iterator type fields holding a borrow into the iteration source**
+  (§12.7.4). When a user-defined iterator type satisfies the `Iterator`
+  trait with `Item = &T`, the iterator's record may carry a `source: &T`
+  field referencing the iteration source. The borrow's lifetime is
+  bounded by the enclosing for-loop expression that holds the iterator;
+  the compiler verifies that the source outlives the iterator at
+  construction. This carve-out is bounded to fields of types satisfying
+  `Iterator` — it does not generalize to arbitrary record fields.
+- **`Iterator::next` return values** (§12.7.4). The `Iterator` trait's
+  `next` method may return `(Option[&T], Self)` when the iterator's
+  `Item` type is a borrow. This is the value-side counterpart to the
+  iterator-type-field carve-out above: the iterator stores the borrow in
+  its source field, and `next` exposes that borrow as the yielded item.
+  The borrow's lifetime is bounded by the enclosing for-loop expression.
+- **Stdlib-privileged borrow-returning function signatures** (§3.7.3).
+  The language reserves the right to provide functions in the standard
+  library whose return type is a borrow into one of their arguments — for
+  example, indexed-collection accessors like `element_at(v: &Vec[T], i:
+  isize) -> &T`. The returned borrow's lifetime is bounded by the
+  argument-borrow's lifetime (the borrow-scope of the call expression
+  that constructed the argument borrow). This carve-out applies only to
+  language-privileged stdlib functions enumerated in §3.7.3; user-defined
+  functions cannot declare borrow return types.
 
-All three positions share the same lifetime discipline: the borrow lives
+All six positions share the same lifetime discipline: the borrow lives
 for the scope of one parameter-binding occurrence (one call expression,
 one iteration body, or one for-loop expression respectively). The
 compiler does not need lifetime parameters or cross-statement tracking;
@@ -6771,12 +6976,14 @@ Outside these positions, `&T` is a parse error.
 forbidden in:
 
 - `let` and `mut` declarations: `let r: &Vec = ...` is a parse error.
-- Record fields: `type Holder: data: &Vec` is a parse error.
+- Record fields: `type Holder: data: &Vec` is a parse error. Exception:
+  iterator-type fields per the position list above.
 - Enum payloads: `Variant(&T)` is a parse error.
 - Tuple components, *except* the tuple appearing as the return type of
   `Iterator::next` per §12.7.4: `(&i32, i32)` is generally a parse error.
-- Function return types, *except* `Iterator::next` per §12.7.4:
-  `fn f(...) -> &T` is generally a parse error.
+- Function return types, *except* `Iterator::next` per §12.7.4 and
+  stdlib-privileged borrow-returning functions per the carve-out above
+  (`element_at`, etc.): `fn f(...) -> &T` is generally a parse error.
 - Closure parameter types in stored closure types (deferred).
 - Trait associated types, *except* `Iterator::Item` per §12.7.4:
   `type Item = &T` is generally a parse error.
@@ -6846,8 +7053,8 @@ let closure = || sum(buf)                     // ✗ compile error:
 Non-`Copy` values flow through closures as arguments rather than captures:
 
 ```
-let closure = |b: &Vec[f32]| sum(b)          // takes a borrow argument
-let total = closure(&buf)                     // caller passes &buf each call
+let closure = |b: &Vec[f32]| sum(b)          // closure takes a borrow argument
+let total = closure(buf)                      // caller passes buf; borrow inserted per signature
 ```
 
 #### 11.10.2 Capture granularity
@@ -6896,7 +7103,7 @@ counter = counter + 1                         // mut continues to evolve
 
 For closures that must track live updates of changing state, the reactive
 system is the appropriate mechanism. The reactive system is specified in
-a deferred section.
+§13 (see §13.2 for reactive cell declarations).
 
 #### 11.10.4 Body unrestricted
 
@@ -6943,8 +7150,8 @@ element being assigned must itself be of a type compatible with the
 assigned value, per the standard type-check rules.
 
 Field and indexed assignment desugar to operator-trait method calls (the
-exact traits — `FieldAssign`, `IndexAssign`, or analogous — are specified
-in §Operator Traits, deferred). The desugaring preserves the
+exact traits — `FieldAssign`, `IndexAssign`, or analogous — are stdlib
+concerns specified outside this document). The desugaring preserves the
 single-writer invariant: the assignment is a mutation through the `mut`
 binding only; no other binding to the same underlying value can exist
 while the mutation occurs (borrows would block it per §11.9.2; aliased
@@ -7023,8 +7230,8 @@ parameters. The borrow lifetime remains call-scoped as for direct calls.
 
 ### 11.14 Interaction with Reactivity
 
-The reactive system is specified in a deferred section. The interaction
-with local mutability follows two principles, recorded here for
+The reactive system is specified in §13. The interaction with local
+mutability follows two principles, recorded here for
 forward-compatibility:
 
 - **Reactive expressions (`derived` and analogous) are pure-evaluated.**
@@ -7043,7 +7250,7 @@ forward-compatibility:
 
 The reactive boundary is one of the "global" scopes referenced in
 §11.1's principles. The full specification of how values cross this
-boundary is deferred to the reactive-system section.
+boundary is given in §13.11 (the reactivity boundary).
 
 ---
 
@@ -7304,7 +7511,7 @@ under consume form, or `Iterable::Iter` under borrow form). The Item
 type depends on both the iterable's element type and which form the
 loop uses.
 
-The iteration variable is one of the three valid borrow-bearing
+The iteration variable is one of the six valid borrow-bearing
 positions per §11.9.5: bound by the loop construct, fresh each
 iteration, immutable, cannot be declared `mut`. Its borrow lifetime
 (when borrow-typed) is the duration of one iteration body. The compiler
@@ -7589,6 +7796,13 @@ value` sites in the body and the presence/absence of an `else:` clause:
 where `T` is the unified type of all `break value` sites (and the
 `else:` clause, when present).
 
+**Note on `never`-unification:** if the body provably never completes
+naturally (every path produces a `break value`, `return`, `panic`, or
+other diverging operation), the natural-completion arm is unreachable
+and unifies with the break-value type via §8.2.2. In this case the
+loop expression's type collapses to `T` regardless of the `else:`
+clause's presence. See §12.6.4.
+
 ##### Without `break value`, without `else:`
 
 The loop produces unit. This is the statement form.
@@ -7619,14 +7833,17 @@ the loop to also yield a summary value.
 
 ##### With `break value`, without `else:`
 
-The loop produces `Option[T]`. `Some(v)` from `break value`, `None`
-from natural completion:
+The loop produces `Option[T]` where `T` is the type of the `break value`
+expression. The language auto-wraps each `break value` as `Some(value)`;
+natural completion produces `None`. The user writes the bare value (not
+`Some(...)`).
 
 ```
 let found = for item in &items:
   if matches(item):
-    break Some(item.id)       // borrow form: items survives the loop
-                              // expression value: Option[ItemId]
+    break item.id              // borrow form: items survives the loop
+                               // auto-wrapped to Some(item.id)
+                               // expression type: Option[ItemId]
 ```
 
 For the find-first pattern, the user typically wants `Some(item)` from
@@ -7725,9 +7942,9 @@ implicitly.
 Because the for-loop's iterator binding is owned exclusively by the loop
 and is reassigned only by the loop's internal desugaring, the iterator's
 ownership is *linear* (single owner at every moment, no aliasing). The
-compiler is required to recognize this pattern and emit in-place
-cursor mutation — equivalent to the machine code produced for `&mut self`
-methods in languages with mutable references.
+compiler recognizes this pattern and emits in-place cursor mutation —
+equivalent to the machine code produced for `&mut self` methods in
+languages with mutable references.
 
 Specifically, when:
 
@@ -7743,20 +7960,17 @@ Condition 3 holds by construction for the for-loop's internal
 desugaring: the desugaring emits one statement that calls `next`,
 destructures the returned tuple via pattern match, and rebinds the
 iterator location to `NewIter` — all in one expression with no other
-references possible. The compiler treats this pattern as a recognized
-form.
+references possible.
 
-When the three conditions hold, the compiler may compile the call as:
+When the three conditions hold, the compiler compiles the call as:
 pass a pointer to the iterator's state, mutate the cursor in place,
 return only the item value in registers. The "consumed" and "returned"
 iterator are the same memory location; no copy occurs.
 
 This optimization is a *required* property of conforming implementations,
-not an optional optimization. The tuple-return trait shape is the source-
-level pattern; the linear-ownership compilation is the performance
-guarantee. Implementations that fail to optimize this pattern produce
-code with iterator-cursor copies on every iteration, which is unacceptable
-for the workloads loops are designed to serve.
+not an optional optimization. The tuple-return trait shape is the
+source-level pattern; the linear-ownership compilation is the performance
+guarantee.
 
 #### 12.7.3 Implementing `Iterator`
 
@@ -7798,11 +8012,16 @@ When `Item = &T`, the `next` method's return type becomes
 tuple, both of which are normally borrow-forbidden positions; the
 exception applies specifically to this trait's `next` return.
 
+User-defined borrow-yielding iterators store a borrow into the iteration
+source as a field of the iterator type. This is one of the narrow `&T`
+positions permitted per §11.9.5; the lifetime is bounded by the for-loop
+expression.
+
 A borrow-yielding iterator implementation:
 
 ```
 type VecIter[T]:
-  source: ...                       // internal: refers back to the borrowed Vec
+  source: &Vec[T]                   -- borrow into the iteration source
   cursor: isize
 
 fulfill Iterator for VecIter[Record]:
@@ -7817,9 +8036,10 @@ fulfill Iterator for VecIter[Record]:
       (Some(element_ref), local)
 ```
 
-The `element_at` operation is a stdlib primitive that produces a borrow
-into the source's storage. The borrow's validity is tied to the
-iteration step.
+`local.source.element_at(local.cursor)` calls a stdlib-privileged
+borrow-returning function per §11.9.5 (the §3.7.3 carve-out for
+borrow-return signatures). The returned `&Record` is bounded by the
+source borrow's lifetime.
 
 The trait declaration itself is unchanged:
 
@@ -7959,8 +8179,8 @@ remain inside the iterator's internal storage. When the iterator is
 dropped (at loop exit), the remaining elements are dropped per their
 `Drop` semantics, and the underlying buffer is released.
 
-The exact `Drop` mechanism for non-Copy types is specified in §Drop
-Trait (deferred). For Copy types, drop is a no-op.
+The exact `Drop` mechanism for non-Copy types is specified in §14.9.
+For Copy types, drop is a no-op.
 
 #### 12.9.4 Implementing `IntoIterable`
 
@@ -8195,8 +8415,8 @@ per call site.
 
 ### 12.13 Interaction with Reactivity (Forward-Looking)
 
-The reactive system is specified in a deferred section. Loops in
-reactive contexts follow §11.14:
+The reactive system is specified in §13. Loops in reactive contexts
+follow §11.14:
 
 - A `derived` expression's body may contain loops. Each evaluation of
   the derived expression runs the loop fresh. The loop's local
@@ -8208,7 +8428,8 @@ reactive contexts follow §11.14:
 - The `while` loop's condition may depend on reactive values, but
   reactive updates do not interrupt an in-progress loop iteration.
 
-Full specification is deferred to the reactive-system chapter.
+Full specification is given in §13 (see §13.9 for the evaluation
+cycle and §13.11 for the reactivity boundary).
 
 ### 12.14 Restrictions and Edge Cases
 
@@ -8220,7 +8441,7 @@ expression context) is determined by the else-clause-and-break-value
 table of §12.6.2:
 
 ```
-let result = for x in []:           // hypothetical empty array
+let result = for x in 0..0:         // empty range (type-resolvable)
   break x
 else:
   default_value
@@ -8310,12 +8531,17 @@ via connections are handled separately via the `Circularity` trait
 (§13.5, §13.10): a topology cycle is valid only if it traverses at
 least one connection type satisfying `Circularity`.
 
-**Reactive vs imperative separation.** Reactive composition uses
-nodes, parts, and connections. Imperative data structures (`Vec`,
-`HashMap`, fixed-size arrays of more than one cell, etc.) hold
-non-reactive data only. Reactive cell types are restricted
-(§13.11.4) to types that fit single cells in the reactive state
-buffer (§14.3).
+**Reactive composition uses nodes, parts, and connections.**
+Reactive cells (signal, attr, recurrent, derived) may hold values
+of any type; the kernel chooses a storage strategy from §13.11.4:
+direct in-cell storage for values fitting the platform atomic
+word, or handle-based pool storage for larger or dynamically-sized
+values. Imperative data structures (`Vec`, `HashMap`, etc.) are
+first-class as values held inside reactive cells via pool storage,
+and are also usable as ordinary owned values inside function
+bodies (governed by §11). The reactive system organizes
+composition and propagation; cell content is governed by ordinary
+type rules.
 
 **No separate effects construct.** External effects (logging, I/O,
 audio output, network requests, scheduling, etc.) are not expressed
@@ -8797,6 +9023,8 @@ placement. If per-instance variation is needed, parametrize via
 attrs read inside `next_expr`:
 
 ```
+signal tick_signal: u64 = 0
+
 node Counter:
   attr step_size: i32 = 1
   recurrent count: i32 = 0
@@ -8854,6 +9082,9 @@ work is factored into a helper function whose body computes the
 gain once and returns the pair of updated values:
 
 ```
+signal source: f32 = 0.0
+signal noise: f32 = 0.01
+
 fn kalman_step(mean: f32, variance: f32, source: f32, noise: f32) -> (f32, f32):
   let gain = variance / (variance + noise)        // computed once per call
   (
@@ -8989,12 +9220,12 @@ every instance of the type and is fixed at compile time.
 ```
 trait Action
 
-node log:
+node Log:
   satisfies Action
   const type: string = "@action/log"
   default attr message: string
 
-node delay:
+node Delay:
   satisfies Action
   const type: string = "@action/delay"
   default attr time: duration
@@ -9037,8 +9268,8 @@ A const is accessible through three syntactic forms:
 ```
 -- Type-level access lets callers read a type's const without an
 -- instance. Useful for compile-time tables and dispatch keys.
-const ACTION_LOG_TAG: string = log::type        -- "@action/log"
-const ACTION_DELAY_TAG: string = delay::type    -- "@action/delay"
+const ACTION_LOG_TAG: string = Log::type        -- "@action/log"
+const ACTION_DELAY_TAG: string = Delay::type    -- "@action/delay"
 
 fn tag_for[T: Action](_: T) -> string:
   T::type           -- type-level read; no instance needed at runtime
@@ -9134,6 +9365,12 @@ Traps during initial evaluation (signal initializers, attr defaults,
 recurrent initial values, or initial derived evaluation) follow
 §13.12.1 — the process aborts. There is no recovery path for traps
 encountered during startup.
+
+**Cross-instance init cycles.** When a cell's initial value references
+a cell on another instance (e.g., a sibling part's attr), the init
+dependency graph includes cross-instance edges. Cycles across
+instances are compile errors at the same severity as within-instance
+init cycles, identifying the participating instances and cells.
 
 #### 13.2.7 No mutation of cells from Ductus source
 
@@ -9325,9 +9562,11 @@ kinds of child node instances may be placed inside instances of
 this node at placement time:
 
 - **No `parts:` clause** — the node accepts child instances of *any
-  node type*. Only the heterogeneous access form `self.parts`
-  (§13.4.1) is available inside the node body; type-bulk and
-  cardinality-bounded forms are not.
+  node type*. Inside the node body, only the heterogeneous
+  `self.parts` form is available, and it requires an explicit trait
+  bound on the iteration variable (`for p: SomeTrait in self.parts`)
+  per §13.4.1. Type-bulk (`self.parts.<NodeType>[i]`) and
+  cardinality-bounded forms are not available.
 - **With a `parts:` clause** — the node accepts only children whose
   types appear in the listed set, with the declared cardinality
   constraints. Both heterogeneous (`self.parts`) and type-bulk
@@ -9400,9 +9639,13 @@ which is a structural iterable of compile-time-known length range:
 - Heterogeneous iteration: `for p in self.parts: ...` iterates
   all parts of all declared types (§13.4.2).
 
-A node without a `parts` clause cannot contain children. A node
-with a `parts` clause may contain children at runtime according to
-the declared cardinality.
+A node without a `parts` clause may still contain children of any
+node type (per §13.3.3); inside its body, only the heterogeneous
+`self.parts` form is available, and it requires an explicit trait
+bound on the iteration variable (`for p: SomeTrait in self.parts`)
+per §13.4.1 — type-bulk and cardinality-bounded forms are not
+available. A node with a `parts` clause may contain children at
+runtime according to the declared cardinality.
 
 #### 13.3.4 `in` and `out` clauses
 
@@ -9918,10 +10161,10 @@ blocks. Same rule as nodes (§13.3.6).
 
 #### 13.5.5 The `Circularity` trait
 
-A connection type may declare conformance to the language-provided
-`Circularity` trait — a language-defined marker trait (§3.7.4) — to
-indicate that placements of this connection type may participate in
-topology cycles in the node graph (§13.10.2).
+A connection type may declare conformance to the `Circularity` trait
+— a language-defined marker trait (§3.7.4) — to indicate that
+placements of this connection type may participate in topology cycles
+in the node graph (§13.10.2).
 
 ```
 trait Circularity                          -- marker trait, no methods
@@ -9937,8 +10180,8 @@ construction-time node graph must traverse at least one connection
 whose type satisfies `Circularity`. Cycles consisting only of
 non-`Circularity` connections are compile errors.
 
-`Circularity` is a marker trait — it has no methods. Its sole
-purpose is to opt a connection type into participation in cycles.
+Its sole purpose is to opt a connection type into participation in
+cycles.
 
 The decision of which connection types satisfy `Circularity` is
 domain-defined. A connection type whose runtime semantics introduce
@@ -10268,13 +10511,32 @@ in the inline-parts ordering between `/Expr` and the inline pipes
 (§13.7.9).
 
 ```
+// (presumes Filter declares signal_active and App declares debug_enabled)
 App my_app:
   Filter filter / "low-pass":
-    -> Cascade / next_filter when self.from.signal_active     // part-owned, gated
+    -> Cascade / next_filter when self.signal_active          // part-owned, gated on filter's own attr
   Filter next_filter / "high-pass"
   Monitor monitor
-  WiresTo / monitor when self.debug_enabled                   // node-owned, gated
+  WiresTo / monitor when self.debug_enabled                   // node-owned, gated on my_app's attr
 ```
+
+**Scope of placement-level `when` on part-owned connections.** A
+placement-level `when` clause on a part-owned connection
+(`-> ConnType / dest when predicate`) evaluates in the scope of the
+*enclosing part instance*, not the connection-being-placed. The
+connection has not yet been constructed; its `self` is unavailable. To
+reference the connection's own attrs in a gate, use a type-level
+`when:` clause inside the connection's body (§13.5.1.1) instead.
+
+**Scope of placement-level `when` on node-owned connections.** A
+placement-level `when` clause on a node-owned connection (e.g.,
+`WiresTo / monitor when self.debug_enabled` placed at the same level
+as the source node instance) evaluates in the scope of the *enclosing
+instance* (typically a parent node containing both source and
+destination). `self` here refers to that enclosing instance, not the
+connection-being-placed. To reference the connection's own attrs in a
+gate, use a type-level `when:` clause inside the connection's body
+(§13.5.1.1) instead.
 
 #### 13.7.5 The `/expr` form
 
@@ -10352,8 +10614,10 @@ three categories:
   slot rather than an attribute. The identifiers `to` and `from`
   are reserved as endpoint slots inside connection bodies; they
   cannot be used as attr names on connections.
-- **Placement:** `["->"]? TypeRef [Flags]? [InstanceName]? [/Expr]? ["when" Pred]? [| AttrPipe]*` followed by an
-  optional `:` and indented body. Creates a child part or connection. The `when` modifier gates the placement (§13.8).
+- **Placement:** the placement form (see §13.7.9 for the canonical
+  ordering of inline parts), optionally followed by `:` and an
+  indented body. Creates a child part or connection. The optional
+  `when` modifier gates the placement (§13.8).
 
 The parser distinguishes by what follows the first identifier: `:`
 (with an expression after) → attribute setting or endpoint slot
@@ -10619,10 +10883,12 @@ a schema member. It uses colon form, consistent with other body
 fields (`from:`, `to:`, `attr name:`, `recurrent name:`, etc.):
 
 ```
+signal trigger: u64 = 0
+
 node OneShot:
   out: Pulse
   recurrent fired: bool = false
-    | on self.in.trigger: true
+    | on trigger: true
   when: not self.fired                        // intrinsic refractory gate
 
 connection ActiveEdge:
@@ -10750,9 +11016,11 @@ placement-level `when` is unconditional — always active.
 
 A gate predicate may reference cells of the gated instance itself.
 The kernel evaluates the predicate against the cells' current
-committed values; cyclic self-reference is well-defined because
-reads see committed state (per §13.10.3 — the per-publish DAG
-treats every cell read as an input to the current publish).
+committed values; cyclic self-reference is well-defined: the gate
+predicate evaluates against the gated cell's *previously-committed*
+values from the prior publish. The gate-open transition is itself a
+propagation event scheduled within the publish that flips the
+predicate (per §13.8.7's snap-on-gate-open rule).
 
 ```
 connection WeightedEdge:
@@ -10776,9 +11044,10 @@ predicate.
 **Definitions.**
 
 - A *gate-true* edge propagates normally.
-- A *gate-false* edge does not propagate to the destination's
-  output-affecting state, but does deliver to the destination's
-  input cells (so the destination's own `when` can re-evaluate).
+- A *gate-false* edge on a gated *node* does not propagate to the
+  destination's output-affecting state, but inbound connections
+  still deliver to the gated node's input cells, so the node's own
+  `when` predicate can re-evaluate.
 
 **Behavior on a gated node** (its `when` predicate is currently
 false):
@@ -10805,9 +11074,12 @@ false):
 - **Outputs:** do not propagate. Outbound connections from the
   gated node do not deliver to their destinations.
 
-**Behavior on a gated connection** (its `when` predicate is
-currently false): the edge does not propagate at all. The
-destination receives nothing through this connection.
+**Behavior on a gated connection** (the connection's own `when` is
+false): a gated connection edge does not propagate at all — its
+destination receives nothing through this connection. Note this
+differs from a gated *node*, whose inbound connections still deliver
+to its `in` cells (the node's own `when` re-evaluates against those
+inputs).
 
 **Snap on gate-open.** When a `when` predicate transitions from
 false to true between publishes, the kernel treats this as a
@@ -10823,7 +11095,7 @@ is a separate concern handled by the parameter system, not by the
 gate primitive. The gate guarantees correctness, not continuity.
 
 **Cell-value reads on gated subgraphs.** Reads always return a
-defined value of type T (no `Option<T>`), because:
+defined value of type T (no `Option[T]`), because:
 
 - All attrs have values (defaults or required-at-placement —
   §13.2.2).
@@ -10987,13 +11259,20 @@ operation on the producer thread:
    publish. No new dirty bits are added during the rest of the
    publish cycle.
 2. **Compute evaluation order.** Topologically sort the per-publish
-   DAG (§13.10.3). Nodes in the DAG are: dirty derived expressions
-   plus recurrent arm expressions whose triggers fired this
-   publish. Edges are dependencies; recurrent reads are treated as
-   inputs (their previous-committed values), which breaks reactive
-   cycles. Reads of deriveds, signals, and attrs follow normal
-   dependency edges within this publish. Edges whose gate predicate
-   evaluates false do not propagate to destination outputs; see §13.8
+   DAG (§13.10.3). Nodes in the DAG are:
+    - Dirty derived expressions.
+    - Each recurrent **arm** whose triggers fired this publish. A
+      multi-arm recurrent (§13.2.4) contributes one DAG node per
+      fired arm, not one node per recurrent. The arm's `where` guard
+      expression (if present) contributes its own dependency edges
+      into the DAG — guard reads are not deferred to evaluation;
+      they participate in the topological sort.
+
+   Edges are dependencies; recurrent reads are treated as inputs
+   (their previous-committed values), which breaks reactive cycles.
+   Reads of deriveds, signals, and attrs follow normal dependency
+   edges within this publish. Edges whose gate predicate evaluates
+   false do not propagate to destination outputs; see §13.8
    (Conditional Activation) for the full semantics, including the
    gate-open transition rule.
 3. **Evaluate in topological order.** For each node in topo order,
@@ -11009,6 +11288,18 @@ operation on the producer thread:
    Derived behaviors write their results into the back buffer.
    Recurrent arm expression results are held aside (not yet
    visible to in-pass evaluation) until step 4.
+
+   **Arm selection at evaluation.** Multi-arm recurrent evaluation
+   proceeds in two stages within the publish cycle:
+   1. **Guard evaluation order**: each arm's `where` guard expression
+      evaluates in topological order over the per-publish DAG
+      (alongside other dirty deriveds). This produces a fired/not-fired
+      bit per arm.
+   2. **Arm selection order**: among the arms with fired triggers AND
+      guards evaluated to true (or no guard), the first one in
+      declaration order (per §13.2.4) wins. Only the winning arm's
+      `next_expr` evaluates; remaining arms' `next_expr` expressions
+      are skipped this publish.
 4. **Commit recurrent advancement.** Write the next values
    computed in step 3 into the recurrent cells. After this step,
    recurrent reads return their newly-advanced values.
@@ -11149,6 +11440,18 @@ by treating every recurrent read as an *input* — its value is
 whatever was committed at the end of the previous publish, not
 what will be committed at the end of this publish. This breaks
 all valid reactive cycles, producing a DAG.
+
+Reads OF a recurrent cell — from any expression context (derived
+bodies, recurrent arm `next_expr` bodies, `where` guards) — always
+return the previous-committed value. This is the rule that breaks
+reactive cycles.
+
+Reads FROM a `where` guard (its own input cells) are NOT treated as
+previous-publish inputs. The guard evaluates within the current
+publish to determine whether its arm fires (per §13.9.2 step 2). The
+two rules are not in conflict: "reads OF recurrents" refers to what
+value a recurrent cell yields when read; "reads FROM a guard" refers
+to which cells the guard's expression itself reads.
 
 The per-publish DAG is what gets topologically sorted in §13.9.2
 step 2.
@@ -11343,10 +11646,10 @@ from the type's size and shape:
   buffer's cell. The atomic publication (§14.3.3) is a single
   atomic store. No allocation, no refcount, no pool.
 - On platforms supporting wider atomics (x86_64 with `CMPXCHG16B`,
-  ARM64 with `LDXP`/`STXP`), types of size 9–16 bytes may
-  optionally be stored directly in a 128-bit cell (§14.3.4). On
-  platforms without wide atomics, types in this range fall back to
-  handle-based storage.
+  ARM64 with `LDXP`/`STXP`), types of size 9–16 bytes are stored
+  across two consecutive 64-bit cells with atomic-pair updates
+  (§14.3.4). On platforms without wide-atomic support, types in
+  this range fall back to handle-based storage.
 - `Result[T, E]` and `Option[T]` follow the same rule: if the total
   bit width (discriminant + maximum payload) fits the atomic word,
   direct storage applies.
@@ -11407,6 +11710,11 @@ from the type's size and shape:
 | Fixed-size array `T[N]` with N×sizeof(T) ≤ word | direct                                                     |
 | Fixed-size array `T[N]` with N×sizeof(T) > word | pool                                                       |
 
+Sizes shown are value widths. Storage is in 64-bit (8-byte) cells:
+values ≤8 bytes occupy one cell with appropriate padding/extension;
+larger values span multiple consecutive cells per §14.3.2 or use pool
+storage per §14.3.5.
+
 **Dynamic-size handle-based types:**
 
 The stdlib provides three dynamic-size collection types usable as
@@ -11419,6 +11727,10 @@ documented complexity bounds.
 | `Vec[T]`         | O(log32 n)   | O(log32 n)    | Persistent trie, structural sharing across versions |
 | `SmallVec[T; N]` | O(n) bounded | O(1)          | Inline storage up to N elements, heap beyond        |
 | `RingBuf[T; N]`  | O(1)         | O(1)          | Fixed-capacity ring; oldest dropped when full       |
+
+The `T; N` form distinguishes the type parameter T from the
+const-generic parameter N. Generic syntax in Ductus uses commas
+between type parameters and semicolons before const-generics.
 
 `Vec[T]` is the default for unbounded growth; the persistent
 vector trie (Clojure/Scala/Rust `im::Vector` family) provides
@@ -11562,26 +11874,27 @@ The kernel's lifecycle proceeds in phases:
 
 1. Load metadata (per §14.7).
 2. Allocate the reactive state buffer (per §14.3).
-3. Initialize signal cells with their declared initial values (in
-   declaration order).
-4. Initialize attr cells with their declared defaults (per-instance,
-   in declaration order within each instance, with placement
-   order across instances).
-5. Initialize recurrent cells with their declared initial values
-   (per-instance, with placement-time overrides applied). The arm
-   expressions are *not* evaluated at startup; they run only when
-   triggers fire during a publish.
-6. Run the initial derived evaluation in topological order over
-   the reactive dependency graph. Each derived computes its
-   initial value from the now-initialized signals, attrs, and
-   recurrents. Recurrents' initial values serve as the
-   "previous-committed" source for any cyclic reads during this
-   pass.
-7. Perform the first publish (atomic current-pointer swap per
+3. Initialize all reactive cells (signals, attrs, recurrents,
+   deriveds) and evaluate all `when` predicates in topological order
+   over their init-time read dependencies, per §13.2.6's startup
+   pass rules. Signal cells receive declared initial values; attr
+   cells receive declared defaults (or placement-supplied values);
+   recurrent cells receive declared initial values (the arm
+   `next_expr` is NOT evaluated at startup); derived cells are
+   computed by evaluating their expression bodies; `when` predicates
+   are evaluated to determine each instance's initial gate state.
+   Placement-level `when` predicates (§13.8.3) are evaluated
+   alongside type-level `when:` predicates in the same topological
+   pass; placement-level overrides type-level per §13.8.5 with the
+   placement's predicate evaluating in its placement scope rather
+   than the type's `self` scope. The kernel does not separate this
+   work into per-declaration-kind phases; the topological sort
+   determines the order.
+4. Perform the first publish (atomic current-pointer swap per
    §14.3.3.1). Consumers' subsequent swaps return real data.
 
-The kernel is "constructing" through steps 1–6; "live" after step
-7 completes. Consumer reads via swap before step 7 return a
+The kernel is "constructing" through steps 1–3; "live" after step
+4 completes. Consumer reads via swap before step 4 return a
 sentinel (or block, per implementation choice).
 
 **Steady-state operation:**
@@ -11611,17 +11924,17 @@ sentinel (or block, per implementation choice).
 
 #### 13.13.2 `kernel.write_signal`
 
-Two forms, one per signal scope:
+A single overloaded call, dispatched by arity:
 
 ```
-kernel.write_signal(signal_id, value)                          // module-level signal
-kernel.write_instance_signal(instance_id, signal_id, value)    // per-instance signal
+kernel.write_signal(signal_id, value)                      // module-level signal
+kernel.write_signal(instance_id, signal_id, value)         // per-instance signal
 ```
 
-Both forms write a new value to the named signal's cell. The calls
-are synchronous and inexpensive: they update the back buffer's
-cell and set the dirty bit for dependents. No evaluation runs at
-this point.
+Both arities write a new value to the named signal's cell. The
+calls are synchronous and inexpensive: they update the back
+buffer's cell and set the dirty bit for dependents. No evaluation
+runs at this point.
 
 **Module-level form** — `kernel.write_signal(signal_id, value)`:
 writes to a top-level signal. The `signal_id` identifies a
@@ -11629,14 +11942,14 @@ module-scope signal declared per §13.2.1. One cell exists for the
 entire program.
 
 **Per-instance form** —
-`kernel.write_instance_signal(instance_id, signal_id, value)`:
+`kernel.write_signal(instance_id, signal_id, value)`:
 writes to a node-level or connection-level signal on a specific
 instance. The `instance_id` identifies the instance (assigned at
 compile time per placement); `signal_id` identifies the signal on
 that instance's type. Each placement creates its own cell; the
 write targets one specific cell.
 
-Both calls must be made from the producer thread (the kernel's
+Both arities must be called from the producer thread (the kernel's
 designated thread for write/evaluation/publish operations; see
 §14.8). Other threads write indirectly by enqueueing requests for
 the producer thread to apply — that's a host-application concern,
@@ -11653,7 +11966,7 @@ kernel.write_attr(instance_id, attr_id, value)
 ```
 
 Writes a new value to the cell of a specific instance's attr.
-Otherwise behaves identically to `kernel.write_instance_signal`:
+Otherwise behaves identically to the per-instance form of `kernel.write_signal`:
 synchronous, back-buffer-only, dirty-bit propagation, no evaluation.
 
 `instance_id` identifies the instance (assigned at compile time per
@@ -11698,32 +12011,16 @@ kernel.transaction(|tx| {
 })
 ```
 
-Provides atomic grouping of writes. Properties:
+Provides atomic grouping of writes.
 
-- The transaction's closure executes synchronously.
-- Writes within the closure accumulate in the back buffer; a
-  snapshot of the pre-transaction back-buffer state is preserved
-  to support `tx.abort()`.
-- On successful completion, the writes are committed (the snapshot
-  is discarded).
-- **On panic within the closure**, the trap-track semantics of
-  §13.12.1 apply: the process aborts. There is no rollback; the
-  back-buffer state at the moment of abort is irrelevant because
-  the process is terminating. Atomicity of grouped writes is
-  trivially preserved by process death. The savepoint mechanism
-  exists only for `tx.abort()`, not for panic recovery.
-- **On `tx.abort()`** (called from within the closure), the back
-  buffer is rolled back to the pre-transaction snapshot. The
-  closure returns normally; no panic is raised. This is the only
-  rollback path.
-- **Nesting:** nested transactions flatten — only the outermost
-  `kernel.transaction` commits. Inner `kernel.transaction` calls
-  are no-ops with respect to commit; their writes accumulate into
-  the outer transaction and commit together at outer close.
-
-Transactions provide *atomicity of grouped writes*. They do not
-publish; dirty cells remain dirty until the next `kernel.publish()`,
-which performs evaluation and consumer visibility.
+The transaction's closure executes synchronously. Writes accumulate
+in the back buffer and commit atomically at closure completion. The
+full semantic rules for atomicity, panic-on-abort, nesting flattening,
+and `tx.abort()` rollback are specified in §13.9.4; the API surface
+here is the syntactic invocation form. Transactions provide
+*atomicity of grouped writes*; dirty cells remain dirty until the
+next `kernel.publish()`, which performs evaluation and consumer
+visibility.
 
 #### 13.13.6 `kernel.swap`
 
@@ -11827,17 +12124,29 @@ recomputed.
 
 #### 13.14.4 Constraints on reloadability
 
-Some changes are not safely hot-reloadable and require full kernel
-restart:
+Some changes are not safely hot-reloadable in place and require a
+restart — either full-kernel or per-instance, depending on the change:
 
 - Changes to the layout of the reactive state buffer that would
   require relocating live cells. The reload's diff-and-apply
   approach handles incremental changes but not whole-buffer
-  reorganization.
+  reorganization. **Full-kernel restart required.**
+- Operator-specific changes that require restart for the affected
+  operator instances:
+  - Operator signature changes (parameters added, removed, or
+    retyped; return type changed).
+  - Internal cell type changes within an operator body.
+  - Changes to a cell's `= initial` expression in a way that would
+    alter its current state semantics.
 
-Implementations detect these cases during the diff phase and
-either reject the reload or schedule it as a restart-required
-reload. The kernel diagnoses which class of change occurred.
+  See §13.16.10 for full operator-reload rules. **Per-instance
+  restart** suffices: the affected operator instances are
+  recreated; the rest of the kernel continues without restart.
+
+Implementations detect these cases during the diff phase and either
+reject the reload or schedule the appropriate restart (full-kernel
+or per-instance). The kernel diagnoses which class of change
+occurred.
 
 ### 13.15 Interaction with the Implementation (§14)
 
@@ -11965,13 +12274,45 @@ on `Signal[T]` parameters are not allowed in v1 (a default cell
 reference has no clear meaning; if needed, use a stdlib helper
 that constructs a constant cell).
 
+**Default-parameter ordering.** Defaulted-before-non-defaulted ordering
+follows the general rule in §3.5.4 (which applies uniformly to
+functions, operators, and constructors); operators have no special-case
+relaxation.
+
 **At call sites:**
 
 - Literals passed to `Signal[T]` parameters are wrapped as implicit
-  `const`-cell instances. Cost: one cell per literal at the call
-  site (effectively zero — folded by the compiler when possible).
+  constant signal cells (compile-time-fixed `Signal[T]` values). Cost:
+  one cell per literal at the call site (effectively zero — folded by
+  the compiler when possible).
 - Cells passed to `Signal[T]` parameters bind directly.
 - Values passed to `T` parameters are evaluated and snapshotted.
+
+##### 13.16.3.1 Signal[T] auto-deref in expression contexts
+
+When an expression context requires a value of type `T` and the
+supplied expression has type `Signal[T]`, the compiler implicitly
+inserts a read of the cell — `signal` is dereferenced to its current
+value. The provenance tracking (§13.11.1) records the cell read as a
+dependency, so the surrounding expression becomes reactive on changes
+to that cell.
+
+```
+operator example(s: Signal[f32]) -> Signal[f32]:
+  derived doubled: f32 = s * 2.0       // s: Signal[f32] auto-derefs to f32 in arithmetic context
+  doubled
+```
+
+The implicit deref applies wherever a `Signal[T]` flows into a
+position expecting `T`: arithmetic operands, function-call arguments
+typed `T`, attribute initial-value expressions, derived bodies,
+recurrent arm expressions. It does NOT apply when the context expects
+`Signal[T]` directly (operator parameters, function parameters typed
+`Signal[T]`, pipe-form `|>` LHS) — in those cases the cell reference
+is bound without dereferencing.
+
+The auto-deref is a compile-time mechanism; no runtime cost beyond
+the cell read itself.
 
 #### 13.16.4 Body
 
@@ -12000,14 +12341,13 @@ Not permitted in operator bodies:
 - Side-effecting statements. The body is reactive — declarative,
   not imperative.
 
-The final expression's type must be `T` (matching the operator's
-return type `Signal[T]`). The compiler synthesizes a derived cell
-holding the final expression's value, and exposes that cell as the
-operator instance's output.
-
-If the final expression is itself a cell (e.g., a recurrent named
-in the body), no synthesis is needed — that cell is the output
-directly.
+The final expression's type must be either `T` or `Signal[T]`
+(matching the operator's return type `Signal[T]`). If the type is
+`T`, the compiler synthesizes a derived cell holding the final
+expression's value, and exposes that cell as the operator instance's
+output. If the type is already `Signal[T]` (e.g., a named recurrent
+or derived in the body), that cell is the output directly — no
+synthesis needed.
 
 #### 13.16.5 Output
 
@@ -12053,7 +12393,7 @@ Two equivalent call-site syntaxes:
 let smoothed = smooth(source_cell, rate: 0.1, clock: tick)
 ```
 
-**Pipe form (`|>`):**
+**Pipe form:**
 
 ```
 let smoothed = source_cell |> smooth(rate: 0.1, clock: tick)
@@ -12066,7 +12406,7 @@ function-call form. The two forms are observationally identical.
 The pipe form is convenient for chaining:
 
 ```
-signal bar = 0.0 |> clamp(min: 0.0, max: 1.0) |> smooth(rate: 0.1, clock: tick) |> ease_in_out
+derived bar: f32 = 0.0 |> clamp(min: 0.0, max: 1.0) |> smooth(rate: 0.1, clock: tick) |> ease_in_out
 ```
 
 Each `|>` step is an operator application. The result of each step
@@ -12093,15 +12433,17 @@ state buffer reserves space for each instance's internal cells.
 
 ##### 13.16.6.1 Operator instance identity
 
-An operator instance is identified by its enclosing scope plus its
-position in source. Two `|>` chains in different scopes (different
-modules, different node bodies, different placements) produce
-distinct instances with independent state.
+An operator instance is identified by its enclosing scope, the
+operator name, and its argument bindings. Two `|>` chains in
+different scopes (different modules, different node bodies,
+different placements) produce distinct instances with independent
+state.
 
-Operator instances do not have user-assignable names. Assigning
-an operator's output to a `let` binding names the *output cell*,
-not the instance — but for reload-identity purposes (§13.16.10),
-the instance is identified by source position, not by binding name.
+Operator instances do not have user-assignable names. Assigning an
+operator's output to a `let` binding names the *output cell*, not
+the instance. For reload-identity purposes (§13.16.10), the same
+identity scheme is used, with tolerance for positional moves within
+the same scope; the binding name has no role.
 
 ##### 13.16.6.2 Graph metadata
 
@@ -12122,7 +12464,8 @@ instances is bounded and known.
 `|>` is the operator-application token. Its semantics:
 
 - LHS must be an expression of type `Signal[T]` (or convertible to
-  one — literals are wrapped as implicit const cells).
+  one — literals are wrapped as implicit constant signal cells
+  (compile-time-fixed `Signal[T]` values) automatically).
 - RHS must be an operator call (the operator name optionally
   followed by parenthesized arguments).
 - The operator is instantiated; the LHS is bound to the operator's
@@ -12138,22 +12481,22 @@ a + b |> op            // parses as (a + b) |> op
 a |> op1 |> op2        // parses as (a |> op1) |> op2
 ```
 
-Bitwise `|` (§4.4.2) shares this low precedence with `|>`; mixed
-arithmetic and bitwise-OR expressions may need parentheses for the
-desired grouping.
+Bitwise `|` (§4.4.2) has the same low precedence as `|>`. Expressions
+mixing bitwise OR with operator application may need parentheses for
+the desired grouping.
 
 **`|>` exclusivity:** `|>` may only apply operators. Using `|>`
 with a `fn` is a compile error:
 
 ```
-signal bar = 0.0 |> some_fn       // ✗ error: `|>` requires an operator
+let bar = 0.0 |> some_fn       // ✗ error: `|>` requires an operator
 ```
 
 Diagnostic class:
 ```
 error: `|>` requires an operator on the right-hand side
-  --> signal bar = 0.0 |> some_fn
-                        ^^^^^^^^ `some_fn` is a `fn`, not an operator
+  --> let bar = 0.0 |> some_fn
+                     ^^^^^^^^ `some_fn` is a `fn`, not an operator
   hint: use function call syntax: `some_fn(0.0)`
 ```
 
@@ -12218,13 +12561,19 @@ operator body.
   recurrent/derived reload safety.
 - Adding a new internal cell — new cells are initialized fresh.
 
-**Reload-unsafe changes (require restart for affected instances):**
+**Reload-unsafe changes** are handled per §13.14.4: operator-specific
+cases (signature changes, internal cell type changes) trigger
+per-instance restart — only the affected operator instances are
+recreated, not the whole kernel. Other reload-unsafe changes
+(buffer-layout relocation per §13.14.4) require full-kernel restart.
+
+The reload-unsafe operator changes are:
 
 - Operator signature changes (parameters added, removed, or
-  retyped; return type changed).
-- Internal cell type changes.
+  retyped; return type changed) — per-instance restart.
+- Internal cell type changes — per-instance restart.
 - Changes to a cell's `= initial` expression in a way that would
-  alter its current state semantics.
+  alter its current state semantics — per-instance restart.
 
 **Call-site changes:**
 
@@ -12295,8 +12644,8 @@ Normative diagnostic classes for operator usage:
 
 ```
 error: `|>` requires an operator on the right-hand side
-  --> signal bar = 0.0 |> some_fn
-                        ^^^^^^^^ `some_fn` is a `fn`, not an operator
+  --> let bar = 0.0 |> some_fn
+                     ^^^^^^^^ `some_fn` is a `fn`, not an operator
   hint: use function call syntax: `some_fn(0.0)`
 ```
 
@@ -12304,8 +12653,8 @@ error: `|>` requires an operator on the right-hand side
 
 ```
 error: operator `smooth` has no positional parameter to bind from `|>`
-  --> signal bar = source |> smooth(rate: 0.1)
-                             ^^^^^^ no positional parameter declared
+  --> derived bar: f32 = source |> smooth(rate: 0.1)
+                                   ^^^^^^ no positional parameter declared
   hint: either pass the upstream cell as the first positional argument,
         or declare a positional `Signal[T]` parameter on the operator
 ```
@@ -12316,7 +12665,8 @@ error: operator `smooth` has no positional parameter to bind from `|>`
 error: cannot pass value of type `f32` to `Signal[f32]` parameter
   --> smooth(source: some_value, rate: 0.1, clock: tick)
                      ^^^^^^^^^^ expected `Signal[f32]`, found `f32`
-  hint: literals are wrapped as const cells automatically; this expression
+  hint: literals are wrapped as implicit constant signal cells
+        (compile-time-fixed `Signal[T]` values) automatically; this expression
         cannot be wrapped — use a `signal`, `derived`, or `recurrent` declaration
 ```
 
@@ -12396,9 +12746,8 @@ The frontend performs:
    sites bound to concrete implementations.
 3. **Borrow and ownership checking** per §11. Catches use-after-move,
    borrow conflicts, and other ownership violations.
-4. **Reactive analysis** per §13 (forthcoming). Identifies reactive
-   declarations, computes dependency graphs, and extracts graph
-   metadata.
+4. **Reactive analysis** per §13. Identifies reactive declarations,
+   computes dependency graphs, and extracts graph metadata.
 5. **Monomorphization** per §2.3. Resolves all generic instantiations
    in Ductus before lowering. Ductus's compiler does not delegate
    monomorphization to Rust; emitted code is fully concrete.
@@ -12439,7 +12788,9 @@ Characteristics:
 - Does not support hot reload at runtime; rebuild is required to
   change the program.
 
-The emitted Rust source is **fully monomorphic and trait-free**. Per
+The emitted Rust source is **fully monomorphic and Ductus-trait-free**
+(with the narrow exception of Rust operator-overloading impls per
+§14.10.2). Per
 §14.10, the Rust emitter produces concrete struct definitions and
 specialized function definitions per Ductus instantiation. Ductus's
 trait system is not exported into the emitted Rust; trait dispatch
@@ -12571,8 +12922,10 @@ The arrangement is **single-producer, single-consumer (SPSC)**: one
 *producer role* writes, one *consumer role* reads, mediated by three
 buffer copies and an atomic current-pointer swap. The mapping of
 these roles to physical threads, and the trigger that initiates a
-publish, are specified in §13 (reactive system); §14 specifies only
-the mechanism.
+publish, are implementation-defined; §14 specifies only the
+mechanism. Typical native deployments map the producer role to the
+host's main thread and the consumer role to one or more application
+threads.
 
 The kernel maintains three copies of the buffer:
 
@@ -12598,12 +12951,21 @@ is O(N) where N is the buffer size — the producer copies the
 publishable state into the back buffer before the swap. The atomic
 swap itself is O(1).
 
+The "copy" here refers to the producer's carry-forward of unchanged
+cells from the previous-current buffer to the back buffer, not a
+re-copy of dirty cells. Dirty cells were written into the back buffer
+incrementally between publishes per §13.9.1; the publish operation
+copies forward only the cells the producer did not touch (so the new
+back buffer is a complete snapshot). This carry-forward is O(N) in the
+buffer size; the atomic swap itself is O(1).
+
 The producer's per-publish cost is therefore O(N) memcpy + one
 atomic operation. This cost is paid on the producer side, not on
 the consumer side; consumers are unaffected.
 
-When the producer chooses to publish (the trigger for which is
-specified in §13) is outside the scope of this section.
+When the producer chooses to publish (the trigger is specified in
+§13.9 — the kernel's evaluation cycle) is outside the scope of this
+section.
 
 ##### 14.3.3.2 Swap operation
 
@@ -12719,6 +13081,7 @@ buffer. Specifically, the values held by:
 
 - `signal` declarations.
 - `attr` declarations on node and connection instances.
+- `recurrent` declarations on node and connection instances.
 - `derived` declarations (the cached computed value).
 
 Regular Ductus values — local bindings (`let`/`mut`) inside function
@@ -12729,8 +13092,8 @@ They are normal Rust values in stack or heap memory, governed by the
 ownership and borrow rules of §11.
 
 A record type may appear in both contexts in the same program. As the
-value of a signal/attr/derived declaration, it occupies cells in the
-reactive buffer. As a local value, parameter, or non-reactive field,
+value of a signal/attr/recurrent/derived declaration, it occupies cells
+in the reactive buffer. As a local value, parameter, or non-reactive field,
 it lives in regular memory. The Ductus compiler determines storage
 location based on the declaration site, not the type.
 
@@ -12780,13 +13143,20 @@ handles; the pool holds the data. This separation allows:
 The pool's allocation and refcount operations are atomic but may
 block briefly under contention. These operations are performed by
 the producer role (§14.8); the consumer role only reads via handles,
-which is wait-free. The role-to-thread mapping is specified in §13.
+which is wait-free. The role-to-thread mapping is implementation-defined:
+in typical native deployments the host's main thread plays the producer
+role and one or more application threads play the consumer role; other
+deployments may assign a kernel-configured thread to the producer role.
+The mechanism (§14.3.3, §14.8) does not depend on the mapping choice.
 
 ### 14.6 The Behavior ABI
 
-Every executable unit of a Ductus program — a derived expression
-body, a function body called from a reactive context, a modulation
-function — is exposed to the kernel via a uniform **behavior ABI**.
+Each reactive behavior — a `derived` expression body or a `recurrent`
+arm body — is exposed to the kernel via a uniform **behavior ABI**.
+Functions called from reactive bodies are reactive-transparent per
+§13.11.2: they compile to ordinary Rust functions (per §14.10) reached
+transitively from the registered behaviors, not as separately-registered
+behaviors of their own.
 
 #### 14.6.1 Behavior signature
 
@@ -12809,9 +13179,17 @@ kernel cells. Return value is unit; all effects are side effects
 through the kernel handle.
 
 This uniform shape means the kernel maintains a single function
-pointer table: `Vec<fn(*const KernelHandle, u64) -> ()>` (in the
-reference Rust implementation). The kernel invokes behaviors by index
-into this table; no per-behavior dispatch logic is needed.
+pointer table: `Vec<fn(&KernelHandle, u64) -> ()>` (in the
+reference Rust implementation; the function pointer type uses
+`&KernelHandle` and relies on Rust's higher-rank trait bound
+semantics for the lifetime parameter). The kernel invokes
+behaviors by index into this table; no per-behavior dispatch logic
+is needed.
+
+`InstanceId` is a transparent newtype over `u64` defined in the
+kernel; the function-pointer table uses `u64` directly since
+`fn`-pointer types in Rust do not preserve newtype identity at the
+ABI level. The two are interconvertible at zero cost.
 
 #### 14.6.2 Statelessness
 
@@ -12830,54 +13208,15 @@ only within the behavior's invocation; they do not escape.
 
 #### 14.6.3 Error handling
 
-A behavior may **trap** (§4.6) during evaluation — e.g., from
-arithmetic overflow under the default `+` operator, division by
-zero, an out-of-range array index, or an explicit `panic` call.
-
-Ductus's two-track failure model (§8.1) applies to behaviors
-without modification. Traps follow the trap-track semantics of
-§4.6.1: the process aborts. The kernel does not isolate behavior
-traps; there is no "errored cell" sentinel state, no `catch_unwind`
-boundary, and no continuation past a trap.
-
-Authors expecting recoverable failure must use the value-track
-error model. Specifically: declare the derived's value type as
-`Result[T, E]` (or `Option[T]`), have the behavior body produce
-`Err(...)` for failure cases via explicit checking, and propagate
-through `?` (§8.4) or `match` in downstream expressions. Errored
-state is then a value flowing through the type system, not a kernel
-sideband.
-
-Example:
-
-```
-node Divider:
-  attr numerator: f32
-  attr denominator: f32
-  derived quotient: Result[f32, DivideError] =
-    if self.denominator is 0.0:
-      Err(DivideError::ByZero)
-    else:
-      Ok(self.numerator / self.denominator)
-
-node Consumer:
-  parts: Divider
-  derived report: string =
-    match self.divider.quotient:
-      Ok(value): "result: {value}"
-      Err(DivideError::ByZero): "result: undefined"
-
-Consumer my_consumer:
-  Divider divider               // names the contained Divider part
-```
-
-The divide-by-zero case never traps; it produces `Err(...)` through
-the type system, which `Consumer.report` handles via `match`. No
-kernel-level error isolation is needed.
-
-This applies uniformly across the language. Traps are for bugs that
-should abort; value-track errors are for conditions the program
-must handle. The reactive context is no exception.
+Behaviors follow Ductus's two-track failure model per §13.12:
+trap-track failures (arithmetic overflow under default operators,
+division by zero, out-of-range indices, explicit `panic`) abort the
+process; recoverable conditions are expressed as value-track
+`Option`/`Result` values flowing through the type system. The
+kernel does not isolate behavior traps — there is no `catch_unwind`
+boundary, no errored-cell sentinel, no continuation past a trap.
+See §13.12.1 for full rules and worked examples; the same semantics
+apply uniformly to all behaviors invoked by the producer.
 
 #### 14.6.4 Behavior identity
 
@@ -12899,15 +13238,15 @@ is not supported.
 
 Each behavior also carries a debug name: the qualified source path
 (`module::path::clip_name::derived_name`). Names appear in
-diagnostics, profiles, and error messages. Lookup is by ID; names are
-for human consumption.
+diagnostics, profiles, and error messages. The kernel resolves
+behaviors by ID; debug names appear only in diagnostic output.
 
 #### 14.6.5 Thread invocation
 
 Behaviors are invoked by the kernel; the specific thread that
-invokes each behavior is determined by the role assignment
-specified in §13 (reactive system). Ductus source does not
-specify thread roles.
+invokes each behavior is the producer-role thread, which the kernel
+maps to a specific OS thread at startup (implementation-defined per
+§14.8.1). Ductus source does not specify thread roles.
 
 Ductus source code does not encounter cross-thread concerns:
 behaviors are thread-safe by construction (no shared mutable state
@@ -12950,6 +13289,9 @@ The metadata describes:
 - **String pool entries**: any string literals used by the program,
   pre-loaded into the pool at startup.
 
+- **Schema version**: the Ductus toolchain version that produced the
+  metadata. Used for cross-version compatibility checks (§14.12).
+
 #### 14.7.2 Format
 
 The graph metadata is a binary format. The reference implementation
@@ -12990,7 +13332,7 @@ The triple-buffer mechanism (§14.3.3) operates in terms of two roles:
   do not go through the triple-buffer pointer swap. What the
   producer writes (signal/attr updates from host API, derived and
   recurrent arm expression results) and what triggers it to publish
-  are specified in §13.
+  are specified in §13.9.
 - **Consumer**: the role that reads the current buffer via the swap
   operation. Loads the current pointer and reads cells from the
   buffer it points to. Never writes; never invokes behaviors. There
@@ -13001,9 +13343,10 @@ The triple-buffer mechanism (§14.3.3) operates in terms of two roles:
 §14 specifies only the mechanism of these roles — what each role is
 permitted to do, how the two coordinate via the triple buffer, and
 the costs of the swap and publish operations. The mapping of roles
-to physical threads, the choreography of what the producer does
-between publishes, and the trigger that initiates a publish are all
-specified in §13 (reactive system).
+to physical threads and the choreography of what the producer does
+between publishes are implementation-defined; the trigger that
+initiates a publish is specified in §13.9 (the kernel's evaluation
+cycle).
 
 #### 14.8.1 Thread-safety properties of the mechanism
 
@@ -13018,16 +13361,22 @@ By construction of the SPSC triple buffer:
 - No locks are required, no spin-wait is required, and reads are
   wait-free.
 
-These properties hold regardless of the role-to-thread mapping
-specified in §13.
+These properties hold regardless of the role-to-thread mapping, which
+is implementation-defined: in typical native deployments the host's
+main thread plays the producer role and one or more application threads
+play the consumer role; other deployments may assign a kernel-configured
+thread to the producer role. The mechanism (§14.3.3, §14.8) does not
+depend on the mapping choice.
 
 #### 14.8.2 Behaviors invoked by the mechanism
 
-Reactive behaviors (derived expression bodies, recurrent arm
-expressions, functions called from reactive contexts) are invoked
-by the producer. The trigger, the selection of which behaviors are
-invoked, and the ordering of invocations within a publish cycle
-are all specified in §13.
+Reactive behaviors (derived expression bodies and recurrent arm
+expressions) are invoked by the producer. Functions called from
+reactive contexts are reactive-transparent per §13.11.2 and reached
+transitively from registered behaviors; they are not themselves
+separately invoked by the producer. The trigger, the selection of
+which behaviors are invoked, and the ordering of invocations within
+a publish cycle are all specified in §13.9.
 
 The behavior ABI (§14.6) is the contract between the producer and
 each invoked behavior. Each invocation receives a kernel handle
@@ -13037,8 +13386,8 @@ via the handle. Behaviors are thread-safe by construction
 
 #### 14.8.3 Why Ductus behaviors are thread-safe by construction
 
-Regardless of the role-to-thread mapping in §13, Ductus source
-code never sees cross-thread concerns:
+Regardless of the role-to-thread mapping (implementation-defined per
+§14.8.1), Ductus source code never sees cross-thread concerns:
 
 - No shared mutable state outside reactive cells.
 - Reactive cells are coordinated through the triple-buffer
@@ -13047,13 +13396,13 @@ code never sees cross-thread concerns:
 - Closure captures are by-value Copy (§11.10), no shared mutability.
 
 A Ductus program does not declare thread affinity; it does not
-need to. The kernel determines (per §13) which thread plays which
-role.
+need to. The kernel determines (implementation-defined per §14.8.1)
+which thread plays which role.
 
 ### 14.9 Drop Semantics
 
-Ductus's user-facing `Drop` trait (referenced as deferred in §11.3.3
-and §12.9.3) is specified here.
+Ductus's `Drop` trait — referenced from §11.3.3 and §12.9.3 — is
+specified here.
 
 #### 14.9.1 The Drop trait
 
@@ -13099,9 +13448,9 @@ inconsistent state.
 #### 14.9.5 Drop on reactive cells
 
 The kernel manages drop for reactive cells. When a node or connection
-instance is removed (deferred to §13's evolution model), its attr and
-derived cells are dropped per their type's `Drop` impl. Initial
-declarations (signals declared at program startup) live for the
+instance is removed (removal mechanics are specified in §13.14), its
+attr and derived cells are dropped per their type's `Drop` impl.
+Initial declarations (signals declared at program startup) live for the
 program's lifetime; their cells are dropped at program shutdown.
 
 #### 14.9.6 Drop and triple-buffer eviction for dynamic-size cells
@@ -13142,6 +13491,14 @@ refcounts; nodes drop when their refcount reaches zero.
 - Drops complete before the slot is reused — no in-place reuse of
   a slot whose drop hasn't finished.
 
+The synchronization between rotation-out and drop+reclamation is
+provided by the kernel's per-pool reclamation epoch: the slot enters
+a quarantine state when its handle is replaced; the pool's
+reclamation thread (or the producer thread, depending on
+implementation) advances the epoch atomically and runs drops on
+quarantined slots before releasing them to the free list. No drop
+runs while any buffer still references the slot's handle.
+
 **Drop and panic:** if `drop` panics on a dynamic-size cell value,
 process abort applies per §14.9.4. The pool slot is leaked but the
 process is terminating anyway.
@@ -13172,8 +13529,8 @@ The `string` type lowers to the same Rust representation regardless
 of whether the binding is reactive or non-reactive: a newtype around
 a u64 handle into the kernel's string pool (§14.5).
 
-Reactive context (signal/attr/derived value of type `string`): the
-handle lives in a reactive cell. The pool entry's refcount tracks
+Reactive context (signal/attr/recurrent/derived value of type `string`):
+the handle lives in a reactive cell. The pool entry's refcount tracks
 how many cells reference the string across all buffer copies.
 
 Non-reactive context (local `let s = "hello"`, function parameter,
@@ -13249,21 +13606,27 @@ continues to see the tuple-return form. The translation is
 mechanical: each Ductus iterator implementation lowers to a Rust
 struct with a `next(&mut self) -> Option<Item>` method, plus a
 wrapper that exposes the tuple-return form for Ductus-internal
-use during compilation. By the time native code is produced, only
-the `&mut self` form remains.
+use during compilation.
+
+The final emitted Rust module contains only the `&mut self` form.
+The tuple-return wrapper exists in Ductus's IR during lowering for
+type-system consistency with the source-level Iterator trait, and
+is eliminated before Rust code generation. No runtime overhead from
+the dual representation reaches the emitted binary.
 
 This translation is invisible to Ductus source code. Ductus users
 never see `&mut` in their code or in error messages.
 
 #### 14.10.5 Reactive primitive lowering
 
-Ductus's `signal`, `attr`, `derived` declarations do not lower to
-Rust types directly. They lower to:
+Ductus's `signal`, `attr`, `recurrent`, and `derived` declarations
+do not lower to Rust types directly. They lower to:
 
 - Cell allocations in the kernel state buffer (described in graph
   metadata).
-- Behavior registrations (the body of a `derived` expression becomes
-  a Rust function matching the behavior ABI, §14.6).
+- Behavior registrations (the body of a `derived` expression OR the
+  body of a `recurrent` arm becomes a Rust function matching the
+  behavior ABI, §14.6).
 - Dependency edges in the graph metadata.
 
 The lowered Rust code contains no syntactic trace of `signal`/`attr`/
@@ -13282,13 +13645,46 @@ file changes:
 
 1. The CLI's watch mode detects the change.
 2. The frontend re-runs on the changed file.
-3. The new typed IR is compared against the old; behaviors with
-   changed bodies are identified.
-4. For each changed behavior:
-   a. The old bytecode is replaced with new bytecode.
-   b. The kernel's behavior table updates the function pointer (or
-   bytecode reference) for that behavior's ID.
-   c. The next invocation uses the new behavior.
+3a. **Behavior identity (§14.6.4).** The frontend computes
+   content-addressed IDs for each behavior per §14.6.4. Behaviors
+   whose IDs are present only in the old program are *removed*;
+   behaviors present only in the new program are *added*; behaviors
+   present in both are *carried over* unchanged.
+3b. **Cell identity (§13.14.2).** The kernel computes the cell-diff
+   by fully-qualified declaration path. Cells with matching path and
+   type carry forward (preserving values); new cells are added;
+   removed cells are dropped per §14.9.
+3c. **Operator instance identity (§13.16.10).** Operator instances
+   are matched by (enclosing scope, operator name, argument bindings)
+   with tolerance for positional moves within the same scope. Matched
+   instances preserve their internal cell state via 3b; unmatched
+   instances are dropped/added with the corresponding cell churn.
+4. **Apply additions.**
+   - For each added behavior: register in the behavior table at its
+     content-addressed ID; graph metadata edges and cell allocations
+     referencing the new behavior's ID become live; subsequent
+     invocations dispatch through the new behavior's ID.
+   - For each added cell: allocate space in the reactive state buffer
+     and initialize per the new source.
+   - For each added operator instance: allocate internal cell state
+     and initialize per the new source.
+
+5. **Apply removals.**
+   - For each removed behavior: deregister from the behavior table.
+   - For each removed cell: invoke drop per §14.9 in
+     reverse-declaration order.
+   - For each removed operator instance: drop internal cells per
+     §14.9.
+
+6. **Run re-initialization evaluation pass.** For each derived whose
+   behavior body changed (different content-addressed ID), recompute
+   its initial value from current inputs. Deriveds whose body is
+   unchanged retain their values.
+
+7. **Publish the reloaded state** (atomic current-pointer swap).
+
+8. **Release the reload lock.** Resume signal/attr writes; apply any
+   queued writes to the new state.
 
 #### 14.11.2 State preservation
 
@@ -13296,24 +13692,43 @@ Reactive cell values persist across hot reload. Signal values, attr
 values, and derived cached values are unchanged unless the source
 explicitly changes them. The graph topology persists.
 
+Operator instance state is preserved across reload by the
+operator-instance-identity scheme of §13.16.10 (matched by enclosing
+scope, operator name, and argument bindings, with tolerance for
+positional moves within the same scope). Matched instances preserve
+their internal cell state via the same cell-identity mechanism
+(§13.14.2) used for top-level cells.
+
 #### 14.11.3 Reload-safe and reload-unsafe changes
 
 Changes safe to hot reload:
 
 - Body of an existing behavior (same signature, different
   implementation).
-- Adding new behaviors (new derived expressions, new functions).
+- Adding new behaviors (new derived expressions, new recurrent arm
+  bodies).
 - Adding new signals, attrs, derived declarations.
 
-Changes unsafe to hot reload (require full kernel restart):
+Changes unsafe for in-place hot reload fall into two classes per
+§13.14.4:
 
-- Removing a signal/attr/derived that is currently referenced.
-- Changing the type of an existing cell.
-- Changing the connection topology of currently-active instances.
+- **Full-kernel restart** is required for changes to the reactive
+  state buffer layout that would require relocating live cells.
+- **Per-instance restart** is sufficient for operator-specific
+  cases (operator signature changes, internal cell type changes
+  per §13.16.10); only the affected operator instances are
+  recreated, not the whole kernel.
+
+All other changes — including cell removal (which the new source's
+compile gate verifies is unreferenced), cell type changes (handled
+via remove + add per §13.14.2), and connection topology changes
+(handled via remove + add per §13.14.2) — are reload-safe and need
+no restart.
 
 The implementation diagnoses unsafe changes at reload time and
-either rejects them (kernel keeps running old version) or restarts
-the kernel cleanly. The choice is implementation-defined.
+either rejects them (kernel keeps running old version) or applies
+the appropriate restart — full-kernel or per-instance per §13.14.4
+— cleanly. The choice is implementation-defined.
 
 #### 14.11.4 Reload failure
 
@@ -13342,10 +13757,10 @@ by version X.Y compiles with and runs against the same X.Y
 toolchain. Forward and backward compatibility across major version
 boundaries are explicit, not implicit.
 
-The version is recorded in source files via `@version` directives
-(syntactic form: implementation-defined) and in the graph metadata
-header. Mismatches are detected at compile time and load time
-respectively.
+The exact syntactic form of the `@version` directive is reserved for
+a future spec revision; v1 implementations are not required to
+recognize it. Version metadata is recorded in the graph metadata
+header (§14.7); cross-version compatibility checks happen there.
 
 ---
 
