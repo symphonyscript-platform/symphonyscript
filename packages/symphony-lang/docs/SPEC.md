@@ -1681,15 +1681,15 @@ group of methods, defining a single capability:
 ```
 trait Add[Rhs = Self]:
   type Output = Self
-  fn add(left: Self, right: Rhs) -> Output
+  fn add(a: Self, b: Rhs) -> Output
 
 trait Sub[Rhs = Self]:
   type Output = Self
-  fn sub(left: Self, right: Rhs) -> Output
+  fn sub(a: Self, b: Rhs) -> Output
 
 trait Mul[Rhs = Self]:
   type Output = Self
-  fn mul(left: Self, right: Rhs) -> Output
+  fn mul(a: Self, b: Rhs) -> Output
 
 trait Neg:
   fn neg(value: Self) -> Self
@@ -1849,7 +1849,8 @@ These privileged implementations exist outside the user-writable
 A small, closed category of traits are declared by the language itself,
 have no methods and no associated types, and receive compiler-privileged
 enforcement. A type opts into one of these traits via the usual
-`satisfies` clause (and, where applicable, `@derive`); the compiler
+`satisfies` clause or via `@derive` (every member of the category is
+`@derive`-eligible; see §3.8.1); the compiler
 treats membership as a flag carrying load-bearing semantics rather than
 as a vehicle for user-supplied method bodies. Members of this category
 are not redeclarable: user code cannot define a new trait of the same
@@ -1882,9 +1883,8 @@ This category is distinct from two superficially similar things:
   members of the language-defined marker traits category and do not
   receive any compiler privilege beyond the usual `satisfies` check.
 
-The category is closed in v1: the language defines exactly `Copy` and
-`Circularity` as language-defined marker traits. Adding a new member is
-a language-level change, not a user-extensible mechanism.
+Adding a new member to this category is a language-level change, not
+a user-extensible mechanism.
 
 #### 3.7.5 Newtype pattern as orphan-rule workaround
 
@@ -3059,6 +3059,8 @@ trait Cos:  fn cos(value: Self) -> Self
 trait IntPow:   fn pow(base: Self, exp: Self) -> Self
 trait FloatPow: fn pow(base: Self, exp: Self) -> Self
 
+trait Eq: fn eq(a: Self, b: Self) -> bool
+
 trait Ord: requires Lt, Le, Gt, Ge
 trait Lt: fn lt(a: Self, b: Self) -> bool
 trait Le: requires Lt, Eq
@@ -3070,13 +3072,15 @@ trait Gt: requires Lt, Eq
 trait Ge: requires Lt
           fn ge(a: Self, b: Self) -> bool:
             not lt(a, b)
-
-trait Eq: fn eq(a: Self, b: Self) -> bool
 ```
 
 This is the canonical fine-grained set. Stdlib may add additional fine-
 grained traits for specialized operations; the principle (one trait per
 capability) is what's normative, not the exact list above.
+
+Note: `Div` is non-generic (Float-umbrella only); `CheckedDiv` is generic
+for consistency with other checked-arithmetic traits, but instances are
+auto-derived only for Float types where `Div` is implemented.
 
 `Ord` and `Eq` are standalone — not part of any numeric umbrella per §3.6.1.
 Non-numeric types (strings, enums, records) may also be ordered or compared,
@@ -3122,7 +3126,7 @@ trait Integer:
 @default(f64)
 trait Float:
   requires Numeric, Neg, Div,
-           CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedNeg,
+           CheckedDiv, CheckedNeg,
            Sqrt, Sin, Cos, Tan, Asin, Acos, Atan, Atan2,
            Ln, Log2, Log10, Exp, Exp2,
            Floor, Ceil, Round, Trunc,
@@ -3441,9 +3445,9 @@ right-hand side requires a type declaration to acquire identity.
 
 ### 5.5 Cross-Kind Intersection
 
-Conjunction (trait case) is well-defined only between traits;
-intersection (record case) is well-defined only between records. Cross-
-kind combinations and same-kind combinations outside those two sets are
+Intersection is well-defined only within `{trait & trait}` (trait
+intersection) and `{record & record}` (record intersection). Cross-kind
+combinations and same-kind combinations outside those two sets are
 rejected at compile time:
 
 - `Trait & Record` — rejected. A trait expresses a behavior contract; a
@@ -4352,16 +4356,14 @@ language automatically provides the reverse direction:
 The auto-derivation is language-built-in and not user-overridable. This
 forecloses the coherence problem of disagreeing manual `From`/`Into` pairs.
 
-`Into` and `TryInto` are *sealed* traits: declared by the language for use
-in trait bounds (`T: Into[U]`) and method dispatch (`x.into::[U]()`), but
-not implementable by users. All `Into[U] for T` impls come from
-auto-derivation of a corresponding `From[T] for U` impl (plus the
-identity case per §7.3); all `TryInto[U] for T` impls come from
-auto-derivation of `TryFrom[T] for U`. Users do not write `fulfill
-Into[U] for T` or `fulfill TryInto[U] for T` directly — the compiler
-synthesizes the impl from the corresponding `From` or `TryFrom`. To
-expose a conversion from `T` to `U` to users, write the `From[T] for U`
-impl on the destination type; the `Into` direction follows automatically.
+All `Into[U] for T` impls come from auto-derivation of a corresponding
+`From[T] for U` impl (plus the identity case per §7.3); all `TryInto[U]
+for T` impls come from auto-derivation of `TryFrom[T] for U`. Users do
+not write `fulfill Into[U] for T` or `fulfill TryInto[U] for T` directly
+— the compiler synthesizes the impl from the corresponding `From` or
+`TryFrom`. To expose a conversion from `T` to `U` to users, write the
+`From[T] for U` impl on the destination type; the `Into` direction
+follows automatically.
 
 The `From`/`TryFrom` impls are the user's written contract; the
 `Into`/`TryInto` impls are the language's mechanical counterparts.
@@ -9190,12 +9192,12 @@ every instance of the type and is fixed at compile time.
 ```
 trait Action
 
-node log:
+node Log:
   satisfies Action
   const type: string = "@action/log"
   default attr message: string
 
-node delay:
+node Delay:
   satisfies Action
   const type: string = "@action/delay"
   default attr time: duration
@@ -10148,8 +10150,8 @@ construction-time node graph must traverse at least one connection
 whose type satisfies `Circularity`. Cycles consisting only of
 non-`Circularity` connections are compile errors.
 
-`Circularity` is a marker trait — it has no methods. Its sole
-purpose is to opt a connection type into participation in cycles.
+Its sole purpose is to opt a connection type into participation in
+cycles.
 
 The decision of which connection types satisfy `Circularity` is
 domain-defined. A connection type whose runtime semantics introduce
@@ -11062,7 +11064,7 @@ is a separate concern handled by the parameter system, not by the
 gate primitive. The gate guarantees correctness, not continuity.
 
 **Cell-value reads on gated subgraphs.** Reads always return a
-defined value of type T (no `Option<T>`), because:
+defined value of type T (no `Option[T]`), because:
 
 - All attrs have values (defaults or required-at-placement —
   §13.2.2).
@@ -11669,6 +11671,11 @@ from the type's size and shape:
 | Fixed-size array `T[N]` with N×sizeof(T) ≤ word | direct                                                     |
 | Fixed-size array `T[N]` with N×sizeof(T) > word | pool                                                       |
 
+Sizes shown are value widths. Storage is in 64-bit (8-byte) cells:
+values ≤8 bytes occupy one cell with appropriate padding/extension;
+larger values span multiple consecutive cells per §14.3.2 or use pool
+storage per §14.3.5.
+
 **Dynamic-size handle-based types:**
 
 The stdlib provides three dynamic-size collection types usable as
@@ -11681,6 +11688,10 @@ documented complexity bounds.
 | `Vec[T]`         | O(log32 n)   | O(log32 n)    | Persistent trie, structural sharing across versions |
 | `SmallVec[T; N]` | O(n) bounded | O(1)          | Inline storage up to N elements, heap beyond        |
 | `RingBuf[T; N]`  | O(1)         | O(1)          | Fixed-capacity ring; oldest dropped when full       |
+
+The `T; N` form distinguishes the type parameter T from the
+const-generic parameter N. Generic syntax in Ductus uses commas
+between type parameters and semicolons before const-generics.
 
 `Vec[T]` is the default for unbounded growth; the persistent
 vector trie (Clojure/Scala/Rust `im::Vector` family) provides
@@ -12342,7 +12353,7 @@ Two equivalent call-site syntaxes:
 let smoothed = smooth(source_cell, rate: 0.1, clock: tick)
 ```
 
-**Pipe form (`|>`):**
+**Pipe form:**
 
 ```
 let smoothed = source_cell |> smooth(rate: 0.1, clock: tick)
@@ -12733,7 +12744,9 @@ Characteristics:
 - Does not support hot reload at runtime; rebuild is required to
   change the program.
 
-The emitted Rust source is **fully monomorphic and trait-free**. Per
+The emitted Rust source is **fully monomorphic and Ductus-trait-free**
+(with the narrow exception of Rust operator-overloading impls per
+§14.10.2). Per
 §14.10, the Rust emitter produces concrete struct definitions and
 specialized function definitions per Ductus instantiation. Ductus's
 trait system is not exported into the emitted Rust; trait dispatch
@@ -13180,8 +13193,8 @@ is not supported.
 
 Each behavior also carries a debug name: the qualified source path
 (`module::path::clip_name::derived_name`). Names appear in
-diagnostics, profiles, and error messages. Lookup is by ID; names are
-for human consumption.
+diagnostics, profiles, and error messages. The kernel resolves
+behaviors by ID; debug names appear only in diagnostic output.
 
 #### 14.6.5 Thread invocation
 
@@ -13230,6 +13243,9 @@ The metadata describes:
 
 - **String pool entries**: any string literals used by the program,
   pre-loaded into the pool at startup.
+
+- **Schema version**: the Ductus toolchain version that produced the
+  metadata. Used for cross-version compatibility checks (§14.12).
 
 #### 14.7.2 Format
 
@@ -13340,7 +13356,7 @@ role.
 
 ### 14.9 Drop Semantics
 
-Ductus's user-facing `Drop` trait (referenced as deferred in §11.3.3
+Ductus's `Drop` trait (referenced as deferred in §11.3.3
 and §12.9.3) is specified here.
 
 #### 14.9.1 The Drop trait
@@ -13387,11 +13403,10 @@ inconsistent state.
 #### 14.9.5 Drop on reactive cells
 
 The kernel manages drop for reactive cells. When a node or connection
-instance is removed (deferred to §13.14 (Hot Reload of the Reactive
-Graph)), its attr and derived cells are dropped per their type's
-`Drop` impl. Initial declarations (signals declared at program
-startup) live for the program's lifetime; their cells are dropped at
-program shutdown.
+instance is removed (deferred to §13.14), its attr and derived cells
+are dropped per their type's `Drop` impl. Initial declarations
+(signals declared at program startup) live for the program's lifetime;
+their cells are dropped at program shutdown.
 
 #### 14.9.6 Drop and triple-buffer eviction for dynamic-size cells
 
