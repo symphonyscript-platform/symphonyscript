@@ -3709,6 +3709,11 @@ For combining different types' fields into a new type, the user constructs
 a record-intersection type per §5.3 and constructs values of it
 explicitly.
 
+When `with` appears in a reactive declaration context, additional
+per-field rules apply: bare reactive names alias, reactive expressions
+become implicit derived cells, and literals/non-reactive values become
+static fields. See §13.2.9.8 for the reactive-context extension.
+
 ##### Field-override constraints
 
 Every override field name must exist in the base's type. Overriding a
@@ -6286,6 +6291,14 @@ it transfers ownership back to (a new binding in) the caller. Assigning a
 non-`Copy` value to a new binding transfers ownership. The compiler tracks
 ownership at every binding site; using a value after ownership has been
 transferred is a compile error.
+
+*Exception — reference-typed reactive bindings.* `Signal[T]` parameters
+(§13.2.8) and reactive composite bindings (§13.2.9.6) name reactive
+cells (specified by §13, §14) rather than stack-owned values;
+multiple live aliases to the same cell may coexist without violating
+single ownership. For reactive composites, materialization at the
+boundaries of §13.2.9.7 produces a concrete instance subject to
+standard single-ownership rules from that point on.
 
 **Single writer.** A `mut` binding is the only path through which its
 underlying value may be mutated. While a borrow of the value is active,
@@ -9476,7 +9489,289 @@ inside a derived expression projects the field, and the derived
 re-evaluates whenever the cell's value changes (any field). This
 is coarse-grained: changes to one field invalidate consumers of
 all other fields. For finer granularity, project early into
-stable derived cells, or expose distinct cells from the source.
+stable derived cells, expose distinct cells from the source, or
+use a **reactive composite** (§13.2.9) to give each field its own
+cell within a record/tuple/array shape.
+
+#### 13.2.9 Reactive composites
+
+A **reactive composite** is a record, tuple, or fixed-array binding
+whose fields or elements are independently reactive. Reactive
+composites address the coarse-grained limitation noted in §13.2.8
+(where a `Signal[Record]` re-evaluates all consumers on any field
+change) by giving each reactive field or element its own cell while
+preserving the composite's record/tuple/array type at the type-system
+level.
+
+##### 13.2.9.1 Form
+
+Reactive composites are constructed in any reactive declaration
+context by binding individual fields or elements to reactive sources,
+static values, or reactive expressions. The composite's type is the
+underlying record, tuple, or fixed-array type — no new type qualifier
+is introduced (per §13.2.9.10).
+
+**Records:**
+
+```
+type PeakResult:
+  some_property: f32
+  some_other_property: f32
+  some_regular_property: i32
+
+derived A = PeakResult(
+  some_property: signal_a,
+  some_other_property: signal_b,
+  some_regular_property: 15,
+)
+```
+
+**Tuples:**
+
+```
+derived t = (signal_a, 15, signal_b)
+// t: (f32, i32, f32)
+```
+
+**Fixed arrays:**
+
+```
+derived arr: f32[4] = [signal_a, signal_b, 0.0, signal_c]
+```
+
+The same forms apply in `attr` declarations on node and connection
+instances. Use in `signal` and `recurrent` declarations is
+constrained by their host-write and arm-update semantics
+respectively; see §13.2.1, §13.2.4 for the underlying constraints.
+The most natural fit is `derived`.
+
+##### 13.2.9.2 Per-field reactivity model
+
+The composite is a structural grouping; it does not have its own
+outer cell. Each field or element is independently reactive based on
+its binding form (§13.2.9.3). When a constituent reactive cell
+updates, only that field is dirty — consumers reading other fields
+through the same composite are not invalidated.
+
+This distinguishes reactive composites from the §13.2.8
+`Signal[Record]` case, where the entire record value is one cell and
+any field change invalidates all consumers of any field. Reactive
+composites are the recommended construct when fine-grained per-field
+update propagation matters.
+
+##### 13.2.9.3 Field binding form
+
+The form of each field's right-hand side determines that field's
+reactive status:
+
+| RHS form                                  | Field becomes                       |
+|-------------------------------------------|-------------------------------------|
+| Bare reactive name (signal/attr/derived/recurrent) | Alias to that cell — no new cell |
+| Reactive expression                       | Implicit derived cell (§13.2.9.4)   |
+| Literal or compile-time constant          | Static field — no cell, embedded constant |
+| Non-reactive value expression             | Static field — evaluated once at startup |
+
+**Bare-name aliasing.** `some_property: signal_a` does not allocate a
+new cell. `A.some_property` *is* `signal_a` for all purposes —
+including cell identity (§15.4.1.1), hot reload (§13.14.2), and any
+type change to the underlying signal on reload.
+
+**Implicit derived cells.** `some_property: signal_a * 2 + signal_b`
+allocates a fresh derived cell with ID `A.some_property` (§13.2.9.4).
+Dependency edges to `signal_a` and `signal_b` are added to the graph
+specification (§15.4). The expression's evaluation rules are
+identical to those of an explicit `derived A.some_property = ...`
+declaration.
+
+**Static fields.** `some_regular_property: 15` is a compile-time
+constant. No reactive cell is allocated; the value is embedded in
+the composite's lowered representation per §15.5. Static fields
+participate in the composite's value but do not contribute cell
+entries to the graph specification.
+
+##### 13.2.9.4 Cell identity and the graph specification
+
+Reactive-expression fields and aliased fields contribute or
+reference cell entries in the graph specification (§15.4.1) using
+the path syntax of §15.4.1.1:
+
+- Records: `<binding>.<field_name>` (e.g., `A.some_property`).
+- Tuples: `<binding>.<index>` (e.g., `t.0`, `t.1`, `t.2`).
+- Fixed arrays: `<binding>.<index>` (e.g., `arr.0`, `arr.3`).
+
+Implicit derived cells (§13.2.9.3) contribute a new cell entry at
+their composite-field path with the appropriate dependency edges.
+
+Aliased fields do not contribute new cell entries — the alias
+target's existing entry is referenced. Hot-reload identity matches
+follow the alias target (§13.14.2).
+
+Static fields contribute no cell entries; they appear only in the
+composite's lowered value representation.
+
+The composite binding itself (`A`, `t`, `arr`) is a naming prefix,
+not a cell. It does not appear as a standalone cell in the graph
+specification.
+
+##### 13.2.9.5 Reading a reactive composite
+
+**Field access** reads the corresponding cell (for aliased fields
+and implicit derived cells) or returns the embedded constant (for
+static fields):
+
+```
+derived peak_x: f32 = A.some_property         // reads A.some_property cell
+let r: i32 = A.some_regular_property          // returns embedded 15
+```
+
+**Whole-composite reads** — passing the composite to a function
+parameter typed as the composite's type, returning it from a
+function, or binding it to a `let` of the composite's type — do not
+allocate a snapshot. Per §13.11.2, function bodies are
+reactive-transparent templates; expressions in the body that read
+fields of the parameter resolve through to the underlying cells of
+the caller's composite:
+
+```
+fn report(p: PeakResult) -> string:
+  // p.some_property here resolves to A.some_property's cell
+  // when this function is reached from a context where p was A
+  ...
+
+derived msg: string = report(A)
+```
+
+Materialization to a concrete value happens only at the boundaries
+of §13.2.9.7.
+
+##### 13.2.9.6 `let` bindings
+
+A `let` binding whose declared (or inferred) type is the
+composite's type may name a reactive composite. The binding is an
+alias to the same underlying cells; reading through the let-bound
+name resolves to the kernel's current cell values, not to a
+snapshot taken at let-binding time:
+
+```
+fn process(p: PeakResult) -> f32:
+  let q = p                         // q aliases p; same cells
+  q.some_property * 2.0             // reads p.some_property's cell live
+```
+
+This is the composite-typed analogue of the §13.2.8 `Signal[T]`
+binding form: when the binding's type is the composite's type, the
+binding is structural — it preserves the live cell references of
+its RHS. The standard scalar auto-deref rules of §13.2.8 still
+apply to single-cell reads (`let v: f32 = A.some_property`
+auto-derefs per the existing rules).
+
+**Ownership.** A reactive composite binding names cells held by
+the kernel, not stack-owned data; multiple live aliases to the
+same composite may coexist without violating §11's single-
+ownership rule, just as multiple `Signal[T]` parameters may name
+the same cell. Materialization to a concrete value (§13.2.9.7)
+produces a `PeakResult`/tuple/array instance subject to the
+standard §11 ownership rules from that point on.
+
+##### 13.2.9.7 Materialization boundaries
+
+Reactive transparency through functions and `let` bindings means
+reactive composites stay live across most of the language. Three
+boundaries force materialization to a concrete value:
+
+- **Storage in non-reactive collections.** Pushing a reactive
+  composite into a `Vec`, `Map`, or analogous container materializes
+  the current per-field values:
+
+  ```
+  // vec: Vec[PeakResult]
+  let vec2 = vec.push(A)             // A materialized at push time;
+                                      // vec2 holds a concrete snapshot.
+  ```
+
+  The pushed element is a concrete snapshot; subsequent changes to
+  the underlying cells do not propagate to `vec2`'s contents.
+
+- **FFI handoff to host code.** Any value crossing into the host
+  via the Host API (§13.13) is materialized; host code does not see
+  reactive cells.
+
+- **Serialization and persistence.** Hot reload state save, debug
+  dumps, and any explicit serialization path materializes
+  composites to concrete values.
+
+Within Ductus source code outside these boundaries, reactive
+composites remain live.
+
+##### 13.2.9.8 The `with` expression in reactive contexts
+
+The `with` expression (§6.1.5) extends to reactive composites
+without syntactic change. Field overrides in a `with` applied
+within a reactive declaration context follow the per-field binding
+rules of §13.2.9.3:
+
+```
+derived A2 = A with some_regular_property: signal_c
+// A2.some_regular_property is now aliased to signal_c;
+// A.some_regular_property remains the static value 15.
+
+derived A3 = A with some_property: 0.0
+// A3.some_property is now a static 0.0;
+// A.some_property remains aliased to signal_a.
+
+derived A4 = A with some_property: signal_a * 0.5
+// A4.some_property is an implicit derived cell;
+// A.some_property remains aliased to signal_a.
+```
+
+The result of `with` is a new reactive composite binding with its
+own per-field reactive shape. The base composite is unchanged. Each
+`with`-produced binding has its own cell IDs (§15.4.1.1) for any
+fields that contribute cells.
+
+The interpretation of a `with` RHS — alias, implicit derived,
+static — depends on the **binding form**, not the RHS syntax alone:
+
+- A reactive declaration (`derived A2 = base with field: signal_c`,
+  `attr a = base with ...`) produces a reactive composite per the
+  rules of §13.2.9.3; `signal_c` aliases as a reactive field.
+- A plain `let` binding to the `with` expression's result, not
+  itself flowing into a reactive declaration, produces a concrete
+  value per the standard §6.1.5 semantics — `signal_c` is read for
+  its current value at the let-binding's evaluation and the result
+  is a concrete `PeakResult`.
+
+##### 13.2.9.9 Distinction from nodes
+
+Reactive composites are data-only. They have no placement, no
+participation in node/connection topology, no lifecycle beyond the
+declaration that introduces them, and no `recurrent` or behavioral
+content. Nodes (§13.3) provide the full instance machinery —
+hierarchical placement, connections, hot-reload identity at the
+instance level — and remain the appropriate construct when behavior
+or topology is needed.
+
+The two have overlapping flavor (both expose per-field reactive
+cells) but distinct purposes: nodes are *runtime entities* in the
+reactive graph; reactive composites are *value forms* that group
+reactive cells under a record, tuple, or fixed-array shape.
+
+##### 13.2.9.10 Type system
+
+A reactive composite's type is the underlying record, tuple, or
+fixed-array type — `PeakResult`, `(f32, i32, f32)`, `f32[4]` in the
+examples above. There is no `reactive PeakResult` qualifier; the
+type system does not distinguish reactive composites from
+non-reactive values of the same type. Reactivity is a property of
+the *binding* (recorded in the graph specification per §15.4) and of
+the per-field cells, not of the type.
+
+This means a function `fn report(p: PeakResult) -> string` works
+identically whether called with a reactive composite binding or a
+concrete `PeakResult` value. The reactivity is invisible at the
+type signature; transparency flows through (§13.11.2). The
+distinction between live and snapshotted access is determined by
+the caller's context, not by the function's signature.
 
 ### 13.3 Nodes
 
