@@ -1430,7 +1430,7 @@ resolution algorithm prioritizes trait implementations over free functions:
    via implicit widening per §4.5).
 6. **One free function matches → resolve to it.** Standard free-function
    dispatch.
-7. **Multiple free functions in scope under the same local name is
+7. **Multiple free functions in scope under the same local name are
    impossible.** Free functions are uniquely named within their module per
    §10 (Option E in Topics.md); only one can be in scope under any
    given local name. Cross-module conflicts are resolved at import time, not
@@ -1625,6 +1625,19 @@ greet("Alice", "Hi")                            // ✓ uses suffix default
 greet("Alice", "Hi", "?")                       // ✓ all positional
 greet(name: "Alice", suffix: "?")               // ✓ named, skipping greeting
 greet("Alice", suffix: "?")                     // ✗ mixed positional and named
+```
+
+Defaulted parameters may precede non-defaulted ones:
+
+```
+fn render(scale: f32 = 1.0, content: string):
+  ...
+
+render(content: "hello")                        // ✓ named, uses scale default
+render(scale: 2.0, content: "hello")            // ✓ named, both supplied
+render(1.0, "hello")                            // ✓ positional, both supplied
+render("hello")                                 // ✗ positional cannot skip
+                                                //   scale to bind content
 ```
 
 The skipping flexibility of named form is one of its principal practical
@@ -1899,11 +1912,11 @@ canonical workaround is the newtype pattern: wrap the foreign type in a local
 newtype, then implement the foreign trait for the local newtype:
 
 ```
-type MyVec:
+type MyVec[T]:
+  wraps Vec[T]
   satisfies SomeForeignTrait
-  inner: Vec[i32]
 
-fulfill SomeForeignTrait for MyVec:
+fulfill SomeForeignTrait for MyVec[T]:
   ...
 ```
 
@@ -5544,17 +5557,11 @@ Division by zero follows the standard rules of §4.6:
 - `duration / 0` where `0` is an integer-typed value traps per §4.6.7
   (integer division by zero).
 - `duration / 0.0` where `0.0` is a float-typed value produces `±inf`
-  or NaN per IEEE 754; the integer-nanosecond result is then defined
-  by the float-to-integer conversion (saturate or trap per §4.6.6 and
-  §4.7).
+  or NaN per IEEE 754; converting that result back to the i64-nanosecond
+  duration representation traps per §4.7.3 (default float-to-int cast
+  traps on non-finite values).
 - `duration / duration_zero` (i.e., dividing by a zero-duration value)
   traps; this is treated as the i64 zero-divisor case per §4.6.7.
-
-**`duration / 0.0` with a float-typed zero divisor.** IEEE 754 produces
-`±inf` or `NaN`; converting that result back to the i64-nanosecond
-duration representation traps per §4.7.3 (default float-to-int cast
-traps on non-finite values). To handle this case recoverably, use `/?`
-or test the divisor before dividing.
 
 Use checked variants (`/?`, `%?`) per §4.6.4 where division-by-zero
 recovery is needed; they return `Option[duration]` (or `Option[f64]`
@@ -7143,8 +7150,8 @@ element being assigned must itself be of a type compatible with the
 assigned value, per the standard type-check rules.
 
 Field and indexed assignment desugar to operator-trait method calls (the
-exact traits — `FieldAssign`, `IndexAssign`, or analogous — are specified
-in §Operator Traits, deferred). The desugaring preserves the
+exact traits — `FieldAssign`, `IndexAssign`, or analogous — are stdlib
+concerns specified outside this document). The desugaring preserves the
 single-writer invariant: the assignment is a mutation through the `mut`
 binding only; no other binding to the same underlying value can exist
 while the mutation occurs (borrows would block it per §11.9.2; aliased
@@ -7504,7 +7511,7 @@ under consume form, or `Iterable::Iter` under borrow form). The Item
 type depends on both the iterable's element type and which form the
 loop uses.
 
-The iteration variable is one of the three valid borrow-bearing
+The iteration variable is one of the six valid borrow-bearing
 positions per §11.9.5: bound by the loop construct, fresh each
 iteration, immutable, cannot be declared `mut`. Its borrow lifetime
 (when borrow-typed) is the duration of one iteration body. The compiler
@@ -10504,12 +10511,13 @@ in the inline-parts ordering between `/Expr` and the inline pipes
 (§13.7.9).
 
 ```
+// (presumes Filter declares signal_active and App declares debug_enabled)
 App my_app:
   Filter filter / "low-pass":
     -> Cascade / next_filter when self.signal_active          // part-owned, gated on filter's own attr
   Filter next_filter / "high-pass"
   Monitor monitor
-  WiresTo / monitor when self.debug_enabled                   // node-owned, gated
+  WiresTo / monitor when self.debug_enabled                   // node-owned, gated on my_app's attr
 ```
 
 **Scope of placement-level `when` on part-owned connections.** A
@@ -13084,8 +13092,8 @@ They are normal Rust values in stack or heap memory, governed by the
 ownership and borrow rules of §11.
 
 A record type may appear in both contexts in the same program. As the
-value of a signal/attr/derived declaration, it occupies cells in the
-reactive buffer. As a local value, parameter, or non-reactive field,
+value of a signal/attr/recurrent/derived declaration, it occupies cells
+in the reactive buffer. As a local value, parameter, or non-reactive field,
 it lives in regular memory. The Ductus compiler determines storage
 location based on the declaration site, not the type.
 
@@ -13393,8 +13401,8 @@ which thread plays which role.
 
 ### 14.9 Drop Semantics
 
-Ductus's `Drop` trait (referenced as deferred in §11.3.3
-and §12.9.3) is specified here.
+Ductus's `Drop` trait — referenced from §11.3.3 and §12.9.3 — is
+specified here.
 
 #### 14.9.1 The Drop trait
 
@@ -13440,10 +13448,10 @@ inconsistent state.
 #### 14.9.5 Drop on reactive cells
 
 The kernel manages drop for reactive cells. When a node or connection
-instance is removed (deferred to §13.14), its attr and derived cells
-are dropped per their type's `Drop` impl. Initial declarations
-(signals declared at program startup) live for the program's lifetime;
-their cells are dropped at program shutdown.
+instance is removed (removal mechanics are specified in §13.14), its
+attr and derived cells are dropped per their type's `Drop` impl.
+Initial declarations (signals declared at program startup) live for the
+program's lifetime; their cells are dropped at program shutdown.
 
 #### 14.9.6 Drop and triple-buffer eviction for dynamic-size cells
 
@@ -13521,8 +13529,8 @@ The `string` type lowers to the same Rust representation regardless
 of whether the binding is reactive or non-reactive: a newtype around
 a u64 handle into the kernel's string pool (§14.5).
 
-Reactive context (signal/attr/derived value of type `string`): the
-handle lives in a reactive cell. The pool entry's refcount tracks
+Reactive context (signal/attr/recurrent/derived value of type `string`):
+the handle lives in a reactive cell. The pool entry's refcount tracks
 how many cells reference the string across all buffer copies.
 
 Non-reactive context (local `let s = "hello"`, function parameter,
