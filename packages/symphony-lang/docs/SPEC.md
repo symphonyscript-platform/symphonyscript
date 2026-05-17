@@ -13367,7 +13367,7 @@ reactive contexts are reactive-transparent per §13.11.2 and reached
 transitively from registered behaviors; they are not themselves
 separately invoked by the producer. The trigger, the selection of
 which behaviors are invoked, and the ordering of invocations within
-a publish cycle are all specified in §13.
+a publish cycle are all specified in §13.9.
 
 The behavior ABI (§14.6) is the contract between the producer and
 each invoked behavior. Each invocation receives a kernel handle
@@ -13700,16 +13700,21 @@ Changes safe to hot reload:
   bodies).
 - Adding new signals, attrs, derived declarations.
 
-Changes unsafe to hot reload require full kernel restart. The
-authoritative list of restart-required changes is in §13.14.4: any
-change to the reactive state buffer layout that would require
-relocating live cells. Operator-specific restart-required cases
-(operator signature changes, internal cell type changes) are
-enumerated in §13.16.10. All other changes — including cell removal
-(which the new source's compile gate verifies is unreferenced),
-cell type changes (handled via remove + add per §13.14.2), and
-connection topology changes (handled via remove + add per §13.14.2)
-— are reload-safe.
+Changes unsafe for in-place hot reload fall into two classes per
+§13.14.4:
+
+- **Full kernel restart** is required for changes to the reactive
+  state buffer layout that would require relocating live cells.
+- **Per-instance restart** is sufficient for operator-specific
+  cases (operator signature changes, internal cell type changes
+  per §13.16.10); only the affected operator instances are
+  recreated, not the whole kernel.
+
+All other changes — including cell removal (which the new source's
+compile gate verifies is unreferenced), cell type changes (handled
+via remove + add per §13.14.2), and connection topology changes
+(handled via remove + add per §13.14.2) — are reload-safe and need
+no restart.
 
 The implementation diagnoses unsafe changes at reload time and
 either rejects them (kernel keeps running old version) or restarts
