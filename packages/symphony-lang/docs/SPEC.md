@@ -295,7 +295,8 @@ fresh parameters per the same rule.
 #### 2.2.4 Trait-based constraints
 
 Inferred constraints reference traits (§3). Operations in the body resolve to
-trait methods (`+` resolves to `Add::add`, etc.), and the relevant trait
+trait methods (`+` resolves to `Add::add`, where `Add` denotes `Add[Self]`
+per §3.1.6's default-type-parameter resolution), and the relevant trait
 becomes the constraint on the corresponding parameter. The trait system's
 umbrella traits (§3.6) let the compiler simplify inferred constraint sets for
 readability: `Add + Sub + Mul + Neg + Zero + One` may collapse to `Numeric`
@@ -596,8 +597,13 @@ conversion rules (§4.5).
 
 #### 2.4.4 Compile-time evaluation as type-level mechanism
 
-Compile-time-known integer values can serve as type-level arguments. The
-const-generic mechanism (§2.2.5) uses this directly:
+Compile-time-known integer values can serve as type-level arguments.
+Const-generic arguments (where a type parameter accepts a compile-time-known
+value rather than a type) use this directly: `type Buffer[T, N: usize =
+1024]: data: T[N]`. The full const-generic specification — value-kind
+parameters, bounds, inference — is deferred to a future spec revision;
+v1 supports the syntactic form shown above for fixed-size array sizing
+and similar uses.
 
 ```
 let arr: i32[fib(10) + 1]                  // valid; fib(10) + 1 is compile-time evaluable
@@ -691,7 +697,7 @@ trait Display:
   fn display(value: Self) -> string
 
 trait Add[Rhs = Self]:
-  type Output
+  type Output = Self
   fn add(left: Self, right: Rhs) -> Output
 
 trait Producer:
@@ -882,7 +888,7 @@ trait From[T]:
   fn from(value: T) -> Self
 
 trait Add[Rhs = Self]:
-  type Output
+  type Output = Self
   fn add(left: Self, right: Rhs) -> Output
 ```
 
@@ -902,6 +908,27 @@ A type may implement multiple trait instances of the same parent trait
 (`fulfill From[i32] for MyNumber` and `fulfill From[i64] for MyNumber`
 coexist; both share the parent `From`). Default type parameters (`Rhs =
 Self`) follow the rules for generic parameters in §3.1.6 and §2.2.
+
+##### 3.1.6.1 Default-type-parameter resolution
+
+When a generic trait has defaulted type parameters (e.g., `trait
+Add[Rhs = Self]`), references to the bare trait name resolve to the
+trait instance with all defaults applied:
+
+- In `requires` clauses: `requires Add` is sugar for `requires Add[Self]`.
+- In trait bounds: `T: Add` is sugar for `T: Add[Self]`.
+- In `satisfies` clauses: `satisfies Add` is sugar for `satisfies Add[Self]`.
+- In `fulfill` blocks: `fulfill Add for T` is sugar for `fulfill Add[Self] for T`.
+- In inferred constraints: the compiler infers `T: Add[Self]` unless the
+  operation's operand types force a cross-type form.
+
+This rule is universal across all generic traits with default type
+parameters, not specific to operator traits. To reference a non-default
+instance, the user supplies explicit type arguments: `Add[i64]`,
+`From[string]`, etc.
+
+The defaulting happens at name-resolution time; at code-generation
+time, every reference has a fully-specified trait instance.
 
 #### 3.1.7 Required attrs and consts (node and connection types only)
 
@@ -1453,8 +1480,9 @@ dispatch by choosing which traits to import.
 
 Disambiguation forms:
 
-- `Trait::f(x, ...)` — explicitly select a trait-impl candidate (the canonical
-  way to resolve trait-vs-trait ambiguity in step 3).
+- `Trait::f(x, ...)` — explicit trait selection. While trait-vs-trait
+  ambiguity cannot arise per step 3, the explicit form makes the trait
+  source visible at the call site, which aids readability.
 - `some_module::f(x, ...)` — explicitly select a free function (used when a
   free function would otherwise be shadowed by a trait impl per step 4).
 - `x.f::[T]()` is *not* a disambiguation form; the turbofish (§2.2.5)
@@ -1563,16 +1591,24 @@ meaning benefit from positional form.
 #### 3.5.4 Defaults and form interaction
 
 Parameters with default values (per §6.1.2 for records and analogous
-features for functions) interact with argument forms as follows:
+features for functions) may appear in any position in the parameter
+list, including before non-defaulted parameters. Call sites resolve as
+follows:
 
-- In **named form**, default-bearing parameters may be omitted. The
+- In **named form**, default-bearing parameters may be omitted; the
   default value applies for any parameter not named in the call.
-- In **positional form**, parameters must be supplied in declaration order.
-  Default-bearing parameters at the *end* of the parameter list may be
-  omitted (the remaining defaults all apply). Default-bearing parameters
-  in the *middle* of the list cannot be skipped — supplying a later
-  parameter positionally requires supplying all earlier parameters
-  positionally too.
+  Non-defaulted parameters must still be supplied.
+- In **positional form**, parameters must be supplied in declaration
+  order. A defaulted parameter mid-list cannot be skipped using
+  positional form alone — every subsequent positional argument must be
+  supplied as well, which means non-defaulted parameters following
+  defaulted ones force the defaulted ones to also be supplied
+  positionally. To skip a mid-list default, use named form.
+- **Mixed form** (positional then named) is still forbidden per §3.5.2.
+
+The relaxation (defaulted-before-non-defaulted permitted) is uniform
+across functions, operators (§13.16.3), and constructor invocations.
+The rule rewards named-argument call sites for readability.
 
 ```
 fn greet(name: string, greeting: string = "Hello", suffix: string = "!"):
@@ -1792,6 +1828,18 @@ user modules, and are not subject to the orphan rule:
   language automatically provides `Into[U] for T`. The derivation is built
   in, not user-writable.
 - *Identity conversion `From[T] for T` for every type.* Universally provided.
+- *Auto-implementations of `Copy` for built-in types per §11.4.1.* The
+  primitive numeric types, `bool`, `char`, `string`, `duration`, `instant`,
+  tuples of Copy components, and `Range[T]` when T: Copy all auto-implement
+  Copy. User code cannot redefine these impls.
+- *Stdlib auto-impl `From[()] for Option[T]`* — provides the `None` value
+  for use in the `?` desugaring per §8.4.1. The impl is universally
+  available for any T; user code cannot override or shadow it.
+- *Stdlib-privileged borrow-returning functions* (§11.9.5 carve-out).
+  Specific stdlib functions (e.g., indexed-collection accessors like
+  `element_at`) declare return types of the form `&T`. The carve-out is
+  enumerated in stdlib documentation; user-defined functions cannot
+  declare borrow return types.
 
 These privileged implementations exist outside the user-writable
 `fulfill`-block space and cannot conflict with user code.
@@ -2481,6 +2529,13 @@ This table specifies the mapping:
 ¹ The right operand may be any unsigned integer type narrower than or
 equal to u32 (implicit widening per §4.5.1); other types require an
 explicit cast.
+
+Per §3.1.6's default-type-parameter resolution, each table entry that
+names a bare trait (e.g., `Add`) refers to the trait instance with
+default type parameters applied — `Add` is `Add[Self]`. For operands
+of different types, the compiler may infer cross-type instances
+(`Add[T2] for T1`) if such an instance is in scope; otherwise the
+operand types must be unified per the implicit-widening rules of §4.5.
 
 The compiler's inference algorithm per §2.2.1 walks each function body
 collecting the union of these constraints across all operators used. The
@@ -4803,25 +4858,23 @@ function's `Ok(...)` site satisfies that contract separately.
 
 Using `?` on an `Option` value inside a function returning `Result`, or
 on a `Result` value inside a function returning `Option`, is a compile
-error. The failure-type families are fundamentally different:
+error. This is a categorical rule enforced by the compiler at every
+`?` site — regardless of whether `From` impls exist that could in
+principle bridge the failure types (`From[()] for SomeError` or
+`From[SomeError] for ()`).
 
-- `Option`'s `None` carries *no information*.
-- `Result`'s `Err` carries *an error value*.
+The rule's justification: `Option`'s `None` carries no information,
+while `Result`'s `Err` carries an error value. Silently bridging them
+would require either fabricating an error value from `None` (what
+information?) or discarding an error value when going to `Option`
+(information loss without user signal). Both cross-category bridges
+are operations that should be explicit at the call site, never
+implicit through `?`.
 
-Silently bridging them would require either fabricating an error value
-from `None` (which information is invented?) or discarding an error
-value when going to `Option` (information is lost). Both lose
-information that should be explicit at the call site.
-
-The user converts explicitly via stdlib methods (§8.7):
-
-- `option.ok_or(err)` — where `err: E` is the error value to use for
-  `None` — produces `Result[T, E]` from `Option[T]`.
-- `result.ok()` produces `Option[T]` from `Result[T, E]`, discarding
-  the error.
-
-The conversion is visible at the call site; the failure-handling
-decision is explicit.
+The user converts explicitly via stdlib methods (§8.7): `option.ok_or(err)`
+produces `Result[T, E]` from `Option[T]` with an explicit error value;
+`result.ok()` produces `Option[T]` from `Result[T, E]`, discarding the
+error.
 
 ### 8.7 Standard Methods
 
@@ -4845,7 +4898,7 @@ The non-exhaustive list:
   computation.
 - `ok_or[E](value: Self, err: E) -> Result[T, E]` — converts to
   `Result` with the given error on `None`.
-- `is_some(value: Self) -> bool`, `is_none(value: Self) -> bool` —
+- `is_some(value: &Self) -> bool`, `is_none(value: &Self) -> bool` —
   discriminator predicates.
 
 #### 8.7.2 `Result[T, E]`
@@ -4865,7 +4918,7 @@ The non-exhaustive list:
   — error-recovery chain.
 - `ok(value: Self) -> Option[T]`, `err(value: Self) -> Option[E]` —
   convert to `Option`, discarding the other arm.
-- `is_ok(value: Self) -> bool`, `is_err(value: Self) -> bool` —
+- `is_ok(value: &Self) -> bool`, `is_err(value: &Self) -> bool` —
   discriminator predicates.
 
 All methods listed above are *free functions* defined in stdlib, callable
@@ -4885,6 +4938,13 @@ qualification follows the module-path rules in §10. There is no
 `Option::unwrap(option)` (type-qualified) form: free functions live in
 modules per §10, not associated with types, and the dispatch model in
 §3.4 does not include a type-qualified free-function namespace.
+
+Note on closure-type notation: the `fn(T) -> U` parameter types shown
+in the method signatures use a forward-referencing notation for closure
+types. The complete closure-type specification is deferred to a future
+spec revision. For v1, treat these signatures as taking any callable
+value (free function, closure, or operator-applied function) whose
+call-arity and parameter/return types match.
 
 ### 8.8 Convention: `Option` vs `Result`
 
@@ -5582,18 +5642,23 @@ is a stdlib concern.
 #### 9.4.3 Reactive cell compatibility
 
 Both `duration` and `instant` are i64-sized values and satisfy the
-single-cell reactive cell type constraint (§13.11.4). They may appear
-directly as the type of `signal`, `attr`, `recurrent`, and `derived`
+direct in-cell storage criteria of §13.11.4. They may appear directly
+as the type of `signal`, `attr`, `recurrent`, and `derived`
 declarations.
 
 Wrapping in `Result[duration, E]`, `Option[duration]`,
-`Result[instant, E]`, or `Option[instant]` as a reactive cell type is
-generally *not* permitted: the i64 payload plus any discriminant
-exceeds the single-cell budget (§13.11.4). The compiler rejects such
-types at reactive cell declarations. To represent "absent" or "errored"
-duration/instant values in a reactive cell, use a sentinel pattern
-(e.g., a separate `bool` cell indicating presence, or a designated
-sentinel duration value like `i64::MIN`).
+`Result[instant, E]`, or `Option[instant]` is governed by §13.11.4's
+general storage rules: if the total bit width (discriminant + payload)
+fits the platform atomic word, direct storage applies; otherwise the
+cell uses handle-based pool storage. On platforms supporting wide
+atomics, `Option[duration]` (≈9 bytes) fits a 128-bit-coupled cell;
+on platforms without wide atomics, it falls back to handle-based
+storage. The compiler chooses the strategy; the source-level type is
+permitted in all cases.
+
+For minimum-overhead reactive cells, prefer bare `duration` / `instant`
+when an absent/errored sentinel can be encoded in the value's range
+(e.g., `i64::MIN`) rather than via `Option`/`Result`.
 
 ---
 
@@ -6835,7 +6900,7 @@ The borrow-position list below covers both permitted and forbidden
 cases; readers may treat the bullets as a complete enumeration.
 
 `&T` is grammatically valid only in *parameter positions*. The language
-recognizes four positions, each with a clear, lexically-bounded borrow
+recognizes five positions, each with a clear, lexically-bounded borrow
 lifetime:
 
 - **Function parameter type signatures** (this section, §11.7.4 and
@@ -6861,8 +6926,17 @@ lifetime:
   the compiler verifies that the source outlives the iterator at
   construction. This carve-out is bounded to fields of types satisfying
   `Iterator` — it does not generalize to arbitrary record fields.
+- **Stdlib-privileged borrow-returning function signatures** (§3.7.3).
+  The language reserves the right to provide functions in the standard
+  library whose return type is a borrow into one of their arguments — for
+  example, indexed-collection accessors like `element_at(v: &Vec[T], i:
+  isize) -> &T`. The returned borrow's lifetime is bounded by the
+  argument-borrow's lifetime (the borrow-scope of the call expression
+  that constructed the argument borrow). This carve-out applies only to
+  language-privileged stdlib functions enumerated in §3.7.3; user-defined
+  functions cannot declare borrow return types.
 
-All four positions share the same lifetime discipline: the borrow lives
+All five positions share the same lifetime discipline: the borrow lives
 for the scope of one parameter-binding occurrence (one call expression,
 one iteration body, or one for-loop expression respectively). The
 compiler does not need lifetime parameters or cross-statement tracking;
@@ -7933,9 +8007,10 @@ fulfill Iterator for VecIter[Record]:
       (Some(element_ref), local)
 ```
 
-The `element_at` operation is a stdlib primitive that produces a borrow
-into the source's storage. The borrow's validity is tied to the
-iteration step.
+`local.source.element_at(local.cursor)` calls a stdlib-privileged
+borrow-returning function per §11.9.5 (the §3.7.3 carve-out for
+borrow-return signatures). The returned `&Record` is bounded by the
+source borrow's lifetime.
 
 The trait declaration itself is unchanged:
 
@@ -8918,6 +8993,8 @@ placement. If per-instance variation is needed, parametrize via
 attrs read inside `next_expr`:
 
 ```
+signal tick_signal: u64 = 0
+
 node Counter:
   attr step_size: i32 = 1
   recurrent count: i32 = 0
@@ -8975,6 +9052,9 @@ work is factored into a helper function whose body computes the
 gain once and returns the pair of updated values:
 
 ```
+signal source: f32 = 0.0
+signal noise: f32 = 0.01
+
 fn kalman_step(mean: f32, variance: f32, source: f32, noise: f32) -> (f32, f32):
   let gain = variance / (variance + noise)        // computed once per call
   (
@@ -9452,9 +9532,11 @@ kinds of child node instances may be placed inside instances of
 this node at placement time:
 
 - **No `parts:` clause** — the node accepts child instances of *any
-  node type*. Only the heterogeneous access form `self.parts`
-  (§13.4.1) is available inside the node body; type-bulk and
-  cardinality-bounded forms are not.
+  node type*. Inside the node body, only the heterogeneous
+  `self.parts` form is available, and it requires an explicit trait
+  bound on the iteration variable (`for p: SomeTrait in self.parts`)
+  per §13.4.1. Type-bulk (`self.parts.<NodeType>[i]`) and
+  cardinality-bounded forms are not available.
 - **With a `parts:` clause** — the node accepts only children whose
   types appear in the listed set, with the declared cardinality
   constraints. Both heterogeneous (`self.parts`) and type-bulk
@@ -10413,6 +10495,16 @@ connection has not yet been constructed; its `self` is unavailable. To
 reference the connection's own attrs in a gate, use a type-level
 `when:` clause inside the connection's body (§13.5.1.1) instead.
 
+**Scope of placement-level `when` on node-owned connections.** A
+placement-level `when` clause on a node-owned connection (e.g.,
+`WiresTo / monitor when self.debug_enabled` placed at the same level
+as the source node instance) evaluates in the scope of the *enclosing
+instance* (typically a parent node containing both source and
+destination). `self` here refers to that enclosing instance, not the
+connection-being-placed. To reference the connection's own attrs in a
+gate, use a type-level `when:` clause inside the connection's body
+(§13.5.1.1) instead.
+
 #### 13.7.5 The `/expr` form
 
 The `/expr` form appears immediately after the placed type name
@@ -11312,6 +11404,14 @@ whatever was committed at the end of the previous publish, not
 what will be committed at the end of this publish. This breaks
 all valid reactive cycles, producing a DAG.
 
+This rule applies to reads of recurrent cells from any expression —
+derived bodies, recurrent `next_expr` bodies, recurrent `where`
+guards. A `where` guard's reads are NOT treated as inputs (the guard
+evaluates within the publish to determine arm selection per §13.9.2
+step 2's clarification); only the recurrent cell's own value, when
+read by other expressions, is treated as the previous-publish input
+that breaks cycles.
+
 The per-publish DAG is what gets topologically sorted in §13.9.2
 step 2.
 
@@ -11727,9 +11827,19 @@ The kernel's lifecycle proceeds in phases:
 3. Initialize all reactive cells (signals, attrs, recurrents,
    deriveds) and evaluate all `when` predicates in topological order
    over their init-time read dependencies, per §13.2.6's startup
-   pass rules. The kernel does not separate this work into
-   per-declaration-kind phases; the topological sort determines the
-   order.
+   pass rules. Signal cells receive declared initial values; attr
+   cells receive declared defaults (or placement-supplied values);
+   recurrent cells receive declared initial values (the arm
+   `next_expr` is NOT evaluated at startup); derived cells are
+   computed by evaluating their expression bodies; `when` predicates
+   are evaluated to determine each instance's initial gate state.
+   Placement-level `when` predicates (§13.8.3) are evaluated
+   alongside type-level `when:` predicates in the same topological
+   pass; placement-level overrides type-level per §13.8.5 with the
+   placement's predicate evaluating in its placement scope rather
+   than the type's `self` scope. The kernel does not separate this
+   work into per-declaration-kind phases; the topological sort
+   determines the order.
 4. Perform the first publish (atomic current-pointer swap per
    §14.3.3.1). Consumers' subsequent swaps return real data.
 
@@ -11971,6 +12081,17 @@ restart:
   require relocating live cells. The reload's diff-and-apply
   approach handles incremental changes but not whole-buffer
   reorganization.
+- Operator-specific changes that require restart for the affected
+  operator instances:
+  - Operator signature changes (parameters added, removed, or
+    retyped; return type changed).
+  - Internal cell type changes within an operator body.
+  - Changes to a cell's `= initial` expression in a way that would
+    alter its current state semantics.
+
+  See §13.16.10 for full operator-reload rules. These per-instance
+  restart cases are handled by recreating only the affected operator
+  instances; the rest of the kernel continues without restart.
 
 Implementations detect these cases during the diff phase and
 either reject the reload or schedule it as a restart-required
@@ -12102,13 +12223,10 @@ on `Signal[T]` parameters are not allowed in v1 (a default cell
 reference has no clear meaning; if needed, use a stdlib helper
 that constructs a constant cell).
 
-**Default-parameter ordering.** Operators (and functions, per §3.5)
-permit defaulted parameters to precede non-defaulted parameters. Call
-sites must either supply all positional arguments in declaration
-order (in which case the defaulted positional may be omitted only
-when no subsequent positional argument is supplied), or use named
-arguments to skip over the defaulted parameter while supplying the
-non-defaulted one. This is consistent with §3.5.4.
+**Default-parameter ordering.** Defaulted-before-non-defaulted ordering
+follows the general rule in §3.5.4 (which applies uniformly to
+functions, operators, and constructors); operators have no special-case
+relaxation.
 
 **At call sites:**
 
@@ -12295,7 +12413,8 @@ instances is bounded and known.
 `|>` is the operator-application token. Its semantics:
 
 - LHS must be an expression of type `Signal[T]` (or convertible to
-  one — literals are wrapped as implicit const cells).
+  one — literals are wrapped as implicit constant signal cells
+  (compile-time-fixed `Signal[T]` values) automatically).
 - RHS must be an operator call (the operator name optionally
   followed by parenthesized arguments).
 - The operator is instantiated; the LHS is bound to the operator's
@@ -12491,7 +12610,8 @@ error: operator `smooth` has no positional parameter to bind from `|>`
 error: cannot pass value of type `f32` to `Signal[f32]` parameter
   --> smooth(source: some_value, rate: 0.1, clock: tick)
                      ^^^^^^^^^^ expected `Signal[f32]`, found `f32`
-  hint: literals are wrapped as const cells automatically; this expression
+  hint: literals are wrapped as implicit constant signal cells
+        (compile-time-fixed `Signal[T]` values) automatically; this expression
         cannot be wrapped — use a `signal`, `derived`, or `recurrent` declaration
 ```
 
@@ -12774,11 +12894,13 @@ is O(N) where N is the buffer size — the producer copies the
 publishable state into the back buffer before the swap. The atomic
 swap itself is O(1).
 
-The "copy" here refers to the producer's accumulation work *across the
-publish cycle*, not a single bulk memcpy at swap time. Per §13.9.1,
-writes accumulate into the back buffer between publishes; the publish
-operation finalizes derived/recurrent evaluation into that same
-buffer, then performs the atomic pointer swap (O(1)).
+The "copy" here refers to the producer's carry-forward of unchanged
+cells from the previous-current buffer to the back buffer, not a
+re-copy of dirty cells. Dirty cells were written into the back buffer
+incrementally between publishes per §13.9.1; the publish operation
+copies forward only the cells the producer did not touch (so the new
+back buffer is a complete snapshot). This carry-forward is O(N) in the
+buffer size; the atomic swap itself is O(1).
 
 The producer's per-publish cost is therefore O(N) memcpy + one
 atomic operation. This cost is paid on the producer side, not on
@@ -13000,11 +13122,16 @@ through the kernel handle.
 
 This uniform shape means the kernel maintains a single function
 pointer table: `Vec<fn(&KernelHandle, u64) -> ()>` (in the
-reference Rust implementation; implementations facing rust-fn-pointer
-lifetime issues may use `*const KernelHandle` with appropriate
-unsafe-block discipline at the dispatch site). The kernel invokes
+reference Rust implementation; the function pointer type uses
+`&KernelHandle` and relies on Rust's higher-rank trait bound
+semantics for the lifetime parameter). The kernel invokes
 behaviors by index into this table; no per-behavior dispatch logic
 is needed.
+
+`InstanceId` is a transparent newtype over `u64` defined in the
+kernel; the function-pointer table uses `u64` directly since
+`fn`-pointer types in Rust do not preserve newtype identity at the
+ABI level. The two are interconvertible at zero cost.
 
 #### 14.6.2 Statelessness
 
@@ -13059,10 +13186,9 @@ for human consumption.
 #### 14.6.5 Thread invocation
 
 Behaviors are invoked by the kernel; the specific thread that
-invokes each behavior is determined by the producer-role thread,
-which is the kernel's reactive evaluation thread per §14.8. The
-mapping of producer to a specific OS thread is implementation-defined.
-Ductus source does not specify thread roles.
+invokes each behavior is the producer-role thread, which the kernel
+maps to a specific OS thread at startup (implementation-defined per
+§14.5.2). Ductus source does not specify thread roles.
 
 Ductus source code does not encounter cross-thread concerns:
 behaviors are thread-safe by construction (no shared mutable state
@@ -13305,6 +13431,14 @@ refcounts; nodes drop when their refcount reaches zero.
 - Drops complete before the slot is reused — no in-place reuse of
   a slot whose drop hasn't finished.
 
+The synchronization between rotation-out and drop+reclamation is
+provided by the kernel's per-pool reclamation epoch: the slot enters
+a quarantine state when its handle is replaced; the pool's
+reclamation thread (or the producer thread, depending on
+implementation) advances the epoch atomically and runs drops on
+quarantined slots before releasing them to the free list. No drop
+runs while any buffer still references the slot's handle.
+
 **Drop and panic:** if `drop` panics on a dynamic-size cell value,
 process abort applies per §14.9.4. The pool slot is leaked but the
 process is terminating anyway.
@@ -13425,13 +13559,14 @@ never see `&mut` in their code or in error messages.
 
 #### 14.10.5 Reactive primitive lowering
 
-Ductus's `signal`, `attr`, `derived` declarations do not lower to
-Rust types directly. They lower to:
+Ductus's `signal`, `attr`, `recurrent`, and `derived` declarations
+do not lower to Rust types directly. They lower to:
 
 - Cell allocations in the kernel state buffer (described in graph
   metadata).
-- Behavior registrations (the body of a `derived` expression becomes
-  a Rust function matching the behavior ABI, §14.6).
+- Behavior registrations (the body of a `derived` expression OR the
+  body of a `recurrent` arm becomes a Rust function matching the
+  behavior ABI, §14.6).
 - Dependency edges in the graph metadata.
 
 The lowered Rust code contains no syntactic trace of `signal`/`attr`/
@@ -13476,6 +13611,13 @@ file changes:
 Reactive cell values persist across hot reload. Signal values, attr
 values, and derived cached values are unchanged unless the source
 explicitly changes them. The graph topology persists.
+
+Operator instance state is preserved across reload by the
+operator-instance-identity scheme of §13.16.10 (matched by enclosing
+scope, operator name, and argument bindings, with tolerance for
+positional moves within the same scope). Matched instances preserve
+their internal cell state via the same cell-identity mechanism
+(§13.14.2) used for top-level cells.
 
 #### 14.11.3 Reload-safe and reload-unsafe changes
 
