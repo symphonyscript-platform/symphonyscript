@@ -8832,12 +8832,17 @@ that point on, exactly as if the value were a default.
 
 ##### 13.2.2.1 `default attr`
 
-A *node* type may designate one of its attrs as the
+A node or connection type may designate one of its attrs as the
 *positional default* by prefixing the declaration with `default`:
 
 ```
 node Log:
   default attr message: string
+
+connection Drives:
+  from: Driver
+  to: Drivable
+  default attr aggressiveness: f32 = 0.5
 ```
 
 A `default attr` is a regular attr in every respect (writable,
@@ -8854,15 +8859,17 @@ Log | message="Hello World"
 
 Rules:
 
-- At most one `default attr` per node type. Declaring two is a
-  compile error.
+- At most one `default attr` per type. Declaring two is a compile
+  error.
 - The `default attr` marker applies only to `attr` declarations.
   `recurrent`, `derived`, `const`, and `signal` cannot be marked
   `default`.
-- **`default attr` is node-only.** Connection types may not declare
-  `default attr`, because their positional `/expr` slot is reserved
-  for the destination endpoint (§13.8.5.1) and cannot also target
-  an attribute.
+- The mechanism is uniform across nodes and connections: at placement
+  time, `/expr` binds the type's default attr regardless of whether
+  the placed type is a node (§13.8.5.2) or a connection (§13.8.5.1).
+  Connections supply their destination separately, in the placement's
+  body (§13.8.5.1); the destination is not an attr and is not
+  targeted by `/expr`.
 
 #### 13.2.3 `derived`
 
@@ -9889,7 +9896,7 @@ node TypeName[GenericParams]?:
   const name: Type = value                            // per-type compile-time constants
   signal name: Type = initial                         // per-instance runtime-fed entry points
   attr name: Type = default                           // per-instance user-configured cells
-  default attr name: Type = default                   // positional default attr (at most one; node-only)
+  default attr name: Type = default                   // positional default attr (at most one; §13.2.2.1)
   recurrent name: Type = init | on t1: expr           // per-instance memory cells
   derived name: Type = expr                           // per-instance reactive values
 ```
@@ -10758,13 +10765,15 @@ connection TypeName[GenericParams]?:
   const name: Type = value                            // per-type compile-time constants
   signal name: Type = initial                         // per-instance runtime-fed entry points
   attr name: Type = default                           // per-instance writable cells
+  default attr name: Type = default                   // positional default attr (at most one; §13.2.2.1)
   recurrent name: Type = init | on t1: expr           // per-instance memory cells
   derived name: Type = expr                           // per-instance reactive values
 ```
 
-Note: `default attr` is not permitted in connection bodies — the
-positional `/expr` slot on a connection placement targets the
-destination endpoint (§13.8.5.1), not an attr.
+A connection type may declare a `default attr` per §13.2.2.1. At
+placement, `/expr` targets the connection's default attr (§13.8.5.1);
+the destination endpoint is supplied separately in the placement's
+body, not via `/expr`.
 
 Example:
 
@@ -11148,10 +11157,11 @@ attrs. Flag form has no expression slot — a flag always sets a
 literal boolean (true for `'name`, false for `!name`) — so reactive
 bindings do not apply to flags.
 
-A node type's `default attr` (§13.2.2.1) — when declared — is
-additionally settable via the positional `/expr` form (§13.8.5).
-Connection types do not have `default attr`; their `/expr` slot is
-the to-endpoint (§13.8.5.1).
+A type's `default attr` (§13.2.2.1) — when declared — is
+additionally settable via the positional `/expr` form (§13.8.5). The
+rule is uniform across nodes and connections: `/expr` targets the
+`default attr`. Connection destinations are supplied in the
+placement's body, not via `/expr` (§13.8.5.1).
 
 The attribute clause and flags do *not* target consts. Consts
 cannot be overridden at placement (§13.8.2.2). Recurrent initial
@@ -11277,14 +11287,16 @@ Rationale for `->` on part-owned only:
 The connection type must match a type listed in the source
 instance's `out:` clause (or in the type's traits' contributions).
 
-In both forms, the expression after `/` is the destination
-(§13.8.5.1). Connection placements have no body; connection attrs
-are set via the attribute clause (`| name=value`) only.
+In both forms, the destination is supplied in the connection
+placement's body as a single bare-identifier reference (§13.8.5.1).
+The `/expr` slot, when present, sets the connection's `default attr`
+(§13.2.2.1); the attribute clause (`| name=value …`) sets named
+attrs. None of these target the destination.
 
 A placement-level `when` modifier may be attached to either form to
 gate this specific connection instance (§13.9). The modifier appears
 in the inline-parts ordering between `/Expr` and the attribute clause
-(§13.8.9).
+(§13.8.9), before the body's `:`.
 
 ```
 // (presumes Filter declares signal_active and App declares debug_enabled)
@@ -11298,41 +11310,55 @@ App my_app:
 
 **Scope of placement-level `when` on part-owned connections.** A
 placement-level `when` clause on a part-owned connection
-(`-> ConnType / dest when predicate`) evaluates in the scope of the
+(`-> ConnType when predicate: dest`) evaluates in the scope of the
 *enclosing part instance*, not the connection-being-placed. The
 connection has not yet been constructed; its `self` is unavailable. To
 reference the connection's own attrs in a gate, use a type-level
-`when:` clause inside the connection's body (§13.6.1.1) instead.
+`when:` clause inside the connection type's body (§13.6.1.1) instead.
 
 **Scope of placement-level `when` on node-owned connections.** A
 placement-level `when` clause on a node-owned connection (e.g.,
-`WiresTo / monitor when self.debug_enabled` placed at the same level
+`WiresTo when self.debug_enabled: monitor` placed at the same level
 as the source node instance) evaluates in the scope of the *enclosing
 instance* (typically a parent node containing both source and
 destination). `self` here refers to that enclosing instance, not the
 connection-being-placed. To reference the connection's own attrs in a
-gate, use a type-level `when:` clause inside the connection's body
-(§13.6.1.1) instead.
+gate, use a type-level `when:` clause inside the connection type's
+body (§13.6.1.1) instead.
 
 #### 13.8.5 The `/expr` form
 
 The `/expr` form appears immediately after the placed type name
 (and any flags), before any optional instance name and before the
 attribute clause (§13.8.7). The expression after `/` is the
-*positional argument* of the placement; its meaning depends on what
-kind of type is being placed.
+*positional argument* of the placement: it targets the placed type's
+`default attr` (§13.2.2.1), whether the placed type is a node or a
+connection. Using `/expr` on a type without a declared `default attr`
+is a compile error.
 
 ##### 13.8.5.1 For connection placements
 
-For a connection placement, `/expr` sets the `to` endpoint slot:
+For a connection placement, `/expr` sets the connection type's
+`default attr` (when declared); the destination endpoint is supplied
+in the placement's body as a single bare-identifier reference to an
+existing instance whose type satisfies the connection's `to:` clause
+(§13.6.1.1).
 
 ```
-Drives/some_car | enhanced_handling=true aggressiveness=0.8
+// connection Drives: from: Driver; to: Drivable; default attr aggressiveness: f32 = 0.5
+
+Drives: some_car                          // no /expr; destination only
+Drives/0.8: some_car                      // /expr sets default attr; destination in body
+Drives | enhanced_handling=true: some_car // attr clause + destination
+Drives/0.8 | enhanced_handling=true:      // /expr + attr clause + multi-line body
+  some_car
 ```
 
-This places a `Drives` connection whose `to` endpoint is `some_car`,
-with two attrs set inline. Connection placements have no body; the
-`/expr` form is the only way to specify the destination.
+The destination is a bare identifier resolving to a named instance in
+scope. Inline placement specs as destinations are not supported in v1;
+a future revision may admit them in the same body slot. The
+syntactic shape (`:` followed by a single placement) leaves room for
+that extension without further syntax changes.
 
 ##### 13.8.5.2 For node (part) placements
 
@@ -11364,29 +11390,41 @@ attr` is a compile error.
 
 ##### 13.8.5.3 Summary
 
-The `/expr` form is positional shorthand:
+The `/expr` form is positional shorthand for the type's `default
+attr` (§13.2.2.1):
 
-- On connections, it targets the `to` endpoint (always present).
-- On nodes, it targets the `default attr` (present only when the
-  type declares one).
+- On both nodes and connections, `/expr` targets the type's
+  `default attr` (when declared).
+- Connection placements additionally supply the destination as a
+  single bare-identifier reference in the placement body, introduced
+  by `:` (§13.8.5.1).
 
 #### 13.8.6 Disambiguation summary
 
-Only node placements have a body. The body (the indented block
-after `:` on a node placement line) contains child placements —
-either child parts or child connections (§13.8.3, §13.8.4).
-**Attribute settings do not appear in the body**; they live on the
-placement's main line (or its aligned continuation lines per
-§13.8.2 and §13.8.7).
+Both node and connection placements may have a body, but the body's
+content differs by placement kind:
 
-Connection placements have no body. A connection placement is
-single-line: `TypeRef` plus optional flags, name, `/expr` (the
-destination), `when`, and an attribute clause. The identifiers `to`
-and `from` are reserved as endpoint slots inside connection *type*
-bodies (§13.6.1.1); they cannot be used as attr names on
-connections.
+- **Node placement body** — the indented block after `:` on a node
+  placement line — contains child placements: parts and connections
+  (§13.8.3, §13.8.4). Multiple children allowed; same-line
+  multi-placement uses commas per §13.8.10.
+- **Connection placement body** — the indented block (or inline
+  single-line form) after `:` on a connection placement line —
+  contains exactly *one* bare-identifier reference: the destination
+  instance (§13.8.5.1). No child placements, no inline placement
+  specs, no attr settings, no multiple values.
 
-A single line of a placement body may contain multiple child
+**Attribute settings do not appear in the body** of either
+placement kind; they live on the placement's main line via the
+attribute clause (`| name=value …`, §13.8.7) or aligned multi-line
+continuation per §13.8.2.
+
+The identifiers `to` and `from` are reserved as endpoint slots inside
+connection *type* bodies (§13.6.1.1); they cannot be used as attr
+names on connections, and they do not appear in connection
+*placement* bodies.
+
+A single line of a node placement body may contain multiple child
 placements separated by commas (§13.8.10). A placement that
 introduces its own children body via `:` cannot share its line with
 sibling placements; multi-line layout is required when both same-line
@@ -11554,7 +11592,7 @@ attributes (§13.8.7).
 A placement's inline parts have a fixed order:
 
 ```
-["->"]? TypeRef [FlagsRun]? [InstanceName]? [DefaultArgPart (`/Expr`)]? [WhenClause (`when` Pred)]? [AttrClause]?
+["->"]? TypeRef [FlagsRun]? [InstanceName]? [DefaultArgPart (`/Expr`)]? [WhenClause (`when` Pred)]? [AttrClause]? [BodyIntro (`:` Body)]?
 ```
 
 - The optional `->` prefix marks a part-owned outbound connection
@@ -11563,26 +11601,36 @@ A placement's inline parts have a fixed order:
   node-owned connection placements or on node placements.
 - Flags immediately adjacent to TypeRef (no whitespace).
 - Optional instance name follows the type/flags.
-- The `/Expr` default-arg slot follows the name. For connection
-  placements, `/Expr` sets the `to` endpoint. For node placements,
-  `/Expr` sets the type's `default attr` (§13.2.2.1).
+- The `/Expr` default-arg slot follows the name. For both node and
+  connection placements, `/Expr` sets the type's `default attr`
+  (§13.2.2.1). Permitted only when the placed type declares a
+  `default attr`.
 - The optional `when` clause follows next. It gates the placement
   (§13.9). The predicate is a boolean expression in placement scope.
   Use `when` to make the placement conditional. When `/Expr` is
-  absent (the node has no default attr, or the default value is not
+  absent (the type has no default attr, or the default value is not
   being overridden), `when` slots immediately after whichever
   preceding element is present.
 - The attribute clause (§13.8.7) — a single leading `|` followed
-  by attribute settings — follows last.
+  by attribute settings — follows next.
+- The optional body — introduced by `:` — comes last. For node
+  placements, the body holds zero or more child placements (parts
+  and connections, §13.8.3, §13.8.4). For connection placements,
+  the body holds exactly one bare-identifier reference to the
+  destination instance (§13.8.5.1, §13.8.6). A `when` predicate
+  containing an unparenthesized `:` must be parenthesized to avoid
+  colliding with the body-introducer `:`; common predicates are
+  flat boolean expressions and do not require parens.
 
-Example (connection placement):
+Example (connection placement, default attr + flags + destination):
 
 ```
-WiresTo'! my_wire / chip_b.in1 | resistance=50 reverse_polarity
-^^^^^^^^                                                            -- TypeRef + 2 flags
-         ^^^^^^^^                                                   -- instance name
-                  ^^^^^^^^^^^^                                      -- /Expr (connection target)
-                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  -- attribute clause
+Drives'! my_drive / 0.8 | enhanced_handling: some_car
+^^^^^^^                                                  -- TypeRef + 2 flags
+         ^^^^^^^^                                        -- instance name
+                   ^^^                                   -- /Expr (sets default attr)
+                        ^^^^^^^^^^^^^^^^^^^^^            -- attribute clause
+                                              ^^^^^^^^^  -- destination in body
 ```
 
 Example (node placement with `default attr`):
@@ -11594,15 +11642,16 @@ Log / "Hello World" | level="info"
                       ^^^^^^^^^^^^^^^^    -- attribute clause (sets attr `level`)
 ```
 
-Example (gated placement with `when`):
+Example (gated connection placement with `when` + body):
 
 ```
-Debugger d1 / target when self.verbose | level="trace"
-^^^^^^^^                                                  -- TypeRef
-         ^^                                               -- instance name
-            ^^^^^^^^                                      -- /Expr
-                     ^^^^^^^^^^^^^^^^^                    -- when clause (predicate)
-                                          ^^^^^^^^^^^^^^  -- attribute clause
+Debugger d1 / "trace" when self.verbose | level=2: target
+^^^^^^^^                                                     -- TypeRef
+         ^^                                                  -- instance name
+            ^^^^^^^^^                                        -- /Expr (default attr)
+                      ^^^^^^^^^^^^^^^^^                      -- when clause (predicate)
+                                          ^^^^^^^^^          -- attribute clause
+                                                    ^^^^^^^  -- destination in body
 ```
 
 Example (gated placement, no `/Expr`):
@@ -11613,10 +11662,10 @@ Logger when self.debug_enabled
        ^^^^^^^^^^^^^^^^^^^^^^^^^    -- when clause (no /Expr present)
 ```
 
-The `/Expr` form requires the placed type to have a valid target
-for it: connections must have a `to` endpoint type (always true);
-nodes must have a declared `default attr`. Using `/Expr` on a node
-without a `default attr` is a compile error.
+The `/Expr` form requires the placed type to have a declared
+`default attr` (§13.2.2.1) — the same rule for both node and
+connection placements. Using `/Expr` on a type without a `default
+attr` is a compile error.
 
 #### 13.8.10 Same-line multi-placement
 
