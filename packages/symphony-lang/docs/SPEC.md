@@ -8578,7 +8578,7 @@ languages (Haskell `IO`, Elm `Cmd`) work by producing values that
 *describe* what should happen; a runtime then interprets those
 descriptions. The reactive graph already provides exactly that
 mechanism: deriveds and recurrents produce values; the host reads
-them via swap (§13.13.7) and acts on them. Adding a separate
+them via swap (§13.14.6) and acts on them. Adding a separate
 effects layer would duplicate the mechanism — the runtime would
 still need to walk descriptions and dispatch interpretations, just
 for two parallel systems instead of one.
@@ -8768,10 +8768,9 @@ An attr declaration may include a `= default` initializer or omit it:
   with an explicit value but is not required to.
 - **Without default** (`attr name: Type`): the attr has no fallback.
   Every placement of the enclosing type must supply a value for this
-  attr (via the body form, an inline pipe, a flag, or the `/expr`
-  slot if the attr is also the type's `default attr`). Omitting it
-  at placement is a compile error. This is the *required-at-placement*
-  form.
+  attr (via the attribute clause, a flag, or the `/expr` slot if the
+  attr is also the type's `default attr`). Omitting it at placement
+  is a compile error. This is the *required-at-placement* form.
 
 The required form is used when no sensible default exists — an
 identifier the user must choose, an external resource handle, an
@@ -9326,9 +9325,9 @@ For each cell:
 - **Signals** evaluate their `= initial` expression.
 - **Attrs** are initialized when their containing instance is
   placed. For each attr:
-    - If the placement supplies an explicit value (via body form,
-      inline pipe, flag, or `/expr` for the default attr), that
-      value is evaluated and stored.
+    - If the placement supplies an explicit value (via the
+      attribute clause, flag, or `/expr` for the default attr),
+      that value is evaluated and stored.
     - Otherwise, if the attr was declared with `= default`, the
       default expression is evaluated.
     - Otherwise, the attr was declared without a default and the
@@ -10765,8 +10764,8 @@ connection Drives:
 
 `from` and `to` are not attributes — they are endpoint slots,
 first-class structural elements of every connection. Attribute
-syntax (placement-time `name: expr` settings, inline pipes, flags)
-does not target them.
+syntax (placement-time `name=value` settings via the attribute
+clause, flags) does not target them.
 
 Inside the body, `self.from` and `self.to` resolve to the endpoint
 instances directly (their concrete types).
@@ -11139,11 +11138,11 @@ additionally settable via the positional `/expr` form (§13.8.5).
 Connection types do not have `default attr`; their `/expr` slot is
 the to-endpoint (§13.8.5.1).
 
-Inline attribute syntax and flags do *not* target consts. Consts
+The attribute clause and flags do *not* target consts. Consts
 cannot be overridden at placement (§13.8.2.2). Recurrent initial
-values are overridable via the same `name=value` inline form, but
-only with compile-time-evaluable expressions (no reactive
-bindings).
+values are overridable via the same `name=value` form in the
+attribute clause, but only with compile-time-evaluable expressions
+(no reactive bindings).
 
 For recurrent cells, only the initial value is overridable at
 placement. The arm structure (triggers, guards, and `next_expr`
@@ -11198,10 +11197,6 @@ Cardinality declared in the parent's `parts:` clause (§13.3.3.1) is
 enforced at placement: the number of placed parts of each type
 must satisfy the declared cardinality. Violations are compile
 errors at the placement site.
-
-Disambiguation: a line is an *attribute setting* if it has `: expr`
-immediately after the first identifier; otherwise it is a
-*placement*.
 
 #### 13.8.4 Connections
 
@@ -11268,12 +11263,12 @@ The connection type must match a type listed in the source
 instance's `out:` clause (or in the type's traits' contributions).
 
 In both forms, the expression after `/` is the destination
-(§13.8.5.1). Connection attrs are set via the inline attribute clause (`| name=value`)
+(§13.8.5.1). Connection attrs are set via the attribute clause (`| name=value`)
 or the connection's body.
 
 A placement-level `when` modifier may be attached to either form to
 gate this specific connection instance (§13.9). The modifier appears
-in the inline-parts ordering between `/Expr` and the inline pipes
+in the inline-parts ordering between `/Expr` and the attribute clause
 (§13.8.9).
 
 ```
@@ -11391,7 +11386,7 @@ lexically: attribute settings appear after a single leading `|` on
 the placement's main line (or on aligned continuation lines) and use
 `name=expr` form; placements use the placement form per §13.8.9.
 
-#### 13.8.7 Inline attribute syntax
+#### 13.8.7 Attribute clause
 
 After the `TypeRef` (and optional flags, instance name, and `/expr`
 slot) of any placement, an attribute clause may follow on the same
@@ -11566,8 +11561,8 @@ A placement's inline parts have a fixed order:
   absent (the node has no default attr, or the default value is not
   being overridden), `when` slots immediately after whichever
   preceding element is present.
-- The inline attribute clause (§13.8.7) — a single leading `|`
-  followed by attribute settings — follows last.
+- The attribute clause (§13.8.7) — a single leading `|` followed
+  by attribute settings — follows last.
 
 Example (connection placement):
 
@@ -11779,7 +11774,7 @@ and its outputs do not propagate. Its cells hold their initial
 values per Model B (§13.9.7).
 
 Position in the inline-parts ordering is fixed by §13.8.9: after
-`/Expr` (if present), before the inline pipes. When `/Expr` is
+`/Expr` (if present), before the attribute clause. When `/Expr` is
 absent the `when` clause follows whatever element does precede it.
 
 The asymmetric punctuation between type level (`when:`) and
@@ -12882,7 +12877,7 @@ may publish per audio block; UI hosts may publish per frame;
 event-driven hosts may publish per event. The kernel imposes no
 cadence.
 
-#### 13.13.6 `kernel.transaction`
+#### 13.14.5 `kernel.transaction`
 
 ```
 kernel.transaction(|tx| {
@@ -12902,7 +12897,7 @@ here is the syntactic invocation form. Transactions provide
 next `kernel.publish()`, which performs evaluation and consumer
 visibility.
 
-#### 13.13.7 `kernel.swap`
+#### 13.14.6 `kernel.swap`
 
 ```
 kernel.swap() -> BufferView
