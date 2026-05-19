@@ -11234,105 +11234,76 @@ errors at the placement site.
 #### 13.8.4 Connections
 
 A connection placement creates a directional edge from a source
-instance to a destination instance. The placement form differs by
-context:
-
-- **Node-owned connection** — placed at the same level as the
-  source node instance; the source is named explicitly.
-- **Part-owned connection** — placed inside the source part's body
-  using a `->` prefix; the source is the enclosing part instance
-  implicitly.
-
-**Node-owned connection.** When the source is the immediately
-enclosing instance (a top-level placement or a parent node), the
-connection is placed as a sibling declaration inside that
-instance's body. No `->` prefix is used:
+instance to a destination instance. The placement is written inside
+the source instance's body. **The source is always the immediately
+enclosing instance** — the instance whose body directly contains the
+placement line. There is no special prefix or sigil: the source is
+determined positionally.
 
 ```
 App my_app:
   Fetcher fetcher / "url"                       // part placement
-  WiresToExternal: external_target              // node-owned conn from my_app
-                                                 // to external_target
-```
+  WiresToExternal: external_target              // source = my_app
 
-Here `WiresToExternal` originates from `my_app` (the enclosing
-instance); the source is unambiguous because the placement is
-directly inside `my_app`'s body and is not nested inside any part.
-
-**Part-owned connection.** When the source is a specific *part*
-inside a parent, the connection placement appears inside the part's
-body, prefixed with `->`. The arrow marks the line as an outbound
-edge originating from that part:
-
-```
-App my_app:
   Filter filter / "low-pass":
-    -> Cascade: next_filter                     // outbound from filter to next_filter
-    -> WiresTo | gain=0.5: monitor              // outbound from filter to monitor
+    Cascade: next_filter                        // source = filter
+    WiresTo | gain=0.5: monitor                 // source = filter
   Filter next_filter / "high-pass"
   Monitor monitor
 ```
 
-The `->` prefix is **required** for part-owned connections and
-**not used** for node-owned connections. The distinction reflects
-where the source instance lives:
+`WiresToExternal: external_target` is placed in `my_app`'s body, so
+its source is `my_app`. `Cascade: next_filter` and
+`WiresTo | gain=0.5: monitor` are placed in `filter`'s body, so
+their source is `filter`. The rule is uniform across nesting depth;
+the depth at which the connection appears does not change how the
+source is determined.
 
-- No `->`: source is the immediately enclosing instance.
-- `->`: source is the part whose body contains this line.
+The connection type must match a type listed in the source instance's
+`out:` clause (or in the type's traits' contributions).
 
-Rationale for `->` on part-owned only:
+The destination is supplied in the connection placement's body as a
+single bare-identifier reference (§13.8.5.1). The `/expr` slot, when
+present, sets the connection's `default attr` (§13.2.2.1); the
+attribute clause (`| name=value …`) sets named attrs. None of these
+target the destination.
 
-1. **Visual delimitation.** A connection inside a part's body could
-   otherwise be mistaken for an attr setting or a nested child
-   placement. The arrow makes "outbound edge from this part"
-   immediately visible.
-2. **Reuse of `->` symbol.** `->` is already used in connection
-   declarations (`pairs: From -> To`) to denote a directional pair
-   at the type level; using `->` in placement contexts denotes a
-   directional edge at the instance level. Both share the same
-   conceptual meaning: directed flow from left to right.
-
-The connection type must match a type listed in the source
-instance's `out:` clause (or in the type's traits' contributions).
-
-In both forms, the destination is supplied in the connection
-placement's body as a single bare-identifier reference (§13.8.5.1).
-The `/expr` slot, when present, sets the connection's `default attr`
-(§13.2.2.1); the attribute clause (`| name=value …`) sets named
-attrs. None of these target the destination.
-
-A placement-level `when` modifier may be attached to either form to
-gate this specific connection instance (§13.9). The modifier appears
-in the inline-parts ordering between `/Expr` and the attribute clause
-(§13.8.9), before the body's `:`.
+A placement-level `when` modifier may be attached to gate the
+connection instance (§13.9). The modifier appears in the inline-parts
+ordering between `/Expr` and the attribute clause (§13.8.9), before
+the body's `:`:
 
 ```
 // (presumes Filter declares signal_active and App declares debug_enabled)
 App my_app:
   Filter filter / "low-pass":
-    -> Cascade when self.signal_active: next_filter           // part-owned, gated on filter's own attr
+    Cascade when self.signal_active: next_filter      // gated on filter's own attr
   Filter next_filter / "high-pass"
   Monitor monitor
-  WiresTo when self.debug_enabled: monitor                    // node-owned, gated on my_app's attr
+  WiresTo when self.debug_enabled: monitor            // gated on my_app's attr
 ```
 
-**Scope of placement-level `when` on part-owned connections.** A
-placement-level `when` clause on a part-owned connection
-(`-> ConnType when predicate: dest`) evaluates in the scope of the
-*enclosing part instance*, not the connection-being-placed. The
-connection has not yet been constructed; its `self` is unavailable. To
-reference the connection's own attrs in a gate, use a type-level
-`when:` clause inside the connection type's body (§13.6.1.1) instead.
-
-**Scope of placement-level `when` on node-owned connections.** A
-placement-level `when` clause on a node-owned connection (e.g.,
-`WiresTo when self.debug_enabled: monitor` placed at the same level
-as the source node instance) evaluates in the scope of the *enclosing
-instance* (typically a parent node containing both source and
-destination). `self` here refers to that enclosing instance, not the
-connection-being-placed. To reference the connection's own attrs in a
-gate, use a type-level `when:` clause inside the connection type's
+**Scope of placement-level `when`.** The `when` predicate evaluates
+in the scope of the enclosing source instance, not the
+connection-being-placed. The connection has not yet been constructed;
+its `self` is unavailable. To reference the connection's own attrs in
+a gate, use a type-level `when:` clause inside the connection type's
 body (§13.6.1.1) instead.
+
+`self` in the predicate resolves to the enclosing source instance.
+In `Cascade when self.signal_active: next_filter` (inside `filter`'s
+body), `self.signal_active` is `filter.signal_active`. In
+`WiresTo when self.debug_enabled: monitor` (inside `my_app`'s body),
+`self.debug_enabled` is `my_app.debug_enabled`.
+
+##### 13.8.4.1 Terminology
+
+Connections are not "owned" by either endpoint. A connection is an
+*edge* between two instances: it is *initiated from* its source (the
+enclosing instance whose body contains the placement) and
+*terminated at* its destination (the bare-identifier reference in
+the placement's body). "Source" and "destination" are the canonical
+terms; "owner" is not.
 
 #### 13.8.5 The `/expr` form
 
@@ -11612,13 +11583,9 @@ attributes (§13.8.7).
 A placement's inline parts have a fixed order:
 
 ```
-["->"]? TypeRef [FlagsRun]? [InstanceName]? [DefaultArgPart (`/Expr`)]? [WhenClause (`when` Pred)]? [AttrClause]? [BodyIntro (`:` Body)]?
+TypeRef [FlagsRun]? [InstanceName]? [DefaultArgPart (`/Expr`)]? [WhenClause (`when` Pred)]? [AttrClause]? [BodyIntro (`:` Body)]?
 ```
 
-- The optional `->` prefix marks a part-owned outbound connection
-  placement (§13.8.4). Present only when the placement is a
-  connection originating from the enclosing part. Not allowed on
-  node-owned connection placements or on node placements.
 - Flags immediately adjacent to TypeRef (no whitespace).
 - Optional instance name follows the type/flags.
 - The `/Expr` default-arg slot follows the name. For both node and
@@ -11861,9 +11828,7 @@ The asymmetric punctuation between type level (`when:`) and
 placement level (`when`) reflects the underlying grammatical
 distinction. In a declaration body, members are labeled schema
 slots; the colon is the labeling marker. At a placement, modifiers
-are positional and keyword-introduced; no colon is used. The same
-distinction is what separates `from:` (a schema slot) from `->`
-(a placement-level directional sigil).
+are positional and keyword-introduced; no colon is used.
 
 #### 13.9.4 Predicate type and scope
 
