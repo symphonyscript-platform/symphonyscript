@@ -8641,7 +8641,7 @@ connection ShowsCount:
 
 -- Placements (instances).
 Counter c1:
-  ShowsCount /d1                -- outgoing connection to d1
+  ShowsCount: d1                -- outgoing connection to d1
 
 Display d1 | label="Main"
 ```
@@ -11037,7 +11037,7 @@ module scope:
 
 ```
 Driver john_doe | expertise_level=10 risk_tolerance=0.8:
-  Drives/some_car | enhanced_handling=true aggressiveness=0.8
+  Drives | enhanced_handling=true aggressiveness=0.8: some_car
 ```
 
 The first line is `TypeName instance_name` followed (optionally) by
@@ -11083,7 +11083,7 @@ body:
 
 ```
 Driver john_doe | expertise_level=10 risk_tolerance=0.8:
-  Drives/some_car | enhanced_handling=true
+  Drives | enhanced_handling=true: some_car
 ```
 
 The named cell must be declared on the placed type as either an
@@ -11243,7 +11243,7 @@ instance's body. No `->` prefix is used:
 ```
 App my_app:
   Fetcher fetcher / "url"                       // part placement
-  WiresToExternal / external_target             // node-owned conn from my_app
+  WiresToExternal: external_target              // node-owned conn from my_app
                                                  // to external_target
 ```
 
@@ -11259,8 +11259,8 @@ edge originating from that part:
 ```
 App my_app:
   Filter filter / "low-pass":
-    -> Cascade / next_filter                    // outbound from filter to next_filter
-    -> WiresTo / monitor | gain=0.5             // outbound from filter to monitor
+    -> Cascade: next_filter                     // outbound from filter to next_filter
+    -> WiresTo | gain=0.5: monitor              // outbound from filter to monitor
   Filter next_filter / "high-pass"
   Monitor monitor
 ```
@@ -11302,10 +11302,10 @@ in the inline-parts ordering between `/Expr` and the attribute clause
 // (presumes Filter declares signal_active and App declares debug_enabled)
 App my_app:
   Filter filter / "low-pass":
-    -> Cascade / next_filter when self.signal_active          // part-owned, gated on filter's own attr
+    -> Cascade when self.signal_active: next_filter           // part-owned, gated on filter's own attr
   Filter next_filter / "high-pass"
   Monitor monitor
-  WiresTo / monitor when self.debug_enabled                   // node-owned, gated on my_app's attr
+  WiresTo when self.debug_enabled: monitor                    // node-owned, gated on my_app's attr
 ```
 
 **Scope of placement-level `when` on part-owned connections.** A
@@ -11807,7 +11807,7 @@ modifier-style clauses:
 ```
 Logger l1 when self.debug_enabled
 Filter f1 / "low-pass" when self.dsp_mode == DspMode::Realtime | gain=0.5
-ShowsCount/d1 when self.from.count > 0
+ShowsCount when self.from.count > 0: d1
 ```
 
 Parts placed inside a parent's body may carry `when` clauses
@@ -11881,15 +11881,15 @@ connection Pulse:
 App my_app:
   Driver d1
   Listener l1
-  Pulse/l1                                            // gate: self.from.is_emitting
-  Pulse/l1 when self.debug_audio                      // gate: self.debug_audio (overrides type-level)
+  Pulse: l1                                           // gate: self.from.is_emitting
+  Pulse when self.debug_audio: l1                     // gate: self.debug_audio (overrides type-level)
 ```
 
 If a placement needs both predicates, the placement-level form must
 combine them explicitly:
 
 ```
-Pulse/l1 when self.from.is_emitting and self.debug_audio
+Pulse when self.from.is_emitting and self.debug_audio: l1
 ```
 
 Override is not implicit conjunction because conjunction would make
