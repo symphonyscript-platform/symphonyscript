@@ -8848,13 +8848,21 @@ connection Drives:
 A `default attr` is a regular attr in every respect (writable,
 overridable at placement, can have a default value) plus one
 property: it becomes the target of the positional `/expr` syntax at
-placement time (§13.8.5), so the attr can be set without naming it:
+placement time (§13.8.5), so the attr can be set without naming it.
+
+The positional and named forms are equivalent and interchangeable —
+the default attr remains settable by name via the attribute clause
+(§13.8.7) or by flag (§13.8.8), exactly like any other attr; `/expr`
+is an additional, optional positional shortcut:
 
 ```
-Log /"Hello World"        // sets the default attr `message` to "Hello World"
+// Node:
+Log /"Hello World"                          // /expr sets default attr `message`
+Log | message="Hello World"                 // equivalent attribute-clause form
 
-// Equivalent attribute-clause form:
-Log | message="Hello World"
+// Connection (assuming Drives declares `default attr aggressiveness: f32 = 0.5`):
+Drives/0.8: some_car                        // /expr sets default attr `aggressiveness`
+Drives | aggressiveness=0.8: some_car       // equivalent attribute-clause form
 ```
 
 Rules:
@@ -11499,11 +11507,15 @@ All three forms (value, bare, negated-bare) and the flag form
 
 A *flag* is a single non-letter character appearing adjacent to a
 placed type's `TypeRef` (no intervening whitespace), aliasing a
-boolean attribute of the type.
+boolean attribute of the type. **Flags apply uniformly to node and
+connection placements** — any boolean attr on a node or connection
+type may be annotated with `@flag` and set via the flag form at
+placement.
 
 ```
-Pin' p1                            // ' is a flag on Pin
-Component?* c1                      // two flags: ? and *
+Pin' p1                                // ' is a flag on Pin (node placement)
+Component?* c1                         // two flags: ? and *
+WiresTo'! my_wire: chip_b.in1          // two flags on a connection placement
 ```
 
 Flags are declared on attr declarations via the `@flag('c')`
@@ -11516,6 +11528,14 @@ node Pin:
 
   @flag('\'')
   attr is_power: bool = false
+
+connection WiresTo:
+  from: Component
+  to: Pin
+  @flag('\'')
+  attr enhanced_signal: bool = false
+  @flag('!')
+  attr reverse_polarity: bool = false
 ```
 
 The annotation argument is a `char` literal per §9.1.2. Only boolean
