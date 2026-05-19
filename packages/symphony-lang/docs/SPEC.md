@@ -10001,6 +10001,11 @@ Bracketed range forms support arbitrary bounds:
 A part type may carry exactly one cardinality specifier (sigil OR
 bracket, not both); duplicate specifiers are a compile error.
 
+Sigils attach directly to the type name with no intervening
+whitespace: `Type?`, `Type+`, `Type!`. Bracket forms may optionally
+have a space before the bracket: `Type[=1]` and `Type [=1]` are both
+valid.
+
 ##### 13.3.3.2 Access from inside the node body
 
 Parts of a given type are accessible as `self.parts.<NodeType>`,
@@ -10560,7 +10565,7 @@ template by placing it in `Repeat`'s body. `Repeat` uses the
 ```
 node Repeat[T]:
   default attr source: Signal[T[]]
-  parts: Item !                          // exactly one template part
+  parts: Item!                           // exactly one template part
   attr key: fn(T, usize) -> K            // K: StringifiableKey, inferred
 
   attr current: T                        // kernel-updated per iteration
@@ -10580,7 +10585,7 @@ admitting `i8`–`i64`, `u8`–`u64`, `bool`, `char`, `string`. When
 
 - `source` is the iterated signal (default attr; set via `/expr`
   per §13.8.5.2).
-- `parts: Item !` declares that placements may supply exactly one
+- `parts: Item!` declares that placements may supply exactly one
   part of type `Item`. The Item type is what the placer provides
   at the `Repeat` body — the template that `Repeat` invokes per
   source element. The Item's underlying node type must declare a
@@ -12055,7 +12060,7 @@ stdlib pattern for conditional activation. The stdlib provides
 ```
 node When:
   default attr cond: Signal[bool]
-  parts: Then !, Else ?
+  parts: Then!, Else?
   expose:
     self.parts.Then when self.cond
     self.parts.Else when !self.cond
