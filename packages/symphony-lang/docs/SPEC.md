@@ -10708,6 +10708,15 @@ its `in:` and `out:` clauses (§13.3.4), with optional cardinality
 constraints. The actual connection instances appear at placement
 (§13.8.4).
 
+**Connections and exposition.** Connections are not part of any
+node's `expose:` clause (§13.3.7); they are not structural output.
+A connection is held by its endpoint nodes but owned by no single
+one — it lives at the instance graph level, traversed by signals
+rather than by the kernel's structural descent. The motherboard
+analogy: parts compose into the board (`expose:`); wires between
+parts are connections (instance-to-instance edges held by, but
+not contained within, the parts they connect).
+
 Connection vs. node-typed attr: a node could in principle hold a
 direct reference to another node (e.g., `attr target: SomeNode`),
 but this offers no place to carry per-relationship state, no static
@@ -12030,6 +12039,53 @@ error: instantaneous cycle in reactive expressions
   hint: introduce a `recurrent` declaration on the cycle, or
         eliminate the cyclic dependency
 ```
+
+#### 13.9.12 Stdlib pattern: `When` / `Then` / `Else`
+
+The combination of `parts:` declarations, the `expose:` clause
+(§13.3.7), and per-placement `when` gates supports a canonical
+stdlib pattern for conditional activation. The stdlib provides
+`When`, `Then`, and `Else` as cooperating node types:
+
+```
+node When:
+  default attr cond: Signal[bool]
+  parts: Then !, Else ?
+  expose:
+    self.parts.Then when self.cond
+    self.parts.Else when !self.cond
+```
+
+`Then` and `Else` are simple stdlib wrapper nodes; each accepts a
+single child via its own slot (its `default attr` is typed `Node`
+or its underlying type) and re-exposes it.
+
+Placement:
+
+```
+When/some_cond:
+  Then: SomeDecision
+  Else: SomeFallback
+```
+
+The placer supplies a `Then` and (optionally) an `Else` as parts
+of the `When` instance. The exposition gates each by `cond`: when
+`cond` is true the Then's child is active and the Else's child is
+inactive; when `cond` is false the roles reverse. The wrapping
+types (`Then`, `Else`) carry no other state; they are pure
+structural markers that the exposition's `when` gates discriminate.
+
+The same pattern generalizes:
+
+- A two-way `When` with no `Else` is just `When` with `Else ?`
+  declared and not supplied at placement; the cond-false case has
+  no active child.
+- `Match` (sum-type-driven, multiple variants) is a future stdlib
+  node following the same pattern: `parts:` lists one wrapper per
+  variant; `expose:` gates each by the corresponding tag.
+- User-defined conditional nodes can follow the same idiom — there
+  is no kernel-aware special-casing of `When`/`Then`/`Else`. They
+  are documented stdlib types using the general mechanism.
 
 ### 13.10 Reactive Evaluation
 
