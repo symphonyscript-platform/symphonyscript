@@ -105,6 +105,16 @@ Code examples use Ductus syntax per `GRAMMAR.md`. Type-name case conventions:
 - User-defined type names: PascalCase (`Vec3`, `Person`, `Event`).
 - Identifiers (functions, variables, fields): snake_case (`full_name`, `first_name`).
 
+**Keywords are always lowercase.** No keyword has a capitalized form.
+This includes all declaration keywords (`node`, `connection`, `trait`,
+`type`, `fn`, `operator`, `signal`, `attr`, `recurrent`, `derived`,
+`const`, `let`, `mut`), all clause keywords (`parts`, `in`, `out`,
+`expose`, `when`, `satisfies`, `fulfill`, `default`, `from`, `to`,
+`pairs`, `on`, `where`), all control-flow keywords (`if`, `else`,
+`match`, `for`, `while`, `break`, `continue`, `return`), and all
+operator-context keywords (`as`, `is`, `and`, `or`, `not`). The rule
+is normative and takes precedence over any conflicting grammar.
+
 Identifier character set: identifiers may contain `#` as a leading,
 infix, or terminating character — for example `#default`,
 `audio#main`, `note#`. The `#` character behaves like a letter for
