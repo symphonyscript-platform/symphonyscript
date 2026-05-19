@@ -10879,15 +10879,16 @@ A top-level placement creates a named instance of a node type at
 module scope:
 
 ```
-Driver john_doe:
-  expertise_level: 10
-  risk_tolerance: 0.8
-  Drives/some_car | enhanced_handling: true | aggressiveness: 0.8
+Driver john_doe | expertise_level=10 risk_tolerance=0.8:
+  Drives/some_car | enhanced_handling=true aggressiveness=0.8
 ```
 
-The first line is `TypeName instance_name:`. The body sets
-attributes and declares child parts and connections (§13.8.3,
-§13.8.4).
+The first line is `TypeName instance_name` followed (optionally) by
+attribute settings (§13.8.7) and (optionally) by `:` introducing a
+body of child placements (§13.8.3, §13.8.4). The syntax is identical
+to internal part placements (§13.8.3); the only distinction is that
+top-level placements *must* declare a name (internal parts may
+omit the name when not referenced from outside the placement).
 
 Instance names are unique within their declaring scope. Two
 top-level placements with the same name in the same module is a
@@ -10895,16 +10896,37 @@ compile error.
 
 #### 13.8.2 Setting attrs and recurrent initial values
 
-A line `name: expr` inside a placement body sets the named attr or
-recurrent initial value of the enclosing instance:
+Attrs and recurrent initial values are set via inline attribute
+syntax on the placement line. The body of a placement is reserved
+exclusively for child placements (§13.8.3, §13.8.6); attribute
+settings do not appear in the body.
+
+A single-line placement with attrs uses one leading `|` followed by
+one or more `name=value` settings separated by whitespace:
 
 ```
-Driver john_doe:
-  expertise_level: 10         // sets attr `expertise_level`
-  risk_tolerance: 0.8         // sets attr `risk_tolerance`
+Driver john_doe | expertise_level=10 risk_tolerance=0.8
 
-Counter c1:
-  count: 100                  // overrides recurrent `count` initial value
+Counter c1 | count=100
+```
+
+A multi-line placement keeps the first attribute on the placement's
+main line; subsequent attributes continue on lines indented exactly
+to the column of the first attribute (no further `|` characters):
+
+```
+Driver john_doe | expertise_level=10
+                  risk_tolerance=0.8
+                  license_class="full"
+```
+
+A placement with attrs *and* children combines the forms: attributes
+inline (or via aligned continuation), then `:` introducing the
+body:
+
+```
+Driver john_doe | expertise_level=10 risk_tolerance=0.8:
+  Drives/some_car | enhanced_handling=true
 ```
 
 The named cell must be declared on the placed type as either an
@@ -10915,7 +10937,7 @@ the standard widening rules).
 
 ##### 13.8.2.1 Reactive vs. compile-time placement values
 
-The right-hand side of an attr setting at placement may be:
+The right-hand side of an attribute setting at placement may be:
 
 - A **compile-time expression** — a literal, a `const` reference, a
   compile-time-evaluable computation. The value is fixed at
@@ -10930,13 +10952,13 @@ The right-hand side of an attr setting at placement may be:
 ```
 App my_app:
   Fetch fetcher / "url"
-  Log / fetcher.response                 // reactive binding: Log's default attr
-                                          // tracks fetcher.response
+  Log / fetcher.response                  // reactive binding: Log's default attr
+                                           // tracks fetcher.response
 
 App other_app:
   Counter c1
-  Display d1 | label: format(c1.count)   // reactive: d1.label tracks c1.count,
-                                          // formatted as a string
+  Display d1 | label=format(c1.count)     // reactive: d1.label tracks c1.count,
+                                           // formatted as a string
 ```
 
 Mechanically, a reactive placement value introduces a synthesized
@@ -10961,20 +10983,21 @@ fixed at placement.
   syntax. Their declared initial value applies at construction;
   subsequent values come through the host API (§13.14.2).
 - **Recurrent initial-value overrides accept only compile-time
-  values.** Unlike attrs, the placement body form for recurrents
-  (`count: 100`) does *not* accept reactive expressions. A
+  values.** Unlike attrs, the placement form for recurrents
+  (`count=100`) does *not* accept reactive expressions. A
   recurrent's initial value is a fixed compile-time constant at
   construction; runtime advancement happens via the recurrent's
   arms (§13.2.4).
 
-For attrs only, the same value may also be set via inline pipes
-(§13.8.7) or flags (§13.8.8). The three mechanisms (body form,
-pipes, flags) all target the same underlying attr cells; setting
-the same attr via two mechanisms is a compile error (duplicate-set).
+For boolean attrs, the same value may also be set via flags
+(§13.8.8). The two mechanisms (`name=value` / `name` / `!name`
+inline form, and flag form) target the same underlying attr cells;
+setting the same attr via two mechanisms is a compile error
+(duplicate-set).
 
-Reactive bindings apply to **body form and pipe form** for attrs.
-Flag form has no expression slot — a flag always sets a literal
-boolean (true for `'name`, false for `!name`) — so reactive
+Reactive bindings apply to the **`name=value` inline form** for
+attrs. Flag form has no expression slot — a flag always sets a
+literal boolean (true for `'name`, false for `!name`) — so reactive
 bindings do not apply to flags.
 
 A node type's `default attr` (§13.2.2.1) — when declared — is
@@ -10982,9 +11005,11 @@ additionally settable via the positional `/expr` form (§13.8.5).
 Connection types do not have `default attr`; their `/expr` slot is
 the to-endpoint (§13.8.5.1).
 
-Pipes and flags do *not* target recurrent cells or consts.
-Recurrent initial values can be overridden only via the body form
-(with compile-time values). Consts cannot be overridden at all.
+Inline attribute syntax and flags do *not* target consts. Consts
+cannot be overridden at placement (§13.8.2.2). Recurrent initial
+values are overridable via the same `name=value` inline form, but
+only with compile-time-evaluable expressions (no reactive
+bindings).
 
 For recurrent cells, only the initial value is overridable at
 placement. The arm structure (triggers, guards, and `next_expr`
@@ -10997,13 +11022,14 @@ have their type-declared value.
 
 #### 13.8.3 Child parts
 
-A line beginning with a type name (no `:` immediately after the
-first identifier) declares a child placement — a part or a
-connection:
+The body of a placement (the indented block introduced by `:`) is
+reserved exclusively for child placements — parts and connections.
+Attribute settings on the enclosing instance do not appear in the
+body; they live on the placement's main line via inline attribute
+syntax (§13.8.7) or aligned multi-line continuation (§13.8.2).
 
 ```
-Component chip_b:
-  label: "B"                              // attr setting
+Component chip_b | label="B":
   Pin out1                                // child part (Pin instance named out1)
   Pin in1                                 // another child part
 ```
@@ -11210,64 +11236,88 @@ The `/expr` form is positional shorthand:
 
 #### 13.8.6 Disambiguation summary
 
-Within a placement body, each non-blank line falls into one of
-three categories:
+Within a placement body (the indented block after `:` on a placement
+line), each non-blank line is a child placement — either a child
+part or a child connection (§13.8.3, §13.8.4). **Attribute settings
+do not appear in the body**; they live on the placement's main line
+(or its aligned continuation lines per §13.8.2 and §13.8.7).
 
-- **Attribute setting:** `Ident : Expr`. Sets an attr of the
-  enclosing instance.
-- **Endpoint slot setting** (connection placements only):
-  `to : Expr` or `from : Expr`. Sets the connection's endpoint
-  slot rather than an attribute. The identifiers `to` and `from`
-  are reserved as endpoint slots inside connection bodies; they
-  cannot be used as attr names on connections.
-- **Placement:** the placement form (see §13.8.9 for the canonical
-  ordering of inline parts), optionally followed by `:` and an
-  indented body. Creates a child part or connection. The optional
-  `when` modifier gates the placement (§13.9).
+Endpoint slot settings (`to: Expr`, `from: Expr`) on connection
+placements use `:` as part of the connection's declared structure
+rather than the attribute syntax. The identifiers `to` and `from`
+are reserved as endpoint slots inside connection bodies; they
+cannot be used as attr names on connections.
 
-The parser distinguishes by what follows the first identifier: `:`
-(with an expression after) → attribute setting or endpoint slot
-setting (the identifier determines which: `to`/`from` inside a
-connection body resolve to endpoint slots, all other identifiers
-resolve to attr names); otherwise → placement.
+A single line of a placement body may contain multiple child
+placements separated by commas (§13.8.10). A placement that
+introduces its own children body via `:` cannot share its line with
+sibling placements; multi-line layout is required when both same-line
+siblings and `:`-introduced children are needed.
 
-#### 13.8.7 Inline attribute pipes
+The parser distinguishes attribute settings from placements
+lexically: attribute settings appear after a single leading `|` on
+the placement's main line (or on aligned continuation lines) and use
+`name=expr` form; placements use the placement form per §13.8.9.
+
+#### 13.8.7 Inline attribute syntax
 
 After the `TypeRef` (and optional flags, instance name, and `/expr`
-slot) of any placement, zero or more attribute pipes may follow on
-the same line. Each pipe is introduced by `|`. Three syntactic
-forms:
+slot) of any placement, an attribute clause may follow on the same
+line, introduced by exactly **one leading `|`**. After the leading
+`|`, attributes are written one after another separated by
+whitespace; intermediate `|` characters between attributes are not
+permitted.
+
+Three syntactic forms within the attribute clause:
 
 ```
-| name: value      -- set attribute `name` to expression `value`
-| name             -- set boolean attribute `name` to true
-| !name            -- set boolean attribute `name` to false
+name=value         -- set attribute `name` to expression `value`
+name               -- set boolean attribute `name` to true (bare form)
+!name              -- set boolean attribute `name` to false
 ```
 
 ```
-Sensor s1 | gain: 0.5 | active | !calibrated
+Sensor s1 | gain=0.5 active !calibrated
 ```
 
-Setting the same attribute via two pipes on one placement, or via
-an inline pipe and the placement body, is a compile error
+Parentheses may be used freely around values for grouping or
+disambiguation:
+
+```
+Sensor s1 | gain=(base + offset) active
+```
+
+When the attribute clause extends across multiple lines, the
+continuation lines have no `|` and are aligned exactly to the column
+of the first attribute on the placement's main line:
+
+```
+Sensor s1 | gain=0.5
+            active
+            !calibrated
+```
+
+Multi-line continuation does not change semantics — it is purely a
+formatting variant.
+
+Setting the same attribute twice on one placement is a compile error
 (duplicate-set, parallel to the rule for record-field
 duplicate-set).
 
-Pipes target *attrs* declared on the placed type (directly or
-inherited via satisfied traits). Pipes do not target recurrent,
-derived, signal, or const declarations — targeting a non-attr
-identifier is a compile error. The expression in `| name: value`
-must match the attr's type subject to standard widening rules. The
-boolean-true (`| name`) and boolean-false (`| !name`) forms require
-the attr to be of type `bool`; non-boolean attrs used with the bare
-form are a compile error.
+Attribute settings target *attrs* declared on the placed type
+(directly or inherited via satisfied traits). They do not target
+recurrent, derived, signal, or const declarations — targeting a
+non-attr identifier is a compile error. The expression in
+`name=value` must match the attr's type subject to standard widening
+rules. The boolean-true (`name`) and boolean-false (`!name`) forms
+require the attr to be of type `bool`; non-boolean attrs used with
+those bare forms are a compile error.
 
-The expression in `| name: value` may be a compile-time constant
-*or* a reactive expression, per §13.8.2.1. A reactive expression
-in a pipe creates a synthesized derived bridging the source cells
-to the target attr — identical mechanics to the body form. All
-three setting mechanisms (body, pipe, flag) handle reactive
-bindings uniformly for attrs.
+The expression in `name=value` may be a compile-time constant *or*
+a reactive expression, per §13.8.2.1. A reactive expression creates
+a synthesized derived bridging the source cells to the target attr.
+All three forms (value, bare, negated-bare) and the flag form
+(§13.8.8) handle attr binding uniformly.
 
 #### 13.8.8 Flags
 
@@ -11318,7 +11368,7 @@ error at the type declaration site, identifying both attrs.
 At a placement site, each flag character in the run resolves to the
 boolean attr it aliases, setting that attr to `true`. There is no
 flag form for setting `false`; users who need to override a
-default-`true` attr to `false` use the inline pipe `| !name`.
+default-`true` attr to `false` use the inline `!name` form (§13.8.7).
 
 The asymmetry — flags set true only — is deliberate. Flags are for
 the *unusual* case; the default should be chosen so most placements
@@ -11350,23 +11400,23 @@ let r = some_fallible()?           // postfix Try in expression context
 ##### 13.8.8.5 No duplicate-set across forms
 
 A boolean attr may be set via at most one mechanism per placement:
-the flag form, the inline pipe form (`| name` or `| !name`), or the
-body form (`name: expr`). Using two mechanisms on the same attr in
-one placement is a compile error.
+the flag form, or the inline `name` / `!name` / `name=value` form
+(§13.8.7). Using two mechanisms on the same attr in one placement
+is a compile error.
 
 ```
-Pin' p1 | reverse_polarity: false    // ✗ duplicate: ' flag and pipe both target reverse_polarity
+Pin' p1 | reverse_polarity=false    // ✗ duplicate: ' flag and inline both target reverse_polarity
 ```
 
-The diagnostic class is the same as duplicate-set for attribute
-pipes (§13.8.7).
+The diagnostic class is the same as duplicate-set for inline
+attributes (§13.8.7).
 
 #### 13.8.9 Ordering of inline parts
 
 A placement's inline parts have a fixed order:
 
 ```
-["->"]? TypeRef [FlagsRun]? [InstanceName]? [DefaultArgPart (`/Expr`)]? [WhenClause (`when` Pred)]? [AttrPipe]*
+["->"]? TypeRef [FlagsRun]? [InstanceName]? [DefaultArgPart (`/Expr`)]? [WhenClause (`when` Pred)]? [AttrClause]?
 ```
 
 - The optional `->` prefix marks a part-owned outbound connection
@@ -11384,37 +11434,37 @@ A placement's inline parts have a fixed order:
   absent (the node has no default attr, or the default value is not
   being overridden), `when` slots immediately after whichever
   preceding element is present.
-- Inline pipes follow last.
+- The inline attribute clause (§13.8.7) — a single leading `|`
+  followed by attribute settings — follows last.
 
 Example (connection placement):
 
 ```
-WiresTo'! my_wire / chip_b.in1 | resistance: 50 | reverse_polarity
-^^^^^^^^                                              -- TypeRef + 2 flags
-         ^^^^^^^^                                     -- instance name
-                  ^^^^^^^^^^^^                        -- /Expr (connection target)
-                               ^^^^^^^^^^^^^^^        -- pipe 1
-                                                ^^^^^^^^^^^^^^^^^  -- pipe 2
+WiresTo'! my_wire / chip_b.in1 | resistance=50 reverse_polarity
+^^^^^^^^                                                            -- TypeRef + 2 flags
+         ^^^^^^^^                                                   -- instance name
+                  ^^^^^^^^^^^^                                      -- /Expr (connection target)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  -- attribute clause
 ```
 
 Example (node placement with `default attr`):
 
 ```
-Log / "Hello World" | level: "info"
+Log / "Hello World" | level="info"
 ^^^                                       -- TypeRef
       ^^^^^^^^^^^^^^                      -- /Expr (sets default attr `message`)
-                      ^^^^^^^^^^^^^^^^^   -- pipe (sets attr `level`)
+                      ^^^^^^^^^^^^^^^^    -- attribute clause (sets attr `level`)
 ```
 
 Example (gated placement with `when`):
 
 ```
-Debugger d1 / target when self.verbose | level: "trace"
-^^^^^^^^                                                   -- TypeRef
-         ^^                                                -- instance name
-            ^^^^^^^^                                       -- /Expr
-                     ^^^^^^^^^^^^^^^^^                     -- when clause (predicate)
-                                          ^^^^^^^^^^^^^^^  -- pipe
+Debugger d1 / target when self.verbose | level="trace"
+^^^^^^^^                                                  -- TypeRef
+         ^^                                               -- instance name
+            ^^^^^^^^                                      -- /Expr
+                     ^^^^^^^^^^^^^^^^^                    -- when clause (predicate)
+                                          ^^^^^^^^^^^^^^  -- attribute clause
 ```
 
 Example (gated placement, no `/Expr`):
@@ -11429,6 +11479,51 @@ The `/Expr` form requires the placed type to have a valid target
 for it: connections must have a `to` endpoint type (always true);
 nodes must have a declared `default attr`. Using `/Expr` on a node
 without a `default attr` is a compile error.
+
+#### 13.8.10 Same-line multi-placement
+
+Multiple placements may appear on a single line, separated by
+commas. The comma always terminates a placement at the current
+scope level — there is no context-sensitive disambiguation:
+
+```
+A3, rest, A4                              // three bare placements
+G4/4, G5/4                                // two /expr placements
+Sensor s1 | gain=0.5, Sensor s2 | gain=0.7  // two attributed placements
+```
+
+The comma rule is universal: same-line placements are *always*
+comma-separated, regardless of whether the placements have names,
+`/expr`, attribute clauses, or any combination. This removes
+parser context-sensitivity — the comma is the unambiguous
+delimiter.
+
+**A placement that introduces its own children body via `:`
+cannot share its line with sibling placements.** Such a placement
+owns the rest of its line (and the indented block that follows).
+To combine `:`-bearing children with same-line siblings, use
+multi-line layout:
+
+```
+// ✗ ambiguous and disallowed:
+//   SomePart: Child1, Child2, AnotherPart
+
+// ✓ SomePart with three inline children (no siblings on this line):
+SomePart: Child1, Child2, Child3
+
+// ✓ Same-line siblings, no `:` children:
+SomePartA, SomePartB | attr=1, SomePartC
+
+// ✓ Multi-line — `:`-bearing placement on its own line:
+SomePart:
+  Child1
+  Child2
+AnotherPart                                // sibling on next line
+```
+
+Same-line multi-placement is opt-in: one placement per line remains
+the dominant form. Same-line layout is intended for dense sequences
+(e.g., music notation) where vertical compactness aids readability.
 
 ### 13.9 Conditional Activation
 
