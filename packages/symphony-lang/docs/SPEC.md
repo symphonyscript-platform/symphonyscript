@@ -10087,6 +10087,116 @@ This separation enforces the "node bodies are declarative" rule:
 nodes describe structure and reactive content; functions and
 methods are imperative computation, distinct in kind.
 
+#### 13.3.7 Exposition (the `expose:` clause)
+
+The `expose:` clause declares the node type's **structural output**
+— the list of `Node[T]` placements the kernel traverses when it
+encounters an instance of this type. The clause is the node's
+"return value" in the structural sense: it determines what an
+external reader (and the kernel) sees as the node's content.
+
+```
+node TypeName:
+  satisfies SomeTrait
+  parts: SomeA, SomeB
+  in: ConnIn1
+  out: ConnOut1
+  expose:
+    SomeA
+    SomeB
+  attr foo: i32
+  signal user_name: string = "world"
+  derived greeting: string = "hello " ++ self.user_name
+```
+
+The canonical clause order is: `satisfies` → `parts:` → `in:` →
+`out:` → `expose:` → cell declarations.
+
+##### 13.3.7.1 Content
+
+The body of `expose:` is a list of placements — each entry is a
+`Node[T]` value, with the same syntax as inline child placements
+elsewhere (§13.8). Entries reference:
+
+- A part of self by type-bulk access (`self.parts.SomeA` — the full
+  list of supplied parts of that type, in placement order).
+- A named part instance (`self.osc1` — see §13.4.1) — when the
+  exposition needs a specific named child rather than all parts of
+  a type.
+- A wrapper placement that contains parts as its own children. The
+  wrapper is a node-internal type the exposition uses for structural
+  composition:
+
+  ```
+  node MyContainer:
+    parts: Item
+    expose:
+      SomeInternalWrapper:
+        self.parts.Item
+  ```
+
+  Here `SomeInternalWrapper` is a wrapper node whose body contains
+  the supplied `Item` children. Internal nodes used this way are
+  declared (in stdlib or user code) and accept children via their
+  own `parts:` clause.
+
+Each entry in `expose:` may carry a per-placement `when` gate
+(§13.9) for conditional activation. Conditionality inside
+exposition uses the same `when` clause mechanism that applies
+elsewhere — no new control-flow syntax is introduced.
+
+##### 13.3.7.2 Default
+
+When `expose:` is omitted, the node's exposition defaults to
+`expose: self.parts` — the kernel traverses all supplied parts in
+declaration order. When the node has no `parts:` clause and no
+`expose:` clause, the exposition is empty (the node has no
+structural output and exists only for its state and connections).
+
+##### 13.3.7.3 External access via `.exposition`
+
+The exposed list is readable from outside the node via the reserved
+`.exposition` field: `instance.exposition` returns the list of
+`Node[T]` values the instance currently exposes. This is the same
+content the kernel traverses; external readers and the kernel see
+identical output.
+
+Inside the node body, `self.exposition` is the same list. The
+field is read-only; the exposition is fixed by the type's `expose:`
+clause (and the placer's supplied parts), not mutable at runtime.
+
+##### 13.3.7.4 Kernel traversal
+
+The kernel traverses what `expose:` produces, not the `parts:`
+clause directly. This is the load-bearing distinction:
+
+- **`parts:`** is the constraint and supply mechanism — declares
+  what child types are accepted, with cardinality; placement-time
+  child placements fill the parts (§13.4, §13.8.3).
+- **`expose:`** is the structural-output mechanism — declares which
+  parts (and/or wrapping internal nodes containing them) participate
+  in the kernel's traversal of this instance.
+
+A node may receive parts that its exposition does not include — for
+example, a node may accept administrative or diagnostic parts that
+are queried only via the host API, not traversed by the kernel. In
+practice the default `expose: self.parts` covers the common case
+where every supplied part is exposed.
+
+##### 13.3.7.5 Connections and exposition
+
+Connections (§13.6) are **not** part of exposition. Connections are
+instance-to-instance edges, placed at the instantiation site of the
+nodes they connect. They are not declared in any node's `expose:`
+clause and do not appear in `instance.exposition`.
+
+The motherboard analogy: the parts a motherboard exposes (RAM
+slots, CPU socket, expansion slots) are the structural surface of
+the board. The wires connecting those parts to each other and to
+external components are connections — held by the parts, owned by
+no single one, traversed by signals rather than by structural
+descent.
+
 ### 13.4 Parts
 
 #### 13.4.0 Concept
@@ -10123,6 +10233,17 @@ containment.
 The parent declares the types of children it accepts via its
 `parts:` clause (§13.3.3) with optional cardinality; the specific
 instances appear via placement (§13.8.3).
+
+**Kernel traversal goes through `expose:`, not through `parts:`
+directly.** The `parts:` clause is the constraint and supply
+mechanism — declared types, cardinality, and placement-time
+filling. The `expose:` clause (§13.3.7) is the structural output
+the kernel walks; it references parts (via `self.parts.<Type>` or
+by named instance), possibly wrapping them in internal nodes.
+Parts that the exposition does not include are not traversed by
+the kernel — they remain queryable via the host API and addressable
+within the parent's own reactive expressions, but they do not
+contribute to the structural descent.
 
 #### 13.4.1 Access forms
 
