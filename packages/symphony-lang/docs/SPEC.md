@@ -2459,8 +2459,9 @@ error. Bit-level operations on floats require an explicit reinterpret cast
 through `as` to an integer type of the same width.
 
 The `&` and `|` characters are reused at the type level (`&` for trait
-intersection per §5, `|` for placement-attribute pipes per grammar §3.10
-and for enum sum types per grammar §3.6). At the value level — that is,
+intersection per §5, `|` as the leader of the placement attribute clause
+per grammar §3.10 and for enum sum types per grammar §3.6). At the value
+level — that is,
 inside expressions — they are bitwise operators. The grammar's context-based
 disambiguation determines which interpretation applies; user-visible
 overloading is avoided through positional context.
@@ -10886,10 +10887,9 @@ of its declaration (§13.6.1):
 
 `self.from`, `self.to`, and `self.pair` are bound at the
 connection's *placement* time. Each placement specifies its source
-(the enclosing instance) and destination (via the `/expr` form or
-the `to:` endpoint-slot syntax in the connection's body). Inside
-the connection's body, these identifiers resolve to those specific
-instances.
+(the enclosing instance) and destination (via the `/expr` form,
+§13.8.5.1). Inside the connection type's body, these identifiers
+resolve to those specific instances.
 
 #### 13.6.3 Generic connections
 
@@ -11278,8 +11278,8 @@ The connection type must match a type listed in the source
 instance's `out:` clause (or in the type's traits' contributions).
 
 In both forms, the expression after `/` is the destination
-(§13.8.5.1). Connection attrs are set via the attribute clause (`| name=value`)
-or the connection's body.
+(§13.8.5.1). Connection placements have no body; connection attrs
+are set via the attribute clause (`| name=value`) only.
 
 A placement-level `when` modifier may be attached to either form to
 gate this specific connection instance (§13.9). The modifier appears
@@ -11317,10 +11317,10 @@ gate, use a type-level `when:` clause inside the connection's body
 #### 13.8.5 The `/expr` form
 
 The `/expr` form appears immediately after the placed type name
-(and any flags), before any optional instance name and before any
-inline attribute pipes. The expression after `/` is the *positional
-argument* of the placement; its meaning depends on what kind of
-type is being placed.
+(and any flags), before any optional instance name and before the
+attribute clause (§13.8.7). The expression after `/` is the
+*positional argument* of the placement; its meaning depends on what
+kind of type is being placed.
 
 ##### 13.8.5.1 For connection placements
 
@@ -11331,14 +11331,8 @@ Drives/some_car | enhanced_handling=true aggressiveness=0.8
 ```
 
 This places a `Drives` connection whose `to` endpoint is `some_car`,
-with two attrs set inline. Equivalent form using a body for the
-endpoint slot (attrs remain inline; only `to`/`from` endpoint slots
-appear in the body):
-
-```
-Drives | enhanced_handling=true aggressiveness=0.8:
-  to: some_car             // endpoint-slot syntax (not an attribute)
-```
+with two attrs set inline. Connection placements have no body; the
+`/expr` form is the only way to specify the destination.
 
 ##### 13.8.5.2 For node (part) placements
 
@@ -11378,17 +11372,19 @@ The `/expr` form is positional shorthand:
 
 #### 13.8.6 Disambiguation summary
 
-Within a placement body (the indented block after `:` on a placement
-line), each non-blank line is a child placement — either a child
-part or a child connection (§13.8.3, §13.8.4). **Attribute settings
-do not appear in the body**; they live on the placement's main line
-(or its aligned continuation lines per §13.8.2 and §13.8.7).
+Only node placements have a body. The body (the indented block
+after `:` on a node placement line) contains child placements —
+either child parts or child connections (§13.8.3, §13.8.4).
+**Attribute settings do not appear in the body**; they live on the
+placement's main line (or its aligned continuation lines per
+§13.8.2 and §13.8.7).
 
-Endpoint slot settings (`to: Expr`, `from: Expr`) on connection
-placements use `:` as part of the connection's declared structure
-rather than the attribute syntax. The identifiers `to` and `from`
-are reserved as endpoint slots inside connection bodies; they
-cannot be used as attr names on connections.
+Connection placements have no body. A connection placement is
+single-line: `TypeRef` plus optional flags, name, `/expr` (the
+destination), `when`, and an attribute clause. The identifiers `to`
+and `from` are reserved as endpoint slots inside connection *type*
+bodies (§13.6.1.1); they cannot be used as attr names on
+connections.
 
 A single line of a placement body may contain multiple child
 placements separated by commas (§13.8.10). A placement that
@@ -12067,8 +12063,9 @@ node When:
 ```
 
 `Then` and `Else` are simple stdlib wrapper nodes; each accepts a
-single child via its own slot (its `default attr` is typed `Node`
-or its underlying type) and re-exposes it.
+single child via its `parts:` slot and re-exposes it (the same
+pattern Repeat uses with `parts: Item!` + `expose: self.parts.Item`,
+§13.5.4.1).
 
 Placement:
 
@@ -12087,7 +12084,7 @@ structural markers that the exposition's `when` gates discriminate.
 
 The same pattern generalizes:
 
-- A two-way `When` with no `Else` is just `When` with `Else ?`
+- A two-way `When` with no `Else` is just `When` with `Else?`
   declared and not supplied at placement; the cond-false case has
   no active child.
 - `Match` (sum-type-driven, multiple variants) is a future stdlib
