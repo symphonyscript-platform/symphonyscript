@@ -8632,8 +8632,7 @@ connection ShowsCount:
 Counter c1:
   ShowsCount /d1                -- outgoing connection to d1
 
-Display d1:
-  label: "Main"
+Display d1 | label="Main"
 ```
 
 The host drives the program via:
@@ -8814,9 +8813,7 @@ At placement time, the user may override the default by supplying a
 value (§13.8.2):
 
 ```
-Filter f1:
-  cutoff_hz: 500.0                    // override default
-  // resonance and enabled use defaults
+Filter f1 | cutoff_hz=500.0          // override default; resonance and enabled use defaults
 ```
 
 For attrs without defaults, the placement value is mandatory; the
@@ -8841,9 +8838,8 @@ placement time (§13.8.5), so the attr can be set without naming it:
 ```
 Log /"Hello World"        // sets the default attr `message` to "Hello World"
 
-// Equivalent body form:
-Log:
-  message: "Hello World"
+// Equivalent attribute-clause form:
+Log | message="Hello World"
 ```
 
 Rules:
@@ -9033,8 +9029,7 @@ The `= initial` value may be overridden at placement, similar to
 attrs:
 
 ```
-Counter c1:
-  count: 100      // override initial value
+Counter c1 | count=100      // override initial value
 ```
 
 The arm structure (triggers, guards, and `next_expr` expressions)
@@ -9050,8 +9045,7 @@ node Counter:
   recurrent count: i32 = 0
     | on tick_signal: self.count + self.step_size
 
-Counter c1:
-  step_size: 5        // per-instance step via attr override
+Counter c1 | step_size=5    // per-instance step via attr override
 ```
 
 ##### 13.2.4.4 Value-change semantics for triggers
@@ -9793,8 +9787,7 @@ in-line.
 node ItemHost:
   attr item: Node[Post]            // accepts a Node[Post] specification
 
-ItemHost host:
-  item: PostItem/some_post          // PostItem/some_post is the Node[Post] value
+ItemHost host | item=PostItem/some_post   // PostItem/some_post is the Node[Post] value
 ```
 
 Here `PostItem/some_post` is a `Node[Post]` value — a placement
@@ -10491,7 +10484,7 @@ node PostItem:
 
 UI app:
   signal posts_data: Post[] = []
-  Repeat ref/posts_data | item: PostItem/ref.current
+  Repeat ref/posts_data | item=PostItem/ref.current
 ```
 
 `Repeat` iterates `posts_data`; for each post, the kernel
@@ -10502,9 +10495,8 @@ template. `PostItem`'s `expanded` cell is allocated per-key.
 For reordering-stable state, supply `key`:
 
 ```
-Repeat ref/posts_data
-  | item: PostItem/ref.current
-  | key: post_id_key
+Repeat ref/posts_data | item=PostItem/ref.current
+                       key=post_id_key
 ```
 
 where `post_id_key` is `fn(p: Post, _: usize) -> i64` returning
@@ -11106,7 +11098,7 @@ edge originating from that part:
 App my_app:
   Filter filter / "low-pass":
     -> Cascade / next_filter                    // outbound from filter to next_filter
-    -> WiresTo / monitor | gain: 0.5            // outbound from filter to monitor
+    -> WiresTo / monitor | gain=0.5             // outbound from filter to monitor
   Filter next_filter / "high-pass"
   Monitor monitor
 ```
@@ -11134,7 +11126,7 @@ The connection type must match a type listed in the source
 instance's `out:` clause (or in the type's traits' contributions).
 
 In both forms, the expression after `/` is the destination
-(§13.8.5.1). Connection attrs are set via inline pipes (`| name: value`)
+(§13.8.5.1). Connection attrs are set via the inline attribute clause (`| name=value`)
 or the connection's body.
 
 A placement-level `when` modifier may be attached to either form to
@@ -11183,17 +11175,17 @@ type is being placed.
 For a connection placement, `/expr` sets the `to` endpoint slot:
 
 ```
-Drives/some_car | enhanced_handling: true | aggressiveness: 0.8
+Drives/some_car | enhanced_handling=true aggressiveness=0.8
 ```
 
 This places a `Drives` connection whose `to` endpoint is `some_car`,
-with two attrs set inline. Equivalent body form:
+with two attrs set inline. Equivalent form using a body for the
+endpoint slot (attrs remain inline; only `to`/`from` endpoint slots
+appear in the body):
 
 ```
-Drives:
+Drives | enhanced_handling=true aggressiveness=0.8:
   to: some_car             // endpoint-slot syntax (not an attribute)
-  enhanced_handling: true  // attribute setting
-  aggressiveness: 0.8      // attribute setting
 ```
 
 ##### 13.8.5.2 For node (part) placements
@@ -11212,14 +11204,12 @@ Program p1:
 ```
 
 Each `Log /"..."` placement creates a Log part with its `message`
-attr set to the string. Equivalent body form:
+attr set to the string. Equivalent inline form:
 
 ```
 Program p1:
-  Log:
-    message: "Hello World"
-  Log:
-    message: "System ready"
+  Log | message="Hello World"
+  Log | message="System ready"
 ```
 
 A node-placement `/expr` form requires the type to have a declared
@@ -11619,7 +11609,7 @@ modifier-style clauses:
 
 ```
 Logger l1 when self.debug_enabled
-Filter f1 / "low-pass" when self.dsp_mode == DspMode::Realtime | gain: 0.5
+Filter f1 / "low-pass" when self.dsp_mode == DspMode::Realtime | gain=0.5
 ShowsCount/d1 when self.from.count > 0
 ```
 
