@@ -10896,9 +10896,9 @@ of its declaration (§13.6.1):
 
 `self.from`, `self.to`, and `self.pair` are bound at the
 connection's *placement* time. Each placement specifies its source
-(the enclosing instance) and destination (via the `/expr` form,
-§13.8.5.1). Inside the connection type's body, these identifiers
-resolve to those specific instances.
+(the enclosing instance) and destination (a bare-identifier reference
+in the placement's body, §13.8.5.1). Inside the connection type's
+body, these identifiers resolve to those specific instances.
 
 #### 13.6.3 Generic connections
 
