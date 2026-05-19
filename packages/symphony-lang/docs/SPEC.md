@@ -9812,25 +9812,23 @@ value when written as `PostItem/<expr>`.
 
 A `Node[T]` value held in an attr is a specification, not an
 allocated instance. Cell allocation happens only when the receiving
-node instantiates the specification:
+node instantiates the specification — typically once at startup,
+producing one set of template cells with paths under the receiving
+node's path (e.g., `host.item.<template_field>`). Drop of the
+receiving node drops the template cells per §14.8.
 
-- A receiving node that instantiates the specification once at
-  startup allocates one set of template cells with paths under the
-  receiving node's path (e.g., `host.item.<template_field>`).
-- A receiving node that instantiates the specification per
-  iteration (the `Repeat` stdlib node, §13.5.4) allocates per-key
-  state cells managed by the receiving node.
-
-In both cases, drop of the receiving node (or removal of an
-iteration key) drops the corresponding template cells per §14.8.
+For *child-placement-style* external supply with cardinality, list
+semantics, and possible per-instance scoping (the pattern used by
+`Repeat`, §13.5.4), the `parts:` clause and §13.5 keyed-scope
+primitive are the appropriate mechanism — not `Node[T]` attrs.
+`Node[T]` is for attr-shaped *singular* template slots; `parts:`
+is for child-placement slots with cardinality.
 
 ##### 13.2.10.3 Restrictions
 
 - `Node[T]` values cannot be read in user expressions or evaluated
   for their structure; they are consumed only by receiving nodes
-  that know how to instantiate them. In v1, the receiving nodes
-  with kernel-aware instantiation semantics are stdlib-provided
-  (see §13.5.4 for `Repeat`).
+  that know how to instantiate them.
 - A `Node[T]` attr cannot be `mut` and cannot be written to from
   Ductus source after the attr is set (per §13.2.7).
 - A `Node[T]` value's captured references (e.g., to exposed attrs
@@ -10441,32 +10439,32 @@ caller to know placement names).
 
 ### 13.5 Template Scopes and Keyed Instantiation
 
-When a node accepts another node as an attr value via the `Node[T]`
-type (§13.2.10), the host node may instantiate the bound template
-zero, one, or many times — each instantiation backed by its own
-state cells. This section specifies the **keyed-scope primitive**
-that standardizes how the kernel manages per-instantiation state
-and how host nodes drive instantiation.
+Some stdlib host nodes (like `Repeat`, §13.5.4) instantiate a child
+*template* — a part placed in their body — zero, one, or many
+times, each instantiation backed by its own state cells. This
+section specifies the **keyed-scope primitive** that standardizes
+how the kernel manages per-instantiation state and how such host
+nodes drive instantiation.
 
 The primitive is **runtime-implementable**: any conformant kernel
-exposes the three operations of §13.5.1 to its stdlib-privileged
-host nodes; the stdlib's documented hosts (the canonical user
-`Repeat` in §13.5.4, and future siblings such as `Conditional` and
-`Switch`) are layered on top of these operations without
-kernel-specific magic per host.
+exposes the three operations of §13.5.1 to its stdlib host nodes;
+the stdlib's documented hosts (the canonical user `Repeat` in
+§13.5.4, and future siblings such as `Conditional` and `Switch`)
+are layered on top of these operations.
 
 #### 13.5.1 The primitive
 
-For each `Node[T]` attr held by a host instance, the kernel exposes
-three operations to the host. The host's bound template — the node
-specification stored in the attr — is fixed for the host's lifetime
-(per §13.2.7's no-mutation rule); the operations therefore
-parameterize only the **key**.
+For each template-typed parts entry on a host instance — a part
+declared in the host's `parts:` clause that the host's exposition
+(§13.3.7) treats as a per-instantiation template — the kernel
+exposes three operations. The bound template (the part supplied at
+the host's placement site) is fixed for the host's lifetime; the
+operations therefore parameterize only the **key**.
 
 - **`scope_obtain(key)`** — return the scope for `key`, allocating
-  from the host's per-attr pool if absent. Newly-allocated scopes
-  initialize the template's state cells to their declared initial
-  values (per §13.2.6).
+  from the host's per-template pool if absent. Newly-allocated
+  scopes initialize the template's state cells to their declared
+  initial values (per §13.2.6).
 - **`scope_drop(key)`** — drop scope `key`: invoke `Drop` (§14.8)
   on its state cells in reverse declaration order; return the pool
   slot.
@@ -10481,12 +10479,12 @@ The host is responsible for sequencing these operations correctly:
 typically `scope_obtain` for new keys, `scope_evaluate` for active
 keys, and `scope_drop` for keys no longer active.
 
-##### 13.5.1.1 Per-attr pool
+##### 13.5.1.1 Per-template pool
 
-Each `Node[T]` attr on a host instance has its own keyed pool. The
-pool's element shape is the template type's **state-shape**
-(§13.5.2). The pool's index space is the host's key domain. Scopes
-are independent — no cell sharing across keys.
+Each template-typed parts entry on a host instance has its own
+keyed pool. The pool's element shape is the template type's
+**state-shape** (§13.5.2). The pool's index space is the host's
+key domain. Scopes are independent — no cell sharing across keys.
 
 Pool sizing follows the §14.3.5 extensible-pool model: pools grow
 as keys are added and shrink as keys are dropped, subject to the
@@ -10507,7 +10505,7 @@ pure functions of state cells and the host's exposed attrs.
 
 **When the state-shape is empty** (the template declares only
 deriveds, or no body cells at all), the kernel allocates **no pool**
-for the host's `Node[T]` attr. `scope_obtain(key)` becomes a no-op,
+for the host's template entry. `scope_obtain(key)` becomes a no-op,
 `scope_drop(key)` is a no-op, and `scope_evaluate(key)` evaluates
 the template's deriveds against the host's exposed attrs without
 any per-key state context.
@@ -10519,7 +10517,7 @@ incur no per-key allocation overhead.
 
 The compiler determines a template's state-shape at compile time
 and statically selects between the pool and no-pool case per
-host-attr instantiation.
+host-template instantiation.
 
 #### 13.5.3 Hot reload and cell identity
 
@@ -10542,7 +10540,9 @@ across all live keys.
 #### 13.5.4 Repeat: data-driven multiplicity
 
 The stdlib provides `Repeat`, the canonical template-hosting node
-for iterating over a `Signal[T[]]` source. `Repeat` uses the
+for iterating over a `Signal[T[]]` source. `Repeat` declares a
+single template-typed part (`Item`); the placer supplies the
+template by placing it in `Repeat`'s body. `Repeat` uses the
 §13.5.1 primitive directly: it sequences `scope_obtain`,
 `scope_drop`, and `scope_evaluate` per its iteration semantics.
 
@@ -10551,14 +10551,16 @@ for iterating over a `Signal[T[]]` source. `Repeat` uses the
 ```
 node Repeat[T]:
   default attr source: Signal[T[]]
-  attr item: Node[T]
-  attr key: fn(T, usize) -> K          // K: StringifiableKey, inferred
+  parts: Item !                          // exactly one template part
+  attr key: fn(T, usize) -> K            // K: StringifiableKey, inferred
 
-  attr current: T                       // kernel-updated per iteration
-  attr index: usize                     // kernel-updated per iteration
-  attr first: bool                      // kernel-updated per iteration
-  attr last: bool                       // kernel-updated per iteration
-  attr count: usize                     // kernel-updated per iteration
+  attr current: T                        // kernel-updated per iteration
+  attr index: usize                      // kernel-updated per iteration
+  attr first: bool                       // kernel-updated per iteration
+  attr last: bool                        // kernel-updated per iteration
+  attr count: usize                      // kernel-updated per iteration
+
+  expose: self.parts.Item
 ```
 
 `K` is the key function's return type, inferred at placement. `K`
@@ -10569,14 +10571,22 @@ admitting `i8`–`i64`, `u8`–`u64`, `bool`, `char`, `string`. When
 
 - `source` is the iterated signal (default attr; set via `/expr`
   per §13.8.5.2).
-- `item` is the template node to invoke per element. Its `default
-  attr` must accept `T`.
+- `parts: Item !` declares that placements may supply exactly one
+  part of type `Item`. The Item type is what the placer provides
+  at the `Repeat` body — the template that `Repeat` invokes per
+  source element. The Item's underlying node type must declare a
+  `default attr` whose type is `T` (so `/ref.current` can bind it
+  at placement).
 - `key` is a function from `(element, index)` to a stringifiable
   primitive.
 - `current`, `index`, `first`, `last`, `count` are attrs the
   template references via Repeat's placement name (§13.4.1). The
   kernel updates these as part of Repeat's iteration semantics
   (§13.5.4.2); they are not host-writable.
+- `expose: self.parts.Item` declares the exposition (§13.3.7):
+  the kernel traverses the supplied Item template. Repeat's
+  kernel-aware iteration semantics drive that traversal per
+  source element with §13.5.1's scope operations.
 
 ##### 13.5.4.2 Iteration
 
@@ -10605,7 +10615,8 @@ node PostItem:
 
 UI app:
   signal posts_data: Post[] = []
-  Repeat ref/posts_data | item=PostItem/ref.current
+  Repeat ref/posts_data:
+    PostItem/ref.current
 ```
 
 `Repeat` iterates `posts_data`; for each post, the kernel
@@ -10613,11 +10624,11 @@ UI app:
 binds `ref.current` to that post, and `scope_evaluate`s the
 template. `PostItem`'s `expanded` cell is allocated per-key.
 
-For reordering-stable state, supply `key`:
+For reordering-stable state, supply `key` on Repeat's placement:
 
 ```
-Repeat ref/posts_data | item=PostItem/ref.current
-                       key=post_id_key
+Repeat ref/posts_data | key=post_id_key:
+  PostItem/ref.current
 ```
 
 where `post_id_key` is `fn(p: Post, _: usize) -> i64` returning
@@ -10658,7 +10669,8 @@ machinery; the cost model is "pay for what you iterate."
 ##### 13.5.4.7 Restrictions
 
 - The template's underlying node type must declare `default attr
-  d: T` (per §13.2.10.1).
+  d: T` so that `/expr` at the template's placement (e.g.,
+  `PostItem/ref.current`) binds correctly.
 - The template references Repeat's exposed attrs via the
   placement name; closure-over-outer-state beyond §13.12's
   reactive transparency is not supported.
